@@ -23,7 +23,7 @@ use uuid::Uuid;
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
-struct Snapshot {
+pub(crate) struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
     /// The closure of these selections. It is too slow to calculate on every frame.
@@ -382,30 +382,7 @@ impl CampaignContent {
         self.pending = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let repairs = splat::content::read_directory(&campaign.path)
-                .map(|(_, errors)| {
-                    errors
-                        .into_iter()
-                        .filter_map(|e| {
-                            let text = fs::read_to_string(note_path(&campaign.path, &e.path).ok()?)
-                                .ok()?;
-                            Some((e.path, text.clone(), text))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let result =
-                CampaignDocument::load_with_modules(&campaign, &modules).and_then(|document| {
-                    let catalogue = Catalogue::load(&modules, Some(&campaign))?;
-                    let closure = catalogue.closure(&document.selections, document.campaign.id);
-                    Ok(Snapshot {
-                        closure: (document.selections.clone(), closure),
-                        document,
-                        subtitles: crate::library::catalogue_subtitles(&catalogue),
-                        catalogue,
-                    })
-                });
-            let _ = tx.send((repairs, result));
+            let _ = tx.send(load_snapshot(&campaign, &modules));
             ctx.request_repaint();
         });
     }
@@ -1977,6 +1954,37 @@ impl CampaignContent {
                 }
             });
     }
+}
+
+/// Read what the Packages page shows: invalid notes to repair, and the campaign's packages.
+pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
+    let repairs = splat::content::read_folder(&campaign.path)
+        .map(|folder| {
+            folder
+                .errors
+                .iter()
+                .filter_map(|e| {
+                    let path = note_path(&campaign.path, &e.path).ok()?;
+                    let text = match folder.text(&e.path) {
+                        Some(text) => text.to_owned(),
+                        None => fs::read_to_string(path).ok()?,
+                    };
+                    Some((e.path.clone(), text.clone(), text))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let result = CampaignDocument::load_with_modules(campaign, modules).and_then(|document| {
+        let catalogue = Catalogue::load(modules, Some(campaign))?;
+        let closure = catalogue.closure(&document.selections, document.campaign.id);
+        Ok(Snapshot {
+            closure: (document.selections.clone(), closure),
+            document,
+            subtitles: crate::library::catalogue_subtitles(&catalogue),
+            catalogue,
+        })
+    });
+    (repairs, result)
 }
 
 #[cfg(test)]

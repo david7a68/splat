@@ -9,6 +9,10 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-definitions");
+/// builtin/dnd2024-definitions/coverage.json and contracts.json without layout whitespace.
+/// build.rs writes them; most of each pretty-printed file is indentation.
+const COVERAGE: &str = include_str!(concat!(env!("OUT_DIR"), "/coverage.json"));
+const CONTRACTS: &str = include_str!(concat!(env!("OUT_DIR"), "/contracts.json"));
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -218,7 +222,10 @@ fn markdown_files<'a>(dir: &Dir<'a>, files: &mut Vec<&'a File<'a>>) {
 pub fn entries() -> Result<&'static [Entry], String> {
     static ENTRIES: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
     ENTRIES
-        .get_or_init(parse_entries)
+        .get_or_init(|| {
+            // Every catalogue needs the SRD entries too. Read both at the same time.
+            rayon::join(builtin::entries, parse_entries).1
+        })
         .as_deref()
         .map_err(Clone::clone)
 }
@@ -226,37 +233,66 @@ pub fn entries() -> Result<&'static [Entry], String> {
 fn parse_entries() -> Result<Vec<Entry>, String> {
     let mut files = Vec::new();
     markdown_files(&DEFINITIONS, &mut files);
-    let mut result: Vec<_> = files
-        .par_iter()
-        .map(|file| {
-            Entry::parse(
-                &format!("definitions/{}", file.path().display()),
-                file.contents_utf8().ok_or("Definition must be UTF-8")?,
-            )
-            .map_err(|e| format!("{}: {e}", file.path().display()))
-        })
-        .collect::<Result<_, _>>()?;
+    // The reports are large JSON files. Read them while the notes are parsed.
+    let (result, reports) = rayon::join(
+        || {
+            files
+                .par_iter()
+                .map(|file| {
+                    Entry::parse(
+                        &format!("definitions/{}", file.path().display()),
+                        file.contents_utf8().ok_or("Definition must be UTF-8")?,
+                    )
+                    .map_err(|e| format!("{}: {e}", file.path().display()))
+                })
+                .collect::<Result<Vec<_>, String>>()
+        },
+        || {
+            let (coverage, registry) = rayon::join(
+                || serde_json::from_str::<serde_json::Value>(COVERAGE),
+                || read_registry(CONTRACTS),
+            );
+            Ok::<_, String>((
+                coverage.map_err(|e| e.to_string())?,
+                registry.map_err(|e| e.to_string())?,
+            ))
+        },
+    );
+    let mut result = result?;
     result.sort_by(|a, b| a.key.cmp(&b.key));
-    attach_reports(
-        &mut result,
-        DEFINITIONS
-            .get_file("coverage.json")
-            .and_then(|f| f.contents_utf8())
-            .ok_or("Missing coverage")?,
-        DEFINITIONS
-            .get_file("contracts.json")
-            .and_then(|f| f.contents_utf8())
-            .ok_or("Missing contracts")?,
-    )?;
+    let (coverage, registry) = reports?;
+    attach_reports(&mut result, coverage, registry)?;
     Ok(result)
+}
+
+/// The registry holds thousands of nested contract shapes, and reading them is slow.
+/// Read the file once, then read each contract on its own thread.
+fn read_registry(text: &str) -> Result<super::contracts::Registry, serde_json::Error> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Wire<'a> {
+        format: u32,
+        #[serde(borrow)]
+        contracts: Vec<&'a serde_json::value::RawValue>,
+    }
+    let wire: Wire = serde_json::from_str(text)?;
+    Ok(super::contracts::Registry {
+        format: wire.format,
+        contracts: wire
+            .contracts
+            .into_par_iter()
+            .map(|contract| serde_json::from_str(contract.get()))
+            .collect::<Result<_, _>>()?,
+    })
 }
 
 /// Reports are generated package data, not editable note properties.
 /// Attach only after checking identity and the mechanical fingerprint.
-fn attach_reports(entries: &mut [Entry], coverage: &str, contracts: &str) -> Result<(), String> {
-    let coverage: serde_json::Value = serde_json::from_str(coverage).map_err(|e| e.to_string())?;
-    let registry: super::contracts::Registry =
-        serde_json::from_str(contracts).map_err(|e| e.to_string())?;
+fn attach_reports(
+    entries: &mut [Entry],
+    coverage: serde_json::Value,
+    registry: super::contracts::Registry,
+) -> Result<(), String> {
     if registry.format != 2 {
         return Err("Unsupported contract registry".into());
     }
@@ -352,13 +388,8 @@ pub fn verify() -> CatalogueReport {
     let result = (|| -> Result<(), String> {
         let definitions = entries()?;
         report.definitions = definitions.len();
-        let manifest: serde_json::Value = serde_json::from_str(
-            DEFINITIONS
-                .get_file("coverage.json")
-                .and_then(|f| f.contents_utf8())
-                .ok_or("Missing definition coverage inventory")?,
-        )
-        .map_err(|e| e.to_string())?;
+        let manifest: serde_json::Value =
+            serde_json::from_str(COVERAGE).map_err(|e| e.to_string())?;
         report.adjudications = manifest["adjudications"]
             .as_array()
             .ok_or("Missing source adjudication inventory")?
@@ -369,13 +400,7 @@ pub fn verify() -> CatalogueReport {
         if records.len() != definitions.len() {
             return Err("Definition inventory count mismatch".into());
         }
-        let registry: super::contracts::Registry = serde_json::from_str(
-            DEFINITIONS
-                .get_file("contracts.json")
-                .and_then(|f| f.contents_utf8())
-                .ok_or("Missing contract registry")?,
-        )
-        .map_err(|e| e.to_string())?;
+        let registry = read_registry(CONTRACTS).map_err(|e| e.to_string())?;
         if registry.format != 2 {
             return Err("Unsupported contract registry".into());
         }
