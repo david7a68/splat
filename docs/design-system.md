@@ -200,8 +200,8 @@ settings keep their full save actions on a second line at the right edge, so nei
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. Discard recovery uses `Small` text, names the draft, and
-gives Undo the same name for accessibility. Inline creation uses a Label title, fields, a named Create
+icon on the message line, or below when needed. Discard recovery is an Undo message too: info icon, bar,
+`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
 action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
 right edge.
 
@@ -735,9 +735,12 @@ When the turn heading does not fit, drop `’s turn` before shortening the name.
 such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
-(the roster still marks NEXT). A state notice stays whole; beside one, Undo shows `Undo` alone when no
-shortened target fits, and a name is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and
-condition directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
+(the roster still marks NEXT). A state notice stays whole. Beside one, Undo keeps a shortened target while
+one fits, such as `Undo: 3 damage to Brannoch…`: a sheet's step drops `D&D Beyond` before its name
+(`Undo: HP for Brannoch…`), then Undo drops its `U` key letter. A sheet-change notice that leaves no room
+for that target goes below the roster. Undo shows `Undo` alone only when no shortened target fits. A name
+is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
+directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
 Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
 say sheet changed. Sync-panel choices stay in Log and Undo.
