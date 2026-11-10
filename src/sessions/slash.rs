@@ -332,12 +332,17 @@ impl Slash {
                     let Some(generated) = npc.as_ref() else {
                         match error.as_deref() {
                             Some(problem) => {
-                                design::message(ui, Tone::Error, problem);
-                                if Action::quiet("Close")
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked()
-                                {
+                                // The choice starts at the message text; a quiet one keeps its
+                                // words there too.
+                                let close =
+                                    design::message_with_actions(ui, Tone::Error, problem, |ui| {
+                                        Action::quiet("Close")
+                                            .density(Density::Read)
+                                            .line_start()
+                                            .show(ui)
+                                            .clicked()
+                                    });
+                                if close {
                                     result = Outcome::Cancel;
                                 }
                             }
