@@ -5384,6 +5384,14 @@ pub mod nav_table {
             d.in_view(LINKED_TITLE),
             "Reading history: Alt+Left still returns to the entry before the link",
         );
+        d.press_side_button(egui::PointerButton::Extra2, LINKED_TITLE);
+        let forward = !d.in_view(LINKED_TITLE) && d.in_view(LINK);
+        d.press_side_button(egui::PointerButton::Extra1, LINK);
+        d.observe(
+            "G2",
+            forward && d.in_view(LINKED_TITLE),
+            "Reading history: the mouse's Forward and Back buttons step through it",
+        );
         d.click(CLEAR_SEARCH);
         d.begin_task();
 

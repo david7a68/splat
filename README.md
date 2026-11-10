@@ -1040,7 +1040,7 @@ Session Read view keeps each link's written words. When a Timeline event is rena
 
 Settings imports a D&D Beyond campaign directly below its row and suggests a new folder beside the existing campaigns. Saved API keys name their slot, such as **Remove speech key (OpenAI)**. The quiet remove action sits below the key state, at the column’s left edge. Failed recording jobs use **Continue processing**; **Process again** replaces existing results after a separate confirmation.
 
-Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
+Library shows **Back** with **Alt+Left** whenever an earlier entry is available. **Alt+Right** goes forward again to an entry left by Back, until a new link starts a new trail. The mouse's Back and Forward buttons do the same. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
@@ -1050,7 +1050,7 @@ If a package creature is deleted on disk, its encounter row keeps the last known
 
 New creature entries start with speed and six ability scores in the Stat block tables. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 
-Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
+Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back and **Alt+Right** for Forward, as do the mouse's Back and Forward buttons. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
 
 The run header keeps two lines after each action. Undo uses the space after the notice.
 A short label keeps the action, amount and copy number; hover gives the full action.

@@ -249,7 +249,7 @@ line`.
 (T6.4). `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy and creation
 actions, then Back. Drop Back's key hint first; fold Copy and Make NPC note into quiet More when needed, with
-Back before More. Lookup keeps its Back hint. Both use Alt+Left; Lookup takes the key when focus is there.
+Back before More. Lookup keeps its Back hint. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name. Owner status
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the

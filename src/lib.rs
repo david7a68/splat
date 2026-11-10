@@ -27,6 +27,7 @@ mod encounters;
 mod file_batch;
 mod formats_ui;
 mod hermetic;
+mod history;
 mod library;
 #[cfg(test)]
 mod load_bench;
@@ -2185,12 +2186,13 @@ impl Splat {
 }
 
 impl eframe::App for Splat {
-    fn raw_input_hook(&mut self, _: &egui::Context, raw_input: &mut egui::RawInput) {
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         // eframe calls this before the first `update`, where `start` restores the rest.
         if !self.started {
             self.touchpad_speed = self.ui_store.load().touchpad_speed;
         }
         self.touchpad_speed.apply(&mut raw_input.events);
+        history::set_aside(ctx, &mut raw_input.events);
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
@@ -2383,7 +2385,7 @@ impl eframe::App for Splat {
             self.encounters.has_run(),
         );
         design::reserve_primary(ctx, false);
-        self.lookup.back_key(ctx, self.page == Page::Library);
+        self.lookup.history_input(ctx, self.page == Page::Library);
         self.run_strip(ctx);
         self.party_bar(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);
