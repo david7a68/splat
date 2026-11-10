@@ -595,6 +595,19 @@ It must be 1 or more.` Give an upper limit only when exceeded. Done closes the f
 Change forms use the run's condition grid. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
+### Loot lists
+
+One editor holds an encounter's loot and a creature's loot in its Changes, from `loot_editor::show`. Each line is
+a row with a `row_menu` Remove and `Removed <line>.` with `Undo remove loot`. A text line edits in place. A Library
+item shows its name, the book icon and muted `Library item`. A roll shows the dice icon, `Roll`, a `number_field`
+count, `×` and the table as a `menu_button`, then muted dice and note, or a `Cannot roll` warning status with its
+reason. The add field adds the typed words on Enter. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
+only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
+refuses `;`, with the reason beside the field. Its Changes link stays one word, `Loot`, and names any key with no
+table. In a run, a standing creature's card has one muted `Loot · …` line, and the list opens at 0 HP. A result
+replaces its Roll button: the found thing first, then muted `<key> · <values> on <dice>`. The ended view puts
+`LOOT`, a muted `N to roll`, secondary `Roll all N` and quiet `Copy loot` on one line above Final state.
+
 Run settings put Roll NPC initiative help directly below its dropdown, before the tie checkbox: `Run setup
 starts with this choice. You can change it there for one roll. Groups that arrive later use it too.`
 
