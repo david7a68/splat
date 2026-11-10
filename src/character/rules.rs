@@ -395,9 +395,11 @@ pub(super) fn source_id(v: &Value) -> String {
         .unwrap_or_default()
 }
 
+/// `body` is the creature note's body, which the conversion status follows.
 pub(super) fn complete(
     record: &EntitySnapshot,
     notes: &mut Vec<ContentNote>,
+    body: &str,
 ) -> Result<(), String> {
     if registry().version != 1 {
         return Err("Unknown conversion registry".into());
@@ -598,12 +600,7 @@ pub(super) fn complete(
     report.engine_gaps.extend(rules.shared_engine_gaps);
     fields["splat_character"] = serde_json::to_value(sheet).map_err(|e| e.to_string())?;
     put_coverage(&mut fields, report)?;
-    let mut body = entry
-        .body
-        .split("## Import gaps\n")
-        .next()
-        .unwrap_or(&entry.body)
-        .to_owned();
+    let mut body = body.to_owned();
     let cov = coverage(&fields)?;
     body.push_str("## Conversion status\n\n");
     body.push_str(&format!(
@@ -612,13 +609,17 @@ pub(super) fn complete(
         cov.engine_gaps.len()
     ));
     for gap in cov.gaps {
-        body.push_str(&format!("- {}\n", gap.reason));
+        body.push_str(&format!("- {}\n", crate::content::inline_text(&gap.reason)));
     }
     if !cov.required_inputs.is_empty() {
         body.push_str("\n### Required inputs\n\n");
     }
     for input in cov.required_inputs {
-        body.push_str(&format!("- {}: {}\n", input.path, input.reason));
+        body.push_str(&format!(
+            "- {}: {}\n",
+            crate::content::inline_text(&input.path),
+            crate::content::inline_text(&input.reason)
+        ));
     }
     creature = note(creature.relative_path, fields, &body)?;
     notes.extend(rules.notes.into_values());

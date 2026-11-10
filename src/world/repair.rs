@@ -131,14 +131,7 @@ impl Repair {
             }
             return false;
         }
-        if self.reloaded.is_some()
-            && design::undo_message(
-                ui,
-                design::Tone::Info,
-                "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
-                "Undo reload",
-            )
-        {
+        if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
         }
         if let Some(error) = &self.error {

@@ -7,6 +7,7 @@ pub mod campaign_package;
 pub mod check;
 mod content;
 mod presentation;
+pub mod profile;
 mod rules;
 use crate::{
     content::Entry,
@@ -161,6 +162,16 @@ pub fn list(value: &Value) -> &[Value] {
 }
 pub fn string(value: &Value) -> &str {
     value.as_str().unwrap_or("")
+}
+/// A local key that no earlier entry in `taken` has: `base`, then `base_2`, `base_3` and so on.
+fn unique<T>(taken: &BTreeMap<String, T>, base: String) -> String {
+    let mut key = base.clone();
+    let mut occurrence = 1;
+    while taken.contains_key(&key) {
+        occurrence += 1;
+        key = format!("{base}_{occurrence}");
+    }
+    key
 }
 pub fn key(value: &str) -> String {
     value
