@@ -141,7 +141,7 @@ impl Sources {
                 .items
                 .iter()
                 .filter_map(|item| {
-                    crate::lookup::name_rank(&item.lower, &query).map(|rank| (rank, item))
+                    crate::matching::name_rank(&item.lower, &query).map(|rank| (rank, item))
                 })
                 .collect();
             found.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
