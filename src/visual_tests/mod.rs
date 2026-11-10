@@ -3,7 +3,7 @@
 //!
 //! `cargo test` runs every scenario and enforces the ergonomics baseline, without
 //! a GPU or any screenshots. `devenv shell -- visual-test <label>` also renders
-//! PNGs with a software rasterizer. See "Visual tests" in the README.
+//! PNGs, on a GPU when one is available. See "Visual tests" in the README.
 //!
 //! Environment:
 //! - `SPLAT_VISUAL_CAPTURE=1` renders PNGs. Setting `SPLAT_VISUAL_DIR` also does.
@@ -457,7 +457,7 @@ fn jobs() -> usize {
     }
 }
 
-/// Rust code in test builds uses jemalloc, but Mesa's software renderer still
+/// Rust code in test builds uses jemalloc, but Mesa's renderers still
 /// uses glibc's malloc. glibc gives busy threads their own heap arenas and keeps
 /// the memory they free. It also raises its mmap threshold after a large free,
 /// so large buffers then stay in those arenas. One arena per worker and a fixed
@@ -598,7 +598,7 @@ fn is_selected(scenario: &str) -> bool {
 
 /// Only files this suite writes. The folder can be one the caller chose.
 fn clear_old_captures(directory: &Path) {
-    let names = ["manifest.txt", "contact-sheet.png"];
+    let names = ["manifest.txt", "renderer.txt", "contact-sheet.png"];
     let is_ours = |path: &Path| {
         let name = path
             .file_name()
@@ -786,6 +786,10 @@ fn visual_suite() {
             manifest.push_str(&format!("{:x}  {file}\n", Sha256::digest(&bytes)));
         }
         fs::write(directory.join("manifest.txt"), manifest).expect("write manifest");
+        if let Some(adapter) = render::adapter() {
+            fs::write(directory.join("renderer.txt"), format!("{adapter}\n"))
+                .expect("write renderer.txt");
+        }
     }
     let _ = fs::remove_dir_all(&root);
 
