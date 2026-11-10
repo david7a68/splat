@@ -73,39 +73,44 @@ impl Recovery {
 
     pub fn show(&self, ui: &mut egui::Ui, draft: &str) -> Option<bool> {
         let change = self.change.as_ref()?;
-        design::message(
-            ui,
-            Tone::Warning,
-            &format!(
-                "{} changed on disk. Your draft is safe until you choose.",
-                change.path
-            ),
+        let mut messages = vec![format!(
+            "{} changed on disk. Your draft is safe until you choose.",
+            change.path
+        )];
+        messages.extend(
+            change
+                .copies
+                .iter()
+                .map(|path| format!("Another file uses this identity: {path}. Both files stay.")),
         );
-        for path in &change.copies {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!("Another file uses this identity: {path}. Both files stay."),
-            );
+        let last = messages.pop().unwrap_or_default();
+        for message in &messages {
+            design::message(ui, Tone::Warning, message);
         }
+        // The choices follow the last fact the DM reads, at the message text: safe first, then
+        // an `L` gap before the red one.
         let mut choice = None;
-        ui.horizontal_wrapped(|ui| {
-            if Action::secondary("Overwrite with my draft")
+        design::message_with_actions(ui, Tone::Warning, &last, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if Action::secondary("Overwrite with my draft")
+                    .show(ui)
+                    .clicked()
+                {
+                    choice = Some(true);
+                }
+                // egui adds its item spacing too, so the whole gap is exactly `L`.
+                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                if Action::destructive(if change.text.is_some() {
+                    "Reload and lose my draft"
+                } else {
+                    "Let it go"
+                })
                 .show(ui)
                 .clicked()
-            {
-                choice = Some(true);
-            }
-            if Action::destructive(if change.text.is_some() {
-                "Reload and lose my draft"
-            } else {
-                "Let it go"
-            })
-            .show(ui)
-            .clicked()
-            {
-                choice = Some(false);
-            }
+                {
+                    choice = Some(false);
+                }
+            });
         });
         if let Some(text) = &change.text {
             design::draft_comparison_styled(

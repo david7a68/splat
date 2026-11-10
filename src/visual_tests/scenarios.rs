@@ -24,6 +24,26 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// Where each painted copy of these words starts on screen, after stepping back `back`
+/// characters (to the icon before them). Only copies inside their pane's clip count.
+fn painted_starts(d: &Driver<'_>, words: &str, back: usize) -> Vec<Pos2> {
+    let mut starts = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job.text;
+        if let Some(at) = job.find(words) {
+            let index = job[..at].chars().count().saturating_sub(back);
+            let rect = text
+                .galley
+                .pos_from_cursor(egui::text::CCursor::new(index))
+                .translate(text.pos.to_vec2());
+            if clip.contains(rect.center()) {
+                starts.push(rect.left_top());
+            }
+        }
+    });
+    starts
+}
+
 /// FT-2: the run's Undo button always shows the word Undo, at every captured size, and keeps
 /// its full action as its accessible name.
 fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
@@ -1322,7 +1342,7 @@ pub mod party {
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
-        d.expect(CONNECT_FIRST);
+        d.expect(CONNECT);
         d.observe(
             "Force read needs a session",
             !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
@@ -1361,8 +1381,19 @@ pub mod party {
                 ),
             );
         }
+        // One action, one name: the warning's Connect D&D Beyond is the only way to connect on
+        // the page. The header keeps the state.
+        d.observe_both(
+            "iter-15-B-FD8",
+            "With the warning's Connect D&D Beyond, the header shows only Not connected and when it fetched",
+            |d| {
+                !d.has(CONNECT_FIRST)
+                    && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1
+                    && d.visible_text("Not connected · Fetched")
+            },
+        );
         d.state("copy-has-local-edits-signed-out", Sizes::All);
-        d.click("Connect D&D Beyond");
+        d.click(CONNECT);
         d.observe(
             "iter-14-B-FD1-opens",
             d.page_title().as_deref() == Some("Settings")
@@ -1370,21 +1401,19 @@ pub mod party {
             "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
         );
         d.click(NAV_PARTY);
-        d.expect(CONNECT_FIRST);
+        d.expect(CONNECT);
         // Must stay true: the edited note is still on disk, untouched, after the detour.
         d.observe(
             "iter-14-B-FD1-safe",
             std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
             "Opening Settings from the warning leaves the edited note as it was",
         );
-        d.click(CONNECT_FIRST);
         d.observe(
-            "iter-18-B-P3",
-            d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
-            "The Party header connects with the cookie field focused while local edits remain safe",
+            "iter-15-B-FD8-back",
+            !d.has(CONNECT_FIRST)
+                && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1,
+            "Back from Settings, the warning still owns the one Connect D&D Beyond",
         );
-        d.click(NAV_PARTY);
 
         d.app_mut()
             .settings
@@ -1441,6 +1470,7 @@ pub mod party {
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Connect to refresh";
+    const CONNECT: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
@@ -1460,6 +1490,11 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
+    const CHANGED_ON_DISK: &str = "changed on disk. Your draft is safe until you choose.";
+    const OVERWRITE: &str = "Overwrite with my draft";
+    const RELOAD: &str = "Reload and lose my draft";
+    const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
+    const DRAFT_WORDS: &str = " Ash on the water.";
     const RESULT_NAME: &str = "Wolf";
     const OWN_CREATURE: &str = "Cinder Wolf";
     const EDITOR_NAME: &str = "Encounter name";
@@ -1651,6 +1686,56 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+
+        // Another program changes the encounter while the DM edits it. The choices start at the
+        // message text: the safe one first, then exactly `L` before the red one.
+        let file = d
+            .root
+            .join("campaigns/emberfall/Encounters/Bridge Ambush.md");
+        let outside = std::fs::read_to_string(&file).expect("read the encounter") + OUTSIDE_WORDS;
+        std::fs::write(&file, &outside).expect("change the encounter on disk");
+        d.type_into("Read-aloud and notes", DRAFT_WORDS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect(CHANGED_ON_DISK);
+        d.observe(
+            "iter-15-B-EC-safe",
+            std::fs::read_to_string(&file).is_ok_and(|text| text == outside)
+                && d.has_containing(OUTSIDE_WORDS.trim()),
+            "The changed file stays as it is, and the comparison shows its words, until the DM chooses",
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let text = d.painted_rect_in(CHANGED_ON_DISK, egui::Rect::EVERYTHING);
+                let safe = d.place_of(OVERWRITE);
+                let red = d.place_of(RELOAD);
+                let placed = match (text, safe, red) {
+                    (Some(text), Some(safe), Some(red)) => {
+                        (safe.left() - text.left()).abs() < 1.0
+                            && safe.top() >= text.bottom() - 0.5
+                            && (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    }
+                    _ => false,
+                };
+                (placed, format!("text {text:?}, safe {safe:?}, red {red:?}"))
+            });
+            d.observe(
+                "iter-15-B-EC",
+                placed,
+                format!(
+                    "Overwrite with my draft starts at the message text, and the red choice is L after it at {size:?}: {detail}"
+                ),
+            );
+        }
+        d.state("encounter-changed-on-disk", Sizes::All);
+        d.click(OVERWRITE);
+        d.expect(SAVED_NOTE);
+        d.observe(
+            "iter-15-B-EC-overwrite",
+            !d.has(OVERWRITE)
+                && std::fs::read_to_string(&file).is_ok_and(|text| text.contains(DRAFT_WORDS)),
+            "Overwrite with my draft still saves the draft over the changed file",
+        );
         d.click(RESUME);
         d.expect(&format!("{RUN_HEADING}Bridge Ambush"));
         d.observe(
@@ -4498,6 +4583,19 @@ pub mod run_edge_states {
                 }
             },
         );
+        // Exactly `L`: egui's own item spacing once made this gap 24 px.
+        d.observe_both(
+            "iter-15-B-ST4",
+            "Replace the file with this run starts exactly L after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    })
+            },
+        );
         d.state("changed-on-disk", Sizes::Default);
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
@@ -4847,6 +4945,23 @@ pub mod run_roster_conflict {
             .simulate_sync_state(SYNCED, SyncState::Conflict);
         d.settle();
         d.state("roster-of-12-with-conflict", Sizes::All);
+        // On the compact row, the conflict's icon starts where Bloodied's icon starts on the
+        // rows below: the second lines share one left edge.
+        let (aligned, detail) = d.at_size(SMALL, |d| {
+            let conflict = painted_starts(d, "Conflict", 2);
+            let bloodied = painted_starts(d, "Bloodied", 2);
+            let aligned = matches!(conflict.as_slice(), [conflict] if !bloodied.is_empty()
+                && bloodied.iter().all(|b| (b.x - conflict.x).abs() < 0.5));
+            (
+                aligned,
+                format!("conflict {conflict:?}, bloodied {bloodied:?}"),
+            )
+        });
+        d.observe(
+            "iter-15-B-FT3",
+            aligned,
+            format!("The compact row's Conflict starts at the second line's edge: {detail}"),
+        );
         let nodes = d.nodes();
         let rows = run_large_roster::ROSTER_12
             .iter()
@@ -9283,6 +9398,52 @@ pub mod encounter_owned_groups {
             "Dragging an encounter's own group in combat adds each member",
         );
         d.expect("Maximum HP would become −28. It must be 1 or more.");
+        // A repair link under its member fault starts its words at the warning text, and its
+        // icon hangs in the gutter. In a wide panel, it stays beside the fault on its line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let mut placed = true;
+                let mut detail = String::new();
+                for (fault, link) in [
+                    ("Member 1, Unknown creature", "Campaign → Packages"),
+                    ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
+                ] {
+                    let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
+                    let near = |at: &Pos2| {
+                        text.is_some_and(|text| {
+                            at.y >= text.top() - 1.0 && at.y < text.bottom() + crate::design::XL
+                        })
+                    };
+                    let words: Vec<_> = painted_starts(d, link, 0)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    let icons: Vec<_> = painted_starts(d, link, 2)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    placed &= match (text, words.as_slice(), icons.as_slice()) {
+                        (Some(text), [words], [icon]) if size == LARGE => {
+                            words.y < text.bottom()
+                                && icon.x >= text.right() + crate::design::L - 0.5
+                        }
+                        (Some(text), [words], [icon]) => {
+                            words.y >= text.bottom() - 0.5
+                                && (words.x - text.left()).abs() < 1.0
+                                && icon.x < text.left() - 1.0
+                        }
+                        _ => false,
+                    };
+                    detail += &format!("{link}: text {text:?}, words {words:?}, icon {icons:?}. ");
+                }
+                (placed, detail)
+            });
+            d.observe(
+                "iter-15-B-FD4",
+                placed,
+                format!("Arrivals repair links hang their icon at {size:?}: {detail}"),
+            );
+        }
         d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 

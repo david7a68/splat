@@ -591,7 +591,8 @@ impl Run {
                     .hint("Keep the changed file as it is, and save this run beside it")
                     .show(ui)
                     .clicked();
-                ui.add_space(design::L);
+                // egui adds its item spacing too, so the whole gap is exactly `L`.
+                ui.add_space(design::L - ui.spacing().item_spacing.x);
                 let replace = Action::destructive("Replace the file with this run")
                     .density(Density::Read)
                     .hint("The changes in the file on disk are lost")
@@ -5573,13 +5574,29 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
         })
         .inner
     } else {
-        design::message(ui, Tone::Warning, fault);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            design::status_link(ui, status).clicked()
+        // A notice action: the link's words start at the warning text.
+        design::message_with_actions(ui, Tone::Warning, fault, |ui| {
+            hanging_link(ui, status.icon, |ui| {
+                design::status_link(ui, status).clicked()
+            })
         })
-        .inner
     }
+}
+
+/// A repair link under a message. Its words start at the message text, and its icon hangs in
+/// the gutter before them.
+pub(crate) fn hanging_link(
+    ui: &mut egui::Ui,
+    icon: &str,
+    link: impl FnOnce(&mut egui::Ui) -> bool,
+) -> bool {
+    let hang = design::number_width(ui, &format!("{icon} "), &Type::Small.font(ui));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_space(-hang);
+        link(ui)
+    })
+    .inner
 }
 
 fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
@@ -6204,17 +6221,21 @@ impl RowLayout {
         }
         if inline_state && let Some(sync) = sync {
             let status = sync_status(sync);
-            job.append(
-                " ",
-                0.0,
-                egui::TextFormat {
-                    font_id: font.clone(),
-                    ..Default::default()
-                },
-            );
+            // Alone on the line, the state starts at the line's edge, like Bloodied.
+            let alone = job.is_empty();
+            if !alone {
+                job.append(
+                    " ",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        ..Default::default()
+                    },
+                );
+            }
             job.append(
                 &format!("{} {}", status.icon, status.word).replace(' ', "\u{a0}"),
-                design::XS,
+                if alone { 0.0 } else { design::XS },
                 egui::TextFormat {
                     font_id: Type::Small.sized(ui, scale.mark),
                     color: status.color,
@@ -7970,6 +7991,80 @@ mod tests {
                         expected
                     );
                 }
+            });
+        });
+    }
+
+    #[test]
+    fn iter_15_b_inline_conflict_starts_at_the_second_line_edge() {
+        let base = super::super::tests::run().state.participants[0].clone();
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                // The x where the state's icon starts on the second line.
+                let icon_x = |participant: &Participant, sync: Option<SyncState>| {
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        participant,
+                        sync,
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    assert!(layout.inline_state, "the compact row puts its state inline");
+                    let line = layout.second_line.as_ref().unwrap();
+                    let text = line.text();
+                    let word = if sync.is_some() {
+                        "Conflict"
+                    } else {
+                        "Bloodied"
+                    };
+                    let at = text.find(word).expect("the state is on the second line");
+                    let icon = text[..at].chars().count() - 2;
+                    let before = text[..at].chars().take(icon).collect::<String>();
+                    let x = line.pos_from_cursor(egui::text::CCursor::new(icon)).left();
+                    (x, before)
+                };
+                let mut alone = base.clone();
+                alone.side = "party".into();
+                alone.conditions.clear();
+                alone.hp = alone.max_hp;
+                alone.initiative = Some(14);
+                let mut bloodied = alone.clone();
+                bloodied.hp = alone.max_hp.map(|max| max / 3);
+                let (conflict, before) = icon_x(&alone, Some(SyncState::Conflict));
+                let (hurt, _) = icon_x(&bloodied, None);
+                assert_eq!(before, "", "nothing comes before a conflict that is alone");
+                assert!(
+                    (conflict - hurt).abs() < 0.5,
+                    "Conflict starts at {conflict}, Bloodied at {hurt}"
+                );
+                // Must stay true: after other words, the state keeps its space from them.
+                let mut prone = alone.clone();
+                prone.conditions = vec!["Prone".into()];
+                let (after, before) = icon_x(&prone, Some(SyncState::Conflict));
+                assert!(
+                    before.ends_with(' ') && before.contains("Prone"),
+                    "{before:?}"
+                );
+                let prone_end = {
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        &prone,
+                        Some(SyncState::Conflict),
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    let text = line.text();
+                    let end = text[..text.find("Prone").unwrap()].chars().count() + "Prone".len();
+                    line.pos_from_cursor(egui::text::CCursor::new(end)).left()
+                };
+                assert!(after >= prone_end + design::XS, "{after} after {prone_end}");
             });
         });
     }
