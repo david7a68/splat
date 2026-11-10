@@ -34,7 +34,7 @@ const TURN: u64 = 10 * 60;
 const RENEW_BELOW: u64 = 5 * 60;
 /// A new claim saves nothing until this time has passed, so that a claim another computer
 /// made at about the same time can arrive through Obsidian Sync first.
-const SETTLE: u64 = 60;
+pub const SETTLE: u64 = 60;
 
 /// The computer that saves the sheets, since when it claimed the turn, and until when.
 #[derive(Clone, Debug, PartialEq, Eq)]

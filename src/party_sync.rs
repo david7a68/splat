@@ -286,6 +286,8 @@ enum Event {
     CampaignCopy(String, Result<Vec<PathBuf>, CampaignCopyError>),
     Stored(Stored, Result<(), String>),
     Writer(crate::sheet_writer::Turn),
+    /// Cached sheets waited for this computer's new claim to settle. Save them after it.
+    CacheSavesLater,
 }
 /// What a local storage warning is about. The next success for the same thing clears it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -328,6 +330,42 @@ fn release_after(path: &std::path::Path, saved: &Result<Vec<PathBuf>, CampaignCo
     if matches!(saved, Err(CampaignCopyError::Failed(_))) {
         let (device, _) = crate::hermetic::device();
         crate::sheet_writer::release(path, device, crate::hermetic::now());
+    }
+}
+/// Whether an automatic save may write now. It asks the note right before each save, because
+/// a read can take long enough for another computer to take the turn, and a failed save gives
+/// the turn up. The answer also goes to the page.
+fn may_save(path: &std::path::Path, tx: &mpsc::Sender<Event>) -> crate::sheet_writer::Turn {
+    let turn = writer_turn(path);
+    let _ = tx.send(Event::Writer(turn.clone()));
+    turn
+}
+/// Saves the campaign copies of cached sheets, each only while this computer has the turn.
+/// A claim that has not settled asks for the saves again later.
+fn save_cached(
+    records: &[EntitySnapshot],
+    path: &std::path::Path,
+    gate: &Arc<Mutex<bool>>,
+    tx: &mpsc::Sender<Event>,
+) {
+    for record in records {
+        if gate.lock().map_or(true, |active| !*active) {
+            break;
+        }
+        match may_save(path, tx) {
+            crate::sheet_writer::Turn::Mine => {}
+            crate::sheet_writer::Turn::Settling => {
+                let _ = tx.send(Event::CacheSavesLater);
+                break;
+            }
+            _ => break,
+        }
+        let saved = save_campaign_copy(record, path, false);
+        release_after(path, &saved);
+        let _ = tx.send(Event::CampaignCopy(
+            record.source.character_id.clone(),
+            saved,
+        ));
     }
 }
 #[derive(Default)]
@@ -375,6 +413,8 @@ pub struct Reader {
     pub writer_elsewhere: Option<String>,
     /// The DM asked for the next read, so it saves on this computer too.
     by_hand: bool,
+    /// When to save the cached sheets again, after a new claim settles.
+    cache_saves_at: Option<Instant>,
 }
 impl Drop for Reader {
     fn drop(&mut self) {
@@ -430,32 +470,39 @@ impl Reader {
         thread::spawn(move || {
             let result = crate::hermetic::character_cache()
                 .and_then(|c| c.load_all(scope.local, &scope.remote));
-            let turn = writer_turn(&scope.path);
-            let mine = turn == crate::sheet_writer::Turn::Mine;
-            let _ = tx.send(Event::Writer(turn));
-            if let Ok(records) = &result
-                && mine
-            {
-                for record in records {
-                    if let Ok(active) = gate.lock() {
-                        if !*active {
-                            break;
-                        }
-                        let saved = save_campaign_copy(record, &scope.path, false);
-                        release_after(&scope.path, &saved);
-                        let _ = tx.send(Event::CampaignCopy(
-                            record.source.character_id.clone(),
-                            saved,
-                        ));
-                    }
-                }
+            if let Ok(records) = &result {
+                save_cached(records, &scope.path, &gate, &tx);
             }
             let _ = tx.send(Event::Cache(result));
             ctx.request_repaint();
         });
     }
+    /// Saves the cached sheets again, after this computer's claim has settled. It works without
+    /// a session, so a DM who starts offline still gets the copies.
+    fn save_cached_later(&mut self, ctx: &egui::Context) {
+        let Some(scope) = self.scope.clone() else {
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        self.pending = Some(rx);
+        let ctx = ctx.clone();
+        let gate = self.gate.clone();
+        thread::spawn(move || {
+            if let Ok(records) = crate::hermetic::character_cache()
+                .and_then(|c| c.load_all(scope.local, &scope.remote))
+            {
+                save_cached(&records, &scope.path, &gate, &tx);
+            }
+            ctx.request_repaint();
+        });
+    }
     pub fn tick(&mut self, session: Option<Session>, ctx: &egui::Context) {
         self.poll();
+        if self.pending.is_none() && self.cache_saves_at.is_some_and(|t| t <= Instant::now()) {
+            self.cache_saves_at = None;
+            self.save_cached_later(ctx);
+            return;
+        }
         if !self.cache_loaded && self.pending.is_none() {
             self.load_cache(ctx);
             return;
@@ -594,9 +641,6 @@ impl Reader {
         let failures = self.portrait_failures.clone();
         thread::spawn(move || {
             let run = || -> Result<(), Failure> {
-                let turn = writer_turn(&scope.path);
-                let mine = by_hand || turn == crate::sheet_writer::Turn::Mine;
-                let _ = tx.send(Event::Writer(turn));
                 let client = client()?;
                 let members = if full {
                     let members = roster(&get(
@@ -656,7 +700,10 @@ impl Reader {
                                 .map(|_| ());
                             let _ = tx.send(Event::Stored(Stored::Sheet(id.clone()), saved));
                             let forced = force.contains(&id);
-                            if mine || forced {
+                            if by_hand
+                                || forced
+                                || may_save(&scope.path, &tx) == crate::sheet_writer::Turn::Mine
+                            {
                                 let saved = save_campaign_copy(record, &scope.path, forced);
                                 if !by_hand && !forced {
                                     release_after(&scope.path, &saved);
@@ -779,6 +826,10 @@ impl Reader {
                 Ok(Event::CampaignCopy(id, result)) => self.campaign_copy_saved(id, result),
                 Ok(Event::Stored(what, result)) => self.stored(what, result),
                 Ok(Event::Writer(turn)) => self.note_turn(turn),
+                Ok(Event::CacheSavesLater) => {
+                    self.cache_saves_at =
+                        Some(Instant::now() + Duration::from_secs(crate::sheet_writer::SETTLE + 1));
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
@@ -1003,6 +1054,22 @@ mod tests {
         reader.save_campaign_copy(&id, &record);
         assert_eq!(saved(campaign.path()), 1);
         assert_eq!(reader.writer_elsewhere, None);
+    }
+    #[test]
+    fn cached_sheets_wait_for_a_new_claim_and_ask_to_be_saved_after_it() {
+        let campaign = tempfile::tempdir().unwrap();
+        let record = crate::visual_tests::fixture::sample_sheet();
+        let gate = Arc::new(Mutex::new(true));
+        let (tx, rx) = mpsc::channel();
+        // No note yet: this computer claims the turn, and the claim has not settled.
+        save_cached(std::slice::from_ref(&record), campaign.path(), &gate, &tx);
+        drop(tx);
+        let mut reader = Reader::default();
+        reader.pending = Some(rx);
+        reader.poll();
+        assert!(reader.cache_saves_at.is_some());
+        assert!(!campaign.path().join("Characters/D&D Beyond").exists());
+        assert!(campaign.path().join(crate::sheet_writer::FILE).exists());
     }
     #[test]
     fn a_request_by_hand_counts_only_for_the_read_it_asked_for() {
