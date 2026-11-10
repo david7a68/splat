@@ -1287,9 +1287,8 @@ mod tests {
             let ctx = egui::Context::default();
             let _ = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::party::overview(ui, &record, None);
-                    for page in 1..5 {
-                        crate::party::details(ui, &record, page, "");
+                    for (page, _) in crate::party::SHEET_PAGES {
+                        crate::party::sheet_page(ui, &record, page, "", None);
                     }
                 });
             });

@@ -928,11 +928,12 @@ pub mod party {
     const SECOND_MEMBER: &str = "Iselle Marrowind";
     const OFFLINE: &str = "Not connected";
     const FRESHNESS: &str = "Fetched";
-    const PAGES: [(&str, &str); 4] = [
+    const PAGES: [(&str, &str); 5] = [
         ("Actions", "page-actions"),
         ("Spells", "page-spells"),
         ("Equipment", "page-equipment"),
         ("Features", "page-features"),
+        ("Background", "page-background"),
     ];
     const OVERVIEW: &str = "Overview";
     const SOURCE: &str = "Technical details";
@@ -4347,7 +4348,7 @@ pub mod signed_in {
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
     const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
-    const PAGES: [&str; 4] = ["Actions", "Spells", "Equipment", "Features"];
+    const PAGES: [&str; 5] = ["Actions", "Spells", "Equipment", "Features", "Background"];
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
     const SYNC_SECTION: &str = "Combat sync";
