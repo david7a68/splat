@@ -105,7 +105,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 Session Read view omits plan links already shown beside the note, including group links.
-The note file keeps its Markdown and prose. Campaign dependency issues name the entry
+The Add strip stays directly below Tonight, above messages and plan rows. An empty
+note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
@@ -134,7 +135,8 @@ values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
 `immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
 under every habitat.
 
-A live initiative change says `acts next round` when its place has passed. Setup counts
+A live initiative change says `acts next round` when its place has passed, and
+`acts again this round` when a row that already acted moves below the current turn. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
 keep their edges visible while the text scrolls. Saved runs keep the last change in the
 same words as the close dialog.
@@ -159,7 +161,8 @@ Timeline and the Session plan use the same fight state words. An open fight's Ti
 back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
 keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
-and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
+and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
+Both pages let you turn the ruling off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
@@ -399,7 +402,7 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. Add buttons stay at the foot of the plan. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
 
@@ -711,6 +714,12 @@ roll each participant using its supplied bonus. Rows hold still while you type, 
 each tied total has **Tie** and two fixed arrow slots below it. The setup header warns about ties even while the panel is open. Fill in
 unknown HP values through the row menu's **Correct…** action, then choose **Begin combat**. **Next turn** advances through present participants and counts
 rounds. Absent participants keep their state and initiative when they return.
+In combat, click a row's initiative, type the new total, and press Enter; Escape
+leaves it as it was. The row moves to its new place as one step of undo, and the
+current turn stays. A tie keeps its order, or roster order when the campaign uses it.
+The current participant keeps its turn and its row until **Next turn**: then it moves,
+so no one is skipped or acts twice. A lower total acts later this round, as a delay;
+a higher one acts next round.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and

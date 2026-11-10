@@ -184,8 +184,9 @@ changes`. `No changes to save.` belongs only to blocked Save's hover text and ac
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
-reason and disables campaign choices. Package, encounter and repair drafts keep their campaign-switch reason
-after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content.
+reason and disables campaign choices. Package, encounter, repair and run-settings drafts keep their campaign-switch
+reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
+settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
@@ -443,6 +444,7 @@ Name the campaign folder, session folder and link. The session folder has one he
 Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`. A clean folder form
 shows the check icon and No changes. Locked controls have no clean-state reason. Folder help names its files
 and permits a folder in an Obsidian vault. Disconnected campaign-link help opens Settings from an inline link.
+Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
 or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
@@ -724,7 +726,8 @@ with error status in header and rail. Rail conflicts say Notes changed, with Not
 and for accessibility.
 
 Session title and muted date wrap together, with Record on the title line. Below 640 px, save state and
-Details sit beside Read on the content tab row. Read and Write sit there while notes are visible. Notes saved
+Details sit beside Read on the content tab row. Read and Write sit there while notes are visible. An empty
+Read view keeps only its inline Write link; hide tab-row Write until the note has content. Notes saved
 centres on the title action row. Last time is one line linking the previous session and recap, with full recap
 on hover. Without recap, use prose under What happened and omit link-only lines; without either, show the
 session link alone. An older session warns once and links the session being played, which the list marks
@@ -752,8 +755,9 @@ separate tabs; stacked Timeline says All events. Each row has an icon, link and 
 action on the name line, fixed right-aligned action slot and separate menu slot. Row fields open in place,
 align with the name and use Timeline form parts. A caret and accessible expanded state mark open rows; a
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
-duration and place stay on Timeline. Add buttons stay at the foot; messages open above without moving them.
-Empty plans use empty_state above the strip. Add-strip messages stay beside Add. In notes ends at the button
+duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
+messages and scrolling rows. It stays in place when messages or rows change. Empty plans use empty_state
+below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
@@ -773,8 +777,9 @@ accessible name. Duplicate saved-run names first add session name; only same-nam
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. Resume has the run icon.
 
-Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Closed rows show
-Everyone at full; open rows hide that summary so the ruling stays in place. Actions say Mark everyone at full
+Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Every closed
+long-rest row shows an icon and either Everyone at full or Not at full. Open rows hide that summary so the
+ruling stays in place. Actions say Mark everyone at full
 or Mark not at full; states say Everyone at full or Not at full. Keep one Undo ruling until the next edit.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
 rest.` and offers Use the saved HP as one Undo step. Combat retains saved HP; the rest message names those
@@ -789,8 +794,8 @@ with Lookup's width rule and spare space at the right. No selection means no det
 
 Detail headers stay above the scrolling form: kind, title, save state, Copy link, Remove menu. Measure the
 title with Copy link and Saving blocked to avoid moving fields; otherwise put actions on a second line above
-the scroll area. Title and label stay fixed below the header, fields clip below it, and headers end at the
-fields' right edge. Opening Timeline, changing filters, selecting or adding resets fields to the top. Day
+the scroll area. Title and label stay fixed below the header. An S gap and a hairline below Title mark the
+top edge of the scrolling fields. Headers end at the fields' right edge. Opening Timeline, changing filters, selecting or adding resets fields to the top. Day
 headers use only the named calendar icon; days show Starts without Ends, and start time is Kind's help line.
 Field labels have `M` before them. Copy link uses a check and Copied for two seconds. Link text stays in a
 quiet section; Place after is the only ordering control. Adds to shares the filter line. Context shows visible
@@ -812,7 +817,8 @@ Overwrite before destructive Reload and lose my timeline. Flags name file and li
 actions; flagged days have a warning icon. Rail conflicts use warning Timeline changed on disk; write failures
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
-Copied sessions name both files and offer Make <file> a separate entry with Undo separate entry. Moved drafts
+Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
+Make <file> a separate entry with Undo separate entry. Moved drafts
 offer the new path and Let it go. Missing session and run folders offer Choose folder.
 
 ### Notes panel
