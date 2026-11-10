@@ -145,7 +145,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
-The Write frame follows the column; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
+The Write frame is no wider than the reader measure plus its padding and stays at the left edge.
+Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
@@ -465,6 +466,8 @@ The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+**Return to the session being played** opens that note from another session. If both sessions have the same
+number, the warning names both note files.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
 
@@ -517,6 +520,9 @@ dies, and the file stays if it does.
 ### Processing a recording
 
 Nothing leaves the computer until you select **Process** on a recording. Choose the services in **Settings**.
+The first recording that needs processing owns the primary **Process** or **Continue processing** action
+when no run is open and no recovery action in the bottom banner owns primary.
+Open runs keep these actions secondary.
 
 1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
    with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts
@@ -539,6 +545,7 @@ The default instructions for each pass, which you can edit in Settings, ask for 
 ```
 
 A marker is a suggestion. The recording's row lists them, and only what you add goes on the timeline.
+**Add** and **On the timeline** share one column beside the marker text.
 
 ## World notes, NPCs and roll tables
 
