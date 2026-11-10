@@ -518,7 +518,8 @@ Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
 or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
-change counts saved files left behind. Move runs and save stages all files without replacement, saves
+change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
+shows only while no run is open. It stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
 result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
@@ -997,8 +998,9 @@ long-rest row shows an icon and either Everyone at full or Not at full. Open row
 ruling stays in place. Actions say Mark everyone at full
 or Mark not at full; states say Everyone at full or Not at full. Keep one Undo ruling until the next edit.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
-rest.` and offers Use the saved HP as one Undo step. Combat retains saved HP; the rest message names those
-fights.
+rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
+`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with Undo, which gives
+back the full HP. Combat retains saved HP; the rest message names those fights.
 
 ### Party bar
 
