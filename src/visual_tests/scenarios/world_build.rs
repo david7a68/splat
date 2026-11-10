@@ -2555,6 +2555,47 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
         d.in_view("Edit Rook Ambry") && !d.has("Edit North Gate"),
         "The header count's repair menu opens the note whose place has two matches",
     );
+    // iter-13-D-SD2: a place that waits for a choice is not a broken link, even beside one.
+    let npc_path = folder.join("NPCs/Rook Ambry.md");
+    let original = fs::read_to_string(&npc_path).unwrap();
+    for (fields, words, other) in [
+        (
+            "splat_in: '[[Watch House]]'\nsplat_part_of: ['[[Lost Guild]]']\n",
+            "2 links need fixing",
+            "broken link",
+        ),
+        (
+            "splat_in: '[[Nowhere]]'\nsplat_part_of: ['[[Lost Guild]]']\n",
+            "2 broken links",
+            "need fixing",
+        ),
+    ] {
+        fs::write(
+            &npc_path,
+            format!("---\nsplat_schema: 2\nsplat_id: {npc}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_type: npc\n{fields}---\n\n# Rook Ambry\n\nA note for tonight.\n"),
+        )
+        .unwrap();
+        reload(d);
+        d.observe_both(
+            "iter-13-D-SD2",
+            &format!("A row with two link problems says {words}"),
+            |d| {
+                let rows = rook_rows(d);
+                // Neighbour: the header still counts the note once.
+                !rows.is_empty()
+                    && rows.iter().all(|row| {
+                        row.name.contains(words) && !row.name.contains(other) && row.in_view()
+                    })
+                    && d.in_view_containing("1 note needs fixing")
+            },
+        );
+        if words == "2 links need fixing" {
+            d.state("mixed-link-problems-need-fixing", Sizes::All);
+        }
+    }
+    fs::write(&npc_path, &original).unwrap();
+    reload(d);
+    d.expect("Edit Rook Ambry");
     d.click_containing("Watch House · 2 matches");
     d.click("Locations/Watch House.md");
     look_up(d, "Rook Ambry");
@@ -2676,6 +2717,53 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
 }
 
 /// Copying a typed note must keep both files reachable.
+/// Do the duplicate repair choices and consequences start at the warning's text edge? Only nodes
+/// that start right of `pane_left` count, so a check of one pane cannot pass on another's copies.
+fn duplicate_choices_at_text(d: &Driver<'_>, pane_left: f32) -> (bool, String) {
+    let warning = "These two files claim to be the same note.";
+    let parts = [
+        "Make Rook Ambry copy.md a separate note",
+        "Existing links keep NPCs/Rook Ambry.md.",
+        "Make Rook Ambry.md a separate note",
+        "Existing links will then use NPCs/Rook Ambry copy.md.",
+    ];
+    for name in parts.iter().chain([&warning]) {
+        d.expect(name);
+    }
+    let nodes = d.nodes();
+    let texts: Vec<_> = nodes
+        .iter()
+        .filter(|node| node.name == warning && node.in_view() && node.rect.left() >= pane_left)
+        .map(|node| node.rect)
+        .collect();
+    let found: Vec<_> = nodes
+        .iter()
+        .filter(|node| {
+            parts.contains(&node.name.as_str()) && node.in_view() && node.rect.left() >= pane_left
+        })
+        .collect();
+    let every_part = parts
+        .iter()
+        .all(|part| found.iter().any(|node| node.name == *part));
+    // Each choice and consequence sits below a warning and starts at its text edge.
+    let aligned = found.iter().all(|node| {
+        texts.iter().any(|text| {
+            text.top() < node.rect.top() && (text.left() - node.rect.left()).abs() < 1.0
+        })
+    });
+    (
+        !texts.is_empty() && every_part && aligned,
+        format!(
+            "texts at {:?}, parts at {:?}",
+            texts.iter().map(|text| text.left()).collect::<Vec<_>>(),
+            found
+                .iter()
+                .map(|node| (node.name.clone(), node.rect.left()))
+                .collect::<Vec<_>>()
+        ),
+    )
+}
+
 pub fn world_note_duplicated(d: &mut Driver<'_>) {
     let campaign = d.app_mut().campaigns.active_campaign().unwrap();
     let catalogue = crate::content_workspace::Catalogue::load(&[], Some(&campaign)).unwrap();
@@ -2801,6 +2889,14 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
         );
     }
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (aligned, detail) = d.at_size(size, |d| duplicate_choices_at_text(d, 0.0));
+        d.observe(
+            "iter-13-D-FD4-world",
+            aligned,
+            format!("World's duplicate choices start at the message text at {size:?}: {detail}"),
+        );
+    }
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
     d.expect("Make Rook Ambry copy.md a separate note");
@@ -2869,6 +2965,21 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                     .all(|row| row.name.contains("Same note in two files"))
         },
     );
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (aligned, detail) = d.at_size(size, |d| {
+            // Lookup's own copies only: the World pane beside it shows the same message.
+            let pane_left = d
+                .place_of("Resize Lookup column")
+                .map_or(f32::INFINITY, |splitter| splitter.right());
+            let (aligned, detail) = duplicate_choices_at_text(d, pane_left);
+            (aligned, format!("Lookup pane from x {pane_left}; {detail}"))
+        });
+        d.observe(
+            "iter-13-D-FD4-lookup",
+            aligned,
+            format!("Lookup's duplicate choices start at the message text at {size:?}: {detail}"),
+        );
+    }
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
@@ -3528,9 +3639,39 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Added Guild");
     d.click("Added Guild");
+    let safe_rook_rows = |d: &Driver<'_>| -> Vec<String> {
+        d.nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Safe Rook · ") && node.in_view())
+            .map(|node| node.name)
+            .collect()
+    };
+    let before = safe_rook_rows(d);
+    d.observe(
+        "iter-13-D-FD2-before",
+        !before.is_empty() && before.iter().all(|row| row.contains("Group not found")),
+        format!("fixture: before the outside change, the row names the missing group: {before:?}"),
+    );
     fs::write(&path, &unread).unwrap();
     d.click("Save changes");
     d.expect("This note changed on disk. Your draft is safe until you choose.");
+    // The save reads the note again, as a refused Part of write does.
+    d.settle();
+    d.observe_both(
+        "iter-13-D-FD2",
+        "A save conflict refreshes the note's list row and header count; the choice still waits",
+        |d| {
+            d.expect("Overwrite with my draft");
+            let rows = safe_rook_rows(d);
+            // Neighbour: the header still counts the note once.
+            !rows.is_empty()
+                && rows
+                    .iter()
+                    .all(|row| row.contains("1 value not read") && !row.contains("Group not found"))
+                && d.in_view_containing("1 note needs fixing")
+                && d.in_view("Reload and lose my draft")
+        },
+    );
     d.state("group-draft-disk-conflict", Sizes::All);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -3583,6 +3724,172 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     d.state("unread-groups-edit-repair-link", Sizes::All);
     d.click("Cancel");
+
+    // iter-13-D-FD2: the conflict's reload must not cost the Reload choice its Undo.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    let away = readable.replace("splat_status: alive", "splat_status: away");
+    assert_ne!(away, readable, "fixture: Obsidian changes the status");
+    fs::write(&path, &away).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.settle();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.observe_both(
+        "iter-13-D-FD2-reload-undo",
+        "After the conflict's reload, Reload shows the disk value and keeps Undo reload",
+        |d| {
+            d.expect("Undo reload");
+            d.in_view("Undo reload") && d.field_text("Status").as_deref() == Some("away")
+        },
+    );
+    d.click("Undo reload");
+    d.observe(
+        "iter-13-D-FD2-reload-undone",
+        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload"),
+        "Undo reload restores the draft",
+    );
+    d.click("Discard");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        away.as_bytes(),
+        "iter-13-D-FD2-no-write"
+    );
+    // iter-13-D-FD2-second: Obsidian writes again while the choice is open. Reload must not drop
+    // Undo reload for a version the DM has not seen.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    fs::write(&path, &away).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.settle();
+    let gone = readable.replace("splat_status: alive", "splat_status: gone");
+    fs::write(&path, &gone).unwrap();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.observe_both(
+        "iter-13-D-FD2-second",
+        "A second outside change after Reload shows the choice again, not a silent reopen",
+        |d| {
+            d.expect(conflict);
+            // Neighbour: the form waits for the choice, so no field shows yet.
+            d.in_view(conflict)
+                && d.in_view("Reload and lose my draft")
+                && d.field_text("Status").is_none()
+        },
+    );
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.observe(
+        "iter-13-D-FD2-second-reload",
+        d.in_view("Undo reload") && d.field_text("Status").as_deref() == Some("gone"),
+        "The second Reload shows the newest file and keeps Undo reload",
+    );
+    d.click("Undo reload");
+    d.observe(
+        "iter-13-D-FD2-second-undone",
+        d.field_text("Status").as_deref() == Some("ready") && !d.has("Undo reload"),
+        "Undo reload restores the DM's own draft, not the version between",
+    );
+    d.click("Discard");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        gone.as_bytes(),
+        "iter-13-D-FD2-second-no-write"
+    );
+    // iter-13-D-FD2-second-overwrite: the same start, then Overwrite at the second choice. The
+    // DM's own draft goes in, with Undo, and the reopened choice counts as unsaved work.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    fs::write(&path, &away).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    d.settle();
+    fs::write(&path, &gone).unwrap();
+    d.click("Reload and lose my draft");
+    d.settle();
+    d.expect(conflict);
+    let unsaved = d.app_mut().any_unsaved_edits();
+    d.observe(
+        "iter-13-D-FD2-second-unsaved",
+        unsaved && d.in_view("Overwrite with my draft"),
+        "While the second choice shows, the DM's draft counts as unsaved for the close guard",
+    );
+    d.click("Overwrite with my draft");
+    d.settle();
+    let ready_over_gone = gone.replace("splat_status: gone", "splat_status: ready");
+    assert_ne!(ready_over_gone, gone, "fixture: the draft's status differs");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        ready_over_gone.as_bytes(),
+        "iter-13-D-FD2-second-overwrite: Overwrite writes the DM's ready over gone"
+    );
+    d.expect("Undo changes");
+    d.click("Undo changes");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        gone.as_bytes(),
+        "iter-13-D-FD2-second-overwrite-undo: Undo restores gone"
+    );
+    // iter-13-D-FD2-second-overwrite-outside: disk1 also changes another field. Overwrite at the
+    // second choice changes only what the DM changed; disk2 keeps the rest.
+    let status_line = "splat_status: alive\n";
+    let paragraph = "\nA paragraph from Obsidian.\n";
+    for (case, base, outside) in [
+        (
+            "in",
+            readable.replace(
+                status_line,
+                &format!("splat_in: '[[Old Gate]]'\n{status_line}"),
+            ),
+            readable.replace(
+                status_line,
+                &format!("splat_in: '[[New Gate]]'\n{status_line}"),
+            ),
+        ),
+        ("text", readable.clone(), format!("{readable}{paragraph}")),
+    ] {
+        let disk1 = outside.replace(status_line, "splat_status: away\n");
+        let disk2 = outside.replace(status_line, "splat_status: gone\n");
+        let expected = outside.replace(status_line, "splat_status: ready\n");
+        assert!(
+            base != outside && disk1 != outside && disk2 != outside && expected != outside,
+            "fixture {case}: each version differs"
+        );
+        fs::write(&path, &base).unwrap();
+        reload(d);
+        d.click("Edit Safe Rook");
+        d.replace_text_in("Status", "ready");
+        fs::write(&path, &disk1).unwrap();
+        d.click("Save changes");
+        d.expect(conflict);
+        d.settle();
+        fs::write(&path, &disk2).unwrap();
+        d.click("Reload and lose my draft");
+        d.settle();
+        d.expect(conflict);
+        d.click("Overwrite with my draft");
+        d.settle();
+        assert_eq!(
+            String::from_utf8(fs::read(&path).unwrap()).unwrap(),
+            expected,
+            "iter-13-D-FD2-second-overwrite-{case}: only the DM's status goes over disk2"
+        );
+        d.expect("Undo changes");
+        d.click("Undo changes");
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            disk2.as_bytes(),
+            "iter-13-D-FD2-second-overwrite-{case}-undo: Undo restores disk2"
+        );
+    }
 
     // Compact Read has no group Change. Use its real Edit → Change → Save route.
     fs::write(&path, &readable).unwrap();
