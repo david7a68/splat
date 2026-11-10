@@ -12299,7 +12299,8 @@ fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
 const LOOKUP_SPLITTER: &str = "Resize Lookup column";
 
 /// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
-/// words are, and the icon's colour.
+/// words are, and the icon's colour. An underline counts whether the text paints it or the link
+/// paints it as a line under the text.
 fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, bool, egui::Color32)> {
     let whole = format!("{icon} {words}");
     let mut found = None;
@@ -12314,14 +12315,29 @@ fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, boo
                 .find(|section| job.text[section.byte_range.clone()].contains(part))
         };
         if let Some((icon, name)) = section(icon).zip(section(words)) {
-            found = Some((
-                icon.format.underline.width > 0.0,
-                name.format.underline.width > 0.0,
-                icon.format.color,
-            ));
+            let bounds = egui::Rect::from_min_size(text.pos, text.galley.size());
+            let start = whole.chars().count() - words.chars().count();
+            let words_left = text.pos.x
+                + text
+                    .galley
+                    .pos_from_cursor(egui::text::CCursor::new(start))
+                    .left();
+            found = Some((bounds, words_left, icon.format.clone(), name.format.clone()));
         }
     });
-    found
+    let (bounds, words_left, icon, name) = found?;
+    // A line just under the text, across the icon or across the words.
+    let lines = d.line_segments_in(bounds.expand2(egui::vec2(0.0, 4.0)));
+    let line_under = |from: f32, to: f32| {
+        lines
+            .iter()
+            .any(|line| line.left() < to - 0.5 && line.right() > from + 0.5)
+    };
+    Some((
+        icon.underline.width > 0.0 || line_under(bounds.left(), words_left),
+        name.underline.width > 0.0 || line_under(words_left, bounds.right()),
+        icon.color,
+    ))
 }
 
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight

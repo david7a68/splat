@@ -317,11 +317,14 @@ pub fn broken(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo changes"),
         "Undo changes restores the repaired note",
     );
-    // An edit's Undo from before the note broke does not hide the later repair's result.
+    // An edit's Undo from before the note broke does not hide the later repair's result. The
+    // note breaks while Problems shows, so the reader does not see the file change, and the
+    // note leaves the index with its Undo still kept.
     d.click("Edit Repaired watchkeeper");
     d.type_into("Status", "on watch");
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
+    d.click_containing("Problems · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
