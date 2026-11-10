@@ -751,6 +751,7 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
+        assert!(d.visible_text("Campaign entries"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
@@ -1470,6 +1471,11 @@ pub mod encounter_run {
             !d.visible_text("%% splat") && !d.visible_text("Field"),
             "Lookup hides machine lines and empty field rows",
         );
+        d.observe_both(
+            "AT3/FT-6",
+            "Lookup omits the reserved Splat data section",
+            |d| !d.visible_text("Splat data"),
+        );
         d.state("lookup-by-keyboard", Sizes::All);
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
@@ -1658,7 +1664,7 @@ pub mod settings {
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
-        d.state("confirm-remove-campaign", Sizes::Default);
+        d.state("confirm-remove-campaign", Sizes::All);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
         d.click(EDIT_DETAILS);
@@ -1828,6 +1834,31 @@ pub mod dialogs {
                 && d.has_containing(MODULE)
                 && d.has_containing(CLOSE_PROMPT),
             "The prompt names the entry, and the package it is in",
+        );
+        d.observe_both(
+            "FD-12",
+            "The destructive close action stays left of the safe actions on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (lose, keep, save) = (
+                    rect("Discard and close"),
+                    rect("Keep editing"),
+                    rect("Save and close"),
+                );
+                lose.right() < keep.left()
+                    && keep.right() < save.left()
+                    && (lose.center().y - keep.center().y).abs() < 1.0
+                    && (save.center().y - keep.center().y).abs() < 1.0
+            },
         );
         d.state("unsaved-changes-on-close", Sizes::All);
         d.goal("ask to close with unsaved changes");
@@ -2901,6 +2932,11 @@ pub mod nav_state {
         d.begin_task();
         search_library(d, QUERY);
         d.click_containing(CREATURE);
+        d.observe_both(
+            "FD-9",
+            "The reader starts with its title, without a repeated Library breadcrumb",
+            |d| !d.visible_text("Library / Creatures"),
+        );
         d.state("library-set-up", Sizes::DefaultAndHiDpi);
 
         go_party(d);
@@ -4496,7 +4532,7 @@ pub mod nav_table {
         d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
-        let entry_scroll = d.scroll_position_of_reader();
+        let entry_scroll = d.scroll_position_of_reader(ENTRY);
         d.begin_task();
 
         // Open run: selection, amount, scroll, undo, and sync.
@@ -4554,7 +4590,7 @@ pub mod nav_table {
         go_library(d);
         let scope = d.visible_text(EVERYTHING);
         let entry = d.has_label(ENTRY);
-        let scroll = d.scroll_position_of_reader();
+        let scroll = d.scroll_position_of_reader(ENTRY);
         d.observe(
             "G2",
             scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
@@ -5008,8 +5044,15 @@ pub mod session_notes {
         d.expect("Copy link");
         d.click("Copy link");
         d.expect("Copied");
-        d.expect("MENTIONED IN");
-        d.state("timeline-event", Sizes::AllAndHiDpi);
+        d.expect("Mentioned in");
+        d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            let label_visible = d.visible_text("TITLE") || d.visible_text("Title");
+            d.observe(
+                "iter-2-C-FT12",
+                label_visible,
+                "The Title label stays visible with its field after a rename",
+            );
+        });
         d.observe(
             "T11.4",
             d.has_containing(&format!("Session 1: {TITLE}")),
@@ -5191,6 +5234,11 @@ pub mod session_notes {
         d.click("Campaign");
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
+        d.observe_both(
+            "iter-2-C-FT11",
+            "The clean session folder has a No changes status",
+            |d| d.visible_text("No changes") && !d.visible_text("No changes to save."),
+        );
         d.state("session-folder-in-campaign", Sizes::All);
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
@@ -5631,7 +5679,13 @@ pub mod session_notes {
             "iter-10-S3",
             "Timeline header actions end at the form edge",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6073,7 +6127,19 @@ pub mod session_recording {
             "A saved key does not follow the DM to a different service",
         );
         d.expect("Remove speech key (OpenAI)");
-        d.state("key-for-another-service", Sizes::Default);
+        d.state_prepared("key-for-another-service", Sizes::All, |d| {
+            d.scroll_until(
+                pos2(600.0, 400.0),
+                "Remove transcript and summary key (OpenAI): LLM API key",
+                12,
+            );
+            d.expect("Remove transcript and summary key (OpenAI)");
+            d.observe(
+                "iter-2-C-AT5",
+                d.has_containing("Remove transcript and summary key (OpenAI)"),
+                "The key removal action names the transcript and summary task",
+            );
+        });
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
@@ -6231,7 +6297,13 @@ pub mod session_recording {
             "iter-10-S3-wide",
             "Wide Timeline keeps its header and form edges aligned",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6311,7 +6383,7 @@ pub mod session_recording {
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
-        d.state("recording-delete", Sizes::Default);
+        d.state("recording-delete", Sizes::All);
         d.click("Delete recording");
         d.expect("Recording deleted.");
 
@@ -7002,7 +7074,8 @@ pub mod encounter_owned_groups {
             roster_places(d).len() == rows_before + 2,
             "Dragging an encounter's own group in combat adds each member",
         );
-        d.state("own-group-dragged-in-combat", Sizes::Default);
+        d.expect("Maximum HP would become −28. It must be 1 or more.");
+        d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
@@ -7285,6 +7358,16 @@ pub mod session_plan_groups {
         d.click(&format!("Plan {GROUP_RIVALS}"));
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
         d.state("plan-with-groups", Sizes::All);
+        d.state_prepared("plan-groups-read", Sizes::All, |d| {
+            read_note(d);
+            let compact = if d.has("Plan and notes") {
+                !d.visible_text("Plan for tonight") && d.has("Edit group Ash Pack") && d.has(&format!("Edit group {GROUP_RIVALS}"))
+            } else {
+                d.visible_text("2 groups, in the plan")
+            };
+            d.observe("iter-2-C-ST3", compact, "Read compacts group links already shown in the working plan, and keeps the tab count");
+        });
+        show_plan(d);
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
@@ -7370,6 +7453,34 @@ pub mod session_plan_groups {
             stays_out && !d.has("Go to Arrivals for Border Watch"),
             "A group is linked in the plan it began in, with another note open on the way",
         );
+
+        d.click(NAV_CAMPAIGN);
+        d.expect("1 content issue to repair");
+        d.click("1 content issue to repair");
+        d.expect("Lost Patrol needs a creature that cannot be found.");
+        let missing_id = splat::character::stable_id("visual:group:lost:creature").to_string();
+        d.observe_both(
+            "iter-2-C-missing-member",
+            "The missing member names its owner and keeps its reference folded",
+            |d| {
+                d.visible_text("Lost Patrol needs a creature that cannot be found.")
+                    && d.has("Repair Lost Patrol")
+                    && !d.visible_text(&missing_id)
+            },
+        );
+        d.state("missing-group-member", Sizes::All);
+        d.click("Technical details");
+        d.expect(&missing_id);
+        d.state("missing-member-technical-details", Sizes::All);
+        d.click("Repair Lost Patrol");
+        d.expect("Markdown editor");
+        d.observe(
+            "iter-2-C-member-repair",
+            d.editor_text()
+                .is_some_and(|text| text.contains(&missing_id)),
+            "Repair opens the referring member's file without changing it",
+        );
+        d.state("missing-member-repair", Sizes::All);
     }
 }
 
@@ -7886,6 +7997,21 @@ pub mod session_plan {
 
         // What is unfinished can go on or go away. What is over is in the history.
         go_encounters(d);
+        d.observe_both(
+            "iter-2-C-FT4",
+            "Duplicate paused runs show one save time",
+            |d| {
+                let nodes = d.nodes();
+                let duplicates: Vec<_> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.contains(" · Setup · Paused") && node.name.contains("2026-01-01")
+                    })
+                    .collect();
+                !duplicates.is_empty()
+                    && duplicates.iter().all(|node| !node.name.contains("Saved "))
+            },
+        );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
             "T14.1",
@@ -8125,6 +8251,7 @@ pub mod share_to_package {
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
+        d.expect("Also copies Captain Varra, because Watch Orders links to it.");
         assert!(!d.visible_text("Required entries: 1"));
         d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Ashen Marches/Watch Orders.md");
@@ -8175,6 +8302,24 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.expect("Unregister Ashen Marches?");
+        d.observe_both(
+            "FD-12",
+            "Unregister stays left of Keep the package on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (remove, keep) = (rect("Unregister"), rect("Keep the package"));
+                remove.right() < keep.left() && (remove.center().y - keep.center().y).abs() < 1.0
+            },
+        );
         d.state("package-in-use-warning", Sizes::All);
         d.click("Unregister");
         d.observe(

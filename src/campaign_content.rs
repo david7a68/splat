@@ -1252,13 +1252,51 @@ impl CampaignContent {
                     .id_salt("campaign_issues")
                     .show(ui, |ui| {
                         flag_lines(ui, &mut self.open_run_settings);
-                        for e in errors {
+                        for e in errors.iter().filter(|error| {
+                            !closure
+                                .missing_dependencies
+                                .iter()
+                                .any(|issue| issue.message.as_str() == error.as_str())
+                        }) {
                             ui.add(
                                 egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
                                     .wrap(),
                             );
                         }
-                        for entry in catalogue.entries.values().filter(|entry| entry.private) {
+                        for issue in &closure.missing_dependencies {
+                            ui.push_id(&issue.reference, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, &issue.message).color(c.muted),
+                                    )
+                                    .wrap(),
+                                );
+                                for id in &issue.owners {
+                                    let owner = &catalogue.entries[id];
+                                    let action = format!("Repair {}", owner.entry.name);
+                                    if let Some(path) = catalogue.file_path_of(*id)
+                                        && design::link(ui, &action).clicked()
+                                    {
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair"),
+                                                path.to_path_buf(),
+                                            )
+                                        });
+                                    }
+                                }
+                                design::quiet_section(ui, "Technical details", |ui| {
+                                    ui.label(Type::Small.rich(ui, &issue.reference).color(c.muted));
+                                });
+                            });
+                        }
+                        for entry in catalogue.entries.values().filter(|entry| {
+                            entry.private
+                                && !closure
+                                    .missing_dependencies
+                                    .iter()
+                                    .any(|issue| issue.owners.contains(&entry.entry.id))
+                        }) {
                             if splat::content::required_references(&entry.entry).is_ok_and(
                                 |references| {
                                     references

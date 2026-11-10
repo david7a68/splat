@@ -624,30 +624,35 @@ impl Splat {
             }
             ui.add_space(design::S);
             let loses = items.len() != background && (!only_sync || sync_loss);
-            ui.horizontal(|ui| {
-                if only_sync
-                    && conflict.is_some()
-                    && Action::quiet("Review conflict").show(ui).clicked()
-                {
-                    if let Some(run) = self.encounters.run_mut() {
-                        run.review_conflict();
+            if only_sync && (conflict.is_some() || self.settings.signed_out()) {
+                ui.horizontal(|ui| {
+                    if only_sync
+                        && conflict.is_some()
+                        && Action::quiet("Review conflict").show(ui).clicked()
+                    {
+                        if let Some(run) = self.encounters.run_mut() {
+                            run.review_conflict();
+                        }
+                        self.lookup.open = false;
+                        self.sessions.notes_open = false;
+                        self.page = Page::Run;
+                        self.confirm_close = false;
                     }
-                    self.lookup.open = false;
-                    self.sessions.notes_open = false;
-                    self.page = Page::Run;
-                    self.confirm_close = false;
-                }
-                if only_sync
-                    && self.settings.signed_out()
-                    && Action::quiet("Connect to sync").show(ui).clicked()
-                {
-                    self.page = Page::Settings;
-                    self.settings_tab = SettingsTab::default();
-                    self.settings.focus_sign_in();
-                    self.confirm_close = false;
-                }
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if only_sync
+                        && self.settings.signed_out()
+                        && Action::quiet("Connect to sync").show(ui).clicked()
+                    {
+                        self.page = Page::Settings;
+                        self.settings_tab = SettingsTab::default();
+                        self.settings.focus_sign_in();
+                        self.confirm_close = false;
+                    }
+                });
+            }
+            let (lose, ()) = design::dialog_actions(
+                ui,
+                |ui| loses && Action::destructive(discard_label).show(ui).clicked(),
+                |ui| {
                     if only_run_unsaved {
                         save_new = Action::primary("Save as a new run and close")
                             .show(ui)
@@ -664,12 +669,9 @@ impl Splat {
                         ui.data_mut(|data| data.insert_temp(id, true));
                     }
                     keep |= response.clicked();
-                });
-            });
-            if loses {
-                ui.add_space(design::L);
-                discard = Action::destructive(discard_label).show(ui).clicked();
-            }
+                },
+            );
+            discard |= lose;
         });
         if keep {
             self.confirm_close = false;

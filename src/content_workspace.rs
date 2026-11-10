@@ -712,6 +712,76 @@ fn needed_by(names: &BTreeSet<String>) -> String {
         more => format!("{} and {more} more", shown.join(", ")),
     }
 }
+/// A missing reference keeps its repair owners and raw value separate from the message.
+#[derive(Default)]
+pub struct MissingDependency {
+    pub reference: String,
+    pub owners: BTreeSet<Uuid>,
+    pub message: String,
+    names: BTreeSet<String>,
+    creature: bool,
+}
+
+/// Read retained link text or a member's display name without exposing its reference.
+fn missing_reference_context(
+    value: &Value,
+    reference: &Reference,
+) -> Option<(Option<String>, bool)> {
+    fn link_name(raw: &str) -> Option<String> {
+        let name = if let Some(link) = raw.strip_prefix("[[").and_then(|s| s.strip_suffix("]]")) {
+            link.rsplit('|')
+                .next()
+                .unwrap_or(link)
+                .split('#')
+                .next()
+                .unwrap_or("")
+        } else if let Some(link) = raw.strip_prefix('[').and_then(|s| s.split_once("](splat:")) {
+            link.0
+        } else {
+            raw
+        }
+        .trim();
+        (!name.is_empty() && Uuid::parse_str(name).is_err() && !content::resource_key(name))
+            .then(|| name.to_owned())
+    }
+    match value {
+        Value::Mapping(map) => {
+            let matches = match reference {
+                Reference::Id(id) => map
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|raw| raw == id.to_string()),
+                Reference::Key(key) => map.get("key").and_then(Value::as_str) == Some(key),
+            };
+            if matches {
+                return Some((
+                    map.get("link").and_then(Value::as_str).and_then(link_name),
+                    false,
+                ));
+            }
+            map.iter().find_map(|(key, value)| {
+                let (name, creature) = missing_reference_context(value, reference)?;
+                let creature = creature || matches!(key.as_str(), Some("creature" | "stat_block"));
+                let name = name.or_else(|| {
+                    creature
+                        .then(|| {
+                            map.get("overrides")?
+                                .get("name")?
+                                .as_str()
+                                .map(str::to_owned)
+                        })
+                        .flatten()
+                });
+                Some((name, creature))
+            })
+        }
+        Value::Sequence(values) => values
+            .iter()
+            .find_map(|value| missing_reference_context(value, reference)),
+        _ => None,
+    }
+}
+
 impl Catalogue {
     /// Run copies keep enough provenance to distinguish a removed package from a deleted file.
     pub(crate) fn run_entry(&self, id: Uuid) -> Entry {
@@ -896,7 +966,11 @@ impl Catalogue {
         id.filter(|id| self.entries.contains_key(id))
             .ok_or_else(|| format!("Unavailable content: {reference}"))
     }
-    /// An entry's file as it was read, to copy from. A built-in entry has no file on disk.
+    /// The file to open for repair. Built-in entries have no file on disk.
+    pub fn file_path_of(&self, id: Uuid) -> Option<&Path> {
+        self.files.get(&id).map(|(path, _)| path.as_path())
+    }
+    /// An entry's file as it was read, to copy from.
     pub fn text_of(&self, id: Uuid) -> Option<String> {
         self.files
             .get(&id)
@@ -1298,7 +1372,7 @@ impl Catalogue {
         let mut visited = BTreeSet::new();
         // One issue for each thing that is missing, however many entries need it.
         let mut missing_packages = BTreeSet::new();
-        let mut missing_entries = BTreeMap::<String, BTreeSet<String>>::new();
+        let mut missing_entries = BTreeMap::<String, MissingDependency>::new();
         while let Some(id) = queue.pop_front() {
             if !visited.insert(id) {
                 continue;
@@ -1338,10 +1412,17 @@ impl Catalogue {
                                     missing_packages.insert(package);
                                 }
                                 None => {
-                                    missing_entries
-                                        .entry(reference.to_string())
-                                        .or_default()
-                                        .insert(entry.entry.name.clone());
+                                    let issue =
+                                        missing_entries.entry(reference.to_string()).or_default();
+                                    issue.owners.insert(id);
+                                    if let Some((name, creature)) =
+                                        entry.entry.fields.values().find_map(|value| {
+                                            missing_reference_context(value, &reference)
+                                        })
+                                    {
+                                        issue.names.extend(name);
+                                        issue.creature |= creature;
+                                    }
                                 }
                             },
                         }
@@ -1354,14 +1435,38 @@ impl Catalogue {
                 .iter()
                 .map(|package| format!("Package not found: {package}")),
         );
-        result
-            .errors
-            .extend(missing_entries.iter().map(|(reference, names)| {
-                format!(
-                    "Entry not found: {reference} · needed by {}",
-                    needed_by(names)
-                )
-            }));
+        for (reference, mut issue) in missing_entries {
+            let owners = issue
+                .owners
+                .iter()
+                .map(|id| self.entries[id].entry.name.clone())
+                .collect();
+            let owners = needed_by(&owners);
+            let needs = if issue.owners.len() == 1 {
+                "needs"
+            } else {
+                "need"
+            };
+            issue.message = if issue.names.is_empty() {
+                let kind = if issue.creature {
+                    "a creature"
+                } else {
+                    "an entry"
+                };
+                format!("{owners} {needs} {kind} that cannot be found.")
+            } else {
+                let names = needed_by(&issue.names);
+                let was = if issue.names.len() == 1 {
+                    "was"
+                } else {
+                    "were"
+                };
+                format!("{owners} {needs} {names}, which {was} deleted.")
+            };
+            issue.reference = reference;
+            result.errors.push(issue.message.clone());
+            result.missing_dependencies.push(issue);
+        }
         // Cycles between named rule groups are invalid selection units.
         fn visit(
             cat: &Catalogue,
@@ -1406,6 +1511,7 @@ impl Catalogue {
 }
 #[derive(Default)]
 pub struct Closure {
+    pub missing_dependencies: Vec<MissingDependency>,
     pub direct: BTreeSet<Uuid>,
     pub required: BTreeMap<Uuid, BTreeSet<String>>,
     pub errors: Vec<String>,
@@ -3333,6 +3439,34 @@ mod tests {
         fs::write(folder.join(format!("{name}.md")), text).unwrap();
     }
     #[test]
+    fn iter_2_c_missing_member_names_its_owner_and_retained_name() {
+        let owner = Uuid::new_v4();
+        let missing = Uuid::new_v4();
+        for (link, name) in [(Some("[[Scout]]"), Some("Scout")), (None, None)] {
+            let mut cat = Catalogue::default();
+            let mut group = entry("Lost Patrol", "encounter_group");
+            group.fields.insert(
+                "splat_encounter_group".into(),
+                serde_yaml_ng::from_str::<Value>(&format!(
+                    "members: [{{creature: {{id: {missing}{}}}}}]",
+                    link.map_or(String::new(), |link| format!(", link: '{link}'"))
+                ))
+                .unwrap(),
+            );
+            cat.insert(group, owner, true).unwrap();
+            let closure = cat.closure(&[], owner);
+            assert_eq!(
+                closure.errors,
+                [name.map_or_else(
+                    || "Lost Patrol needs a creature that cannot be found.".to_owned(),
+                    |name| format!("Lost Patrol needs {name}, which was deleted.")
+                )]
+            );
+            assert!(!closure.errors.join(" ").contains(&missing.to_string()));
+        }
+    }
+
+    #[test]
     fn each_missing_package_and_entry_is_one_issue() {
         let temp = tempfile::tempdir().unwrap();
         let book = temp.path().join("Monster Manual");
@@ -3368,7 +3502,7 @@ mod tests {
                 )
                 .errors
         };
-        let lost = "Entry not found: book:spells/lost · needed by Devil, Elf, Fiend and 1 more";
+        let lost = "Devil, Elf, Fiend and 1 more need an entry that cannot be found.";
         assert_eq!(
             issues(),
             ["Package not found: Player's Handbook (2024)", lost]

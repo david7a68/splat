@@ -56,16 +56,18 @@ pub fn run(d: &mut Driver<'_>) {
     fs::copy(&note.path, &copy).unwrap();
     d.app_mut().sessions.refresh();
     d.settle();
-    d.expect("Give the copy a new identity");
+    d.expect("These two files claim to be the same entry.");
     d.state("session-copy", Sizes::All);
-    d.click_starting("New identity:");
-    d.expect("Undo new identity");
+    d.click("Make Session 0.md a separate entry");
+    d.expect("Undo separate entry");
+    d.expect("Session 0.md is now a separate entry.");
+    d.state("session-copy-repaired", Sizes::All);
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder).len() == 2,
-        "Both copies have a session after New identity",
+        "Both copies have a session after making a separate entry",
     );
-    d.click("Undo new identity");
+    d.click("Undo separate entry");
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder)[0].path == note.path,

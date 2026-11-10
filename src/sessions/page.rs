@@ -772,8 +772,13 @@ fn recap_preview(body: &str) -> Option<String> {
     None
 }
 
-/// Keep a note's plan links in its file, but avoid listing the same fights twice in Read.
-fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> String {
+/// Keep plan links in the file, but do not repeat fights and groups in Read.
+fn compact_plan_for_reading(
+    body: &str,
+    fights: &[PlanFight],
+    groups: &[std::sync::Arc<crate::encounter_run::RunGroup>],
+    beside: bool,
+) -> String {
     let Some(plan) = section_text(body, "Plan for tonight") else {
         return body.to_owned();
     };
@@ -781,7 +786,7 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let only_fights = !lines.is_empty()
+    let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
             let link = line
                 .trim()
@@ -792,20 +797,52 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
                     .and_then(|link| link.strip_suffix("]]"))
             })
             .is_some_and(|name| {
-                fights.iter().any(|fight| {
-                    fight
-                        .name
-                        .eq_ignore_ascii_case(name.split('|').next().unwrap_or(name))
-                })
+                let name = name.split('|').next().unwrap_or(name);
+                fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                    || groups
+                        .iter()
+                        .any(|group| group.name.eq_ignore_ascii_case(name))
             })
         });
-    if !only_fights {
+    if !only_planned_links {
         return body.to_owned();
     }
-    let words = format!(
-        "{}, in the plan",
-        design::count(lines.len(), "fight", "fights")
-    );
+    let fight_count = lines
+        .iter()
+        .filter(|line| {
+            let name = line
+                .trim()
+                .trim_start_matches(['-', '*', ' '])
+                .trim_start_matches("[[")
+                .trim_end_matches("]]")
+                .split('|')
+                .next()
+                .unwrap_or("");
+            fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+        })
+        .count();
+    // The working plan lists a linked group once, even when its link is repeated.
+    let group_count = linked_names(&plan)
+        .iter()
+        .filter(|name| {
+            !fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+        })
+        .count();
+    let counts = [
+        (fight_count, "fight", "fights"),
+        (group_count, "group", "groups"),
+    ]
+    .into_iter()
+    .filter(|(count, _, _)| *count > 0)
+    .map(|(count, one, many)| design::count(count, one, many))
+    .collect::<Vec<_>>();
+    let words = format!("{}, in the plan", counts.join(" and "));
     let heading = body
         .split_inclusive('\n')
         .scan(0, |offset, line| {
@@ -3283,7 +3320,7 @@ impl Sessions {
             || draft.body.clone(),
             |note| without_own_heading(&draft.body, note),
         );
-        let compact = compact_plan_for_reading(&body, plan.fights, beside);
+        let compact = compact_plan_for_reading(&body, plan.fights, plan.groups, beside);
         let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
@@ -5267,12 +5304,12 @@ impl Sessions {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
+            design::dialog_actions(
+                ui,
                 |ui| {
                     delete = Action::destructive("Delete recording").show(ui).clicked();
-                    ui.add_space(design::L);
+                },
+                |ui| {
                     let response = Action::secondary("Keep the recording").show(ui);
                     if !ui.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false)) {
                         response.request_focus();
@@ -5417,20 +5454,13 @@ impl Sessions {
             }
         }
         for copy in &note.also {
-            design::message(
+            let filename = copy.file_name().unwrap_or_default().to_string_lossy();
+            if design::message_with_action(
                 ui,
                 Tone::Warning,
-                &format!(
-                    "Another file claims this session: {}. Splat edits {}. Give the copy a new identity to keep both sessions.",
-                    copy.file_name().unwrap_or_default().to_string_lossy(),
-                    note.path.file_name().unwrap_or_default().to_string_lossy()
-                ),
-            );
-            if Action::secondary("New identity")
-                .name(&format!("New identity: {}", copy.display()))
-                .show(ui)
-                .clicked()
-            {
+                crate::world::DUPLICATE_ENTRY,
+                &crate::world::separate_entry_action(&filename),
+            ) {
                 match super::new_identity(copy) {
                     Ok(undo) => {
                         self.identity_undo = Some(undo);
@@ -5440,13 +5470,21 @@ impl Sessions {
                 }
             }
         }
-        if self.identity_undo.is_some() && Action::quiet("Undo new identity").show(ui).clicked() {
-            match self.identity_undo.as_ref().unwrap().undo() {
-                Ok(()) => {
-                    self.identity_undo = None;
-                    self.refresh();
+        if let Some(undo) = &self.identity_undo {
+            let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
+            if design::undo_message(
+                ui,
+                Tone::Success,
+                &crate::world::separate_entry_result(&filename),
+                crate::world::SEPARATE_ENTRY_UNDO,
+            ) {
+                match undo.undo() {
+                    Ok(()) => {
+                        self.identity_undo = None;
+                        self.refresh();
+                    }
+                    Err(error) => self.notice = Some((Tone::Error, error)),
                 }
-                Err(error) => self.notice = Some((Tone::Error, error)),
             }
         }
         let today = self.today();
@@ -6149,7 +6187,17 @@ impl Sessions {
                         self.folder_error = None;
                     }
                 }
-                if locked.is_none() {
+                if !changed {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::OK,
+                            word: "No changes",
+                            color: colors().document.clean,
+                        },
+                    );
+                }
+                if locked.is_none() && changed {
                     design::blocked_reason(ui, blocked);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -6775,26 +6823,84 @@ mod tests {
             summary: String::new(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
-        let compact = compact_plan_for_reading(source, &fights, true);
+        let compact = compact_plan_for_reading(source, &fights, &[], true);
         assert!(!compact.contains("Plan for tonight"));
         assert!(!compact.contains("[[Bridge Ambush]]"));
         assert!(compact.contains("We crossed the bridge."));
         assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
-        let tab = compact_plan_for_reading(source, &fights, false);
+        let tab = compact_plan_for_reading(source, &fights, &[], false);
         assert!(tab.contains("2 fights, in the plan"));
         assert!(!tab.contains("at left"));
         let empty = source.replace("We crossed the bridge.", "");
         assert!(!has_written_text(&compact_plan_for_reading(
-            &empty, &fights, true
+            &empty,
+            &fights,
+            &[],
+            true
         )));
         let repeated = format!(
             "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
         );
-        let compact = compact_plan_for_reading(&repeated, &fights, true);
+        let compact = compact_plan_for_reading(&repeated, &fights, &[], true);
         assert_eq!(compact.matches("[[Bridge Ambush]]").count(), 2);
         assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
         let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
-        assert_eq!(compact_plan_for_reading(&mixed, &fights, true), mixed);
+        assert_eq!(compact_plan_for_reading(&mixed, &fights, &[], true), mixed);
+    }
+
+    #[test]
+    fn iter_2_c_read_plan_compacts_groups_and_keeps_prose_and_unknown_links() {
+        let groups = [std::sync::Arc::new(crate::encounter_run::RunGroup {
+            id: Uuid::new_v4(),
+            path: "Group.md".into(),
+            name: "Ash Pack".into(),
+            side: "enemies".into(),
+            encounter: None,
+            encounter_name: None,
+            members: vec![],
+            notes: String::new(),
+            xp: 0,
+            xp_unknown: vec![],
+            unavailable: 0,
+            unavailable_members: vec![],
+            problem: None,
+            warnings: vec![],
+        })];
+        let fights = [PlanFight {
+            saved: None,
+            name: "Bridge Ambush".into(),
+            path: String::new(),
+            summary: String::new(),
+        }];
+        for (links, count) in [
+            ("- [[ash pack|The wolves]]", "1 group"),
+            ("- [[Ash Pack]]\n- [[Bridge Ambush]]", "1 fight and 1 group"),
+            ("- [[Ash Pack]]\n- [[Ash Pack]]", "1 group"),
+        ] {
+            let source = format!(
+                "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"
+            );
+            let before = source.clone();
+            let compact = compact_plan_for_reading(&source, &fights, &groups, true);
+            assert!(!compact.contains("Plan for tonight"));
+            assert!(compact.contains("We reached the mill."));
+            assert!(
+                compact_plan_for_reading(&source, &fights, &groups, false)
+                    .contains(&format!("{count}, in the plan"))
+            );
+            assert_eq!(source, before);
+        }
+        for lines in [
+            "- [[Ash Pack]]\nAsk the ferryman.",
+            "- [[Unknown group]]",
+            "- [[Ash Pack]] extra words",
+        ] {
+            let source = format!("## Plan for tonight\n\n{lines}\n");
+            assert_eq!(
+                compact_plan_for_reading(&source, &fights, &groups, true),
+                source
+            );
+        }
     }
 
     #[test]

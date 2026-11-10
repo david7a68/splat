@@ -261,6 +261,77 @@ fn row_menu_for_run(
     });
 }
 
+/// A duplicate name uses its session first, and has only one save time.
+fn paused_run_detail(
+    run: &SavedRunInfo,
+    runs: &[&SavedRunInfo],
+    open: bool,
+    story: &Story<'_>,
+) -> String {
+    let session_of = |run: &SavedRunInfo| {
+        story
+            .events
+            .iter()
+            .find(|event| event.run == run.id && run.id.is_some())
+            .and_then(|event| event.session)
+            .and_then(|id| story.sessions.iter().find(|session| session.id == id))
+    };
+    let duplicates = runs
+        .iter()
+        .filter(|other| other.encounter == run.encounter)
+        .collect::<Vec<_>>();
+    let session = session_of(run);
+    let mut parts = if open {
+        Vec::new()
+    } else {
+        run.label
+            .trim_end_matches('.')
+            .split(" · ")
+            .filter(|part| !part.is_empty() && !part.starts_with("Saved "))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let needs_date = duplicates.len() > 1
+        && (session.is_none()
+            || duplicates.iter().any(|other| {
+                other.path != run.path
+                    && session_of(other).map(|session| session.id)
+                        == session.map(|session| session.id)
+            }));
+    if duplicates.len() > 1
+        && let Some(session) = session
+    {
+        parts.push(session.label.clone());
+    }
+    if needs_date {
+        let time = run
+            .saved_at
+            .map(|at| {
+                let same_day = duplicates.iter().any(|other| {
+                    other.path != run.path
+                        && other
+                            .saved_at
+                            .is_some_and(|other| other / 86_400 == at / 86_400)
+                });
+                if same_day {
+                    crate::encounter_run::calendar_time(at)
+                } else {
+                    crate::encounter_run::calendar_date(at)
+                }
+            })
+            .unwrap_or_else(|| "Save time unknown".into());
+        parts.push(time);
+    } else if let Some(at) = run.saved_at {
+        parts.push(format!(
+            "Saved {}",
+            crate::encounter_run::saved_time(at, crate::hermetic::now())
+        ));
+    } else if open {
+        parts.push("Save time unknown".into());
+    }
+    parts.join(" · ")
+}
+
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -281,80 +352,7 @@ pub(super) fn in_progress_list(
     for (index, run) in page.in_progress.iter().enumerate() {
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
-        let mut detail = if open {
-            run.saved_at.map_or_else(
-                || "Save time unknown".to_owned(),
-                |at| {
-                    format!(
-                        "Saved {}",
-                        crate::encounter_run::saved_time(at, crate::hermetic::now())
-                    )
-                },
-            )
-        } else {
-            run.saved_at.map_or_else(
-                || run.label.clone(),
-                |at| {
-                    format!(
-                        "{} · Saved {}",
-                        run.label.trim_end_matches('.'),
-                        crate::encounter_run::saved_time(at, crate::hermetic::now())
-                    )
-                },
-            )
-        };
-        if page
-            .in_progress
-            .iter()
-            .filter(|other| other.encounter == run.encounter)
-            .count()
-            > 1
-        {
-            let session = story
-                .events
-                .iter()
-                .find(|event| event.run == run.id && run.id.is_some())
-                .and_then(|event| event.session)
-                .and_then(|id| story.sessions.iter().find(|session| session.id == id));
-            let context = session
-                .map(|session| {
-                    run.saved_at.map_or_else(
-                        || session.label.clone(),
-                        |at| {
-                            format!(
-                                "{} · {}",
-                                session.label,
-                                crate::encounter_run::calendar_time(at)
-                            )
-                        },
-                    )
-                })
-                .unwrap_or_else(|| {
-                    let created = run.saved_at;
-                    let same_day = created.is_some_and(|at| {
-                        page.in_progress.iter().any(|other| {
-                            other.path != run.path
-                                && other.encounter == run.encounter
-                                && other.saved_at.is_some_and(|other| {
-                                    crate::encounter_run::calendar_date(other)
-                                        == crate::encounter_run::calendar_date(at)
-                                })
-                        })
-                    });
-                    created
-                        .map(|at| {
-                            if same_day {
-                                crate::encounter_run::calendar_time(run.saved_at.unwrap_or(at))
-                            } else {
-                                crate::encounter_run::calendar_date(at)
-                            }
-                        })
-                        .unwrap_or_else(|| "Date unknown".into())
-                });
-            if !detail.contains(&context) {
-                detail.push_str(&format!(" · {context}"));
-            }
-        }
+        let detail = paused_run_detail(run, &page.in_progress, open, story);
         list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
             let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
@@ -670,4 +668,82 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
             blocked_reason(ui, Some(line));
         }
     });
+}
+
+#[cfg(test)]
+mod iter_2_c_tests {
+    use super::*;
+    use crate::timeline::{Book, Kind, page::SessionLink};
+
+    #[test]
+    fn paused_duplicates_use_session_then_one_save_time() {
+        let runs = [1, 2].map(|n| SavedRunInfo {
+            path: PathBuf::from(format!("run-{n}.json")),
+            id: Some(Uuid::from_u128(n)),
+            source: None,
+            encounter: "Bridge Ambush".into(),
+            label: "Setup · Paused · Last: Added a wolf · Saved just now".into(),
+            standing: crate::encounter_run::Standing::Unfinished,
+            saved_at: Some(1_767_229_200 + n as u64 * 60),
+            unsent: vec![],
+        });
+        let refs = runs.iter().collect::<Vec<_>>();
+        let sessions = [1, 2].map(|n| SessionLink {
+            id: Uuid::from_u128(n),
+            label: format!("Session {n}"),
+            mentions: vec![],
+        });
+        let mut book = Book::default();
+        for (run, session) in runs.iter().zip(&sessions) {
+            book.add(Kind::Encounter, Some(session.id));
+            book.events.last_mut().unwrap().run = run.id;
+        }
+        let detail = paused_run_detail(
+            &runs[0],
+            &refs,
+            false,
+            &Story {
+                events: &book.events,
+                sessions: &sessions,
+            },
+        );
+        assert!(detail.contains("Session 1"));
+        assert_eq!(detail.matches("Saved ").count(), 1);
+        assert!(!detail.contains("2026-01-01"));
+        assert!(detail.contains("Last: Added a wolf"));
+        book.events[1].session = Some(sessions[0].id);
+        let detail = paused_run_detail(
+            &runs[0],
+            &refs,
+            false,
+            &Story {
+                events: &book.events,
+                sessions: &sessions,
+            },
+        );
+        assert!(detail.contains("Session 1 · 2026-01-01"));
+        assert!(!detail.contains("Saved "));
+        let detail = paused_run_detail(
+            &runs[0],
+            &refs,
+            false,
+            &Story {
+                events: &[],
+                sessions: &[],
+            },
+        );
+        assert_eq!(detail.matches("2026-01-01").count(), 1);
+        assert!(!detail.contains("Saved "));
+        let detail = paused_run_detail(
+            &runs[0],
+            &[&runs[0]],
+            false,
+            &Story {
+                events: &[],
+                sessions: &[],
+            },
+        );
+        assert_eq!(detail.matches("Saved ").count(), 1);
+        assert!(!detail.contains("2026-01-01"));
+    }
 }

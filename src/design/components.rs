@@ -871,10 +871,10 @@ pub fn field<R>(
     error: Option<&str>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    field_label(ui, label, Type::Label, help, error, add)
+    field_label(ui, label, Type::Small, help, error, add)
 }
 
-/// A settings field whose sentence-case label sits below a group heading.
+/// A form field with the same sentence-case label as `field`.
 pub fn small_field<R>(
     ui: &mut Ui,
     label: &str,
@@ -920,7 +920,7 @@ pub fn text_field(
     help: Option<&str>,
     error: Option<&str>,
 ) -> Response {
-    text_field_label(ui, label, Type::Label, text, help, error)
+    text_field_label(ui, label, Type::Small, text, help, error)
 }
 
 pub fn small_text_field(
@@ -1690,6 +1690,24 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
         });
     }
     pressed
+}
+
+/// One dialog action line: red at the left, keep and commit at the right.
+/// Add right-hand actions in reverse order, with the commit action first.
+pub fn dialog_actions<L, R>(
+    ui: &mut Ui,
+    left: impl FnOnce(&mut Ui) -> L,
+    right: impl FnOnce(&mut Ui) -> R,
+) -> (L, R) {
+    ui.horizontal(|ui| {
+        let left = left(ui);
+        ui.add_space(L);
+        let right = ui
+            .with_layout(Layout::right_to_left(Align::Center), right)
+            .inner;
+        (left, right)
+    })
+    .inner
 }
 
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
@@ -2871,5 +2889,73 @@ mod tests {
         assert_eq!(hp_state(Some(6), Some(11)), HpState::Damaged);
         assert_eq!(hp_state(Some(0), Some(10)), HpState::Zero);
         assert_eq!(hp_state(Some(0), None), HpState::Zero);
+    }
+}
+
+#[test]
+fn iter_two_form_labels_share_sentence_case_small_muted_type() {
+    let context = egui::Context::default();
+    super::theme::install(&context);
+    let output = context.run(Default::default(), |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            field(ui, "Default side", None, None, |_| ());
+            text_field(ui, "Copy name", &mut String::new(), None, None);
+        });
+    });
+    let labels: Vec<_> = output
+        .shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if !text.galley.job.text.is_empty() => Some(&text.galley.job),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        labels
+            .iter()
+            .map(|job| job.text.as_str())
+            .collect::<Vec<_>>(),
+        ["Default side", "Copy name"]
+    );
+    for label in labels {
+        assert_eq!(label.sections[0].format.font_id.size, Type::Small.size());
+        assert_eq!(label.sections[0].format.color, colors().muted);
+    }
+}
+
+#[test]
+fn dialog_action_row_fits_the_long_run_close_choices() {
+    for size in [vec2(960.0, 640.0), vec2(1920.0, 1080.0)] {
+        let context = egui::Context::default();
+        super::theme::install(&context);
+        let mut rects = None;
+        let _ = context.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.set_width(FORM_WIDTH);
+                    let area = ui.max_rect();
+                    let (lose, (save, keep)) = dialog_actions(
+                        ui,
+                        |ui| Action::destructive("Close and lose changes").show(ui).rect,
+                        |ui| {
+                            let save = Action::primary("Save as a new run and close").show(ui).rect;
+                            let keep = Action::secondary("Keep running").show(ui).rect;
+                            (save, keep)
+                        },
+                    );
+                    rects = Some((lose, keep, save, area));
+                });
+            },
+        );
+        let (lose, keep, save, area) = rects.unwrap();
+        assert!(lose.right() < keep.left(), "{lose:?} overlaps {keep:?}");
+        assert!(keep.right() < save.left());
+        assert_eq!(lose.center().y, keep.center().y);
+        assert_eq!(save.center().y, keep.center().y);
+        assert!(area.contains_rect(lose) && area.contains_rect(keep) && area.contains_rect(save));
     }
 }

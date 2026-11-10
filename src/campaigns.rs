@@ -783,10 +783,10 @@ impl Campaigns {
                     .wrap(),
                 );
                 ui.add_space(design::S);
-                ui.horizontal(|ui| {
-                    keep |= Action::secondary("Keep the campaign").show(ui).clicked();
-                    ui.add_space(design::L);
+                design::dialog_actions(ui, |ui| {
                     remove = Action::destructive("Remove from Splat").show(ui).clicked();
+                }, |ui| {
+                    keep |= Action::secondary("Keep the campaign").show(ui).clicked();
                 });
             });
         if keep {

@@ -399,7 +399,7 @@ impl ProcessingSettings {
         let slot_word = if slot == KeySlot::Speech {
             "speech"
         } else {
-            "LLM"
+            "transcript and summary"
         };
         let remove = format!("Remove {slot_word} key ({owner})");
         let remove_name = format!("{remove}: {label}");

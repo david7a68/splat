@@ -152,7 +152,7 @@ when a prose AC or HP line disagrees and offers `Use <value>` with Undo. Missing
 replacements use the shared search row, with CR, HP, AC and `Use`. Replace all matching
 rows is on by default; it keeps their names and starting values, with one Undo.
 
-World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Values share a fixed column and text baseline; empty values say `not set`. Missing links keep their names. New NPCs
+World uses labelled `Stat block`, `In` and `Status` rows with `Change` actions. Labels share a fixed column so the values align. `Change` follows each value after an `L` gap. Empty values say `not set`. Missing links keep their names. New NPCs
 show their future path below the name. A missing place stays visible as `Not found`.
 
 The schema-2 creature reader uses the Markdown table, which
@@ -223,9 +223,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, put `blocked_reason` directly beside it in visible `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
-| Field | `field` | Label, control, help, error; names the control for accessibility |
+| Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
-| Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
+| Dialog | `dialog`, `dialog_actions` | An `egui::Modal`, for the brief's modal tasks only. One action line: red action at the left; keep and commit actions at the right |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
 | Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
@@ -244,6 +244,10 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero returns no text. Empty unit words return only the formatted number |
+
+Every form field label uses sentence-case, muted `Small` text. `Label` capitals are for group and column headings only. `field` and `text_field` use the same label style as `small_field` and `small_text_field`.
+
+Dialog actions stay on one line. A red action sits at the left. Keep and commit actions sit at the right, with the commit action last. Keep remains the default keyboard focus when closing could lose work.
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
 The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, scope and category share one line at equal widths above search. Hide the All entries heading when there is no search.
@@ -278,7 +282,9 @@ draft` and the separate red `Reload and lose my draft`. Library uses the same si
 Library's toolbar stays on one line. Drop the Back key hint first; then move Copy and
 Make NPC note into a quiet More menu. Lookup keeps the Back key hint. Both readers use
 Alt+Left, with Lookup taking the key when focus is there. The owner line supplies the
-package name in Library. The kind line does not repeat it.
+package name in Library. The kind line does not repeat it. Library omits the repeated `Library / <kind>` breadcrumb above the title. An unreadable entry keeps one `Cannot be read` status below its title.
+
+Readers omit the reserved Splat data section for every entry kind. A section with no visible body after filtering has no heading or rule. Storage details stay in the existing closed end sections.
 
 New creatures store identity, CR, speed and ability scores in the Stat block tables.
 Each value has one source. Printed source text stays separate from those tables. An absent saving throw leaves its cell empty.
@@ -380,6 +386,8 @@ Run settings put the help for `Roll NPC initiative` directly below that dropdown
 
 ## The live run
 
+An invalid changed stat names only the limit it crossed: `Maximum HP would become -28. It must be 1 or more.` Show the upper limit only when the value is above it.
+
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
 word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. A linked row with sync disabled keeps `Sync off` and its icon. An unlinked creature has no sync word. Conflict words on the header and row are underlined links to review. The sheet colours only the connection icon and `Connected`; sheet and HP facts use muted `Small` text. Conditions take one second line before the HP column. Measure them without change bonuses;
@@ -464,9 +472,9 @@ When a sheet notice fits after the conflict on the header’s second line, show 
 ## Sessions and the timeline
 
 Storage recovery uses the existing warning, comparison and save controls. A copied session names
-both files and offers **New identity** with Undo. A moved draft offers its new path and **Let it go**.
+both files and offers **Make <file> a separate entry** with **Undo separate entry**. A moved draft offers its new path and **Let it go**.
 Missing session and run folders show **Choose folder**. Recording results remain visible with
-**Audio removed** after the WAV is deleted. Conflicting edits to a Timeline item open its disk-conflict comparison at the first difference.
+**Audio removed** after the WAV is deleted. Key removal names the task: Remove transcript and summary key (OpenAI), including its accessible name. Conflicting edits to a Timeline item open its disk-conflict comparison at the first difference.
 The Timeline keeps outside prose and separate event edits on save. Overwrite comes before Reload and lose my timeline,
 which uses the destructive action style. Unknown Timeline properties and event fields survive saves.
 
@@ -478,7 +486,7 @@ before the title. Account
 help and trust text keep READER_MEASURE in both column and stacked Settings layouts.
 The gallery shows clean, dirty and discarded save rows and the hanging Add strip.
 
-The session title and muted date wrap together, with Record on the title line. Below 640 px, the save word and Details sit beside Read on the content tab row. The Notes panel uses the same title, date and save words, and opens with What happened at the top. Last time is one line: a link to the previous session and its recap, with the full recap in the link's tooltip. When the recap is empty, use plain prose under What happened and skip link-only lines. With neither, show the session link alone. Read and Write sit on the content tab row when the note is visible. Templates is a quiet header action. Its list starts with a Sessions back link, and New template sits in the page header. Templates use the note's styled source editor at the full column width; template fields stay faint. The list has no selected row while the new-template form is open. The session folder setting belongs to Campaign, Link and folder. A folder change counts the notes, events, templates and recordings left behind. It offers Move files and save or Save without moving. Moving refuses file collisions and copies every owned file before changing the manifest. A new session uses a Label heading and shows its note path as the fields change. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline, with the link text exactly as written. Renaming a Timeline event never changes a note by itself. An explicit Update links in notes action changes old-title aliases in one batch, with Undo; custom aliases stay as written. The offer names the old and new titles and sits directly below Title in the event detail. Its Undo message stays in the Timeline list column only, until any note or event edit or until the DM leaves Timeline. It never appears in a conflict. A Plan for tonight section made only of fights already in the plan shows one Small muted count instead of repeated links; the file keeps the links. New plan events stay closed and use the kind word as their title. Open rows show Title and Notes; duration and place stay on Timeline. A caret and accessible expanded state mark open rows. Their details align with the name, and the hairline comes after them with an S gap.
+The session title and muted date wrap together, with Record on the title line. Below 640 px, the save word and Details sit beside Read on the content tab row. The Notes panel uses the same title, date and save words, and opens with What happened at the top. Last time is one line: a link to the previous session and its recap, with the full recap in the link's tooltip. When the recap is empty, use plain prose under What happened and skip link-only lines. With neither, show the session link alone. Read and Write sit on the content tab row when the note is visible. Templates is a quiet header action. Its list starts with a Sessions back link, and New template sits in the page header. Templates use the note's styled source editor at the full column width; template fields stay faint. The list has no selected row while the new-template form is open. The session folder setting belongs to Campaign, Link and folder. A clean session folder form shows the check icon and No changes; No changes to save. is only the blocked save action’s hover text and accessible description. A folder change counts the notes, events, templates and recordings left behind. It offers Move files and save or Save without moving. Moving refuses file collisions and copies every owned file before changing the manifest. A new session uses a Label heading and shows its note path as the fields change. An older session shows one warning and a link to the session being played; the list marks that session as Playing. Built-in templates leave one blank line below each heading. Read view shows Obsidian links inline, with the link text exactly as written. Renaming a Timeline event never changes a note by itself. An explicit Update links in notes action changes old-title aliases in one batch, with Undo; custom aliases stay as written. The offer names the old and new titles and sits directly below Title in the event detail. Its Undo message stays in the Timeline list column only, until any note or event edit or until the DM leaves Timeline. It never appears in a conflict. A link-only Plan for tonight section whose fights and groups already appear beside the note is omitted in Read. In the tab layout, it shows one Small muted count of fights and groups. Prose and stored Markdown stay unchanged. An otherwise empty note shows Nothing written yet. with a Write link. New plan events stay closed and use the kind word as their title. Open rows show Title and Notes; duration and place stay on Timeline. A caret and accessible expanded state mark open rows. Their details align with the name, and the hairline comes after them with an S gap.
 
 Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
 is large, has the Reader's rule, and `*these words*` are italic. Markup stays in view in the plain face and `faint`, so the
@@ -486,12 +494,12 @@ file is exactly what was typed and Obsidian reads the same text. The box fills i
 so a note keeps its line breaks between the two views. A session's notes, events and recordings follow the column, because these are the DM's own working pages. The books' rules prose keeps `READER_MEASURE`. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
 table nobody stops to press Save. During the autosave delay, notes show Saving… in muted with the busy icon. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
-Plan row actions show their message and Undo below the affected row with an S gap. Removing a planned group puts the message and Undo in its old row’s place and keeps the other rows still. The second line of a plan row can use the width below its action. Summary items wrap together with their separator, so a line never ends with a dot. Add-strip messages stay beside Add. A removed plan group stays in page state until the next note or plan edit. Duplicate saved-run names include their session or a save date; copies saved on the same date also show the save time. Resume has the run icon. Session and Library conflicts use the shared comparison. It opens at the first difference with two whole lines of context above it. Session also names the nearest heading.
+Plan row actions show their message and Undo below the affected row with an S gap. Removing a planned group puts the message and Undo in its old row’s place and keeps the other rows still. The second line of a plan row can use the width below its action. Summary items wrap together with their separator, so a line never ends with a dot. Add-strip messages stay beside Add. A removed plan group stays in page state until the next note or plan edit. Duplicate saved-run names use their session name first. Only rows with the same name and session, or no known session, need a date. Copies saved on the same date also show the save time. A row that uses a date or time for this context omits Saved …, so the save time appears once. Resume has the run icon. Session and Library conflicts use the shared comparison. It opens at the first difference with two whole lines of context above it. Session also names the nearest heading.
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day uses the shared group-heading style, without a rule, and numbers itself. It has no card and no
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
-rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event, opening Timeline or changing its filters resets the fields to the top. The scrolling fields clip below the fixed header. A Day shows Starts without an Ends time. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Added and removed notices sit in the list column. Selecting or adding an event resets its form to the top. Its context line shows the visible count out of the total while a search or filter is active. The filter says Major events. Removing an event says how many notes still link to it. Its save word tracks its own edits: Saving… in muted during the delay, Saved when unchanged, and Unsaved with a reason when saving is blocked. A rest shows its default duration as a faint placeholder, and Starts and Ends beside the duration help. Field labels have an M gap before them.
+rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event, opening Timeline or changing its filters resets the fields to the top. The scrolling fields clip below the fixed header. Title and its label stay above the scrolling fields, directly below the header. A Day shows Starts without an Ends time. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Added and removed notices sit in the list column. Selecting or adding an event resets its form to the top. Its context line shows the visible count out of the total while a search or filter is active. The filter says Major events. Removing an event says how many notes still link to it. Its save word tracks its own edits: Saving… in muted during the delay, Saved when unchanged, and Unsaved with a reason when saving is blocked. A rest shows its default duration as a faint placeholder, and Starts and Ends beside the duration help. Field labels have an M gap before them.
 
 Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions on the first line at the right edge and say that replacement keeps a copy.
 The affected list row says `Local edits`. A replacement names the character, with Show file for the kept version and Dismiss.
@@ -520,6 +528,24 @@ this campaign can use, and a switch shows everything, one package, or the campai
 entries. Changing the scope never changes the active campaign. Editing, save state and
 `Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
 from the interface.
+
+Missing dependencies lead with the owner and retained member name, such as Lost Patrol needs Scout, which was deleted. If no name is known, say Lost Patrol needs a creature that cannot be found. Each issue offers a repair link to the referring file; the raw reference stays in Technical details.
+
+The scope menu and its selected button both say `Campaign entries`. Fixed scope names
+wrap when space is tight; package names can end with an ellipsis. While a package's
+About page is open, its About row uses the selected fill and no category is selected.
+Choosing a category restores its selected state.
+
+Duplicate-file repairs in Library, World, Encounters and Sessions say “These two files
+claim to be the same entry.” Each bordered secondary action says `Make <file> a separate
+entry`. The result says “<file> is now a separate entry.” with `Undo separate entry` on
+that line. List rows say `Same entry in two files`. A duplicate NPC note keeps an existing
+name-only roster override recognised; the duplicate warning does not imply changed stats.
+
+A copied package folder puts bordered `Register as a new package` on the warning's action
+line, with Technical details below. `Add folder` is blocked with “This folder is a copy.”
+A copy preview explains each additional entry: “Also copies <entry>, because <source>
+links to it.” When more than one entry is copied, it says “because a copied entry links to it.”
 
 ## Icons
 
@@ -620,7 +646,7 @@ An unavailable package keeps its last known display name in the campaign selecti
 
 Package and campaign readers keep their owner status in both Read and Edit Markdown.
 Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
-An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Replace… opens a creature replacement search; Edit and Remove stay in the row menu. The NPC Add to run form labels its side picker SIDE and uses the roster's side words.
+An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Replace… opens a creature replacement search; Edit and Remove stay in the row menu. The NPC Add to run form labels its side picker Side and uses the roster's side words.
 Folder is one editable field with a suggestion menu, followed by its help line.
 New packages default to the parent of the last registered package.
 A completed copy says where it went and keeps its path in hover text.
@@ -699,8 +725,6 @@ An offline Party now line offers Connect to sync. The first-sheet-read help keep
 
 ## Session and preparation audit, iteration 6
 
-Read omits a fight-only plan section when the plan stands beside the note. An otherwise
-empty note shows Nothing written yet. with a Write link. The tab layout keeps the count.
 A moved run has a confirmation and Undo move in the message slot until the next note or plan edit.
 A folder move reports the file counts and destination, with no separate Saved label.
 A Day's start time is the Kind field's help line.
@@ -708,7 +732,7 @@ A Day's start time is the Kind field's help line.
 Sheet rows without a second line use one Read row. Correct HP owns the HP help;
 Correct initiative says This row moves. The current turn stays. Correction field labels
 share one column. Signed-out sheet conflicts offer Connect to refresh before Show file.
-An open Ready run says Go back to the run. Paused rows include their saved date and time.
+An open Ready run says Go back to the run.
 NPC roster rows put as Guard last. Group frames choose where Add goes; the search shows
 Adding to as read-only text. Members and XP share one heading line.
 
@@ -777,7 +801,7 @@ the ID on disk so it cannot create a second file after a move.
 Creature copies write schema-2 stat tables and keep prose.
 Source text and structured item fields stay in the end group after related notes.
 Fight and Packages use the same menu button, with the caret after the word.
-World relationship values use a 240 px column; Not found stays on one line.
+World relationship warnings keep Not found on one line.
 Empty fight prep offers Edit encounter while its encounter exists.
 
 ## Run and session audit, iteration 11
@@ -817,7 +841,7 @@ tile edges. Skills sort A to Z and fill each column from top to bottom. Library
 form headings use text colour and an L gap; field labels stay muted.
 
 Duplicate identities keep both files visible with a warning. Saves write only the
-open file. Each New identity action names its file and has Undo. A renamed copy
+open file. Each separate-entry action names its file and has Undo. A renamed copy
 comes first, or else the newest file does. Other actions name the encounters that
 will change source. Encounters
 block ambiguous creatures; Open in Library opens the first repair action's file.
@@ -872,11 +896,11 @@ The campaign-added message follows the campaign rows, below their heading.
 
 The run's Sheet shows live death saves once, with singular and plural words.
 Campaign Packages and the Library details row offer Write Package.md again for a missing file. An existing file offers Replace with a basic Package.md, with a note that it drops the other fields. The action keeps the registered identity and reloads; replacing a file has Undo.
-Copied typed World notes stay visible with a duplicate warning. Each identity
+Copied typed World notes stay visible with a duplicate warning. Each separate-entry
 action names its file and has Undo. Encounter repair opens World for World notes.
 A copied package folder names the original under Add folder, with the id in
 Technical details. Register as a new package asks for a name, writes independent
-package and entry identities, and has one Undo for all files. New identity also
+package and entry identities, and has one Undo for all files. Making a separate entry also
 sets a note's name and matching first heading to its file stem. World rows with
 the same typed name show each file name on the second line.
 
@@ -923,8 +947,7 @@ Duplicate World readers keep their path on the file line only. Search results ke
 
 ## Design score, iteration 1: campaign and session
 
-Form field labels use sentence-case, muted `Small` text on Campaign and Settings.
-`Label` stays for column and compact group headings. Campaign Packages keeps its
+Campaign Packages keeps its
 save row directly below the tabs, before every notice. Campaign flags appear once
 in the content issue count. Their warning line includes the file and repair actions.
 With no campaigns, Settings hides Reload from disk unless settings need repair.

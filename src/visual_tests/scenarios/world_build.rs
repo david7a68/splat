@@ -1015,7 +1015,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     fs::write(&copy, &copy_text).unwrap();
     go_library(d);
     search_library(d, "Cinder Wolf");
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
@@ -1054,7 +1054,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_ne!(original_id, copy_id);
     d.state("duplicate-copy-new-identity", Sizes::All);
     d.click("Undo separate entry");
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap()),
         original_id
@@ -1313,25 +1313,31 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.expect("6. Rook Ambry");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
-    d.expect("Rook Ambry copy.md and Rook Ambry.md share one ID.");
-    d.expect("New identity for Rook Ambry copy.md");
+    d.expect("These two files claim to be the same entry.");
+    d.expect("Make Rook Ambry copy.md a separate entry");
+    assert!(
+        !d.has("Changed"),
+        "A copied NPC note does not change its roster values"
+    );
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     d.state("duplicate-npc-repaired-from-encounter", Sizes::All);
-    d.click("Undo new identity");
-    d.wait_for_text("New identity for Rook Ambry copy.md");
+    d.click("Undo separate entry");
+    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry.md ·");
-    d.expect("New identity for Rook Ambry copy.md");
-    d.expect("New identity for Rook Ambry.md");
+    d.expect("Make Rook Ambry copy.md a separate entry");
+    d.expect("Make Rook Ambry.md a separate entry");
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
-    d.expect("New identity for Rook Ambry copy.md");
+    d.expect("Make Rook Ambry copy.md a separate entry");
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
         Some(id)
@@ -1343,13 +1349,14 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo new identity");
-    d.wait_for_text("New identity for Rook Ambry copy.md");
+    d.click("Undo separate entry");
+    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
     d.state("world-copy-repair-undone", Sizes::All);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
     reload(d);
@@ -1408,6 +1415,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
+    d.expect("This folder is a copy.");
+    assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
     d.click("Register as a new package");
@@ -1458,7 +1467,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let module = crate::library::local_module(&copied).unwrap();
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
