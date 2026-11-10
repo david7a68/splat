@@ -7,9 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-// At the default four workers, a full capture run keeps about six cores busy
-// and needs about 1.1 GiB. Each 4 GiB slot leaves room for builds and the app.
-const CORES_PER_SLOT: usize = 6;
+// At the default four workers, a full run keeps about four cores busy, and about
+// 4.6 with video. It needs about 1.1-1.3 GiB, and up to 3.3 GiB in `audit-gate`.
+// Each 4 GiB slot leaves room for builds and the app.
+const CORES_PER_SLOT: usize = 5;
 const GIB_PER_SLOT: u64 = 4;
 
 pub(super) struct Permit {
@@ -133,9 +134,9 @@ fn slot_count_requires_a_positive_integer() {
 
 #[test]
 fn default_slots_follow_cores_and_memory() {
-    // A 20-core laptop with 15 GiB, and a 16-core desktop with 31 GiB.
+    // A 20-core laptop with 15 GiB (memory limits it), and a 16-core desktop with 31 GiB.
     assert_eq!(slots_for(20, Some(15)), 3);
-    assert_eq!(slots_for(16, Some(31)), 2);
+    assert_eq!(slots_for(16, Some(31)), 3);
     // Memory limits a computer with many cores.
     assert_eq!(slots_for(64, Some(8)), 2);
     // Small or unknown computers still run one suite.

@@ -24,6 +24,7 @@ use crate::{
             SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
             rest_ruling,
         },
+        removed_event_words,
     },
 };
 use eframe::egui::{self, Color32};
@@ -421,6 +422,15 @@ fn recording_destination(settings: &ProcessingSettings, recording: &Recording) -
         } else {
             destination
         }
+    }
+}
+
+/// A clean result: the same status in the session list as on the recording's own row.
+fn processed_clean() -> Status<'static> {
+    Status {
+        icon: icons::OK,
+        word: "Processed",
+        color: colors().result.success,
     }
 }
 
@@ -1080,65 +1090,6 @@ fn session_detail(
         word.as_ref().map(|(word, color)| (word.as_str(), *color)),
         width,
     )
-}
-
-/// The plan's removal notice. It names which event went, by its result or state, and says when
-/// another event with the same name stays in this session.
-fn removed_event_words(
-    book: &Book,
-    session: Option<Uuid>,
-    days: &[u32],
-    label: &str,
-    planned: &[(String, bool)],
-) -> String {
-    let detail = book
-        .removed_event()
-        .map(|event| {
-            if event.run.is_some() {
-                timeline::played_fight_summary(event, false)
-            } else {
-                event.summary(None)
-            }
-        })
-        .filter(|detail| !detail.trim().is_empty());
-    let mut words = match detail {
-        Some(detail) => format!("Removed “{label}” ({detail})."),
-        None => format!("Removed “{label}”."),
-    };
-    // "The other" only makes sense when the removed fight was in this session; a removal made on
-    // the Timeline page from another session names no other fight here.
-    if !book
-        .removed_event()
-        .is_some_and(|event| event.is_in(session))
-    {
-        return words;
-    }
-    let same: Vec<_> = book
-        .events
-        .iter()
-        .enumerate()
-        .filter(|(at, event)| {
-            event.is_in(session) && event.label(days.get(*at).copied().unwrap_or(0)) == label
-        })
-        .map(|(_, event)| !event.result.trim().is_empty())
-        .chain(
-            planned
-                .iter()
-                .filter(|(name, _)| name == label)
-                .map(|(_, ended)| *ended),
-        )
-        .collect();
-    match same.as_slice() {
-        [] => {}
-        [true] => words.push_str(&format!(" The other “{label}” and its result stay.")),
-        [false] => words.push_str(&format!(" The other “{label}” stays.")),
-        more if more.iter().any(|&result| result) => words.push_str(&format!(
-            " {} other “{label}” events stay, with their results.",
-            more.len()
-        )),
-        more => words.push_str(&format!(" {} other “{label}” events stay.", more.len())),
-    }
-    words
 }
 
 fn recording_recovery(missing_input: bool) -> &'static str {
@@ -2216,11 +2167,7 @@ impl Sessions {
             });
         }
         if self.processed_session.is_some() {
-            return Some(Status {
-                icon: icons::SUCCESS,
-                word: "Processed",
-                color: c.result.success,
-            });
+            return Some(processed_clean());
         }
         self.just_saved().then_some(Status {
             icon: icons::OK,
@@ -3207,19 +3154,21 @@ impl Sessions {
                         };
                         // A warned result is a status like its siblings: icon, word and colour.
                         // The full words stay in hover and in the row's name.
+                        // A clean result is a status too, in the success colour.
                         let warned = state.is_none() && result == Some(note.id) && self.job_warned;
+                        let clean = state.is_none() && result == Some(note.id) && !warned;
                         let state = if warned {
                             Some(Status {
                                 word: "Processed",
                                 ..processed_warning()
                             })
+                        } else if clean {
+                            Some(processed_clean())
                         } else {
                             state
                         };
                         let detail = if let Some(state) = state {
                             format!("{} {}", state.icon, state.word)
-                        } else if result == Some(note.id) {
-                            "Processed".to_owned()
                         } else {
                             note.date.clone()
                         };
@@ -3257,10 +3206,16 @@ impl Sessions {
                         } else {
                             detail
                         };
-                        let full = warned.then(|| {
+                        // The name speaks words, not the icon's private character.
+                        let full = if warned {
                             let short = format!("{} Processed", icons::WARN);
-                            detail.replacen(&short, processed_warning().word, 1)
-                        });
+                            Some(detail.replacen(&short, processed_warning().word, 1))
+                        } else if clean {
+                            let short = format!("{} Processed", icons::OK);
+                            Some(detail.replacen(&short, processed_clean().word, 1))
+                        } else {
+                            None
+                        };
                         let row = session_row(
                             ui,
                             self.selected == Some(note.id),
@@ -4970,7 +4925,8 @@ impl Sessions {
                 (status.icon, status.word, status.color)
             }
         } else if recording.summary {
-            (icons::OK, "Processed", c.result.success)
+            let status = processed_clean();
+            (status.icon, status.word, status.color)
         } else if recording.transcript {
             (icons::DRAFT, "Partly processed", c.muted)
         } else {
@@ -5250,22 +5206,27 @@ impl Sessions {
             });
         }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
-            design::message(
-                ui,
-                Tone::Info,
-                &format!(
-                    "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
-                    processing_llm(settings)
-                ),
-            );
-            ui.horizontal(|ui| {
-                if Action::secondary("Not now").show(ui).clicked() {
-                    self.confirm_again = None;
-                }
-                ui.add_space(design::L);
-                process = Action::destructive("Replace the results")
-                    .show(ui)
-                    .clicked();
+            // Processing help keeps the reader's measure, as the destination line above does.
+            // Not now and Replace the results stay together below the message.
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                design::message(
+                    ui,
+                    Tone::Info,
+                    &format!(
+                        "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                        processing_llm(settings)
+                    ),
+                );
+                ui.horizontal(|ui| {
+                    if Action::secondary("Not now").show(ui).clicked() {
+                        self.confirm_again = None;
+                    }
+                    ui.add_space(design::L);
+                    process = Action::destructive("Replace the results")
+                        .show(ui)
+                        .clicked();
+                });
             });
         }
         if stop {
@@ -7405,7 +7366,12 @@ mod tests {
             job_done: true,
             ..Default::default()
         };
-        assert_eq!(page.rail_recording_status().unwrap().word, "Processed");
+        let clean = page.rail_recording_status().unwrap();
+        assert_eq!(clean.word, "Processed");
+        // One status, one icon: the rail uses the list's and the row's clean status.
+        assert_eq!(clean.icon, processed_clean().icon);
+        assert_eq!(clean.icon, icons::OK);
+        assert_eq!(clean.color, processed_clean().color);
         page.job_warned = true;
         let status = page.rail_recording_status().unwrap();
         assert_eq!(status.word, "Processed");

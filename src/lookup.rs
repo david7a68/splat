@@ -2652,9 +2652,10 @@ mod tests {
         std::fs::write(campaign.path.join("Watch House.md"), "Second place\n").unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(index.place_choices(npc).len(), 2);
-        assert!(
-            !world::broken_links(&index.items[index.position(npc).unwrap()], &index)
-                .contains(&"Place not found")
+        // A place that waits for a choice needs fixing, but it is not missing.
+        assert_eq!(
+            world::broken_links(&index.items[index.position(npc).unwrap()], &index),
+            [world::LinkProblem::PlaceMatches(2)]
         );
     }
 

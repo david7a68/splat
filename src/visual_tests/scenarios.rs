@@ -36,6 +36,46 @@ fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
     );
 }
 
+/// iter11-B-FT1: beside a state notice, which stays whole, the run's Undo keeps a shortened
+/// target while one fits. Its accessible name keeps the full action. A sheet-change notice,
+/// in the header or below the roster, still shows its words and its Log link.
+fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str, sheet: Option<&str>) {
+    let size = d.window_size();
+    let undo: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.in_view() && node.name.starts_with("Undo: "))
+        .collect();
+    let painted = undo
+        .first()
+        .map_or_else(String::new, |node| d.painted_in(node.rect));
+    let action = undo.first().map_or("", |node| node.name.as_str());
+    d.observe(
+        "iter11-B-FT1",
+        undo.len() == 1 && painted.contains("Undo: ") && d.visible_text(notice),
+        format!("At {size:?}, beside a whole {notice:?}, Undo for {action:?} paints {painted:?}"),
+    );
+    if let Some(sheet) = sheet {
+        let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+        let text = d.painted_rect_in(sheet, window);
+        let link = text.and_then(|text| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.in_view() && node.name == "Log")
+                .find(|node| {
+                    (node.rect.center().y - text.center().y).abs() <= crate::design::S
+                        && node.rect.left() >= text.right() - 1.0
+                })
+                .map(|node| node.rect)
+        });
+        d.observe(
+            "iter11-B2-sheet",
+            text.is_some() && link.is_some(),
+            format!("At {size:?}, the sheet-change notice paints {sheet:?} at {text:?}, with its Log link at {link:?}"),
+        );
+    }
+}
+
 /// Recovery actions keep the shared Undo icon, inside their own target.
 fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     let target = d.place_of(action).expect("The Undo action is visible");
@@ -493,8 +533,8 @@ pub mod library_author {
         d.click(UNDO_DISCARD);
         d.observe(
             "Discard undo",
-            draft_here(d, "no front matter at all"),
-            "Undo brings back the discarded draft",
+            draft_here(d, "no front matter at all") && !d.has(UNDO_DISCARD),
+            "Undo brings back the discarded draft, and the discard message goes",
         );
         let editor_top = d
             .nodes()
@@ -503,6 +543,11 @@ pub mod library_author {
             .expect("editor before discard")
             .rect
             .top();
+        let editor_at = |d: &Driver<'_>| d.place_of("Markdown editor").map(|rect| rect.top());
+        let dirty_tops: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| (size, d.at_size(size, editor_at)))
+            .collect();
         d.click(DISCARD);
         let discarded_top = d
             .nodes()
@@ -516,6 +561,52 @@ pub mod library_author {
             editor_top == discarded_top,
             format!("Discard keeps the editor at the same height: {editor_top} to {discarded_top}"),
         );
+        d.state_prepared("library-draft-discarded", Sizes::All, |d| {
+            // iter-12-E-FD3: the Library uses the shared discard message in its reason slot.
+            let size = d.window_size();
+            let words = "Ash Exposure draft discarded.";
+            let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+            let editor = d.place_of("Markdown editor").expect("The editor stays open");
+            let Some(text) = d.painted_rect_in(words, window) else {
+                panic!("At {size:?}, the discard message is painted");
+            };
+            let icon = d
+                .painted_rect_in(
+                    crate::design::icons::INFO,
+                    egui::Rect::from_min_max(
+                        pos2(editor.left(), text.top() - 2.0),
+                        pos2(text.left(), text.bottom() + 2.0),
+                    ),
+                )
+                .is_some();
+            let painted = d.painted_size(text, words);
+            let colour = d.painted_color(words);
+            d.observe(
+                "iter-12-E-FD3",
+                icon && painted == Some(crate::design::Type::Body.size())
+                    && colour == Some(crate::design::colors().text),
+                format!(
+                    "At {size:?}, the discard line has the info icon, Body text and the text colour: {painted:?}, {colour:?}"
+                ),
+            );
+            d.observe(
+                "iter-12-E-FD3-slot",
+                text.top() < editor.top() && text.left() > editor.left(),
+                format!("At {size:?}, the message sits in the reason slot above the editor: {text:?}, {editor:?}"),
+            );
+            check_undo_icon(d, UNDO_DISCARD, "iter-12-E-FD3-undo");
+            // Must stay true: the editor does not move when the reason becomes the message.
+            let before = dirty_tops
+                .iter()
+                .find(|(at, _)| *at == size)
+                .and_then(|(_, top)| *top);
+            let after = editor_at(d);
+            d.observe(
+                "iter-12-E-FD3-steady",
+                before.is_some() && before == after,
+                format!("At {size:?}, Discard keeps the editor top: {before:?} to {after:?}"),
+            );
+        });
         d.goal("try each way out of a failed save");
 
         d.click(PACKAGE_ACTIONS);
@@ -602,7 +693,37 @@ pub mod library_navigation {
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(MODULE);
         d.click_starting("Ash Exposure · ");
+        // iter-12-E-FD2: the broken link counts in the header, as World counts its notes.
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Ash Exposure · "))
+            .collect();
+        d.observe(
+            "iter-12-E-FD2",
+            !rows.is_empty()
+                && rows.iter().all(|row| row.name.contains("1 broken link"))
+                && d.in_view("1 file needs fixing"),
+            "The row's broken link also counts in the Library header",
+        );
         d.state("homebrew-reference", Sizes::All);
+        // From another entry, the header count's menu opens the entry with the broken link.
+        d.click_starting("Ashfall · ");
+        d.wait_for_text("Hot ash falls");
+        assert!(
+            !d.visible_text("Captain Varra knows the road through the ash fields."),
+            "fixture: another entry is open"
+        );
+        d.click("1 file needs fixing");
+        d.expect("Rules/Ash Exposure.md: 1 broken link");
+        d.state("broken-link-menu", Sizes::Default);
+        d.click("Rules/Ash Exposure.md: 1 broken link");
+        d.wait_for_text("Captain Varra knows the road through the ash fields.");
+        d.observe(
+            "iter-12-E-FD2-menu",
+            !d.visible_text("Hot ash falls") && !d.has("Rules/Ash Exposure.md: 1 broken link"),
+            "The header count's menu opens the entry with the broken link, and closes",
+        );
         d.click("Copy Captain Varra to Ashen Marches");
         d.wait_for_text("Dependency copied and linked.");
         d.observe(
@@ -1748,10 +1869,16 @@ pub mod settings {
         );
         // Each state through the same fields a real attempt sets.
         let mut words = true;
+        let mut targets = Vec::new();
         for (state, word) in ACCOUNT_WORDS {
             d.app_mut().settings.simulate(state);
             d.settle();
             words &= d.in_view_containing(word);
+            targets.push((
+                word,
+                [SMALL, DEFAULT, LARGE]
+                    .map(|size| d.at_size(size, session_recording::rail_targets)),
+            ));
             // Not connected and failed already have their captures, from real attempts.
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
@@ -1778,6 +1905,26 @@ pub mod settings {
                             })
                         },
                     );
+                    // AD2: this state really takes two lines, so the target check below compares
+                    // a one-line account with a two-line one at every size.
+                    let line = crate::design::Type::Small.line();
+                    let heights = [SMALL, DEFAULT, LARGE].map(|size| {
+                        d.at_size(size, |d| {
+                            session_recording::account_rect(d).map(|rect| rect.height())
+                        })
+                    });
+                    d.observe(
+                        "iter-11-C-AD2-two-lines",
+                        heights
+                            .iter()
+                            .all(|height| height.is_some_and(|h| h >= 2.0 * line - 0.5)),
+                        format!(
+                            "The keyring warning's account status is at least {} tall at each \
+                             size: {heights:?}",
+                            2.0 * line
+                        ),
+                    );
+                    session_recording::check_rail_anchor(d, "iter-11-C-AD2-anchor");
                 }
                 Account::NotConnected | Account::Failed | Account::RefreshFailing => {}
             }
@@ -1786,6 +1933,22 @@ pub mod settings {
             "T10.3",
             words,
             "Busy, connected, not connected, failed and keyring warning each have words, from a test session",
+        );
+        // AD2: the account slot holds two lines, so Lookup, Notes and Settings stay where they are
+        // when the account status takes one line or two.
+        let first = targets[0].1;
+        d.observe(
+            "iter-11-C-AD2",
+            targets
+                .iter()
+                .any(|(word, _)| word.contains("not remembered"))
+                && targets.iter().all(|(_, at)| {
+                    at.iter().all(Option::is_some)
+                        && at.iter().zip(first.iter()).all(|(now, was)| now == was)
+                }),
+            format!(
+                "Lookup, Notes and Settings keep their tops in every account state: {targets:?}"
+            ),
         );
         d.app_mut().settings.simulate(Account::NotConnected);
         d.settle();
@@ -4179,12 +4342,10 @@ pub mod run_edge_states {
         });
         d.click("Concentrating");
         d.expect(&format!("Undo: stop concentration for {TARGET}"));
-        d.expect_same(
-            "At 960, beside Sync off for the party, Undo shows only its word in both frames, and \
-             stopping concentration returns the row to the long-effect frame.",
-        );
+        // The row returns to the long-effect frame; Undo now names the other step.
         d.state_prepared("stop-concentration-undo", Sizes::All, |d| {
             undo_keeps_its_word(d, &format!("Undo: stop concentration for {TARGET}"));
+            undo_keeps_a_target(d, "Sync off for the party", None);
         });
         d.click("Sheet");
         d.click("Read all conditions");
@@ -4229,6 +4390,19 @@ pub mod run_edge_states {
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
+        // The red choice keeps an `L` gap from the safe one, which stays first on the same line.
+        d.observe_both(
+            "iter-12-FT2",
+            "Replace the file with this run keeps an L gap after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && red.left() - safe.right() >= crate::design::L
+                    })
+            },
+        );
         d.state("changed-on-disk", Sizes::Default);
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
@@ -4416,7 +4590,9 @@ pub mod run_sync_states {
         let (name, state, _) = STATES[4];
         d.app_mut().encounters.simulate_sync_state(name, state);
         d.settle();
-        d.state("every-sync-state", Sizes::All);
+        d.state_prepared("every-sync-state", Sizes::All, |d| {
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale", Some("HP 58 → 54"));
+        });
         d.goal("show every sync state");
         d.begin_task();
         d.app_mut()
@@ -4432,7 +4608,9 @@ pub mod run_sync_states {
             },
         );
         d.click_row("Sable Harrowgate");
-        d.state("linked-row-sync-off", Sizes::All);
+        d.state_prepared("linked-row-sync-off", Sizes::All, |d| {
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale", Some("HP 58 → 54"));
+        });
         d.click_row("Cinder Wolf 2");
         d.app_mut()
             .encounters
@@ -4996,7 +5174,33 @@ pub mod signed_in {
                 "Simulated read after a reconnect: the HP recorded during the outage stands ({hp_in_run:?}), and the row asks: {row}"
             ),
         );
-        d.state("reconnect-conflict", Sizes::Default);
+        d.state_prepared("reconnect-conflict", Sizes::Default, |d| {
+            undo_keeps_a_target(d, &format!("Sync conflict: {MEMBER}"), None);
+        });
+        // iter11-B2: only a step the sheet made gives up `D&D Beyond`. A DM's own effect with
+        // those words keeps them, or Undo shows its word alone.
+        const DM_EFFECT: &str = "D&D Beyond boon";
+        let dm_undo = format!("Undo: {DM_EFFECT} on {MEMBER}");
+        d.click(CONDITIONS);
+        d.type_into("Other effect", DM_EFFECT);
+        d.click("Add");
+        d.expect(&dm_undo);
+        let painted = d.at_size(SMALL, |d| {
+            d.place_of(&dm_undo)
+                .map_or_else(String::new, |rect| d.painted_in(rect))
+        });
+        d.observe(
+            "iter11-B2-source",
+            painted.contains("Undo")
+                && !painted.contains("Undo: boon")
+                && (painted.contains(DM_EFFECT) || !painted.contains("Undo:")),
+            format!(
+                "At 960x640, beside the conflict, the DM's effect keeps its words: {painted:?}"
+            ),
+        );
+        d.click(&dm_undo);
+        d.expect(&format!("Undo: 3 damage to {MEMBER}"));
+        d.click("Sheet");
         d.begin_task();
 
         // The link cannot change under a run.
@@ -5630,6 +5834,38 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
+            // every size. Portraits give way before AC.
+            let (items, painted) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            session_recording::check_party_names(
+                d,
+                &format!("iter-12-C-FT3-names-{width}"),
+                &items,
+                &painted,
+            );
+            let has = |words: &str, label: &str| words.split_whitespace().any(|word| word == label);
+            let hurt = items
+                .iter()
+                .filter(|item| item.name.contains("Temp HP"))
+                .count();
+            let bloodied = items
+                .iter()
+                .filter(|item| item.name.contains("Bloodied"))
+                .count();
+            if width >= crate::visual_tests::driver::DEFAULT.0 {
+                d.observe(
+                    "iter-12-C-FT3",
+                    items.len() >= 4
+                        && hurt >= 2
+                        && bloodied >= 1
+                        && painted.iter().all(|(_, words)| has(words, "AC")),
+                    format!(
+                        "At {width}, with {hurt} temporary HP and {bloodied} Bloodied, every item \
+                         shows AC: {painted:?}"
+                    ),
+                );
+            }
         });
         d.press(Key::Escape);
         d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
@@ -6977,9 +7213,92 @@ pub mod session_recording {
         }
     }
 
+    /// Each party bar item's accessible node, and its first name with the words painted in it.
+    pub(crate) fn party_bar_items(
+        d: &mut Driver<'_>,
+    ) -> (
+        Vec<crate::visual_tests::driver::Found>,
+        Vec<(String, String)>,
+    ) {
+        let items: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains("Passive Perception"))
+            .collect();
+        let painted = items
+            .iter()
+            .map(|item| {
+                (
+                    item.name
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    d.painted_lines_in(item.rect).join(" "),
+                )
+            })
+            .collect();
+        (items, painted)
+    }
+
+    /// Every party bar item paints its first name, and a state word that hover names stays.
+    pub(crate) fn check_party_names(
+        d: &mut Driver<'_>,
+        id: &str,
+        items: &[crate::visual_tests::driver::Found],
+        painted: &[(String, String)],
+    ) {
+        let states = items.iter().zip(painted).all(|(item, (_, words))| {
+            ["Bloodied", "0 HP"]
+                .into_iter()
+                .all(|state| !item.name.contains(state) || words.contains(state))
+        });
+        d.observe(
+            id,
+            items.len() >= 4
+                && painted
+                    .iter()
+                    .all(|(first, words)| words.split_whitespace().any(|word| word == first))
+                && states,
+            format!("Every party bar item shows its first name and state word: {painted:?}"),
+        );
+    }
+
+    /// The tops of Lookup, Notes and Settings in the rail, rounded to whole points.
+    pub(crate) fn rail_targets(d: &Driver<'_>) -> Option<[i32; 3]> {
+        let nodes = d.nodes();
+        let top = |name: &str| {
+            nodes
+                .iter()
+                .filter(|node| node.name == name)
+                .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))
+                .map(|node| node.rect.top().round() as i32)
+        };
+        Some([top("Lookup")?, top("Notes")?, top("Settings")?])
+    }
+
     /// FT-6: Lookup, Notes, Settings and the account line keep fixed places at the rail's
     /// bottom edge. The status slot grows upward above Lookup and never reaches under it.
-    fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
+    /// The account status in the rail: every node below Settings, together.
+    pub(crate) fn account_rect(d: &Driver<'_>) -> Option<egui::Rect> {
+        let nodes = d.nodes();
+        let settings = nodes
+            .iter()
+            .filter(|node| node.name == "Settings")
+            .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.rect.top() >= settings.bottom() - 0.5
+                    && node.rect.right() <= settings.right() + 1.0
+                    && node.rect.height() < 100.0
+            })
+            .map(|node| node.rect)
+            .reduce(|a, b| a.union(b))
+    }
+
+    pub(crate) fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
         let nodes = d.nodes();
         let (_, height) = d.window_size();
         let lookup = nodes
@@ -6992,33 +7311,53 @@ pub mod session_recording {
         };
         let rail =
             |rect: &egui::Rect| rect.right() <= lookup.right() + 1.0 && rect.height() < 100.0;
-        let lower: Vec<_> = nodes
+        let settings = nodes
             .iter()
-            .filter(|node| rail(&node.rect) && node.rect.top() >= lookup.top() - 0.5)
-            .collect();
-        let settings = lower.iter().find(|node| node.name == "Settings");
-        let bottom = lower
-            .iter()
-            .map(|node| node.rect.bottom())
-            .fold(f32::MIN, f32::max);
-        let account = lower
-            .iter()
-            .find(|node| (node.rect.bottom() - bottom).abs() < 0.5);
+            .any(|node| node.name == "Settings" && rail(&node.rect));
         let slot_clear = nodes.iter().all(|node| {
             !rail(&node.rect)
                 || node.rect.top() >= lookup.top() - 0.5
                 || node.rect.bottom() <= lookup.top() + 0.5
         });
+        // AD2: the account slot holds two `Small` lines and ends at the rail's bottom edge. The
+        // status starts at the slot's top. One painted line leaves the second line empty.
         let expected = height - crate::design::S;
+        let line = crate::design::Type::Small.line();
+        let account = account_rect(d);
+        // Painted rows at distinct heights: the icon's own column is not another line.
+        let mut tops: Vec<f32> = Vec::new();
+        if let Some(rect) = account {
+            d.each_painted_text(|text, _| {
+                for row in &text.galley.rows {
+                    let row = row.rect().translate(text.pos.to_vec2());
+                    if rect.contains(row.center())
+                        && !tops.iter().any(|top| (top - row.top()).abs() < line / 2.0)
+                    {
+                        tops.push(row.top());
+                    }
+                }
+            });
+        }
+        let lines = tops.len();
+        let bottom = if lines >= 2 {
+            expected
+        } else {
+            expected - line
+        };
         d.observe(
             id,
-            settings.is_some()
-                && account.is_some_and(|account| account.name != "Settings")
-                && (bottom - expected).abs() <= 0.5
-                && slot_clear,
+            settings
+                && slot_clear
+                && (1..=2).contains(&lines)
+                && account.is_some_and(|rect| {
+                    (rect.top() - (expected - 2.0 * line)).abs() <= 0.5
+                        && (rect.bottom() - bottom).abs() <= 0.5
+                }),
             format!(
-                "The account line ends at the rail's bottom edge ({bottom} vs {expected}), below \
-                 Settings, and no status reaches under Lookup (top {})",
+                "The account status ({lines} lines, {account:?}) starts at the top of its two-line \
+                 slot ({}) and ends at {bottom}, below Settings; no status reaches under Lookup \
+                 (top {})",
+                expected - 2.0 * line,
                 lookup.top()
             ),
         );
@@ -7059,6 +7398,57 @@ pub mod session_recording {
         );
     }
 
+    /// FT-3, AT2: a clean result in the session list is a status: the check icon, then
+    /// `Processed` in the success colour, as on the recording's own row.
+    fn check_clean_row(d: &mut Driver<'_>, id: &str) {
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view()
+                    && node.name.starts_with("Session ")
+                    && node.name.contains(" · ")
+                    && node.name.contains("Processed")
+                    && !node.name.contains("with a warning")
+            })
+            .collect();
+        let success = crate::design::colors().result.success;
+        let word = format!("{} Processed", crate::design::icons::OK);
+        let mut seen = Vec::new();
+        let clean = rows.iter().all(|row| {
+            // The spoken name says Processed without the icon's private character.
+            let spoken = !row.name.contains(crate::design::icons::OK)
+                && (row.name.contains(" · Processed") || row.name.contains("\nProcessed"));
+            let mut colored = false;
+            d.each_painted_text(|text, _| {
+                if !row.rect.contains(text.visual_bounding_rect().center()) {
+                    return;
+                }
+                let job = &text.galley.job;
+                let all = job.text.replace('\u{a0}', " ");
+                for section in &job.sections {
+                    let words = &job.text[section.byte_range.clone()];
+                    if words.contains("Processed") {
+                        seen.push((all.clone(), section.format.color));
+                        colored |= all.contains(&word) && section.format.color == success;
+                    }
+                }
+            });
+            colored && spoken
+        });
+        let names: Vec<_> = rows.iter().map(|row| row.name.clone()).collect();
+        d.observe(
+            id,
+            !rows.is_empty() && clean,
+            format!(
+                "Each clean Processed row shows the check icon and Processed in the success \
+                 colour, and its name says Processed without the icon: {} rows, {seen:?}, \
+                 {names:?}",
+                rows.len()
+            ),
+        );
+    }
+
     fn check_result_row(d: &mut Driver<'_>) {
         let rows: Vec<_> = d
             .nodes()
@@ -7072,6 +7462,9 @@ pub mod session_recording {
         assert_eq!(rows.len(), 1, "The processed session row is visible");
         let lines = d.painted_lines_in(rows[0].rect);
         assert!(!lines.is_empty(), "The processed row has laid-out text");
+        if !rows[0].name.contains("with a warning") {
+            check_clean_row(d, "iter-11-C-FT3");
+        }
         d.observe(
             "iter-9-C2-FT4-lines",
             lines.iter().all(|line| !line.trim_start().starts_with('·')),
@@ -7144,7 +7537,12 @@ pub mod session_recording {
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
-        d.state("recording-listed", Sizes::Default);
+        d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give
+            // way before names; HP and state words stay.
+            let (items, painted) = party_bar_items(d);
+            check_party_names(d, "iter-11-C-AT1", &items, &painted);
+        });
         let tabs_top = |d: &Driver<'_>| {
             d.place_of("Plan")
                 .or_else(|| d.place_of("Plan and notes"))
@@ -7528,6 +7926,7 @@ pub mod session_recording {
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
             check_marker_columns(d);
+            check_clean_row(d, "iter-11-C-FT3-marker");
             let size = d.window_size();
             let before = marker_positions
                 .iter()
@@ -7660,7 +8059,30 @@ pub mod session_recording {
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
         d.expect("Replace the results");
-        d.state("process-again-confirm", Sizes::Default);
+        d.state_prepared("process-again-confirm", Sizes::Default, |d| {
+            // ST1: the confirmation keeps the reader's measure, with both choices together below.
+            let mut message = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("The audio is not sent again") {
+                    message = Some(text.visual_bounding_rect());
+                }
+            });
+            let buttons = d.place_of("Not now").zip(d.place_of("Replace the results"));
+            d.observe(
+                "iter-11-C-ST1",
+                message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
+                    message.width() <= crate::design::READER_MEASURE + 0.5
+                        && not_now.top() >= message.bottom()
+                        && (not_now.center().y - replace.center().y).abs() < 1.0
+                        && replace.left() > not_now.right()
+                        && replace.left() - not_now.right() <= crate::design::L + crate::design::S
+                }),
+                format!(
+                    "The confirmation is at most {} wide, with Not now and Replace the results together below it: {message:?} {buttons:?}",
+                    crate::design::READER_MEASURE
+                ),
+            );
+        });
         d.click("Not now");
 
         d.click_containing("More actions for 2026-01-01");
@@ -7878,6 +8300,7 @@ pub mod session_recording {
                 d.in_view(resume),
                 "A paused timeline fight has a visible Resume"
             );
+            check_clean_row(d, "iter-11-C-AT2");
         });
         d.begin_task();
         assert!(
@@ -8107,7 +8530,48 @@ pub mod encounter_groups {
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
         assert!(d.has("Undo discard of Lost Patrol"));
-        d.state("group-removed", Sizes::All);
+        d.state_prepared("group-removed", Sizes::All, |d| {
+            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
+            let size = d.window_size();
+            let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+            let discarded = d.painted_rect_in("Lost Patrol draft discarded.", window);
+            let removed = d.painted_rect_in(&format!("Removed group {GROUP_GOBLINS}."), window);
+            let text = crate::design::colors().text;
+            let body = crate::design::Type::Body.size();
+            let (Some(discarded), Some(removed)) = (discarded, removed) else {
+                panic!("At {size:?}, both notices are painted: {discarded:?} and {removed:?}");
+            };
+            d.observe(
+                "iter11-B-FT4",
+                (discarded.left() - removed.left()).abs() < 1.0,
+                format!(
+                    "At {size:?}, the discard notice starts at the removal's left edge: {discarded:?} and {removed:?}"
+                ),
+            );
+            let painted = d.painted_size(discarded, "Lost Patrol draft discarded.");
+            let icon = |text: egui::Rect| {
+                d.painted_rect_in(
+                    crate::design::icons::INFO,
+                    egui::Rect::from_min_max(
+                        pos2(text.left() - crate::design::XXL, text.top() - 2.0),
+                        pos2(text.left(), text.bottom() + 2.0),
+                    ),
+                )
+                .is_some()
+            };
+            let colour = d.painted_color("Lost Patrol draft discarded.");
+            d.observe(
+                "iter11-B-FT4",
+                icon(discarded) && icon(removed) && colour == Some(text),
+                format!("At {size:?}, both notices have the info icon, and the discard words use the text colour: {colour:?}"),
+            );
+            d.observe(
+                "iter11-B-FT4",
+                painted == Some(body),
+                format!("At {size:?}, the discard notice uses Body text: {painted:?}, not {body}"),
+            );
+            check_undo_icon(d, "Undo discard of Lost Patrol", "iter11-B-FT4");
+        });
         d.observe(
             "F15",
             !d.has(&format!("Edit group {GROUP_GOBLINS}")),
@@ -8899,6 +9363,58 @@ pub mod run_no_groups {
     }
 }
 
+/// FT3 repair: a crowded party bar at the minimum window never cuts an item off.
+pub mod party_bar_crowded {
+    use super::*;
+    const HURT: [(&str, &str); 2] = [("Iselle Marrowind", "8"), ("Oren Thistlewick", "23")];
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        // Kestrel is already Bloodied. Two more make three of five; two keep temporary HP.
+        for (name, damage) in HURT {
+            d.click_row(name);
+            d.type_text(damage);
+            d.press(Key::Enter);
+            d.expect(&format!("Undo: {damage} damage to {name}"));
+        }
+        d.click(NAV_SESSIONS);
+        d.state_prepared("three-bloodied", Sizes::Default, |d| {
+            let (items, _) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            let hide = d.place_of("Hide the party");
+            let more = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains(" more: "))
+                .map(|node| node.name);
+            let named = |part: &str| {
+                items.iter().filter(|item| item.name.contains(part)).count()
+                    + more.as_deref().map_or(0, |more| more.matches(part).count())
+            };
+            let shown = items.len()
+                + more
+                    .as_deref()
+                    .and_then(|more| more.split_whitespace().next()?.parse::<usize>().ok())
+                    .unwrap_or(0);
+            d.observe(
+                &format!("iter-12-C2-FT3-whole-{width}"),
+                !items.is_empty()
+                    && shown == 5
+                    && named("Bloodied") == 3
+                    && hide.is_some_and(|hide| {
+                        hide.right() <= width
+                            && items.iter().all(|item| item.rect.right() <= hide.left())
+                    }),
+                format!(
+                    "At {width}, 3 of 5 Bloodied: every party item lies whole before Hide the \
+                     party, and every player is named ({} items, {more:?})",
+                    items.len()
+                ),
+            );
+        });
+    }
+}
+
 /// W13: one creature joins a fight with nothing prepared, made up or found.
 pub mod run_add_creature {
     use super::*;
@@ -9444,6 +9960,42 @@ pub mod session_plan {
             cost <= 3 && d.visible_text("Scorching Sickle") && d.visible_text("4"),
             format!("The result shows in {cost}, and the stat block stays"),
         );
+        // iter11-B-FT2: a roll is not an Undo step. Damage, a roll, then U takes back the damage.
+        d.observe(
+            "iter11-B-FT2",
+            d.has_containing("Undo") && !d.has_containing("Undo: 1d1+3"),
+            "The roll does not take an Undo step",
+        );
+        let whole = d.row_hp("Ember Cultist");
+        d.type_text("2");
+        d.press(Key::Enter);
+        let hurt = d.row_hp("Ember Cultist");
+        assert!(d.has_containing("Undo: 2 damage to Ember Cultist"));
+        // Not T12.4's expression, so the Log line can only come from this roll.
+        d.type_into("Dice", "1d1+5");
+        d.press(Key::Enter);
+        d.observe(
+            "iter11-B-FT2",
+            d.has_containing("Undo: 2 damage to Ember Cultist"),
+            "After the roll, Undo still names the damage",
+        );
+        d.press(Key::U);
+        d.observe(
+            "iter11-B-FT2",
+            hurt != whole && d.row_hp("Ember Cultist") == whole,
+            format!(
+                "U after the roll takes back the damage: {whole:?}, {hurt:?}, then {:?}",
+                d.row_hp("Ember Cultist")
+            ),
+        );
+        fight_tab(d, "Log");
+        d.observe(
+            "iter11-B-FT2",
+            d.visible_text("DM roll 1d1+5"),
+            "The roll stays in the Log after that Undo",
+        );
+        fight_tab(d, "Stat block");
+        d.expect("Scorching Sickle");
 
         // T12.5: a look at someone else, and back.
         let turn = current_participant(d).unwrap_or_default();
@@ -9613,7 +10165,22 @@ pub mod session_plan {
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
-        d.state("timeline-after-fight", Sizes::All);
+        d.state_prepared("timeline-after-fight", Sizes::All, |d| {
+            // FT4: Timeline names the removed fight as the plan does, so the row below reads true.
+            let notice = format!(
+                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
+            );
+            d.observe(
+                "iter-12-C-FT4",
+                d.visible_text(&notice),
+                format!("Timeline's removal notice names the removed fight: {notice}"),
+            );
+            d.observe(
+                "iter-12-C-FT4-row",
+                d.in_view("Undo remove") && d.has_containing("Held the bridge · Ended · Round 1"),
+                "Undo remove stays with the notice, and the played fight's row stays",
+            );
+        });
         d.click(NAV_SESSIONS);
         show_plan(d);
 
@@ -9872,32 +10439,8 @@ pub mod session_plan {
         }
         d.state_prepared("session-party-bar", Sizes::All, |d| {
             // FT-1: each item names its player before HP. Stats give way first, together.
-            let items: Vec<_> = d
-                .nodes()
-                .into_iter()
-                .filter(|node| node.name.contains("Passive Perception"))
-                .collect();
-            let painted: Vec<(String, String)> = items
-                .iter()
-                .map(|item| {
-                    (
-                        item.name
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or_default()
-                            .to_owned(),
-                        d.painted_lines_in(item.rect).join(" "),
-                    )
-                })
-                .collect();
-            d.observe(
-                "iter-10-C-FT1",
-                items.len() >= 4
-                    && painted
-                        .iter()
-                        .all(|(first, words)| words.split_whitespace().any(|word| word == first)),
-                format!("Every party bar item shows its first name: {painted:?}"),
-            );
+            let (items, painted) = session_recording::party_bar_items(d);
+            session_recording::check_party_names(d, "iter-10-C-FT1", &items, &painted);
             let stats = |words: &str| {
                 ["AC", "Per", "Ins"]
                     .into_iter()

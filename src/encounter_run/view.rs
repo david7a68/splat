@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, LastRoll, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
-    display, mode_label,
+    SHEET_SOURCE, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -584,7 +584,7 @@ impl Run {
         ui.add_space(design::XS);
         let mut outcome = None;
         ui.horizontal(|ui| {
-            // The action that loses nothing is the filled one.
+            // Neither action is filled: the safe one comes first, and the red one keeps an `L` gap.
             if Action::secondary("Save as a new run")
                 .density(Density::Read)
                 .hint("Keep the changed file as it is, and save this run beside it")
@@ -593,6 +593,7 @@ impl Run {
             {
                 outcome = Some(self.save_as_new_run());
             }
+            ui.add_space(design::L);
             if Action::destructive("Replace the file with this run")
                 .density(Density::Read)
                 .hint("The changes in the file on disk are lost")
@@ -1041,17 +1042,19 @@ impl Run {
                         sync_alert.as_ref().map_or("", |alert| alert.short.as_str())
                     )
                 } else if let Some(alert) = &sync_alert {
-                    format!(
-                        "{} {}",
-                        alert.text,
-                        if needs_connection {
-                            "Connect to sync"
-                        } else if self.hide_panel && strip.conflict.is_some() {
-                            "Review"
-                        } else {
-                            ""
-                        }
-                    )
+                    // Measure only what is painted: no space after a notice with no link.
+                    let link = if needs_connection {
+                        "Connect to sync"
+                    } else if self.hide_panel && strip.conflict.is_some() {
+                        "Review"
+                    } else {
+                        ""
+                    };
+                    if link.is_empty() {
+                        alert.text.clone()
+                    } else {
+                        format!("{} {link}", alert.text)
+                    }
                 } else if nobody_present {
                     "No participants are present".to_owned()
                 } else {
@@ -1061,9 +1064,11 @@ impl Run {
                         .map_or(String::new(), |next| format!("Next: {next}"))
                 };
                 let action_font = Type::Strong.font(ui);
+                let from_sheet = self.undo_from_sheet();
                 let fitted = undo_words(
                     ui,
                     &undo_label,
+                    from_sheet,
                     &self.state.participants,
                     &action_font,
                     f32::INFINITY,
@@ -1082,6 +1087,13 @@ impl Run {
                         1,
                     );
                 }
+                // The shortest target Undo keeps: a sheet's step also gives up its source.
+                let shortest = minimum
+                    .strip_prefix("Undo: ")
+                    .and_then(|action| action.strip_prefix(SHEET_SOURCE))
+                    .filter(|_| from_sheet)
+                    .map_or_else(|| minimum.clone(), |action| format!("Undo: {action}"));
+                let target_reserve = self.undo_action(&shortest).natural_width(ui) + design::XS;
                 let minimum = self.undo_action(&minimum).natural_width(ui)
                     + design::XS
                     + if self.history.is_empty() {
@@ -1089,21 +1101,28 @@ impl Run {
                     } else {
                         0.0
                     };
-                // A state notice stays whole; Undo then shortens its target, down to the word
-                // Undo alone. Only the Next notice gives way to Undo's shortened target.
-                // Undo keeps its full accessible name and hover text.
+                // A state notice stays whole; Undo then shortens its target, and shows the word
+                // Undo alone only when no target fits. Only the Next notice gives way to Undo's
+                // shortened target. Undo keeps its full accessible name and hover text.
                 let state_notice =
                     sync_alert.is_some() || self.recording_notice.is_some() || nobody_present;
-                let minimum = if (party_sync_off && self.recording_notice.is_some())
-                    || (state_notice && !self.history.is_empty())
-                {
+                let silence_beside_sync_off = party_sync_off && self.recording_notice.is_some();
+                let beside_state = state_notice && !self.history.is_empty();
+                let minimum = if silence_beside_sync_off || beside_state {
                     self.undo_action("Undo").natural_width(ui) + design::XS
+                } else {
+                    minimum
+                };
+                // A shortened Undo target comes before the sheet-change notice, which can go
+                // below the roster.
+                let sheet_reserve = if beside_state && !silence_beside_sync_off {
+                    target_reserve
                 } else {
                     minimum
                 };
                 let notice_width = design::number_width(ui, &notice, &font) + design::S;
                 let sheet_room =
-                    (ui.available_width() - minimum - notice_width - design::L).max(0.0);
+                    (ui.available_width() - sheet_reserve - notice_width - design::L).max(0.0);
                 let sheet_width = |summary: &str| {
                     design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
                         + design::number_width(ui, " Log ", &Type::Body.font(ui))
@@ -1131,25 +1150,36 @@ impl Run {
                 let notice_width = (notice_width + if sheet.is_some() { sheet_width } else { 0.0 })
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
-                let overhead = self.undo_action("").natural_width(ui);
+                let mut keyless = false;
                 let shown = if party_sync_off
                     && self.recording_notice.is_some()
                     && self.undo_action(&fitted).natural_width(ui) > slot
                 {
                     "Undo".to_owned()
                 } else {
-                    let words = undo_words(
-                        ui,
-                        &undo_label,
-                        &self.state.participants,
-                        &Type::Strong.font(ui),
-                        slot - overhead - design::XS,
-                    );
-                    if self.undo_action(&words).natural_width(ui) > slot || !keeps_names(&words) {
-                        "Undo".to_owned()
-                    } else {
-                        words
+                    // The key letter goes before the target does; the Keys list still has U.
+                    let mut shown = "Undo".to_owned();
+                    for drop_key in [false, true] {
+                        let width_of = |words: &str| {
+                            let action = self.undo_action(words);
+                            let action = if drop_key { action.key("") } else { action };
+                            action.natural_width(ui)
+                        };
+                        let words = undo_words(
+                            ui,
+                            &undo_label,
+                            from_sheet,
+                            &self.state.participants,
+                            &Type::Strong.font(ui),
+                            slot - width_of("") - design::XS,
+                        );
+                        if width_of(&words) <= slot && keeps_names(&words) {
+                            shown = words;
+                            keyless = drop_key;
+                            break;
+                        }
                     }
+                    shown
                 };
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
@@ -1158,7 +1188,9 @@ impl Run {
                         undo = if self.history.is_empty() {
                             self.empty_undo(ui)
                         } else {
-                            self.undo_action(&shown)
+                            let action = self.undo_action(&shown);
+                            let action = if keyless { action.key("") } else { action };
+                            action
                                 .name(&undo_label)
                                 .hint(&undo_label)
                                 .show(ui)
@@ -2086,9 +2118,16 @@ impl Run {
             } else {
                 self.dice.trim().to_owned()
             };
-            let before = self.state.log.len();
-            self.run_command(Command::Roll(expression));
-            self.last_roll = (self.state.log.len() > before)
+            match self.roll_dice(&expression) {
+                Err(error) => self.error = Some(error),
+                Ok(()) => {
+                    self.condition.clear();
+                    self.note.clear();
+                }
+            }
+            self.last_roll = self
+                .error
+                .is_none()
                 .then(|| self.state.log.last().cloned())
                 .flatten()
                 .map(|line| LastRoll {
@@ -3115,6 +3154,7 @@ impl Run {
                             let shown = undo_words(
                                 ui,
                                 &full,
+                                false,
                                 &self.state.participants,
                                 &font,
                                 ui.available_width() - design::M * 2.0,
@@ -5585,9 +5625,11 @@ fn close_saved_words(undo: bool, sync: bool) -> String {
 }
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
+/// `from_sheet`: a sheet made this step, so its source can go before its target.
 fn undo_words(
     ui: &egui::Ui,
     label: &str,
+    from_sheet: bool,
     participants: &[Participant],
     font: &egui::FontId,
     width: f32,
@@ -5637,10 +5679,18 @@ fn undo_words(
             .map_or(("", label), |action| ("Undo: ", action)),
     };
     let width = width - design::number_width(ui, prefix, font);
-    format!(
-        "{prefix}{}",
-        shortened_action(ui, action, participants, font, width)
-    )
+    let shown = shortened_action(ui, action, participants, font, width);
+    // A sheet's step gives up its source before its target: `HP for Brannoch…`.
+    if from_sheet
+        && (design::number_width(ui, &shown, font) > width || !keeps_names(&shown))
+        && let Some(rest) = action.strip_prefix(SHEET_SOURCE)
+    {
+        let without = shortened_action(ui, rest, participants, font, width);
+        if design::number_width(ui, &without, font) <= width && keeps_names(&without) {
+            return format!("{prefix}{without}");
+        }
+    }
+    format!("{prefix}{shown}")
 }
 
 /// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
@@ -7770,6 +7820,66 @@ mod tests {
     }
 
     #[test]
+    fn iter_11_b_a_sheet_step_gives_up_its_source_before_its_target() {
+        let entry = Entry::parse("vale.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Brannoch Vale\nsplat_creature: {{type: humanoid}}\nsplat_stats: {{max_hp: {{value: 62}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        let p =
+            Participant::new("vale".into(), "party".into(), entry, &Mapping::new(), true).unwrap();
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Strong.font(ui);
+                // One pixel over each form's own width: the parts are measured apart.
+                let words = |label: &str, width: f32| {
+                    undo_words(
+                        ui,
+                        label,
+                        true,
+                        std::slice::from_ref(&p),
+                        &font,
+                        width + 1.0,
+                    )
+                };
+                let full = format!("Undo: {SHEET_SOURCE}HP for {}", p.name);
+                // Room for all of it: nothing changes.
+                let wide = design::number_width(ui, &full, &font);
+                assert_eq!(words(&full, wide), full);
+                // The name shortens first, while the source fits.
+                let named = format!("Undo: {SHEET_SOURCE}HP for Brannoch…");
+                assert_eq!(words(&full, design::number_width(ui, &named, &font)), named);
+                // Then the source goes, and the target stays.
+                let short = "Undo: HP for Brannoch…";
+                assert_eq!(words(&full, design::number_width(ui, short, &font)), short);
+                // A count of characters has no name to shorten.
+                let many = format!("Undo: {SHEET_SOURCE}values for 2 characters");
+                let target = "Undo: values for 2 characters";
+                assert_eq!(
+                    words(&many, design::number_width(ui, target, &font)),
+                    target
+                );
+                // iter11-B2: a DM's effect that starts with the same words keeps them.
+                let effect = format!("Undo: {SHEET_SOURCE}boon on {}", p.name);
+                let tight = design::number_width(ui, "Undo: boon on Brannoch…", &font);
+                let shown = undo_words(
+                    ui,
+                    &effect,
+                    false,
+                    std::slice::from_ref(&p),
+                    &font,
+                    tight + 1.0,
+                );
+                assert!(
+                    shown.starts_with(&format!("Undo: {SHEET_SOURCE}boon on ")),
+                    "{shown}"
+                );
+                // A step from the DM keeps its words, however tight.
+                let damage = format!("Undo: 3 damage to {}", p.name);
+                assert!(words(&damage, 10.0).starts_with("Undo: 3 damage to "));
+            });
+        });
+    }
+
+    #[test]
     fn iter_2_b_undo_keeps_actions_directions_amounts_and_copy_numbers() {
         let entry = Entry::parse("wolf.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         let p = Participant::new(
@@ -7800,7 +7910,8 @@ mod tests {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
                         design::number_width(ui, &format!("Undo: {before}Cinder… 3{after}"), &font);
-                    let shown = undo_words(ui, &full, std::slice::from_ref(&p), &font, width);
+                    let shown =
+                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width);
                     // iter10-B-FT2: the word Undo stays; the target is shortened.
                     assert!(
                         shown.starts_with(&format!("Undo: {before}")) && shown.ends_with(after),
@@ -7818,7 +7929,7 @@ mod tests {
                     let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
-                        undo_words(ui, &full, std::slice::from_ref(&p), &font, width),
+                        undo_words(ui, &full, false, std::slice::from_ref(&p), &font, width),
                         expected
                     );
                 }

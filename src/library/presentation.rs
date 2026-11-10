@@ -140,7 +140,7 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
         format!(
             "{} {} · {line}",
             design::icons::WARN,
-            design::count(entry.flags.len(), "flagged value", "flagged values")
+            design::count(entry.flags.len(), "value not read", "values not read")
         )
     } else {
         line

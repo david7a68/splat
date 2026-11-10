@@ -316,14 +316,22 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
         colors().muted
     };
     let font = if selected { Type::Strong } else { Type::Body };
-    let galley = ui.painter().layout(
-        label.to_owned(),
-        font.font(ui),
-        color,
-        (ui.available_width() - design::S * 2.0).max(design::XXL),
+    // One line, so a warning icon never moves the rows below. The package name shortens by whole
+    // words; hover and the accessible name keep the full label.
+    let room = (ui.available_width() - design::S * 2.0).max(design::XXL);
+    let (head, name) = label
+        .split_once("About ")
+        .map_or(("", label), |(icon, name)| (icon, name));
+    let head = format!("{head}About ");
+    let name_room = room - design::number_width(ui, &head, &font.font(ui));
+    let shown = format!(
+        "{head}{}",
+        design::words_that_fit(ui, name, &font.font(ui), name_room)
     );
+    let galley = design::one_line(ui, &shown, font.font(ui), color, room);
+    let shortened = shown != label || galley.elided;
     let height = (galley.size().y + design::XS * 2.0).max(Density::Read.row());
-    design::row(ui, height, selected, label, |ui, rect| {
+    let response = design::row(ui, height, selected, label, |ui, rect| {
         ui.painter().galley(
             egui::pos2(
                 rect.left() + design::S,
@@ -332,7 +340,12 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
             galley,
             color,
         );
-    })
+    });
+    if shortened {
+        response.on_hover_text(label)
+    } else {
+        response
+    }
 }
 
 /// What the catalogue shows. The default is what the active campaign can use.
@@ -462,6 +475,12 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+/// The link index a scan used, and each listed entry's position and broken link count.
+type BrokenLinks = (
+    std::sync::Arc<crate::lookup::ContentIndex>,
+    Vec<(usize, usize)>,
+);
+
 #[derive(Default)]
 pub(crate) struct Loaded {
     pub(crate) notes: Vec<Note>,
@@ -477,6 +496,9 @@ pub(crate) struct Loaded {
     duplicates: std::sync::OnceLock<DuplicateIndex>,
     /// Each note's creature facts, for search and the creature filter.
     facets: std::sync::OnceLock<Vec<Option<Facets>>>,
+    /// Listed entries with a broken link, found against this link index. A new index, an edited
+    /// note (`invalidate`) or a reload (a new `Loaded`) finds them again.
+    broken_links: std::sync::Mutex<Option<BrokenLinks>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
@@ -486,6 +508,36 @@ impl Loaded {
                 .map(|note| note.entry.as_ref().and_then(Facets::of))
                 .collect()
         })
+    }
+    /// The listed entries whose rows say `broken link`, as (note position, broken link count):
+    /// campaign and package entries, not manifests. Scanning every body is the work the cache
+    /// keeps out of each frame, the header menu included.
+    fn broken_link_notes(
+        &self,
+        index: &std::sync::Arc<crate::lookup::ContentIndex>,
+    ) -> Vec<(usize, usize)> {
+        let mut cache = self
+            .broken_links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((known, notes)) = cache.as_ref()
+            && std::sync::Arc::ptr_eq(known, index)
+        {
+            return notes.clone();
+        }
+        let notes: Vec<(usize, usize)> = self
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(_, note)| note.owner != Owner::Builtin && !note.is_manifest())
+            .filter_map(|(at, note)| {
+                let entry = note.entry.as_ref()?;
+                let count = index.broken_link_count(&entry.body, entry.id);
+                (count > 0).then_some((at, count))
+            })
+            .collect();
+        *cache = Some((index.clone(), notes.clone()));
+        notes
     }
     fn old_layout_count(&self) -> usize {
         self.notes
@@ -750,6 +802,10 @@ impl Loaded {
             .map_or(0, |(_, n)| *n)
     }
     fn invalidate(&mut self) {
+        *self
+            .broken_links
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         self.subtitles.take();
         self.counts.take();
         self.duplicate_ids.take();
@@ -1454,6 +1510,33 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
     Ok(all)
 }
 
+/// The height `design::draft_discarded` takes at this width: one line beside Undo discard, or the
+/// message with Undo discard on the line below.
+fn discarded_height(ui: &egui::Ui, name: &str, width: f32) -> f32 {
+    let text = format!("{name} draft discarded.");
+    let body = Type::Body.font(ui);
+    let gap = ui.spacing().item_spacing.x;
+    let inset =
+        design::S + 1.0 + design::number_width(ui, icons::INFO, &body) + gap * 2.0 - design::XS;
+    let button = Action::quiet("Undo discard")
+        .icon(icons::UNDO)
+        .density(Density::Read)
+        .natural_width(ui);
+    if design::number_width(ui, &text, &body) + inset + gap + button <= width {
+        return Density::Read.control();
+    }
+    let lines = egui::WidgetText::from(Type::Body.rich(ui, text))
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Wrap),
+            (width - inset).max(1.0),
+            body,
+        )
+        .size()
+        .y;
+    lines + ui.spacing().item_spacing.y + Density::Read.control()
+}
+
 /// Undo discard offers words only to the note they came from. Two owners can each have a
 /// note at the same path.
 fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
@@ -1517,8 +1600,13 @@ struct IdentityUndo {
     after: String,
 }
 
+type ParsedDraft = std::sync::Arc<Result<Entry, String>>;
+
 #[derive(Default)]
 pub struct Library {
+    /// The draft as last parsed, with its path. The editor needs the parse on every frame,
+    /// and parsing a long note each time took most of the frame.
+    draft_parse: Option<(String, String, ParsedDraft)>,
     layouts: crate::formats_ui::State,
     layout_scope: Option<Scope>,
     /// The list should scroll to the selected entry, which arrived by a link.
@@ -2098,6 +2186,20 @@ impl Library {
             ctx.request_repaint();
         });
     }
+    /// The draft of note `i`, parsed. The same text keeps the same parse.
+    fn parsed_draft(&mut self, i: usize) -> ParsedDraft {
+        let path = &self.loaded.as_ref().unwrap().notes[i].path;
+        if let Some((parsed_path, draft, parsed)) = &self.draft_parse
+            && parsed_path == path
+            && *draft == self.draft
+        {
+            return parsed.clone();
+        }
+        let parsed = std::sync::Arc::new(Entry::parse(path, &self.draft));
+        self.draft_parse = Some((path.clone(), self.draft.clone(), parsed.clone()));
+        parsed
+    }
+
     fn draft_reason(&self) -> Option<&'static str> {
         if self.disk_change.is_some() {
             Some("Choose what to do with the changed file first.")
@@ -2231,6 +2333,13 @@ impl Library {
                 .count()
         });
         let mut new_entry = false;
+        let link_index = ui.ctx().data(|data| {
+            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                "reader_link_index",
+            ))
+        });
+        let draft_reason = self.draft_reason();
+        let mut open_broken = None;
         design::page_header(
             ui,
             "Library",
@@ -2310,14 +2419,22 @@ impl Library {
                         self.layouts.scan(campaigns);
                     }
                 }
+                let broken = self
+                    .loaded
+                    .as_ref()
+                    .zip(link_index.as_ref())
+                    .map(|(loaded, index)| loaded.broken_link_notes(index))
+                    .unwrap_or_default();
                 if let Some(loaded) = &self.loaded
-                    && !loaded.diagnostics.is_empty()
+                    && (!loaded.diagnostics.is_empty() || !broken.is_empty())
                 {
+                    // A file counts once, for a problem, a broken link, or both.
                     let word = design::count(
                         loaded
                             .diagnostics
                             .iter()
                             .map(|message| message.split(": ").next().unwrap_or(message))
+                            .chain(broken.iter().map(|&(at, _)| loaded.notes[at].path.as_str()))
                             .collect::<std::collections::HashSet<_>>()
                             .len(),
                         "file needs fixing",
@@ -2344,11 +2461,34 @@ impl Library {
                                         .wrap(),
                                     );
                                 }
+                                // As in World, each entry with a broken link opens from here.
+                                design::locked(ui, draft_reason, |ui| {
+                                    for &(at, count) in &broken {
+                                        let note = &loaded.notes[at];
+                                        if design::small_link(
+                                            ui,
+                                            &format!(
+                                                "{}: {}",
+                                                note.path,
+                                                design::count(count, "broken link", "broken links")
+                                            ),
+                                        )
+                                        .clicked()
+                                        {
+                                            open_broken = Some(at);
+                                            ui.close();
+                                        }
+                                    }
+                                });
                             });
                     });
                 }
             },
         );
+        if let Some(at) = open_broken {
+            self.open_entry(at);
+            self.reveal_row = true;
+        }
         if new_entry {
             self.new_form = true;
             self.new_folder = kind_folder(&self.new_kind).into();
@@ -4244,8 +4384,9 @@ impl Library {
             }
         }
         let draft_reason = self.draft_reason();
+        let parsed_draft = self.parsed_draft(i);
+        let parsed: &Result<Entry, String> = &parsed_draft;
         let note = &self.loaded.as_ref().unwrap().notes[i];
-        let parsed = Entry::parse(&note.path, &self.draft);
         let reading = parsed
             .as_ref()
             .ok()
@@ -4890,6 +5031,7 @@ impl Library {
             } else {
                 // Measure the same words in both states, so the first edit keeps the caret in place.
                 let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
+                // The discard message is measured too, so neither state moves the editor.
                 let height = egui::WidgetText::from(Type::Small.rich(ui, words))
                     .into_galley(
                         ui,
@@ -4899,34 +5041,31 @@ impl Library {
                     )
                     .size()
                     .y
+                    .max(discarded_height(ui, note.name(), editor_width))
                     .max(Density::Read.control() + design::XS);
                 let (slot, _) =
                     ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-                if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
+                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    if design::draft_discarded(&mut slot_ui, note.name())
+                        && let Some((_, _, text)) = self.discarded.take()
+                    {
+                        self.draft = text;
+                    }
+                } else if let Some(reason) = draft_reason {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(slot)
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
-                    let ui = &mut slot_ui;
-                    if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
-                        ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
-                        if Action::quiet("Undo discard")
-                            .name(&format!("Undo discard of {}", note.name()))
-                            .icon(icons::UNDO)
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                            && let Some((_, _, text)) = self.discarded.take()
-                        {
-                            self.draft = text;
-                        }
-                    } else if let Some(reason) = draft_reason {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
-                                .wrap(),
-                        );
-                    }
+                    slot_ui.add(
+                        egui::Label::new(Type::Small.rich(&slot_ui, reason).color(colors().muted))
+                            .wrap(),
+                    );
                 }
             }
         }
@@ -5553,6 +5692,11 @@ mod tests {
                 "spell",
                 "## Spell\n\n| Field | Value |\n| --- | --- |\n| Level | many |\n",
             ),
+            (
+                "Bear",
+                "creature",
+                "## Stat block\n\n| Stat | Value |\n| --- | --- |\n| Armor Class | thick fur |\n| Hit Points | about forty |\n",
+            ),
         ] {
             fs::write(module.path.join(format!("{name}.md")), format!(
                 "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: {name}\n---\n\n{table}", Uuid::new_v4()
@@ -5566,8 +5710,19 @@ mod tests {
                 .iter()
                 .position(|note| note.name() == name)
                 .unwrap();
-            assert!(loaded.subtitles()[at].contains("1 flagged value"));
+            assert!(loaded.subtitles()[at].contains("1 value not read"));
         }
+        // FD5: the Library row uses World's words, in the plural too.
+        let bear = loaded
+            .notes
+            .iter()
+            .position(|note| note.name() == "Bear")
+            .unwrap();
+        assert!(
+            loaded.subtitles()[bear].contains("2 values not read"),
+            "{}",
+            loaded.subtitles()[bear]
+        );
         let mut library = Library {
             loaded: Some(loaded),
             ..Default::default()
@@ -5586,7 +5741,7 @@ mod tests {
                     .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
             },
         );
-        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("2 files need fixing"))));
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
         let diagnostics = &library.loaded.as_ref().unwrap().diagnostics;
         assert!(
             diagnostics
@@ -5598,6 +5753,154 @@ mod tests {
                 .iter()
                 .any(|s| s.contains("Spark.md: Level \"many\" not read"))
         );
+    }
+
+    /// iter-12-E-FD2: an entry with a broken link counts in the header once, beside unreadable and
+    /// flagged files. The scan is cached against the link index until a note changes.
+    #[test]
+    fn broken_links_count_in_the_header_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
+        let note = |name: &str, kind: &str, body: &str| {
+            fs::write(
+                module.path.join(format!("{name}.md")),
+                format!(
+                    "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: {name}\n---\n\n{body}",
+                    Uuid::new_v4()
+                ),
+            )
+            .unwrap();
+        };
+        note("Linker", "rule", "See [[Gone Page]].\n");
+        note("Fine", "rule", "See [[Linker]].\n");
+        // A flag and a broken link in one file: one file to fix.
+        note(
+            "Both",
+            "creature",
+            "## Stat block\n\n| Stat | Value |\n| --- | --- |\n| Hit Points | about twenty |\n\n[[Gone Too]]\n",
+        );
+        fs::write(
+            module.path.join("Unreadable.md"),
+            "---\nsplat_kind: [\n---\n",
+        )
+        .unwrap();
+        let mut loaded = load(Some(&module)).unwrap();
+        loaded.refresh_diagnostics();
+        let index = std::sync::Arc::new(
+            crate::lookup::ContentIndex::load(std::slice::from_ref(&module), None).unwrap(),
+        );
+        let names = |loaded: &Loaded, notes: Vec<(usize, usize)>| -> Vec<String> {
+            notes
+                .into_iter()
+                .map(|(at, _)| loaded.notes[at].name().to_owned())
+                .collect()
+        };
+        assert_eq!(
+            names(&loaded, loaded.broken_link_notes(&index)),
+            ["Both", "Linker"]
+        );
+        // Cached: a changed body is not scanned again until the note is invalidated.
+        let fine = loaded
+            .notes
+            .iter()
+            .position(|n| n.name() == "Fine")
+            .unwrap();
+        loaded.notes[fine].entry.as_mut().unwrap().body =
+            "See [[Nowhere]] and [[Nor Here]].\n".into();
+        assert_eq!(loaded.broken_link_notes(&index).len(), 2);
+        loaded.invalidate();
+        assert_eq!(
+            names(&loaded, loaded.broken_link_notes(&index)),
+            ["Both", "Fine", "Linker"]
+        );
+        // The menu reads each count from the cache: two links in Fine, one in each other file.
+        assert_eq!(
+            loaded
+                .broken_link_notes(&index)
+                .iter()
+                .map(|&(_, count)| count)
+                .collect::<Vec<_>>(),
+            [1, 2, 1]
+        );
+        // A new index finds them again, with the same notes.
+        loaded.notes[fine].entry.as_mut().unwrap().body = "See [[Linker]].\n".into();
+        let other = std::sync::Arc::new(
+            crate::lookup::ContentIndex::load(std::slice::from_ref(&module), None).unwrap(),
+        );
+        assert_eq!(loaded.broken_link_notes(&other).len(), 2);
+
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        ctx.data_mut(|data| data.insert_temp(egui::Id::new("reader_link_index"), other));
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 800.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| library.show(ui, &mut Campaigns::default()));
+            },
+        );
+        let painted = |words: &str| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains(words))
+            })
+        };
+        // Linker, Both (flag and link) and the unreadable file: three, not four.
+        assert!(painted("3 files need fixing"));
+    }
+
+    /// The reserved slot measures the shared message, on one line and wrapped, so the editor keeps
+    /// its place when Discard replaces the reason.
+    #[test]
+    fn discarded_height_matches_the_shared_message() {
+        let ctx = egui::Context::default();
+        for (name, width) in [
+            ("Ash Exposure", 600.0),
+            ("Ash Exposure", 200.0),
+            ("Cinder Hound of the Long Ash Road", 260.0),
+        ] {
+            let mut measured = (0.0, 0.0);
+            for _ in 0..2 {
+                let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let expected = discarded_height(ui, name, width);
+                        let shown = ui
+                            .allocate_ui_with_layout(
+                                egui::vec2(width, f32::INFINITY),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ui.set_width(width);
+                                    design::draft_discarded(ui, name)
+                                },
+                            )
+                            .response
+                            .rect
+                            .height();
+                        measured = (expected, shown);
+                    });
+                });
+            }
+            let (expected, shown) = measured;
+            assert!(
+                (expected - shown).abs() <= 0.5,
+                "{name} at {width}: slot {expected}, message {shown}"
+            );
+            // The narrow case wraps, so the slot must grow past one control.
+            if width < 300.0 {
+                assert!(
+                    expected > Density::Read.control() + design::XS,
+                    "{name} at {width}"
+                );
+            }
+        }
     }
 
     #[test]

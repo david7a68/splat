@@ -131,9 +131,11 @@ by an accent line. Left and Right move its edge by `L`. Home restores its natura
 window again. The chosen width is saved after a drag or key press. Each handle has an accessible name and
 key help. At the table, the rail uses its natural width; a wider desk width stays saved.
 
-Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom edge. Rail statuses
-(recording, processing, unsaved words, sync) fill one slot that grows upward above Lookup, so a status that
-comes, goes or wraps never moves these targets. Tab order still follows reading order.
+Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom edge. The account line
+has a slot of two `Small` lines below Settings; a one-line status leaves the second line empty, so an account
+status that wraps never moves Lookup, Notes or Settings. Rail statuses (recording, processing, unsaved words,
+sync) fill one slot that grows upward above Lookup, so a status that comes, goes or wraps never moves these
+targets. Tab order still follows reading order.
 
 ## Widgets
 
@@ -198,8 +200,8 @@ settings keep their full save actions on a second line at the right edge, so nei
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. Discard recovery uses `Small` text, names the draft, and
-gives Undo the same name for accessibility. Inline creation uses a Label title, fields, a named Create
+icon on the message line, or below when needed. Discard recovery is an Undo message too: info icon, bar,
+`Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
 action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
 right edge.
 
@@ -218,8 +220,9 @@ and deletions. Highlights and line counts use these aligned rows. Adjacent chang
 `Next difference` moves to the start of the next group, wraps to the first, and stays hidden for one group.
 
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
-discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library uses
-its reserved reason line, aligned with the editor's left edge. Keeping a draft in the close dialog restores
+discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library shows the
+same Undo message in its reserved reason slot, aligned with the editor's left edge. The slot reserves the
+message's height, so neither the reason nor the message moves the editor. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
 A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Show secondary `Overwrite with my draft` first, then
@@ -261,7 +264,8 @@ Reader links use accent text and an underline. Library links open in place; othe
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
 found in this campaign` on hover. Broken campaign and package links also have a warning icon before the dotted
-text and a list-row warning. Reference keys still work. Markdown readers call `reader_markdown` through
+text and a list-row warning. The page header counts each file with a broken link once in its `N files need
+fixing` (Library) or `N notes need fixing` (World) link, and its menu opens that file. Reference keys still work. Markdown readers call `reader_markdown` through
 `ContentIndex::resolve_link`. Hidden SRD provenance does not count as broken links; SRD page targets count as
 found.
 
@@ -311,7 +315,8 @@ when search is empty.
 The scope control says `Can use` in both layouts, at the top of the category column. Keep those words
 whole at minimum width. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
 Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
-wrap; package names can shorten with full hover text and accessible names. Both the scope menu and
+wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
+or without its warning icon: the package name shortens by whole words, so a fault moves no row below it. Both the scope menu and
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
@@ -328,7 +333,8 @@ text edge below the action. The consequence wraps at the pane's notice measure, 
 and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
-says how many entries need fixing; its menu opens the messages. Unreadable notes use CANNOT BE READ. Rows name
+says how many files need fixing: a validation message, a broken link or both count a file once. Its menu
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
@@ -506,17 +512,23 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. The value column measures each value as it
-is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place and stat block values are unset and give no warning. Broken links have a
-warning icon, list warning and count in the header. Table faults use the same list warning and header
-repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case
-paths after type groups.
+is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
+warning icon, list warning and count in the header. A Part of target that is not found is a broken link
+(`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
+matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
+count and its menu include the note until `Always use this one` picks one. Table faults use the
+same list warning and header repair link. Unread values name field, bad value, source line and repair, in
+the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
+obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
+sits in one place: below the file line, above the value rows. Folder groups use normal-case paths after
+type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
-bordered `Always use this one` action on each row. Actions share one column at the widest file link
-plus an `L` gap. A saved choice changes only its key and has Undo,
+bordered `Always use this one` action on each row. Change and the choice actions share one column: the
+widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
 both values and follow Change when they fit, otherwise sit below the whole row block. Different file and
 stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
@@ -531,10 +543,15 @@ keeps the state at the left, then quiet `Cancel` while the form has no changes o
 has changes, and Save changes at that right edge. Save changes is primary unless a live run owns Next turn;
 then it is secondary. Cancel closes the form. Discard closes the form and offers Undo discard.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
-One save writes every change with one Undo. A disk change uses the shared conflict choices. Below the
+One save writes every change with one Undo. If the note on disk already reads as the save would write it
+(for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
+form with the Info message `Your changes are already in the note.` A group change refused because Part of
+could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
-If Part of could not be read, block its Change action with `Part of could not be read (line N). Repair it first.`
+If Part of could not be read, block its Change action with the unread-value message, for example
+`Part of "{link: '[[Lost Guild]]'}" not read (line 9). Write each group as a link, such as [[Arena Guild]].`
+A list written below its key names its first value that is not text, and that value's line.
 In Edit, a quiet `Edit in Obsidian` link follows the reason. Read shows the reason in the same warning
 tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts the link
 after the reason. Read shows Part of as `not read`, with Change blocked by the reason. Other fields stay
@@ -543,7 +560,9 @@ Every Part of write checks the current disk parse flag before it changes anythin
 its picker, keeps every disk byte and reads the note again, so its list row and the header count the fault. Adding or removing a readable group keeps the raw text of the
 other groups. Overwrite keeps unread disk groups, saves other draft fields and shows the reason. With a readable disk
 list, Overwrite applies the draft's group additions and removals to that list, so a group added outside
-Splat stays.
+Splat stays. Groups compare by target, not spelling: a link Obsidian respelled (another alias, a folder
+path) is the same group, and a group both sides have keeps the note's spelling on one line. A link to no
+single note compares by its link target; plain text compares as written.
 Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
 source text. World calls each file a note in related-note headings, Problems and conflict messages.
 Each duplicate-note repair has a muted Small consequence below it, including the first repair's retained
@@ -733,9 +752,12 @@ When the turn heading does not fit, drop `’s turn` before shortening the name.
 such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
-(the roster still marks NEXT). A state notice stays whole; beside one, Undo shows `Undo` alone when no
-shortened target fits, and a name is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and
-condition directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
+(the roster still marks NEXT). A state notice stays whole. Beside one, Undo keeps a shortened target while
+one fits, such as `Undo: 3 damage to Brannoch…`: a sheet's step drops `D&D Beyond` before its name
+(`Undo: HP for Brannoch…`), then Undo drops its `U` key letter. A sheet-change notice that leaves no room
+for that target goes below the roster. Undo shows `Undo` alone only when no shortened target fits. A name
+is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
+directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
 Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
 say sheet changed. Sync-panel choices stay in Log and Undo.
@@ -935,8 +957,14 @@ player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `S
 the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
-the source status gives way first, then stats drop from the end, then the names go together. HP and its
-state word stay. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
+the source status gives way first, then the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
+`AC`. Then the portraits go together, and then `AC`: AC answers "does a 17 hit?", and a portrait repeats the
+name beside it. HP and temporary HP always stay. The exception, when first names and HP still do not fit: the
+names shorten to an initial (`B.`), with the full name in hover and the accessible name. If that does not fit,
+initials stay and the HP state keeps its icon and colour without its word (the word stays in hover and the
+accessible name). No item is ever cut off: when even that does not fit, the items that fit show whole, and a
+muted `N more` names the rest, with HP, in hover and its accessible name. `N more` takes keyboard focus, and
+focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
 ### Timeline
@@ -1057,10 +1085,12 @@ again. With a partial transcript, name remaining audio parts and destination.
 Reserve Process again… for replacing results, in the row menu above Delete… with inline confirmation. One info
 message names transcript and context sent to the LLM and says audio is not sent again. Confirmation uses
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
-READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
+READER_MEASURE; the Process again message sits in a scope capped at it, with Not now and Replace the results
+together below. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
 Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour. The
 session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
-its sibling states do; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
+its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
+on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 

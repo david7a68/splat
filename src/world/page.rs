@@ -796,9 +796,9 @@ impl WorldPage {
                         "{} {}",
                         icons::WARN,
                         if problems.len() > 1 {
-                            "2 broken links"
+                            design::count(problems.len(), "broken link", "broken links")
                         } else {
-                            problems[0]
+                            problems[0].to_string()
                         }
                     )
                 } else if entry.kind == "world" {

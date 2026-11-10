@@ -17,6 +17,10 @@ use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
+/// What the form says when it closes with nothing to write.
+pub(crate) const ALREADY_SAVED: &str = "Your changes are already in the note.";
+/// The faint example in an empty Status field: the rule the value must follow.
+pub(crate) const STATUS_HINT: &str = "A short word, such as alive.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
 pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
@@ -72,7 +76,7 @@ struct Fields {
     creature: Option<Value>,
     place: Option<Value>,
     groups: Vec<Value>,
-    groups_unread: Option<usize>,
+    groups_unread: Option<super::fields::Unread>,
     text: String,
 }
 
@@ -113,11 +117,11 @@ impl Fields {
 
     /// The groups Overwrite saves, from the form's start: the draft's additions and removals
     /// applied to the disk list. An unread disk list stays as it is.
-    fn overwritten_groups(&self, draft: &Self, disk: &Self) -> Vec<Value> {
+    fn overwritten_groups(&self, draft: &Self, disk: &Self, index: &ContentIndex) -> Vec<Value> {
         if disk.groups_unread.is_some() {
             return disk.groups.clone();
         }
-        super::merge_groups(&self.groups, &draft.groups, &disk.groups)
+        super::merge_groups(index, &self.groups, &draft.groups, &disk.groups)
     }
 
     fn changed(&self, start: &Self) -> Changed {
@@ -145,6 +149,18 @@ pub(super) struct EditDraft {
     disk: Option<(String, Option<Fields>)>,
     /// The draft before Reload, until the DM edits again.
     reloaded: Option<Fields>,
+    /// Overwrite kept the note's unread groups in place of the draft's group change.
+    groups_refused: bool,
+}
+
+/// What Save did.
+enum Saved {
+    /// The note changed on disk under the draft. The draft waits for the DM to choose.
+    Waiting,
+    /// The note on disk already reads as the draft would write it, so nothing was written. It
+    /// holds that text.
+    Unchanged(String),
+    Written(Change),
 }
 
 /// Where a disk change under the draft stands.
@@ -174,6 +190,7 @@ impl EditDraft {
             start,
             disk: None,
             reloaded: None,
+            groups_refused: false,
         })
     }
 
@@ -207,19 +224,19 @@ impl EditDraft {
         campaign: &Campaign,
         index: &ContentIndex,
         log_as: Option<&str>,
-    ) -> Result<Option<Change>, String> {
+    ) -> Result<Saved, String> {
         let disk = fs::read_to_string(note_path(&campaign.path, &self.path)?)
             .map_err(|e| e.to_string())?;
         if disk != self.baseline {
             let theirs = Fields::read(&self.path, &disk);
             self.disk = Some((disk, theirs));
-            return Ok(None);
+            return Ok(Saved::Waiting);
         }
         let changed = self.now.changed(&self.start);
         if changed.groups
-            && let Some(line) = self.start.groups_unread
+            && let Some(unread) = &self.start.groups_unread
         {
-            return Err(super::fields::unread_groups_reason(line));
+            return Err(unread.reason.clone());
         }
         let mut after = disk.clone();
         if changed.status {
@@ -289,8 +306,13 @@ impl EditDraft {
                 }
             }
         }
+        // For example, Overwrite adds a group that Obsidian added too. A write and an Undo
+        // would change nothing.
+        if after == disk {
+            return Ok(Saved::Unchanged(disk));
+        }
         write_note(&campaign.path, &self.path, Some(&disk), &after)?;
-        Ok(Some(Change {
+        Ok(Saved::Written(Change {
             path: self.path.clone(),
             before: disk,
             after,
@@ -352,13 +374,13 @@ impl EditDraft {
                 ));
             }
         }
-        if let Some(line) = theirs.groups_unread {
+        if let Some(super::fields::Unread { line, .. }) = &theirs.groups_unread {
             effects.push((
                 "Part of",
                 format!("Overwrite keeps the note's groups. They could not be read (line {line})."),
             ));
         } else if self.now.groups != theirs.groups {
-            let saved = self.start.overwritten_groups(&self.now, theirs);
+            let saved = self.start.overwritten_groups(&self.now, theirs, index);
             let names = |groups: Vec<&Value>| {
                 let names: Vec<_> = groups
                     .into_iter()
@@ -370,19 +392,29 @@ impl EditDraft {
                     None => String::new(),
                 }
             };
+            // Groups compare by target. Each list is resolved once per frame.
+            let saved_keys = super::group_keys(index, &saved);
+            let disk_keys = super::group_keys(index, &theirs.groups);
+            let start_keys = super::group_keys(index, &self.start.groups);
             let added: Vec<_> = saved
                 .iter()
-                .filter(|group| !theirs.groups.contains(group))
+                .zip(&saved_keys)
+                .filter(|(_, key)| !disk_keys.contains(key))
+                .map(|(group, _)| group)
                 .collect();
             let removed: Vec<_> = theirs
                 .groups
                 .iter()
-                .filter(|group| !saved.contains(group))
+                .zip(&disk_keys)
+                .filter(|(_, key)| !saved_keys.contains(key))
+                .map(|(group, _)| group)
                 .collect();
             let outside: Vec<_> = theirs
                 .groups
                 .iter()
-                .filter(|group| !self.start.groups.contains(group) && saved.contains(group))
+                .zip(&disk_keys)
+                .filter(|(_, key)| !start_keys.contains(key) && saved_keys.contains(key))
+                .map(|(group, _)| group)
                 .collect();
             let mut parts = Vec::new();
             if !added.is_empty() {
@@ -451,7 +483,7 @@ impl EditDraft {
             self.disk = Some((disk, theirs));
             return Conflict::Waiting;
         };
-        self.resolve(disk, theirs, choice)
+        self.resolve(disk, theirs, choice, index)
     }
 
     /// Apply the DM's choice between the draft and the file on disk.
@@ -460,7 +492,9 @@ impl EditDraft {
         disk: String,
         theirs: Option<Fields>,
         choice: design::DiskConflictChoice,
+        index: &ContentIndex,
     ) -> Conflict {
+        self.groups_refused = false;
         if let Some(theirs) = theirs {
             match choice {
                 design::DiskConflictChoice::Reload => {
@@ -479,8 +513,9 @@ impl EditDraft {
                     if !changed.place {
                         now.place.clone_from(&theirs.place);
                     }
-                    now.groups = self.start.overwritten_groups(now, &theirs);
-                    now.groups_unread = theirs.groups_unread;
+                    self.groups_refused = changed.groups && theirs.groups_unread.is_some();
+                    now.groups = self.start.overwritten_groups(now, &theirs, index);
+                    now.groups_unread.clone_from(&theirs.groups_unread);
                     if !changed.text {
                         now.text.clone_from(&theirs.text);
                     }
@@ -504,6 +539,7 @@ impl Reader {
                 self.edits.insert(item.entry.id, draft);
                 self.discarded = None;
                 self.undo = None;
+                self.kept = None;
                 self.picker = None;
                 self.error = None;
             }
@@ -642,7 +678,20 @@ impl Reader {
             draft.now = previous;
         }
         let mut focused = false;
-        focused |= design::text_field(ui, "Status", &mut draft.now.status, None, None).has_focus();
+        // The shared text field, with a faint example of the one rule the value has.
+        focused |= design::field(ui, "Status", None, None, |ui| {
+            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut draft.now.status)
+                    .desired_width(width)
+                    .min_size(egui::vec2(0.0, Density::Read.control()))
+                    .margin(egui::vec2(design::S, 5.0))
+                    .hint_text(design::placeholder(ui, STATUS_HINT)),
+            );
+            design::named(ui, &response, "Status");
+            response
+        })
+        .has_focus();
         let npc = super::fights(&item.entry);
         for (key, label, slot) in [
             (
@@ -688,7 +737,8 @@ impl Reader {
         let groups_error = draft
             .start
             .groups_unread
-            .map(super::fields::unread_groups_reason);
+            .as_ref()
+            .map(|unread| unread.reason.clone());
         if groups_error.is_some()
             && self
                 .picker
@@ -857,18 +907,41 @@ impl Reader {
         }
         if save {
             match draft.save(campaign, index, self.log_as.as_deref()) {
-                Ok(Some(change)) => {
+                Ok(Saved::Written(change)) => {
                     self.picker = None;
                     self.form_focused = false;
                     self.undo = Some(change);
+                    self.kept = None;
                     return Some(Go::Reload(id));
                 }
-                Ok(None) => {}
+                Ok(Saved::Unchanged(disk)) => {
+                    self.picker = None;
+                    self.form_focused = false;
+                    self.undo = None;
+                    // A refused group change is not in the note. The note's own warning says why.
+                    self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
+                    return Some(Go::Reload(id));
+                }
+                Ok(Saved::Waiting) => {}
                 Err(error) => self.error = Some(error),
             }
         }
         self.edits.insert(id, draft);
         None
+    }
+}
+
+#[cfg(test)]
+impl Saved {
+    fn change(self) -> Change {
+        match self {
+            Self::Written(change) => change,
+            _ => panic!("Save wrote nothing"),
+        }
+    }
+
+    fn waiting(&self) -> bool {
+        matches!(self, Self::Waiting)
     }
 }
 
@@ -909,13 +982,94 @@ mod tests {
                 .flags
                 .iter()
                 .any(|flag| flag.message.contains("Part of")
-                    && flag.message.contains("Use a list of names or links")),
+                    && flag
+                        .message
+                        .contains("Write each group as a link, such as [[Arena Guild]].")),
             "FD-5-object-input: an object group is explicitly flagged"
         );
         assert!(
             super::super::part_of(&entry).is_empty(),
             "FD-5-object-input: rejected values never reach stored_value"
         );
+    }
+
+    #[test]
+    fn iter11_d_fd2_unread_values_name_their_text_and_line() {
+        let help = "Write each group as a link, such as [[Arena Guild]].";
+        for (front, expected) in [
+            (
+                "splat_part_of: [Guild, {id: 1}] # A note.\n".to_owned(),
+                Some(format!("Part of \"[Guild, {{id: 1}}]\" not read (line 7). {help}")),
+            ),
+            (
+                "splat_part_of: 17\n".to_owned(),
+                Some(format!("Part of \"17\" not read (line 7). {help}")),
+            ),
+            (
+                "splat_part_of: # Kept.\n- '[[Zarel]]'\n- [[Verori]]\n\n- {link: '[[Lost]]'} # Old.\n"
+                    .to_owned(),
+                Some(format!("Part of \"{{link: '[[Lost]]'}}\" not read (line 11). {help}")),
+            ),
+            (
+                "splat_part_of:\n- '[[Zarel]]'\n- [[Verori]]\n".to_owned(),
+                None,
+            ),
+            // A key with no value is an empty list, not an unread value.
+            ("splat_part_of:\n".to_owned(), None),
+        ] {
+            let file = format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\n{front}splat_status: alive\n---\n",
+                Uuid::new_v4()
+            );
+            let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+            let unread = super::super::fields::unread_groups(&entry, &file);
+            assert_eq!(
+                unread.as_ref().map(|unread| unread.reason.clone()),
+                expected,
+                "FD2-{front}"
+            );
+            // Neighbour: the flag and the message name the same line.
+            if let Some(unread) = unread {
+                assert!(unread.reason.contains(&format!("(line {})", unread.line)));
+            }
+        }
+        // The last key's scan stops at the closing `---`: the note's text is never a value.
+        for (front, expected) in [
+            (
+                "splat_part_of:\n  x: 1\n",
+                Some(format!("Part of \"\" not read (line 7). {help}")),
+            ),
+            ("splat_part_of:\n", None),
+            (
+                "splat_in:\n  x: 1\n",
+                Some("In \"\" not read (line 7). Use one place name or link.".to_owned()),
+            ),
+        ] {
+            let file = format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\n{front}---\n# Notes\n- HP: 30\n- Lair: cave\n",
+                Uuid::new_v4()
+            );
+            let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+            let messages: Vec<_> = entry
+                .flags
+                .iter()
+                .map(|flag| flag.message.clone())
+                .collect();
+            assert_eq!(
+                messages,
+                expected.into_iter().collect::<Vec<_>>(),
+                "FD2-last-key-{front}"
+            );
+        }
+        // Neighbour: an unread Status keeps its own words and is not a Part of fault.
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_status: [alive] # Old.\naliases:\n- Rook\n- 17\n---\n",
+            Uuid::new_v4()
+        );
+        let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        assert!(super::super::fields::unread_groups(&entry, &file).is_none());
+        assert!(entry.flags.iter().any(|flag| flag.message
+            == "Status \"[alive]\" not read (line 7). Use a short word, such as alive."));
     }
 
     #[test]
@@ -955,7 +1109,7 @@ mod tests {
             .now
             .groups
             .push(Value::String("[[Arena Guild]]".into()));
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let after = fs::read_to_string(&path).unwrap();
         let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
         for (position, value) in before.iter().enumerate() {
@@ -990,6 +1144,17 @@ mod tests {
         fs::write(dir.path().join("NPCs/Rook.md"), &file).unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         (dir, campaign, index, id, file)
+    }
+
+    /// The Part of reason for `unread_group_note`: the object on line 9, and how to write a group.
+    fn unread_reason(file: &str) -> String {
+        let value = file
+            .lines()
+            .find_map(|line| line.strip_prefix("- {id:"))
+            .unwrap();
+        format!(
+            "Part of \"{{id:{value}\" not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+        )
     }
 
     #[test]
@@ -1029,10 +1194,7 @@ mod tests {
                 "SD2/FD1: a refused write reads the note again"
             );
             assert!(reader.picker.is_none());
-            assert_eq!(
-                reader.error.as_deref(),
-                Some("Part of could not be read (line 7). Repair it first.")
-            );
+            assert_eq!(reader.error.as_deref(), Some(unread_reason(&file).as_str()));
         }
     }
 
@@ -1146,11 +1308,11 @@ mod tests {
                 .group_fault
                 .as_ref()
                 .unwrap()
-                .source
+                .unread
                 .as_ref()
                 .unwrap()
-                .0,
-            7
+                .line,
+            9
         );
     }
 
@@ -1211,10 +1373,34 @@ mod tests {
             saved, file,
             "D2-object-save: refused save must preserve the whole file"
         );
-        assert_eq!(
-            result.err().as_deref(),
-            Some("Part of could not be read (line 7). Repair it first.")
+        assert_eq!(result.err().as_deref(), Some(unread_reason(&file).as_str()));
+    }
+
+    #[test]
+    fn iter12_d_ad2_overwrite_that_only_changes_unread_groups_writes_nothing() {
+        let (dir, campaign, _, id, file) = unread_group_note();
+        // The form opens on a readable note. Obsidian then writes groups the app cannot read.
+        let path = dir.path().join("NPCs/Rook.md");
+        let start = file.find("- {id:").unwrap();
+        let end = file[start..].find('\n').unwrap() + start;
+        fs::write(&path, format!("{}{}", &file[..start], &file[end + 1..])).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let mut draft = EditDraft::open(&campaign, entry).unwrap();
+        draft.now.groups.push("[[Arena Guild]]".into());
+        fs::write(&path, &file).unwrap();
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
+        let (disk, theirs) = draft.disk.take().unwrap();
+        draft.resolve(disk, theirs, design::DiskConflictChoice::Overwrite, &index);
+        assert!(
+            draft.groups_refused,
+            "AD2-refused: the form knows the group change did not go in"
         );
+        assert!(matches!(
+            draft.save(&campaign, &index, None).unwrap(),
+            Saved::Unchanged(text) if text == file
+        ));
+        assert_eq!(fs::read(&path).unwrap(), file.as_bytes(), "AD2-refused-raw");
     }
 
     #[test]
@@ -1224,7 +1410,7 @@ mod tests {
         let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
         draft.now.status = "missing".into();
         draft.now.text = "Left the gate.\n".into();
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
         let group_bytes = |text: &str| {
             text.split_once("splat_part_of:")
@@ -1321,19 +1507,36 @@ mod tests {
     fn overwrite_after_outside_group(
         change: impl FnOnce(&mut EditDraft, &ContentIndex),
     ) -> Overwritten {
+        overwrite_after(
+            |readable| readable.replace(ZAREL, &format!("{ZAREL}{OUTSIDE}")),
+            change,
+        )
+    }
+
+    /// Open the form, change the draft, let Obsidian change the file, then choose Overwrite.
+    fn overwrite_after(
+        outside: impl FnOnce(&str) -> String,
+        change: impl FnOnce(&mut EditDraft, &ContentIndex),
+    ) -> Overwritten {
         let (dir, campaign, id, path, readable) = safe_rook();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let entry = &index.items[index.position(id).unwrap()].entry;
         let mut draft = EditDraft::open(&campaign, entry).unwrap();
         change(&mut draft, &index);
-        let disk = readable.replace(ZAREL, &format!("{ZAREL}{OUTSIDE}"));
+        let disk = outside(&readable);
+        assert_ne!(disk, readable, "fixture: Obsidian changes the note");
         fs::write(&path, &disk).unwrap();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         let (disk_text, theirs) = draft.disk.take().unwrap();
-        assert_eq!(disk_text, disk, "fixture: the outside group is on disk");
+        assert_eq!(disk_text, disk, "fixture: the outside change is on disk");
         let effects = draft.overwrite_effects(theirs.as_ref().unwrap(), &index);
         assert!(matches!(
-            draft.resolve(disk_text, theirs, design::DiskConflictChoice::Overwrite),
+            draft.resolve(
+                disk_text,
+                theirs,
+                design::DiskConflictChoice::Overwrite,
+                &index
+            ),
             Conflict::Overwrite
         ));
         (draft, index, campaign, path, disk, dir, effects)
@@ -1361,7 +1564,7 @@ mod tests {
             )],
             "SD1-preview-add: the choice names the group it adds and the one it keeps"
         );
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let stored = stored_value(&index, added.into_inner());
         let added_line = format!(
             "- {}\n",
@@ -1391,12 +1594,99 @@ mod tests {
             )],
             "SD1-preview-remove: the choice names the group it removes and the one it keeps"
         );
-        draft.save(&campaign, &index, None).unwrap().unwrap();
+        draft.save(&campaign, &index, None).unwrap().change();
         assert_eq!(
             fs::read(&path).unwrap(),
             disk.replace(ZAREL, "").as_bytes(),
             "SD1-remove: Overwrite saves C alone, as raw text"
         );
+    }
+
+    const RESPELLED: &str = "- \"[[Zarel]]\" # Respelled in Obsidian.\n";
+    const OTHER_SPELLING: &str = "- \"[[Factions/Added Guild|Guild]]\" # Added in Obsidian.\n";
+
+    #[test]
+    fn iter11_d_sd1_overwrite_removes_a_group_obsidian_respelled() {
+        let (mut draft, index, campaign, path, disk, _dir, effects) = overwrite_after(
+            |readable| readable.replace(ZAREL, RESPELLED),
+            |draft, _| draft.now.groups.clear(),
+        );
+        assert_eq!(
+            effects,
+            [("Part of", "Overwrite removes Zarel.".into())],
+            "SD1-preview-respelled: the choice names the respelled group it removes"
+        );
+        let change = draft.save(&campaign, &index, None).unwrap().change();
+        let saved = fs::read_to_string(&path).unwrap();
+        let entry = Entry::parse("NPCs/Safe Rook.md", &saved).unwrap();
+        assert!(
+            super::super::part_of(&entry).is_empty() && !saved.contains("Zarel"),
+            "SD1-respelled: Overwrite removes the group whatever its spelling: {saved}"
+        );
+        // Neighbour: every other byte of the note stays as Obsidian left it.
+        let part_of = "splat_part_of: # Keep the stored groups.\n";
+        assert_eq!(
+            saved,
+            disk.replace(&format!("{part_of}{RESPELLED}"), ""),
+            "SD1-respelled-raw"
+        );
+        change.undo(&campaign).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), disk.as_bytes());
+    }
+
+    #[test]
+    fn iter11_d_sd1_overwrite_adds_a_group_once_when_obsidian_added_it_too() {
+        let (mut draft, index, campaign, path, disk, _dir, effects) = overwrite_after(
+            |readable| readable.replace(ZAREL, &format!("{ZAREL}{OTHER_SPELLING}")),
+            |draft, _| draft.now.groups.push("[[Added Guild]]".into()),
+        );
+        assert!(
+            effects.iter().all(|(_, words)| !words.contains("adds")),
+            "SD1-preview-same: the choice does not add a group the note has: {effects:?}"
+        );
+        // An old time on the file shows whether Save wrote it, even with the same bytes.
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let saved = draft.save(&campaign, &index, None).unwrap();
+        assert!(
+            matches!(&saved, Saved::Unchanged(text) if *text == disk),
+            "AD2-no-undo: nothing written, no Change"
+        );
+        assert_eq!(
+            fs::metadata(&path).unwrap().modified().unwrap(),
+            old,
+            "AD2-no-write: the note is not written again"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            disk,
+            "SD1-same-raw: one line for the group, in the note's own spelling"
+        );
+    }
+
+    #[test]
+    fn iter11_d_sd1_groups_compare_by_target() {
+        let (_dir, campaign, _, _, _) = safe_rook();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let value = |text: &str| Value::String(text.into());
+        let same = |a: &str, b: &str| super::super::has_group(&index, &[value(a)], &value(b));
+        // Found notes: the target decides, whatever the folder, alias or case.
+        assert!(same("[[Added Guild]]", "[[Factions/Added Guild|Guild]]"));
+        assert!(same("[[added guild]]", "[[Factions/Added Guild.md]]"));
+        assert!(!same("[[Added Guild]]", "[[Outside Guild]]"));
+        // Missing notes: the link target, without alias or heading.
+        assert!(same("[[Zarel|the Archdevil]]", "[[Zarel]]"));
+        assert!(same("[[Zarel#Court]]", "[[zarel]]"));
+        assert!(!same("[[Zarel]]", "[[Devils/Zarel]]"));
+        // Plain text compares as written.
+        assert!(same("Night Market", "Night Market"));
+        assert!(!same("Night Market", "night market"));
+        assert!(!same("Zarel", "[[Zarel]]"));
     }
 
     #[test]
@@ -1444,7 +1734,7 @@ mod tests {
         draft.now.groups = vec![Value::String("[[Watch House]]".into())];
         draft.now.text.push_str("\nOwes Nell a favour.\n");
         assert!(draft.dirty());
-        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().change();
         let after = fs::read_to_string(&path).unwrap();
         let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
         assert_eq!(saved.id, id);
@@ -1469,12 +1759,12 @@ mod tests {
         let mut draft = EditDraft::open(&campaign, &entry).unwrap();
         draft.now.status = "dead".into();
         fs::write(&path, format!("{after}From Obsidian.\n")).unwrap();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         assert!(draft.disk.is_some());
         let invalid = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
         fs::write(&path, invalid).unwrap();
         draft.now.groups.clear();
-        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().waiting());
         assert_eq!(
             fs::read_to_string(&path).unwrap(),
             invalid,

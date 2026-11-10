@@ -187,6 +187,22 @@ pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestR
     action
 }
 
+/// Timeline's removal notice: the plan's words, for the removed event's own session, then how
+/// many notes still link to it.
+fn timeline_removal_words(book: &Book, label: &str, mentions: usize) -> String {
+    let session = book.removed_event().and_then(|event| event.session);
+    let days = day_numbers(&book.events);
+    let mut words = super::removed_event_words(book, session, &days, label, &[]);
+    if mentions > 0 {
+        words.push_str(&format!(
+            " {} still {} to it.",
+            design::count(mentions, "note", "notes"),
+            if mentions == 1 { "links" } else { "link" }
+        ));
+    }
+    words
+}
+
 pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> String {
     let mut words = "Long rest added. Everyone starts the next fight at full.".to_owned();
     for name in saved_fights {
@@ -597,17 +613,9 @@ impl TimelinePage {
     }
 
     fn list_messages(&mut self, ui: &mut egui::Ui, book: &mut Book) {
-        if let Some(label) = book.removed() {
+        if let Some(label) = book.removed().map(str::to_owned) {
             let mentions = self.removed_mentions;
-            let words = if mentions == 0 {
-                format!("Removed “{label}”.")
-            } else {
-                format!(
-                    "Removed “{label}”. {} still {} to it.",
-                    design::count(mentions, "note", "notes"),
-                    if mentions == 1 { "links" } else { "link" }
-                )
-            };
+            let words = timeline_removal_words(book, &label, mentions);
             let tone = if mentions > 0 {
                 Tone::Warning
             } else {
@@ -1478,5 +1486,67 @@ mod tests {
     #[test]
     fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {
         check_long_rest_add(&Kind::ALL);
+    }
+
+    #[test]
+    fn iter12_c_ft4_timeline_removal_names_the_fight_from_its_own_session() {
+        let (here, elsewhere) = (Some(Uuid::new_v4()), Some(Uuid::new_v4()));
+        let mut book = Book::default();
+        let mut fight = |session, result: &str| {
+            let id = book.add(Kind::Encounter, session);
+            let event = book.events.iter_mut().find(|event| event.id == id).unwrap();
+            event.title = "Bridge Ambush".to_owned();
+            event.result = result.to_owned();
+            event.run = Some(Uuid::new_v4());
+            id
+        };
+        let paused = fight(here, "Round 2");
+        fight(here, "Held the bridge, round 1");
+        // A fight of the same name in another session is not "the other" one.
+        let other = fight(elsewhere, "Round 3");
+        book.remove(&paused);
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 0),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result stay."
+        );
+        // The notes that still link to it stay last.
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 2),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result \
+             stay. 2 notes still link to it."
+        );
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 1),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result \
+             stay. 1 note still links to it."
+        );
+        // The session comes from the removed event: the one in the other session stands alone.
+        book.undo_remove();
+        book.remove(&other);
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 0),
+            "Removed “Bridge Ambush” (Round 3 · Paused)."
+        );
+    }
+
+    /// An event with no session has no "other" event of its name: the sentence is left out.
+    #[test]
+    fn iter12_c2_removal_without_a_session_names_no_other_event() {
+        let mut book = Book::default();
+        let mut fight = |result: &str| {
+            let id = book.add(Kind::Encounter, None);
+            let event = book.events.iter_mut().find(|event| event.id == id).unwrap();
+            event.title = "Bridge Ambush".to_owned();
+            event.result = result.to_owned();
+            event.run = Some(Uuid::new_v4());
+            id
+        };
+        let paused = fight("Round 2");
+        fight("Held the bridge, round 1");
+        book.remove(&paused);
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 1),
+            "Removed “Bridge Ambush” (Round 2 · Paused). 1 note still links to it."
+        );
     }
 }

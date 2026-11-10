@@ -119,13 +119,14 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   its suite slot without waiting for scenario cleanup or thread joins. Captures from
   that failed run are incomplete. Outside the isolated child, the check still panics.
 - `SPLAT_VISUAL_TIMINGS=1` prints world-lock wait, fixture setup, app/font/renderer
-  setup, settling, PNG rendering and PNG encoding/writing times. Per-scenario times
-  overlap because the scenarios run in parallel; do not add them as wall time.
+  setup, settling, rendering (captures and video frames) and PNG encoding/writing
+  times, then counts of settles, settle frames, renders and PNGs. Per-scenario times overlap
+  because the scenarios run in parallel; do not add them as wall time.
 - `SPLAT_VISUAL_JOBS=4` (the default) runs four scenarios at a time. A full capture run
-  then needs about 1.1 GiB and keeps about six cores busy. More jobs are faster when
+  then needs about 1.1 GiB and keeps about four cores busy (about 4.6 with video). More jobs are faster when
   cores are free, and use more memory: about 1.6 GiB at eight.
 - `SPLAT_VISUAL_SLOTS` sets how many suites may run at once on this computer, across
-  worktrees. The default is one per six cores, and at most one per 4 GiB of RAM.
+  worktrees. The default is one per five cores, and at most one per 4 GiB of RAM.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
@@ -223,7 +224,8 @@ recordings into text; **Transcript and summary** chooses the service that checks
 those words and writes the summary. Custom speech services show their API requirement.
 Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
-the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
+the full step on hover. Completed jobs say **Processed** in the rail, and the session list shows the
+same check icon and green **Processed**. Warned jobs
 keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
 and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
 Both pages let you turn the ruling off or on, with Undo.
@@ -258,7 +260,8 @@ and saves the other changed fields. Empty optional links say **not set** in Edit
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
 open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
-with **Always use this one**. An empty World note says **Nothing written yet.**
+with **Always use this one**. Until you choose, the note's World row says **Place has 2 matches**
+and the header's **notes need fixing** link counts it. An empty World note says **Nothing written yet.**
 Its file line keeps the one **Edit in Obsidian** link.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
@@ -491,7 +494,7 @@ not carry over.
 
 **Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
 by default; change it under **Campaign → Link and folder**). A folder change counts what stays behind and offers **Move files and save** or **Save without moving**. Moving keeps note text, templates, events, audio and processing files, and refuses to replace an existing file. **Timeline** holds every encounter, rest, travel interval, day and other
-major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours, counted
+major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours and minutes, counted
 from the first **Day**. A **Day** moves to the start of the next day. A rest adds 8 hours or 1 hour unless you say otherwise,
 and any event adds its length when it reads as a number and a unit, such as `3 days` or `an hour`. A length it cannot read
 moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat
@@ -642,12 +645,15 @@ The rest of the file, including comments and spacing, stays as it was. `in: "[[A
 including a location's aliases. A place loop stays in the list and shows a warning.
 The **Edit** action beside a campaign entry's name, in World or Lookup, opens one form with **Status**, **Stat block**,
 **In**, **Part of** and the entry's text, without its title line. This form includes empty fields. If **Part of** could not be read, its **Change** action is blocked
-with **Part of could not be read. Repair it first.** Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
+with a message that quotes the value it could not read, gives its line, and says to write each group as a link, such as `[[Arena Guild]]`. Other fields stay editable, and saving them keeps the stored group text unchanged. **Save changes** (Ctrl+S) writes them together and offers
 **Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
 The form keeps its state and quiet **Discard** at the left, with **Save changes** at the right edge of both text fields.
 **Discard** writes nothing and offers **Undo discard**. The rail shows **World draft** for an unsaved edit,
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
+For **Part of**, it adds and removes only the groups you changed. A group that Obsidian spelled another way,
+such as `[[Factions/Arena Guild|Guild]]` for `[[Arena Guild]]`, is still the same group. If the note already
+holds every change, Splat writes nothing, offers no Undo, and says **Your changes are already in the note.**
 **Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
 read other entries, and Splat asks before it closes or changes campaign.
 A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
@@ -867,7 +873,8 @@ Other participants show them only when a success or failure is already recorded.
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
-such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
+such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log. It is not an Undo
+step, so **Undo** after a roll takes back the change before it, and the roll stays in the log.
 
 | Key | Command |
 |---|---|
@@ -901,7 +908,7 @@ are stat block text, so their changes stay on the card and on the row during com
 change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
-prior actions, including turn changes, dice rolls, and manual endings in the current session.
+prior actions, including turn changes, initiative and table rolls, and manual endings in the current session.
 **End encounter…** records a manual ending and your outcome. It shortens to **End…** before it moves into a menu, and stays visible while it fits. Runs save automatically
 after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
