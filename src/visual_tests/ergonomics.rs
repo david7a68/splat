@@ -1022,6 +1022,8 @@ mod tests {
             1,
             "{found:?}"
         );
+        assert_eq!(found[0].role, Role::Splitter);
+        assert_eq!(found[0].name, "Resize side panel column");
     }
 
     /// A real control can never count as egui chrome, however small it is.

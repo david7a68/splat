@@ -1776,7 +1776,11 @@ impl<'a> Driver<'a> {
         let controls = ergonomics::controls(&self.harness);
         let expected: Vec<u64> = controls
             .iter()
-            .filter(|control| !control.disabled && !control.chrome && !control.is_label())
+            .filter(|control| {
+                !control.disabled
+                    && (!control.chrome || control.role == Role::Splitter)
+                    && !control.is_label()
+            })
             .map(|control| control.id)
             .collect();
         let total = controls

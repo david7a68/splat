@@ -1571,6 +1571,9 @@ pub mod settings {
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
+        d.expect(COOKIE_FIELD);
+        assert!(!d.has("Connect…"));
+        d.expect_same("The wide layout already shows the cookie form. Connect opens that same form in the narrow layout.");
         d.state("cookie-placeholder", Sizes::All);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
