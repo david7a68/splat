@@ -1440,6 +1440,30 @@ pub struct Reader {
     /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
     /// With no session, a change writes no Log line.
     pub log_as: Option<String>,
+    /// The World page's result for this draw. It sits where every World result sits: below the
+    /// file line, so the title never moves.
+    pub page_result: Option<PageResult>,
+    /// The page result's Undo was pressed in the last draw.
+    pub page_result_undo: bool,
+}
+
+/// A result that the World page owns, drawn by the reader in the one place for results.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PageResult {
+    Repaired,
+    /// A generated NPC that Discard let go, by name, with `Undo discard`.
+    Discarded(String),
+}
+
+/// The one message form for a World result. Returns true when its Undo is pressed.
+pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
+    match result {
+        PageResult::Repaired => {
+            design::message(ui, Tone::Success, "Note repaired.");
+            false
+        }
+        PageResult::Discarded(name) => design::draft_discarded(ui, name),
+    }
 }
 
 impl Reader {
@@ -1564,6 +1588,14 @@ impl Reader {
         go.and_then(|go| self.settle(go))
     }
 
+    fn draw_page_result(&mut self, ui: &mut egui::Ui) {
+        if let Some(result) = self.page_result.take()
+            && page_result(ui, &result)
+        {
+            self.page_result_undo = true;
+        }
+    }
+
     fn draw(
         &mut self,
         ui: &mut egui::Ui,
@@ -1613,21 +1645,44 @@ impl Reader {
             let edit_action = Action::quiet("Edit")
                 .icon(design::icons::EDIT)
                 .density(Density::Read);
-            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::S);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width() - room, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    view::title_with_art(ui, &title, &kind_line, Some(&item.entry));
-                },
-            );
-            if let Some(campaign) = edit
-                && edit_action
+            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::L);
+            let width = ui.available_width() - room;
+            let cell = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        view::title_with_art(ui, &title, &kind_line, Some(&item.entry));
+                    },
+                )
+                .response
+                .rect;
+            if let Some(campaign) = edit {
+                // Edit's icon sits one `L` after the measured title, so a kind line wider than
+                // a short title never pushes it away. Its target starts `S` before the icon.
+                // Art beside the title keeps it after the art.
+                if crate::art::entry_art(ui.ctx(), &item.entry).is_none() {
+                    let title_width = ui
+                        .painter()
+                        .layout(
+                            title.clone(),
+                            Type::Display.font(ui),
+                            colors().text,
+                            width.max(design::XXL),
+                        )
+                        .size()
+                        .x;
+                    ui.add_space(
+                        cell.left() + title_width + design::L - design::S - ui.cursor().left(),
+                    );
+                }
+                if edit_action
                     .name(&format!("Edit {}", item.entry.name))
                     .show(ui)
                     .clicked()
-            {
-                self.begin_edit(campaign, item);
+                {
+                    self.begin_edit(campaign, item);
+                }
             }
         });
         self.form_focused = false;
@@ -1665,6 +1720,8 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
+            // The form has no file line, so the result sits below the title.
+            self.draw_page_result(ui);
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -1763,6 +1820,8 @@ impl Reader {
             {
                 self.identity_undo = None;
             }
+            // Every World result sits here, where the separate-note result sits.
+            self.draw_page_result(ui);
             if let Some((_, undo)) = &self.identity_undo
                 && design::undo_message(
                     ui,

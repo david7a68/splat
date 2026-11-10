@@ -203,6 +203,8 @@ settings keep their full save actions on a second line at the right edge, so nei
 
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
+A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
+reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
 icon on the message line, or below when needed. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
@@ -384,9 +386,13 @@ was deleted.
 
 Lookup shows up to five one-line results and selects the open result. A sole open result closes the list. Rows
 use Scan height, Body names, then Small muted type and level. Campaign entries add Campaign; source appears
-only when different from the campaign's main source. Shorten metadata only; hover and accessibility keep the
-whole row. Results never scroll sideways. Clicking a result or scrolling into its reader closes the list. Show
-all offers the remaining results. Clear sits beside nonempty search only. Back, Open in Library and the close
+only when different from the campaign's main source. Shorten metadata only, by whole parts; hover and accessibility
+keep the whole row. The kind and other parts before a fault go first, then parts after it. The file, which tells
+duplicate rows apart, stays whole while the fault shortens to whole words and then to its warning mark; only then is
+the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator. Results never scroll sideways.
+Clicking a result or scrolling into its reader closes the list. `Show all N` is quiet and lists every match in place,
+in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
+return to five. Clear sits beside nonempty search only. Back, Open in Library and the close
 icon share the title line. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search.
 
@@ -552,7 +558,13 @@ it: Problems, Open questions, another note, a repair, New, a reveal from another
 view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
 and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
 `Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
-asks about the NPC as it does for other drafts.
+asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
+it is a link that opens the NPC's card on World from any page.
+
+A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
+`<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
+`<name> draft discarded.` sits there below the open note's file line. In an edit form, which has no file line, a result
+sits below the title. With no note open, it sits below the empty state's words.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -580,7 +592,7 @@ stored names offer `Rename the note to <file name>`, with a guarded update and U
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
 
-A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. Edit replaces the rows and
 the text with one form: Status, Stat block, In and Part of as labelled fields, then Text in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
 the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
@@ -629,8 +641,10 @@ states the result below in UI sans. Typed rolls use well fill, a centred placeho
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
-use your own, add a table of names to a note and mark it.` with a quiet `Copy the marker` action. It copies the exact
-marker line and then says `Copied`. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
+use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
+marker` action drawn with `line_start`, so its icon starts at the card's text edge. It copies the exact marker line,
+and then a success message in its place says `Copied. Change 1d6 to the number of names.` until the card shows another
+NPC. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says
 `Built-in names.` only, so the note keeps the keyboard. Table warnings use the words name, look, manner and
 want; hover keeps the marker key.
