@@ -903,6 +903,18 @@ impl TimelinePage {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
         design::rule(ui);
+        ui.scope(|ui| {
+            ui.set_max_width(header_width);
+            let event = &mut book.events[index];
+            ui.add_space(design::XS);
+            let hint = (event.kind == Kind::Day)
+                .then_some("Optional. Days number themselves, so a name is extra.");
+            let title = design::text_field(ui, "Title", &mut event.title, hint, None);
+            changed |= title.changed();
+            if std::mem::take(&mut self.focus_title) {
+                title.request_focus();
+            }
+        });
         let can_undo_ruling = book.rest_undo_id() == Some(id.as_str());
         let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
@@ -921,15 +933,6 @@ impl TimelinePage {
                 ui.ctx().request_repaint();
             }
             ui.set_max_width(form_width);
-            let event = &mut book.events[index];
-            ui.add_space(design::XS);
-            let hint = (event.kind == Kind::Day)
-                .then_some("Optional. Days number themselves, so a name is extra.");
-            let title = design::text_field(ui, "Title", &mut event.title, hint, None);
-            changed |= title.changed();
-            if std::mem::take(&mut self.focus_title) {
-                title.request_focus();
-            }
             notes.event_link_offer(ui, book, &id);
             let event = &mut book.events[index];
             ui.add_space(design::M);
