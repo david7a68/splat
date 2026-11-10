@@ -15,8 +15,20 @@ pub const WORLD_FIELDS: &[(&str, &str)] = &[
     ("status", "splat_status"),
     ("creature", "splat_stat_block"),
     ("in", "splat_in"),
+    ("part_of", "splat_part_of"),
+    ("when", "splat_when"),
+    ("until", "splat_until"),
     ("aliases", "aliases"),
 ];
+
+/// A world type is the DM's own word. It only names a group on the World page.
+fn type_word(word: &str) -> bool {
+    word.len() <= 40
+        && word.starts_with(|c: char| c.is_alphabetic())
+        && word
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, ' ' | '_' | '-'))
+}
 
 pub fn flat_reference(value: &Value) -> Value {
     if let Some(link) = value.get("link").and_then(Value::as_str) {
@@ -143,14 +155,30 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
             }
             let mut world = Mapping::new();
             for &(old, flat) in WORLD_FIELDS {
-                if let Some(value) = fields.remove(flat) {
+                if let Some(mut value) = fields.remove(flat) {
+                    // One group reads as a list of one, as Obsidian shows a text property.
+                    if old == "part_of" && value.is_string() {
+                        value = Value::Sequence(vec![value]);
+                    }
+                    // Without quotes, YAML reads `- [[Verori]]` as a list in a list.
+                    if old == "part_of"
+                        && let Value::Sequence(groups) = &mut value
+                    {
+                        for group in groups {
+                            let name = group
+                                .as_sequence()
+                                .and_then(|outer| outer.first())
+                                .and_then(Value::as_sequence)
+                                .and_then(|inner| inner.first())
+                                .and_then(Value::as_str);
+                            if let Some(name) = name {
+                                *group = format!("[[{name}]]").into();
+                            }
+                        }
+                    }
                     let valid = match old {
-                        "type" => value.as_str().is_some_and(|s| {
-                            ["npc", "location", "faction", "item", "other"]
-                                .iter()
-                                .any(|kind| s.eq_ignore_ascii_case(kind))
-                        }),
-                        "aliases" => value
+                        "type" => value.as_str().is_some_and(type_word),
+                        "aliases" | "part_of" => value
                             .as_sequence()
                             .is_some_and(|a| a.iter().all(Value::is_string)),
                         _ => value.is_string() || value.is_null(),
@@ -161,7 +189,7 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                             if ["creature", "in"].contains(&old) {
                                 model_reference(value)
                             } else if old == "type" {
-                                value.as_str().unwrap().to_ascii_lowercase().into()
+                                value.as_str().unwrap().to_lowercase().into()
                             } else {
                                 value
                             },
@@ -173,10 +201,13 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                             .map(str::trim)
                             .unwrap_or("");
                         let (label, help) = match old {
-                            "type" => ("Type", "Use npc, location, faction, item or other."),
+                            "type" => ("Type", "Use one short word, such as npc or faction."),
                             "status" => ("Status", "Use a short word, such as alive."),
                             "creature" => ("Stat block", "Use one creature name or link."),
                             "in" => ("In", "Use one place name or link."),
+                            "part_of" => ("Part of", "Use a list of names or links."),
+                            "when" => ("When", "Use words such as 120 years ago."),
+                            "until" => ("Until", "Use words such as 90 years ago."),
                             _ => ("Aliases", "Use a list of names."),
                         };
                         flag(&mut flags, flat, "");

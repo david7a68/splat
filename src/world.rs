@@ -2,9 +2,12 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
+mod checks;
 mod edit;
 mod fields;
+pub mod lines;
 pub mod page;
+mod related;
 pub(crate) mod repair;
 
 use crate::{
@@ -19,6 +22,7 @@ use crate::{
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use related::related;
 use serde_yaml_ng::{Mapping, Value};
 use splat::character::stable_id;
 use splat::content::{Entry, Reference, art::FORMATS, overrides::Overrides};
@@ -442,7 +446,59 @@ pub fn aliases(entry: &Entry) -> Vec<&str> {
         .collect()
 }
 
-fn link_name(value: &Value, fallback: &str) -> String {
+/// What this entry belongs to, as its file wrote each group.
+pub fn part_of(entry: &Entry) -> Vec<&Value> {
+    world_field(entry, "part_of")
+        .and_then(Value::as_sequence)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// An event's date, as its file wrote it: `120 years ago`.
+pub fn when(entry: &Entry) -> Option<&str> {
+    world_field(entry, "when").and_then(Value::as_str)
+}
+
+pub fn until(entry: &Entry) -> Option<&str> {
+    world_field(entry, "until").and_then(Value::as_str)
+}
+
+/// How long before Day 1 a date is, in minutes of the campaign clock. A date counts from
+/// Day 1, so it does not move as the campaign runs.
+pub fn ago(date: &str) -> Option<u64> {
+    let date = date.trim().to_lowercase();
+    let date = date.strip_prefix("about ").unwrap_or(&date);
+    timeline::read_duration(date.strip_suffix(" ago")?.trim())
+}
+
+/// An event's date and its end, for a list: `120 to 90 years ago`.
+pub fn date_words(entry: &Entry) -> Option<String> {
+    let when = when(entry)?.trim();
+    let Some(until) = until(entry)
+        .map(str::trim)
+        .filter(|until| !until.is_empty())
+    else {
+        return Some(when.to_owned());
+    };
+    // The same unit is said once.
+    let short = when
+        .strip_suffix(" ago")
+        .and_then(|start| start.rsplit_once(' '))
+        .filter(|(_, unit)| until.ends_with(&format!(" {unit} ago")))
+        .map(|(number, _)| number);
+    Some(match short {
+        Some(number) => format!("{number} to {until}"),
+        None => format!("{when} to {until}"),
+    })
+}
+
+/// Any entry with a stat block can join a fight. An NPC can choose one when it does.
+pub fn fights(entry: &Entry) -> bool {
+    world_type(entry) == "npc" || world_field(entry, "creature").is_some_and(|v| !v.is_null())
+}
+
+pub(crate) fn link_name(value: &Value, fallback: &str) -> String {
     value
         .as_str()
         .or_else(|| value.get("link").and_then(Value::as_str))
@@ -465,6 +521,8 @@ pub fn type_group(kind: &str) -> String {
     match kind {
         "npc" => "NPCs".into(),
         "location" => "Locations".into(),
+        // These have no plural.
+        "lore" | "history" | "news" | "equipment" | "gear" => type_label(kind),
         other => {
             let label = type_label(other);
             if label.ends_with('y')
@@ -545,13 +603,46 @@ pub fn create_generated(
     create_with_details(campaign, &npc.name, "npc", &npc.details())
 }
 
-/// Where a new entry of this kind is written.
-fn folder_for(kind: &str) -> &'static str {
-    match kind {
-        "location" => "Locations",
-        "npc" => "NPCs",
-        _ => "Notes",
+/// The folder that holds most entries of this type, from each entry's path and type. Folders
+/// belong to the DM, so a new entry goes where its kind already is.
+pub(crate) fn common_folder<'a>(
+    entries: impl Iterator<Item = (&'a str, &'a str)>,
+    kind: &str,
+) -> Option<String> {
+    let mut folders: std::collections::BTreeMap<&str, usize> = Default::default();
+    for (path, _) in entries.filter(|(_, other)| !kind.is_empty() && *other == kind) {
+        *folders
+            .entry(path.rsplit_once('/').map_or("", |(folder, _)| folder))
+            .or_default() += 1;
     }
+    // Of two equal folders, the first by name, so the answer does not change between loads.
+    folders
+        .into_iter()
+        .max_by_key(|&(folder, count)| (count, std::cmp::Reverse(folder)))
+        .map(|(folder, _)| folder.to_owned())
+}
+
+/// Where a new entry of this kind is written when the campaign has none yet.
+fn default_folder(kind: &str) -> String {
+    match kind {
+        "" => "Notes".into(),
+        kind => sessions::file_safe(&type_group(kind)),
+    }
+}
+
+/// Where a new entry of this kind is written, from the files as they are now.
+fn folder_for(campaign: &Campaign, kind: &str) -> String {
+    let entries = splat::content::read_directory(&campaign.path)
+        .map(|(entries, _)| entries)
+        .unwrap_or_default();
+    common_folder(
+        entries
+            .iter()
+            .filter(|entry| entry.kind == "world")
+            .map(|entry| (entry.path.as_str(), world_type(entry))),
+        kind,
+    )
+    .unwrap_or_else(|| default_folder(kind))
 }
 
 /// The link to an entry just made by `create_entry` or `create_generated`, before the index
@@ -569,7 +660,14 @@ pub(crate) fn new_entry_link(index: Option<&ContentIndex>, name: &str, kind: &st
             .chars()
             .filter(|c| !matches!(c, '|' | '[' | ']'))
             .collect();
-        format!("[[{}/{stem}|{shown}]]", folder_for(kind))
+        let folder = index
+            .and_then(|index| index.type_folder(kind))
+            .unwrap_or_else(|| default_folder(kind));
+        if folder.is_empty() {
+            format!("[[{stem}|{shown}]]")
+        } else {
+            format!("[[{folder}/{stem}|{shown}]]")
+        }
     }
 }
 
@@ -579,13 +677,27 @@ fn create_with_details(
     kind: &str,
     details: &str,
 ) -> Result<Uuid, String> {
+    create_at(campaign, name, kind, details).map(|(id, _)| id)
+}
+
+/// The new entry's identity and its path in the campaign.
+fn create_at(
+    campaign: &Campaign,
+    name: &str,
+    kind: &str,
+    details: &str,
+) -> Result<(Uuid, String), String> {
     let name = name.trim();
     let stem = sessions::file_safe(name);
     if stem.is_empty() {
         return Err("Type a name first.".to_owned());
     }
-    let folder = folder_for(kind);
-    let relative = format!("{folder}/{stem}.md");
+    let folder = folder_for(campaign, kind);
+    let relative = if folder.is_empty() {
+        format!("{stem}.md")
+    } else {
+        format!("{folder}/{stem}.md")
+    };
     let path = note_path(&campaign.path, &relative)?;
     if path.exists() {
         return Err(format!("{relative} already exists."));
@@ -600,7 +712,7 @@ fn create_with_details(
         text.push('\n');
         text.push_str(details);
     }
-    fs::create_dir_all(campaign.path.join(folder)).map_err(|e| e.to_string())?;
+    fs::create_dir_all(campaign.path.join(&folder)).map_err(|e| e.to_string())?;
     if kind.is_empty() {
         use std::io::Write;
         let mut temp =
@@ -613,11 +725,12 @@ fn create_with_details(
     } else {
         write_note(&campaign.path, &relative, None, &text)?;
     }
-    Ok(if kind.is_empty() {
+    let id = if kind.is_empty() {
         note_id(&relative)
     } else {
         id
-    })
+    };
+    Ok((id, relative))
 }
 
 /// Give a plain note an identity. Its body does not change.
@@ -667,6 +780,41 @@ fn set_world_field(
         word: "World value saved.".into(),
         kind: ChangeKind::of_key(name),
     })
+}
+
+/// What a Log line says about one changed value. A place and a group are links, so the line
+/// also shows on their pages.
+fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Value) -> String {
+    let label = match key {
+        "in" => "In",
+        "part_of" => "Part of",
+        _ => "Status",
+    };
+    let one = |value: &Value| -> String {
+        if key == "status" {
+            return match value.as_str().map(str::trim) {
+                Some(word) if !word.is_empty() => word.to_owned(),
+                _ => "not set".into(),
+            };
+        }
+        if value.is_null() {
+            return "not set".into();
+        }
+        index.world_value_target(value).map_or_else(
+            || format!("[[{}]]", link_name(value, label)),
+            |at| index.link_to(at),
+        )
+    };
+    let all = |value: &Value| match value.as_sequence() {
+        Some(groups) if groups.is_empty() => "not set".into(),
+        Some(groups) => groups.iter().map(&one).collect::<Vec<_>>().join(", "),
+        None => one(value),
+    };
+    format!(
+        "{label} {} → {}.",
+        before.map_or_else(|| "not set".into(), all),
+        all(after)
+    )
 }
 
 /// One NPC, as an encounter group of one, so a run adds them the way it adds any group.
@@ -776,8 +924,7 @@ fn obsidian_url(path: &Path) -> String {
 }
 
 pub(crate) fn make_npc_note(campaign: &Campaign, entry: &Entry) -> Result<Uuid, String> {
-    let id = create_entry(campaign, &entry.name, "npc")?;
-    let path = format!("NPCs/{}.md", sessions::file_safe(&entry.name));
+    let (id, path) = create_at(campaign, &entry.name, "npc", "")?;
     let text = fs::read_to_string(campaign.path.join(&path)).map_err(|e| e.to_string())?;
     let npc = Entry::parse(&path, &text)?;
     set_world_field(
@@ -810,6 +957,7 @@ pub(crate) struct Change {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ChangeKind {
     Place,
+    PartOf,
     StatBlock,
     Status,
     Name,
@@ -823,6 +971,7 @@ impl ChangeKind {
     fn of_key(key: &str) -> Self {
         match key {
             "in" => Self::Place,
+            "part_of" => Self::PartOf,
             "status" => Self::Status,
             _ => Self::StatBlock,
         }
@@ -831,6 +980,7 @@ impl ChangeKind {
     fn undo_label(self) -> &'static str {
         match self {
             Self::Place => "Undo place change",
+            Self::PartOf => "Undo group change",
             Self::Status => "Undo status change",
             Self::StatBlock => "Undo stat block change",
             Self::Name => "Undo name change",
@@ -841,7 +991,10 @@ impl ChangeKind {
 
     /// A relationship row shows its own change when there is room beside it.
     fn has_row(self) -> bool {
-        matches!(self, Self::Place | Self::StatBlock | Self::Status)
+        matches!(
+            self,
+            Self::Place | Self::PartOf | Self::StatBlock | Self::Status
+        )
     }
 }
 
@@ -995,6 +1148,9 @@ pub struct Reader {
     pub sides: RunSides,
     pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
     pub select_run: Option<usize>,
+    /// The session being played and the day, as a Log line begins: `[[Session 1]], Day 1`.
+    /// With no session, a change writes no Log line.
+    pub log_as: Option<String>,
 }
 
 impl Reader {
@@ -1450,20 +1606,56 @@ impl Reader {
     ) -> Option<Go> {
         let label = match key {
             "in" => "In",
+            "part_of" => "Part of",
             "status" => "Status",
             _ => "Stat block",
         };
-        let before_name = world_field(&item.entry, key).map_or_else(
-            || "not set".into(),
-            |value| edit::value_name(index, value, label),
-        );
-        let after_name = edit::value_name(index, &value, label);
+        let name = |value: &Value| match value.as_sequence() {
+            Some(groups) if groups.is_empty() => "not set".into(),
+            Some(groups) => groups
+                .iter()
+                .map(|group| link_name(group, label))
+                .collect::<Vec<_>>()
+                .join(", "),
+            None => edit::value_name(index, value, label),
+        };
+        // Choosing what is already there changes nothing, and writes no Log line.
+        let current = world_field(&item.entry, key).filter(|value| !value.is_null());
+        let same = match (key, current) {
+            ("part_of", _) => false,
+            ("status", _) => value.as_str().map(str::trim) == Some(status(&item.entry)),
+            (_, None) => value.is_null(),
+            (_, Some(now)) => {
+                let target = index.world_value_target(now);
+                target.is_some() && target == index.world_value_target(&value)
+            }
+        };
+        if same {
+            self.picker = None;
+            self.place_choices_open = false;
+            return None;
+        }
+        let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
+        let after_name = name(&value);
+        // What play changes goes in the entry's Log, in the same write, so one Undo takes
+        // both back.
+        let log = self
+            .log_as
+            .as_ref()
+            .filter(|_| matches!(key, "in" | "part_of" | "status"))
+            .map(|stamp| {
+                let words = log_words(index, key, world_field(&item.entry, key), &value);
+                format!("{stamp}: {words}")
+            });
         let value = edit::stored_value(index, value);
         let result = (|| {
             let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
                 .map_err(|e| e.to_string())?;
             let patched = fields::patch(&before, key, value)?;
-            let after = patched;
+            let after = match &log {
+                Some(line) => lines::add_log(&patched, line),
+                None => patched,
+            };
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
                 path: item.entry.path.clone(),
@@ -1503,7 +1695,7 @@ impl Reader {
     fn relationship_value_width(ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
         let mut values = Vec::new();
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
-            if key == "creature" && world_type(&item.entry) != "npc" {
+            if key == "creature" && !fights(&item.entry) {
                 continue;
             }
             let target = if key == "in" {
@@ -1531,6 +1723,11 @@ impl Reader {
             let linked =
                 target.is_some() || (key == "in" && !index.place_choices(item.entry.id).is_empty());
             values.push((value, if linked { Type::Body } else { Type::Small }));
+        }
+        let groups = index.groups_of(&item.entry);
+        if !groups.is_empty() {
+            let names: Vec<&str> = groups.iter().map(|(name, _)| name.as_str()).collect();
+            values.push((names.join("  "), Type::Body));
         }
         let status = if item
             .entry
@@ -1746,7 +1943,7 @@ impl Reader {
         let mut go = None;
         let value_width = Self::relationship_value_width(ui, item, index);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
-            if key == "creature" && world_type(&item.entry) != "npc" {
+            if key == "creature" && !fights(&item.entry) {
                 continue;
             }
             let target = if key == "in" {
@@ -1836,8 +2033,53 @@ impl Reader {
                 }
             }
         }
+        let groups = index.groups_of(&item.entry);
+        let notice = self.row_notice(ui, item, ChangeKind::PartOf, value_width);
+        ui.push_id("part_of", |ui| {
+            let (changed, undo) = Self::relationship_row(
+                ui,
+                "Part of",
+                value_width,
+                |ui| {
+                    if groups.is_empty() {
+                        ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
+                    }
+                    for (name, target) in groups {
+                        match target {
+                            Some(at) => {
+                                if design::wrapped_link(ui, &index.items[*at].entry.name).clicked()
+                                {
+                                    go = Some(Go::Item(*at, None));
+                                }
+                            }
+                            None => {
+                                ui.label(
+                                    Type::Small
+                                        .rich(
+                                            ui,
+                                            format!("{} {name} · Not found", design::icons::WARN),
+                                        )
+                                        .color(colors().result.warning),
+                                );
+                            }
+                        }
+                    }
+                },
+                notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
+            );
+            if changed {
+                self.picker = Some(Picker {
+                    key: "part_of",
+                    focus: true,
+                    ..Default::default()
+                });
+            }
+            if undo {
+                go = self.undo_change(campaign, item.entry.id);
+            }
+        });
         if let Some(key) = self.picker.as_ref().map(|picker| picker.key)
-            && let Some(value) = self.pick(ui, index, campaign)
+            && let Some(value) = self.pick(ui, item, index, campaign)
         {
             return self.change(campaign, item, index, key, value);
         }
@@ -1848,16 +2090,23 @@ impl Reader {
     fn pick(
         &mut self,
         ui: &mut egui::Ui,
+        item: &Item,
         index: &ContentIndex,
         campaign: &Campaign,
     ) -> Option<Value> {
         let picker = self.picker.as_mut()?;
         let key = picker.key;
-        let label = if key == "in" {
-            "Find a location"
-        } else {
-            "Find a stat block"
+        let label = match key {
+            "in" => "Find a location",
+            "part_of" => "Find a group",
+            _ => "Find a stat block",
         };
+        let groups: Vec<Value> = part_of(&item.entry).into_iter().cloned().collect();
+        let joined: Vec<usize> = index
+            .groups_of(&item.entry)
+            .iter()
+            .filter_map(|(_, at)| *at)
+            .collect();
         let width = ui.available_width();
         let response = design::search_field(ui, label, &mut picker.search, label, width);
         if std::mem::take(&mut picker.focus) {
@@ -1866,29 +2115,46 @@ impl Reader {
         let matches = if key == "creature" {
             index.creatures_matching(&picker.search, 5)
         } else {
-            index
+            // Anything can hold a place or a member. Locations come first for a place.
+            let wanted = picker.search.to_lowercase();
+            let mut found: Vec<(bool, usize)> = index
                 .items
                 .iter()
                 .enumerate()
-                .filter(|(_, i)| {
+                .filter(|(at, i)| {
                     i.is_private()
                         && i.entry.kind == "world"
-                        && world_type(&i.entry) == "location"
-                        && i.entry
-                            .name
-                            .to_lowercase()
-                            .contains(&picker.search.to_lowercase())
+                        && i.entry.id != item.entry.id
+                        && !(key == "part_of" && joined.contains(at))
+                        && i.entry.name.to_lowercase().contains(&wanted)
                 })
-                .map(|(at, _)| at)
-                .take(5)
-                .collect()
+                .map(|(at, i)| (key == "in" && world_type(&i.entry) != "location", at))
+                .collect();
+            found.sort_by_key(|&(later, _)| later);
+            found.into_iter().map(|(_, at)| at).take(5).collect()
         };
         let mut chosen = None;
         let mut cancel = false;
         for at in matches {
             let entry = &index.items[at].entry;
             if design::link(ui, &entry.name).clicked() {
-                chosen = serde_yaml_ng::to_value(EntryRef::id(entry.id)).ok();
+                chosen = if key == "part_of" {
+                    let mut groups = groups.clone();
+                    groups.push(index.link_to(at).into());
+                    Some(Value::Sequence(groups))
+                } else {
+                    serde_yaml_ng::to_value(EntryRef::id(entry.id)).ok()
+                };
+            }
+        }
+        if key == "part_of" {
+            for (at, group) in groups.iter().enumerate() {
+                let name = format!("Remove {}", link_name(group, "group"));
+                if Action::quiet(&name).show(ui).clicked() {
+                    let mut groups = groups.clone();
+                    groups.remove(at);
+                    chosen = Some(Value::Sequence(groups));
+                }
             }
         }
         if key == "in" {
@@ -1919,7 +2185,7 @@ impl Reader {
             });
         }
         ui.horizontal_wrapped(|ui| {
-            if Action::quiet("Clear value").show(ui).clicked() {
+            if key != "part_of" && Action::quiet("Clear value").show(ui).clicked() {
                 chosen = Some(Value::Null);
             }
             cancel = Action::quiet("Cancel").show(ui).clicked();
@@ -1944,10 +2210,16 @@ impl Reader {
         let mut go = None;
         if self.compact {
             ui.horizontal_wrapped(|ui| {
-                let targets = [
+                let mut targets = vec![
                     ("Stat block", index.world_target(&item.entry, "creature")),
                     ("In", index.place_of(item.entry.id)),
                 ];
+                targets.extend(
+                    index
+                        .groups_of(&item.entry)
+                        .iter()
+                        .map(|(_, group)| ("Part of", *group)),
+                );
                 let mut first = true;
                 for (label, target) in targets {
                     if let Some(at) = target {
@@ -2131,7 +2403,7 @@ impl Reader {
         {
             return self.undo_change(campaign, item.entry.id);
         }
-        if world_type(&item.entry) != "npc" {
+        if !fights(&item.entry) {
             return None;
         }
         if let Some((index, initiative)) = self.in_run.get(&item.entry.id) {
@@ -2214,40 +2486,6 @@ impl Reader {
         }
         None
     }
-}
-
-/// What is here, for a place or a group, and what mentions this.
-fn related(ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
-    let mut go = None;
-    let here = index.inside(&item.entry);
-    if !here.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, "Here");
-        for position in here {
-            let entry = &index.items[position].entry;
-            ui.horizontal(|ui| {
-                if design::link(ui, &entry.name).clicked() {
-                    go = Some(Go::Item(position, None));
-                }
-                ui.label(
-                    Type::Small
-                        .rich(ui, type_label(world_type(entry)))
-                        .color(colors().muted),
-                );
-            });
-        }
-    }
-    let mentions = index.mentions_of(item.entry.id);
-    if !mentions.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, "Mentioned in");
-        for &position in mentions {
-            if design::link(ui, &index.items[position].entry.name).clicked() {
-                go = Some(Go::Item(position, None));
-            }
-        }
-    }
-    go
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
@@ -2710,6 +2948,159 @@ mod tests {
                 .contains("changed on disk")
         );
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), external);
+    }
+
+    #[test]
+    fn a_change_in_play_writes_the_field_and_a_log_line_and_one_undo_removes_both() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let arena = create_entry(&campaign, "The Arena", "location").unwrap();
+        let cart = create_entry(&campaign, "Harvest Cart", "team").unwrap();
+        let session = format!(
+            "---\nsession_id: {}\nsession_title: ''\nsession_date: 2026-01-01\nsession_number: 1\n---\n# Session 1\n",
+            Uuid::new_v4()
+        );
+        fs::create_dir_all(dir.path().join("Sessions")).unwrap();
+        fs::write(dir.path().join("Sessions/Session 1.md"), session).unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let original = fs::read_to_string(&path).unwrap();
+        let mut reader = Reader {
+            log_as: Some("[[Session 1]], Day 2".into()),
+            ..Default::default()
+        };
+        let mut change = |key: &str, value: Value| {
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(hob).unwrap()];
+            assert!(reader.change(&campaign, item, &index, key, value).is_some());
+            reader.undo.clone().unwrap()
+        };
+        change("status", "dead".into());
+        let place = change("in", serde_yaml_ng::to_value(EntryRef::id(arena)).unwrap());
+        let group = change("part_of", Value::Sequence(vec!["[[Harvest Cart]]".into()]));
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            text.ends_with(
+                "## Log\n\n- [[Session 1]], Day 2: Status alive → dead.\n- [[Session 1]], Day 2: In not set → [[The Arena]].\n- [[Session 1]], Day 2: Part of not set → [[Harvest Cart]].\n"
+            ),
+            "{text}"
+        );
+        assert_eq!(place.word, "In: not set → The Arena.");
+        assert_eq!(group.kind, ChangeKind::PartOf);
+
+        // The session, the place and the group each show the line. The entry holds it.
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let changes = index.world_changes(&dir.path().join("Sessions/Session 1.md"));
+        assert_eq!(changes.len(), 3);
+        assert!(
+            changes
+                .iter()
+                .all(|(source, _)| index.items[*source].entry.id == hob)
+        );
+        for (id, words) in [
+            (arena, "In not set → The Arena."),
+            (cart, "Part of not set → Harvest Cart."),
+        ] {
+            let about = index.lines_about(id);
+            assert!(
+                about.iter().any(|mention| {
+                    index.items[mention.source].lines[mention.line.unwrap()]
+                        .words()
+                        .ends_with(words)
+                }),
+                "{words}"
+            );
+        }
+        assert_eq!(index.members(cart).len(), 1);
+
+        // Undo takes back the field and its Log line together.
+        group.undo(&campaign).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("splat_part_of") && !text.contains("Harvest Cart"));
+        assert!(text.ends_with("In not set → [[The Arena]].\n"));
+
+        // Choosing the value that is already there writes nothing.
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        let same_place = serde_yaml_ng::to_value(EntryRef::id(arena)).unwrap();
+        assert!(
+            reader
+                .change(&campaign, item, &index, "in", same_place)
+                .is_none()
+        );
+        assert!(
+            reader
+                .change(&campaign, item, &index, "status", "dead".into())
+                .is_none()
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+
+        // With no session, a change writes no Log line.
+        fs::write(&path, &original).unwrap();
+        reader.log_as = None;
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(hob).unwrap()];
+        reader.change(&campaign, item, &index, "status", "dead".into());
+        assert!(!fs::read_to_string(&path).unwrap().contains("## Log"));
+    }
+
+    #[test]
+    fn groups_save_as_a_list_and_an_empty_list_leaves_no_property() {
+        let before = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Zarel\nsplat_type: npc\n---\n\n# Zarel\n\nKeep this.\n";
+        let groups = Value::Sequence(vec!["[[Arena Guild]]".into(), "[[Verori]]".into()]);
+        let joined = fields::patch(before, "part_of", groups).unwrap();
+        let entry = Entry::parse("Zarel.md", &joined).unwrap();
+        let names: Vec<_> = part_of(&entry)
+            .into_iter()
+            .map(|group| link_name(group, "Group"))
+            .collect();
+        assert_eq!(names, ["Arena Guild", "Verori"]);
+        assert!(joined.ends_with("# Zarel\n\nKeep this.\n"));
+        let left = fields::patch(&joined, "part_of", Value::Sequence(Vec::new())).unwrap();
+        assert_eq!(left, before);
+    }
+
+    #[test]
+    fn dates_count_back_from_day_one_and_say_a_span_once() {
+        assert_eq!(ago("About 2 years ago"), Some(2 * 12 * 30 * 24 * 60));
+        assert_eq!(ago("a year ago"), ago("1 year ago"));
+        assert_eq!(ago("long ago"), None);
+        assert_eq!(ago("2 years"), None);
+        let event = |dates: &str| {
+            Entry::parse(
+                "Event.md",
+                &format!("---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Event\nsplat_type: event\n{dates}\n---\n"),
+            )
+            .unwrap()
+        };
+        assert_eq!(
+            date_words(&event(
+                "splat_when: 70 years ago\nsplat_until: 45 years ago"
+            ))
+            .as_deref(),
+            Some("70 to 45 years ago")
+        );
+        assert_eq!(
+            date_words(&event("splat_when: 2 years ago\nsplat_until: 6 months ago")).as_deref(),
+            Some("2 years ago to 6 months ago")
+        );
+        assert_eq!(date_words(&event("splat_status: done")), None);
+        // Most entries of a type decide its folder. Of two equal folders, the first by name.
+        let entries = [
+            ("Places/A.md", "location"),
+            ("Places/B.md", "location"),
+            ("Old/C.md", "location"),
+            ("Zed/D.md", "team"),
+            ("Alpha/E.md", "team"),
+            ("F.md", "lore"),
+        ];
+        let folder = |kind| common_folder(entries.iter().copied(), kind);
+        assert_eq!(folder("location").as_deref(), Some("Places"));
+        assert_eq!(folder("team").as_deref(), Some("Alpha"));
+        assert_eq!(folder("lore").as_deref(), Some(""));
+        assert_eq!(folder("npc"), None);
+        assert_eq!(type_group("lore"), "Lore");
+        assert_eq!(type_group("company"), "Companies");
     }
 
     #[test]

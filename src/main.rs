@@ -1024,7 +1024,14 @@ impl Splat {
             self.page = Page::World;
         }
         let mut refresh = std::mem::take(&mut self.world_page.reload);
+        let log_as = self.sessions.current_link().map(|session| {
+            match timeline::day_now(&self.timeline.events) {
+                Some(day) => format!("{session}, Day {day}"),
+                None => session,
+            }
+        });
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+            reader.log_as.clone_from(&log_as);
             reader.sides = sides.clone();
             reader.in_run = in_run.clone();
             if let Some(index) = reader.select_run.take()

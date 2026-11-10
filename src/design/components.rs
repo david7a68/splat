@@ -863,6 +863,48 @@ pub fn wrapped_link(ui: &mut Ui, label: &str) -> Response {
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Small words that wrap and can be pressed, with a quiet label before them. It is a link to
+/// the page the words are from, and it reads as that page's text and not as a control.
+pub fn line_link(ui: &mut Ui, label: &str, words: &str) -> Response {
+    let c = colors();
+    let name = format!("{label}{words}");
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = ui.available_width().max(1.0);
+    for (part, color) in [(label, c.muted), (words, c.text)] {
+        job.append(
+            part,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                line_height: Some(Type::Small.line()),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(24.0)),
+        Sense::click(),
+    );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), &name));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter().galley(pos2(rect.left(), top), galley, c.text);
+        if response.hovered() {
+            ui.painter().hline(
+                rect.x_range(),
+                rect.bottom() - 1.0,
+                Stroke::new(1.0, c.focus.gamma_multiply(0.6)),
+            );
+        }
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// A label above a control, with help and an error below it.
 pub fn field<R>(
     ui: &mut Ui,

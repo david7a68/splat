@@ -268,10 +268,54 @@ fn fmt_f1_malformed_flat_property_stays_and_note_loads() {
         Value::from("Rook")
     );
     assert!(text.contains("splat_status: [alive]"));
-    let bad_type = text.replace("splat_type: npc", "splat_type: dragon");
+    // A type is the DM's own word, and only a word.
+    let own_type = text.replace("splat_type: npc", "splat_type: Company");
+    let entry = super::legacy::parse("Rook.md", &own_type).unwrap();
+    assert_eq!(entry.flags.len(), 1);
+    assert_eq!(entry.fields["splat_world"]["type"], Value::from("company"));
+    let bad_type = text.replace("splat_type: npc", "splat_type: [dragon]");
     let entry = super::legacy::parse("Rook.md", &bad_type).unwrap();
     assert_eq!(entry.flags.len(), 2);
     assert!(entry.fields["splat_world"].get("type").is_none());
+}
+
+#[test]
+fn world_relations_and_dates_read_from_flat_properties_and_stay_on_a_patch() {
+    let text = note(
+        "world",
+        "splat_type: event\nsplat_part_of:\n- '[[Verori]]'\n- Kaun\nsplat_when: 120 years ago\nsplat_until: 90 years ago",
+        "# The Revolt\n",
+    )
+    .replace("splat_schema: 1", "splat_schema: 2");
+    let entry = Entry::parse("The Revolt.md", &text).unwrap();
+    assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+    let world = &entry.fields["splat_world"];
+    assert_eq!(world["part_of"][0], Value::from("[[Verori]]"));
+    assert_eq!(world["part_of"][1], Value::from("Kaun"));
+    assert_eq!(world["when"], Value::from("120 years ago"));
+    assert_eq!(world["until"], Value::from("90 years ago"));
+    // A hand-written link without quotes reads as the same link.
+    let bare = text.replace("- '[[Verori]]'", "- [[Verori]]");
+    let entry = Entry::parse("The Revolt.md", &bare).unwrap();
+    assert!(entry.flags.is_empty(), "{:?}", entry.flags);
+    assert_eq!(
+        entry.fields["splat_world"]["part_of"][0],
+        Value::from("[[Verori]]")
+    );
+    // One group reads as a list of one, and a number is not a date.
+    let one = text
+        .replace(
+            "splat_part_of:\n- '[[Verori]]'\n- Kaun",
+            "splat_part_of: Kaun",
+        )
+        .replace("splat_when: 120 years ago", "splat_when: 120");
+    let entry = Entry::parse("The Revolt.md", &one).unwrap();
+    assert_eq!(
+        entry.fields["splat_world"]["part_of"][0],
+        Value::from("Kaun")
+    );
+    assert_eq!(entry.flags.len(), 1);
+    assert!(entry.flags[0].message.starts_with("When \"120\" not read"));
 }
 
 #[test]

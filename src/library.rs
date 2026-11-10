@@ -105,7 +105,7 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
     let Some(world) = entry
         .fields
         .get("splat_world")
-        .filter(|world| world.get("type").and_then(serde_yaml_ng::Value::as_str) == Some("npc"))
+        .filter(|_| entry.kind == "world" && crate::world::fights(entry))
     else {
         return false;
     };

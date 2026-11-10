@@ -2,7 +2,6 @@
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
-    world_type,
 };
 use crate::{
     design::{self, Action, Density, Tone, Type, colors, reader as style},
@@ -185,6 +184,7 @@ impl EditDraft {
         &mut self,
         campaign: &Campaign,
         index: &ContentIndex,
+        log_as: Option<&str>,
     ) -> Result<Option<Change>, String> {
         let disk = fs::read_to_string(note_path(&campaign.path, &self.path)?)
             .map_err(|e| e.to_string())?;
@@ -221,6 +221,31 @@ impl EditDraft {
                 "\n"
             };
             after = format!("{head}{newline}{}", self.now.text);
+        }
+        // A status or a place that play changed goes in the Log, as it does outside the form.
+        if let Some(stamp) = log_as {
+            let null = Value::Null;
+            let status = (
+                Value::from(self.start.status.as_str()),
+                Value::from(self.now.status.trim()),
+            );
+            let place = (
+                self.start.place.as_ref().unwrap_or(&null),
+                self.now.place.as_ref().unwrap_or(&null),
+            );
+            for (key, changed, before, now) in [
+                ("status", changed.status, &status.0, &status.1),
+                ("in", changed.place, place.0, place.1),
+            ] {
+                // The same place under another spelling is not a change in play.
+                let same = key == "in"
+                    && index.world_value_target(before).is_some()
+                    && index.world_value_target(before) == index.world_value_target(now);
+                if changed && !same {
+                    let words = super::log_words(index, key, Some(before), now);
+                    after = super::lines::add_log(&after, &format!("{stamp}: {words}"));
+                }
+            }
         }
         write_note(&campaign.path, &self.path, Some(&disk), &after)?;
         Ok(Some(Change {
@@ -422,7 +447,7 @@ impl Reader {
         }
         let mut focused = false;
         focused |= design::text_field(ui, "Status", &mut draft.now.status, None, None).has_focus();
-        let npc = world_type(&item.entry) == "npc";
+        let npc = super::fights(&item.entry);
         for (key, label, slot) in [
             (
                 "creature",
@@ -455,7 +480,7 @@ impl Reader {
                 });
             });
             if self.picker.as_ref().is_some_and(|picker| picker.key == key)
-                && let Some(chosen) = self.pick(ui, index, campaign)
+                && let Some(chosen) = self.pick(ui, item, index, campaign)
             {
                 *slot = Some(chosen).filter(|value| !value.is_null());
             }
@@ -517,7 +542,7 @@ impl Reader {
             return None;
         }
         if save {
-            match draft.save(campaign, index) {
+            match draft.save(campaign, index, self.log_as.as_deref()) {
                 Ok(Some(change)) => {
                     self.picker = None;
                     self.form_focused = false;
@@ -591,7 +616,7 @@ mod tests {
         draft.now.place = serde_yaml_ng::to_value(EntryRef::id(place)).ok();
         draft.now.text.push_str("\nOwes Nell a favour.\n");
         assert!(draft.dirty());
-        let change = draft.save(&campaign, &index).unwrap().unwrap();
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
         let after = fs::read_to_string(&path).unwrap();
         let saved = Entry::parse("NPCs/Rook.md", &after).unwrap();
         assert_eq!(saved.id, id);
@@ -612,7 +637,7 @@ mod tests {
         let mut draft = EditDraft::open(&campaign, &entry).unwrap();
         draft.now.status = "dead".into();
         fs::write(&path, format!("{after}From Obsidian.\n")).unwrap();
-        assert!(draft.save(&campaign, &index).unwrap().is_none());
+        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
         assert!(draft.disk.is_some());
         fs::write(&path, &after).unwrap();
         change.undo(&campaign).unwrap();

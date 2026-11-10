@@ -1023,6 +1023,22 @@ pub(crate) fn press<'a>(
     if let LinkTarget::Url(url) = destination {
         response.clone().on_hover_text(url);
     }
+    // A linked world page says what it is before the DM opens it.
+    if let LinkTarget::Note(note) = destination
+        && response.hovered()
+        && let Some(index) = ui.ctx().data(|data| {
+            data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+        })
+    {
+        let from = ui
+            .ctx()
+            .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+        if let crate::world::Go::Item(at, _) = index.resolve_link(note, from)
+            && !index.items[at].summary().is_empty()
+        {
+            response.clone().on_hover_text(index.items[at].summary());
+        }
+    }
     if !response.clicked() {
         return None;
     }
