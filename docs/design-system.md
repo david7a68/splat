@@ -565,7 +565,8 @@ Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the se
 Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. Side
 pickers offer Party, Enemies and Other…; only Other opens a name field and replaces the value. Changed stays
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
-the full change link, removing source before base creature.
+the full change link, removing source before base creature. Remove a source whole without an ellipsis;
+hover keeps the full detail.
 
 An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
@@ -602,7 +603,8 @@ any encounter when you save.`, with Undo move until save. Move to… lists named
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
-List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
+Arrivals reserves one Add slot as wide as the widest Add label in the panel, so every Initiative field
+shares one left edge. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
 Flagged members name file and line, with Edit in Obsidian, Show file, Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
@@ -642,9 +644,11 @@ icon and Connected; sheet and HP facts use muted Small.
 
 Names that need more than two lines use `RUN_COMPACT.name`. On that row, the numeric columns can move into unused state space to keep the name whole and compact. The other rows keep their shared columns. Pictures align with the first name line.
 
-Conditions take one second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
+Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
 drop the bonus before more if needed. Measure sync before folding conditions into a count. Keep the first
-condition and whole multiword sync states. In narrow rows beside a sync state, `+1` can link to Conditions.
+condition and whole multiword sync states. Hidden-condition counts always keep their word, such as `5 more`,
+including beside sync state. Move sync state first if the row needs more room. If the required words still
+cannot share one line, sync state continues on its own line; the row includes its full height.
 At minimum width, mandatory state words may use the empty left part of the HP bar slot; the bar stays below HP
 and at least `XL` long. Compact rows put sync last after an `XS` gap, apart from conditions. If required state words still do not fit, use the run mark type size on the second line. If that still needs the whole row width, move the HP bar below the detail with an `S` allowance; keep every state word and the first condition. No initiative uses
 the same underline as other row links. When the state column cannot fit, such as 960×640 beside a panel, move
@@ -658,7 +662,8 @@ share columns and picture size; shortening bonuses changes none of these.
 
 Setup reserves initiative, Absent and menu columns on the name line, centred on initiative. Only NPC rows
 reserve Roll, before initiative, so party names use that room and all initiative fields stay aligned. Reserve
-the tie column only while the roster has tied rows, and the place column only while ordinals show. Tied rows
+the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column only while
+the roster has tied rows; change its width only after the initiative field loses focus. Tied rows
 keep fixed up and down arrow slots, in that order, with unused directions empty. Rows use the height of their name line (at least a Scan control), their Small detail line, and an XS gap.
 Do not add the live roster's minimum height to setup rows. Setup retains its first
 condition and counts the rest when needed. Shared-roll brackets stay beside fields and stop before detail.
@@ -669,7 +674,8 @@ still work inside shared rolls.
 Setup has a `Label` column heading INITIATIVE above empty, labelled number fields.
 
 An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
-have initiative, a muted ordinal follows each field, updates with totals or tie rulings, and the ready line
+have initiative, a muted ordinal follows each field, also while the last field has focus. It updates with
+totals or tie rulings, and the ready line
 names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
 row menu opens Correct. Unread-row notices use compact message type and the unused ready-line space
 so the roster keeps its height. Overflow uses the live list's band and counts hidden missing initiatives and ties.
@@ -698,7 +704,8 @@ the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
-text-colour words. Stat-block errors use the notice icon and one fitted line, with
+text-colour words. Centre a compact header notice in the same control-height slot as Next and Log. Keep
+an `S` gap before its bar and include that gap in the header measure. Stat-block errors use the notice icon and one fitted line, with
 full error on hover.
 
 Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
