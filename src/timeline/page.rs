@@ -308,9 +308,10 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
             return true;
         }
     } else if let Some(error) = book.error.clone() {
-        if design::message_with_actions(ui, Tone::Error, &error, |ui| {
+        let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
             Action::secondary("Try to save again").show(ui).clicked()
-        }) {
+        });
+        if again {
             book.error = None;
             book.save();
         }

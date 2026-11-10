@@ -2919,9 +2919,10 @@ impl Sessions {
                 );
             }
             DraftState::Failed(error) => {
-                if design::message_with_actions(ui, Tone::Error, &error, |ui| {
+                let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
                     Action::secondary("Try to save again").show(ui).clicked()
-                }) {
+                });
+                if again {
                     draft.save();
                 }
             }
