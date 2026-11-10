@@ -650,6 +650,9 @@ impl Reader {
         draft.name.clone_from(&item.entry.name);
         if !draft.dirty() && draft.disk.is_none() && draft.index_moved(&item.entry) {
             match EditDraft::open(campaign, &item.entry) {
+                // The draft already holds this file, as after a save conflict's reload. Keep it,
+                // so `Undo reload` stays until the file changes again.
+                Ok(fresh) if fresh.baseline == draft.baseline => draft.seen = fresh.seen,
                 Ok(fresh) => draft = fresh,
                 Err(error) => {
                     // Try again when the index next changes, not on every frame.
@@ -922,7 +925,12 @@ impl Reader {
                     self.kept = (!draft.groups_refused).then(|| (draft.path.clone(), disk));
                     return Some(Go::Reload(id));
                 }
-                Ok(Saved::Waiting) => {}
+                Ok(Saved::Waiting) => {
+                    // The note changed on disk. Read it again for its list row and header count,
+                    // as a refused Part of write does. The draft waits for the DM's choice.
+                    self.edits.insert(id, draft);
+                    return Some(Go::Reload(id));
+                }
                 Err(error) => self.error = Some(error),
             }
         }

@@ -402,7 +402,8 @@ names the file and keeps `Undo separate entry` on the message line. Folder repai
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action.
-An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
+An `L` gap separates choices. In World and Lookup, `message_with_actions` draws the choices and their
+consequence lines, so they start at the message text edge, as in Sessions. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
 
@@ -519,7 +520,9 @@ is drawn, including a missing group's icon and ` · Not found`. Empty or whitesp
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
-count and its menu include the note until `Always use this one` picks one. Table faults use the
+count and its menu include the note until `Always use this one` picks one. A row with more than one link
+problem says `2 broken links` only when every target is missing; when one of them waits for a choice, it
+says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
@@ -546,7 +549,9 @@ The rail shows World draft while an edit is unsaved. If a repair is also unsaved
 One save writes every change with one Undo. If the note on disk already reads as the save would write it
 (for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
 form with the Info message `Your changes are already in the note.` A group change refused because Part of
-could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices. Below the
+could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices.
+The save that finds the disk change reads the note again for its list row and header count, as a refused Part of
+write does; the draft stays as it is until the DM chooses. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example

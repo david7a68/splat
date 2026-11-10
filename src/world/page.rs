@@ -792,15 +792,7 @@ impl WorldPage {
                         design::count(faults, "table fault", "table faults")
                     )
                 } else if !problems.is_empty() {
-                    format!(
-                        "{} {}",
-                        icons::WARN,
-                        if problems.len() > 1 {
-                            design::count(problems.len(), "broken link", "broken links")
-                        } else {
-                            problems[0].to_string()
-                        }
-                    )
+                    format!("{} {}", icons::WARN, super::link_problem_words(&problems))
                 } else if entry.kind == "world" {
                     if index.items.iter().any(|other| {
                         other.entry.id != entry.id
