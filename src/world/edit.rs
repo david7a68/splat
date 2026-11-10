@@ -111,6 +111,15 @@ impl Fields {
             .map(|entry| Self::of(&entry, file))
     }
 
+    /// The groups Overwrite saves, from the form's start: the draft's additions and removals
+    /// applied to the disk list. An unread disk list stays as it is.
+    fn overwritten_groups(&self, draft: &Self, disk: &Self) -> Vec<Value> {
+        if disk.groups_unread.is_some() {
+            return disk.groups.clone();
+        }
+        super::merge_groups(&self.groups, &draft.groups, &disk.groups)
+    }
+
     fn changed(&self, start: &Self) -> Changed {
         Changed {
             status: self.status.trim() != start.status,
@@ -290,12 +299,150 @@ impl EditDraft {
         }))
     }
 
+    /// What Overwrite does to each field that differs between the draft and the note on disk.
+    fn overwrite_effects(
+        &self,
+        theirs: &Fields,
+        index: &ContentIndex,
+    ) -> Vec<(&'static str, String)> {
+        let changed = self.now.changed(&self.start);
+        let named = |value: &Option<Value>, label: &str| {
+            value
+                .as_ref()
+                .map_or_else(|| "not set".into(), |value| value_name(index, value, label))
+        };
+        let effect = |draft_changed: bool, draft: String, disk: String| {
+            if draft_changed {
+                format!("Overwrite saves {draft} in place of {disk}.")
+            } else {
+                format!("Overwrite keeps {disk} from the note.")
+            }
+        };
+        let mut effects = Vec::new();
+        let status = |value: &str| {
+            if value.trim().is_empty() {
+                "not set".to_owned()
+            } else {
+                value.trim().to_owned()
+            }
+        };
+        if self.now.status.trim() != theirs.status.trim() {
+            effects.push((
+                "Status",
+                effect(
+                    changed.status,
+                    status(&self.now.status),
+                    status(&theirs.status),
+                ),
+            ));
+        }
+        for (label, draft_changed, now, disk) in [
+            (
+                "Stat block",
+                changed.creature,
+                &self.now.creature,
+                &theirs.creature,
+            ),
+            ("In", changed.place, &self.now.place, &theirs.place),
+        ] {
+            if now != disk {
+                effects.push((
+                    label,
+                    effect(draft_changed, named(now, label), named(disk, label)),
+                ));
+            }
+        }
+        if let Some(line) = theirs.groups_unread {
+            effects.push((
+                "Part of",
+                format!("Overwrite keeps the note's groups. They could not be read (line {line})."),
+            ));
+        } else if self.now.groups != theirs.groups {
+            let saved = self.start.overwritten_groups(&self.now, theirs);
+            let names = |groups: Vec<&Value>| {
+                let names: Vec<_> = groups
+                    .into_iter()
+                    .map(|group| value_name(index, group, "group"))
+                    .collect();
+                match names.split_last() {
+                    Some((last, [])) => last.clone(),
+                    Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+                    None => String::new(),
+                }
+            };
+            let added: Vec<_> = saved
+                .iter()
+                .filter(|group| !theirs.groups.contains(group))
+                .collect();
+            let removed: Vec<_> = theirs
+                .groups
+                .iter()
+                .filter(|group| !saved.contains(group))
+                .collect();
+            let outside: Vec<_> = theirs
+                .groups
+                .iter()
+                .filter(|group| !self.start.groups.contains(group) && saved.contains(group))
+                .collect();
+            let mut parts = Vec::new();
+            if !added.is_empty() {
+                parts.push(format!("adds {}", names(added)));
+            }
+            if !removed.is_empty() {
+                parts.push(format!("removes {}", names(removed)));
+            }
+            if !outside.is_empty() {
+                parts.push(format!("keeps {} from the note", names(outside)));
+            }
+            if parts.is_empty() {
+                parts.push("keeps the note's groups".into());
+            }
+            let last = parts.pop().unwrap_or_default();
+            let words = if parts.is_empty() {
+                last
+            } else {
+                format!("{} and {last}", parts.join(", "))
+            };
+            effects.push(("Part of", format!("Overwrite {words}.")));
+        }
+        if self.now.text != theirs.text {
+            effects.push((
+                "Text",
+                if changed.text {
+                    "Overwrite saves your text. The lines that differ are below.".into()
+                } else {
+                    "Overwrite keeps the note's text. The lines that differ are below.".into()
+                },
+            ));
+        }
+        effects
+    }
+
     /// The note changed on disk under the draft. The DM keeps it, or reloads with an Undo.
-    fn conflict(&mut self, ui: &mut egui::Ui) -> Conflict {
+    fn conflict(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Conflict {
         let Some((disk, theirs)) = self.disk.take() else {
             return Conflict::None;
         };
         let choice = design::disk_conflict_choices(ui, "note");
+        if let Some(theirs) = &theirs {
+            let effects = self.overwrite_effects(theirs, index);
+            if !effects.is_empty() {
+                ui.add_space(design::S);
+            }
+            for (label, words) in effects {
+                ui.horizontal_top(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(design::XXL * 3.0 + design::S, 0.0),
+                        egui::Layout::left_to_right(egui::Align::Min),
+                        |ui| {
+                            ui.set_min_width(design::XXL * 3.0 + design::S);
+                            ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                        },
+                    );
+                    ui.add(egui::Label::new(Type::Small.rich(ui, words)).wrap());
+                });
+            }
+        }
         let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
         if their_text != self.now.text {
             design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
@@ -304,6 +451,16 @@ impl EditDraft {
             self.disk = Some((disk, theirs));
             return Conflict::Waiting;
         };
+        self.resolve(disk, theirs, choice)
+    }
+
+    /// Apply the DM's choice between the draft and the file on disk.
+    fn resolve(
+        &mut self,
+        disk: String,
+        theirs: Option<Fields>,
+        choice: design::DiskConflictChoice,
+    ) -> Conflict {
         if let Some(theirs) = theirs {
             match choice {
                 design::DiskConflictChoice::Reload => {
@@ -322,9 +479,7 @@ impl EditDraft {
                     if !changed.place {
                         now.place.clone_from(&theirs.place);
                     }
-                    if !changed.groups || theirs.groups_unread.is_some() {
-                        now.groups.clone_from(&theirs.groups);
-                    }
+                    now.groups = self.start.overwritten_groups(now, &theirs);
                     now.groups_unread = theirs.groups_unread;
                     if !changed.text {
                         now.text.clone_from(&theirs.text);
@@ -472,7 +627,7 @@ impl Reader {
             }
         }
         ui.add_space(design::M);
-        let overwrite = match draft.conflict(ui) {
+        let overwrite = match draft.conflict(ui, index) {
             Conflict::Waiting => {
                 self.edits.insert(id, draft);
                 return None;
@@ -681,8 +836,13 @@ impl Reader {
                             color: colors().muted,
                         }
                     };
-                    // A clean form can also be closed without writing.
-                    cancel = design::save_row_state(ui, state, true, None);
+                    // A dirty draft says Discard. A clean form loses nothing, so it says Cancel.
+                    cancel = if dirty {
+                        design::save_row_state(ui, state, true, None)
+                    } else {
+                        design::status(ui, state);
+                        Action::quiet("Cancel").show(ui).clicked()
+                    };
                 });
             });
         });
@@ -864,7 +1024,10 @@ mod tests {
                 file.as_bytes(),
                 "SD1/AD1/AT1: unread disk groups must keep every raw byte"
             );
-            assert!(result.is_none());
+            assert!(
+                matches!(result, Some(Go::Reload(reloaded)) if reloaded == id),
+                "SD2/FD1: a refused write reads the note again"
+            );
             assert!(reader.picker.is_none());
             assert_eq!(
                 reader.error.as_deref(),
@@ -1014,16 +1177,18 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            assert!(
-                reader
-                    .change(
-                        &campaign,
-                        item,
-                        &index,
-                        "part_of",
-                        Value::Sequence(vec!["[[Arena Guild]]".into()])
-                    )
-                    .is_none()
+            let result = reader.change(
+                &campaign,
+                item,
+                &index,
+                "part_of",
+                Value::Sequence(vec!["[[Arena Guild]]".into()]),
+            );
+            // Only an unread list reads the note again; a file that cannot be read stays put.
+            assert_eq!(
+                result.is_some(),
+                fault == "two fields",
+                "SD2-read-fault: {fault}"
             );
             assert!(reader.picker.is_none());
             assert!(reader.error.is_some());
@@ -1106,6 +1271,131 @@ mod tests {
         assert!(
             draft.index_moved(&repaired),
             "D2-repair-refresh: changed read flags must refresh a clean form even when parsed fields are unchanged"
+        );
+    }
+
+    /// The readable note that `world-part-of-safety` reports, byte for byte.
+    fn safe_rook() -> (
+        tempfile::TempDir,
+        Campaign,
+        Uuid,
+        std::path::PathBuf,
+        String,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        super::super::create_entry(&campaign, "Added Guild", "faction").unwrap();
+        super::super::create_entry(&campaign, "Outside Guild", "faction").unwrap();
+        let id = Uuid::new_v4();
+        let readable = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Safe Rook\nsplat_type: npc\nsplat_part_of: # Keep the stored groups.\n- \"[[Zarel|the Archdevil]]\" # Keep the alias.\nsplat_status: alive\n---\n\n# Safe Rook\n\nKeeps the gate.\n"
+        );
+        let path = dir.path().join("NPCs/Safe Rook.md");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &readable).unwrap();
+        (dir, campaign, id, path, readable)
+    }
+
+    const ZAREL: &str = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
+    const OUTSIDE: &str = "- '[[Outside Guild]]' # Added in Obsidian.\n";
+
+    /// The draft after Overwrite, its index and campaign, the note's path, the disk text before
+    /// Overwrite, the folder that holds them, and what the comparison said Overwrite would do.
+    type Overwritten = (
+        EditDraft,
+        ContentIndex,
+        Campaign,
+        std::path::PathBuf,
+        String,
+        tempfile::TempDir,
+        Vec<(&'static str, String)>,
+    );
+
+    /// Open the form, change the draft, let Obsidian add a group, then choose Overwrite.
+    fn overwrite_after_outside_group(
+        change: impl FnOnce(&mut EditDraft, &ContentIndex),
+    ) -> Overwritten {
+        let (dir, campaign, id, path, readable) = safe_rook();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let mut draft = EditDraft::open(&campaign, entry).unwrap();
+        change(&mut draft, &index);
+        let disk = readable.replace(ZAREL, &format!("{ZAREL}{OUTSIDE}"));
+        fs::write(&path, &disk).unwrap();
+        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        let (disk_text, theirs) = draft.disk.take().unwrap();
+        assert_eq!(disk_text, disk, "fixture: the outside group is on disk");
+        let effects = draft.overwrite_effects(theirs.as_ref().unwrap(), &index);
+        assert!(matches!(
+            draft.resolve(disk_text, theirs, design::DiskConflictChoice::Overwrite),
+            Conflict::Overwrite
+        ));
+        (draft, index, campaign, path, disk, dir, effects)
+    }
+
+    #[test]
+    fn iter10_d_sd1_overwrite_adds_the_draft_group_and_keeps_the_outside_group() {
+        let added = std::cell::RefCell::new(Value::Null);
+        let (mut draft, index, campaign, path, disk, _dir, effects) =
+            overwrite_after_outside_group(|draft, index| {
+                let at = index
+                    .items
+                    .iter()
+                    .position(|item| item.entry.name == "Added Guild")
+                    .unwrap();
+                let link: Value = index.link_to(at).into();
+                *added.borrow_mut() = link.clone();
+                draft.now.groups.push(link);
+            });
+        assert_eq!(
+            effects,
+            [(
+                "Part of",
+                "Overwrite adds Added Guild and keeps Outside Guild from the note.".into()
+            )],
+            "SD1-preview-add: the choice names the group it adds and the one it keeps"
+        );
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let stored = stored_value(&index, added.into_inner());
+        let added_line = format!(
+            "- {}\n",
+            serde_yaml_ng::to_string(&stored).unwrap().trim_end()
+        );
+        let expected = disk.replace(OUTSIDE, &format!("{OUTSIDE}{added_line}"));
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            expected.as_bytes(),
+            "SD1-add: Overwrite saves A, B and C, with A and C as raw text"
+        );
+        change.undo(&campaign).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), disk.as_bytes());
+    }
+
+    #[test]
+    fn iter10_d_sd1_overwrite_removes_only_the_draft_group() {
+        let (mut draft, index, campaign, path, disk, _dir, effects) =
+            overwrite_after_outside_group(|draft, _| {
+                draft.now.groups.clear();
+            });
+        assert_eq!(
+            effects,
+            [(
+                "Part of",
+                "Overwrite removes the Archdevil and keeps Outside Guild from the note.".into()
+            )],
+            "SD1-preview-remove: the choice names the group it removes and the one it keeps"
+        );
+        draft.save(&campaign, &index, None).unwrap().unwrap();
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            disk.replace(ZAREL, "").as_bytes(),
+            "SD1-remove: Overwrite saves C alone, as raw text"
         );
     }
 

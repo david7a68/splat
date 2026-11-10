@@ -437,6 +437,42 @@ fn duplicate_consequence(paths: &[String], at: usize) -> Option<String> {
     }
 }
 
+/// The disk list with only the groups that changed from `before` to `after` added or removed.
+/// Groups added outside Splat stay. The Read picker and Edit's Overwrite both use this.
+fn merge_groups(before: &[Value], after: &[Value], disk: &[Value]) -> Vec<Value> {
+    let mut groups: Vec<_> = disk
+        .iter()
+        .filter(|group| !before.contains(group) || after.contains(group))
+        .cloned()
+        .collect();
+    for group in after.iter().filter(|group| !before.contains(group)) {
+        if !groups.contains(group) {
+            groups.push(group.clone());
+        }
+    }
+    groups
+}
+
+fn missing_words(name: &str) -> String {
+    format!("{} {name} · Not found", design::icons::WARN)
+}
+
+/// A link to a note that is not there: icon, name and ` · Not found`. When the row is too narrow,
+/// the name wraps and `Not found` takes its own line, whole.
+fn missing_link(ui: &mut egui::Ui, name: &str) {
+    let words = missing_words(name);
+    let warning = colors().result.warning;
+    if design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
+        ui.label(Type::Small.rich(ui, &words).color(warning));
+    } else {
+        ui.vertical(|ui| {
+            let (name, state) = words.split_once(" · ").unwrap_or((&words, ""));
+            ui.add(egui::Label::new(Type::Small.rich(ui, name).color(warning)).wrap());
+            ui.label(Type::Small.rich(ui, state).color(warning));
+        });
+    }
+}
+
 fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
 }
@@ -1422,7 +1458,24 @@ impl Reader {
         });
         self.form_focused = false;
         self.lost_edits(ui, index);
-        if let Some(error) = &self.error {
+        let editing = campaign.is_some() && self.editing(id);
+        if !editing && let Some(campaign) = campaign {
+            self.refresh_group_fault(item, index.generation(), || {
+                note_path(&campaign.path, &item.entry.path)
+                    .ok()
+                    .and_then(|path| fs::read_to_string(path).ok())
+            });
+        }
+        let unread_line = self
+            .group_fault
+            .as_ref()
+            .filter(|fault| !editing && fault.id == id)
+            .and_then(|fault| fault.source.as_ref())
+            .map(|(line, _)| *line);
+        // A refused Part of write shows as the unread warning below the file line.
+        if let Some(error) = &self.error
+            && !(self.group_error && unread_line.is_some())
+        {
             ui.horizontal_wrapped(|ui| {
                 design::message(ui, Tone::Error, error);
                 if self.group_error
@@ -1436,38 +1489,29 @@ impl Reader {
             });
         }
         if let Some(campaign) = campaign
-            && self.editing(id)
+            && editing
         {
             return self.edit_form(ui, item, index, campaign);
         }
-        if let Some(campaign) = campaign {
-            self.refresh_group_fault(item, index.generation(), || {
-                note_path(&campaign.path, &item.entry.path)
-                    .ok()
-                    .and_then(|path| fs::read_to_string(path).ok())
-            });
-            if self.error.is_none()
-                && let Some((line, _)) = self
-                    .group_fault
-                    .as_ref()
-                    .and_then(|fault| fault.source.as_ref())
-            {
-                unread_groups_message(
-                    ui,
-                    campaign,
-                    &item.entry.path,
-                    &fields::unread_groups_reason(*line),
-                );
-            }
-        }
 
         self.discarded_notice(ui, id);
-        if !self.compact
+        let file_line = !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
-            && item.is_private()
-            && let Some(campaign) = campaign
-        {
+            && item.is_private();
+        if file_line && let Some(campaign) = campaign {
             file_actions(ui, campaign, &item.entry.path);
+        }
+        if let Some(line) = unread_line
+            && let Some(campaign) = campaign
+            && (self.error.is_none() || self.group_error)
+        {
+            let reason = fields::unread_groups_reason(line);
+            if file_line {
+                // The file line just above has the one Edit in Obsidian link.
+                design::message(ui, Tone::Warning, &reason);
+            } else {
+                unread_groups_message(ui, campaign, &item.entry.path, &reason);
+            }
         }
         if let Some(campaign) = campaign {
             if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
@@ -1561,7 +1605,12 @@ impl Reader {
                     paths.iter().map(|path| campaign.path.join(path)),
                 );
                 paths.sort_by_key(|path| Some(campaign.path.join(path)) != first);
+                let spacing = ui.spacing().item_spacing.y;
                 for (at, path) in paths.iter().enumerate() {
+                    // An `L` gap separates the choices, as in Library.
+                    if at > 0 {
+                        ui.add_space((design::L - spacing).max(0.0));
+                    }
                     let filename = Path::new(path)
                         .file_name()
                         .unwrap_or_default()
@@ -1580,6 +1629,8 @@ impl Reader {
                         ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
                     }
                 }
+                // An `M` gap ends the choices, so the fields below do not read as a consequence.
+                ui.add_space((design::M - spacing).max(0.0));
             }
         }
         for warning in index.errors.iter().filter(|error| {
@@ -1788,21 +1839,35 @@ impl Reader {
         // A picker can outlive an outside edit. Re-read before deriving a replacement or Log.
         let fresh = if key == "part_of" {
             let result = (|| {
-                let file = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
-                    .map_err(|error| error.to_string())?;
-                let entry = Entry::parse(&item.entry.path, &file)?;
+                let path =
+                    note_path(&campaign.path, &item.entry.path).map_err(|error| (error, None))?;
+                let file = fs::read_to_string(path).map_err(|error| (error.to_string(), None))?;
+                let entry = Entry::parse(&item.entry.path, &file).map_err(|error| (error, None))?;
                 if let Some(line) = fields::unread_groups(&entry, &file) {
-                    return Err(fields::unread_groups_reason(line));
+                    return Err((
+                        fields::unread_groups_reason(line),
+                        Some((line, Box::new(entry))),
+                    ));
                 }
                 Ok((file, entry))
             })();
             match result {
                 Ok(fresh) => Some(fresh),
-                Err(error) => {
+                Err((error, unread)) => {
                     self.picker = None;
                     self.error = Some(error);
                     self.group_error = true;
-                    return None;
+                    // The file on disk has an unread list now. Show that state at once, and
+                    // read the note again so its list row and the header count it too.
+                    let (line, entry) = unread?;
+                    let mut entry = *entry;
+                    entry.flags.retain(|flag| flag.line != line);
+                    if let Some(fault) = &mut self.group_fault
+                        && fault.id == item.entry.id
+                    {
+                        fault.source = Some((line, entry));
+                    }
+                    return Some(Go::Reload(item.entry.id));
                 }
             }
         } else {
@@ -1811,19 +1876,9 @@ impl Reader {
         let current_entry = fresh.as_ref().map_or(&item.entry, |(_, entry)| entry);
         let value = if key == "part_of" {
             // Apply only the picker's add/remove to the fresh disk list.
-            let previous = part_of(&item.entry);
-            let proposed = value.as_sequence()?;
-            let mut groups: Vec<_> = part_of(current_entry)
-                .into_iter()
-                .filter(|group| !previous.contains(group) || proposed.contains(group))
-                .cloned()
-                .collect();
-            for group in proposed.iter().filter(|group| !previous.contains(group)) {
-                if !groups.contains(group) {
-                    groups.push(group.clone());
-                }
-            }
-            Value::Sequence(groups)
+            let previous: Vec<_> = part_of(&item.entry).into_iter().cloned().collect();
+            let disk: Vec<_> = part_of(current_entry).into_iter().cloned().collect();
+            Value::Sequence(merge_groups(&previous, value.as_sequence()?, &disk))
         } else {
             value
         };
@@ -1920,7 +1975,16 @@ impl Reader {
         )
     }
 
-    fn relationship_value_width(ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
+    /// The Part of reason while this note's list could not be read.
+    fn unread_groups(&self, id: Uuid) -> Option<String> {
+        self.group_fault
+            .as_ref()
+            .filter(|fault| fault.id == id)
+            .and_then(|fault| fault.source.as_ref())
+            .map(|(line, _)| fields::unread_groups_reason(*line))
+    }
+
+    fn relationship_value_width(&self, ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
         let mut values = Vec::new();
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
@@ -1954,10 +2018,22 @@ impl Reader {
                 target.is_some() || (key == "in" && !index.place_choices(item.entry.id).is_empty());
             values.push((value, if linked { Type::Body } else { Type::Small }));
         }
+        // Part of is measured as drawn: each group in its own type, a missing one with its
+        // icon and ` · Not found`, with the gaps between them.
         let groups = index.groups_of(&item.entry);
-        if !groups.is_empty() {
-            let names: Vec<&str> = groups.iter().map(|(name, _)| name.as_str()).collect();
-            values.push((names.join("  "), Type::Body));
+        let mut groups_width = 0.0_f32;
+        for (at, (name, target)) in groups.iter().enumerate() {
+            let (words, role) = match target {
+                Some(_) => (name.clone(), Type::Body),
+                None => (missing_words(name), Type::Small),
+            };
+            if at > 0 {
+                groups_width += ui.spacing().item_spacing.x;
+            }
+            groups_width += design::number_width(ui, &words, &role.font(ui));
+        }
+        if self.unread_groups(item.entry.id).is_some() {
+            values.push(("not read".into(), Type::Small));
         }
         let status = if item
             .entry
@@ -1975,7 +2051,7 @@ impl Reader {
         values
             .iter()
             .map(|(value, role)| design::number_width(ui, value, &role.font(ui)))
-            .fold(0.0_f32, f32::max)
+            .fold(groups_width, f32::max)
             .min(Self::relationship_width(ui))
     }
 
@@ -2049,11 +2125,13 @@ impl Reader {
         width: f32,
         value: impl FnOnce(&mut egui::Ui),
         notice: Option<(&str, ChangeKind)>,
+        blocked: Option<&str>,
     ) -> (bool, bool) {
         let name = format!("Change {label}");
         let change = Action::quiet("Change")
             .density(design::Density::Scan)
-            .name(&name);
+            .name(&name)
+            .blocked(blocked);
         let stacked = ui.available_width() < design::XXL * 12.0;
         let width = width
             .min((ui.available_width() - change.natural_width(ui) - design::L).max(design::XXL));
@@ -2171,7 +2249,7 @@ impl Reader {
         campaign: &Campaign,
     ) -> Option<Go> {
         let mut go = None;
-        let value_width = Self::relationship_value_width(ui, item, index);
+        let value_width = self.relationship_value_width(ui, item, index);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
@@ -2213,38 +2291,13 @@ impl Reader {
                                 self.place_choices_open = !self.place_choices_open;
                             }
                         } else if let Some(value) = reader_field(&item.entry, key) {
-                            let words = format!(
-                                "{} {} · Not found",
-                                design::icons::WARN,
-                                link_name(value, label)
-                            );
-                            let fits = design::number_width(ui, &words, &Type::Small.font(ui))
-                                <= ui.available_width();
-                            if fits {
-                                ui.label(
-                                    Type::Small.rich(ui, &words).color(colors().result.warning),
-                                );
-                            } else {
-                                ui.vertical(|ui| {
-                                    let (name, state) = words.split_once(" · ").unwrap();
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small
-                                                .rich(ui, name)
-                                                .color(colors().result.warning),
-                                        )
-                                        .wrap(),
-                                    );
-                                    ui.label(
-                                        Type::Small.rich(ui, state).color(colors().result.warning),
-                                    );
-                                });
-                            }
+                            missing_link(ui, &link_name(value, label));
                         } else {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
                     },
                     notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
+                    None,
                 );
                 if changed {
                     self.picker = Some(Picker {
@@ -2268,13 +2321,23 @@ impl Reader {
         }
         let groups = index.groups_of(&item.entry);
         let notice = self.row_notice(ui, item, ChangeKind::PartOf, value_width);
-        if !groups.is_empty() {
+        // An unread list keeps its row: `not read`, with Change blocked by the reason.
+        let unread = self.unread_groups(item.entry.id);
+        if !groups.is_empty() || unread.is_some() {
             ui.push_id("part_of", |ui| {
                 let (changed, undo) = Self::relationship_row(
                     ui,
                     "Part of",
                     value_width,
                     |ui| {
+                        if unread.is_some() {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "not read")
+                                    .color(colors().result.warning),
+                            );
+                            return;
+                        }
                         for (name, target) in groups {
                             match target {
                                 Some(at) => {
@@ -2284,23 +2347,12 @@ impl Reader {
                                         go = Some(Go::Item(*at, None));
                                     }
                                 }
-                                None => {
-                                    ui.label(
-                                        Type::Small
-                                            .rich(
-                                                ui,
-                                                format!(
-                                                    "{} {name} · Not found",
-                                                    design::icons::WARN
-                                                ),
-                                            )
-                                            .color(colors().result.warning),
-                                    );
-                                }
+                                None => missing_link(ui, name),
                             }
                         }
                     },
                     notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
+                    unread.as_deref(),
                 );
                 if changed {
                     self.picker = Some(Picker {
@@ -2552,7 +2604,7 @@ impl Reader {
             return Some(go);
         }
         if !self.compact {
-            let value_width = Self::relationship_value_width(ui, item, index);
+            let value_width = self.relationship_value_width(ui, item, index);
             if !self.status_editing
                 && (!status(&item.entry).trim().is_empty()
                     || item
@@ -2593,6 +2645,7 @@ impl Reader {
                         );
                     },
                     notice.as_ref().map(|(word, kind)| (word.as_str(), *kind)),
+                    None,
                 );
                 if undo {
                     return self.undo_change(campaign, item.entry.id);
@@ -2638,7 +2691,7 @@ impl Reader {
             // A row shows its own change when it fits. Any other change shows here.
             && (!Self::notice_fits(
                 ui,
-                Self::relationship_value_width(ui, item, index),
+                self.relationship_value_width(ui, item, index),
                 &change.word,
                 change.kind,
             ) || !change.kind.has_row()
@@ -3250,6 +3303,7 @@ mod tests {
                                     |ui| {
                                         ui.label(Type::Small.rich(ui, value));
                                     },
+                                    None,
                                     None,
                                 );
                             }
