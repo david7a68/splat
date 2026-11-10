@@ -107,6 +107,19 @@ fn fact(ui: &mut egui::Ui, line: &Line, names: &[String]) -> bool {
     design::line_link(ui, label, text).clicked()
 }
 
+/// A source note's name. A copy of this note, or any file with its name, is named by its path,
+/// as search rows name duplicates.
+fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
+    let entry = &index.items[source].entry;
+    if entry.name.eq_ignore_ascii_case(&item.entry.name)
+        || index.duplicate_world.contains_key(&entry.path)
+    {
+        entry.path.clone()
+    } else {
+        entry.name.clone()
+    }
+}
+
 /// The lines other pages hold about this one, by the kind of page and then by page.
 /// `listed` holds the pages that a list above already shows with their summaries.
 fn from_other_pages(
@@ -164,7 +177,7 @@ fn from_other_pages(
             .show(ui, |ui| {
                 for (source, facts) in pages {
                     ui.push_id(source, |ui| {
-                        if design::link(ui, &index.items[*source].entry.name).clicked() {
+                        if design::link(ui, &source_name(index, item, *source)).clicked() {
                             go = Some(Go::Item(*source, None));
                         }
                         for line in facts.iter().take(LINES_PER_PAGE) {
@@ -198,7 +211,7 @@ fn from_other_pages(
                     .color(colors().muted),
             );
             for source in only_linked {
-                if design::link(ui, &index.items[source].entry.name).clicked() {
+                if design::link(ui, &source_name(index, item, source)).clicked() {
                     go = Some(Go::Item(source, None));
                 }
             }

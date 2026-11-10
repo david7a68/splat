@@ -672,10 +672,14 @@ A campaign creature in Library offers **Make NPC note**, which opens its new NPC
 encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
-and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
+and nothing is written until **Save NPC**, which creates the note and opens it. The card says where: the folder that
+holds most of the campaign's NPCs, or `NPCs/` when there are none. **Discard** lets it go.
 The card names the campaign tables it uses, or says that it uses built-in lists. Without a names table, Lookup says
 **Built-in names.** and offers **Use your own names**, which opens the same NPC on the World page. The World page's card
-says how to mark a table of names.
+says to add a table of names to a note and mark it, and **Copy the marker** copies the marker line for you.
+
+On the World page, an unsaved NPC stays until you save it or choose **Discard**, and **Undo discard** brings it back.
+While you look at other notes, Problems or a repair, one row above them says **Unsaved NPC: <name> · Show**.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
 `npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes

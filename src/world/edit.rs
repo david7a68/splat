@@ -802,7 +802,11 @@ impl Reader {
             });
         });
         if let Some(reason) = &groups_error {
-            super::unread_groups_message(ui, campaign, &draft.path, reason);
+            // The warning keeps the form's right edge.
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                super::unread_groups_message(ui, campaign, &draft.path, reason);
+            });
         }
         if self
             .picker

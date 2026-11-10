@@ -536,6 +536,12 @@ names share one left edge and a wrapped summary stays right of the dates. The co
 the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
 column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
 which says `Lookup keeps <name>. Save or discard this NPC to move it here.` while Lookup holds that NPC.
+An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
+it: Problems, Open questions, another note, a repair, New, a reveal from another page and Lookup's link. While another
+view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the view stays usable. Show, Generate NPC
+and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
+`Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
+asks about the NPC as it does for other drafts.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -550,7 +556,8 @@ says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
-sits in one place: below the file line, above the value rows. Folder groups use normal-case paths after
+sits in one place: below the file line, above the value rows. It wraps at the reader measure in Read and at
+`FORM_WIDTH` in Edit, so it keeps the right edge of the rows and fields. Folder groups use normal-case paths after
 type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
@@ -594,6 +601,8 @@ path) is the same group, and a group both sides have keeps the note's spelling o
 single note compares by its link target; plain text compares as written.
 Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
 source text. World calls each file a note in related-note headings, Problems and conflict messages.
+`Also linked from` and the page links under `From other notes` name a copy of the note, or another note with the same
+name, by its path (`NPCs/Rook Ambry copy.md`), as search rows do.
 Each duplicate-note repair has a muted Small consequence below it, including the first repair's retained
 link target. An `L` gap separates the choices, and an `M` gap follows the last consequence.
 
@@ -607,8 +616,10 @@ warn before app close or a campaign switch. The unreadable count in the header o
 note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
-sources below attributes. Without a names table, the World page's card shows the table marker inside the app,
-with no external link, because the DM prepares there. Lookup's card says `Built-in names.` with a quiet
+sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
+the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
+use your own, add a table of names to a note and mark it.` with a quiet `Copy the marker` action. It copies the exact
+marker line and then says `Copied`. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says
 `Built-in names.` only, so the note keeps the keyboard. Table warnings use the words name, look, manner and
 want; hover keeps the marker key.

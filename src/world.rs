@@ -793,6 +793,26 @@ pub(crate) fn common_folder<'a>(
         .map(|(folder, _)| folder.to_owned())
 }
 
+/// The relative path of a new entry with this name in this folder. An empty folder is the
+/// campaign's root.
+fn path_in(folder: &str, name: &str) -> String {
+    let stem = sessions::file_safe(name.trim());
+    if folder.is_empty() {
+        format!("{stem}.md")
+    } else {
+        format!("{folder}/{stem}.md")
+    }
+}
+
+/// Where a new entry of this kind and name will be written, from the campaign's notes as the
+/// index read them. It uses the folder rule of the write, so a card can promise the real path.
+pub(crate) fn new_entry_path(index: Option<&ContentIndex>, name: &str, kind: &str) -> String {
+    let folder = index
+        .and_then(|index| index.type_folder(kind))
+        .unwrap_or_else(|| default_folder(kind));
+    path_in(&folder, name)
+}
+
 /// Where a new entry of this kind is written when the campaign has none yet.
 fn default_folder(kind: &str) -> String {
     match kind {
@@ -864,11 +884,7 @@ fn create_at(
         return Err("Type a name first.".to_owned());
     }
     let folder = folder_for(campaign, kind);
-    let relative = if folder.is_empty() {
-        format!("{stem}.md")
-    } else {
-        format!("{folder}/{stem}.md")
-    };
+    let relative = path_in(&folder, name);
     let path = note_path(&campaign.path, &relative)?;
     if path.exists() {
         return Err(format!("{relative} already exists."));
@@ -1659,23 +1675,26 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             file_actions(ui, campaign, &item.entry.path);
         }
-        if let Some(reason) = unread_reason
-            && let Some(campaign) = campaign
-            && (self.error.is_none() || self.group_error)
-        {
-            if file_line {
-                // The file line just above has the one Edit in Obsidian link.
-                design::message(ui, Tone::Warning, &reason);
-            } else {
-                unread_groups_message(ui, campaign, &item.entry.path, &reason);
+        // Unread-value warnings wrap at the reader measure, the right edge of the rows below.
+        design::reader::measure(ui, |ui| {
+            if let Some(reason) = unread_reason
+                && let Some(campaign) = campaign
+                && (self.error.is_none() || self.group_error)
+            {
+                if file_line {
+                    // The file line just above has the one Edit in Obsidian link.
+                    design::message(ui, Tone::Warning, &reason);
+                } else {
+                    unread_groups_message(ui, campaign, &item.entry.path, &reason);
+                }
             }
-        }
-        // Every other value not read sits here too, not below the values.
-        if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
-            for notice in &fault.notices {
-                design::message(ui, Tone::Warning, notice);
+            // Every other value not read sits here too, not below the values.
+            if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
+                for notice in &fault.notices {
+                    design::message(ui, Tone::Warning, notice);
+                }
             }
-        }
+        });
         if let Some(campaign) = campaign {
             if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
                 let stem = Path::new(&item.entry.path)
@@ -3595,6 +3614,47 @@ mod tests {
         let again = create_generated(&campaign, &npc).unwrap_err();
         assert!(again.contains("already exists"), "{again}");
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), text);
+    }
+
+    /// AD2: the card's `Will save` path is the path Save NPC writes, for a campaign with no
+    /// NPCs, NPCs in another folder, and NPCs at the campaign's root.
+    #[test]
+    fn iter15_d_ad2_the_card_promises_the_path_the_save_writes() {
+        let npc_at = |path: &str, name: &str| {
+            format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_type: npc\n---\n\n# {name}\n",
+                splat::character::stable_id(path)
+            )
+        };
+        for (existing, expected) in [
+            (vec![], "NPCs/Wren Hallam.md"),
+            (
+                vec!["People/Rook.md", "People/Tally.md", "NPCs/Blot.md"],
+                "People/Wren Hallam.md",
+            ),
+            (vec!["Rook.md"], "Wren Hallam.md"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let campaign = sample_campaign(dir.path());
+            for path in &existing {
+                let file = dir.path().join(path);
+                fs::create_dir_all(file.parent().unwrap()).unwrap();
+                let name = Path::new(path).file_stem().unwrap().to_string_lossy();
+                fs::write(file, npc_at(path, &name)).unwrap();
+            }
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let promised = new_entry_path(Some(&index), "Wren Hallam", "npc");
+            assert_eq!(promised, expected, "AD2-promise: {existing:?}");
+            let npc = crate::npc_generator::Generated {
+                name: "Wren Hallam".into(),
+                attributes: ["Ink".into(), "Bored".into(), "A writ".into()],
+            };
+            create_generated(&campaign, &npc).unwrap();
+            assert!(
+                dir.path().join(&promised).is_file(),
+                "AD2-write: the save wrote the promised {promised} for {existing:?}"
+            );
+        }
     }
     fn sample_campaign(root: &Path) -> Campaign {
         Campaign {

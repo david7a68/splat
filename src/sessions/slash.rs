@@ -345,8 +345,14 @@ impl Slash {
                         }
                         return;
                     };
-                    let (save, again, discard) =
-                        lookup::generated_card(ui, generated, problems, sources, place.run_open);
+                    let (save, again, discard) = lookup::generated_card(
+                        ui,
+                        generated,
+                        problems,
+                        sources,
+                        place.run_open,
+                        &world::new_entry_path(place.index, &generated.name, "npc"),
+                    );
                     let save = save || keys.choose;
                     if let Some(error) = error.as_deref() {
                         design::message(ui, Tone::Error, error);
