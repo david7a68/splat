@@ -6691,7 +6691,7 @@ pub mod session_recording {
         d.observe(
             "iter-8-C-AT1",
             (add.left() - added.left()).abs() <= 1.0
-                && gap >= crate::design::L - 1.0 && gap <= crate::design::L + 2.0
+                && (crate::design::L - 1.0..=crate::design::L + 2.0).contains(&gap)
                 && add.left() - title.left() <= crate::design::READER_MEASURE + crate::design::L,
             format!("Marker actions align left with an L gap after the content: gap {gap}, Add {add:?}, added {added:?}"),
         );

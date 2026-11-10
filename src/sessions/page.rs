@@ -5723,17 +5723,16 @@ impl Sessions {
             } else {
                 self.current()
             };
-            if plan.group_open {
-                if let Some(group) = self
+            if plan.group_open
+                && let Some(group) = self
                     .notes
                     .iter()
                     .find(|note| Some(note.id) == self.group_session)
-                {
-                    let (open, group) = session_warning_names(&note, group);
-                    words = format!(
-                        "{open} is not the session being played. A group is being assembled in {group}."
-                    );
-                }
+            {
+                let (open, group) = session_warning_names(&note, group);
+                words = format!(
+                    "{open} is not the session being played. A group is being assembled in {group}."
+                );
             }
             let next = self
                 .notes
