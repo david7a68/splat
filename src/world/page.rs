@@ -13,6 +13,9 @@ const ROW: f32 = 40.0;
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
+/// The words for a held NPC, in the rail and in the row above another view. The rail's link
+/// is found by this constant.
+pub const UNSAVED_NPC: &str = "Unsaved NPC";
 
 /// A repair cause must stay whole even when Lookup narrows the list.
 fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
@@ -181,6 +184,11 @@ impl WorldPage {
     /// The name of the unsaved generated NPC, for the app's list of unsaved work.
     pub fn held_npc(&self) -> Option<&str> {
         self.generated.as_ref().map(|npc| npc.name.as_str())
+    }
+
+    /// The rail's link to the held NPC: its card becomes the view.
+    pub fn open_held(&mut self) {
+        self.show_held();
     }
 
     /// Lookup's link kept Lookup's NPC because this page holds its own. The page opens on
@@ -466,9 +474,11 @@ impl WorldPage {
                     });
             });
         let mut nav = None;
+        // An `L` gutter, so a quiet action that starts a line can reach into it and stay clear
+        // of the World column's splitter.
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::S as i8,
+                left: design::L as i8,
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
@@ -514,23 +524,25 @@ impl WorldPage {
                         "Choose one from the list, or make a new one.",
                         |_| {},
                     );
+                    // With no file line, the result sits below the empty state's words, near
+                    // the height it has below a note's file line.
+                    if let Some(result) = self.result(None)
+                        && super::page_result(ui, &result)
+                    {
+                        self.undo_discard();
+                    }
                     return;
                 };
                 egui::ScrollArea::vertical()
                     .id_salt(("world_reader", item.entry.id))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if self.repaired == Some(item.entry.id) {
-                            design::status(
-                                ui,
-                                design::Status {
-                                    icon: icons::OK,
-                                    word: "Note repaired.",
-                                    color: colors().document.saved,
-                                },
-                            );
-                        }
+                        self.reader.page_result = self.result(Some(item.entry.id));
                         let read = self.reader.read(ui, item, index, Some(campaign));
+                        self.reader.page_result = None;
+                        if std::mem::take(&mut self.reader.page_result_undo) {
+                            self.undo_discard();
+                        }
                         nav = nav.take().or(read);
                     });
             });
@@ -589,14 +601,15 @@ impl WorldPage {
         self.generated.is_some() && self.generated_shown
     }
 
-    /// Above another view: the held NPC's one row, or the Undo for the NPC Discard let go.
+    /// Above another view: the held NPC's one row. The Undo for a discarded NPC is a result, so
+    /// it sits below the file line.
     fn held_row(&mut self, ui: &mut egui::Ui) {
         if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown) {
             let mut show = false;
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     Type::Body
-                        .rich(ui, format!("Unsaved NPC: {}", npc.name))
+                        .rich(ui, format!("{UNSAVED_NPC}: {}", npc.name))
                         .color(colors().text),
                 );
                 ui.label(Type::Body.rich(ui, "·").color(colors().muted));
@@ -606,11 +619,26 @@ impl WorldPage {
             if show {
                 self.show_held();
             }
-        } else if let Some((npc, _, _)) = &self.discarded_npc
+        }
+    }
+
+    /// The result this page shows below the file line: the NPC Discard let go, or the repair
+    /// that made the open note readable.
+    fn result(&self, open: Option<Uuid>) -> Option<super::PageResult> {
+        if let Some((npc, _, _)) = self.discarded_npc.as_ref()
             && self.generated.is_none()
-            && design::draft_discarded(ui, &npc.name)
-            && let Some((npc, problems, sources)) = self.discarded_npc.take()
         {
+            Some(super::PageResult::Discarded(npc.name.clone()))
+        } else if open.is_some() && self.repaired == open {
+            Some(super::PageResult::Repaired)
+        } else {
+            None
+        }
+    }
+
+    /// `Undo discard`: the same NPC, with its table facts, on its card again.
+    fn undo_discard(&mut self) {
+        if let Some((npc, problems, sources)) = self.discarded_npc.take() {
             self.generated = Some(npc);
             self.generator_problems = problems;
             self.generator_sources = sources;

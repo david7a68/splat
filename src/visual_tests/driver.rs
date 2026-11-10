@@ -488,6 +488,32 @@ impl<'a> Driver<'a> {
             .any(|shape| contains(&shape.shape, first, color))
     }
 
+    /// A message's tone bar beside one line of its painted words: the bar is as tall as the
+    /// words, ends before them, and starts on their line.
+    pub fn has_tone_bar(&self, words: egui::Rect, color: egui::Color32) -> bool {
+        fn contains(shape: &egui::Shape, words: egui::Rect, color: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().any(|shape| contains(shape, words, color))
+                }
+                egui::Shape::Rect(bar) => {
+                    bar.fill == color
+                        && bar.rect.width() <= crate::design::XS
+                        && bar.rect.right() < words.left()
+                        && words.left() - bar.rect.right() <= crate::design::XXL
+                        && (bar.rect.top() - words.top()).abs() <= 1.0
+                        && bar.rect.bottom() >= words.bottom() - 1.0
+                }
+                _ => false,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .any(|shape| contains(&shape.shape, words, color))
+    }
+
     pub fn painted_right(&self, words: &str) -> Option<f32> {
         let mut right = None;
         self.each_painted_text(|text, clip| {
