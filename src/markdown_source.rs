@@ -1,12 +1,13 @@
 //! Markdown source, styled where it is typed, in the Reader's faces. Only the look changes:
 //! every character stays, markup included, so the file holds exactly what was typed.
 use crate::design::{self, Type, colors};
+use crate::markdown_view::LinkTarget;
 use eframe::egui::{
     self, Stroke, TextBuffer, TextFormat,
     text::LayoutJob,
     util::cache::{ComputerMut, FrameCache},
 };
-use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag};
+use pulldown_cmark::{Event, HeadingLevel, LinkType, Options, Parser, Tag};
 use std::{ops::Range, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -34,12 +35,14 @@ struct Look {
 
 type Runs = Arc<Vec<(Range<usize>, Look)>>;
 
+const OPTIONS: Options = Options::ENABLE_TABLES
+    .union(Options::ENABLE_STRIKETHROUGH)
+    .union(Options::ENABLE_WIKILINKS);
+
 /// The look of each stretch of a text. Together they cover all of it.
 fn looks(text: &str) -> Runs {
     let mut bytes = vec![Look::default(); text.len()];
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_WIKILINKS;
-    for (event, range) in Parser::new_ext(text, options).into_offset_iter() {
+    for (event, range) in Parser::new_ext(text, OPTIONS).into_offset_iter() {
         // A block's own line break stays plain, or the empty line after it takes its height.
         let end = range.start + text[range.clone()].trim_end_matches(['\n', '\r']).len();
         let range = range.start..end;
@@ -154,6 +157,43 @@ fn looks(text: &str) -> Runs {
         runs.push((0..0, Look::default()));
     }
     Arc::new(runs)
+}
+
+type Links = Arc<Vec<(Range<usize>, LinkTarget)>>;
+
+/// Where each link that can be followed is in a text, markup included, and where it goes.
+fn links(text: &str) -> Links {
+    let found = Parser::new_ext(text, OPTIONS)
+        .into_offset_iter()
+        .filter_map(|(event, range)| {
+            let Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                ..
+            }) = event
+            else {
+                return None;
+            };
+            let target = if matches!(link_type, LinkType::WikiLink { .. }) {
+                // What the link names, read as the Reader reads it.
+                let (_, _, note, _) = crate::world::each_link(&text[range.clone()]).pop()?;
+                LinkTarget::Note(note)
+            } else {
+                LinkTarget::from_destination(&dest_url)?
+            };
+            Some((range, target))
+        })
+        .collect();
+    Arc::new(found)
+}
+
+#[derive(Default)]
+struct Linker;
+
+impl ComputerMut<&str, Links> for Linker {
+    fn compute(&mut self, text: &str) -> Links {
+        links(text)
+    }
 }
 
 /// A text's looks, and where each section heading ends, in characters.
@@ -277,6 +317,80 @@ pub fn paint_section_rules(ui: &egui::Ui, output: &egui::text_edit::TextEditOutp
             output.galley_pos.y + row.bottom() + RULE_GAP,
             Stroke::new(design::HAIRLINE_WIDTH, colors().rule),
         );
+    }
+}
+
+/// The link under the pointer, if the pointer is on its characters and not only near them.
+fn link_at(
+    ui: &egui::Ui,
+    output: &egui::text_edit::TextEditOutput,
+    pointer: egui::Pos2,
+) -> Option<LinkTarget> {
+    if !output.text_clip_rect.contains(pointer) {
+        return None;
+    }
+    let galley = &output.galley;
+    let text = &galley.job.text;
+    // Read first, so that the cache stays while the pointer crosses the gaps between words.
+    let links = ui.ctx().memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<FrameCache<Links, Linker>>()
+            .get(text.as_str())
+    });
+    let local = (pointer - output.galley_pos).to_pos2();
+    let mut at = 0;
+    let mut rows = galley.rows.iter();
+    let row = loop {
+        let row = rows.next()?;
+        if row.rect().y_range().contains(local.y) {
+            break row;
+        }
+        at += row.char_count_including_newline();
+    };
+    let x = local.x - row.pos.x;
+    at += row
+        .glyphs
+        .iter()
+        .position(|glyph| glyph.pos.x <= x && x < glyph.pos.x + glyph.advance_width)?;
+    let byte = text.char_indices().nth(at)?.0;
+    links
+        .iter()
+        .find(|(range, _)| range.contains(&byte))
+        .map(|(_, target)| target.clone())
+}
+
+/// True for a note link that names nothing in the campaign. With no index, it cannot be known.
+fn names_nothing(ui: &egui::Ui, note: &str, from: Option<uuid::Uuid>) -> bool {
+    ui.ctx()
+        .data(|data| {
+            data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+        })
+        .is_some_and(|index| matches!(index.resolve_link(note, from), crate::world::Go::Missing(_)))
+}
+
+/// With Ctrl held, a link in the text can be pressed, as in the Reader. A plain click only
+/// places the caret. A web link opens here. A note link goes back to the caller, which knows
+/// where its notes open. `from` is the note being edited.
+pub fn pressed_note_link(
+    ui: &egui::Ui,
+    output: &egui::text_edit::TextEditOutput,
+    from: Option<uuid::Uuid>,
+) -> Option<String> {
+    let response = &output.response;
+    // Ctrl+click is a right click on a Mac. There, Cmd is the key.
+    if !response.sense.senses_click() || !ui.input(|input| input.modifiers.command) {
+        return None;
+    }
+    let mut target = link_at(ui, output, response.hover_pos()?)?;
+    if let LinkTarget::Note(note) = &target
+        && names_nothing(ui, note, from)
+    {
+        target = LinkTarget::Missing;
+    }
+    match crate::markdown_view::press(ui, response, &target)? {
+        LinkTarget::Note(note) => Some(note.clone()),
+        _ => None,
     }
 }
 
@@ -436,6 +550,128 @@ mod tests {
             chars[first..second].iter().collect::<String>(),
             "\n\n### Later ##"
         );
+    }
+
+    #[test]
+    fn note_and_web_links_can_be_followed_but_images_and_code_cannot() {
+        let text = "See [[Hobb|the miller]], [site](https://example.com) and [here](notes.md).\n\
+                    ![[map.png]] `[[Not]]`\n";
+        let found: Vec<_> = links(text)
+            .iter()
+            .map(|(range, target)| (&text[range.clone()], target.clone()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("[[Hobb|the miller]]", LinkTarget::Note("Hobb".into())),
+                (
+                    "[site](https://example.com)",
+                    LinkTarget::Url("https://example.com".into())
+                ),
+            ]
+        );
+    }
+
+    /// Press on these words in an editor of `text`, with or without Ctrl.
+    fn press_in_editor(text: &str, words: &str, ctrl: bool) -> (Option<String>, Vec<String>) {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let at = text[..text.find(words).unwrap()].chars().count();
+        let mut body = text.to_owned();
+        // The text does not move, so each frame finds the same place.
+        let pointer = std::cell::Cell::new(egui::Pos2::ZERO);
+        let mut noted = None;
+        let mut draw = |ctx: &egui::Context| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut layouter = layouter;
+                // One row, so that no word is split between two.
+                let output = egui::TextEdit::multiline(&mut body)
+                    .layouter(&mut layouter)
+                    .desired_width(1000.0)
+                    .show(ui);
+                noted = noted.take().or(pressed_note_link(ui, &output, None));
+                let cursor = |at| {
+                    output
+                        .galley
+                        .pos_from_cursor(egui::text::CCursor::new(at))
+                        .center()
+                        .to_vec2()
+                };
+                pointer.set(output.galley_pos + (cursor(at) + cursor(at + 1)) / 2.0);
+            });
+        };
+        let _ = context.run(egui::RawInput::default(), &mut draw);
+        let modifiers = if ctrl {
+            egui::Modifiers::COMMAND
+        } else {
+            egui::Modifiers::NONE
+        };
+        let pointer = pointer.get();
+        let mut urls = Vec::new();
+        for pressed in [true, false] {
+            let events = vec![
+                egui::Event::PointerMoved(pointer),
+                egui::Event::PointerButton {
+                    pos: pointer,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers,
+                },
+            ];
+            let input = egui::RawInput {
+                modifiers,
+                events,
+                ..Default::default()
+            };
+            let output = context.run(input, &mut draw);
+            for command in output.platform_output.commands {
+                if let egui::OutputCommand::OpenUrl(url) = command {
+                    urls.push(url.url);
+                }
+            }
+        }
+        (noted, urls)
+    }
+
+    #[test]
+    fn ctrl_click_follows_a_link_in_the_editor_and_a_plain_click_does_not() {
+        let text = "Ask [[Hobb|the miller]] or read [the site](https://example.com).\n";
+        assert_eq!(
+            press_in_editor(text, "miller", true),
+            (Some("Hobb".to_owned()), vec![])
+        );
+        assert_eq!(
+            press_in_editor(text, "site", true),
+            (None, vec!["https://example.com".to_owned()])
+        );
+        assert_eq!(press_in_editor(text, "miller", false), (None, vec![]));
+        assert_eq!(press_in_editor(text, "Ask", true), (None, vec![]));
+    }
+
+    #[test]
+    fn the_first_letter_of_a_wrapped_row_is_part_of_its_link() {
+        let text = format!("[[Hobb|{}]]\n", "the miller ".repeat(20));
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let _ = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut body = text.clone();
+                let mut layouter = layouter;
+                let output = egui::TextEdit::multiline(&mut body)
+                    .layouter(&mut layouter)
+                    .desired_width(200.0)
+                    .show(ui);
+                let row = &output.galley.rows[1];
+                let glyph = &row.glyphs[0];
+                let pointer = output.galley_pos
+                    + row.pos.to_vec2()
+                    + egui::vec2(glyph.pos.x + glyph.advance_width / 2.0, row.size.y / 2.0);
+                assert_eq!(
+                    link_at(ui, &output, pointer),
+                    Some(LinkTarget::Note("Hobb".into()))
+                );
+            });
+        });
     }
 
     #[test]

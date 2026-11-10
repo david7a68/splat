@@ -199,7 +199,15 @@ impl Party {
                 c.connection.connected,
             )
         };
-        let context = format!("{status_icon} {status_word}{fetched}");
+        // Another computer saves the sheets from automatic reads. Say so, because this
+        // computer's notes change only through that computer and Obsidian Sync.
+        let writer = self
+            .reader
+            .writer_elsewhere
+            .as_ref()
+            .map(|name| format!(" · Sheets save on {name}"))
+            .unwrap_or_default();
+        let context = format!("{status_icon} {status_word}{fetched}{writer}");
         let mut refresh = false;
         let mut open_link = false;
         design::page_header(ui, "Party", Some(&context), |ui| {
@@ -221,7 +229,7 @@ impl Party {
             design::blocked_reason(ui, can_refresh);
         }
         if refresh && let Some(session) = session.clone() {
-            self.reader.refresh(session, ui.ctx(), true);
+            self.reader.refresh_by_hand(session, ui.ctx());
         }
         if !linked {
             design::empty_state(

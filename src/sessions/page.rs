@@ -3028,6 +3028,7 @@ impl Sessions {
                 "reader_link_index",
             ))
         });
+        let mut pressed_link = None;
         frame.show(ui, |ui| {
             let visible_height = ui.available_height().max(design::XL);
             let mut scroll =
@@ -3052,6 +3053,7 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, visible_height + heading_offset))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
                     let place = super::slash::Place {
                         session: self.selected,
                         campaign: self.campaign.as_ref(),
@@ -3151,6 +3153,9 @@ impl Sessions {
                     }
                 });
         });
+        if let Some(target) = pressed_link {
+            self.open_note_link(target);
+        }
     }
 
     pub fn fresh_focus_in_panel(&mut self) {
@@ -3341,11 +3346,16 @@ impl Sessions {
                 });
             });
         if let Some(target) = markdown_view::take_note_link(ui.ctx()) {
-            if let Some(id) = target.strip_prefix("Timeline#^") {
-                self.wants_event = Some(id.to_owned());
-            } else {
-                self.wants_lookup = Some(target);
-            }
+            self.open_note_link(target);
+        }
+    }
+
+    /// A timeline reference opens its event. Any other note link opens in Lookup.
+    fn open_note_link(&mut self, target: String) {
+        if let Some(id) = target.strip_prefix("Timeline#^") {
+            self.wants_event = Some(id.to_owned());
+        } else {
+            self.wants_lookup = Some(target);
         }
     }
 
@@ -5969,6 +5979,7 @@ impl Sessions {
             }
             Self::draft_problem(ui, draft);
         }
+        let mut pressed_link = None;
         egui::ScrollArea::vertical()
             .id_salt(("template_editor", &template.name))
             .auto_shrink([false, false])
@@ -5983,6 +5994,7 @@ impl Sessions {
                         .min_size(egui::vec2(0.0, ui.available_height()))
                         .show(ui);
                     crate::markdown_source::paint_section_rules(ui, &output);
+                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
                     let response = output.response;
                     design::named(ui, &response, "Template text");
                     if response.changed() {
@@ -6004,6 +6016,9 @@ impl Sessions {
                     crate::markdown_source::paint_section_rules(ui, &output);
                 }
             });
+        if let Some(target) = pressed_link {
+            self.open_note_link(target);
+        }
     }
 
     pub fn folder_view(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {

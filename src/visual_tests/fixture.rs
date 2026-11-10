@@ -863,6 +863,11 @@ fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// One party member's sheet, for a test that needs a sheet and not a whole campaign.
+pub(crate) fn sample_sheet() -> EntitySnapshot {
+    HEROES[0].snapshot().expect("The first hero makes a sheet")
+}
+
 /// The cached sheets a player sees without a connection, and their campaign copies.
 fn party(
     campaign_path: &Path,
@@ -870,6 +875,19 @@ fn party(
     campaign: uuid::Uuid,
 ) -> Result<Vec<EntitySnapshot>, String> {
     let cache = Cache::at(cache.to_path_buf());
+    // This computer has saved these sheets for a while, so its turn has settled. The test
+    // clock does not move, so a new claim would never settle.
+    let (device, name) = crate::hermetic::device();
+    let now = crate::hermetic::now();
+    crate::sheet_writer::hold(
+        campaign_path,
+        &crate::sheet_writer::Holder {
+            device,
+            name,
+            since: now - 120,
+            until: now + 300,
+        },
+    );
     let mut party = Vec::new();
     for hero in HEROES {
         let record = hero.snapshot()?;
