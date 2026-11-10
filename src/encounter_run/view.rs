@@ -640,7 +640,7 @@ impl Run {
                         ui.available_width(),
                         self.state.order.len(),
                     );
-                    self.live_header(ui, scale);
+                    let sheet_notice_in_header = self.live_header(ui, scale);
                     let stat_error = self
                         .error
                         .as_ref()
@@ -658,33 +658,39 @@ impl Run {
                     let room = room - error_room;
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
-                    let notice = self.notice.as_ref().map(|detail| {
-                        let summary = self
-                            .notice_summary
-                            .clone()
-                            .unwrap_or_else(|| detail.clone());
-                        let boundaries: Vec<_> = self
-                            .state
-                            .participants
-                            .iter()
-                            .filter(|p| detail.contains(&format!("Undo for {} stops here", p.name)))
-                            .map(|p| {
-                                format!(
-                                    "Undo for {} stops here",
-                                    p.name.split_whitespace().next().unwrap_or(&p.name)
-                                )
-                            })
-                            .collect();
-                        let full = format!("{summary} · {}", boundaries.join(" · "));
-                        if !boundaries.is_empty()
-                            && design::number_width(ui, &full, &Type::Small.font(ui))
-                                <= ui.available_width() - design::L * 6.0
-                        {
-                            full
-                        } else {
-                            summary
-                        }
-                    });
+                    let notice = self
+                        .notice
+                        .as_ref()
+                        .filter(|_| !sheet_notice_in_header)
+                        .map(|detail| {
+                            let summary = self
+                                .notice_summary
+                                .clone()
+                                .unwrap_or_else(|| detail.clone());
+                            let boundaries: Vec<_> = self
+                                .state
+                                .participants
+                                .iter()
+                                .filter(|p| {
+                                    detail.contains(&format!("Undo for {} stops here", p.name))
+                                })
+                                .map(|p| {
+                                    format!(
+                                        "Undo for {} stops here",
+                                        p.name.split_whitespace().next().unwrap_or(&p.name)
+                                    )
+                                })
+                                .collect();
+                            let full = format!("{summary} · {}", boundaries.join(" · "));
+                            if !boundaries.is_empty()
+                                && design::number_width(ui, &full, &Type::Small.font(ui))
+                                    <= ui.available_width() - design::L * 6.0
+                            {
+                                full
+                            } else {
+                                summary
+                            }
+                        });
                     let width = ui.available_width();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
                         let font = Type::Small.font(ui);
@@ -872,7 +878,7 @@ impl Run {
 
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
-    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
+    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
         let strip = self.strip();
         let name = strip.current.as_deref().unwrap_or_default();
@@ -991,6 +997,7 @@ impl Run {
                 )
             })
         };
+        let mut sheet_notice_in_header = false;
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
@@ -1051,7 +1058,34 @@ impl Run {
                     } else {
                         0.0
                     };
-                let notice_width = (design::number_width(ui, &notice, &font) + design::S)
+                let notice_width = design::number_width(ui, &notice, &font) + design::S;
+                let sheet_room =
+                    (ui.available_width() - minimum - notice_width - design::L).max(0.0);
+                let sheet_width = |summary: &str| {
+                    design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
+                        + design::number_width(ui, "Log", &font)
+                        + Density::Read.control()
+                        + design::L
+                        + design::S
+                };
+                let sheet = self
+                    .notice_summary
+                    .as_ref()
+                    .filter(|_| self.notice.is_some() && self.recording_notice.is_none())
+                    .and_then(|summary| {
+                        if sheet_width(summary) <= sheet_room {
+                            return Some(summary.clone());
+                        }
+                        let compact = summary
+                            .split(", ")
+                            .next()
+                            .unwrap_or(summary)
+                            .replace("'s sheet changed: ", ": ");
+                        (sheet_width(&compact) <= sheet_room).then_some(compact)
+                    });
+                let sheet_width = sheet.as_ref().map_or(0.0, |summary| sheet_width(summary));
+                sheet_notice_in_header = sheet.is_some();
+                let notice_width = (notice_width + if sheet.is_some() { sheet_width } else { 0.0 })
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
                 let overhead = self.undo_action("").natural_width(ui);
@@ -1119,6 +1153,7 @@ impl Run {
                                 + design::XS
                                 <= ui.available_width();
                         let text_width = ui.available_width()
+                            - if sheet.is_some() { sheet_width } else { 0.0 }
                             - if fits_link {
                                 link_width + design::XS
                             } else {
@@ -1130,13 +1165,32 @@ impl Run {
                             vec2(text_width, Density::Read.control()),
                             Layout::left_to_right(Align::Center),
                             |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, words).color(alert.color),
+                                if strip.conflict.is_some() {
+                                    let word = words
+                                        .split_once(' ')
+                                        .map_or(words.as_str(), |(_, word)| word);
+                                    if design::status_link(
+                                        ui,
+                                        Status {
+                                            icon: icons::WARN,
+                                            word,
+                                            color: alert.color,
+                                        },
                                     )
-                                    .truncate(),
-                                )
-                                .on_hover_text(full);
+                                    .on_hover_text(full)
+                                    .clicked()
+                                    {
+                                        review_conflict = true;
+                                    }
+                                } else {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, words).color(alert.color),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .on_hover_text(full);
+                                }
                             },
                         );
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
@@ -1162,6 +1216,23 @@ impl Run {
                             c.turn.next
                         }));
                     }
+                    if let Some(summary) = &sheet {
+                        let response = ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} {summary}", icons::WARN))
+                                .color(c.result.warning),
+                        );
+                        let detail = self.notice.as_deref().unwrap_or(summary);
+                        design::named(ui, &response, detail);
+                        response.on_hover_text(detail);
+                        if design::small_link(ui, "Log").clicked() {
+                            self.panel = Panel::Log;
+                        }
+                        if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
+                            self.notice = None;
+                            self.notice_summary = None;
+                        }
+                    }
                 });
             },
         );
@@ -1177,13 +1248,13 @@ impl Run {
         if next_turn {
             self.run_command(Command::Next);
         }
+        sheet_notice_in_header
     }
 
     /// The sync state a row shows, if this participant has one.
     pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
             .get(&index)
-            .filter(|sync| sync.enabled || sync.error.is_some() || sync.stranded())
             .map(crate::combat_sync::CombatSync::state)
     }
 
@@ -3153,6 +3224,9 @@ impl Run {
             );
         }
         let warnings = group.warnings.join("\n");
+        if !warnings.is_empty() {
+            ui.label(Type::Small.rich(ui, "Cannot join").color(c.muted));
+        }
         if let Some(problem) = group
             .problem
             .as_deref()
@@ -3383,10 +3457,16 @@ impl Run {
             let freshness = crate::party::freshness(&record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
-            let word = if self.syncs.get(&index).is_some_and(|sync| sync.ready()) {
-                "Connected · Sync reads this sheet · HP from this run".to_owned()
+            let ready = self.syncs.get(&index).is_some_and(|sync| sync.ready());
+            let word = if ready {
+                "Connected"
             } else {
-                format!("{} · HP from this run", freshness.word)
+                freshness.word.as_str()
+            };
+            let facts = if ready {
+                "· Sync reads this sheet · HP from this run"
+            } else {
+                "· HP from this run"
             };
             // Beside an open conflict, green words would say the opposite of what matters.
             if !self
@@ -3414,10 +3494,11 @@ impl Run {
                         ui,
                         Status {
                             icon: freshness.icon,
-                            word: &word,
+                            word,
                             color: freshness.color,
                         },
                     );
+                    ui.label(Type::Small.rich(ui, facts).color(colors().muted));
                 });
             }
             if p.hp == Some(0) {
@@ -4520,6 +4601,8 @@ impl Run {
                     if design::icon_button(ui, icon, &name).clicked() {
                         command = Some(Command::Move(position, destination));
                     }
+                } else {
+                    ui.allocate_space(vec2(Density::Read.control(), Density::Read.control()));
                 }
             }
         });
@@ -5039,7 +5122,25 @@ fn undo_words(
     if design::number_width(ui, label, font) <= width {
         return label.to_owned();
     }
-    let action = label.strip_prefix("Undo: ").unwrap_or(label);
+    let compact_effect = [" on ", " off "].into_iter().find_map(|direction| {
+        let (effect, target) = label.strip_prefix("Undo: ")?.rsplit_once(direction)?;
+        if !effect.ends_with('…') || !participants.iter().any(|p| p.name == target) {
+            return None;
+        }
+        let effect = effect
+            .split_whitespace()
+            .take(2)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let verb = if direction == " on " { "add" } else { "remove" };
+        Some(format!(
+            "Undo {verb}: {}…{direction}{target}",
+            effect.trim_end_matches('…')
+        ))
+    });
+    let action = compact_effect
+        .as_deref()
+        .unwrap_or_else(|| label.strip_prefix("Undo: ").unwrap_or(label));
     if design::number_width(ui, action, font) <= width {
         return action.to_owned();
     }
@@ -5070,6 +5171,22 @@ fn undo_words(
         .max_by_key(|p| p.name.len());
     if let Some(target) = target {
         let (before, after) = action.split_once(&target.name).expect("target in action");
+        let words: Vec<_> = target.name.split_whitespace().collect();
+        let suffix = words
+            .last()
+            .copied()
+            .filter(|last| last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
+        for count in (1..words.len()).rev() {
+            let name = if let Some(last) = suffix {
+                format!("{}… {last}", words[..count].join(" "))
+            } else {
+                format!("{}…", words[..count].join(" "))
+            };
+            let candidate = format!("{before}{name}{after}");
+            if design::number_width(ui, &candidate, font) <= width {
+                return candidate;
+            }
+        }
         let room = width - design::number_width(ui, &format!("{before}{after}"), font);
         return format!("{before}{}{after}", dock_name(ui, &target.name, font, room));
     }
@@ -5498,6 +5615,11 @@ impl RowLayout {
                 egui::TextFormat {
                     font_id: font.clone(),
                     color: status.color,
+                    underline: if sync == SyncState::Conflict {
+                        Stroke::new(design::HAIRLINE_WIDTH, status.color)
+                    } else {
+                        Stroke::NONE
+                    },
                     ..Default::default()
                 },
             );
@@ -5962,18 +6084,32 @@ fn paint_row(
     if let Some(sync) = sync.filter(|_| !layout.inline_state) {
         let status = sync_status(sync);
         // In the state column, under Bloodied, so the two are read together.
-        painter.text(
-            pos2(
-                hp_right + design::S,
-                if hp_word(p).is_some() {
-                    second_y + second_height / 2.0
-                } else {
-                    line_y
-                },
-            ),
-            Align2::LEFT_CENTER,
-            format!("{} {}", status.icon, status.word),
-            state_font,
+        let text = Type::Heading
+            .rich(ui, format!("{} {}", status.icon, status.word))
+            .font(state_font.clone())
+            .color(status.color);
+        let text = if sync == SyncState::Conflict {
+            text.underline()
+        } else {
+            text
+        };
+        let galley = egui::WidgetText::from(text).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            Type::Heading.font(ui),
+        );
+        let at = pos2(
+            hp_right + design::S,
+            if hp_word(p).is_some() {
+                second_y + second_height / 2.0
+            } else {
+                line_y
+            },
+        );
+        painter.galley(
+            pos2(at.x, at.y - galley.size().y / 2.0),
+            galley,
             status.color,
         );
     }
@@ -6335,7 +6471,7 @@ mod tests {
     }
 
     #[test]
-    fn undo_keeps_actions_directions_amounts_and_copy_numbers() {
+    fn iter_2_b_undo_keeps_actions_directions_amounts_and_copy_numbers() {
         let entry = Entry::parse("wolf.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         let p = Participant::new(
             "wolf".into(),
@@ -6357,6 +6493,8 @@ mod tests {
                     ("", " present"),
                     ("", " absent"),
                     ("initiative for ", ""),
+                    ("start concentration for ", ""),
+                    ("stop concentration for ", ""),
                 ] {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
@@ -6374,7 +6512,8 @@ mod tests {
                         "Undo: Wreathed in the cinders of the old shrine {direction} {}",
                         p.name
                     );
-                    let expected = format!("Wreathed in the cinders… {direction} Cinder… 3");
+                    let verb = if direction == "on" { "add" } else { "remove" };
+                    let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
                         undo_words(ui, &full, std::slice::from_ref(&p), &font, width),
@@ -6465,6 +6604,80 @@ mod tests {
         harness.run_steps(2);
         assert!(closed.get());
         assert!(!run.borrow().closing);
+    }
+
+    #[test]
+    fn iter_2_b_sheet_notice_uses_header_room_and_keeps_undo() {
+        use egui_kittest::kittest::Queryable;
+        for (width, in_header) in [(1920.0, true), (442.0, false)] {
+            let mut run = super::super::tests::run();
+            for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                run.apply(Command::Initiative(index, Some(total))).unwrap();
+            }
+            run.apply(Command::Begin).unwrap();
+            run.notice =
+                Some("Guard 1's sheet changed: HP 17 → 15. Undo for Guard 1 stops here.".into());
+            run.notice_summary = Some("Guard 1's sheet changed: HP 17 → 15".into());
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.live_header(ui, design::RUN_REGULAR);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness
+                    .query_all_by_label_contains("Guard 1's sheet changed: HP 17 → 15")
+                    .count()
+                    > 0,
+                in_header,
+                "{width}: {:?}",
+                harness.root()
+            );
+            assert!(harness.query_by_label("Undo: begin combat").is_some());
+        }
+    }
+
+    #[test]
+    fn iter_2_b_tie_arrows_keep_their_columns() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        run.initiative.roster_ties = false;
+        run.state.order = vec![0, 1];
+        for p in &mut run.state.participants {
+            p.initiative = Some(10);
+        }
+        let first = run.state.participants[0].name.clone();
+        let last = run.state.participants[1].name.clone();
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for i in [0, 1] {
+                    ui.push_id(i, |ui| {
+                        run.setup_tie_controls(ui, i);
+                    });
+                }
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let down = harness
+            .get_by_label(&format!("Move {first} after {last}"))
+            .rect();
+        let up = harness
+            .get_by_label(&format!("Move {last} before {first}"))
+            .rect();
+        assert!(down.left() >= up.right(), "down {down:?}, up {up:?}");
+    }
+
+    #[test]
+    fn iter_2_b_linked_sync_off_stays_visible() {
+        let mut run = super::super::tests::run();
+        run.syncs
+            .insert(0, crate::combat_sync::CombatSync::default());
+        assert_eq!(run.row_sync_word(0), Some(SyncState::Off));
+        assert_eq!(run.row_sync_word(1), None);
     }
 
     #[test]

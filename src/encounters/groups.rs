@@ -555,152 +555,195 @@ pub(super) fn load(
         .entries
         .values()
         .filter(|e| e.private && e.owner == campaign && e.entry.kind == "encounter_group")
-        .filter_map(|e| {
-            let unread = splat::content::list_formats::unread_group_members(
-                &format!("{}{}", "\n".repeat(e.entry.body_line - 1), e.entry.body),
-                &e.entry.flags,
-            );
-            let group = match EncounterGroup::of(&e.entry) {
-                Ok(group) => group,
-                Err(error) if !unread.is_empty() && error == "This group is empty. Add at least one creature." => {
-                    // Keep an all-unread table visible without relaxing save validation.
-                    let setup: GroupSetup = serde_yaml_ng::from_value(
-                        e.entry.fields.get("splat_encounter_group")?.clone(),
-                    ).ok()?;
-                    if !setup.members.is_empty() || !setup.extra.is_empty() { return None; }
-                    EncounterGroup {
-                        side: setup.side.trim().to_owned(),
-                        encounter: setup.encounter.and_then(|reference| reference.id),
-                        members: Vec::new(),
-                    }
-                }
-                Err(_) => return None,
-            };
-            let mut members = Vec::new();
-            let mut warnings = Vec::new();
-            let mut unavailable = 0_u64;
-            let mut unavailable_members = Vec::new();
-            let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
-            for (index, member) in group.members.iter().enumerate() {
-                let what = format!("Member {}", index + 1);
-                let Some((id, creature)) = catalogue
-                    .resolve(&member.creature)
-                    .ok()
-                    .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
-                else {
-                    let link = e.entry.fields.get("splat_encounter_group")
-                        .and_then(|group| group.get("members"))
-                        .and_then(|members| members.get(index))
-                        .and_then(|member| member.get("creature"))
-                        .and_then(|creature| creature.get("link"))
-                        .and_then(Value::as_str);
-                    let name = missing_member_name(member.overrides.name.as_deref(), link);
-                    let fault_name = &name;
-                    warnings.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
+        .filter_map(|e| resolve_group(&e.entry, catalogue, creatures, campaign))
+        .collect();
+    groups.sort_by_key(|group| group.name.to_lowercase());
+    groups
+}
+
+fn resolve_group(
+    entry: &Entry,
+    catalogue: &Catalogue,
+    creatures: &[Creature],
+    campaign: Uuid,
+) -> Option<Arc<RunGroup>> {
+    let unread = splat::content::list_formats::unread_group_members(
+        &format!("{}{}", "\n".repeat(entry.body_line - 1), entry.body),
+        &entry.flags,
+    );
+    let group = match EncounterGroup::of(entry) {
+        Ok(group) => group,
+        Err(error)
+            if !unread.is_empty() && error == "This group is empty. Add at least one creature." =>
+        {
+            // Keep an all-unread table visible without relaxing save validation.
+            let setup: GroupSetup =
+                serde_yaml_ng::from_value(entry.fields.get("splat_encounter_group")?.clone())
+                    .ok()?;
+            if !setup.members.is_empty() || !setup.extra.is_empty() {
+                return None;
+            }
+            EncounterGroup {
+                side: setup.side.trim().to_owned(),
+                encounter: setup.encounter.and_then(|reference| reference.id),
+                members: Vec::new(),
+            }
+        }
+        Err(_) => return None,
+    };
+    let mut members = Vec::new();
+    let mut warnings = Vec::new();
+    let mut unavailable = 0_u64;
+    let mut unavailable_members = Vec::new();
+    let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
+    for (index, member) in group.members.iter().enumerate() {
+        let what = format!("Member {}", index + 1);
+        let Some((id, creature)) = catalogue
+            .resolve(&member.creature)
+            .ok()
+            .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
+        else {
+            let link = entry
+                .fields
+                .get("splat_encounter_group")
+                .and_then(|group| group.get("members"))
+                .and_then(|members| members.get(index))
+                .and_then(|member| member.get("creature"))
+                .and_then(|creature| creature.get("link"))
+                .and_then(Value::as_str);
+            let name = missing_member_name(member.overrides.name.as_deref(), link);
+            let fault_name = &name;
+            warnings.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
                         note.word.clone()
                     } else { format!(
                         "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
                     ) });
-                    unavailable_members.push((index, member.count, name.to_owned()));
-                    unavailable = unavailable.saturating_add(member.count);
-                    continue;
-                };
-                let entry = &catalogue.entries[&id].entry;
-                let resolved = member.overrides.resolve_for(entry, &group.side);
-                let shown = member.overrides.name.as_deref().unwrap_or(&entry.name);
-                let member_name = if shown == entry.name { shown.to_owned() } else { format!("{shown} (as {})", entry.name) };
-                let issue = if creature.linked {
-                    Some(format!("{what}: {member_name} has a D&D Beyond sheet."))
-                } else {
-                    match &resolved {
-                        Err(error) => Some(format!(
-                            "{what}, {}: {}",
-                            member_name,
-                            override_error(error)
-                        )),
-                        Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
-                            "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
-                            member_name
-                        )),
-                        Ok(_) => None,
-                    }
-                };
-                if let Some(issue) = issue {
-                    warnings.push(issue);
-                    unavailable = unavailable.saturating_add(member.count);
-                    unavailable_members.push((index, member.count, member_name));
-                    continue;
-                }
-                match creature_xp(entry) {
-                    Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
-                    None => xp_unknown.push(entry.name.clone()),
-                }
-                members.push(GroupMember {
-                    entry: Arc::new(catalogue.run_entry(id)),
-                    count: member.count,
-                    overrides: member.overrides.clone(),
-                });
+            unavailable_members.push((index, member.count, name.to_owned()));
+            unavailable = unavailable.saturating_add(member.count);
+            continue;
+        };
+        let entry = &catalogue.entries[&id].entry;
+        let resolved = member.overrides.resolve_for(entry, &group.side);
+        let shown = member.overrides.name.as_deref().unwrap_or(&entry.name);
+        let member_name = if shown == entry.name {
+            shown.to_owned()
+        } else {
+            format!("{shown} (as {})", entry.name)
+        };
+        let issue = if creature.linked {
+            Some(format!("{what}: {member_name} has a D&D Beyond sheet."))
+        } else {
+            match &resolved {
+                Err(error) => Some(format!(
+                    "{what}, {}: {}",
+                    member_name,
+                    override_error(error)
+                )),
+                Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
+                    "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
+                    member_name
+                )),
+                Ok(_) => None,
             }
-            for member in unread {
-                let reference = member.creature.clone().and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
-                if let Some(note) = reference.as_ref().and_then(|reference| catalogue.unreadable_ref(reference)).filter(|note| note.old_layout) {
-                    warnings.push(note.word.clone());
-                    let count = member.count.unwrap_or(1);
-                    unavailable = unavailable.saturating_add(count);
-                    unavailable_members.push((member.before, count, member.label.clone()));
-                    continue;
-                }
-                let name = member.creature.clone()
-                    .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok())
-                    .and_then(|reference| catalogue.resolve_ref(&reference).ok())
-                    .and_then(|id| catalogue.entries.get(&id))
-                    .map_or_else(|| missing_member_name(None, Some(&member.label)), |entry| entry.entry.name.clone());
-                let shown = if member.name.is_empty() { &name } else { &member.name };
-                let fault_name = if shown == &name { shown.to_owned() } else { format!("{shown} (as {name})") };
-                warnings.push(format!("{fault_name} needs fixing (line {})", member.flag.line));
-                let count = member.count.unwrap_or(1);
-                unavailable = unavailable.saturating_add(count);
-                unavailable_members.push((member.before, count, format!("{shown} (not read)")));
+        };
+        if let Some(issue) = issue {
+            warnings.push(issue);
+            unavailable = unavailable.saturating_add(member.count);
+            unavailable_members.push((index, member.count, member_name));
+            continue;
+        }
+        match creature_xp(entry) {
+            Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
+            None => xp_unknown.push(entry.name.clone()),
+        }
+        members.push(GroupMember {
+            entry: Arc::new(catalogue.run_entry(id)),
+            count: member.count,
+            overrides: member.overrides.clone(),
+        });
+    }
+    for member in unread {
+        let reference = member
+            .creature
+            .clone()
+            .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
+        if let Some(note) = reference
+            .as_ref()
+            .and_then(|reference| catalogue.unreadable_ref(reference))
+            .filter(|note| note.old_layout)
+        {
+            warnings.push(note.word.clone());
+            let count = member.count.unwrap_or(1);
+            unavailable = unavailable.saturating_add(count);
+            unavailable_members.push((member.before, count, member.label.clone()));
+            continue;
+        }
+        let name = member
+            .creature
+            .clone()
+            .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok())
+            .and_then(|reference| catalogue.resolve_ref(&reference).ok())
+            .and_then(|id| catalogue.entries.get(&id))
+            .map_or_else(
+                || missing_member_name(None, Some(&member.label)),
+                |entry| entry.entry.name.clone(),
+            );
+        let shown = if member.name.is_empty() {
+            &name
+        } else {
+            &member.name
+        };
+        let fault_name = if shown == &name {
+            shown.to_owned()
+        } else {
+            format!("{shown} (as {name})")
+        };
+        warnings.push(format!(
+            "{fault_name} needs fixing (line {})",
+            member.flag.line
+        ));
+        let count = member.count.unwrap_or(1);
+        unavailable = unavailable.saturating_add(count);
+        unavailable_members.push((member.before, count, format!("{shown} (not read)")));
+    }
+    let problem = members.is_empty().then(|| {
+        let mut problems = warnings.clone();
+        // Edit cannot fix a group whose only fault is the old layout; Convert files can.
+        problems.push(
+            if warnings
+                .iter()
+                .any(|word| !word.contains("uses the old layout."))
+            {
+                "No members can join. Edit group to fix them."
+            } else {
+                "No members can join."
             }
-            let problem = members.is_empty().then(|| {
-                let mut problems = warnings.clone();
-                // Edit cannot fix a group whose only fault is the old layout; Convert files can.
-                problems.push(
-                    if warnings.iter().any(|word| !word.contains("uses the old layout.")) {
-                        "No members can join. Edit group to fix them."
-                    } else {
-                        "No members can join."
-                    }
-                    .into(),
-                );
-                problems.join("\n")
-            });
-            Some(Arc::new(RunGroup {
-                id: e.entry.id,
-                path: e.entry.path.clone(),
-                name: e.entry.name.clone(),
-                side: group.side,
-                encounter: group.encounter,
-                encounter_name: group
-                    .encounter
-                    .and_then(|id| catalogue.entries.get(&id))
-                    .filter(|owner| {
-                        owner.private && owner.owner == campaign && owner.entry.kind == "encounter"
-                    })
-                    .map(|owner| owner.entry.name.clone()),
-                members,
-                notes: splat::content::list_formats::prose(&e.entry),
-                xp,
-                xp_unknown,
-                unavailable,
-                unavailable_members,
-                warnings,
-                problem,
-            }))
-        })
-        .collect();
-    groups.sort_by_key(|group| group.name.to_lowercase());
-    groups
+            .into(),
+        );
+        problems.join("\n")
+    });
+    Some(Arc::new(RunGroup {
+        id: entry.id,
+        path: entry.path.clone(),
+        name: entry.name.clone(),
+        side: group.side,
+        encounter: group.encounter,
+        encounter_name: group
+            .encounter
+            .and_then(|id| catalogue.entries.get(&id))
+            .filter(|owner| {
+                owner.private && owner.owner == campaign && owner.entry.kind == "encounter"
+            })
+            .map(|owner| owner.entry.name.clone()),
+        members,
+        notes: splat::content::list_formats::prose(entry),
+        xp,
+        xp_unknown,
+        unavailable,
+        unavailable_members,
+        warnings,
+        problem,
+    }))
 }
 
 /// Group actions use the encounter ledger's right-hand columns.
@@ -710,16 +753,7 @@ fn list_row(
     blocked: Option<&'static str>,
     action: &mut Option<super::ListAction>,
 ) {
-    let summary = if group.warnings.is_empty() {
-        group.summary()
-    } else {
-        format!(
-            "{} · {} · {}",
-            design::reader::human_label(&group.side),
-            group.count_label(),
-            group.xp_label()
-        )
-    };
+    let summary = group.summary();
     super::list::list_row(
         ui,
         group.id,
@@ -740,21 +774,20 @@ fn list_row(
                     *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
                 }
             });
-            if Action::quiet(if group.warnings.is_empty() {
-                "Edit"
-            } else {
-                "Edit group"
-            })
-            .density(Density::Read)
-            .name(&format!("Edit group {}", group.name))
-            .blocked(blocked)
-            .show(ui)
-            .clicked()
+            if Action::quiet("Edit")
+                .density(Density::Read)
+                .name(&format!("Edit group {}", group.name))
+                .blocked(blocked)
+                .show(ui)
+                .clicked()
             {
                 *action = Some(super::ListAction::OpenGroup(group.path.clone()));
             }
         },
     );
+    if !group.warnings.is_empty() {
+        ui.label(Type::Small.rich(ui, "Cannot join").color(colors().muted));
+    }
     for warning in &group.warnings {
         ui.add(
             egui::Label::new(
@@ -765,7 +798,15 @@ fn list_row(
             .wrap(),
         );
     }
-    if let Some(problem) = &group.problem {
+    if group
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("Campaign → Packages"))
+        && packages_link(ui)
+    {
+        ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+    }
+    if let Some(problem) = group.problem.as_ref().filter(|_| group.warnings.is_empty()) {
         ui.add_space(-design::S);
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.y = design::XS;
@@ -2143,24 +2184,27 @@ fn group_fields(
 
 /// How many creatures will arrive, and what they are worth, as the list and the panel say it.
 fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
-    let (mut xp, mut unknown) = (0_u64, !draft.flags.is_empty());
-    for member in &draft.setup.members {
-        let each = snapshot
-            .catalogue
-            .resolve_ref(&member.creature)
-            .ok()
-            .and_then(|id| snapshot.catalogue.entries.get(&id))
-            .and_then(|e| creature_xp(&e.entry));
-        match each {
-            Some(each) => xp = xp.saturating_add(each.saturating_mul(member.count)),
-            None => unknown = true,
-        }
-    }
-    format!(
-        "XP {}{}",
-        crate::encounter_run::grouped_number(xp),
-        if unknown { " + unknown" } else { "" }
+    let Some(mut entry) = draft
+        .text()
+        .ok()
+        .and_then(|text| Entry::parse(&draft.path, &text).ok())
+    else {
+        return "XP not known".into();
+    };
+    let entries: Vec<_> = snapshot
+        .catalogue
+        .entries
+        .values()
+        .map(|e| e.entry.clone())
+        .collect();
+    splat::content::list_formats::resolve(&mut entry, &entries, "");
+    resolve_group(
+        &entry,
+        &snapshot.catalogue,
+        &snapshot.creatures,
+        Uuid::nil(),
     )
+    .map_or_else(|| "XP not known".into(), |group| group.xp_label())
 }
 
 fn members(
@@ -2958,10 +3002,11 @@ mod tests {
         assert!(group.summary().contains("2 of 9 members can join"));
         assert!(
             group
-                .summary()
-                .contains("Lookout (as Scout) needs fixing (line 13)")
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Lookout (as Scout) needs fixing (line 13)"))
         );
-        assert_eq!(group.xp_label(), "XP 100 + unknown");
+        assert_eq!(group.xp_label(), "XP 100 for 2 that can join");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
@@ -3106,8 +3151,36 @@ mod tests {
         assert_eq!(group.count_label(), "1 of 3 members can join");
         assert_eq!(group.unavailable, 2);
         assert_eq!(group.warnings.len(), 2);
-        assert!(group.summary().contains("Lookout"));
-        assert!(group.summary().contains("Weak scout"));
+        assert!(
+            group
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Lookout"))
+        );
+        assert!(
+            group
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Weak scout"))
+        );
+    }
+
+    #[test]
+    fn iter_2_b_partial_group_names_only_joining_members_and_uses_one_xp_total() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        creature(dir.path(), "Scout");
+        let source = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Patrol\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[Scout]] | | | |\n| 1 | [[Missing]] | Lookout | | |\n| 1 | [[Scout]] | Weak scout | HP -100 | |\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("Patrol.md"), source).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let group = &snapshot.groups[0];
+        assert_eq!(group.member_summary(), "Will add: 1 × Scout");
+        assert_eq!(group.xp_label(), "XP 50 for 1 that can join");
+        let draft = GroupDraft::open(dir.path(), "Patrol.md").unwrap();
+        assert_eq!(members_heading(&draft, &snapshot), group.xp_label());
     }
 
     #[test]
@@ -3129,7 +3202,7 @@ mod tests {
         let problem = snapshot.groups[0].problem.clone().unwrap();
         assert!(!problem.contains(&id.to_string()), "{problem}");
         assert!(problem.contains("Member 1, Unknown creature"), "{problem}");
-        assert_eq!(snapshot.groups[0].member_summary(), "1 × Unknown creature");
+        assert_eq!(snapshot.groups[0].member_summary(), "Will add: none");
         assert!(
             problem.contains("not in this campaign's packages"),
             "{problem}"
@@ -3165,7 +3238,8 @@ mod tests {
                 !problem.contains("00000000-0000-4000-8000-000000000001"),
                 "{problem}"
             );
-            assert_eq!(group.member_summary(), format!("2 × {name}"));
+            assert_eq!(group.member_summary(), "Will add: none");
+            assert_eq!(group.unavailable_members, vec![(0, 2, name.to_owned())]);
             assert_eq!(group.creature_count(), 2);
         }
         let dir = tempfile::tempdir().unwrap();
@@ -3184,7 +3258,11 @@ mod tests {
                 .contains("Member 1, Captain Varra:")
         );
         assert!(!group.problem.as_ref().unwrap().contains(&id.to_string()));
-        assert_eq!(group.member_summary(), "1 × Captain Varra");
+        assert_eq!(group.member_summary(), "Will add: none");
+        assert_eq!(
+            group.unavailable_members,
+            vec![(0, 1, "Captain Varra".into())]
+        );
     }
 
     fn encounter(root: &std::path::Path, name: &str) -> Uuid {

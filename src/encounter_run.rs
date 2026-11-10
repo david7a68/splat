@@ -141,16 +141,13 @@ impl RunGroup {
         if !members.is_empty() {
             summary.push_str(&format!(" · {members}"));
         }
-        for warning in &self.warnings {
-            summary.push_str(&format!(" · {warning}"));
-        }
         summary
     }
     pub(crate) fn joinable_count(&self) -> u64 {
         self.members.iter().map(|member| member.count).sum()
     }
     pub(crate) fn count_label(&self) -> String {
-        if self.warnings.is_empty() {
+        if self.unavailable_members.is_empty() {
             crate::design::count(self.creature_count() as usize, "member", "members")
         } else {
             format!(
@@ -161,16 +158,20 @@ impl RunGroup {
         }
     }
     pub(crate) fn xp_label(&self) -> String {
-        if self.xp_unknown.is_empty() && self.unavailable == 0 {
+        let mut label = if self.xp_unknown.is_empty() {
             format!("XP {}", grouped_number(self.xp))
         } else if self.xp == 0 && self.members.len() == self.xp_unknown.len() {
             "XP not known".to_owned()
         } else {
             format!("XP {} + unknown", grouped_number(self.xp))
+        };
+        if self.unavailable > 0 {
+            label.push_str(&format!(" for {} that can join", self.joinable_count()));
         }
+        label
     }
     pub(crate) fn member_summary(&self) -> String {
-        let mut members: Vec<_> = self
+        let members: Vec<_> = self
             .members
             .iter()
             .map(|member| {
@@ -190,17 +191,17 @@ impl RunGroup {
                 )
             })
             .collect();
-        for (position, count, name) in &self.unavailable_members {
-            members.insert(
-                (*position).min(members.len()),
-                format!(
-                    "{} × {name}",
-                    crate::design::count(*count as usize, "", "").trim()
-                ),
-            );
+        let summary = members.join(", ");
+        if self.unavailable > 0 {
+            format!(
+                "Will add: {}",
+                if summary.is_empty() { "none" } else { &summary }
+            )
+        } else {
+            summary
         }
-        members.join(", ")
     }
+
     pub(crate) fn member_summary_wrapped(&self) -> String {
         self.member_summary()
             .split(", ")
@@ -1834,7 +1835,11 @@ impl Run {
                     .map_or("an effect", String::as_str),
                 name(i)
             ),
-            Command::Concentration(i, _) => format!("concentration on {}", name(i)),
+            Command::Concentration(i, value) => format!(
+                "{} concentration for {}",
+                if *value { "start" } else { "stop" },
+                name(i)
+            ),
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
@@ -3990,6 +3995,26 @@ mod tests {
         run.undo();
         assert_eq!(run.state.phase, Phase::Running);
         run.apply(Command::Next).unwrap();
+    }
+
+    #[test]
+    fn iter_2_b_concentration_undo_names_the_recorded_direction() {
+        let mut run = run();
+        let name = run.state.participants[0].name.clone();
+        run.apply(Command::Concentration(0, true)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: start concentration for {name}")
+        );
+        run.apply(Command::Concentration(0, false)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: stop concentration for {name}")
+        );
+        run.undo();
+        assert!(run.state.participants[0].concentration);
+        run.undo();
+        assert!(!run.state.participants[0].concentration);
     }
     #[test]
     fn render_setup_running_and_ended_views_without_changing_state() {

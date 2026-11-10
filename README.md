@@ -156,7 +156,7 @@ A broken or deleted `Package.md` keeps the package's entries available. Campaign
 names the manifest fault and opens an unreadable manifest in Library for repair.
 SRD copies no longer warn about hidden citation links. World lists table faults
 and offers its repair count in the header. New entries start in their kind folder.
-Named NPC search results say **In roster** after Add.
+Named NPC search results say **In roster** after Add. An NPC with a missing stat block stays in search, names the missing block and offers **Open in World**. Add stays blocked until repaired.
 
 An unreadable package creature offers **Open in Library** from the encounter roster.
 Library keeps a deleted file's draft until you choose **Save my draft again** or
@@ -658,7 +658,7 @@ creature is refused with a message.
 
 **Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
 it. With one encounter, only runs of that encounter offer it, and the Encounters page keeps it in a
-closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal.
+closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal. A partial group names only the members that will join beside **Add 1**, such as **Will add: 1 × Goblin Warrior**. Excluded members stay under **Cannot join**, with their reason and repair link. The list, editor and Arrivals use the same XP total, marked **for 1 that can join**. **+ unknown** applies only to a joining member with no XP.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
 The frame’s **⋯ → Make available to any encounter** makes a saved group available for any encounter on the next save. **Undo move** restores its owner before that save. **Move to…** lists named encounters only.
@@ -783,7 +783,7 @@ itself. A finished run does not sync, so a resumed one keeps its results.
 
 If D&D Beyond reports that this session cannot edit a character, the row says `Sync read-only`. Your
 changes for that character stay in the run and nothing is sent. Changes on the sheet still come in, and
-if you both changed a value, you choose which to keep. Each synced row shows its state, and a conflict shows on the row and the strip without stopping
+if you both changed a value, you choose which to keep. Each linked row shows its state, including **Sync off** after you stop it. Conflict words are underlined links to review. A conflict shows on the row and the strip without stopping
 the table. Each connection first reads the live sheet. Saved runs do not automatically push old values.
 The session must have edit permission for the character.
 
@@ -799,7 +799,7 @@ the sheet's.
 
 While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
 in the run. A maximum set while sync was off stays until the next first read, where the notice and the
-log say what it became. A message from sync stays under the list until you dismiss it.
+log say what it became. A message from sync stays beside the conflict in the header when it fits, or under the list in a narrow layout, until you dismiss it.
 
 A save from an earlier version can hold unsent values as its last match, so on its first read every
 difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and

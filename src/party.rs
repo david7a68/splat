@@ -433,7 +433,7 @@ impl Party {
                 "Connect D&D Beyond"
             };
             let actions = if connected {
-                vec!["Show file", action]
+                vec![action, "Show file"]
             } else {
                 vec!["Connect to refresh", "Show file"]
             };
@@ -441,11 +441,10 @@ impl Party {
                 if !connected && design::link(ui, "Connect to refresh").clicked() {
                     self.wants_settings = true;
                 }
-                show_file(ui, path);
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
                 } else if connected
-                    && Action::quiet(action)
+                    && Action::secondary(action)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -456,6 +455,7 @@ impl Party {
                         self.reader.force_read_character(id);
                     }
                 }
+                show_file(ui, path);
             });
         }
         for id in self.reader.conflicts.keys() {

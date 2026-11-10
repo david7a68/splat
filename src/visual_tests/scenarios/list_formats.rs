@@ -154,7 +154,7 @@ pub fn run(d: &mut Driver<'_>) {
             ) && d.visible_text("This member cannot join a fight until its Changes cell is fixed. Other members can join.")
         },
     );
-    d.expect("XP 100 + unknown");
+    d.expect("XP 100 for 2 that can join");
     d.expect("Edit in Obsidian");
     d.expect("Show file");
     d.expect("Changes for Scout");

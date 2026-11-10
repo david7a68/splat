@@ -665,6 +665,7 @@ impl CreatureEditor {
     }
 }
 struct Creature {
+    unavailable: Option<String>,
     id: Uuid,
     name: String,
     lower: String,
@@ -908,7 +909,7 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
     while !parts.is_empty() {
         let priority = |part: &str| {
             if part.starts_with("as ") {
-                0
+                6
             } else if !(["CR ", "HP ", "AC "]
                 .iter()
                 .any(|prefix| part.starts_with(prefix)))
@@ -981,11 +982,26 @@ fn creature_result_row(
         ui.set_min_height(RESULT_ROW);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.set_max_width((ui.available_width() - design::S * 12.0).max(design::S * 10.0));
+            let controls = if c.unavailable.is_some() {
+                Action::secondary(action)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + Action::secondary("Open in World")
+                        .density(Density::Read)
+                        .natural_width(ui)
+                    + design::M
+            } else {
+                design::S * 12.0
+            };
+            ui.set_max_width((ui.available_width() - controls).max(design::S * 10.0));
             read = creature_name_link(ui, &c.name)
                 .on_hover_text("Read this entry in Lookup")
                 .clicked();
-            detail_columns(ui, &c.detail, c.source.as_deref());
+            if let Some(reason) = &c.unavailable {
+                ui.label(Type::Small.rich(ui, reason).color(colors().result.warning));
+            } else {
+                detail_columns(ui, &c.detail, c.source.as_deref());
+            }
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if already {
@@ -999,8 +1015,19 @@ fn creature_result_row(
                 chosen = Action::secondary(action)
                     .name(&name)
                     .density(Density::Read)
+                    .blocked(c.unavailable.as_deref())
                     .show(ui)
                     .clicked();
+                if c.unavailable.is_some()
+                    && Action::secondary("Open in World")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id)
+                    });
+                }
             }
         });
     });
@@ -1267,6 +1294,7 @@ impl Snapshot {
                                     == campaign.dndbeyond_campaign_id.as_deref()
                         });
                 Creature {
+                    unavailable: None,
                     id: *id,
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
@@ -1312,14 +1340,29 @@ impl Snapshot {
                 }
                 let value = npc.fields.get("splat_world")?.get("creature")?;
                 let reference: EntryRef = serde_yaml_ng::from_value(value.clone()).ok()?;
-                let id = catalogue.resolve_ref(&reference).ok()?;
-                let stat = creatures.iter().find(|c| c.id == id && !c.linked)?;
+                let stat = catalogue
+                    .resolve_ref(&reference)
+                    .ok()
+                    .and_then(|id| creatures.iter().find(|c| c.id == id && !c.linked));
+                let missing_name = reference
+                    .link
+                    .as_deref()
+                    .map(crate::sessions::plain_links)
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| "This NPC's".into());
+                let unavailable = stat
+                    .is_none()
+                    .then(|| format!("{missing_name} stat block not found"));
                 Some(Creature {
+                    unavailable: unavailable.clone(),
                     id: npc.id,
                     name: npc.name.clone(),
                     lower: npc.name.to_lowercase(),
-                    detail: format!("NPC · as {} · {}", stat.name, stat.detail),
-                    facets: stat.facets.clone(),
+                    detail: stat.map_or_else(
+                        || unavailable.clone().unwrap_or_default(),
+                        |stat| format!("NPC · as {} · {}", stat.name, stat.detail),
+                    ),
+                    facets: stat.and_then(|stat| stat.facets.clone()),
                     origin: crate::lookup::entry_origin(Some(npc), entry.private),
                     source: None,
                     party: false,
@@ -3642,6 +3685,7 @@ impl Encounters {
             && !query.is_empty()
             && let Some(first) = matches.first()
             && !(roster.already)(first)
+            && first.unavailable.is_none()
         {
             chosen = Some((first.id, first.party));
             *focus_search = true;
@@ -3690,10 +3734,16 @@ impl Encounters {
             );
         }
         ui.spacing_mut().item_spacing.y = 0.0;
+        let row_height = RESULT_ROW
+            + if matches.iter().any(|c| c.unavailable.is_some()) {
+                Type::Small.line()
+            } else {
+                0.0
+            };
         egui::ScrollArea::vertical()
             .id_salt(("encounter_results", &query))
             .auto_shrink([false, false])
-            .show_rows(ui, RESULT_ROW, matches.len(), |ui, range| {
+            .show_rows(ui, row_height, matches.len(), |ui, range| {
                 for c in &matches[range] {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -4161,14 +4211,10 @@ impl Encounters {
                     });
                 design::named(ui, &combo.response, "Roll NPC initiative");
             });
+            ui.label(Type::Small.rich(ui, "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.").color(colors().muted));
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",
-            );
-            ui.label(
-                Type::Small
-                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and initiative groups use the first NPC's bonus and roll mode. Players keep their entered initiative. An encounter group follows this rule when it arrives, and the run's Arrivals tab says how.")
-                    .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
@@ -4318,6 +4364,46 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn iter_2_b_npc_with_deleted_stat_block_stays_in_search_and_cannot_be_added() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let text = splat::content::formats::convert("Fixture.md", &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Watchkeeper\nsplat_world:\n  type: npc\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n---\n",
+            Uuid::new_v4(),
+            Uuid::new_v4()
+        )).unwrap();
+        fs::create_dir_all(dir.path().join("NPCs")).unwrap();
+        fs::write(dir.path().join("NPCs/Watchkeeper.md"), text).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        assert!(snapshot.creatures.iter().any(|c| c.name == "Watchkeeper"));
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let chosen = Encounters::creature_search(
+                    ui,
+                    snapshot.creatures.iter(),
+                    &mut "Watchkeeper".to_owned(),
+                    &mut false,
+                    &mut None,
+                    SearchRoster {
+                        already: &|_| false,
+                    },
+                );
+                assert!(chosen.is_none());
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(harness.query_by_label("No creatures match").is_none());
+        assert!(
+            harness
+                .query_by_label("Watchkeeper Guard stat block not found")
+                .is_some()
+        );
+        assert!(harness.query_by_label("Open in World").is_some());
+        assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
+    }
     #[test]
     fn editor_save_row_has_one_height_in_every_state() {
         let ctx = egui::Context::default();
@@ -4481,7 +4567,7 @@ mod tests {
     }
 
     #[test]
-    fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
+    fn iter_2_b_changed_row_keeps_base_and_full_hand_change_link() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
@@ -4490,14 +4576,9 @@ mod tests {
                 let word = "Changed · 3 to add by hand";
                 for width in [280.0, 320.0, 356.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
-                    assert!(fitted.ends_with('…'), "{fitted}");
+                    assert!(fitted.contains("as Ember Cultist"), "{fitted}");
+                    assert!(!fitted.contains("Ashen Marches"), "{fitted}");
                     assert!(!fitted.contains(word));
-                    let shown = fitted.trim_end_matches(" …").trim_end_matches('…');
-                    let mut previous = 0;
-                    for part in shown.split(" · ").filter(|part| !part.is_empty()) {
-                        let at = detail[previous..].find(part).unwrap(); previous += at + part.len();
-                    }
-                    if width == 356.0 { assert!(fitted.contains("AC 15"), "{fitted}"); }
                     let font = Type::Small.font(ui);
                     let used = design::number_width(ui, &fitted, &font)
                         + design::number_width(ui, word, &font)

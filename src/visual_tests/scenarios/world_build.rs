@@ -1270,8 +1270,13 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     go_encounters(d);
     d.click(NEW_ENCOUNTER);
     d.type_into(FIND_CREATURE, "Watchkeeper");
-    d.expect("No creatures match");
+    d.expect("Watchkeeper Guard stat block not found");
+    assert!(d.is_disabled("Add"));
+    assert!(!d.has("No creatures match"));
     d.state("npc-deleted-stat-block-encounter-search", Sizes::All);
+    d.click("Open in World");
+    d.expect("Watchkeeper Guard · Not found");
+    d.state("npc-stat-block-repair-from-search", Sizes::All);
 }
 
 /// Copying a typed note must keep both files reachable.

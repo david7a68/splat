@@ -346,7 +346,7 @@ The open-run block appears once under `READY TO RUN`.
 
 Roster rows have the name and second line, side menu, quiet `Edit`, then `⋯`.
 The menu holds ordering, duplication, `Make it yours`, and removal. A creature
-result’s name opens its stat block; its one button is `Add`. A party member already
+result’s name opens its stat block; its one button is `Add`. An NPC whose stat block is missing stays in search. It names the missing block, disables Add with that reason, and offers `Open in World` for repair. A party member already
 present shows `In roster`, and leaves an empty search once the whole party is present.
 Results use text-coloured names, underlined on hover. The main source has no suffix; other sources
 and campaign-owned entries show their source or `Campaign`, including roster rows.
@@ -368,25 +368,26 @@ Member changes stay on one line, such as `Changed · 2 to add by hand`, until op
 An empty group frame has one muted line and no zero count or duplicate search summary.
 The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
 Its rows keep Edit and a menu with Remove, which has Undo. A planned group has Remove from tonight and Undo remove. An isolated plan link is deleted; links inside sentences keep their words.
-A summary of members stays below the search when it has members. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
+A summary of members stays below the search when it has members. The list, editor and Arrivals resolve the same joining members and use one XP total. A partial group says `XP 50 for 1 that can join`; `+ unknown` means a joining member has no XP. Flagged list rows keep their member summary and the same `Edit` action as other rows. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
 
 A saved Setup resumed after a restoring long rest starts party HP at full. Its
 notice says `Party HP is full after the long rest.` and offers `Use the saved HP`
 as one Undo step. Combat keeps its saved HP, and the rest message names those fights.
 New templates say `Starts with the title line only.` below the name field.
 
+Run settings put the help for `Roll NPC initiative` directly below that dropdown, before the tie checkbox. It says: `Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.`
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
-word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. Conditions take one second line before the HP column. Measure them without change bonuses;
+word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. A linked row with sync disabled keeps `Sync off` and its icon. An unlinked creature has no sync word. Conflict words on the header and row are underlined links to review. The sheet colours only the connection icon and `Connected`; sheet and HP facts use muted `Small` text. Conditions take one second line before the HP column. Measure them without change bonuses;
 shorten bonuses first, remeasure, then drop the bonus before `more` if needed.
 Measure the sync word before folding conditions into a count. Keep the first condition,
 and keep multiword sync states together. Beside `Reading sheet…` in a narrow row, the condition count can use `+1`; it keeps the same link to Conditions.
 At the narrowest width, mandatory state words can use the empty left part of the
 HP bar's slot. The bar stays under HP and keeps at least XL of length.
-Long local effects show four words and `more`. Undo names the effect with those four
-words and an ellipsis; hover and accessibility keep its full text.
+Long local effects show four words and `more`. Undo keeps those four words when they fit. In a narrow header it keeps `Undo add` or `Undo remove`, two effect words and the target. Hover and accessibility keep the full text. Concentration Undo names `start concentration` or `stop concentration` before the target.
 `No initiative` has the same underline as other row links.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
@@ -440,15 +441,15 @@ the panel, those words open the second line instead, so that a name is never cut
   others for any encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group has two lines: name handle, side, count and XP; then
   members, a `Total` field (blank rolls initiative), and `Add`. Member summaries wrap at the
-  minimum width. Each fault has its own member line and an `Edit group` link. Added groups
+  minimum width. Each excluded member stays under `Cannot join`, with its reason and an `Edit group` repair link. Added groups
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
 
-Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have Tie and two fixed arrow slots below the total. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. Shared-roll bracket segments stay beside initiative fields and stop before each detail line. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
+Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share the name line, centred with the initiative field. Empty Roll slots keep player totals aligned. Only tied rows have two fixed arrow slots: up first and down second. An unused slot stays empty. Other rows fit their two text lines and Scan padding, with RUN_REGULAR as the minimum height. Shared-roll bracket segments stay beside initiative fields and stop before each detail line. The header always reports ties. Undo stays at the top right in setup and live play. The blocked Begin combat reason sits directly below that button. Setup's row menu opens Correct for that participant.
 
 Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
 
-Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 members can join` and `Add 1`, with each excluded member's reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Total keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
+Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 members can join`, `Will add: 1 × Goblin Warrior` and `Add 1`, using only joining members in the action summary. Each excluded member stays below under `Cannot join`, with its reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Total keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
 
 Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows use relative time for today and yesterday, then a short UTC date. They show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
@@ -456,6 +457,8 @@ A disconnected run keeps Connect to sync on its header only. The footer's blocke
 An ended run puts its short conflict and pending-change count directly below the blocked Close after sync button at the panel's right edge. Saved and Undo end at the roster's right edge. Footer and strip Close run close at once when the run is saved and nothing is unsent. Otherwise they ask for a choice.
 
 The app-close dialog uses Keep running for a run, Keep recording for audio, and Keep processing for a job. Recording and processing titles name the unfinished session. A sync conflict names the character and offers Review conflict. Stop and close is secondary when saved work is kept; an action is red only when it loses work.
+
+When a sheet notice fits after the conflict on the header’s second line, show it there with Log and Dismiss. Shorten it to the character’s name and first changed value when needed; hover and Log keep the full notice. Otherwise keep it below the roster. Show it once and keep Undo visible.
 
 ## Sessions and the timeline
 
@@ -593,8 +596,8 @@ The run closed last and a file changed elsewhere lead their row's second line.
 History puts the outcome before the ended state and shows the outcome, end reason
 and final round above the final roster.
 
-The encounter and group searches include NPCs with a usable stat block. Add uses
-the stat block and the existing display-name override. The saved encounter format
+The encounter and group searches include NPCs. Add uses
+a usable stat block and the existing display-name override; a missing block stays visible with repair. The saved encounter format
 stays the same. Roster sides sit on the second line and change in Edit. A collapsed
 change list uses one Changed link in both editors. Group menus distinguish Make
 available to any encounter from Delete group, with Undo before saving.
