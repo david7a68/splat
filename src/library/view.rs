@@ -200,15 +200,6 @@ pub(crate) fn show_run(
     )
 }
 
-/// A value the reader could not read, as the reader says it.
-pub(crate) fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    if flag.message.contains(" not read (line ") {
-        flag.message.clone()
-    } else {
-        format!("Line {}: {}", flag.line, flag.message)
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn show_inner(
     ui: &mut egui::Ui,
@@ -224,7 +215,15 @@ fn show_inner(
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
         for flag in &entry.flags {
-            design::message(ui, crate::design::Tone::Warning, &flag_words(flag));
+            design::message(
+                ui,
+                crate::design::Tone::Warning,
+                &if flag.message.contains(" not read (line ") {
+                    flag.message.clone()
+                } else {
+                    format!("Line {}: {}", flag.line, flag.message)
+                },
+            );
         }
     }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());

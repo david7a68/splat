@@ -103,7 +103,11 @@ fn unread_value(text: &str, key_line: usize) -> (String, usize) {
         .iter()
         .enumerate()
         .skip(key_line)
-        .take_while(|(_, line)| line.trim().is_empty() || line.starts_with([' ', '\t', '-', '#']))
+        // The closing `---` starts with `-` too. The note's text after it is never a value.
+        .take_while(|(_, line)| {
+            line.trim() != "---"
+                && (line.trim().is_empty() || line.starts_with([' ', '\t', '-', '#']))
+        })
         .filter_map(|(at, line)| Some((at + 1, shown(line.trim_start().strip_prefix('-')?))))
         .find(|(_, item)| {
             serde_yaml_ng::from_str::<Value>(item).is_ok_and(|value| {
@@ -201,6 +205,10 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                     // One group reads as a list of one, as Obsidian shows a text property.
                     if old == "part_of" && value.is_string() {
                         value = Value::Sequence(vec![value]);
+                    }
+                    // A key with no value is an empty list, as Obsidian shows it.
+                    if old == "part_of" && value.is_null() {
+                        value = Value::Sequence(Vec::new());
                     }
                     // Without quotes, YAML reads `- [[Verori]]` as a list in a list.
                     if old == "part_of"

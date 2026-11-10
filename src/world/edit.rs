@@ -968,6 +968,8 @@ mod tests {
                 "splat_part_of:\n- '[[Zarel]]'\n- [[Verori]]\n".to_owned(),
                 None,
             ),
+            // A key with no value is an empty list, not an unread value.
+            ("splat_part_of:\n".to_owned(), None),
         ] {
             let file = format!(
                 "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\n{front}splat_status: alive\n---\n",
@@ -984,6 +986,34 @@ mod tests {
             if let Some(unread) = unread {
                 assert!(unread.reason.contains(&format!("(line {})", unread.line)));
             }
+        }
+        // The last key's scan stops at the closing `---`: the note's text is never a value.
+        for (front, expected) in [
+            (
+                "splat_part_of:\n  x: 1\n",
+                Some(format!("Part of \"\" not read (line 7). {help}")),
+            ),
+            ("splat_part_of:\n", None),
+            (
+                "splat_in:\n  x: 1\n",
+                Some("In \"\" not read (line 7). Use one place name or link.".to_owned()),
+            ),
+        ] {
+            let file = format!(
+                "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\n{front}---\n# Notes\n- HP: 30\n- Lair: cave\n",
+                Uuid::new_v4()
+            );
+            let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+            let messages: Vec<_> = entry
+                .flags
+                .iter()
+                .map(|flag| flag.message.clone())
+                .collect();
+            assert_eq!(
+                messages,
+                expected.into_iter().collect::<Vec<_>>(),
+                "FD2-last-key-{front}"
+            );
         }
         // Neighbour: an unread Status keeps its own words and is not a Part of fault.
         let file = format!(

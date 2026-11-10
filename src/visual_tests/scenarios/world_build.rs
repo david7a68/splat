@@ -441,6 +441,7 @@ pub fn facts(d: &mut Driver<'_>) {
                 .collect::<Vec<_>>();
             // Neighbour: the field stays empty and editable; the example is not a value.
             field.len() == 1
+                && d.field_text("Status").unwrap_or_default().is_empty()
                 && d.painted_in(field[0])
                     .contains(crate::world::edit::STATUS_HINT)
                 && !d.is_disabled("Status")
@@ -3159,15 +3160,18 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         },
     );
     d.state("missing-group-on-one-line", Sizes::All);
+    // From another note, the header count's menu opens the note that needs fixing.
+    d.click_containing("Added Guild · ");
+    d.expect("Edit Added Guild");
+    assert!(!d.has("Edit Safe Rook"), "fixture: another note is open");
     d.click("1 note needs fixing");
+    d.click("Safe Rook");
+    d.expect("Edit Safe Rook");
     d.observe(
         "iter-11-D-FD1-menu",
-        d.nodes()
-            .iter()
-            .any(|node| node.name == "Safe Rook" && node.role == Role::Link && node.in_view()),
-        "The header count's repair menu names the note",
+        d.in_view("Edit Safe Rook") && !d.has("Edit Added Guild"),
+        "The header count's repair menu opens the note that needs fixing",
     );
-    d.press(Key::Escape);
     d.click("Change Part of");
     d.type_into("Find a group", "Added Guild");
     fs::write(&path, &unread).unwrap();

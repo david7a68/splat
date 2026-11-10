@@ -1312,6 +1312,15 @@ struct GroupFault {
     entry: Option<Entry>,
 }
 
+/// A value the reader could not read, as the shared reader says it (`src/library/view.rs`).
+fn flag_words(flag: &splat::content::layout::Flag) -> String {
+    if flag.message.contains(" not read (line ") {
+        flag.message.clone()
+    } else {
+        format!("Line {}: {}", flag.line, flag.message)
+    }
+}
+
 impl GroupFault {
     /// The flags of `entry` other than the Part of one, and the entry without any flags.
     fn flags(entry: &Entry, unread: Option<&fields::Unread>) -> (Vec<String>, Option<Entry>) {
@@ -1321,8 +1330,12 @@ impl GroupFault {
         let notices = entry
             .flags
             .iter()
-            .filter(|flag| unread.is_none_or(|unread| unread.line != flag.line))
-            .map(view::flag_words)
+            // The Part of flag is the one with its line and words; another flag can share a line.
+            .filter(|flag| {
+                unread
+                    .is_none_or(|unread| unread.line != flag.line || unread.reason != flag.message)
+            })
+            .map(flag_words)
             .collect();
         let mut entry = entry.clone();
         entry.flags.clear();
@@ -3086,6 +3099,9 @@ mod tests {
             ("[]", 0),
             ("['']", 0),
             ("['  ']", 0),
+            // A key with no value reads as an empty list.
+            ("", 0),
+            ("# No groups yet.", 0),
         ] {
             let dir = tempfile::tempdir().unwrap();
             let campaign = sample_campaign(dir.path());
