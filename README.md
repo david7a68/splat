@@ -867,7 +867,8 @@ Other participants show them only when a success or failure is already recorded.
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
-such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
+such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log. It is not an Undo
+step, so **Undo** after a roll takes back the change before it, and the roll stays in the log.
 
 | Key | Command |
 |---|---|
@@ -901,7 +902,7 @@ are stat block text, so their changes stay on the card and on the row during com
 change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
-prior actions, including turn changes, dice rolls, and manual endings in the current session.
+prior actions, including turn changes, initiative and table rolls, and manual endings in the current session.
 **End encounter…** records a manual ending and your outcome. It shortens to **End…** before it moves into a menu, and stays visible while it fits. Runs save automatically
 after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,

@@ -36,6 +36,26 @@ fn undo_keeps_its_word(d: &mut Driver<'_>, action: &str) {
     );
 }
 
+/// iter11-B-FT1: beside a state notice, which stays whole, the run's Undo keeps a shortened
+/// target while one fits. Its accessible name keeps the full action.
+fn undo_keeps_a_target(d: &mut Driver<'_>, notice: &str) {
+    let size = d.window_size();
+    let undo: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.in_view() && node.name.starts_with("Undo: "))
+        .collect();
+    let painted = undo
+        .first()
+        .map_or_else(String::new, |node| d.painted_in(node.rect));
+    let action = undo.first().map_or("", |node| node.name.as_str());
+    d.observe(
+        "iter11-B-FT1",
+        undo.len() == 1 && painted.contains("Undo: ") && d.visible_text(notice),
+        format!("At {size:?}, beside a whole {notice:?}, Undo for {action:?} paints {painted:?}"),
+    );
+}
+
 /// Recovery actions keep the shared Undo icon, inside their own target.
 fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     let target = d.place_of(action).expect("The Undo action is visible");
@@ -4179,12 +4199,10 @@ pub mod run_edge_states {
         });
         d.click("Concentrating");
         d.expect(&format!("Undo: stop concentration for {TARGET}"));
-        d.expect_same(
-            "At 960, beside Sync off for the party, Undo shows only its word in both frames, and \
-             stopping concentration returns the row to the long-effect frame.",
-        );
+        // The row returns to the long-effect frame; Undo now names the other step.
         d.state_prepared("stop-concentration-undo", Sizes::All, |d| {
             undo_keeps_its_word(d, &format!("Undo: stop concentration for {TARGET}"));
+            undo_keeps_a_target(d, "Sync off for the party");
         });
         d.click("Sheet");
         d.click("Read all conditions");
@@ -4416,7 +4434,9 @@ pub mod run_sync_states {
         let (name, state, _) = STATES[4];
         d.app_mut().encounters.simulate_sync_state(name, state);
         d.settle();
-        d.state("every-sync-state", Sizes::All);
+        d.state_prepared("every-sync-state", Sizes::All, |d| {
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale");
+        });
         d.goal("show every sync state");
         d.begin_task();
         d.app_mut()
@@ -4432,7 +4452,9 @@ pub mod run_sync_states {
             },
         );
         d.click_row("Sable Harrowgate");
-        d.state("linked-row-sync-off", Sizes::All);
+        d.state_prepared("linked-row-sync-off", Sizes::All, |d| {
+            undo_keeps_a_target(d, "Sync conflict: Brannoch Vale");
+        });
         d.click_row("Cinder Wolf 2");
         d.app_mut()
             .encounters
@@ -4996,7 +5018,9 @@ pub mod signed_in {
                 "Simulated read after a reconnect: the HP recorded during the outage stands ({hp_in_run:?}), and the row asks: {row}"
             ),
         );
-        d.state("reconnect-conflict", Sizes::Default);
+        d.state_prepared("reconnect-conflict", Sizes::Default, |d| {
+            undo_keeps_a_target(d, &format!("Sync conflict: {MEMBER}"));
+        });
         d.begin_task();
 
         // The link cannot change under a run.
@@ -8107,7 +8131,48 @@ pub mod encounter_groups {
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
         assert!(d.has("Undo discard of Lost Patrol"));
-        d.state("group-removed", Sizes::All);
+        d.state_prepared("group-removed", Sizes::All, |d| {
+            // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
+            let size = d.window_size();
+            let window = egui::Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(size.0, size.1));
+            let discarded = d.painted_rect_in("Lost Patrol draft discarded.", window);
+            let removed = d.painted_rect_in(&format!("Removed group {GROUP_GOBLINS}."), window);
+            let text = crate::design::colors().text;
+            let body = crate::design::Type::Body.size();
+            let (Some(discarded), Some(removed)) = (discarded, removed) else {
+                panic!("At {size:?}, both notices are painted: {discarded:?} and {removed:?}");
+            };
+            d.observe(
+                "iter11-B-FT4",
+                (discarded.left() - removed.left()).abs() < 1.0,
+                format!(
+                    "At {size:?}, the discard notice starts at the removal's left edge: {discarded:?} and {removed:?}"
+                ),
+            );
+            let painted = d.painted_size(discarded, "Lost Patrol draft discarded.");
+            let icon = |text: egui::Rect| {
+                d.painted_rect_in(
+                    crate::design::icons::INFO,
+                    egui::Rect::from_min_max(
+                        pos2(text.left() - crate::design::XXL, text.top() - 2.0),
+                        pos2(text.left(), text.bottom() + 2.0),
+                    ),
+                )
+                .is_some()
+            };
+            let colour = d.painted_color("Lost Patrol draft discarded.");
+            d.observe(
+                "iter11-B-FT4",
+                icon(discarded) && icon(removed) && colour == Some(text),
+                format!("At {size:?}, both notices have the info icon, and the discard words use the text colour: {colour:?}"),
+            );
+            d.observe(
+                "iter11-B-FT4",
+                painted == Some(body),
+                format!("At {size:?}, the discard notice uses Body text: {painted:?}, not {body}"),
+            );
+            check_undo_icon(d, "Undo discard of Lost Patrol", "iter11-B-FT4");
+        });
         d.observe(
             "F15",
             !d.has(&format!("Edit group {GROUP_GOBLINS}")),
@@ -9444,6 +9509,41 @@ pub mod session_plan {
             cost <= 3 && d.visible_text("Scorching Sickle") && d.visible_text("4"),
             format!("The result shows in {cost}, and the stat block stays"),
         );
+        // iter11-B-FT2: a roll is not an Undo step. Damage, a roll, then U takes back the damage.
+        d.observe(
+            "iter11-B-FT2",
+            d.has_containing("Undo") && !d.has_containing("Undo: 1d1+3"),
+            "The roll does not take an Undo step",
+        );
+        let whole = d.row_hp("Ember Cultist");
+        d.type_text("2");
+        d.press(Key::Enter);
+        let hurt = d.row_hp("Ember Cultist");
+        assert!(d.has_containing("Undo: 2 damage to Ember Cultist"));
+        d.type_into("Dice", "1d1+3");
+        d.press(Key::Enter);
+        d.observe(
+            "iter11-B-FT2",
+            d.has_containing("Undo: 2 damage to Ember Cultist"),
+            "After the roll, Undo still names the damage",
+        );
+        d.press(Key::U);
+        d.observe(
+            "iter11-B-FT2",
+            hurt != whole && d.row_hp("Ember Cultist") == whole,
+            format!(
+                "U after the roll takes back the damage: {whole:?}, {hurt:?}, then {:?}",
+                d.row_hp("Ember Cultist")
+            ),
+        );
+        fight_tab(d, "Log");
+        d.observe(
+            "iter11-B-FT2",
+            d.visible_text("DM roll 1d1+3"),
+            "The roll stays in the Log after that Undo",
+        );
+        fight_tab(d, "Stat block");
+        d.expect("Scorching Sickle");
 
         // T12.5: a look at someone else, and back.
         let turn = current_participant(d).unwrap_or_default();

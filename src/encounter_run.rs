@@ -656,6 +656,9 @@ enum Panel {
 const GROUP_ADDED: &str = "Encounter group ";
 /// How one creature's log line starts, with no group to name.
 const ONE_ADDED: &str = "Added by hand: ";
+/// The source at the start of an Undo step that a sheet made. A tight Undo gives it up before
+/// its target.
+const SHEET_SOURCE: &str = "D&D Beyond ";
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
 /// Where a run's own text ends. Saved runs hold both parts in one string.
@@ -712,7 +715,6 @@ enum Command {
     Concentration(usize, bool),
     DeathSaves(usize, u8, u8),
     Note(usize, String),
-    Roll(String),
     /// Add every member of an encounter group, on this total, or by rolling.
     AddGroup(Arc<RunGroup>, Option<i64>),
     /// One line of creatures with no group behind them.
@@ -1350,6 +1352,24 @@ impl Run {
         }
         Ok((names.join(", "), initiative))
     }
+    /// The dock's roll. It changes no game state, so it goes to the Log and is not an Undo
+    /// step. Undo of an earlier step keeps its line, and the dice do not roll the same again.
+    pub(super) fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
+        if matches!(self.state.phase, Phase::Ended { .. }) {
+            return Err("This encounter has ended. Undo the ending to continue.".into());
+        }
+        let mut random = self.state.random.clone();
+        let roll = Dice::parse(expression)?.roll(&mut random, false)?;
+        let line = format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total);
+        for state in self.history.iter_mut().chain([&mut self.state]) {
+            state.log.push(line.clone());
+            state.random = random.clone();
+        }
+        self.dm_steps += 1;
+        self.dirty = true;
+        self.error = None;
+        Ok(())
+    }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
     pub(crate) fn roll_table(
         &mut self,
@@ -1641,10 +1661,6 @@ impl Run {
                     "Ended manually in round {}. Outcome: {outcome}.",
                     next.round
                 )
-            }
-            Command::Roll(expression) => {
-                let roll = Dice::parse(&expression)?.roll(&mut next.random, false)?;
-                format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
             }
             Command::AddGroup(group, total) => {
                 let first = next.participants.len();
@@ -1950,7 +1966,6 @@ impl Run {
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
-            self.last_roll = None;
         }
     }
     /// Undo can take away an encounter group, and these all hold a participant's place.
@@ -2045,7 +2060,6 @@ impl Run {
             ),
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
-            Command::Roll(expression) => format!("{expression} roll"),
             Command::AddGroup(group, _) | Command::AddCreature(group, _) => {
                 format!("add {}", group.name)
             }
@@ -2833,10 +2847,10 @@ impl Run {
                 } else {
                     "values"
                 };
-                format!("D&D Beyond {what} for {}", now.name)
+                format!("{SHEET_SOURCE}{what} for {}", now.name)
             } else {
                 format!(
-                    "D&D Beyond values for {}",
+                    "{SHEET_SOURCE}values for {}",
                     crate::design::count(choices.len(), "character", "characters")
                 )
             };
@@ -4366,6 +4380,46 @@ mod tests {
         }
         assert!(run.apply(Command::Next).is_err());
         assert_eq!(run.state.round, 2);
+    }
+    #[test]
+    fn a_dice_roll_stays_in_the_log_and_is_not_an_undo_step() {
+        let mut run = run();
+        begin(&mut run);
+        let health = |run: &Run| {
+            let p = &run.state.participants[0];
+            (p.hp, p.temporary_hp)
+        };
+        let whole = health(&run);
+        run.apply(Command::Damage(0, 3)).unwrap();
+        assert_ne!(health(&run), whole);
+        let label = run.undo_label();
+        let steps = run.history.len();
+        run.state.random = Random::controlled([4, 5]);
+        run.roll_dice("1d6").unwrap();
+        let line = run.state.log.last().cloned().unwrap();
+        assert!(
+            line.starts_with("DM roll 1d6:") && line.ends_with("= 4."),
+            "{line}"
+        );
+        // The roll is not a step: Undo still names the damage.
+        assert_eq!(run.history.len(), steps);
+        assert_eq!(run.undo_label(), label);
+        run.undo();
+        assert_eq!(health(&run), whole, "U takes back the damage");
+        assert!(run.state.log.contains(&line), "the roll stays in the Log");
+        // The dice go on, so the next roll is not the same one again.
+        run.roll_dice("1d6").unwrap();
+        assert!(run.state.log.last().unwrap().ends_with("= 5."));
+        // Other commands keep their Undo.
+        run.apply(Command::Heal(0, 1)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: 1 healing to {}", run.state.participants[0].name)
+        );
+        // A bad expression changes nothing.
+        let log = run.state.log.len();
+        assert!(run.roll_dice("1d").is_err());
+        assert_eq!(run.state.log.len(), log);
     }
     #[test]
     fn initiative_requires_input_preserves_dm_ties_and_rolls_use_supplied_bonus_once() {
