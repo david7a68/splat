@@ -63,11 +63,26 @@ pub enum RollLink {
 }
 
 /// The scheme of a Markdown link that rolls.
-pub const ROLL_LINK: &str = "splat-roll:";
+const ROLL_LINK: &str = "splat-roll:";
 
 impl RollLink {
+    /// A d20 roll with no damage to follow it.
+    pub fn d20(what: D20, bonus: i64, label: impl Into<String>) -> Self {
+        Self::D20 {
+            what,
+            bonus,
+            label: label.into(),
+            damage: Vec::new(),
+        }
+    }
+
+    /// `shown` as a Markdown link that rolls this.
+    pub fn markdown(&self, shown: &str) -> String {
+        format!("[{shown}](<{}>)", self.destination())
+    }
+
     /// A Markdown link destination, inside `<…>`, so spaces are allowed.
-    pub fn destination(&self) -> String {
+    fn destination(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_default();
         let mut out = String::from(ROLL_LINK);
         for c in json.chars() {
@@ -98,20 +113,11 @@ impl RollLink {
         json.push_str(rest);
         serde_json::from_str(&json).ok()
     }
-
-    pub fn label(&self) -> &str {
-        match self {
-            Self::D20 { label, .. }
-            | Self::Damage { label, .. }
-            | Self::Dice { label, .. }
-            | Self::SaveDc { label, .. } => label,
-        }
-    }
 }
 
 /// One rollable number in a text, by its byte range.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Span {
+struct Span {
     pub range: Range<usize>,
     pub link: RollLink,
 }
@@ -130,6 +136,12 @@ pub fn plain_dice(text: &str) -> String {
         .collect()
 }
 
+/// How many ASCII digits `text` starts with.
+fn digits(text: &str) -> usize {
+    text.find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len())
+}
+
 fn signed_number(text: &str) -> Option<(i64, usize)> {
     let mut chars = text.char_indices();
     let (_, first) = chars.next()?;
@@ -139,11 +151,9 @@ fn signed_number(text: &str) -> Option<(i64, usize)> {
         '\u{2212}' => (true, '\u{2212}'.len_utf8()),
         _ => return None,
     };
-    let digits = text[start..]
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(text.len() - start);
-    let value: i64 = text[start..start + digits].parse().ok()?;
-    Some((if negative { -value } else { value }, start + digits))
+    let length = digits(&text[start..]);
+    let value: i64 = text[start..start + length].parse().ok()?;
+    Some((if negative { -value } else { value }, start + length))
 }
 
 /// A dice term at `at`, such as `2d6` or `d20`, with ` + 2` or ` − 1` after it. Returns its end.
@@ -171,11 +181,9 @@ fn dice_at(text: &str, at: usize) -> Option<usize> {
     if let Some(sign) = spaced.chars().next().filter(|c| "+-\u{2212}".contains(*c)) {
         let rest = &spaced[sign.len_utf8()..];
         let number = rest.trim_start_matches(' ');
-        let digits = number
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(number.len());
-        if digits > 0 {
-            end += gap + sign.len_utf8() + (rest.len() - number.len()) + digits;
+        let length = digits(number);
+        if length > 0 {
+            end += gap + sign.len_utf8() + (rest.len() - number.len()) + length;
         }
     }
     Some(end)
@@ -190,7 +198,8 @@ fn word_before(text: &str, at: usize) -> &str {
     &head[start..]
 }
 
-fn ability(word: &str) -> Option<&'static str> {
+/// The book name of an ability, from its name in any case.
+pub fn ability(word: &str) -> Option<&'static str> {
     ABILITIES
         .into_iter()
         .find(|ability| ability.eq_ignore_ascii_case(word))
@@ -237,7 +246,7 @@ fn sentence_end(text: &str, from: usize) -> usize {
 }
 
 /// Every rollable number in one paragraph, in order. `label` names the paragraph's feature.
-pub fn find(text: &str, label: &str) -> Vec<Span> {
+fn find(text: &str, label: &str) -> Vec<Span> {
     let mut groups: Vec<(Range<usize>, DamagePart, bool)> = Vec::new();
     // Damage groups first: an average, then its dice in brackets.
     let mut at = 0;
@@ -356,26 +365,22 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         let after = &text[index + "Saving Throw".len()..];
         let skipped = after.len() - after.trim_start_matches(['*', '_', ':', ' ']).len();
         let start = index + "Saving Throw".len() + skipped;
-        if let Some(digits) = text[start..].strip_prefix("DC ") {
-            let length = digits
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(digits.len());
-            if let Ok(dc) = digits[..length].parse() {
+        if let Some(number) = text[start..].strip_prefix("DC ") {
+            let length = digits(number);
+            if let Ok(dc) = number[..length].parse() {
                 add_dc(start..start + 3 + length, ability, dc);
             }
         }
     }
     for (index, _) in text.match_indices("DC ") {
-        let digits = &text[index + 3..];
-        let length = digits
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(digits.len());
-        let after = digits[length..].trim_start();
+        let number = &text[index + 3..];
+        let length = digits(number);
+        let after = number[length..].trim_start();
         let word: String = after.chars().take_while(|c| c.is_alphabetic()).collect();
         if length > 0
             && let Some(ability) = ability(&word)
             && after[word.len()..].trim_start().starts_with("saving throw")
-            && let Ok(dc) = digits[..length].parse()
+            && let Ok(dc) = number[..length].parse()
         {
             add_dc(index..index + 3 + length, ability, dc);
         }
@@ -437,11 +442,7 @@ pub fn with_links(text: &str, label: &str) -> String {
             continue;
         }
         out.push_str(&text[at..span.range.start]);
-        out.push('[');
-        out.push_str(&text[span.range.clone()]);
-        out.push_str("](<");
-        out.push_str(&span.link.destination());
-        out.push_str(">)");
+        out.push_str(&span.link.markdown(&text[span.range.clone()]));
         at = span.range.end;
     }
     out.push_str(&text[at..]);
@@ -535,7 +536,7 @@ mod tests {
             label: "Odd <name> & 50% \\ (1)".into(),
             dice: "1d4".into(),
         };
-        let markdown = format!("[1d4](<{}>)", link.destination());
+        let markdown = link.markdown("1d4");
         let parser = pulldown_cmark::Parser::new(&markdown);
         let destination = parser
             .filter_map(|event| match event {

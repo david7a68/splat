@@ -3744,12 +3744,11 @@ impl Run {
                 ui,
                 "Roll",
                 Type::Body,
-                &splat::content::dice_text::RollLink::D20 {
-                    what: splat::content::dice_text::D20::DeathSave,
-                    bonus: 0,
-                    label: String::new(),
-                    damage: Vec::new(),
-                },
+                &splat::content::dice_text::RollLink::d20(
+                    splat::content::dice_text::D20::DeathSave,
+                    0,
+                    "",
+                ),
             );
             crate::rolls::set_roller(ui.ctx(), None);
         });

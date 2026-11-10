@@ -1733,12 +1733,7 @@ fn numeral_link(ui: &mut egui::Ui, bonus: Option<i64>, link: impl FnOnce(i64) ->
 
 /// A d20 roll for an ability, a save or a skill, named in book case.
 fn d20(what: D20, bonus: i64, name: &str) -> RollLink {
-    RollLink::D20 {
-        what,
-        bonus,
-        label: design::reader::human_label(name),
-        damage: Vec::new(),
-    }
+    RollLink::d20(what, bonus, design::reader::human_label(name))
 }
 
 /// `DEX` or `dexterity` as the book names it.

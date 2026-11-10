@@ -33,12 +33,26 @@ pub(super) struct Call {
     pub rows: BTreeMap<usize, CallRow>,
 }
 
+impl Call {
+    /// Tick a row, or take its tick away.
+    fn tick(&mut self, row: usize) {
+        if self.rows.remove(&row).is_none() {
+            self.rows.insert(row, CallRow::default());
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(super) struct CallRow {
     pub total: Option<i64>,
     /// A player's own roll, as typed.
     pub typed: String,
     pub half: bool,
+}
+
+/// A linked player sheet rolls its own saves.
+fn character(entry: &Entry) -> bool {
+    entry.fields.contains_key("splat_external")
 }
 
 /// A save bonus from a stat block: its Save value, or else its ability modifier.
@@ -88,12 +102,10 @@ impl Run {
     }
 
     fn try_roll_link(&mut self, ask: Ask) -> Result<Option<Shown>, String> {
-        if matches!(self.state.phase, Phase::Ended { .. }) {
+        if self.ended() {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
-        let roller = ask
-            .roller
-            .filter(|row| *row < self.state.participants.len());
+        let roller = self.existing(ask.roller);
         let who = roller.map_or_else(
             || ask.entry.clone(),
             |row| self.state.participants[row].name.clone(),
@@ -104,15 +116,33 @@ impl Run {
             dc,
             half,
             damage,
-        } = &ask.link
+        } = ask.link
         {
-            self.open_call(roller, who, label, ability, *dc, *half, damage);
+            let paragraph = roller.and_then(|row| {
+                feature_paragraph(&self.state.participants[row].definition, &label)
+            });
+            self.open_call(Call {
+                caster: roller,
+                who,
+                label,
+                ability,
+                dc,
+                half,
+                damage,
+                paragraph,
+                rows: BTreeMap::new(),
+            });
             return Ok(None);
         }
         let change = self.change(roller, &ask.link);
         let rolled =
             self.record(|random| rolls::roll(&who, &ask.link, ask.mode, change, random))?;
         Ok(Some(self.after_roll(roller, rolled, ask.at)))
+    }
+
+    /// The roller's row, if it is still in the run.
+    fn existing(&self, roller: Option<usize>) -> Option<usize> {
+        roller.filter(|row| *row < self.state.participants.len())
     }
 
     /// A run change to the roller's attack or damage, from its encounter or group.
@@ -138,7 +168,7 @@ impl Run {
         &mut self,
         roll: impl FnOnce(&mut Random) -> Result<Rolled, String>,
     ) -> Result<Rolled, String> {
-        if matches!(self.state.phase, Phase::Ended { .. }) {
+        if self.ended() {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
         let mut random = self.state.random.clone();
@@ -207,14 +237,12 @@ impl Run {
         } else {
             Mode::Normal
         };
-        let roller = strip
-            .roller
-            .filter(|row| *row < self.state.participants.len());
+        let roller = self.existing(strip.roller);
         let change = self.change(roller, &link);
         let who = strip.rolled.who.clone();
         match self.record(|random| rolls::roll(&who, &link, mode, change, random)) {
             Ok(rolled) => {
-                let shown = self.after_roll(strip.roller, rolled, at.unwrap_or_default());
+                let shown = self.after_roll(roller, rolled, at.unwrap_or_default());
                 at.map(|_| shown)
             }
             Err(error) => {
@@ -229,10 +257,7 @@ impl Run {
         let Some(strip) = &self.strip else {
             return;
         };
-        if strip.rolled.attack() || matches!(strip.rolled.link, RollLink::D20 { .. }) {
-            return;
-        }
-        if self.use_blocked(strip.roller, &strip.rolled).is_some() {
+        if !strip.rolled.usable() || self.use_blocked(strip.roller, &strip.rolled).is_some() {
             return;
         }
         self.amount = strip.rolled.total.max(0).to_string();
@@ -271,9 +296,7 @@ impl Run {
         };
         let c = colors();
         let rolled = &strip.rolled;
-        let roller = strip
-            .roller
-            .filter(|row| *row < self.state.participants.len());
+        let roller = self.existing(strip.roller);
         ui.spacing_mut().item_spacing.y = design::XS;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
@@ -290,11 +313,7 @@ impl Run {
                 );
             }
             // The dice go first, then the feature; the roller's name stays.
-            let mut name = rolled.who.clone();
-            if let Some(feature) = rolled.feature() {
-                name.push_str(" · ");
-                name.push_str(feature);
-            }
+            let name = rolled.name();
             let mut full = format!("{name} · {}", rolled.parts());
             if let Some(words) = rolled.changed_words() {
                 full.push_str(&format!(" · {words}"));
@@ -356,35 +375,16 @@ impl Run {
         design::rule(ui);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn open_call(
-        &mut self,
-        caster: Option<usize>,
-        who: String,
-        label: &str,
-        ability: &str,
-        dc: i64,
-        half: bool,
-        damage: &[DamagePart],
-    ) {
+    fn open_call(&mut self, call: Call) {
         // The same DC opens the same call again, with its ticks.
-        let same = self.call.as_ref().is_some_and(|call| {
-            call.caster == caster && call.label == label && call.dc == dc && call.ability == ability
+        let same = self.call.as_ref().is_some_and(|open| {
+            open.caster == call.caster
+                && open.label == call.label
+                && open.dc == call.dc
+                && open.ability == call.ability
         });
         if !same {
-            let paragraph = caster
-                .and_then(|row| feature_paragraph(&self.state.participants[row].definition, label));
-            self.call = Some(Call {
-                caster,
-                who,
-                label: label.to_owned(),
-                ability: ability.to_owned(),
-                dc,
-                half,
-                damage: damage.to_vec(),
-                paragraph,
-                rows: BTreeMap::new(),
-            });
+            self.call = Some(call);
             self.also.clear();
             self.halved.clear();
         }
@@ -404,13 +404,24 @@ impl Run {
         let Some(call) = self.call.as_mut().filter(|_| self.panel == Panel::Call) else {
             return false;
         };
-        if Some(row) == call.caster {
-            return true;
-        }
-        if call.rows.remove(&row).is_none() {
-            call.rows.insert(row, CallRow::default());
+        if Some(row) != call.caster {
+            call.tick(row);
         }
         true
+    }
+
+    /// The call's ticked creatures that have not saved yet and can roll here.
+    fn unrolled_creatures(&self, call: &Call) -> Vec<usize> {
+        call.rows
+            .iter()
+            .filter(|(row, entry)| {
+                let definition = &self.state.participants[**row].definition;
+                entry.total.is_none()
+                    && !character(definition)
+                    && save_bonus(definition, &call.ability).is_some()
+            })
+            .map(|(row, _)| *row)
+            .collect()
     }
 
     fn roll_save(&mut self, row: usize) {
@@ -421,12 +432,7 @@ impl Run {
         let Some(bonus) = save_bonus(&p.definition, &call.ability) else {
             return;
         };
-        let link = RollLink::D20 {
-            what: D20::Save,
-            bonus,
-            label: call.ability.clone(),
-            damage: Vec::new(),
-        };
+        let link = RollLink::d20(D20::Save, bonus, call.ability.clone());
         let name = p.name.clone();
         match self.record(|random| rolls::roll(&name, &link, Mode::Normal, 0, random)) {
             Ok(rolled) => {
@@ -532,7 +538,7 @@ impl Run {
                         continue;
                     }
                     let ticked = call.rows.get(&row);
-                    let character = p.definition.fields.contains_key("splat_external");
+                    let character = character(&p.definition);
                     let bonus = save_bonus(&p.definition, &call.ability);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = design::S;
@@ -584,16 +590,7 @@ impl Run {
                 ui.add_space(design::S);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = design::S;
-                    let creatures = call.rows.iter().any(|(row, entry)| {
-                        entry.total.is_none()
-                            && !self.state.participants[*row]
-                                .definition
-                                .fields
-                                .contains_key("splat_external")
-                            && save_bonus(&self.state.participants[*row].definition, &call.ability)
-                                .is_some()
-                    });
-                    if creatures
+                    if !self.unrolled_creatures(&call).is_empty()
                         && Action::secondary("Roll all creatures")
                             .density(Density::Read)
                             .show(ui)
@@ -624,16 +621,7 @@ impl Run {
                         ui.label(Type::Body.rich(ui, "Damage").color(c.text));
                         rolls::set_roller(ui.ctx(), call.caster);
                         rolls::set_entry(ui.ctx(), &call.who);
-                        let words = call
-                            .damage
-                            .iter()
-                            .map(|part| match &part.kind {
-                                Some(kind) => format!("{} {}", part.dice, kind.to_lowercase()),
-                                None => part.dice.clone(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        rolls::link(ui, &words, Type::Body, &link);
+                        rolls::link(ui, &rolls::parts_text(&call.damage), Type::Body, &link);
                         rolls::set_roller(ui.ctx(), None);
                     });
                 }
@@ -686,10 +674,8 @@ impl Run {
     fn call_step(&mut self, step: CallStep) {
         match step {
             CallStep::Tick(row) => {
-                if let Some(call) = &mut self.call
-                    && call.rows.remove(&row).is_none()
-                {
-                    call.rows.insert(row, CallRow::default());
+                if let Some(call) = &mut self.call {
+                    call.tick(row);
                 }
             }
             CallStep::Typed(row, typed) => {
@@ -700,19 +686,10 @@ impl Run {
             }
             CallStep::Roll(row) => self.roll_save(row),
             CallStep::RollAll => {
-                let rows: Vec<usize> = self.call.as_ref().map_or_else(Vec::new, |call| {
-                    call.rows
-                        .iter()
-                        .filter(|(row, entry)| {
-                            entry.total.is_none()
-                                && !self.state.participants[**row]
-                                    .definition
-                                    .fields
-                                    .contains_key("splat_external")
-                        })
-                        .map(|(row, _)| *row)
-                        .collect()
-                });
+                let rows = self
+                    .call
+                    .as_ref()
+                    .map_or_else(Vec::new, |call| self.unrolled_creatures(call));
                 for row in rows {
                     self.roll_save(row);
                 }

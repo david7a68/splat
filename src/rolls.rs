@@ -4,7 +4,7 @@
 use crate::design::{self, Type, colors};
 use eframe::egui::{self, Id, Pos2, text::LayoutJob};
 use splat::content::dice_text::{D20, DamagePart, RollLink};
-use splat::execution::dice::{Dice, Random};
+use splat::execution::dice::{Dice, Random, Roll};
 
 /// How a d20 or a damage roll is made.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -71,24 +71,20 @@ pub(crate) fn set_entry(ctx: &egui::Context, name: &str) {
     ctx.data_mut(|data| data.insert_temp(entry_id(), name.to_owned()));
 }
 
-fn ask(ui: &egui::Ui, link: &RollLink, mode: Mode, at: Pos2) {
+/// A press on `link`, from the roller and entry set for what is drawn now.
+fn ask(ui: &egui::Ui, link: &RollLink, mode: Mode, at: Pos2) -> Ask {
     let roller = ui.ctx().data(|data| data.get_temp::<usize>(roller_id()));
     let entry = ui
         .ctx()
         .data(|data| data.get_temp::<String>(entry_id()))
         .unwrap_or_default();
-    ui.ctx().data_mut(|data| {
-        data.insert_temp(
-            ask_id(),
-            Ask {
-                link: link.clone(),
-                mode,
-                at,
-                roller,
-                entry,
-            },
-        );
-    });
+    Ask {
+        link: link.clone(),
+        mode,
+        at,
+        roller,
+        entry,
+    }
 }
 
 /// What a press on this link does, in words, for hover.
@@ -100,10 +96,7 @@ pub(crate) fn hint(link: &RollLink) -> String {
         } => {
             let what = match what {
                 D20::Attack => format!("{label} attack"),
-                D20::Check => format!("{label} check"),
-                D20::Save => format!("{label} save"),
-                D20::Skill => label.clone(),
-                D20::DeathSave => "death save".to_owned(),
+                _ => d20_words(*what, label),
             };
             format!("Roll 1d20 {}: {what}.{keys}", signed_spaced(*bonus))
         }
@@ -126,15 +119,28 @@ fn signed_spaced(value: i64) -> String {
     }
 }
 
-fn parts_text(parts: &[DamagePart]) -> String {
-    parts
-        .iter()
-        .map(|part| match &part.kind {
-            Some(kind) => format!("{} {}", part.dice, kind.to_lowercase()),
-            None => part.dice.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+/// What a d20 roll is for, in words: `to hit`, `Dexterity save`, `Stealth`.
+fn d20_words(what: D20, label: &str) -> String {
+    match what {
+        D20::Attack => "to hit".to_owned(),
+        D20::Check => format!("{label} check"),
+        D20::Save => format!("{label} save"),
+        D20::Skill => label.to_owned(),
+        D20::DeathSave => "death save".to_owned(),
+    }
+}
+
+/// `2d6+2 bludgeoning`: one damage part's dice and type.
+fn part_text(part: &DamagePart) -> String {
+    match &part.kind {
+        Some(kind) => format!("{} {}", part.dice, kind.to_lowercase()),
+        None => part.dice.clone(),
+    }
+}
+
+/// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll.
+pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
+    parts.iter().map(part_text).collect::<Vec<_>>().join(", ")
 }
 
 /// Handle the pointer on a dice link: hover words, a click with its keys, and the menu.
@@ -146,17 +152,8 @@ pub(crate) fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
             egui::pos2(pos.x, response.rect.bottom().min(pos.y + Type::Body.line()))
         });
     if response.secondary_clicked() {
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(menu_id(), (link.clone(), at));
-        });
-        let roller = ui.ctx().data(|data| data.get_temp::<usize>(roller_id()));
-        let entry = ui.ctx().data(|data| data.get_temp::<String>(entry_id()));
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(
-                Id::new("roll_menu_from"),
-                (roller, entry.unwrap_or_default()),
-            );
-        });
+        let asked = ask(ui, link, Mode::Normal, at);
+        ui.ctx().data_mut(|data| data.insert_temp(menu_id(), asked));
         return;
     }
     response.clone().on_hover_text(hint(link));
@@ -164,14 +161,16 @@ pub(crate) fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
         return;
     }
     let modifiers = ui.input(|i| i.modifiers);
-    let mode = if matches!(link, RollLink::D20 { .. }) && modifiers.shift {
+    let d20 = matches!(link, RollLink::D20 { .. });
+    let mode = if d20 && modifiers.shift {
         Mode::Advantage
-    } else if matches!(link, RollLink::D20 { .. }) && modifiers.command {
+    } else if d20 && modifiers.command {
         Mode::Disadvantage
     } else {
         Mode::Normal
     };
-    ask(ui, link, mode, at);
+    let asked = ask(ui, link, mode, at);
+    ui.ctx().data_mut(|data| data.insert_temp(ask_id(), asked));
 }
 
 /// A dice link outside Markdown: a table cell, a skill, a sheet's bonus.
@@ -234,13 +233,13 @@ fn place(ctx: &egui::Context, id: Id, at: Pos2) -> Pos2 {
 
 /// The right-click menu of the last dice link, until the DM picks a way to roll.
 pub(crate) fn show_menu(ctx: &egui::Context) {
-    let Some((link, at)) = ctx.data(|data| data.get_temp::<(RollLink, Pos2)>(menu_id())) else {
+    let Some(asked) = ctx.data(|data| data.get_temp::<Ask>(menu_id())) else {
         return;
     };
     let close = |ctx: &egui::Context| {
-        ctx.data_mut(|data| data.remove::<(RollLink, Pos2)>(menu_id()));
+        ctx.data_mut(|data| data.remove::<Ask>(menu_id()));
     };
-    let modes: &[(&str, Mode)] = match &link {
+    let modes: &[(&str, Mode)] = match &asked.link {
         RollLink::D20 { .. } => &[
             ("Roll", Mode::Normal),
             ("Roll with advantage", Mode::Advantage),
@@ -254,13 +253,13 @@ pub(crate) fn show_menu(ctx: &egui::Context) {
     };
     let response = egui::Area::new(menu_id())
         .order(egui::Order::Foreground)
-        .fixed_pos(place(ctx, menu_id(), at))
+        .fixed_pos(place(ctx, menu_id(), asked.at))
         .show(ctx, |ui| {
             egui::Frame::menu(ui.style()).show(ui, |ui| {
                 ui.set_min_width(180.0);
                 let mut picked = None;
                 for (word, mode) in modes {
-                    let word = if matches!(link, RollLink::SaveDc { .. }) {
+                    let word = if matches!(asked.link, RollLink::SaveDc { .. }) {
                         "Call for the save"
                     } else {
                         word
@@ -274,21 +273,7 @@ pub(crate) fn show_menu(ctx: &egui::Context) {
         });
     let escape = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
     if let Some(mode) = response.inner.inner {
-        let (roller, entry) = ctx
-            .data(|data| data.get_temp::<(Option<usize>, String)>(Id::new("roll_menu_from")))
-            .unwrap_or_default();
-        ctx.data_mut(|data| {
-            data.insert_temp(
-                ask_id(),
-                Ask {
-                    link,
-                    mode,
-                    at,
-                    roller,
-                    entry,
-                },
-            );
-        });
+        ctx.data_mut(|data| data.insert_temp(ask_id(), Ask { mode, ..asked }));
         close(ctx);
     } else if escape
         || (ctx.input(|i| i.pointer.any_pressed())
@@ -343,6 +328,11 @@ impl Rolled {
         matches!(self.link, RollLink::Damage { .. })
     }
 
+    /// A total `Use` can put in Amount: damage or dice, not a d20.
+    pub fn usable(&self) -> bool {
+        !matches!(self.link, RollLink::D20 { .. })
+    }
+
     pub fn damage(&self) -> &[DamagePart] {
         match &self.link {
             RollLink::D20 { damage, .. } => damage,
@@ -353,13 +343,7 @@ impl Rolled {
     /// The words after the total: `to hit`, `damage`, `Dexterity save`.
     pub fn what(&self) -> String {
         match &self.link {
-            RollLink::D20 { what, label, .. } => match what {
-                D20::Attack => "to hit".to_owned(),
-                D20::Check => format!("{label} check"),
-                D20::Save => format!("{label} save"),
-                D20::Skill => label.clone(),
-                D20::DeathSave => "death save".to_owned(),
-            },
+            RollLink::D20 { what, label, .. } => d20_words(*what, label),
             RollLink::Damage { .. } => "damage".to_owned(),
             RollLink::Dice { dice, .. } => dice.clone(),
             RollLink::SaveDc { .. } => String::new(),
@@ -377,6 +361,14 @@ impl Rolled {
             | RollLink::Damage { label, .. }
             | RollLink::Dice { label, .. } => Some(label.as_str()).filter(|l| !l.is_empty()),
             _ => None,
+        }
+    }
+
+    /// The roller, then the feature: `Wolf · Bite`.
+    pub fn name(&self) -> String {
+        match self.feature() {
+            Some(feature) => format!("{} · {feature}", self.who),
+            None => self.who.clone(),
         }
     }
 
@@ -537,12 +529,7 @@ pub(crate) fn roll(
                 Mode::Normal | Mode::Critical => "1d20",
             };
             let rolled = Dice::parse(dice)?.roll(random, false)?;
-            let faces: Vec<(i64, bool)> = rolled
-                .dice
-                .iter()
-                .enumerate()
-                .map(|(at, face)| (*face, rolled.dropped.contains(&at)))
-                .collect();
+            let faces = faces(&rolled);
             let kept = faces
                 .iter()
                 .find(|(_, dropped)| !dropped)
@@ -568,10 +555,7 @@ pub(crate) fn roll(
                 sum += rolled.total;
                 by_kind.push((rolled.total, part.kind.clone()));
                 pieces.push(Piece {
-                    label: match &part.kind {
-                        Some(kind) => format!("{} {}", part.dice, kind.to_lowercase()),
-                        None => part.dice.clone(),
-                    },
+                    label: part_text(part),
                     faces: rolled.dice.iter().map(|face| (*face, false)).collect(),
                 });
             }
@@ -590,12 +574,7 @@ pub(crate) fn roll(
             let rolled = Dice::parse(dice)?.roll(random, false)?;
             pieces.push(Piece {
                 label: dice.clone(),
-                faces: rolled
-                    .dice
-                    .iter()
-                    .enumerate()
-                    .map(|(at, face)| (*face, rolled.dropped.contains(&at)))
-                    .collect(),
+                faces: faces(&rolled),
             });
             (dice.clone(), 0, rolled.total, None, None)
         }
@@ -617,6 +596,16 @@ pub(crate) fn roll(
         natural,
         expression,
     })
+}
+
+/// Each face of a roll, and whether a keep dropped it.
+fn faces(rolled: &Roll) -> Vec<(i64, bool)> {
+    rolled
+        .dice
+        .iter()
+        .enumerate()
+        .map(|(at, face)| (*face, rolled.dropped.contains(&at)))
+        .collect()
 }
 
 /// A roll made outside a run, on its own stream. Tests use a fixed seed.
@@ -672,12 +661,12 @@ pub(crate) fn close_result(ctx: &egui::Context) {
 
 /// True when Escape belongs to an open result or menu. It closes the top one.
 pub(crate) fn escape(ctx: &egui::Context) -> bool {
-    let menu = ctx.data(|data| data.get_temp::<(RollLink, Pos2)>(menu_id()).is_some());
+    let menu = ctx.data(|data| data.get_temp::<Ask>(menu_id()).is_some());
     let open = shown(ctx).is_some();
     if (menu || open) && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
     {
         if menu {
-            ctx.data_mut(|data| data.remove::<(RollLink, Pos2)>(menu_id()));
+            ctx.data_mut(|data| data.remove::<Ask>(menu_id()));
         } else {
             close_result(ctx);
         }
@@ -692,12 +681,7 @@ pub(crate) fn result_lines(ui: &mut egui::Ui, rolled: &Rolled, armor: Option<&st
     let c = colors();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = design::XS;
-        let mut name = rolled.who.clone();
-        if let Some(feature) = rolled.feature() {
-            name.push_str(" · ");
-            name.push_str(feature);
-        }
-        ui.label(Type::Small.rich(ui, name).color(c.muted));
+        ui.label(Type::Small.rich(ui, rolled.name()).color(c.muted));
     });
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
@@ -771,7 +755,7 @@ pub(crate) fn actions(
             {
                 action = Some(Action::RollDamage);
             }
-        } else if !rolled.attack() && !matches!(rolled.link, RollLink::D20 { .. }) {
+        } else if rolled.usable() {
             let word = format!("Use {}", rolled.total);
             let clicked = design::Action::secondary(&word)
                 .density(design::Density::Read)

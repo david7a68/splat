@@ -384,22 +384,13 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
             c.text,
         );
         cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
-        let name = dice_text::ABILITIES
-            .iter()
-            .find(|name| name.eq_ignore_ascii_case(ability))
-            .copied()
-            .unwrap_or(ability);
+        let name = dice_text::ability(ability).unwrap_or(ability);
         match modifier {
             Some(bonus) => link_cell(
                 ui,
                 26.0,
                 &design::signed(bonus),
-                &RollLink::D20 {
-                    what: D20::Check,
-                    bonus,
-                    label: name.to_owned(),
-                    damage: Vec::new(),
-                },
+                &RollLink::d20(D20::Check, bonus, name),
             ),
             None => cell(ui, 26.0, "—", Type::Stat, c.muted),
         }
@@ -408,12 +399,7 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
                 ui,
                 56.0,
                 &format!("Save {}", design::signed(bonus)),
-                &RollLink::D20 {
-                    what: D20::Save,
-                    bonus,
-                    label: name.to_owned(),
-                    damage: Vec::new(),
-                },
+                &RollLink::d20(D20::Save, bonus, name),
             ),
             None => cell(ui, 56.0, "", Type::Stat, c.muted),
         }
@@ -471,17 +457,7 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
     let mut at = 0;
     for (range, name, bonus) in dice_text::skills(text) {
         markdown.push_str(&text[at..range.start]);
-        let link = RollLink::D20 {
-            what: D20::Skill,
-            bonus,
-            label: name,
-            damage: Vec::new(),
-        };
-        markdown.push_str(&format!(
-            "[{}](<{}>)",
-            &text[range.clone()],
-            link.destination()
-        ));
+        markdown.push_str(&RollLink::d20(D20::Skill, bonus, name).markdown(&text[range.clone()]));
         at = range.end;
     }
     markdown.push_str(&text[at..]);
