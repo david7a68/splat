@@ -2794,7 +2794,7 @@ pub mod run_sync_conflict {
             "The conflict panel names the conflict, and its buttons name the values",
         );
         d.click(USE_REMOTE);
-        d.state("conflict-resolved", Sizes::Default);
+        d.state("conflict-resolved", Sizes::All);
         d.goal_within("T3.2", "resolve a conflict", 2);
         let resolved = d
             .row_node(SYNCED)

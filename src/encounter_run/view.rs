@@ -1063,7 +1063,7 @@ impl Run {
                     (ui.available_width() - minimum - notice_width - design::L).max(0.0);
                 let sheet_width = |summary: &str| {
                     design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
-                        + design::number_width(ui, "Log", &font)
+                        + design::number_width(ui, " Log ", &Type::Body.font(ui))
                         + Density::Read.control()
                         + design::L
                         + design::S
@@ -1225,8 +1225,11 @@ impl Run {
                         let detail = self.notice.as_deref().unwrap_or(summary);
                         design::named(ui, &response, detail);
                         response.on_hover_text(detail);
-                        if design::small_link(ui, "Log").clicked() {
+                        let log = design::link(ui, " Log ");
+                        design::named(ui, &log, "Log");
+                        if log.clicked() {
                             self.panel = Panel::Log;
+                            self.close_lookup = true;
                         }
                         if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
                             self.notice = None;
@@ -3458,15 +3461,18 @@ impl Run {
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
             let ready = self.syncs.get(&index).is_some_and(|sync| sync.ready());
-            let word = if ready {
-                "Connected"
+            let (word, age) = if ready {
+                ("Connected", "")
             } else {
-                freshness.word.as_str()
+                freshness
+                    .word
+                    .split_once(" · ")
+                    .unwrap_or((&freshness.word, ""))
             };
             let facts = if ready {
-                "· Sync reads this sheet · HP from this run"
+                "· Sync reads this sheet · HP from this run".to_owned()
             } else {
-                "· HP from this run"
+                format!("· {age} · HP from this run")
             };
             // Beside an open conflict, green words would say the opposite of what matters.
             if !self
