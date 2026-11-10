@@ -173,7 +173,24 @@ fn missing_folders(
                 && d.visible_text("It may have been moved or renamed.")
                 && !d.has_containing("Choose folder.")
                 && message.zip(action).is_some_and(|(message, action)| {
-                    message.rect.y_range().contains(action.rect.center().y)
+                    // Beside the words, or right below them and aligned with them, as
+                    // `message_with_action` places it when the line is too narrow.
+                    let (m, a) = (message.rect, action.rect);
+                    m.y_range().contains(a.center().y)
+                        || (a.top() >= m.bottom()
+                            && a.top() - m.bottom() <= crate::design::M
+                            && (a.left() - m.left()).abs() <= 1.0)
+                })
+        },
+    );
+    d.observe_both(
+        "iter-13-C-FD3",
+        "Choose folder after the session folder warning is a bordered secondary action",
+        |d| {
+            d.in_view("Choose folder")
+                && d.control_frame("Choose folder").is_some_and(|frame| {
+                    frame.stroke.width > 0.0
+                        && frame.stroke.color == crate::design::colors().field_border
                 })
         },
     );

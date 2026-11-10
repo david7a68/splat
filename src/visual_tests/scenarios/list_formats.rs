@@ -379,6 +379,27 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("Splat renumbers it when it saves.")
         },
     );
+    // Round 13 FD6: the flagged day keeps its Day icon and says what its heading was written as.
+    d.observe_both(
+        "iter-13-C-FD6",
+        "The flagged day row keeps the Day icon and adds a muted warning word",
+        |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.ends_with(" · Written as Day 5"))
+                .collect();
+            let warn = crate::design::icons::WARN;
+            rows.len() == 1
+                && rows[0].name.starts_with("Day 1: ")
+                && d.visible_text(&format!("{warn} Written as Day 5"))
+                && {
+                    let painted = d.painted_in(rows[0].rect);
+                    painted.contains(crate::timeline::Kind::Day.icon())
+                        && painted.matches(warn).count() == 1
+                }
+        },
+    );
     // AD1: the clock shows minutes, so a ten-minute event ends at a different time.
     d.observe_both(
         "iter-12-C-AD1",

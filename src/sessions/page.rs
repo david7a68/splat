@@ -483,6 +483,20 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) 
     }
 }
 
+/// The plan's door to Arrivals while a fight is open. The run uses the same words.
+const ADD_TO_FIGHT: &str = "Add to fight…";
+
+/// A plan group's summary that wraps between members, never inside a member's
+/// `N × name (as base)`, as Arrivals does.
+fn plan_summary_text(group: &crate::encounter_run::RunGroup) -> String {
+    let summary = group.summary();
+    let members = group.member_summary();
+    match summary.strip_suffix(&members) {
+        Some(head) if !members.is_empty() => format!("{head}{}", group.member_summary_wrapped()),
+        _ => summary,
+    }
+}
+
 fn plan_group_summary(ui: &mut egui::Ui, summary: &str) {
     let mut job = egui::text::LayoutJob::simple(
         summary.replace(" · ", " ·\u{a0}"),
@@ -490,8 +504,13 @@ fn plan_group_summary(ui: &mut egui::Ui, summary: &str) {
         colors().muted,
         ui.available_width(),
     );
-    job.wrap.max_rows = 2;
-    ui.add(egui::Label::new(job).wrap()).on_hover_text(summary);
+    // Members stay whole, so a long member list can take a third line before it shortens.
+    job.wrap.max_rows = 3;
+    let plain = summary.replace('\u{a0}', " ");
+    let response = ui.add(egui::Label::new(job).wrap());
+    // The no-break spaces only steer the wrap; the name keeps plain spaces.
+    design::named(ui, &response, &plain);
+    response.on_hover_text(plain);
 }
 
 /// The recording count belongs to the tab's label and click target.
@@ -4354,15 +4373,19 @@ impl Sessions {
                     let row = ui.push_id(group.id, |ui| {
                         let mut read_group = false;
                         let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
-                        let group_action = if plan.arrivals_open { Action::quiet("Arrivals").icon(icons::GROUP) } else { Action::quiet(edit_word) };
+                        // With a fight open, the run's words and plus icon: the group joins it through Arrivals.
+                        let group_action = if plan.arrivals_open { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
                         let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
                         let group_widths = [width - action_width - design::S, action_width];
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = group.summary();
+                            let summary = plan_summary_text(group);
                             if group.warnings.is_empty() { plan_group_summary(ui, &summary); }
-                            else { wrapped_words(ui, Type::Small, &summary, c.muted); }
+                            else {
+                                let response = ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
+                                design::named(ui, &response, &summary.replace('\u{a0}', " "));
+                            }
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                             // Name each member left out, its base and its line, beside Edit group.
                             else {
@@ -4379,8 +4402,8 @@ impl Sessions {
                                 }
                             });
                             if plan.arrivals_open {
-                                if Action::quiet("Arrivals").icon(icons::GROUP)
-                                    .name(&format!("Go to Arrivals for {}", group.name)).density(Density::Read).show(ui).clicked() {
+                                if Action::quiet(ADD_TO_FIGHT).icon(icons::ADD)
+                                    .name(&format!("Add {} to fight", group.name)).density(Density::Read).show(ui).clicked() {
                                     self.wants_arrivals = true;
                                 }
                             } else if Action::quiet(edit_word).name(&format!("Edit group {}", group.name))
@@ -6924,28 +6947,17 @@ impl Sessions {
             self.open_form();
         }
         if folder_missing {
-            let action = Action::quiet("Choose folder").density(Density::Read);
-            let width =
-                ui.available_width() - action.natural_width(ui) - ui.spacing().item_spacing.x;
-            ui.horizontal_top(|ui| {
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                        design::message(
-                            ui,
-                            Tone::Warning,
-                            self.folder_error
-                                .as_deref()
-                                .unwrap_or("The session folder is not available."),
-                        );
-                    },
-                );
-                if action.show(ui).clicked() {
-                    self.wants_campaign_link = true;
-                }
-            });
+            // The only way out of this page, so it has the bordered recovery action.
+            if design::message_with_action(
+                ui,
+                Tone::Warning,
+                self.folder_error
+                    .as_deref()
+                    .unwrap_or("The session folder is not available."),
+                "Choose folder",
+            ) {
+                self.wants_campaign_link = true;
+            }
             return;
         }
         match self.view {
@@ -7538,6 +7550,43 @@ mod tests {
                 }
             });
         });
+    }
+
+    /// Round 13 FT4: the plan column has wider item spacing than other callers. A message's words
+    /// still start `XS` after its icon, and a wrapped Undo still lines up with the words.
+    #[test]
+    fn message_words_and_undo_keep_their_place_whatever_the_spacing() {
+        use egui_kittest::kittest::Queryable;
+        let words = "Removed “Shrine of Cinders” from tonight.";
+        let place = |spacing: f32| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(260.0, 200.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.spacing_mut().item_spacing.x = spacing;
+                        design::undo_message(ui, Tone::Info, words, "Undo remove");
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let message = harness.get_by_label(words).rect();
+            let undo = harness.get_by_label("Undo remove").rect();
+            (message, undo)
+        };
+        let (message, undo) = place(design::S);
+        // The narrow pane puts Undo below the words.
+        assert!(undo.top() >= message.bottom(), "{message:?} {undo:?}");
+        for spacing in [design::XS, design::L, design::XL] {
+            let (other, other_undo) = place(spacing);
+            assert!(
+                (other.left() - message.left()).abs() < 0.5,
+                "words at {spacing}: {other:?} against {message:?}"
+            );
+            assert!(
+                (other_undo.left() - undo.left()).abs() < 0.5,
+                "Undo at {spacing}: {other_undo:?} against {undo:?}"
+            );
+        }
     }
 
     #[test]
