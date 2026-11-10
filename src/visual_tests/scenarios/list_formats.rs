@@ -38,9 +38,27 @@ pub fn run(d: &mut Driver<'_>) {
         },
     );
     d.state("timeline-conversion-preview", Sizes::All);
+    // Where the later change's line sits in the small window, before and after the click.
+    let later = |d: &mut Driver<'_>| {
+        d.at_size(SMALL, |d| {
+            d.nodes()
+                .iter()
+                .filter(|node| node.name == "## Day 1: The crossing" && node.in_view())
+                .map(|node| node.rect.top().round() as i32)
+                .min()
+        })
+    };
+    let before_click = later(d);
     d.click("Next difference");
     d.expect("## Day 1: The crossing");
-    d.expect_same("The larger preview already shows every changed line at desk sizes; Next difference keeps them in view.");
+    let after_click = later(d);
+    d.observe(
+        "iter-4-D-FD8-next",
+        after_click.is_some() && after_click != before_click,
+        format!(
+            "Next difference moves the small preview to the later change: {before_click:?} -> {after_click:?}"
+        ),
+    );
     d.state("timeline-next-change-group", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);

@@ -397,9 +397,8 @@ impl State {
                     let line_height = Type::Mono
                         .line()
                         .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
-                    // Alignment can insert blank rows on both sides. Their combined
-                    // source count bounds the space needed without running alignment twice.
-                    let content_height = (file.before.lines().count() + file.after.lines().count())
+                    // Short previews fit the longer side; rows that alignment adds scroll.
+                    let content_height = file.before.lines().count().max(file.after.lines().count())
                         as f32
                         * line_height;
                     // The panes get the height, not the comparison's headings. Do not

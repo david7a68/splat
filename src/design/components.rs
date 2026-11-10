@@ -2396,10 +2396,16 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
         group_label(&mut columns[0], "Before");
         group_label(&mut columns[1], "After");
     });
-    let height = ui.available_height();
     let line_height = Type::Mono
         .line()
         .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
+    // Whole rows above the horizontal scroll bar: a pane never ends on a cut line.
+    let bar = ui.spacing().scroll.allocated_width();
+    let height = ((ui.available_height() - bar) / line_height)
+        .floor()
+        .max(1.0)
+        * line_height
+        + bar;
     if let Some(line) = target {
         offset.y = comparison_offset(&vec![line_height; count], line, height - S);
         ui.data_mut(|data| data.insert_temp(state.with("line"), line));
