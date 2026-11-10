@@ -5098,7 +5098,8 @@ impl Sessions {
                 shown.on_hover_text(recorder_said(said));
             }
         }
-        if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
+        let warning_shown = !live && !processing;
+        if let Some(warning) = recording.warning.as_ref().filter(|_| warning_shown) {
             ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
         }
         let job_here = self
@@ -5123,6 +5124,15 @@ impl Sessions {
                         .clicked()
                     {
                         open = Some(made);
+                    }
+                    // While processing hides the warning line, the old results still need
+                    // their reason, in the same words. Never both at once.
+                    if made == Made::Transcript && !warning_shown && recording.check_missing() {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, processing::NO_CHECK_LABEL)
+                                .color(c.muted),
+                        );
                     }
                 }
             });

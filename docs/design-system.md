@@ -1166,7 +1166,8 @@ The viewer has back link and muted date on line one, Add to notes at the right o
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
 views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
-states an empty check once, in the warning line; no label beside Raw transcript repeats it. Keep row menu
+states an empty check once: in the warning line, or, while processing again hides that line, as `The check
+returned nothing` beside Raw transcript. Never both. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings

@@ -6678,6 +6678,18 @@ pub mod session_notes {
         // Must stay true: the open details form owns its own save, so the move is not primary.
         d.click("Edit details");
         d.expect("Save details");
+        // The details form's own save is the one primary once its details change.
+        let name = d
+            .field_text("Campaign name")
+            .expect("the campaign name field");
+        d.type_into("Campaign name", " (edited)");
+        super::session_recording::check_one_primary(
+            d,
+            "Save details",
+            "iter-16-C-FT4-details-primary",
+        );
+        d.replace_text_in("Campaign name", &name);
+        d.expect("Cancel");
         d.scroll_until(pos2(600.0, 400.0), "Move files and save", 20);
         let frame = d.control_frame("Move files and save");
         assert!(
@@ -8642,6 +8654,34 @@ pub mod session_recording {
             );
         });
         d.click("Not now");
+
+        // FT3 (round 16): processing again hides the warning line, so the label says it once.
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 4,
+        });
+        d.settle();
+        assert!(
+            d.has_containing("Processing") && !d.visible_text(WARNING),
+            "Processing again hides the warning line"
+        );
+        d.state_prepared("recording-processing-again", Sizes::All, |d| {
+            let mut said = Vec::new();
+            d.each_painted_text(|text, _| {
+                let words = &text.galley.job.text;
+                if words.contains("returned nothing") || words.contains("returned no result") {
+                    said.push(words.clone());
+                }
+            });
+            d.observe(
+                "iter-16-C-FT3-processing",
+                said == [crate::processing::NO_CHECK_LABEL],
+                format!("While processing again, the label alone says the check returned nothing: {said:?}"),
+            );
+        });
+        d.app_mut().sessions.simulate_job_end_warned(WARNING);
+        d.settle();
+        d.expect(WARNING);
 
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
