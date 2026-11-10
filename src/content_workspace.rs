@@ -1086,6 +1086,10 @@ impl Catalogue {
         }
         drop(built);
         let catalogue = Self::build(modules, campaign, neighbours.clone(), &folders)?;
+        // Which duplicate a repair names depends on file times, not texts. Build it again.
+        if !catalogue.duplicate_ids.is_empty() {
+            return Ok(catalogue);
+        }
         let mut built = BUILT.lock().unwrap_or_else(PoisonError::into_inner);
         built.retain(|((m, c, _, _), _)| !(m.as_slice() == modules && c.as_ref() == campaign));
         if built.len() >= 2 {
@@ -1231,8 +1235,8 @@ impl Catalogue {
                 if entry.kind == "package" && result.manifest_problems.contains_key(&module.id) {
                     result.insert(entry, module.id, false)?;
                 } else {
-                    let text = folder.text(&entry.path).map(str::to_owned);
-                    result.insert_file(entry, module.id, false, &module.path, text.as_deref())?;
+                    let text = folder.text(&entry.path);
+                    result.insert_file(entry, module.id, false, &module.path, text)?;
                 }
             }
             result.modules.push(ModuleIndex {
@@ -1279,13 +1283,13 @@ impl Catalogue {
                     .filter(|_| campaign_package::in_folder(&entry.path))
                     .map(|(id, _)| *id);
                 package_entries.extend(package.map(|_| entry.id));
-                let text = folder.text(&entry.path).map(str::to_owned);
+                let text = folder.text(&entry.path);
                 result.insert_file(
                     entry,
                     package.unwrap_or(campaign.id),
                     true,
                     &campaign.path,
-                    text.as_deref(),
+                    text,
                 )?;
             }
             if let Some((id, name)) = manifest {

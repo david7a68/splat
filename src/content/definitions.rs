@@ -9,6 +9,10 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-definitions");
+/// builtin/dnd2024-definitions/coverage.json and contracts.json without layout whitespace.
+/// build.rs writes them; most of each pretty-printed file is indentation.
+const COVERAGE: &str = include_str!(concat!(env!("OUT_DIR"), "/coverage.json"));
+const CONTRACTS: &str = include_str!(concat!(env!("OUT_DIR"), "/contracts.json"));
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -244,13 +248,9 @@ fn parse_entries() -> Result<Vec<Entry>, String> {
                 .collect::<Result<Vec<_>, String>>()
         },
         || {
-            // The same files as builtin/dnd2024-definitions/coverage.json and contracts.json,
-            // without layout whitespace. build.rs writes them.
-            let coverage = include_str!(concat!(env!("OUT_DIR"), "/coverage.json"));
-            let contracts = include_str!(concat!(env!("OUT_DIR"), "/contracts.json"));
             let (coverage, registry) = rayon::join(
-                || serde_json::from_str::<serde_json::Value>(coverage),
-                || read_registry(contracts),
+                || serde_json::from_str::<serde_json::Value>(COVERAGE),
+                || read_registry(CONTRACTS),
             );
             Ok::<_, String>((
                 coverage.map_err(|e| e.to_string())?,
@@ -388,13 +388,8 @@ pub fn verify() -> CatalogueReport {
     let result = (|| -> Result<(), String> {
         let definitions = entries()?;
         report.definitions = definitions.len();
-        let manifest: serde_json::Value = serde_json::from_str(
-            DEFINITIONS
-                .get_file("coverage.json")
-                .and_then(|f| f.contents_utf8())
-                .ok_or("Missing definition coverage inventory")?,
-        )
-        .map_err(|e| e.to_string())?;
+        let manifest: serde_json::Value =
+            serde_json::from_str(COVERAGE).map_err(|e| e.to_string())?;
         report.adjudications = manifest["adjudications"]
             .as_array()
             .ok_or("Missing source adjudication inventory")?
@@ -405,13 +400,7 @@ pub fn verify() -> CatalogueReport {
         if records.len() != definitions.len() {
             return Err("Definition inventory count mismatch".into());
         }
-        let registry: super::contracts::Registry = serde_json::from_str(
-            DEFINITIONS
-                .get_file("contracts.json")
-                .and_then(|f| f.contents_utf8())
-                .ok_or("Missing contract registry")?,
-        )
-        .map_err(|e| e.to_string())?;
+        let registry = read_registry(CONTRACTS).map_err(|e| e.to_string())?;
         if registry.format != 2 {
             return Err("Unsupported contract registry".into());
         }

@@ -1231,7 +1231,7 @@ fn has_line(text: &str, start: &str) -> bool {
 pub struct Folder {
     /// Each Markdown file read, by path in the folder, with its text and whether it has
     /// Splat fields. A file that is not a note can still explain a problem with one.
-    texts: Vec<(String, String, bool)>,
+    texts: Vec<(String, Text, bool)>,
     /// Problems found while walking, before any note was parsed.
     walked: Vec<Diagnostic>,
     by_path: std::collections::HashMap<String, usize>,
@@ -1239,10 +1239,35 @@ pub struct Folder {
     pub errors: Vec<Diagnostic>,
 }
 
+/// A file's text, or for an ordinary note only enough to see that it changed.
+/// A vault can hold thousands of ordinary notes that Splat never shows.
+#[derive(Debug, PartialEq)]
+enum Text {
+    Kept(String),
+    Digest(u64, usize),
+}
+
+impl Text {
+    fn digest(text: &str) -> Self {
+        use std::hash::Hasher;
+        let mut hasher = std::hash::DefaultHasher::new();
+        hasher.write(text.as_bytes());
+        Self::Digest(hasher.finish(), text.len())
+    }
+    fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Kept(text) => Some(text),
+            Self::Digest(..) => None,
+        }
+    }
+}
+
 impl Folder {
-    /// The text of a Markdown file as this reading saw it.
+    /// The text of a note, or of a file with a problem, as this reading saw it.
     pub fn text(&self, path: &str) -> Option<&str> {
-        self.by_path.get(path).map(|at| self.texts[*at].1.as_str())
+        self.by_path
+            .get(path)
+            .and_then(|at| self.texts[*at].1.as_str())
     }
 }
 
@@ -1258,7 +1283,7 @@ fn read_folder_using(
     fn walk(
         root: &Path,
         current: &Path,
-        files: &mut Vec<(String, String, bool)>,
+        files: &mut Vec<(String, Text, bool)>,
         errors: &mut Vec<Diagnostic>,
     ) -> Result<(), String> {
         let mut report = |path: &Path, message: String| {
@@ -1335,6 +1360,7 @@ fn read_folder_using(
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .into_owned();
+                let problems = errors.len();
                 let note = {
                     let normalized = text.trim_start_matches('\u{feff}');
                     // Most notes have no CR. Replacing still copies and scans every byte.
@@ -1366,12 +1392,22 @@ fn read_folder_using(
                         false
                     }
                 };
+                // A problem names this file, and a repair needs its text.
+                let text = if note || errors.len() != problems {
+                    Text::Kept(text)
+                } else {
+                    Text::digest(&text)
+                };
                 files.push((name, text, note));
             }
         }
         Ok(())
     }
-    let key = (root.to_path_buf(), parse as usize);
+    // Pages name some folders by their canonical path. Both names share one reading.
+    let key = (
+        root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
+        parse as usize,
+    );
     // Pages often read the same folder at the same time. The later ones wait and reuse it.
     let reading = read_cache::reading(&key);
     let _reading = reading
@@ -1388,7 +1424,7 @@ fn read_folder_using(
     let parsed: Vec<_> = files
         .par_iter()
         .map(|(path, text, _)| {
-            parse(path, text).map_err(|message| Diagnostic {
+            parse(path, text.as_str().unwrap_or_default()).map_err(|message| Diagnostic {
                 path: path.clone(),
                 message,
             })
@@ -1409,7 +1445,7 @@ fn read_folder_using(
         .collect();
     let catalogue = entries.clone();
     for entry in &mut entries {
-        let source = &texts[by_path[&entry.path]].1;
+        let source = texts[by_path[&entry.path]].1.as_str().unwrap_or_default();
         list_formats::resolve(entry, &catalogue, source);
     }
     let folder = Arc::new(Folder {
@@ -1426,7 +1462,7 @@ fn read_folder_using(
 /// Several pages read the same folders. Parsing is most of the work, so the last result
 /// for each folder is kept. It is reused only when every Markdown file's text is the same.
 mod read_cache {
-    use super::{Diagnostic, Folder};
+    use super::{Diagnostic, Folder, Text};
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
@@ -1454,7 +1490,7 @@ mod read_cache {
 
     pub(super) fn find(
         key: &Key,
-        texts: &[(String, String, bool)],
+        texts: &[(String, Text, bool)],
         walked: &[Diagnostic],
     ) -> Option<Arc<Folder>> {
         let found = CACHE.lock().ok()?.as_ref()?.get(key)?.clone();
