@@ -44,6 +44,21 @@ fn painted_starts(d: &Driver<'_>, words: &str, back: usize) -> Vec<Pos2> {
     starts
 }
 
+/// Every disk-conflict choice row uses the Read density, so its buttons are one height on every
+/// page. Runs at the size being captured.
+fn conflict_choices_read_height(d: &mut Driver<'_>, id: &str, safe: &str, red: &str) {
+    let height = crate::design::Density::Read.control();
+    let (safe_rect, red_rect) = (d.place_of(safe), d.place_of(red));
+    let size = d.window_size();
+    d.observe(
+        id,
+        safe_rect.zip(red_rect).is_some_and(|(safe, red)| {
+            (safe.height() - height).abs() < 0.5 && (red.height() - height).abs() < 0.5
+        }),
+        format!("At {size:?}: {safe} {safe_rect:?} and {red} {red_rect:?} are {height} px tall"),
+    );
+}
+
 /// iter-15-E: a file-conflict message's choices start at its text edge, not at its bar. The safe
 /// choice comes first; the red one follows exactly `L` after it on the same line (every captured
 /// size has room for both). `below`, when given, is text that must stay under both choices. The
@@ -551,6 +566,7 @@ pub mod library_author {
                 RELOAD_DISK,
                 Some("YOUR DRAFT"),
             );
+            conflict_choices_read_height(d, "iter-15-B2-density-library", OVERWRITE, RELOAD_DISK);
             // Each column is (width - gap) / 2 wide, so the second starts (width + gap) / 2 after
             // the first; the theme's gap is S. At 1920x1080 the side-by-side comparison takes the
             // full pane, wider than the source editor (a 720 px cap measures exactly 720).
@@ -1790,7 +1806,9 @@ pub mod encounter_build {
                 ),
             );
         }
-        d.state("encounter-changed-on-disk", Sizes::All);
+        d.state_prepared("encounter-changed-on-disk", Sizes::All, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density", OVERWRITE, RELOAD);
+        });
         d.click(OVERWRITE);
         d.expect(SAVED_NOTE);
         d.observe(
@@ -4659,7 +4677,9 @@ pub mod run_edge_states {
                     })
             },
         );
-        d.state("changed-on-disk", Sizes::Default);
+        d.state_prepared("changed-on-disk", Sizes::Default, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
+        });
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(

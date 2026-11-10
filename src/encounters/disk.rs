@@ -1,6 +1,6 @@
 //! The same disk comparison for encounter, group and creature drafts.
 use crate::{
-    design::{self, Action, Tone},
+    design::{self, Action, Density, Tone},
     library::note_path,
 };
 use eframe::egui;
@@ -92,7 +92,9 @@ impl Recovery {
         let mut choice = None;
         design::message_with_actions(ui, Tone::Warning, &last, |ui| {
             ui.horizontal_wrapped(|ui| {
+                // The same Read density as every other disk-conflict choice row.
                 if Action::secondary("Overwrite with my draft")
+                    .density(Density::Read)
                     .show(ui)
                     .clicked()
                 {
@@ -105,6 +107,7 @@ impl Recovery {
                 } else {
                     "Let it go"
                 })
+                .density(Density::Read)
                 .show(ui)
                 .clicked()
                 {
