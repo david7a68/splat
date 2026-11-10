@@ -74,7 +74,6 @@
       "encounter-run": 4,
       "file-formats": 6,
       "gallery": 10,
-      "generator-tables": 4,
       "library-author": 3,
       "library-browse": 6,
       "library-scope": 5,
@@ -85,8 +84,7 @@
       "session-plan": 19,
       "session-recording": 13,
       "settings": 1,
-      "world": 4,
-      "world-held-npc": 3
+      "world": 4
     },
     "target-size/egui-chrome": {
       "book-to-package": 50,

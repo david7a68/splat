@@ -474,9 +474,11 @@ impl WorldPage {
                     });
             });
         let mut nav = None;
+        // An `L` gutter, so a quiet action that starts a line can reach into it and stay clear
+        // of the World column's splitter.
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::S as i8,
+                left: design::L as i8,
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {

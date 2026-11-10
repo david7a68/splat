@@ -1339,6 +1339,23 @@ pub fn generator(d: &mut Driver<'_>) {
             }),
         format!("Copy the marker's icon starts at the card's text edge: icon {icon:?}, help {help:?}, Will save {save:?}"),
     );
+    // The press area reaches into the pane's gutter, never into the World column's splitter.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (copy, splitter) = d.at_size(size, |d| {
+            (
+                d.place_of(crate::lookup::COPY_MARKER),
+                d.place_of("Resize World notes column"),
+            )
+        });
+        d.observe(
+            "iter-16-D-FD4",
+            copy.zip(splitter)
+                .is_some_and(|(copy, splitter)| copy.left() >= splitter.right()),
+            format!(
+                "At {size:?}, Copy the marker's press area {copy:?} starts right of the splitter {splitter:?}"
+            ),
+        );
+    }
     d.state("generator-own-names-on-world", Sizes::Default);
     // FD3: after the copy, the card says where the line goes and which dice to change.
     d.click(crate::lookup::COPY_MARKER);
@@ -1609,6 +1626,13 @@ pub fn held_npc(d: &mut Driver<'_>) {
         "iter-15-D-AD1-undo",
         d.has(&format!("Will save {file}")) && !d.visible_text(&notice),
         "Undo discard brings back the same NPC",
+    );
+    // The NPC that Undo brings back is held again, so the rail names it again, once.
+    let rail = d.rail_words();
+    d.observe(
+        "iter-16-D-FD1-undo",
+        rail.matches(crate::world::page::UNSAVED_NPC).count() == 1,
+        format!("After Undo discard, the rail names the held NPC once: {rail:?}"),
     );
 
     // Closing the app or changing the campaign asks about the held NPC, as for other drafts.
