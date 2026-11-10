@@ -1402,7 +1402,8 @@ pub fn generator(d: &mut Driver<'_>) {
 /// one row, Show brings its card back, Discard has Undo, and Save writes it once. AD2: the
 /// card names the campaign's own NPC folder.
 pub fn held_npc(d: &mut Driver<'_>) {
-    for name in ["Wren Hollis", "Oskar Venn", "Ilsa Marrow"] {
+    // Ilsa is shorter than a link's minimum target.
+    for name in ["Wren", "Oskar", "Ilsa"] {
         entry(d, &format!("People/{name}.md"), name, "npc", "");
     }
     fs::write(
@@ -1458,10 +1459,24 @@ pub fn held_npc(d: &mut Driver<'_>) {
     };
     d.click_containing("Problems · ");
     kept(d, "iter-15-D-AD1-problems", "Problems");
+    let short = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "Ilsa" && node.role == Role::Link && node.in_view());
+    d.observe(
+        "iter-15-D2-short-link",
+        short
+            .as_ref()
+            .is_some_and(|node| node.rect.width() >= design::XL),
+        format!(
+            "A short link's press target is at least XL wide: {:?}",
+            short.as_ref().map(|node| node.rect)
+        ),
+    );
     d.state("held-npc-row-over-problems", Sizes::All);
     d.click_containing("Open questions · ");
     kept(d, "iter-15-D-AD1-questions", "Who rings the bells?");
-    d.click_starting("Wren Hollis · ");
+    d.click_starting("Wren · ");
     kept(d, "iter-15-D-AD1-other-note", "Show file");
     d.state("held-npc-row-over-note", Sizes::Default);
     d.click_starting("Broken.md · ");
@@ -1492,6 +1507,37 @@ pub fn held_npc(d: &mut Driver<'_>) {
         d.has(&format!("Will save {file}")) && !d.visible_text(&notice),
         "Undo discard brings back the same NPC",
     );
+
+    // Closing the app or changing the campaign asks about the held NPC, as for other drafts.
+    let unsaved = format!("The generated NPC \u{201c}{npc}\u{201d} is not saved.");
+    d.request_close();
+    d.observe(
+        "iter-15-D-AD1-close",
+        d.in_view_containing(&unsaved) && d.in_view("Keep editing"),
+        "The close dialog names the unsaved NPC",
+    );
+    // The check above requires the dialog. Without it, the rest still reports its own checks.
+    if d.has("Keep editing") {
+        d.click("Keep editing");
+    }
+    d.observe(
+        "iter-15-D-AD1-close-kept",
+        !d.has_containing(&unsaved) && d.has(&format!("Will save {file}")),
+        "Keep editing leaves the same NPC on its card",
+    );
+    let switch = "Save or discard your changes to change campaigns.";
+    d.observe(
+        "iter-15-D-AD1-switch-start",
+        !d.in_view_containing(switch),
+        "The campaign list is closed before the check",
+    );
+    d.click_starting("Active campaign: ");
+    d.observe(
+        "iter-15-D-AD1-switch",
+        d.in_view_containing(switch),
+        "The campaign selector is blocked while the NPC is unsaved",
+    );
+    d.press(Key::Escape);
     d.click("Save NPC");
     d.settle();
     let people_after = fs::read_dir(root(d).join("People")).unwrap().count();

@@ -945,10 +945,14 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
     let galley = one_line(ui, label, role.font(ui), c.accent, room);
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(galley.size().x, galley.size().y.max(24.0)),
-        Sense::click(),
+    // The words take their own width in the layout. A short word's press target grows
+    // evenly to `XL`, so a link such as `Ilsa` is as easy to hit as a longer one.
+    let (rect, word) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(XL)),
+        Sense::hover(),
     );
+    let target = rect.expand2(vec2(((XL - rect.width()) / 2.0).max(0.0), 0.0));
+    let response = ui.interact(target, word.id.with("link"), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
     if ui.is_rect_visible(rect) {
         let y = rect.center().y - galley.size().y / 2.0;

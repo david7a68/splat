@@ -1233,11 +1233,24 @@ mod tests {
                 }),
             ),
             (
-                "AD1-new-npc",
+                "AD1-new-npc-saved",
                 Box::new(|harness| {
                     harness.state_mut().begin_new("npc", Some(&index));
                     harness.run_steps(2);
-                    harness.query_by_label("Create NPC").is_some()
+                    let form = harness.query_by_label("Create NPC").is_some();
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
+                        .focus();
+                    harness.run_steps(1);
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
+                        .type_text("Tam");
+                    harness.run_steps(2);
+                    harness.get_by_label("Create NPC").click();
+                    harness.run_steps(2);
+                    // The New form's save writes only its own note.
+                    form && harness.state().new_kind.is_none()
+                        && npc_files(dir.path()) == ["Tam.md"]
                 }),
             ),
         ];
@@ -1289,10 +1302,12 @@ mod tests {
 
         harness.get_by_label("Save NPC").click();
         harness.run_steps(2);
+        let mut expected = vec![format!("{npc}.md"), "Tam.md".to_owned()];
+        expected.sort();
         assert_eq!(
             npc_files(dir.path()),
-            [format!("{npc}.md")],
-            "AD1-saved: the held NPC saves to one file"
+            expected,
+            "AD1-saved: the held NPC saves to one file, beside the New form's note"
         );
         assert!(held(harness.state()).is_none());
         assert!(harness.query_by_label(&row).is_none());
