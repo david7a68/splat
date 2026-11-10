@@ -537,9 +537,11 @@ impl Run {
             .hint(full)
             .show(ui)
             .clicked();
-        let reason = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-        design::named(ui, &reason, full);
-        reason.on_hover_text(full);
+        if design::number_width(ui, shown, &Type::Small.font(ui)) <= room {
+            let reason = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+            design::named(ui, &reason, full);
+            reason.on_hover_text(full);
+        }
         clicked
     }
 
@@ -1074,6 +1076,12 @@ impl Run {
                     } else {
                         0.0
                     };
+                // Keep both facts whole. Undo keeps its full accessible name and hover text.
+                let minimum = if party_sync_off && self.recording_notice.is_some() {
+                    self.undo_action("Undo").natural_width(ui) + design::XS
+                } else {
+                    minimum
+                };
                 let notice_width = design::number_width(ui, &notice, &font) + design::S;
                 let sheet_room =
                     (ui.available_width() - minimum - notice_width - design::L).max(0.0);
@@ -1105,13 +1113,20 @@ impl Run {
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
                 let overhead = self.undo_action("").natural_width(ui);
-                let shown = undo_words(
-                    ui,
-                    &undo_label,
-                    &self.state.participants,
-                    &Type::Strong.font(ui),
-                    slot - overhead - design::XS,
-                );
+                let shown = if party_sync_off
+                    && self.recording_notice.is_some()
+                    && self.undo_action(&fitted).natural_width(ui) > slot
+                {
+                    "Undo".to_owned()
+                } else {
+                    undo_words(
+                        ui,
+                        &undo_label,
+                        &self.state.participants,
+                        &Type::Strong.font(ui),
+                        slot - overhead - design::XS,
+                    )
+                };
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),

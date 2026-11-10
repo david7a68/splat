@@ -6113,12 +6113,12 @@ pub mod session_recording {
         );
         d.state("run-silent", Sizes::All);
         let silence = d.at_size(SMALL, |d| {
-            d.visible_text("Recording silence") && d.visible_text("Not connected")
+            d.visible_text("Recording silence") && d.visible_text("Sync off for the party")
         });
         d.observe(
             "R1",
             silence,
-            "Silence and the short connection word fit the run notice at 960x640",
+            "Silence and the full party sync state fit the run notice at 960x640",
         );
         d.click_containing("Undo: 7 damage");
         close_run(d);

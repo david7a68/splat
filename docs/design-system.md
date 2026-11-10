@@ -639,6 +639,9 @@ say sheet changed. Sync-panel choices stay in Log and Undo.
 
 Notice priority is conflict, recording silence, other sync notices, next name. Silence and short sync state
 stay together when space is tight. Connect to sync loses its link before either state loses its word. Keep the
+full `Sync off for the party` beside recording silence. If the Undo target cannot fit, show `Undo` and keep
+its full target in hover and accessibility. An empty Undo can omit its adjacent reason when it cannot fit;
+the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
 once below the roster, keeping Undo visible. Stat-block errors use the notice icon and one fitted line, with
