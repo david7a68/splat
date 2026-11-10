@@ -894,6 +894,61 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "Make NPC note opens the linked person in World",
     );
     d.state("campaign-creature-as-npc", Sizes::All);
+
+    // An unread list must not turn into an empty editable list.
+    let id = Uuid::new_v4();
+    let unread_groups = format!(
+        "splat_part_of: # Keep the stored groups.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n",
+        Uuid::new_v4()
+    );
+    let unread_path = root(d).join("NPCs/Unread groups.md");
+    let before = format!(
+        "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Unread groups\nsplat_type: npc\n{unread_groups}---\n\n# Unread groups\n\nKeeps the gate.\n"
+    );
+    fs::write(&unread_path, &before).unwrap();
+    reload(d);
+    d.click_containing("Unread groups · ");
+    d.click("Edit Unread groups");
+    d.expect("Part of could not be read. Repair it first.");
+    d.observe_both(
+        "iter-8-D2-unread-groups",
+        "An unread Part of list blocks only its picker and explains the repair",
+        |d| {
+            for name in ["Change Part of", "Status", "Text", "Change In"] {
+                d.expect(name);
+            }
+            d.is_disabled("Change Part of")
+                && !d.is_disabled("Status")
+                && !d.is_disabled("Text")
+                && !d.is_disabled("Change In")
+        },
+    );
+    d.type_into("Status", "ready");
+    d.state("unread-part-of-edit", Sizes::All);
+    d.click("Save changes");
+    d.wait_for_text("Changes saved.");
+    let saved = fs::read_to_string(&unread_path).unwrap();
+    assert!(saved.contains("splat_status: ready"));
+    assert!(
+        saved.contains(&unread_groups),
+        "iter-8-D2-group-bytes: another field's save must keep the raw group block"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read_to_string(&unread_path).unwrap(), before);
+    // Repair on disk must make the group picker available again.
+    fs::write(
+        &unread_path,
+        before.replace(&unread_groups, "splat_part_of: []\n"),
+    )
+    .unwrap();
+    reload(d);
+    d.click("Edit Unread groups");
+    d.expect("Change Part of");
+    assert!(
+        !d.is_disabled("Change Part of"),
+        "iter-8-D2-repaired: a repaired list is editable"
+    );
+    d.click("Discard");
 }
 
 pub fn tables(d: &mut Driver<'_>) {

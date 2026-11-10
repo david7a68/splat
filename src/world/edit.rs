@@ -17,6 +17,7 @@ use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
+const UNREAD_GROUPS: &str = "Part of could not be read. Repair it first.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
 pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
@@ -72,6 +73,7 @@ struct Fields {
     creature: Option<Value>,
     place: Option<Value>,
     groups: Vec<Value>,
+    groups_unread: bool,
     text: String,
 }
 
@@ -96,6 +98,17 @@ impl Fields {
             creature: set("creature"),
             place: set("in"),
             groups: super::part_of(entry).into_iter().cloned().collect(),
+            // A rejected list is absent from the model. Match its flag by the source key,
+            // so the form cannot mistake unread values for an empty list.
+            groups_unread: entry.flags.iter().any(|flag| {
+                file.lines()
+                    .nth(flag.line.saturating_sub(1))
+                    .and_then(|line| line.split_once(':'))
+                    .is_some_and(|(key, _)| {
+                        serde_yaml_ng::from_str::<String>(key)
+                            .is_ok_and(|key| key == "splat_part_of")
+                    })
+            }),
             text: split_text(file, &entry.name)
                 .map_or(file, |(_, text)| text)
                 .to_owned(),
@@ -198,6 +211,9 @@ impl EditDraft {
             return Ok(None);
         }
         let changed = self.now.changed(&self.start);
+        if changed.groups && self.start.groups_unread {
+            return Err(UNREAD_GROUPS.into());
+        }
         let mut after = disk.clone();
         if changed.status {
             after = super::fields::patch(&after, "status", self.now.status.trim().into())?;
@@ -507,7 +523,16 @@ impl Reader {
                 *slot = Some(chosen).filter(|value| !value.is_null());
             }
         }
-        design::field(ui, "Part of", None, None, |ui| {
+        let groups_error = draft.start.groups_unread.then_some(UNREAD_GROUPS);
+        if groups_error.is_some()
+            && self
+                .picker
+                .as_ref()
+                .is_some_and(|picker| picker.key == "part_of")
+        {
+            self.picker = None;
+        }
+        design::field(ui, "Part of", None, groups_error, |ui| {
             ui.horizontal_wrapped(|ui| {
                 let names: Vec<_> = draft
                     .now
@@ -519,7 +544,9 @@ impl Reader {
                     Type::Body
                         .rich(
                             ui,
-                            if names.is_empty() {
+                            if groups_error.is_some() {
+                                "not read".into()
+                            } else if names.is_empty() {
                                 "not set".into()
                             } else {
                                 names.join(", ")
@@ -530,6 +557,7 @@ impl Reader {
                 if Action::quiet("Change")
                     .density(Density::Read)
                     .name("Change Part of")
+                    .blocked(groups_error)
                     .show(ui)
                     .clicked()
                 {
@@ -763,12 +791,86 @@ mod tests {
                     .unwrap()
                     .as_bytes(),
                 serde_yaml_ng::to_string(value).unwrap().as_bytes(),
-                "FD-5-untouched-{position}: stored group text must be byte-identical"
+                "FD-5-untouched-{position}: stored group values must be identical"
             );
         }
         assert_eq!(super::super::part_of(&saved).len(), 3);
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), file);
+    }
+
+    fn unread_group_note() -> (tempfile::TempDir, Campaign, ContentIndex, Uuid, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let id = super::super::create_entry(&campaign, "Rook", "npc").unwrap();
+        super::super::create_entry(&campaign, "Arena Guild", "faction").unwrap();
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of: # Keep these exact bytes.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\nsplat_status: alive\n---\n\n# Rook\n\nKeeps the gate.\n",
+            Uuid::new_v4()
+        );
+        fs::write(dir.path().join("NPCs/Rook.md"), &file).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        (dir, campaign, index, id, file)
+    }
+
+    #[test]
+    fn iter8_d2_unread_object_groups_cannot_be_replaced_by_edit() {
+        let (dir, campaign, index, id, file) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        assert!(editable(item, &index));
+        assert!(super::super::part_of(&item.entry).is_empty());
+        let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
+        draft.now.groups.push("[[Arena Guild]]".into());
+        draft.now.status = "missing".into();
+        let result = draft.save(&campaign, &index, None);
+        let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
+        assert_eq!(
+            saved, file,
+            "D2-object-save: refused save must preserve the whole file"
+        );
+        assert_eq!(
+            result.err().as_deref(),
+            Some("Part of could not be read. Repair it first.")
+        );
+    }
+
+    #[test]
+    fn iter8_d2_other_edits_keep_unread_group_bytes() {
+        let (dir, campaign, index, id, file) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut draft = EditDraft::open(&campaign, &item.entry).unwrap();
+        draft.now.status = "missing".into();
+        draft.now.text = "Left the gate.\n".into();
+        let change = draft.save(&campaign, &index, None).unwrap().unwrap();
+        let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
+        let group_bytes = |text: &str| {
+            text.split_once("splat_part_of:")
+                .unwrap()
+                .1
+                .split_once("splat_status:")
+                .unwrap()
+                .0
+                .to_owned()
+        };
+        assert_eq!(
+            group_bytes(&saved),
+            group_bytes(&file),
+            "D2-other-save: unread groups must stay byte-identical"
+        );
+        let parsed = Entry::parse("NPCs/Rook.md", &saved).unwrap();
+        assert_eq!(status(&parsed), "missing");
+        assert!(saved.ends_with("Left the gate.\n"));
+        change.undo(&campaign).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap(),
+            file
+        );
     }
 
     #[test]

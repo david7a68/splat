@@ -509,6 +509,8 @@ keeps the state and quiet Discard at the left, and Save changes at that right ed
 unless a live run owns Next turn; then it is secondary. Discard closes the form and offers Undo discard.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
 One save writes every change with one Undo. A disk change uses the shared conflict choices.
+If Part of could not be read, block its Change action with `Part of could not be read. Repair it first.`
+Other fields stay editable. Saving them keeps the stored Part of bytes unchanged.
 
 Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
 
