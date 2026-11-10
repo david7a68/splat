@@ -477,7 +477,7 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
-NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned
+NPCs show labelled Stat block, In and Status rows; locations show In. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change on the first line. Empty
 values say `not set`. Missing links retain names and keep `Not found` on one line. Broken links have a
@@ -494,9 +494,9 @@ stored names offer `Rename the note to <file name>`, with a guarded update and U
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
 
-A campaign world entry has a quiet Edit icon after its title, in Lookup and World. Edit replaces the rows and
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
 the text with one form: Status, Stat block and In as labelled fields, then Text in the reader's prose type,
-without the title line. Save changes is primary, Unsaved follows it, then an `L` gap and quiet Cancel. One save
+without the title line. Save changes is primary unless a live run owns Next turn; then it is secondary. Unsaved follows it, then an `L` gap and quiet Cancel. One save
 writes every change with one Undo. A disk change uses the shared conflict choices.
 
 Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and

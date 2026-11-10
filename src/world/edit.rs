@@ -486,12 +486,16 @@ impl Reader {
         let mut cancel = false;
         ui.add_space(design::S);
         ui.horizontal_wrapped(|ui| {
-            save |= Action::primary("Save changes")
-                .density(Density::Read)
-                .key("Ctrl+S")
-                .blocked(reason)
-                .show(ui)
-                .clicked();
+            save |= (if self.sides.is_some() {
+                Action::secondary("Save changes")
+            } else {
+                Action::primary("Save changes")
+            })
+            .density(Density::Read)
+            .key("Ctrl+S")
+            .blocked(reason)
+            .show(ui)
+            .clicked();
             if dirty {
                 design::status(
                     ui,

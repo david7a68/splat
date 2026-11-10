@@ -4970,6 +4970,7 @@ pub mod nav_table {
 /// World notes, roll tables, and an NPC made at the table.
 pub mod world {
     use super::*;
+    use egui::accesskit::Role;
 
     const NPC: &str = "Ashori Deepcut";
 
@@ -4993,7 +4994,19 @@ pub mod world {
             !d.has("Create NPC") && d.has_containing("Watchkeeper"),
             "Creating a World note closes the form and opens the note",
         );
-        d.state("world-new-note-created", Sizes::Default);
+        for size in [SMALL, DEFAULT, LARGE] {
+            let clear = d.at_size(size, |d| {
+                d.expect("NPC · Campaign");
+                d.expect("Status");
+                d.visible_text("alive") && !d.visible_text("NPC · alive · Campaign")
+            });
+            d.observe(
+                "iter-6-D-FD8",
+                clear,
+                format!("The full NPC reader shows status once at {size:?}"),
+            );
+        }
+        d.state("world-new-note-created", Sizes::All);
 
         d.click("Setting · ");
         d.observe(
@@ -5050,7 +5063,7 @@ pub mod world {
         d.settle();
         d.observe(
             "T14.7",
-            d.has("Add to run") && !d.has("Save NPC"),
+            d.has("Add to fight") && !d.has("Save NPC"),
             "A saved NPC opens as a note, ready to join the fight",
         );
         d.state("world-generated-npc-saved", Sizes::Default);
@@ -5058,16 +5071,58 @@ pub mod world {
         look_up_again(d, NPC);
         d.click(&format!("New NPC \"{NPC}\""));
         d.settle();
-        d.expect("Add to run");
+        d.expect("Add to fight");
+        d.expect("NPC · alive · Campaign");
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to run");
+        d.click("Add to fight");
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
-        d.expect("SIDE");
+        d.expect("Side");
         d.wait_for_text("Enemies");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (words, side, width, change) = d.at_size(size, |d| {
+                d.expect("Side");
+                d.expect("Initiative");
+                d.expect("Change");
+                d.expect("Add to fight");
+                let label = d
+                    .nodes()
+                    .into_iter()
+                    .find(|n| n.name == "Side" && n.role == Role::Label);
+                (
+                    d.visible_text(&format!("Add {NPC} to the fight")) && !d.has("Add to run"),
+                    label.is_some_and(|label| {
+                        d.painted_size(label.rect, "Side")
+                            == Some(crate::design::Type::Small.size())
+                    }),
+                    d.nodes()
+                        .into_iter()
+                        .find(|n| n.name == "Initiative" && n.role == Role::TextInput)
+                        .is_some_and(|field| field.rect.width() <= crate::design::L * 5.0 + 1.0),
+                    d.nodes()
+                        .into_iter()
+                        .any(|n| n.name == "Change" && n.role == Role::Button)
+                        && d.control_frame("Change")
+                            .is_some_and(|frame| frame.stroke.width == 0.0),
+                )
+            });
+            for (id, passed) in [
+                ("FT2", words),
+                ("FD5-label", side),
+                ("FD5-width", width),
+                ("FD5-change", change),
+            ] {
+                d.observe(
+                    &format!("iter-6-D-{id}"),
+                    passed,
+                    format!("NPC Add form: {id} at {size:?}"),
+                );
+            }
+        }
         d.state("npc-add-to-run-form", Sizes::All);
-        d.click("Add");
+        d.expect("Add to fight");
+        d.click("Add to fight");
         d.settle();
         d.observe(
             "T14.5",
@@ -5079,7 +5134,12 @@ pub mod world {
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
-            d.has_containing("In the run · initiative 11") && !d.has("Add to run"),
+            d.has_containing("In the run · initiative 11")
+                && d.nodes()
+                    .into_iter()
+                    .filter(|n| n.name == "Add to fight" && n.role == Role::Button)
+                    .count()
+                    == 1,
             "The NPC's panel links to their row after they join",
         );
         d.click("In the run · initiative 11");

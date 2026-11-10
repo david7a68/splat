@@ -544,16 +544,17 @@ An NPC's **Stat block** and **In** rows each have a **Change** picker. A locatio
 Choose by name, or create a location from that picker. Each change edits only that key and offers **Undo**.
 The rest of the file, including comments and spacing, stays as it was. `in: "[[Ashfall Keep]]"` also works,
 including a location's aliases. A place loop stays in the list and shows a warning.
-The pencil beside a campaign entry's name, in World or Lookup, opens **Edit**: one form with **Status**, **Stat block**,
+The **Edit** action beside a campaign entry's name, in World or Lookup, opens one form with **Status**, **Stat block**,
 **In** and the entry's text, without its title line. **Save changes** (Ctrl+S) writes them together and offers
-**Undo changes**; **Cancel** writes nothing and offers **Undo discard**. If the note changed on disk, Splat writes
+**Undo changes**. During a live fight, **Save changes** uses a secondary border so **Next turn** stays the primary action.
+**Cancel** writes nothing and offers **Undo discard**. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
 **Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
 read other entries, and Splat asks before it closes or changes campaign.
 A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
 **New ▾ → Note…** creates a file in `Notes/`; its type is optional. The note opens with **Edit in Obsidian**.
 
-**Add to run** on an NPC puts them in the open fight under their own name, on their stat block. It does not change the
+**Add to fight** on an NPC puts them in the open fight under their own name, on their stat block. It does not change the
 encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
@@ -913,7 +914,7 @@ The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 
-If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu keeps **Edit** and can remove a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
+If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu keeps **Edit** and can remove a row. The NPC **Add to fight** form labels its side choice **Side** and uses the roster's side names.
 
 New creature entries start with speed and six ability scores in the Stat block tables. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 

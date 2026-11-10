@@ -1633,6 +1633,26 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
     pressed
 }
 
+/// A message with several actions below it, aligned with the message text.
+pub fn message_with_actions<R>(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    actions: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        let response = message(ui, tone, text);
+        let inset = response.rect.left() - ui.cursor().left();
+        ui.horizontal_top(|ui| {
+            ui.add_space(inset);
+            ui.vertical(actions).inner
+        })
+        .inner
+    })
+    .inner
+}
+
 /// The same safe-first choice for a draft whose file changed on disk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiskConflictChoice {
