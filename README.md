@@ -824,7 +824,7 @@ Saving a template does not execute rules or start a combat run.
 ### Encounter groups
 
 A session's plan can assemble a group in place: choose **Group**, then **New group**. The editor uses
-the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
+the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **+ Add to fight…**, the run's words, which goes to the Arrivals
 panel in the run. Its **⋯ → Remove from tonight** deletes an isolated plan link and keeps words inside a sentence. **Undo remove** restores the link.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a

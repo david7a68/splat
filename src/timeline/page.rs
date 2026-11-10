@@ -433,7 +433,7 @@ impl TimelinePage {
         event: &Event,
         day: u32,
         session: Option<&str>,
-        flagged: bool,
+        written_as: Option<u32>,
     ) {
         let c = colors();
         let selected = self.selected.as_deref() == Some(event.id.as_str());
@@ -461,11 +461,16 @@ impl TimelinePage {
             let status = long_rest_status(event.restores);
             detail.push_str(&format!("{} {}", status.icon, status.word));
         }
-        let name = if detail.is_empty() {
+        // A day heading written out of order keeps its Day icon and says what it was written as.
+        let flag = written_as.map(|day| format!("Written as Day {day}"));
+        let mut name = if detail.is_empty() {
             title.clone()
         } else {
             format!("{title} · {detail}")
         };
+        if let Some(flag) = &flag {
+            name.push_str(&format!(" · {flag}"));
+        }
         let response = design::row(ui, ROW, selected, &name, |ui, rect| {
             let painter = ui.painter();
             let spine = rect.left() + SPINE;
@@ -483,23 +488,33 @@ impl TimelinePage {
             painter.text(
                 egui::pos2(spine, icon_y),
                 egui::Align2::CENTER_CENTER,
-                if flagged {
-                    icons::WARN
-                } else {
-                    event.kind.icon()
-                },
+                event.kind.icon(),
                 Type::Name.font(ui),
-                if flagged {
-                    c.result.warning
-                } else if event.kind == Kind::Day {
+                if event.kind == Kind::Day {
                     c.text
                 } else {
                     c.muted
                 },
             );
+            // The warning icon and a muted word after the heading, in `Small`.
+            let flag = flag.as_ref().map(|flag| {
+                let mut job = egui::text::LayoutJob::default();
+                for (text, color) in [
+                    (icons::WARN.to_owned(), c.result.warning),
+                    (format!(" {flag}"), c.muted),
+                ] {
+                    job.append(
+                        &text,
+                        0.0,
+                        egui::TextFormat::simple(Type::Small.font(ui), color),
+                    );
+                }
+                painter.layout_job(job)
+            });
+            let flag_room = flag.as_ref().map_or(0.0, |flag| flag.size().x + design::S);
             let galley = if event.kind == Kind::Day {
                 let mut job = design::group_heading_text(ui, &title, 0);
-                job.wrap.max_width = width;
+                job.wrap.max_width = (width - flag_room).max(0.0);
                 job.wrap.max_rows = 1;
                 painter.layout_job(job)
             } else {
@@ -513,6 +528,13 @@ impl TimelinePage {
             };
             let top = rect.center().y - lines / 2.0;
             let x = rect.left() + TEXT_AT;
+            if let Some(flag) = flag {
+                let at = egui::pos2(
+                    x + galley.size().x + design::S,
+                    top + (galley.size().y - flag.size().y) / 2.0,
+                );
+                painter.galley(at, flag, c.muted);
+            }
             painter.galley(egui::pos2(x, top), galley, c.text);
             if !detail.is_empty() && !open {
                 let second = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
@@ -669,12 +691,14 @@ impl TimelinePage {
                     .color(colors().muted),
             );
         }
-        let flagged = book
+        let flagged: std::collections::HashMap<String, u32> = book
             .baseline
             .as_deref()
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .map(super::formats::flagged_days)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         let days = day_numbers(&book.events);
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
@@ -714,7 +738,13 @@ impl TimelinePage {
                     .session
                     .and_then(|id| sessions.iter().find(|session| session.id == id))
                     .map(|session| short_session(&session.label));
-                self.row(ui, event, days[index], session, flagged.contains(&event.id));
+                self.row(
+                    ui,
+                    event,
+                    days[index],
+                    session,
+                    flagged.get(&event.id).copied(),
+                );
             }
         });
     }
@@ -1391,7 +1421,7 @@ mod tests {
             let expected = format!("{} · {icon} {word}", event.label(0));
             let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    TimelinePage::default().row(ui, &event, 0, None, false);
+                    TimelinePage::default().row(ui, &event, 0, None, None);
                 });
             });
             design::theme::install(&harness.ctx);
@@ -1428,7 +1458,7 @@ mod tests {
                     if filtered {
                         page.filter = Filter::Rests;
                     }
-                    page.row(ui, &event, 1, None, false);
+                    page.row(ui, &event, 1, None, None);
                 });
             });
             design::theme::install(&harness.ctx);

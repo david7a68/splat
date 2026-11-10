@@ -9633,6 +9633,23 @@ pub mod session_plan_groups {
                 d.visible_text("2 groups, in the plan")
             };
             d.observe("iter-2-C-ST3", compact, "Read compacts group links already shown in the working plan, and keeps the tab count");
+            // Round 13 FT3: the Rival Team summary wraps between members, never inside
+            // `1 × Rival Captain (as Ember Cultist)`.
+            let rows: Vec<String> = d
+                .painted_lines_in(egui::Rect::EVERYTHING)
+                .into_iter()
+                .map(|row| row.replace('\u{a0}', " "))
+                .collect();
+            // At 960 px, Read compacts the plan's group links, so there is no summary to read.
+            // From 1200 px the summary must show.
+            if d.window_size().0 >= 1200.0 || d.in_view_containing("Rival Captain (as Ember Cultist)") {
+                let captain: Vec<_> = rows.iter().filter(|row| row.contains("Captain")).collect();
+                let whole = !captain.is_empty()
+                    && captain.iter().all(|row| row.contains("× Rival Captain (as Ember Cultist)"))
+                    && !rows.iter().any(|row| row.trim_end().ends_with("× Rival"))
+                    && rows.iter().any(|row| row.contains("2 × Cinder Wolf"));
+                d.observe("iter-13-C-FT3", whole, format!("The plan summary keeps each member whole, and every member shows: {captain:?}"));
+            }
         });
         show_plan(d);
         d.begin_task();
@@ -9676,8 +9693,21 @@ pub mod session_plan_groups {
         d.click("Stat block");
         d.click(NAV_SESSIONS);
         show_plan(d);
-        let route = format!("Go to Arrivals for {GROUP_RIVALS}");
+        let route = format!("Add {GROUP_RIVALS} to fight");
         d.expect(&route);
+        d.observe_both(
+            "iter-13-C-FT2",
+            "With a fight open, a plan group's door uses the run's words and plus icon",
+            |d| {
+                d.in_view(&route)
+                    && d.place_of(&route).is_some_and(|rect| {
+                        let words = d.painted_in(rect);
+                        words.contains("Add to fight…")
+                            && words.contains(crate::design::icons::ADD)
+                            && !words.contains("Arrivals")
+                    })
+            },
+        );
         d.state("plan-groups-fight-open", Sizes::All);
         d.click(&route);
         d.expect("IN TONIGHT'S PLAN");
@@ -9712,12 +9742,12 @@ pub mod session_plan_groups {
         let stays_out = !d.has("Save group");
         d.click("Return to the session being played");
         d.click("Save group");
-        d.expect("Go to Arrivals for Border Watch");
+        d.expect("Add Border Watch to fight");
         d.click_starting("Session 1: The Crossing ·");
-        d.expect(&format!("Go to Arrivals for {GROUP_RIVALS}"));
+        d.expect(&format!("Add {GROUP_RIVALS} to fight"));
         d.observe(
             "T14.6",
-            stays_out && !d.has("Go to Arrivals for Border Watch"),
+            stays_out && !d.has("Add Border Watch to fight"),
             "A group is linked in the plan it began in, with another note open on the way",
         );
 

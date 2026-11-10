@@ -168,7 +168,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high |
@@ -940,8 +940,8 @@ planned fight with that name. Delete the saved run stays in the menu. Start a ne
 planned encounters with a saved run, including legacy runs without a source ID. Open fights use a status link
 while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
-A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap to two lines, then shorten
-with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
+A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap between members, never inside a
+name, to at most three lines, then shorten with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells, quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
@@ -982,6 +982,14 @@ muted `N more` names the rest, with HP, in hover and its accessible name. `N mor
 focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
+Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
+in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
+item narrows, so nothing moves back when a player is healed. The held widths are measured again at the
+held level each frame, and dropped when they would hide a player who shows without the hold; the
+held level stays, so the hold never hides a player. A change of bar width (the window or the rail) or of the party
+measures again. The bar keeps this in its own state, keyed to the run, never in
+the party data.
+
 ### Timeline
 
 Timeline is a story-order ledger: one column, hairline spine, icon and word per kind, no kind colours or
@@ -1011,7 +1019,7 @@ displayed clock. File items use Fight and Major event; accept Encounter and Even
 a colon. Preserve outside prose, unknown properties and event fields. Separate app and outside event edits
 save together with a quiet notice; same-event edits need a choice. Compare at the first difference, with
 Overwrite before destructive Reload and lose my timeline. Flags name file and line and offer shared file
-actions; flagged days have a warning icon. Rail conflicts use warning Timeline changed on disk; write failures
+actions; a flagged day keeps its Day icon and adds a muted `Small` word after the heading with a warning icon (`⚠ Written as Day 5`). Rail conflicts use warning Timeline changed on disk; write failures
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
