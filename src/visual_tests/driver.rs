@@ -128,6 +128,8 @@ pub struct Driver<'a> {
     timing: CaptureTiming,
     repeated_captures: super::repeated_captures::RepeatedCaptures,
     expect_same: Option<&'static str>,
+    /// A probe can expire the real settle loop without waiting three minutes.
+    pub(super) settle_timeout: Duration,
 }
 
 #[derive(Default)]
@@ -274,6 +276,7 @@ impl<'a> Driver<'a> {
             timing: CaptureTiming::default(),
             repeated_captures: Default::default(),
             expect_same: None,
+            settle_timeout: ASYNC_TIMEOUT,
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -617,7 +620,7 @@ impl<'a> Driver<'a> {
                 self.timing.settle += started.elapsed();
                 return;
             }
-            check_settle_deadline(self.scenario, started, ASYNC_TIMEOUT);
+            check_settle_deadline(self.scenario, started, self.settle_timeout);
             if busy {
                 std::thread::sleep(Duration::from_millis(5));
             }
