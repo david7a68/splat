@@ -1201,17 +1201,22 @@ impl CampaignContent {
                 .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
             for flag in campaign_flags {
-                ui.horizontal_wrapped(|ui| {
-                    design::message(
-                        ui,
-                        Tone::Warning,
-                        &format!("Line {}: {}", flag.line, flag.message),
-                    );
-                    crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                    let words = format!("Line {}: {}", flag.line, flag.message);
                     if flag.message.contains(" choice \"") {
-                        *open_run_settings |=
-                            Action::quiet("Choose in Rules and runs").show(ui).clicked();
+                        *open_run_settings |= design::message_with_action(
+                            ui,
+                            Tone::Warning,
+                            &words,
+                            "Choose in Rules and runs",
+                        );
+                    } else {
+                        design::message(ui, Tone::Warning, &words);
                     }
+                    ui.horizontal_wrapped(|ui| {
+                        crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                    });
                 });
             }
         };
@@ -1252,13 +1257,51 @@ impl CampaignContent {
                     .id_salt("campaign_issues")
                     .show(ui, |ui| {
                         flag_lines(ui, &mut self.open_run_settings);
-                        for e in errors {
+                        for e in errors.iter().filter(|error| {
+                            !closure
+                                .missing_dependencies
+                                .iter()
+                                .any(|issue| issue.message.as_str() == error.as_str())
+                        }) {
                             ui.add(
                                 egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
                                     .wrap(),
                             );
                         }
-                        for entry in catalogue.entries.values().filter(|entry| entry.private) {
+                        for issue in &closure.missing_dependencies {
+                            ui.push_id(&issue.reference, |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, &issue.message).color(c.muted),
+                                    )
+                                    .wrap(),
+                                );
+                                for id in &issue.owners {
+                                    let owner = &catalogue.entries[id];
+                                    let action = format!("Repair {}", owner.entry.name);
+                                    if let Some(path) = catalogue.file_path_of(*id)
+                                        && design::link(ui, &action).clicked()
+                                    {
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair"),
+                                                path.to_path_buf(),
+                                            )
+                                        });
+                                    }
+                                }
+                                design::quiet_section(ui, "Technical details", |ui| {
+                                    ui.label(Type::Small.rich(ui, &issue.reference).color(c.muted));
+                                });
+                            });
+                        }
+                        for entry in catalogue.entries.values().filter(|entry| {
+                            entry.private
+                                && !closure
+                                    .missing_dependencies
+                                    .iter()
+                                    .any(|issue| issue.owners.contains(&entry.entry.id))
+                        }) {
                             if splat::content::required_references(&entry.entry).is_ok_and(
                                 |references| {
                                     references
@@ -1311,107 +1354,126 @@ impl CampaignContent {
                     .and_then(|id| campaigns.unregistered_module(id).cloned())
             });
             let unregistered = registered.is_none() && known.is_some();
+            let relocated = known
+                .as_ref()
+                .filter(|known| !known.path.is_dir())
+                .and_then(|known| relocated_package(known, campaigns.modules()));
             ui.push_id(i, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    let message = if unregistered {
-                        format!("{} is not registered.", selection.display_name())
-                    } else {
-                        selection.unavailable_message()
-                    };
-                    design::message(ui, Tone::Warning, &message);
+                let message = if let (Some(old), Some(moved)) = (&known, &relocated) {
+                    format!(
+                        "{} moved from {}/ to {}/.",
+                        moved.name,
+                        folder_words(&old.path),
+                        folder_words(&moved.path)
+                    )
+                } else if unregistered {
+                    format!("{} is not registered.", selection.display_name())
+                } else {
+                    selection.unavailable_message()
+                };
+                let text = design::message(ui, Tone::Warning, &message);
+                let remaining = egui::Rect::from_min_max(
+                    egui::pos2(text.rect.left(), ui.cursor().top()),
+                    ui.max_rect().max,
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(remaining), |ui| {
                     let users = selection.campaign_users(catalogue);
-                    for (at, (id, name)) in users.iter().enumerate() {
-                        if at > 0 {
-                            ui.label("and");
-                        }
-                        if design::link(ui, name).clicked() {
-                            self.open_lookup = Some(*id);
-                        }
-                    }
                     if !users.is_empty() {
-                        ui.label("use its creatures.");
+                        ui.scope(|ui| {
+                            ui.spacing_mut().item_spacing.x =
+                                design::number_width(ui, " ", &Type::Body.font(ui));
+                            ui.horizontal_wrapped(|ui| {
+                                for (at, (id, name)) in users.iter().enumerate() {
+                                    if at > 0 {
+                                        ui.label(Type::Body.rich(ui, "and"));
+                                    }
+                                    if design::link(ui, name).clicked() {
+                                        self.open_lookup = Some(*id);
+                                    }
+                                }
+                                ui.label(Type::Body.rich(ui, "use its creatures."));
+                            });
+                        });
                     }
-                });
-                let relocated = known
-                    .as_ref()
-                    .filter(|known| !known.path.is_dir())
-                    .and_then(|known| relocated_package(known, campaigns.modules()));
-                if let Some(known) = &known {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("It was in {}/.", folder_words(&known.path)))
-                            .color(c.muted),
-                    );
-                    if unregistered
-                        && Action::secondary("Register it again")
-                            .blocked(manifest_locked)
-                            .show(ui)
-                            .clicked()
+                    if relocated.is_none()
+                        && let Some(known) = &known
                     {
-                        match find_package_folder(&selection.package, &known.path) {
-                            Ok(module) => {
-                                self.recovered = Some((module.clone(), registered.clone()));
-                                self.found_package = Some(module);
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("It was in {}/.", folder_words(&known.path)))
+                                .color(c.muted),
+                        );
                     }
-                    if let Some(module) = &relocated {
-                        let message =
-                            format!("{} is now in {}/.", module.name, folder_words(&module.path));
-                        design::message(ui, Tone::Info, &message);
-                        if Action::secondary("Use this folder")
-                            .blocked(manifest_locked)
-                            .show(ui)
-                            .clicked()
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(module) = &relocated
+                            && Action::secondary("Use this folder")
+                                .blocked(manifest_locked)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
                         {
                             self.recovered = Some((module.clone(), registered.clone()));
                             self.found_package = Some(module.clone());
                         }
-                    }
-                }
-                ui.horizontal_wrapped(|ui| {
-                    if (if relocated.is_some() {
-                        Action::quiet("Find the folder…")
-                    } else {
-                        Action::secondary("Find the folder…")
-                    })
-                    .blocked_if(
-                        document.selections != self.saved_selections
-                            || self
-                                .repairs
-                                .iter()
-                                .any(|(_, baseline, draft)| baseline != draft),
-                        "Save or discard changes before finding the folder.",
-                    )
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                        && let Some(folder) = crate::hermetic::pick_folder_from(
-                            known.as_ref().and_then(|module| module.path.parent()),
-                        )
-                    {
-                        match find_package_folder(&selection.package, &folder) {
-                            Ok(module) => {
-                                self.recovered = Some((module.clone(), registered.clone()));
-                                self.found_package = Some(module);
+                        if unregistered
+                            && relocated.is_none()
+                            && Action::secondary("Register it again")
+                                .blocked(manifest_locked)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            && let Some(known) = &known
+                        {
+                            match find_package_folder(&selection.package, &known.path) {
+                                Ok(module) => {
+                                    self.recovered = Some((module.clone(), registered.clone()));
+                                    self.found_package = Some(module);
+                                }
+                                Err(error) => self.error = Some(error),
                             }
-                            Err(error) => self.error = Some(error),
                         }
-                    }
-                    if Action::quiet("Remove from this campaign")
+                        if (if relocated.is_some() {
+                            Action::quiet("Find the folder…")
+                        } else {
+                            Action::secondary("Find the folder…")
+                        })
+                        .blocked_if(
+                            document.selections != self.saved_selections
+                                || self
+                                    .repairs
+                                    .iter()
+                                    .any(|(_, baseline, draft)| baseline != draft),
+                            "Save or discard changes before finding the folder.",
+                        )
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
-                    {
-                        remove = Some(i);
-                    }
-                });
-                design::quiet_section(ui, "Technical details", |ui| {
-                    ui.label(Type::Mono.rich(
-                        ui,
-                        format!("Package reference: {}", selection.package.label()),
-                    ));
+                            && let Some(folder) = crate::hermetic::pick_folder_from(
+                                known.as_ref().and_then(|module| module.path.parent()),
+                            )
+                        {
+                            match find_package_folder(&selection.package, &folder) {
+                                Ok(module) => {
+                                    self.recovered = Some((module.clone(), registered.clone()));
+                                    self.found_package = Some(module);
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
+                        if Action::quiet("Remove from this campaign")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            remove = Some(i);
+                        }
+                    });
+                    design::quiet_section(ui, "Technical details", |ui| {
+                        ui.label(Type::Mono.rich(
+                            ui,
+                            format!("Package reference: {}", selection.package.label()),
+                        ));
+                    });
                 });
             });
         }

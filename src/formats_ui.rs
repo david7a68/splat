@@ -353,27 +353,29 @@ impl State {
                         *kinds.entry(kind).or_default() += 1;
                     }
                 }
-                ui.label(
-                    Type::Small.rich(
-                        ui,
-                        kinds
-                            .iter()
-                            .map(|(kind, n)| {
-                                let label = if kind == "world" {
-                                    "World note".into()
-                                } else {
-                                    kind.replace('_', " ")
-                                };
-                                if kind == "timeline" {
-                                    "the Timeline".into()
-                                } else {
-                                    design::count(*n, &label, &format!("{label}s"))
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                    ),
-                );
+                if !kinds.is_empty() {
+                    ui.label(
+                        Type::Small.rich(
+                            ui,
+                            kinds
+                                .iter()
+                                .map(|(kind, n)| {
+                                    let label = if kind == "world" {
+                                        "World note".into()
+                                    } else {
+                                        kind.replace('_', " ")
+                                    };
+                                    if kind == "timeline" {
+                                        "the Timeline".into()
+                                    } else {
+                                        design::count(*n, &label, &format!("{label}s"))
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" · "),
+                        ),
+                    );
+                }
                 if let Some(file) = files.get(self.selected) {
                     let picker = egui::ComboBox::from_id_salt("convert_file")
                         .icon(design::combo_icon)
@@ -392,17 +394,50 @@ impl State {
                         });
                     design::named(ui, &picker.response, "File to convert");
                     let file = &files[self.selected];
+                    let line_height = Type::Mono
+                        .line()
+                        .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
+                    // Short previews fit the longer side; rows that alignment adds scroll.
                     let content_height = file.before.lines().count().max(file.after.lines().count())
                         as f32
-                        * Type::Mono.line()
-                        + design::Density::Read.control() * 2.0;
-                    let height = content_height
+                        * line_height;
+                    // The panes get the height, not the comparison's headings. Do not
+                    // cap it by the modal's previous frame, which can keep it short.
+                    let label_height = ui.fonts_mut(|fonts| {
+                        fonts
+                            .layout_no_wrap(
+                                "BEFORE".to_owned(),
+                                Type::Label.font(ui),
+                                design::colors().muted,
+                            )
+                            .size()
+                            .y
+                    });
+                    let headings = design::Density::Scan.control()
+                        + label_height
+                        + ui.spacing().item_spacing.y * 2.0;
+                    let scroll_bar = ui.spacing().scroll.allocated_width();
+                    let room = ui.ctx().content_rect().bottom()
+                        - design::XXL
+                        - design::L
+                        - ui.cursor().top()
+                        - headings
+                        - scroll_bar
+                        - design::Density::Scan.control()
+                        - design::L;
+                    let pane_height = (content_height
                         .min(ui.ctx().content_rect().height() * 0.6)
-                        .min(
-                            (ui.available_height() - design::Density::Read.control() - design::L)
-                                .max(design::XXL),
-                        );
-                    ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                        .min(room.max(line_height))
+                        / line_height)
+                        .floor()
+                        * line_height;
+                    let height = pane_height + headings + scroll_bar;
+                    let rect = egui::Rect::from_min_size(
+                        ui.cursor().min,
+                        egui::vec2(ui.available_width(), height),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        ui.spacing_mut().interact_size.y = design::Density::Scan.control();
                         ui.set_min_height(height);
                         design::source_comparison(
                             ui,
@@ -414,17 +449,21 @@ impl State {
                 if !self.skipped.is_empty() {
                     skipped_list(ui, &self.skipped);
                 }
-                ui.horizontal(|ui| {
-                    apply = Action::primary("Convert files")
-                        .blocked(
-                            blocked.or(selected_files
-                                .is_empty()
-                                .then_some("Select an owner with files to convert.")),
-                        )
-                        .show(ui)
-                        .clicked();
-                    close = Action::quiet("Cancel").show(ui).clicked();
-                });
+                design::dialog_actions(
+                    ui,
+                    |_| (),
+                    |ui| {
+                        apply = Action::primary("Convert files")
+                            .blocked(
+                                blocked.or(selected_files
+                                    .is_empty()
+                                    .then_some("Select an owner with files to convert.")),
+                            )
+                            .show(ui)
+                            .clicked();
+                        close = Action::quiet("Cancel").show(ui).clicked();
+                    },
+                );
             });
             if apply {
                 self.apply();

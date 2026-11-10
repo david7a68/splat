@@ -411,6 +411,14 @@ impl Run {
         if self.back_out_on_escape(ui) {
             return;
         }
+        // Escape in a row's initiative field closes the field and nothing else. The field
+        // has lost focus by now, so the check above does not keep the key from here.
+        if self.live_initiative.is_some()
+            && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+        {
+            self.live_initiative = None;
+            return;
+        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -640,7 +648,7 @@ impl Run {
                         ui.available_width(),
                         self.state.order.len(),
                     );
-                    self.live_header(ui, scale);
+                    let sheet_notice_in_header = self.live_header(ui, scale);
                     let stat_error = self
                         .error
                         .as_ref()
@@ -658,33 +666,39 @@ impl Run {
                     let room = room - error_room;
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. The next action clears it. A long one wraps.
-                    let notice = self.notice.as_ref().map(|detail| {
-                        let summary = self
-                            .notice_summary
-                            .clone()
-                            .unwrap_or_else(|| detail.clone());
-                        let boundaries: Vec<_> = self
-                            .state
-                            .participants
-                            .iter()
-                            .filter(|p| detail.contains(&format!("Undo for {} stops here", p.name)))
-                            .map(|p| {
-                                format!(
-                                    "Undo for {} stops here",
-                                    p.name.split_whitespace().next().unwrap_or(&p.name)
-                                )
-                            })
-                            .collect();
-                        let full = format!("{summary} · {}", boundaries.join(" · "));
-                        if !boundaries.is_empty()
-                            && design::number_width(ui, &full, &Type::Small.font(ui))
-                                <= ui.available_width() - design::L * 6.0
-                        {
-                            full
-                        } else {
-                            summary
-                        }
-                    });
+                    let notice = self
+                        .notice
+                        .as_ref()
+                        .filter(|_| !sheet_notice_in_header)
+                        .map(|detail| {
+                            let summary = self
+                                .notice_summary
+                                .clone()
+                                .unwrap_or_else(|| detail.clone());
+                            let boundaries: Vec<_> = self
+                                .state
+                                .participants
+                                .iter()
+                                .filter(|p| {
+                                    detail.contains(&format!("Undo for {} stops here", p.name))
+                                })
+                                .map(|p| {
+                                    format!(
+                                        "Undo for {} stops here",
+                                        p.name.split_whitespace().next().unwrap_or(&p.name)
+                                    )
+                                })
+                                .collect();
+                            let full = format!("{summary} · {}", boundaries.join(" · "));
+                            if !boundaries.is_empty()
+                                && design::number_width(ui, &full, &Type::Small.font(ui))
+                                    <= ui.available_width() - design::L * 6.0
+                            {
+                                full
+                            } else {
+                                summary
+                            }
+                        });
                     let width = ui.available_width();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
                         let font = Type::Small.font(ui);
@@ -802,7 +816,7 @@ impl Run {
                                 let detail = self.notice.as_deref().unwrap_or(shown);
                                 design::named(ui, &response, detail);
                                 response.on_hover_text(detail);
-                                let log = design::link(ui, " Log ");
+                                let log = design::small_link(ui, " Log ");
                                 design::named(ui, &log, "Log");
                                 if log.clicked() {
                                     self.panel = Panel::Log;
@@ -872,7 +886,7 @@ impl Run {
 
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
-    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
+    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
         let strip = self.strip();
         let name = strip.current.as_deref().unwrap_or_default();
@@ -991,6 +1005,7 @@ impl Run {
                 )
             })
         };
+        let mut sheet_notice_in_header = false;
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), Density::Read.control()),
             Layout::right_to_left(Align::Center),
@@ -1051,7 +1066,34 @@ impl Run {
                     } else {
                         0.0
                     };
-                let notice_width = (design::number_width(ui, &notice, &font) + design::S)
+                let notice_width = design::number_width(ui, &notice, &font) + design::S;
+                let sheet_room =
+                    (ui.available_width() - minimum - notice_width - design::L).max(0.0);
+                let sheet_width = |summary: &str| {
+                    design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
+                        + design::number_width(ui, " Log ", &Type::Body.font(ui))
+                        + Density::Read.control()
+                        + design::L
+                        + design::S
+                };
+                let sheet = self
+                    .notice_summary
+                    .as_ref()
+                    .filter(|_| self.notice.is_some() && self.recording_notice.is_none())
+                    .and_then(|summary| {
+                        if sheet_width(summary) <= sheet_room {
+                            return Some(summary.clone());
+                        }
+                        let compact = summary
+                            .split(", ")
+                            .next()
+                            .unwrap_or(summary)
+                            .replace("'s sheet changed: ", ": ");
+                        (sheet_width(&compact) <= sheet_room).then_some(compact)
+                    });
+                let sheet_width = sheet.as_ref().map_or(0.0, |summary| sheet_width(summary));
+                sheet_notice_in_header = sheet.is_some();
+                let notice_width = (notice_width + if sheet.is_some() { sheet_width } else { 0.0 })
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
                 let overhead = self.undo_action("").natural_width(ui);
@@ -1119,6 +1161,7 @@ impl Run {
                                 + design::XS
                                 <= ui.available_width();
                         let text_width = ui.available_width()
+                            - if sheet.is_some() { sheet_width } else { 0.0 }
                             - if fits_link {
                                 link_width + design::XS
                             } else {
@@ -1130,13 +1173,32 @@ impl Run {
                             vec2(text_width, Density::Read.control()),
                             Layout::left_to_right(Align::Center),
                             |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, words).color(alert.color),
+                                if strip.conflict.is_some() {
+                                    let word = words
+                                        .split_once(' ')
+                                        .map_or(words.as_str(), |(_, word)| word);
+                                    if design::status_link(
+                                        ui,
+                                        Status {
+                                            icon: icons::WARN,
+                                            word,
+                                            color: alert.color,
+                                        },
                                     )
-                                    .truncate(),
-                                )
-                                .on_hover_text(full);
+                                    .on_hover_text(full)
+                                    .clicked()
+                                    {
+                                        review_conflict = true;
+                                    }
+                                } else {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, words).color(alert.color),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .on_hover_text(full);
+                                }
                             },
                         );
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
@@ -1162,6 +1224,26 @@ impl Run {
                             c.turn.next
                         }));
                     }
+                    if let Some(summary) = &sheet {
+                        let response = ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} {summary}", icons::WARN))
+                                .color(c.result.warning),
+                        );
+                        let detail = self.notice.as_deref().unwrap_or(summary);
+                        design::named(ui, &response, detail);
+                        response.on_hover_text(detail);
+                        let log = design::small_link(ui, " Log ");
+                        design::named(ui, &log, "Log");
+                        if log.clicked() {
+                            self.panel = Panel::Log;
+                            self.close_lookup = true;
+                        }
+                        if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
+                            self.notice = None;
+                            self.notice_summary = None;
+                        }
+                    }
                 });
             },
         );
@@ -1177,17 +1259,28 @@ impl Run {
         if next_turn {
             self.run_command(Command::Next);
         }
+        sheet_notice_in_header
     }
 
     /// The sync state a row shows, if this participant has one.
     pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
             .get(&index)
-            .filter(|sync| sync.enabled || sync.error.is_some() || sync.stranded())
             .map(crate::combat_sync::CombatSync::state)
+            .or_else(|| {
+                // A linked row with no sync says Sync off, unless sync starts again by itself:
+                // the party stays synced, or this row's sync waits for the connection.
+                self.state
+                    .participants
+                    .get(index)
+                    .filter(|p| super::remote_identity(p).is_some())
+                    .filter(|p| !self.keep_party_synced && !self.sync_to_restore.contains(&p.key))
+                    .map(|_| SyncState::Off)
+            })
     }
 
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
+        // A lost connection stops sync, and it starts again by itself: not the DM's Sync off.
         self.sync_word(index)
             .filter(|state| *state != SyncState::Stopped)
     }
@@ -1298,6 +1391,7 @@ impl Run {
         let mut spans = Vec::with_capacity(count);
         let mut edit_initiative = None;
         let mut set_initiative = None;
+        let mut close_initiative = false;
         let order = self.state.order.clone();
         let output = egui::ScrollArea::vertical()
             .id_salt("run_roster")
@@ -1426,6 +1520,51 @@ impl Run {
                             design::focus_ring(ui, target);
                         }
                     }
+                    // In combat the number itself opens a field to change it.
+                    // With several targets, this place holds the half-damage mark.
+                    if self.state.phase == Phase::Running
+                        && self.live_initiative != Some(index)
+                        && (!selected || self.also.is_empty())
+                    {
+                        // Inside the row, as its second target, like the missing-total link.
+                        // A short summary row keeps it to the row, with no clamp to panic.
+                        let middle = (rect.top() + layout.line_y(scale, rect.height()))
+                            .min(rect.bottom() - Density::Read.control() / 2.0)
+                            .max(rect.top() + Density::Read.control() / 2.0);
+                        let target = Rect::from_min_max(
+                            pos2(
+                                rect.left() + design::S,
+                                middle - Density::Read.control() / 2.0,
+                            ),
+                            pos2(
+                                rect.left() + layout.initiative_right + design::XS,
+                                middle + Density::Read.control() / 2.0,
+                            ),
+                        )
+                        .intersect(rect);
+                        let number = ui
+                            .interact(
+                                target,
+                                ui.id().with(("change_initiative", &p.key)),
+                                egui::Sense::click(),
+                            )
+                            .on_hover_text("Change initiative")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        number.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Link,
+                                true,
+                                format!("Change initiative for {}", p.name),
+                            )
+                        });
+                        if number.clicked() {
+                            edit_initiative = Some(index);
+                            clicked = None;
+                        }
+                        if number.has_focus() {
+                            design::focus_ring(ui, target);
+                        }
+                    }
                     if self.live_initiative == Some(index) {
                         let field = Rect::from_min_size(
                             pos2(
@@ -1447,14 +1586,20 @@ impl Run {
                                 Density::Read.control(),
                             );
                             if self.focus_field == Some(index) {
-                                response.request_focus();
+                                // Typing replaces the total that is there.
+                                design::focus_and_select(ui, response.id, text);
                                 self.focus_field = None;
                             }
-                            if ui.input(|i| i.key_pressed(Key::Enter))
+                            let enter = ui.input(|i| i.key_pressed(Key::Enter));
+                            if enter
                                 && (response.has_focus() || response.lost_focus())
                                 && let Ok(total) = text.parse()
                             {
                                 set_initiative = Some((index, total));
+                            } else if response.lost_focus() {
+                                // Escape, a click away, or Enter with no number leaves the
+                                // total as it was.
+                                close_initiative = true;
                             }
                         });
                     }
@@ -1521,13 +1666,21 @@ impl Run {
                 }
             });
         self.overflow_note(ui, &output, &spans);
+        if close_initiative {
+            self.live_initiative = None;
+        }
         if let Some(index) = edit_initiative {
             self.live_initiative = Some(index);
             self.focus_field = Some(index);
-            self.setup_inputs.insert(index, String::new());
+            let total = self.state.participants[index].initiative;
+            self.setup_inputs
+                .insert(index, total.map_or_else(String::new, |n| n.to_string()));
         }
         if let Some((index, total)) = set_initiative {
-            self.run_command(Command::Initiative(index, Some(total)));
+            // The same total again changes nothing, and is no step to undo.
+            if self.state.participants[index].initiative != Some(total) {
+                self.run_command(Command::Initiative(index, Some(total)));
+            }
             self.live_initiative = None;
         }
         if let Some(index) = toggle_half {
@@ -1981,9 +2134,10 @@ impl Run {
                                 .rich(ui, format!("Exhaustion level {level}"))
                                 .color(colors().text),
                         );
-                        if Action::quiet("−")
+                        if Action::secondary("")
+                            .icon(egui_phosphor::regular::MINUS)
                             .name("Less exhaustion")
-                            .density(Density::Read)
+                            .density(Density::Scan)
                             .show(ui)
                             .clicked()
                         {
@@ -1993,9 +2147,10 @@ impl Run {
                                 Command::RemoveCondition(index, at)
                             });
                         }
-                        if Action::quiet("+")
+                        if Action::secondary("")
+                            .icon(icons::ADD)
                             .name("More exhaustion")
-                            .density(Density::Read)
+                            .density(Density::Scan)
                             .blocked_if(level >= 6, "Level 6 is the highest.")
                             .show(ui)
                             .clicked()
@@ -2210,13 +2365,10 @@ impl Run {
         let status = self.save_status_value();
         let base_word = status.word;
         let path = self.path().map(|path| path.display().to_string());
-        let word = self.copy_label.as_ref().map(|copy| {
-            format!(
-                "{} · copy {}",
-                status.word,
-                copy.strip_prefix("saved ").unwrap_or(copy)
-            )
-        });
+        let word = self
+            .copy_label
+            .as_ref()
+            .map(|copy| format!("{} · {copy}", status.word));
         let status = Status {
             word: word.as_deref().unwrap_or(status.word),
             ..status
@@ -2330,25 +2482,37 @@ impl Run {
                 );
             }
             ui.add_space(design::S);
-            ui.horizontal(|ui| {
-                if self.sync_needs_sign_in()
-                    && !stranded.is_empty()
-                    && Action::quiet("Connect to sync").show(ui).clicked()
-                {
-                    self.wants_sign_in = true;
-                    keep = true;
-                }
-                if conflict.is_some() {
-                    review = Action::quiet("Review conflict").show(ui).clicked();
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if (self.sync_needs_sign_in() && !stranded.is_empty()) || conflict.is_some() {
+                ui.horizontal(|ui| {
+                    if self.sync_needs_sign_in()
+                        && !stranded.is_empty()
+                        && Action::quiet("Connect to sync").show(ui).clicked()
+                    {
+                        self.wants_sign_in = true;
+                        keep = true;
+                    }
+                    if conflict.is_some() {
+                        review = Action::quiet("Review conflict").show(ui).clicked();
+                    }
+                });
+            }
+            let (lose, ()) = design::dialog_actions(
+                ui,
+                |ui| {
+                    (cannot_save || !lost.is_empty())
+                        && Action::destructive("Close and lose changes")
+                            .blocked(block)
+                            .show(ui)
+                            .clicked()
+                },
+                |ui| {
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
                             .blocked(block)
                             .show(ui)
                             .clicked();
                     } else if lost.is_empty() {
-                        close = Action::secondary("Close now")
+                        close |= Action::secondary("Close now")
                             .blocked(block)
                             .show(ui)
                             .clicked();
@@ -2360,15 +2524,9 @@ impl Run {
                         ui.data_mut(|data| data.insert_temp(id, true));
                     }
                     keep |= response.clicked();
-                });
-            });
-            if cannot_save || !lost.is_empty() {
-                ui.add_space(design::L);
-                close |= Action::destructive("Close and lose changes")
-                    .blocked(block)
-                    .show(ui)
-                    .clicked();
-            }
+                },
+            );
+            close |= lose;
         });
         if review {
             self.review_conflict();
@@ -2932,6 +3090,37 @@ impl Run {
             .iter()
             .any(|member| !member.overrides.is_empty());
         let change_hint = if changed { " Changed." } else { "" };
+        let added = self
+            .state
+            .participants
+            .iter()
+            .filter_map(|p| p.added_from.as_ref())
+            .filter(|from| from.group_id == Some(group.id))
+            .map(|from| from.round)
+            .max();
+        let mut status = if let Some(round) = added {
+            if round == 0 {
+                "Added before combat".to_owned()
+            } else {
+                format!("Added in round {round}")
+            }
+        } else if let Some(name) = group
+            .encounter_name
+            .as_ref()
+            .filter(|_| group.encounter != self.source)
+        {
+            format!("For {name}")
+        } else if group.encounter.is_some() && group.encounter != self.source {
+            "For a deleted encounter".to_owned()
+        } else {
+            String::new()
+        };
+        if changed {
+            if !status.is_empty() {
+                status.push_str(" · ");
+            }
+            status.push_str(&format!("{} Changed", icons::CHANGED));
+        }
         let grip = ui.allocate_response(
             vec2(ui.available_width(), Density::Read.control()),
             egui::Sense::DRAG,
@@ -2957,6 +3146,20 @@ impl Run {
         } else {
             group.xp_label()
         };
+        let heading_width = design::number_width(
+            ui,
+            &format!("{} {name}", icons::DRAG),
+            &Type::Strong.font(ui),
+        );
+        let status_in_heading = !status.is_empty()
+            && heading_width
+                + design::L
+                + design::number_width(
+                    ui,
+                    &format!("{status} · {totals_text}"),
+                    &Type::Small.font(ui),
+                )
+                <= grip.rect.width();
         let totals = ui.painter().text(
             grip.rect.right_center(),
             Align2::RIGHT_CENTER,
@@ -2964,6 +3167,18 @@ impl Run {
             Type::Small.font(ui),
             c.muted,
         );
+        if status_in_heading {
+            ui.painter().text(
+                pos2(
+                    grip.rect.left() + heading_width + design::L,
+                    grip.rect.center().y,
+                ),
+                Align2::LEFT_CENTER,
+                &status,
+                Type::Small.font(ui),
+                c.muted,
+            );
+        }
         // A long name stops short of the totals, and its row shows it whole on hover.
         let title = egui::WidgetText::from(
             Type::Strong
@@ -3039,37 +3254,6 @@ impl Run {
             );
         }
         let members = group.member_summary_wrapped();
-        let added = self
-            .state
-            .participants
-            .iter()
-            .filter_map(|p| p.added_from.as_ref())
-            .filter(|from| from.group_id == Some(group.id))
-            .map(|from| from.round)
-            .max();
-        let mut status = if let Some(round) = added {
-            if round == 0 {
-                "Added before combat".to_owned()
-            } else {
-                format!("Added in round {round}")
-            }
-        } else if let Some(name) = group
-            .encounter_name
-            .as_ref()
-            .filter(|_| group.encounter != self.source)
-        {
-            format!("For {name}")
-        } else if group.encounter.is_some() && group.encounter != self.source {
-            "For a deleted encounter".to_owned()
-        } else {
-            String::new()
-        };
-        if changed {
-            if !status.is_empty() {
-                status.push_str(" · ");
-            }
-            status.push_str("Changed");
-        }
         let mut add = false;
         let add_word = if group.warnings.is_empty() {
             "Add".to_owned()
@@ -3077,7 +3261,7 @@ impl Run {
             format!("Add {}", group.joinable_count())
         };
         ui.horizontal(|ui| {
-            let controls = design::number_width(ui, "Total", &Type::Small.font(ui))
+            let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
                 + 72.0
                 + design::XS
                 + Action::secondary(&add_word)
@@ -3088,7 +3272,12 @@ impl Run {
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
-                let summary = arrival_summary(ui, &status, &members, width);
+                let summary = arrival_summary(
+                    ui,
+                    if status_in_heading { "" } else { &status },
+                    &members,
+                    width,
+                );
                 let response =
                     ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
                 let name = if status.is_empty() {
@@ -3099,7 +3288,7 @@ impl Run {
                 design::named(ui, &response, &name);
             });
             let field = format!("Initiative total for {name}");
-            ui.label(Type::Small.rich(ui, "Total").color(c.muted));
+            ui.label(Type::Small.rich(ui, "Initiative").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
             // By id, because two groups can have one name.
             let response = design::locked(ui, group.problem.as_deref(), |ui| {
@@ -3153,58 +3342,42 @@ impl Run {
             );
         }
         let warnings = group.warnings.join("\n");
+        if !warnings.is_empty() {
+            ui.label(Type::Small.rich(ui, "Cannot join").color(c.muted));
+        }
         if let Some(problem) = group
             .problem
             .as_deref()
             .or((!warnings.is_empty()).then_some(warnings.as_str()))
         {
             for fault in problem.lines() {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!(
-                                    "{} {}",
-                                    icons::WARN,
-                                    fault.trim_end_matches(" Campaign → Packages.")
-                                ),
-                            )
-                            .color(c.result.warning),
-                    )
-                    .wrap(),
-                );
+                if group_fault(ui, fault) {
+                    if fault.contains("not in this campaign's packages") {
+                        self.wants_packages = true;
+                    } else {
+                        self.wants_group_editor = Some(group.path.clone());
+                    }
+                }
             }
-            ui.horizontal(|ui| {
-                if design::status_link(
+            // Every fault gives one link; when all point to packages, the group editor
+            // stays one click away.
+            if problem
+                .lines()
+                .all(|fault| fault.contains("not in this campaign's packages"))
+                && design::status_link(
                     ui,
                     Status {
                         icon: icons::EDIT,
                         word: "Edit group",
-                        color: c.accent,
+                        color: colors().accent,
                     },
                 )
                 .clicked()
-                {
-                    self.wants_group_editor = Some(group.path.clone());
-                }
-                if problem.contains("Campaign → Packages") {
-                    ui.label(Type::Small.rich(ui, "·").color(c.muted));
-                    if design::status_link(
-                        ui,
-                        Status {
-                            icon: icons::CAMPAIGN,
-                            word: "Campaign → Packages",
-                            color: c.accent,
-                        },
-                    )
-                    .clicked()
-                    {
-                        self.wants_packages = true;
-                    }
-                }
-            });
+            {
+                self.wants_group_editor = Some(group.path.clone());
+            }
         }
+
         add
     }
 
@@ -3383,10 +3556,19 @@ impl Run {
             let freshness = crate::party::freshness(&record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
-            let word = if self.syncs.get(&index).is_some_and(|sync| sync.ready()) {
-                "Connected · Sync reads this sheet · HP from this run".to_owned()
+            let ready = self.syncs.get(&index).is_some_and(|sync| sync.ready());
+            let (word, age) = if ready {
+                ("Connected", "")
             } else {
-                format!("{} · HP from this run", freshness.word)
+                freshness
+                    .word
+                    .split_once(" · ")
+                    .unwrap_or((&freshness.word, ""))
+            };
+            let facts = if ready {
+                "· Sync reads this sheet · HP from this run".to_owned()
+            } else {
+                format!("· {age} · HP from this run")
             };
             // Beside an open conflict, green words would say the opposite of what matters.
             if !self
@@ -3414,10 +3596,11 @@ impl Run {
                         ui,
                         Status {
                             icon: freshness.icon,
-                            word: &word,
+                            word,
                             color: freshness.color,
                         },
                     );
+                    ui.label(Type::Small.rich(ui, facts).color(colors().muted));
                 });
             }
             if p.hp == Some(0) {
@@ -3586,12 +3769,19 @@ impl Run {
                             "No initiative yet: last in the order until you set it. The current turn stays.",
                             colors().result.warning,
                         )
+                    } else if self.current() == Some(index) {
+                        // Moving it now would skip others, or give them a second turn.
+                        (
+                            "The turn stays. If the new total moves this row, it moves when its turn ends.",
+                            colors().muted,
+                        )
                     } else {
                         (
                             "This row moves. The current turn stays.",
                             colors().muted,
                         )
                     };
+                    let had = p.initiative;
                     ui.add_space(design::L);
                     design::group_heading(ui, "Correct initiative", 0);
                     let field = format!("Initiative for {}", p.name);
@@ -3621,7 +3811,10 @@ impl Run {
                         if (pressed || enter)
                             && let Some(total) = total
                         {
-                            command = Some(Command::Initiative(index, Some(total)));
+                            // The same total again changes nothing, and is no step to undo.
+                            if had != Some(total) {
+                                command = Some(Command::Initiative(index, Some(total)));
+                            }
                             text.clear();
                             self.return_focus = self.lookup_open;
                         }
@@ -4520,6 +4713,8 @@ impl Run {
                     if design::icon_button(ui, icon, &name).clicked() {
                         command = Some(Command::Move(position, destination));
                     }
+                } else {
+                    ui.allocate_space(vec2(Density::Read.control(), Density::Read.control()));
                 }
             }
         });
@@ -4723,7 +4918,7 @@ impl Run {
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
-fn exhaustion_level(condition: &str) -> u8 {
+pub(super) fn exhaustion_level(condition: &str) -> u8 {
     condition
         .trim()
         .strip_prefix("Exhaustion (")
@@ -4967,20 +5162,62 @@ pub(crate) fn change_preview(row: &Row) -> String {
     )
 }
 
+/// Keep a member's repair at the end of that member's fault, with no overlapping targets.
+pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
+    let packages = fault.contains("not in this campaign's packages");
+    let status = Status {
+        icon: if packages {
+            icons::CAMPAIGN
+        } else {
+            icons::EDIT
+        },
+        word: if packages {
+            "Campaign → Packages"
+        } else {
+            "Edit group"
+        },
+        color: colors().accent,
+    };
+    let words = format!("{} {fault}", icons::WARN);
+    let text_width = design::number_width(ui, &words, &Type::Small.font(ui));
+    let link_width = design::number_width(
+        ui,
+        &format!("{} {}", status.icon, status.word),
+        &Type::Small.font(ui),
+    );
+    let label = |ui: &mut egui::Ui| {
+        ui.add(
+            egui::Label::new(Type::Small.rich(ui, &words).color(colors().result.warning)).wrap(),
+        );
+    };
+    if text_width + design::S + link_width <= ui.available_width() {
+        ui.horizontal(|ui| {
+            label(ui);
+            design::status_link(ui, status).clicked()
+        })
+        .inner
+    } else {
+        label(ui);
+        design::status_link(ui, status).clicked()
+    }
+}
+
 fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
     if status.is_empty() {
         return members.to_owned();
     }
-    let summary = format!("{status}\u{a0}·\u{a0}{members}");
-    if design::number_width(ui, &summary, &Type::Small.font(ui)) <= width {
-        summary
+    let status = status.replace(' ', "\u{a0}");
+    let first = members.split(", ").next().unwrap_or(members);
+    let joined = format!("{status}\u{a0}·\u{a0}{first}");
+    if design::number_width(ui, &joined, &Type::Small.font(ui)) <= width {
+        format!("{status}\u{a0}·\u{a0}{members}")
+    } else if design::number_width(ui, &status, &Type::Small.font(ui)) <= width {
+        format!("{status}\n{members}")
     } else {
-        let parts = status
-            .split(" · ")
-            .map(|part| part.replace(' ', "\u{a0}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!("{parts}\n{members}")
+        format!(
+            "{}\n{members}",
+            status.split("\u{a0}·\u{a0}").collect::<Vec<_>>().join("\n")
+        )
     }
 }
 
@@ -5039,7 +5276,25 @@ fn undo_words(
     if design::number_width(ui, label, font) <= width {
         return label.to_owned();
     }
-    let action = label.strip_prefix("Undo: ").unwrap_or(label);
+    let compact_effect = [" on ", " off "].into_iter().find_map(|direction| {
+        let (effect, target) = label.strip_prefix("Undo: ")?.rsplit_once(direction)?;
+        if !effect.ends_with('…') || !participants.iter().any(|p| p.name == target) {
+            return None;
+        }
+        let effect = effect
+            .split_whitespace()
+            .take(2)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let verb = if direction == " on " { "add" } else { "remove" };
+        Some(format!(
+            "Undo {verb}: {}…{direction}{target}",
+            effect.trim_end_matches('…')
+        ))
+    });
+    let action = compact_effect
+        .as_deref()
+        .unwrap_or_else(|| label.strip_prefix("Undo: ").unwrap_or(label));
     if design::number_width(ui, action, font) <= width {
         return action.to_owned();
     }
@@ -5070,6 +5325,22 @@ fn undo_words(
         .max_by_key(|p| p.name.len());
     if let Some(target) = target {
         let (before, after) = action.split_once(&target.name).expect("target in action");
+        let words: Vec<_> = target.name.split_whitespace().collect();
+        let suffix = words
+            .last()
+            .copied()
+            .filter(|last| last.chars().all(|c| c.is_ascii_digit()) || last.chars().count() == 1);
+        for count in (1..words.len()).rev() {
+            let name = if let Some(last) = suffix {
+                format!("{}… {last}", words[..count].join(" "))
+            } else {
+                format!("{}…", words[..count].join(" "))
+            };
+            let candidate = format!("{before}{name}{after}");
+            if design::number_width(ui, &candidate, font) <= width {
+                return candidate;
+            }
+        }
         let room = width - design::number_width(ui, &format!("{before}{after}"), font);
         return format!("{before}{}{after}", dock_name(ui, &target.name, font, room));
     }
@@ -5272,6 +5543,7 @@ struct RowLayout {
     tight: bool,
     fit: RowFit,
     bar_inset: f32,
+    bar_below_detail: bool,
     /// The compressed list's shared row height, once any spare room is shared out.
     even: f32,
     initiative_right: f32,
@@ -5442,7 +5714,7 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &if inline_state && sync == Some(SyncState::FirstRead) {
+                    &if inline_state && sync.is_some() {
                         format!("+{}", p.conditions.len() - condition_count)
                     } else {
                         design::count(p.conditions.len() - condition_count, "more", "more")
@@ -5494,10 +5766,15 @@ impl RowLayout {
             );
             job.append(
                 &format!("{} {}", status.icon, status.word).replace(' ', "\u{a0}"),
-                design::S,
+                design::XS,
                 egui::TextFormat {
-                    font_id: font.clone(),
+                    font_id: Type::Small.sized(ui, scale.mark),
                     color: status.color,
+                    underline: if sync == SyncState::Conflict {
+                        Stroke::new(design::HAIRLINE_WIDTH, status.color)
+                    } else {
+                        Stroke::NONE
+                    },
                     ..Default::default()
                 },
             );
@@ -5576,6 +5853,7 @@ impl RowLayout {
                 longest_name,
             );
         }
+        let mut bar_below_detail = false;
         // At the narrowest width, mandatory state words can need the unused left
         // part of the HP bar. Keep the bar under HP, with at least an XL of length.
         if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
@@ -5587,7 +5865,18 @@ impl RowLayout {
                 .min((hp_right - temp_right - bar_inset - design::XL - design::XS).max(0.0));
             bar_inset += extra;
             job.wrap.max_width += extra;
-            second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+            second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
+            if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+                for section in &mut job.sections {
+                    section.format.font_id = Type::Small.sized(ui, scale.mark);
+                }
+                second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
+                if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+                    bar_below_detail = true;
+                    job.wrap.max_width = (width - second_left - design::XS).max(1.0);
+                    second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+                }
+            }
         }
         let name = ui.fonts_mut(|fonts| {
             fonts.layout(
@@ -5608,6 +5897,7 @@ impl RowLayout {
             name,
             even: 0.0,
             bar_inset,
+            bar_below_detail,
             second_line,
             condition_spans,
             initiative_span,
@@ -5652,12 +5942,22 @@ impl RowLayout {
         let name_line = self.name_line(scale);
         if self.fit != RowFit::Natural {
             return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
-                .max(self.even);
+                .max(self.even)
+                + if self.bar_below_detail {
+                    design::S
+                } else {
+                    0.0
+                };
         }
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale
             .row
             .max(top + name_line + self.name_extra() + second + 3.0)
+            + if self.bar_below_detail {
+                design::S
+            } else {
+                0.0
+            }
     }
 
     /// The height a wrapped name adds under its first line.
@@ -5731,9 +6031,13 @@ fn condition_links(
         let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
             .translate(origin.to_vec2());
         // The words are smaller than a target may be, so the target grows, inside its row.
-        let bottom = (word.center().y + 12.0).min(rect.bottom());
+        let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
+        let width = word.width().max(design::XL);
+        let left = (word.center().x - width / 2.0)
+            .max(rect.left())
+            .min(rect.right() - width);
         let target =
-            Rect::from_min_max(pos2(word.left(), bottom - 24.0), pos2(word.right(), bottom));
+            Rect::from_min_max(pos2(left, bottom - design::XL), pos2(left + width, bottom));
         let id = ui.id().with(("condition_rule", key, position));
         let response = ui
             .interact(target, id, egui::Sense::click())
@@ -5929,7 +6233,11 @@ fn paint_row(
         (scale.row / 14.0).clamp(3.0, 5.0)
     };
     // Close under the digits, and clear of the hairline.
-    let bar_top = (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0);
+    let bar_top = if layout.bar_below_detail {
+        rect.bottom() - bar_height - design::HAIRLINE_WIDTH
+    } else {
+        (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0)
+    };
     let bar = Rect::from_min_max(
         pos2(x + layout.temp_right + layout.bar_inset + 4.0, bar_top),
         pos2(hp_right, bar_top + bar_height),
@@ -5962,18 +6270,32 @@ fn paint_row(
     if let Some(sync) = sync.filter(|_| !layout.inline_state) {
         let status = sync_status(sync);
         // In the state column, under Bloodied, so the two are read together.
-        painter.text(
-            pos2(
-                hp_right + design::S,
-                if hp_word(p).is_some() {
-                    second_y + second_height / 2.0
-                } else {
-                    line_y
-                },
-            ),
-            Align2::LEFT_CENTER,
-            format!("{} {}", status.icon, status.word),
-            state_font,
+        let text = Type::Heading
+            .rich(ui, format!("{} {}", status.icon, status.word))
+            .font(state_font.clone())
+            .color(status.color);
+        let text = if sync == SyncState::Conflict {
+            text.underline()
+        } else {
+            text
+        };
+        let galley = egui::WidgetText::from(text).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            Type::Heading.font(ui),
+        );
+        let at = pos2(
+            hp_right + design::S,
+            if hp_word(p).is_some() {
+                second_y + second_height / 2.0
+            } else {
+                line_y
+            },
+        );
+        painter.galley(
+            pos2(at.x, at.y - galley.size().y / 2.0),
+            galley,
             status.color,
         );
     }
@@ -6051,6 +6373,53 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn iter_3_b_crowded_linked_row_keeps_its_states_on_one_line() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut p = super::super::tests::run().state.participants[0].clone();
+                p.hp = Some(5);
+                p.present = false;
+                p.conditions = vec![
+                    "Poisoned".into(),
+                    "Wreathed in the cinders of the old shrine".into(),
+                ];
+                for concentration in [false, true] {
+                    p.concentration = concentration;
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        &p,
+                        Some(SyncState::Off),
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    assert_eq!(
+                        line.rows.len(),
+                        1,
+                        "{} width={} rows={:?}",
+                        line.text(),
+                        line.job.wrap.max_width,
+                        line.rows.iter().map(|row| row.size).collect::<Vec<_>>()
+                    );
+                    for word in ["Bloodied", "Absent", "Poisoned", "Sync", "off"] {
+                        assert!(line.text().contains(word));
+                    }
+                    assert!(
+                        layout
+                            .condition_spans
+                            .iter()
+                            .any(|(name, _)| name == "Run conditions")
+                    );
+                }
+            });
+        });
+    }
 
     #[test]
     fn run_snapshot_notice_ignores_metadata_but_keeps_model_and_prose_changes() {
@@ -6258,7 +6627,7 @@ mod tests {
                             );
                             assert!(row.size.x <= width + 1.0);
                         }
-                        if width == 150.0 && status.contains("round") {
+                        if width == 400.0 && status.contains("round") {
                             assert!(galley.rows.iter().any(|row| {
                                 row.glyphs
                                     .iter()
@@ -6266,7 +6635,7 @@ mod tests {
                                     .collect::<String>()
                                     .replace('\u{a0}', " ")
                                     .trim()
-                                    == "Added in round 2"
+                                    .contains("Added in round 2 · Changed")
                             }));
                         }
                         if width == 400.0 {
@@ -6335,7 +6704,7 @@ mod tests {
     }
 
     #[test]
-    fn undo_keeps_actions_directions_amounts_and_copy_numbers() {
+    fn iter_2_b_undo_keeps_actions_directions_amounts_and_copy_numbers() {
         let entry = Entry::parse("wolf.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
         let p = Participant::new(
             "wolf".into(),
@@ -6357,6 +6726,10 @@ mod tests {
                     ("", " present"),
                     ("", " absent"),
                     ("initiative for ", ""),
+                    ("start concentration for ", ""),
+                    ("stop concentration for ", ""),
+                    ("exhaustion 2 → 3 on ", ""),
+                    ("exhaustion 3 → 1 on ", ""),
                 ] {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
@@ -6374,7 +6747,8 @@ mod tests {
                         "Undo: Wreathed in the cinders of the old shrine {direction} {}",
                         p.name
                     );
-                    let expected = format!("Wreathed in the cinders… {direction} Cinder… 3");
+                    let verb = if direction == "on" { "add" } else { "remove" };
+                    let expected = format!("Undo {verb}: Wreathed in… {direction} Cinder… 3");
                     let width = design::number_width(ui, &expected, &font);
                     assert_eq!(
                         undo_words(ui, &full, std::slice::from_ref(&p), &font, width),
@@ -6465,6 +6839,180 @@ mod tests {
         harness.run_steps(2);
         assert!(closed.get());
         assert!(!run.borrow().closing);
+    }
+
+    #[test]
+    fn iter_2_b_sheet_notice_uses_header_room_and_keeps_undo() {
+        use egui_kittest::kittest::Queryable;
+        for (width, in_header) in [(1920.0, true), (442.0, false)] {
+            let mut run = super::super::tests::run();
+            for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                run.apply(Command::Initiative(index, Some(total))).unwrap();
+            }
+            run.apply(Command::Begin).unwrap();
+            run.notice =
+                Some("Guard 1's sheet changed: HP 17 → 15. Undo for Guard 1 stops here.".into());
+            run.notice_summary = Some("Guard 1's sheet changed: HP 17 → 15".into());
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.live_header(ui, design::RUN_REGULAR);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness
+                    .query_all_by_label_contains("Guard 1's sheet changed: HP 17 → 15")
+                    .count()
+                    > 0,
+                in_header,
+                "{width}: {:?}",
+                harness.root()
+            );
+            assert!(harness.query_by_label("Undo: begin combat").is_some());
+        }
+    }
+
+    #[test]
+    fn iter_2_b_tie_arrows_keep_their_columns() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        run.initiative.roster_ties = false;
+        run.state.order = vec![0, 1];
+        for p in &mut run.state.participants {
+            p.initiative = Some(10);
+        }
+        let first = run.state.participants[0].name.clone();
+        let last = run.state.participants[1].name.clone();
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for i in [0, 1] {
+                    ui.push_id(i, |ui| {
+                        run.setup_tie_controls(ui, i);
+                    });
+                }
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let down = harness
+            .get_by_label(&format!("Move {first} after {last}"))
+            .rect();
+        let up = harness
+            .get_by_label(&format!("Move {last} before {first}"))
+            .rect();
+        assert!(down.left() >= up.right(), "down {down:?}, up {up:?}");
+    }
+
+    #[test]
+    fn a_combat_row_initiative_opens_a_field_to_change_it() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1280.0, 720.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut run = shown.borrow_mut();
+                    run.live_keys(ui);
+                    run.roster(ui, 600.0, 0.0);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        run.borrow_mut().select(1);
+        harness.run_steps(2);
+        // Escape leaves the total as it was, and the DM's look at another row stays.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, Some(2));
+        harness.key_press(Key::Escape);
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, None);
+        assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+        assert_eq!(run.borrow().selected, 1);
+        // Enter with no number closes the field too.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        harness.key_press(Key::Backspace);
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, None);
+        assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+        // The field opens on the total, and what is typed replaces it.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        assert_eq!(
+            run.borrow().setup_inputs.get(&2).map(String::as_str),
+            Some("10")
+        );
+        harness
+            .get_by_label("Initiative for Guard 3")
+            .type_text("18");
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        let run = run.borrow();
+        assert_eq!(run.state.participants[2].initiative, Some(18));
+        assert_eq!(run.state.order, vec![0, 2, 1]);
+        assert_eq!(run.current(), Some(0));
+        assert_eq!(run.live_initiative, None);
+    }
+
+    #[test]
+    fn iter_3_b_all_five_linked_rows_show_sync_off_without_workers() {
+        let mut run = super::super::tests::run();
+        while run.state.participants.len() < 6 {
+            run.state
+                .participants
+                .push(run.state.participants[0].clone());
+        }
+        for index in 0..5 {
+            super::super::tests::linked(&mut run, index, &index.to_string());
+        }
+        for worker in [None, Some(0), Some(3)] {
+            run.syncs.clear();
+            if let Some(index) = worker {
+                run.syncs
+                    .insert(index, crate::combat_sync::CombatSync::default());
+            }
+            for index in 0..5 {
+                assert_eq!(run.row_sync_word(index), Some(SyncState::Off));
+            }
+            assert_eq!(run.row_sync_word(5), None);
+        }
+        run.syncs.insert(
+            0,
+            crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
+        );
+        assert_eq!(run.row_sync_word(0), Some(SyncState::Conflict));
+        assert_eq!(run.row_sync_word(1), Some(SyncState::Off));
+        let mut stopped = crate::combat_sync::CombatSync::default();
+        stopped.start();
+        stopped.session_ended();
+        run.syncs.insert(1, stopped);
+        // A lost connection stopped it; sync starts again by itself, so the row is not Sync off.
+        assert_eq!(run.row_sync_word(1), None);
+        // Rows that wait for the connection, or a party kept in sync, are not Sync off either.
+        run.syncs.clear();
+        run.sync_to_restore = vec![run.state.participants[2].key.clone()];
+        assert_eq!(run.row_sync_word(2), None);
+        assert_eq!(run.row_sync_word(3), Some(SyncState::Off));
+        run.keep_party_synced = true;
+        assert_eq!(run.row_sync_word(3), None);
     }
 
     #[test]

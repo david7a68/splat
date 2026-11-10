@@ -2,11 +2,15 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
+Form labels use sentence case. Placeholders use faint body text. Reader headings appear only above visible content;
+Splat data stays out of the reading view. Dialogs keep red actions at the left and
+keep and commit actions at the right on one line.
 The sidebar has one flat level: **Run** (while a run is open), **Paused run** (one unfinished fight) or **Paused runs** (several unfinished fights), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
 opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
-change its width. The app keeps that width after a restart. Simulation is later work.
+change its width. Tab also focuses the edge: Left and Right move it by 16 px, and
+Home restores its natural width. The app keeps a chosen width after a restart. Simulation is later work.
 
 ## Development
 
@@ -100,11 +104,31 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
+Session Read view omits plan links already shown beside the note, including group links.
+A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
+The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+Group and Long rest stay visible. When all actions do not fit on one line, More holds
+Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+uses the same width rule. An empty note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
+that needs repair and keep raw references in Technical details.
+
+The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
+only when it resolves to an entry. Explicit Markdown and wiki links still work.
+
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
 Each save renumbers day headings. Separate edits in Splat and in Obsidian save together;
 changes to the same event require a choice. A flagged day names the file and line and
 provides `Edit in Obsidian` and `Show file`.
+
+Conversion and draft comparisons align unchanged lines. Their highlights and counts
+show actual changes. **Next difference** moves between separate change groups and
+stays hidden when there is only one group.
+Long conversion previews give the source panes about 60% of the window height and show whole rows.
+
+Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
+writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
+World's unreadable-note count opens the first note's repair and keeps other repair drafts.
 
 Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
@@ -117,12 +141,13 @@ A creature's `Habitat` row holds its 2024 Monster Manual habitat, such as
 Library's Creatures section, Library search results and the encounter creature
 search have **Filter**. It filters by habitat, type, size, alignment, challenge,
 movement, senses, languages, resistances, immunities and vulnerabilities. Each
-chosen value shows as a chip; click a chip to remove it. Search also finds these
+chosen value shows as a chip; click a chip to remove it. Filtered creature lists show the number of matches. Search also finds these
 values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
 `immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
 under every habitat.
 
-A live initiative change says `acts next round` when its place has passed. Setup counts
+A live initiative change says `acts next round` when its place has passed, and
+`acts again this round` when a row that already acted moves below the current turn. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
 keep their edges visible while the text scrolls. Saved runs keep the last change in the
 same words as the close dialog.
@@ -147,16 +172,18 @@ Timeline and the Session plan use the same fight state words. An open fight's Ti
 back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover. Completed jobs say **Processed** in the rail. Warned jobs
 keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
-and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
+and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
+Both pages let you turn the ruling off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
-A broken or deleted `Package.md` keeps the package's entries available. Campaign
+A broken or deleted `Package.md` keeps the package's entries available. The manifest
+never counts as an entry, even when unreadable; its warning stays on About. Campaign
 names the manifest fault and opens an unreadable manifest in Library for repair.
 SRD copies no longer warn about hidden citation links. World lists table faults
 and offers its repair count in the header. New entries start in their kind folder.
-Named NPC search results say **In roster** after Add.
+Named NPC search results say **In roster** after Add. An NPC with a missing stat block stays in search, names the missing block and offers **Open in World**. Add stays blocked until repaired.
 
 An unreadable package creature offers **Open in Library** from the encounter roster.
 Library keeps a deleted file's draft until you choose **Save my draft again** or
@@ -172,7 +199,9 @@ An empty fight **Prep** tab offers **Edit encounter** while the encounter exists
 
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
-open a chooser, including an NPC's **In** link in World and Lookup.
+open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
+with **Always use this one**. Empty World notes say **Nothing written yet.** and
+offer **Edit in Obsidian**.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
@@ -368,7 +397,7 @@ before it can replace those words. A repaired Timeline file is read
 again, and the open fight's latest result is applied.
 
 Session storage remembers each known note path in `.splat-session-paths.json`. A copied session
-shows both file names and offers **New identity**, with Undo. A moved draft can save to its new path
+shows both file names and offers **Make <file> a separate entry**, with **Undo separate entry**. A moved draft can save to its new path
 with the same session ID. If a session or run folder is gone, choose its folder before making new
 files. Recording results stay listed as **Audio removed** when their WAV is gone.
 
@@ -384,7 +413,10 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. Add buttons stay at the foot of the plan. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
+title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+Group and Long rest stay visible. When all actions do not fit on one line, More holds
+Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
 
@@ -544,7 +576,7 @@ The design and what is still only proposed are in [World and house rules](docs/d
 Select **Library** to work on reusable packages without changing the active campaign.
 The built-in D&D 2024 SRD, your packages, and the active campaign's own entries are one
 catalogue. It opens on what this campaign can use, and the menu at the top shows everything,
-one package, or the campaign's own entries. The built-in SRD is read-only. Browse Creatures,
+one package, or **Campaign entries**. The built-in SRD is read-only. Browse Creatures,
 Spells, Items, Character options, Rules, Glossary, and Encounters in the section
 sidebar. Sections use subject metadata as well as entry kinds, so spell references
 appear with spells. Other entries includes package notes and invalid notes for repair.
@@ -570,10 +602,12 @@ apply a change. The sidebar shows how many changes wait. See
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
+A copied folder offers **Register as a new package** beside its warning. **Add folder**
+stays blocked until you choose another folder.
 Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.
 
-Local packages support new entries and Markdown editing. **About <package name>** opens the manifest. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
+Local packages support new entries and Markdown editing. **About <package name>** opens the manifest and selects its About row. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.
 
 **Use in this campaign** starts on for new entries, new packages and copies to packages. It saves the package choice too, so the content can be found in the encounter editor. The reader shows whether an entry is used here and offers the same action when it is not. **Save** checks note
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
@@ -585,7 +619,11 @@ and shows disk and draft side by side, with marked lines and **Next difference**
 pages keeps the draft in memory.
 Save before closing the app; drafts are not persisted.
 
-Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]`. Names resolve to World notes and content this campaign can use. **Alt+Left** returns through Library history. Duplicate names open a chooser. A missing name has a dotted underline and **Not found in this campaign** on hover. Existing reference keys still work. A package entry that refers to campaign-only content warns before sharing.
+Every reader accepts Obsidian links: `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]`. Names resolve to World notes and content this campaign can use. **Alt+Left** returns through Library history. Duplicate names open a chooser. A missing name has a dotted underline and **Not found in this campaign** on hover. Existing reference keys still work. A package entry that refers to campaign-only content warns before sharing. The copy
+preview names each additional entry and explains which source links to it.
+
+Copied notes show **Same entry in two files**. In Library, World, Encounters and Sessions,
+**Make <file> a separate entry** keeps both files and offers **Undo separate entry**.
 
 In **Campaign → Packages**, enable a whole package or select individual
 entries. Required dependencies are included separately with their reasons, and rule
@@ -618,7 +656,7 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Connect D&D Beyond** action instead. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. Cantrips use one-line rows, and coins appear below the Equipment heading. **Bloodied** uses the same heart icon and colour as the run. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Connect D&D Beyond** action instead. Saves and skills use two or three columns. Skills show **Proficient**, **Expertise** or **Half** in words. A sheet list gets a filter only when it has more than eight entries. Cantrips use one-line rows, and coins appear below the Equipment heading. **Bloodied** uses the same heart icon and colour as the run. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
@@ -676,7 +714,7 @@ creature is refused with a message.
 
 **Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
 it. With one encounter, only runs of that encounter offer it, and the Encounters page keeps it in a
-closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal.
+closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal. A partial group names only the members that will join beside **Add 1**, such as **Will add: 1 × Goblin Warrior**. Excluded members stay under **Cannot join**, with their reason and repair link. The list, editor and Arrivals use the same XP total for joining members. A partial summary says **1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior**. **+ unknown** applies only to a joining member with no XP.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
 The frame’s **⋯ → Make available to any encounter** makes a saved group available for any encounter on the next save. **Undo move** restores its owner before that save. **Move to…** lists named encounters only.
@@ -696,6 +734,12 @@ roll each participant using its supplied bonus. Rows hold still while you type, 
 each tied total has **Tie** and two fixed arrow slots below it. The setup header warns about ties even while the panel is open. Fill in
 unknown HP values through the row menu's **Correct…** action, then choose **Begin combat**. **Next turn** advances through present participants and counts
 rounds. Absent participants keep their state and initiative when they return.
+In combat, click a row's initiative, type the new total, and press Enter; Escape
+leaves it as it was. The row moves to its new place as one step of undo, and the
+current turn stays. A tie keeps its order, or roster order when the campaign uses it.
+The current participant keeps its turn and its row until **Next turn**: then it moves,
+so no one is skipped or acts twice. A lower total acts later this round, as a delay;
+a higher one acts next round.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
@@ -801,7 +845,7 @@ itself. A finished run does not sync, so a resumed one keeps its results.
 
 If D&D Beyond reports that this session cannot edit a character, the row says `Sync read-only`. Your
 changes for that character stay in the run and nothing is sent. Changes on the sheet still come in, and
-if you both changed a value, you choose which to keep. Each synced row shows its state, and a conflict shows on the row and the strip without stopping
+if you both changed a value, you choose which to keep. Each linked row shows its state, including **Sync off** after you stop it. Conflict words are underlined links to review. A conflict shows on the row and the strip without stopping
 the table. Each connection first reads the live sheet. Saved runs do not automatically push old values.
 The session must have edit permission for the character.
 
@@ -817,7 +861,7 @@ the sheet's.
 
 While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
 in the run. A maximum set while sync was off stays until the next first read, where the notice and the
-log say what it became. A message from sync stays under the list until you dismiss it.
+log say what it became. A message from sync stays beside the conflict in the header when it fits, or under the list in a narrow layout, until you dismiss it.
 
 A save from an earlier version can hold unsent values as its last match, so on its first read every
 difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
@@ -877,7 +921,9 @@ comes first. Keys keeps its word beside each panel. When several unfinished copi
 one encounter exist, the save word and the rail hover identify the open copy.
 
 Recording and processing keep one linked rail slot above the account state. An open
-recording row owns its error or stall message. Other pages show the banner. A live row has
+recording row owns its error or stall message. Other pages show the banner.
+Opening the session clears its unread completion notice. The rail keeps **Processed** and its warning
+until a later recording or processing replaces the result. Generated drafts ask you to check them against your memory. A live row has
 **Stop recording** before **Process**. A processed row keeps **Process again…** in its
 menu above **Delete…**, with confirmation before it replaces results. The Recordings tab
 keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.
@@ -893,7 +939,8 @@ copy, and has one Undo that restores the files. A run's Sheet uses its live deat
 
 Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
 
-After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path and, when there is one matching folder nearby, **Use this folder**. Folder recovery has Undo.
+After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
+folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.
 
 ## Obsidian file layouts
 

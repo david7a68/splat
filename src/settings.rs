@@ -462,7 +462,7 @@ impl Settings {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut self.cookie_input)
                         .password(true)
-                        .hint_text("Paste session cookie")
+                        .hint_text(design::placeholder(ui, "Paste session cookie"))
                         .min_size(egui::vec2(0.0, Density::Read.control()))
                         .margin(egui::vec2(design::S, 5.0))
                         .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),

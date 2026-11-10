@@ -91,7 +91,7 @@ impl Column {
         let shown = self
             .panel_within(ctx, ctx.available_rect().width())
             .show(ctx, |ui| fill_and_add(ui, add));
-        remember_drag(ctx, id, &shown);
+        finish_handle(ctx, id, &shown);
         shown.inner
     }
 
@@ -101,13 +101,13 @@ impl Column {
         let shown = self
             .panel_within(&ctx, ui.available_width())
             .show_inside(ui, |ui| fill_and_add(ui, add));
-        remember_drag(&ctx, id, &shown);
+        finish_handle(&ctx, id, &shown);
         shown.inner
     }
 
     fn panel_within(self, ctx: &Context, room: f32) -> egui::SidePanel {
         let id = Id::new(self.id);
-        let dragged = ctx.data_mut(|data| {
+        let mut dragged = ctx.data_mut(|data| {
             // Egui would hold on to the width of the last frame, and a window that changes
             // size could not move a natural width any more.
             data.remove::<PanelState>(id);
@@ -124,6 +124,44 @@ impl Column {
             .end()
             .max(self.natural)
             .min((room - self.page_keeps).max(*self.range.start()));
+        if ctx.memory(|memory| memory.has_focus(id.with("__resize"))) {
+            // Egui moves focus with the arrow keys at the end of the frame; a focused handle
+            // keeps them, so each press resizes and focus stays on the handle.
+            ctx.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    id.with("__resize"),
+                    egui::EventFilter {
+                        horizontal_arrows: true,
+                        ..Default::default()
+                    },
+                );
+            });
+            let (left, right, home) = ctx.input_mut(|input| {
+                (
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft),
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight),
+                    input.consume_key(egui::Modifiers::NONE, egui::Key::Home),
+                )
+            });
+            if home || left || right {
+                dragged = if home {
+                    None
+                } else {
+                    let direction = if self.side == Side::Left { 1.0 } else { -1.0 };
+                    let delta = (i32::from(right) - i32::from(left)) as f32 * L * direction;
+                    Some((dragged.unwrap_or(self.natural).clamp(min, max) + delta).clamp(min, max))
+                };
+                ctx.data_mut(|data| {
+                    let widths = &mut data.get_temp_mut_or_default::<Widths>(widths_id()).0;
+                    if let Some(width) = dragged {
+                        widths.insert(self.id.to_owned(), width);
+                    } else {
+                        widths.remove(self.id);
+                    }
+                });
+                ctx.request_repaint();
+            }
+        }
         egui::SidePanel::new(self.side, id)
             .resizable(true)
             .default_width(dragged.unwrap_or(self.natural))
@@ -138,13 +176,41 @@ fn fill_and_add<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     add(ui)
 }
 
-fn remember_drag<R>(ctx: &Context, id: &'static str, shown: &InnerResponse<R>) {
+fn finish_handle<R>(ctx: &Context, id: &'static str, shown: &InnerResponse<R>) {
     // The handle's id is egui's own. A test drags a handle, so an update cannot lose it.
     let handle = Id::new(id).with("__resize");
-    if ctx
-        .read_response(handle)
-        .is_some_and(|handle| handle.dragged())
-    {
+    let Some(response) = ctx.read_response(handle) else {
+        return;
+    };
+    let column = match id {
+        "navigation" => "navigation",
+        "library_sections" => "Library categories",
+        "library_entries" => "Library entries",
+        "world_list_panel" => "World notes",
+        "session_list_panel" => "sessions",
+        "template_list_panel" => "templates",
+        "campaign_modules" => "campaign packages",
+        "party_members" => "party members",
+        "session_notes" => "session notes",
+        "lookup" => "Lookup",
+        "timeline_detail_panel" => "timeline details",
+        "run_panel" | "run_setup_panel" | "run_ended_log" => "fight panel",
+        "encounter_add" => "creature search",
+        _ => "side panel",
+    };
+    ctx.accesskit_node_builder(handle, |node| {
+        node.set_role(egui::accesskit::Role::Splitter);
+        node.set_label(format!("Resize {column} column"));
+        node.set_description("Left and Right move the edge. Home restores the natural width.");
+    });
+    if response.has_focus() {
+        ctx.layer_painter(response.layer_id).vline(
+            response.rect.center().x,
+            response.rect.y_range(),
+            egui::Stroke::new(FOCUS_WIDTH, super::colors().focus),
+        );
+    }
+    if response.dragged() {
         let width = shown.response.rect.width();
         ctx.data_mut(|data| {
             data.get_temp_mut_or_default::<Widths>(widths_id())
@@ -194,6 +260,40 @@ mod tests {
         }
         harness.remove_cursor();
         harness.step();
+    }
+
+    #[test]
+    fn iter3_column_handle_resizes_by_keyboard_and_home_restores_natural_width() {
+        for side in [Side::Left, Side::Right] {
+            let (mut harness, width) = window(move || match side {
+                Side::Left => Column::left("c", NATURAL, RANGE),
+                Side::Right => Column::right("c", NATURAL, RANGE),
+            });
+            harness.run_steps(2);
+            harness.key_press(egui::Key::Tab);
+            harness.run();
+            assert_eq!(
+                harness.ctx.memory(|memory| memory.focused()),
+                Some(Id::new("c").with("__resize"))
+            );
+            harness.key_press(egui::Key::ArrowRight);
+            harness.run();
+            assert_eq!(
+                width.get(),
+                NATURAL + if side == Side::Left { L } else { -L }
+            );
+            harness.key_press(egui::Key::Home);
+            harness.run();
+            assert_eq!(width.get(), NATURAL);
+            assert!(!column_dragged(&harness.ctx, "c"));
+            harness.key_press(egui::Key::ArrowLeft);
+            harness.run();
+            assert_eq!(
+                width.get(),
+                NATURAL + if side == Side::Left { -L } else { L }
+            );
+            assert!(column_dragged(&harness.ctx, "c"));
+        }
     }
 
     #[test]

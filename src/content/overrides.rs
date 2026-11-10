@@ -377,9 +377,14 @@ impl Overrides {
             let changed = change
                 .apply(value)
                 .ok_or_else(|| format!("{field} has no value to add to. Set a value instead."))?;
-            if !(low..=high).contains(&changed) {
+            if changed < low {
                 return Err(format!(
-                    "{field} would become {changed}. It must be from {low} to {high}."
+                    "{field} would become {changed}. It must be {low} or more."
+                ));
+            }
+            if changed > high {
+                return Err(format!(
+                    "{field} would become {changed}. It must be {high} or less."
                 ));
             }
             Ok(Some(changed))
@@ -658,6 +663,40 @@ mod tests {
             let error = Overrides::parse(&map(text)).unwrap_err();
             assert!(error.contains(words), "{text}: {error}");
         }
+    }
+
+    #[test]
+    fn iter_two_override_range_messages_name_only_the_limit_that_was_crossed() {
+        assert_eq!(
+            parsed("{max_hp: {add: -38}}").resolve(&base()).unwrap_err(),
+            "Maximum HP would become -28. It must be 1 or more."
+        );
+        assert_eq!(
+            parsed("{max_hp: {add: 1000000}}")
+                .resolve(&base())
+                .unwrap_err(),
+            "Maximum HP would become 1000010. It must be 1000000 or less."
+        );
+        assert_eq!(
+            parsed("{armor_class: {add: -16}}")
+                .resolve(&base())
+                .unwrap_err(),
+            "AC would become -1. It must be 0 or more."
+        );
+        assert_eq!(
+            parsed("{max_hp: {set: 1}}")
+                .resolve(&base())
+                .unwrap()
+                .max_hp,
+            Some(1)
+        );
+        assert_eq!(
+            parsed("{max_hp: {set: 1000000}}")
+                .resolve(&base())
+                .unwrap()
+                .max_hp,
+            Some(1000000)
+        );
     }
 
     #[test]

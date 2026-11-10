@@ -94,27 +94,36 @@ pub fn quick_add(
     first: impl FnOnce(&mut egui::Ui),
 ) -> Option<String> {
     let blocked = book.unreadable.is_some();
-    let mut added = None;
-    design::hanging_add_strip(ui, |ui| {
-        first(ui);
-        for &kind in kinds {
-            if Action::quiet(kind.word())
+    let names: Vec<_> = kinds
+        .iter()
+        .map(|kind| format!("Add {}", kind.word()))
+        .collect();
+    let actions = kinds
+        .iter()
+        .zip(&names)
+        .map(|(kind, name)| {
+            Action::quiet(kind.word())
                 .icon(kind.icon())
-                .name(&format!("Add {}", kind.word()))
+                .name(name)
                 .density(Density::Read)
                 .blocked_if(blocked, "The timeline file must be repaired first.")
-                .show(ui)
-                .clicked()
-            {
-                added = Some(if kind == Kind::LongRest {
-                    book.add_long_rest(session)
-                } else {
-                    book.add(kind, session)
-                });
-            }
+        })
+        .collect();
+    // Fight and Long rest stay visible; the rarer kinds share More when space is short.
+    let always_visible: Vec<usize> = kinds
+        .iter()
+        .enumerate()
+        .filter(|(_, kind)| matches!(kind, Kind::Encounter | Kind::LongRest))
+        .map(|(index, _)| index)
+        .collect();
+    design::hanging_add_strip(ui, first, actions, &always_visible).map(|index| {
+        let kind = kinds[index];
+        if kind == Kind::LongRest {
+            book.add_long_rest(session)
+        } else {
+            book.add(kind, session)
         }
-    });
-    added
+    })
 }
 
 pub enum RestRulingAction {
@@ -131,34 +140,34 @@ impl RestRulingAction {
     }
 }
 
-/// Both pages show and edit the same ruling, with one step of undo.
+/// Both pages use the same ruling words, icon and colour.
+pub fn long_rest_status(restores: bool) -> Status<'static> {
+    Status {
+        icon: if restores {
+            icons::OK
+        } else {
+            icons::LONG_REST
+        },
+        word: if restores {
+            "Everyone at full"
+        } else {
+            "Not at full"
+        },
+        color: if restores {
+            colors().document.saved
+        } else {
+            colors().muted
+        },
+    }
+}
+
 pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestRulingAction> {
     if event.kind != Kind::LongRest {
         return None;
     }
-    let c = colors();
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
-        design::status(
-            ui,
-            Status {
-                icon: if event.restores {
-                    icons::OK
-                } else {
-                    icons::LONG_REST
-                },
-                word: if event.restores {
-                    "Everyone at full"
-                } else {
-                    "Not at full"
-                },
-                color: if event.restores {
-                    c.document.saved
-                } else {
-                    c.muted
-                },
-            },
-        );
+        design::status(ui, long_rest_status(event.restores));
         if design::link(
             ui,
             if event.restores {
@@ -341,7 +350,7 @@ impl TimelinePage {
         sessions: &[SessionLink],
         current: Option<Uuid>,
     ) {
-        ui.label(Type::Small.rich(ui, "Adds to:").color(colors().muted));
+        ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
         let label = current
             .and_then(|id| sessions.iter().find(|session| session.id == id))
             .map_or("No session", |session| short_session(&session.label));
@@ -445,11 +454,12 @@ impl TimelinePage {
                 format!("Day {day} · {detail}")
             };
         }
-        if event.kind == Kind::LongRest && event.restores {
+        if event.kind == Kind::LongRest {
             if !detail.is_empty() {
                 detail.push_str(" · ");
             }
-            detail.push_str(&format!("{} Everyone at full", icons::OK));
+            let status = long_rest_status(event.restores);
+            detail.push_str(&format!("{} {}", status.icon, status.word));
         }
         let name = if detail.is_empty() {
             title.clone()
@@ -903,6 +913,20 @@ impl TimelinePage {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
         design::rule(ui);
+        ui.scope(|ui| {
+            ui.set_max_width(header_width);
+            let event = &mut book.events[index];
+            ui.add_space(design::XS);
+            let hint = (event.kind == Kind::Day)
+                .then_some("Optional. Days number themselves, so a name is extra.");
+            let title = design::text_field(ui, "Title", &mut event.title, hint, None);
+            changed |= title.changed();
+            if std::mem::take(&mut self.focus_title) {
+                title.request_focus();
+            }
+        });
+        ui.add_space(design::S);
+        design::rule(ui);
         let can_undo_ruling = book.rest_undo_id() == Some(id.as_str());
         let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
@@ -921,15 +945,6 @@ impl TimelinePage {
                 ui.ctx().request_repaint();
             }
             ui.set_max_width(form_width);
-            let event = &mut book.events[index];
-            ui.add_space(design::XS);
-            let hint = (event.kind == Kind::Day)
-                .then_some("Optional. Days number themselves, so a name is extra.");
-            let title = design::text_field(ui, "Title", &mut event.title, hint, None);
-            changed |= title.changed();
-            if std::mem::take(&mut self.focus_title) {
-                title.request_focus();
-            }
             notes.event_link_offer(ui, book, &id);
             let event = &mut book.events[index];
             ui.add_space(design::M);
@@ -1362,6 +1377,36 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter3_c_closed_long_rest_rows_show_both_rulings() {
+        use egui_kittest::kittest::Queryable;
+        for restores in [false, true] {
+            let mut book = Book::default();
+            book.add(Kind::LongRest, None);
+            let mut event = book.events.remove(0);
+            event.restores = restores;
+            let word = if restores {
+                "Everyone at full"
+            } else {
+                "Not at full"
+            };
+            let icon = if restores {
+                icons::OK
+            } else {
+                icons::LONG_REST
+            };
+            let expected = format!("{} · {icon} {word}", event.label(0));
+            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    TimelinePage::default().row(ui, &event, 0, None, false);
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness.get_by_label(&expected);
+        }
+    }
 
     #[test]
     fn iter1_c_day_appears_only_when_filters_hide_day_headings() {

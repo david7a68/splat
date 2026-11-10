@@ -778,6 +778,14 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// Add an event from the shared strip, opening More only when the strip needs it.
+    pub fn click_add_event(&mut self, name: &str) {
+        if !self.has(name) {
+            self.click("More Add actions");
+        }
+        self.click(name);
+    }
+
     /// Click the one control whose name has this text. Two matches fail the script: a
     /// script that takes the first one can press Undo instead of a row, and not notice.
     pub fn click_containing(&mut self, name: &str) {
@@ -904,10 +912,10 @@ impl<'a> Driver<'a> {
     }
 
     /// Where the reader's title is, which moves when the reader scrolls.
-    pub fn scroll_position_of_reader(&self) -> Option<f32> {
+    pub fn scroll_position_of_reader(&self, title: &str) -> Option<f32> {
         self.nodes()
             .into_iter()
-            .find(|node| node.role == Role::Label && node.name.starts_with("Library / "))
+            .find(|node| node.role == Role::Label && node.name == title)
             .map(|node| node.rect.min.y)
     }
 
@@ -1776,7 +1784,11 @@ impl<'a> Driver<'a> {
         let controls = ergonomics::controls(&self.harness);
         let expected: Vec<u64> = controls
             .iter()
-            .filter(|control| !control.disabled && !control.chrome && !control.is_label())
+            .filter(|control| {
+                !control.disabled
+                    && (!control.chrome || control.role == Role::Splitter)
+                    && !control.is_label()
+            })
             .map(|control| control.id)
             .collect();
         let total = controls

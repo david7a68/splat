@@ -44,6 +44,8 @@ pub fn broken(d: &mut Driver<'_>) {
         "The World total includes the note that cannot be read",
     );
     d.state("broken-note-listed", Sizes::All);
+    d.click("1 note cannot be read");
+    d.expect("Save repaired note");
     d.click_containing("Notes/Broken.md");
     d.expect("Save repaired note");
     d.observe(
@@ -60,6 +62,8 @@ pub fn broken(d: &mut Driver<'_>) {
     let unfinished = format!("{external}\nMy unfinished draft.\n");
     let outside = format!("{external}\nNew words on disk.\n");
     d.replace_text_in("Note text", &unfinished);
+    d.click("1 note cannot be read");
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     fs::write(&path, &outside).unwrap();
     d.settle();
     d.click("Overwrite with my draft");
@@ -293,6 +297,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
             .contains("type: faction"),
         "New Note accepts an optional World type and offers the file editor",
     );
+    d.expect("Nothing written yet.");
     d.state("new-faction-note", Sizes::All);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -384,7 +389,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("the npc-name table stops at 1, but 1d6 rolls up to 6.")
+        d.visible_text("the name table stops at 1, but 1d6 rolls up to 6.")
             && d.visible_text("Built-in names stand in until it is fixed."),
         "A bad campaign table states why the built-in list stands in",
     );
@@ -570,7 +575,25 @@ pub fn package_rename(d: &mut Driver<'_>) {
     go_campaign(d);
     d.click("Reload from disk");
     d.expect("Find the folder…");
-    d.state("package-folder-moved-on-disk", Sizes::All);
+    d.expect("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+    assert!(!d.has_containing("Splat cannot find Ashen Marches"));
+    assert!(!d.has_containing("Ashen Marches is now in"));
+    d.state_prepared("package-folder-moved-on-disk", Sizes::All, |d| {
+        let warning = d.place_of("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+        let action = d.place_of("Use this folder");
+        let first = d.place_of("Bridge Ambush");
+        let second = d.place_of("Shrine of Cinders");
+        let and = d.nodes().into_iter().find(|node| node.name == "and");
+        let aligned = warning.zip(action).is_some_and(|(text, action)| {
+            (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
+        });
+        let spaced = first.zip(second).zip(and).is_some_and(|((first, second), and)| {
+            (and.rect.left() - first.right() - (second.left() - and.rect.right())).abs() < 1.0
+                && and.rect.left() - first.right() < crate::design::S
+        });
+        d.observe("iter-4-C-FD1-FD14", aligned && spaced,
+            "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
+    });
     let wrong = d.root.join("modules/wrong-package");
     fs::create_dir(&wrong).unwrap();
     fs::write(
@@ -747,8 +770,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
     d.state("manifest-deleted-library-keeps-entries", Sizes::All);
-    search_library(d, "Package.md");
-    d.click_starting("Package.md · ");
+    search_library(d, "");
+    open_local_package(d, MODULE);
+    d.click_containing("About Ashen Marches");
     d.expect("Write Package.md again");
     d.state("manifest-deleted-library-repair", Sizes::All);
     d.click("Write Package.md again");
@@ -802,6 +826,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Reload and lose my draft");
     d.click("Read");
     d.wait_for_text("Ash Bite");
+    d.expect("Undo discard of Cinder Wolf");
+    assert!(!d.app_mut().library.dirty());
     d.state("package-disk-version-kept", Sizes::All);
 
     d.click("What the Library shows: Can use");
@@ -1059,7 +1085,26 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     fs::write(&copy, &copy_text).unwrap();
     go_library(d);
     search_library(d, "Cinder Wolf");
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
+    d.expect("Bridge Ambush keeps Cinder Wolf.md.");
+    d.expect("Bridge Ambush will then use Cinder Wolf copy.md.");
+    d.observe_both(
+        "iter-3-D-FD4",
+        "Each repair consequence stays under its own choice",
+        |d| {
+            let first = d
+                .place_of("Make Cinder Wolf copy.md a separate entry")
+                .unwrap();
+            let keeps = d.place_of("Bridge Ambush keeps Cinder Wolf.md.").unwrap();
+            let second = d.place_of("Make Cinder Wolf.md a separate entry").unwrap();
+            let changes = d
+                .place_of("Bridge Ambush will then use Cinder Wolf copy.md.")
+                .unwrap();
+            (keeps.top() - first.bottom() - crate::design::XS).abs() < 1.0
+                && second.top() - keeps.bottom() >= crate::design::L
+                && (changes.top() - second.bottom() - crate::design::XS).abs() < 1.0
+        },
+    );
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
@@ -1098,7 +1143,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_ne!(original_id, copy_id);
     d.state("duplicate-copy-new-identity", Sizes::All);
     d.click("Undo separate entry");
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&copy).unwrap()),
         original_id
@@ -1215,6 +1260,30 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click_containing("Rook Ambry · ");
     d.click_containing("Watch House · 2 matches");
     d.expect("This link matches more than one note. Choose one.");
+    d.observe_both(
+        "iter-3-D-FD9-10",
+        "Each place choice pairs its file and bordered action",
+        |d| {
+            ["Locations/Watch House.md", "Other/Watch House.md"]
+                .iter()
+                .all(|path| {
+                    let link = d.place_of(path).unwrap();
+                    let action = d.place_of(&format!("Always use {path}")).unwrap();
+                    action.left() >= link.right() + crate::design::L - 1.0
+                        && action.top() < link.bottom()
+                        && link.top() < action.bottom()
+                })
+        },
+    );
+    d.observe_both(
+        "iter-4-D-FD11",
+        "Place choices share one action column in World",
+        |d| {
+            let first = d.place_of("Always use Locations/Watch House.md").unwrap();
+            let second = d.place_of("Always use Other/Watch House.md").unwrap();
+            (first.left() - second.left()).abs() < 1.0
+        },
+    );
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
     d.state("place-choice-kept-with-undo", Sizes::All);
@@ -1314,8 +1383,13 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     go_encounters(d);
     d.click(NEW_ENCOUNTER);
     d.type_into(FIND_CREATURE, "Watchkeeper");
-    d.expect("No creatures match");
+    d.expect("Watchkeeper Guard stat block not found");
+    assert!(d.is_disabled("Add"));
+    assert!(!d.has("No creatures match"));
     d.state("npc-deleted-stat-block-encounter-search", Sizes::All);
+    d.click("Open in World");
+    d.expect("Watchkeeper Guard · Not found");
+    d.state("npc-stat-block-repair-from-search", Sizes::All);
 }
 
 /// Copying a typed note must keep both files reachable.
@@ -1352,25 +1426,31 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.expect("6. Rook Ambry");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
-    d.expect("Rook Ambry copy.md and Rook Ambry.md share one ID.");
-    d.expect("New identity for Rook Ambry copy.md");
+    d.expect("These two files claim to be the same entry.");
+    d.expect("Make Rook Ambry copy.md a separate entry");
+    assert!(
+        !d.has("Changed"),
+        "A copied NPC note does not change its roster values"
+    );
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     d.state("duplicate-npc-repaired-from-encounter", Sizes::All);
-    d.click("Undo new identity");
-    d.wait_for_text("New identity for Rook Ambry copy.md");
+    d.click("Undo separate entry");
+    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry.md ·");
-    d.expect("New identity for Rook Ambry copy.md");
-    d.expect("New identity for Rook Ambry.md");
+    d.expect("Make Rook Ambry copy.md a separate entry");
+    d.expect("Make Rook Ambry.md a separate entry");
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
-    d.expect("New identity for Rook Ambry copy.md");
+    d.expect("Make Rook Ambry copy.md a separate entry");
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
         Some(id)
@@ -1382,13 +1462,14 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo new identity");
-    d.wait_for_text("New identity for Rook Ambry copy.md");
+    d.click("Undo separate entry");
+    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
     d.state("world-copy-repair-undone", Sizes::All);
-    d.click("New identity for Rook Ambry copy.md");
-    d.wait_for_text("Undo new identity");
+    d.click("Make Rook Ambry copy.md a separate entry");
+    d.wait_for_text("Undo separate entry");
+    d.expect("Rook Ambry copy.md is now a separate entry.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
     reload(d);
@@ -1414,7 +1495,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.expect("Rook Ambry");
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("Use Mara Vell");
+    d.click("Rename the note to Mara Vell");
     d.wait_for_text("Undo name change");
     d.state("renamed-npc-name-updated", Sizes::All);
     look_up(d, "Mara Vell");
@@ -1422,7 +1503,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.state("renamed-npc-new-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Undo name change");
-    d.wait_for_text("Use Mara Vell");
+    d.wait_for_text("Rename the note to Mara Vell");
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {
@@ -1447,6 +1528,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
+    d.expect("Register it as a new package below.");
+    assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);
     d.click("Register as a new package");
@@ -1455,7 +1538,44 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     assert!(d.is_disabled("Register package"));
     d.state("copied-package-needs-a-name", Sizes::All);
     d.replace_text_in("New package name", "Ashen Reaches");
+    d.expect("REGISTER A COPY");
+    d.expect("This campaign keeps the original. The copy is registered but not used.");
+    d.expect("Cancel");
+    d.observe_both(
+        "iter-4-D-FD2",
+        "The copy warning stays above the named registration form and Cancel",
+        |d| {
+            let warning = d
+                .place_of("This folder is a copy of Ashen Marches.")
+                .unwrap();
+            let title = d.place_of("REGISTER A COPY").unwrap();
+            let register = d.place_of("Register Ashen Reaches").unwrap();
+            let cancel = d.place_of("Cancel").unwrap();
+            warning.bottom() < title.top()
+                && title.bottom() < register.top()
+                && cancel.left() >= register.right() + design::L
+                && cancel.top() < register.bottom()
+        },
+    );
     d.state("copied-package-new-name", Sizes::All);
+    d.click("Use in this campaign");
+    d.expect("Uses every entry in this package, including future entries.");
+    assert!(!d.has("This campaign keeps the original. The copy is registered but not used."));
+    d.state("copied-package-use-enabled", Sizes::All);
+    d.click("Cancel");
+    d.expect("Register as a new package");
+    assert!(!d.has("New package name"));
+    assert_eq!(d.app_mut().campaigns.modules().len(), 1);
+    assert_eq!(fs::read(copied.join("Module.md")).unwrap(), before);
+    d.expect_same(
+        "Cancel restores the copied-folder warning and its registration action without writing.",
+    );
+    d.state("copied-package-registration-cancelled", Sizes::All);
+    d.click("Register as a new package");
+    d.expect("Register Ashen Reaches");
+    d.expect("Uses every entry in this package, including future entries.");
+    d.click("Use in this campaign");
+    d.expect("This campaign keeps the original. The copy is registered but not used.");
     d.click("Register Ashen Reaches");
     d.wait_for_text("Undo package registration");
     search_library(d, "Cinder Wolf");
@@ -1497,7 +1617,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let module = crate::library::local_module(&copied).unwrap();
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
-    d.wait_for_text("Duplicate identity");
+    d.wait_for_text("Same entry in two files");
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");

@@ -141,27 +141,24 @@ impl RunGroup {
         if !members.is_empty() {
             summary.push_str(&format!(" · {members}"));
         }
-        for warning in &self.warnings {
-            summary.push_str(&format!(" · {warning}"));
-        }
         summary
     }
     pub(crate) fn joinable_count(&self) -> u64 {
         self.members.iter().map(|member| member.count).sum()
     }
     pub(crate) fn count_label(&self) -> String {
-        if self.warnings.is_empty() {
+        if self.unavailable_members.is_empty() {
             crate::design::count(self.creature_count() as usize, "member", "members")
         } else {
             format!(
-                "{} of {} members can join",
+                "{} of {} can join",
                 self.joinable_count(),
                 self.creature_count()
             )
         }
     }
     pub(crate) fn xp_label(&self) -> String {
-        if self.xp_unknown.is_empty() && self.unavailable == 0 {
+        if self.xp_unknown.is_empty() {
             format!("XP {}", grouped_number(self.xp))
         } else if self.xp == 0 && self.members.len() == self.xp_unknown.len() {
             "XP not known".to_owned()
@@ -170,7 +167,7 @@ impl RunGroup {
         }
     }
     pub(crate) fn member_summary(&self) -> String {
-        let mut members: Vec<_> = self
+        let members: Vec<_> = self
             .members
             .iter()
             .map(|member| {
@@ -190,17 +187,17 @@ impl RunGroup {
                 )
             })
             .collect();
-        for (position, count, name) in &self.unavailable_members {
-            members.insert(
-                (*position).min(members.len()),
-                format!(
-                    "{} × {name}",
-                    crate::design::count(*count as usize, "", "").trim()
-                ),
-            );
+        let summary = members.join(", ");
+        if self.unavailable > 0 {
+            format!(
+                "Will add: {}",
+                if summary.is_empty() { "none" } else { &summary }
+            )
+        } else {
+            summary
         }
-        members.join(", ")
     }
+
     pub(crate) fn member_summary_wrapped(&self) -> String {
         self.member_summary()
             .split(", ")
@@ -1039,19 +1036,146 @@ impl Run {
 
     /// A place for someone whose initiative was set during combat. The current turn stays
     /// current, and no one else moves relative to each other.
-    fn take_place_in_order(state: &mut State, index: usize) {
+    /// Whether `a` acts before `b`: by total, then by roster when the campaign breaks ties
+    /// that way. Otherwise a tie keeps the order the DM gave it.
+    fn goes_before(state: &State, a: usize, b: usize, roster_ties: bool) -> bool {
+        let (x, y) = (
+            state.participants[a].initiative,
+            state.participants[b].initiative,
+        );
+        x > y || (roster_ties && x == y && a < b)
+    }
+    /// Whether the row at `at` in the order is where its total puts it, beside the rows
+    /// other than `skip`.
+    fn in_place(state: &State, at: usize, roster_ties: bool, skip: Option<usize>) -> bool {
+        let index = state.order[at];
+        let others = |i: &&usize| Some(**i) != skip;
+        let after_previous = state.order[..at]
+            .iter()
+            .rfind(others)
+            .is_none_or(|previous| !Self::goes_before(state, index, *previous, roster_ties));
+        let before_next = state.order[at + 1..]
+            .iter()
+            .find(others)
+            .is_none_or(|next| !Self::goes_before(state, *next, index, roster_ties));
+        after_previous && before_next
+    }
+    /// The current row whose total changed during its turn. It keeps its place until its
+    /// turn ends, so that no one else is skipped or acts twice in this round.
+    ///
+    /// Only a total out of order says so. A tie is never out of order here: the DM can move
+    /// an arrival within a tie, and the campaign's tie rule can change while a run is open.
+    /// A row that only sits in another tie order does not wait for its turn to end.
+    fn moves_after_turn(state: &State) -> Option<usize> {
+        (state.phase == Phase::Running && !Self::in_place(state, state.cursor, false, None))
+            .then(|| state.order[state.cursor])
+    }
+    /// Put a participant where its total goes, and keep the current turn on the same row.
+    /// `waiting` is the current row that waits for its turn to end, found before this
+    /// change: it is not where its total goes, so the place is found beside the others.
+    fn take_place_in_order(
+        state: &mut State,
+        index: usize,
+        roster_ties: bool,
+        waiting: Option<usize>,
+    ) {
         let current = state.order[state.cursor];
         state.order.retain(|i| *i != index);
-        let total = state.participants[index].initiative;
         let place = state
             .order
             .iter()
-            .position(|i| state.participants[*i].initiative < total)
+            .position(|i| Some(*i) != waiting && Self::goes_before(state, index, *i, roster_ties))
             .unwrap_or(state.order.len());
         state.order.insert(place, index);
         if let Some(cursor) = state.order.iter().position(|i| *i == current) {
             state.cursor = cursor;
         }
+    }
+    /// What a total set in combat does to the turn order, in words.
+    fn initiative_notice(
+        state: &State,
+        index: usize,
+        total: i64,
+        had: bool,
+        acted: bool,
+        roster_ties: bool,
+    ) -> String {
+        let name = &state.participants[index].name;
+        let at = state.order.iter().position(|i| *i == index);
+        if at == Some(state.cursor) {
+            if Self::moves_after_turn(state).is_none() {
+                return format!("{name} moves to\u{a0}{total}. The turn stays.");
+            }
+            if !state.participants[index].present {
+                return format!("{name} moves to\u{a0}{total} when this turn ends.");
+            }
+            // Where the row goes when this turn ends, and whether that is in this round.
+            let mut after = state.clone();
+            let later = Self::end_turn(&mut after, roster_ties).is_ok()
+                && after.round == state.round
+                && after
+                    .order
+                    .iter()
+                    .position(|i| *i == index)
+                    .is_some_and(|at| at >= after.cursor);
+            return format!(
+                "{name} moves to\u{a0}{total} when this turn ends\u{a0}· acts {}.",
+                if later {
+                    "later this round"
+                } else {
+                    "next round"
+                }
+            );
+        }
+        let passed = at.is_some_and(|at| at < state.cursor);
+        // An absent row has no turn to speak of until it returns.
+        let when = if !state.participants[index].present {
+            ""
+        } else if passed {
+            "\u{a0}· acts next round"
+        } else if acted {
+            "\u{a0}· acts again this round"
+        } else {
+            ""
+        };
+        let verb = if had { "moves to" } else { "joins at" };
+        format!("{name} {verb}\u{a0}{total}{when}.")
+    }
+    /// Give the turn to the next present participant. A current row whose total changed in
+    /// its turn goes to its new place first: if that is still to come in this round, it acts
+    /// again there; if it has passed, it acts there next round.
+    fn end_turn(state: &mut State, roster_ties: bool) -> Result<(), String> {
+        if !state.participants.iter().any(|p| p.present) {
+            return Err(NOBODY_PRESENT.into());
+        }
+        // The rows still to come in this round start after the current one.
+        let mut from = state.cursor + 1;
+        if let Some(moved) = Self::moves_after_turn(state) {
+            state.order.remove(state.cursor);
+            let place = state
+                .order
+                .iter()
+                .position(|i| Self::goes_before(state, moved, *i, roster_ties))
+                .unwrap_or(state.order.len());
+            state.order.insert(place, moved);
+            // A place above the rows still to come pushes them down by one. A place among
+            // them is one of them, after its turn here.
+            if place > state.cursor {
+                from = state.cursor;
+            }
+        }
+        let present = |i: &usize| state.participants[*i].present;
+        state.cursor = match state.order[from.min(state.order.len())..]
+            .iter()
+            .position(present)
+        {
+            Some(at) => from + at,
+            None => {
+                state.round = state.round.checked_add(1).ok_or("Round limit reached.")?;
+                state.order.iter().position(present).ok_or(NOBODY_PRESENT)?
+            }
+        };
+        Ok(())
     }
     /// The initiative of each new participant, and the words the log uses for it. They are
     /// new, so none of them is in `state` yet.
@@ -1085,7 +1209,11 @@ impl Run {
                     p.initiative = Some(total);
                     p.shared_roll = Some(key.clone());
                 });
-                words.push(format!("Shared roll {die} {bonus:+} = {total}"));
+                words.push(format!(
+                    "Shared roll {die} {} {} = {total}",
+                    if bonus < 0 { "−" } else { "+" },
+                    bonus.unsigned_abs()
+                ));
             }
             Grouping::Individual => {
                 for p in added.iter_mut() {
@@ -1128,8 +1256,10 @@ impl Run {
         state: &mut State,
         group: &RunGroup,
         total: Option<i64>,
-        grouping: Grouping,
+        rule: &Initiative,
     ) -> Result<(String, String), String> {
+        let grouping = rule.grouping;
+        let waiting = Self::moves_after_turn(state);
         if let Some(problem) = &group.problem {
             return Err(format!("{}: {problem}", group.name));
         }
@@ -1173,7 +1303,7 @@ impl Run {
         for index in first..state.participants.len() {
             state.order.push(index);
             if state.phase == Phase::Running {
-                Self::take_place_in_order(state, index);
+                Self::take_place_in_order(state, index, rule.roster_ties, waiting);
             }
         }
         if state.phase == Phase::Setup {
@@ -1252,9 +1382,22 @@ impl Run {
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
         let follow_turn = matches!(command, Command::Begin | Command::Next);
+        let roster_ties = self.initiative.roster_ties;
+        // Who it was, and whether its turn this round had come, before the change.
         let live_initiative = match &command {
             Command::Initiative(index, Some(total)) if self.state.phase == Phase::Running => {
-                Some((*index, *total))
+                let had = self
+                    .state
+                    .participants
+                    .get(*index)
+                    .is_some_and(|p| p.initiative.is_some());
+                let acted = self
+                    .state
+                    .order
+                    .iter()
+                    .position(|i| i == index)
+                    .is_some_and(|at| at < self.state.cursor);
+                Some((*index, *total, had, acted))
             }
             _ => None,
         };
@@ -1356,16 +1499,7 @@ impl Run {
                 if !next.participants.iter().any(|p| p.present) {
                     return Err(NOBODY_PRESENT.into());
                 }
-                loop {
-                    next.cursor += 1;
-                    if next.cursor == next.order.len() {
-                        next.cursor = 0;
-                        next.round = next.round.checked_add(1).ok_or("Round limit reached.")?;
-                    }
-                    if next.participants[next.order[next.cursor]].present {
-                        break;
-                    }
-                }
+                Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
                     "Round {}: {}'s turn.",
                     next.round, next.participants[next.order[next.cursor]].name
@@ -1469,7 +1603,7 @@ impl Run {
             Command::AddGroup(group, total) => {
                 let first = next.participants.len();
                 let (added, initiative) =
-                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                    Self::join_group(&mut next, &group, total, &self.initiative)?;
                 for p in &mut next.participants[first..] {
                     if let Some(from) = &mut p.added_from {
                         from.round = next.round;
@@ -1480,7 +1614,7 @@ impl Run {
             Command::AddCreature(group, total) => {
                 let first = next.participants.len();
                 let (added, initiative) =
-                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                    Self::join_group(&mut next, &group, total, &self.initiative)?;
                 // There is no group to have arrived with.
                 for p in &mut next.participants[first..] {
                     if let Some(from) = &mut p.added_from {
@@ -1492,14 +1626,14 @@ impl Run {
             Command::Several(commands) => {
                 let mut lines = commands
                     .into_iter()
-                    .map(|command| Self::participant_command(&mut next, command))
+                    .map(|command| Self::participant_command(&mut next, command, roster_ties))
                     .collect::<Result<Vec<_>, _>>()?;
                 let last = lines.pop().ok_or("Choose a target first.")?;
                 next.log.append(&mut lines);
                 last
             }
             Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
-            other => Self::participant_command(&mut next, other)?,
+            other => Self::participant_command(&mut next, other, roster_ties)?,
         };
         next.log.push(label);
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
@@ -1515,21 +1649,14 @@ impl Run {
         }
         self.history_labels.push(undo_label);
         self.notice_summary = None;
-        if let Some((index, total)) = live_initiative {
-            let waits = self
-                .state
-                .order
-                .iter()
-                .position(|i| *i == index)
-                .is_some_and(|at| at < self.state.cursor);
-            self.notice = Some(format!(
-                "{} joins at\u{a0}{total}{}.",
-                self.state.participants[index].name,
-                if waits {
-                    "\u{a0}· acts next round"
-                } else {
-                    ""
-                }
+        if let Some((index, total, had, acted)) = live_initiative {
+            self.notice = Some(Self::initiative_notice(
+                &self.state,
+                index,
+                total,
+                had,
+                acted,
+                roster_ties,
             ));
         }
         self.last_initiative = initiative_edit;
@@ -1543,7 +1670,14 @@ impl Run {
         self.error = None;
         Ok(())
     }
-    fn participant_command(state: &mut State, command: Command) -> Result<String, String> {
+    fn participant_command(
+        state: &mut State,
+        command: Command,
+        roster_ties: bool,
+    ) -> Result<String, String> {
+        // Found before the change, which can make a neighbour of the current row look out of
+        // place.
+        let waiting = Self::moves_after_turn(state);
         let index = match &command {
             Command::Npc(i, ..)
             | Command::RollMode(i, ..)
@@ -1637,7 +1771,14 @@ impl Run {
                 let change = format!("Initiative set to {}.", display(total));
                 if state.phase == Phase::Running {
                     let label = format!("{}: {change}", p.name);
-                    Self::take_place_in_order(state, index);
+                    let at = state.order.iter().position(|i| *i == index);
+                    // The current row keeps its place until its turn ends. Another row moves
+                    // only when its total puts it somewhere else, so a tie keeps its order.
+                    if at.is_some_and(|at| {
+                        at != state.cursor && !Self::in_place(state, at, roster_ties, waiting)
+                    }) {
+                        Self::take_place_in_order(state, index, roster_ties, waiting);
+                    }
                     return Ok(label);
                 }
                 change
@@ -1825,6 +1966,17 @@ impl Run {
                 if *present { "present" } else { "absent" }
             ),
             Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
+            Command::RemoveCondition(i, at)
+                if self
+                    .state
+                    .participants
+                    .get(*i)
+                    .and_then(|p| p.conditions.get(*at))
+                    .is_some_and(|condition| condition.starts_with("Exhaustion")) =>
+            {
+                let old = view::exhaustion_level(&self.state.participants[*i].conditions[*at]);
+                format!("exhaustion {old} → 0 on {}", name(i))
+            }
             Command::RemoveCondition(i, at) => format!(
                 "{} off {}",
                 self.state
@@ -1834,7 +1986,11 @@ impl Run {
                     .map_or("an effect", String::as_str),
                 name(i)
             ),
-            Command::Concentration(i, _) => format!("concentration on {}", name(i)),
+            Command::Concentration(i, value) => format!(
+                "{} concentration for {}",
+                if *value { "start" } else { "stop" },
+                name(i)
+            ),
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
@@ -1844,8 +2000,28 @@ impl Run {
             Command::Several(commands) => {
                 let word = match commands.first() {
                     Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
-                    Some(Command::RemoveCondition(i, _)) => {
-                        return format!("Exhaustion on {}", name(i));
+                    Some(Command::RemoveCondition(i, at)) => {
+                        let old = self
+                            .state
+                            .participants
+                            .get(*i)
+                            .and_then(|p| p.conditions.get(*at));
+                        if let Some(old) = old.filter(|old| old.starts_with("Exhaustion")) {
+                            let old = view::exhaustion_level(old);
+                            let new = commands
+                                .iter()
+                                .find_map(|command| match command {
+                                    Command::Condition(target, condition)
+                                        if target == i && condition.starts_with("Exhaustion") =>
+                                    {
+                                        Some(view::exhaustion_level(condition))
+                                    }
+                                    _ => None,
+                                })
+                                .unwrap_or(0);
+                            return format!("exhaustion {old} → {new} on {}", name(i));
+                        }
+                        "a change to".to_owned()
                     }
                     Some(Command::Heal(_, amount)) => format!("{amount} healing to"),
                     Some(Command::TempHp(_, amount)) => format!("{amount} temporary HP on"),
@@ -2713,6 +2889,24 @@ struct Recovery {
     closed_order: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     copied_from: Option<Uuid>,
+    #[serde(default)]
+    copy_number: u64,
+}
+
+impl Recovery {
+    fn number(&self, name: &str) -> u64 {
+        let legacy = name
+            .split_once(" · saved ")
+            .map(|(_, suffix)| {
+                suffix
+                    .strip_suffix(')')
+                    .and_then(|suffix| suffix.rsplit_once(" ("))
+                    .and_then(|(_, number)| number.parse().ok())
+                    .unwrap_or(1)
+            })
+            .unwrap_or(0);
+        self.copy_number.max(legacy)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -2945,36 +3139,33 @@ impl Run {
             .as_mut()
             .ok_or("This run has no save location.")?;
         let id = crate::hermetic::new_uuid();
-        let path = storage
-            .path
-            .parent()
-            .ok_or("Invalid run location")?
-            .join(format!("{id}.json"));
-        let time = calendar_time(crate::hermetic::now());
-        let base_name = self.name.split(" · saved ").next().unwrap_or(&self.name);
-        let stem = format!(
-            "{base_name} · saved {}:{:02}",
-            &time[11..],
-            crate::hermetic::now() % 60
-        );
-        let names: BTreeSet<_> = fs::read_dir(storage.path.parent().ok_or("Invalid run location")?)
+        let directory = storage.path.parent().ok_or("Invalid run location")?;
+        let now = crate::hermetic::now();
+        let time = calendar_time(now);
+        let time = time.replace([' ', ':'], "-");
+        let path = directory.join(format!("{time}-{:02}-UTC-{id}.json", now % 60));
+        let base_name = self
+            .name
+            .split(" · saved ")
+            .next()
+            .unwrap_or(&self.name)
+            .to_owned();
+        let copy_number = fs::read_dir(directory)
             .map_err(|e| e.to_string())?
             .filter_map(Result::ok)
             .filter_map(|file| read_saved(&file.path(), storage.campaign).ok())
-            .map(|saved| saved.name)
-            .collect();
-        let mut new_name = stem.clone();
-        let mut suffix = 2;
-        while names.contains(&new_name) {
-            new_name = format!("{stem} ({suffix})");
-            suffix += 1;
-        }
+            .filter(|saved| saved.name.split(" · saved ").next() == Some(base_name.as_str()))
+            .map(|saved| saved.recovery.number(&saved.name))
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
         let old_path = std::mem::replace(&mut storage.path, path);
         let old_baseline = storage.baseline.take();
         let old_id = std::mem::replace(&mut self.id, id);
         let old_recovery = self.recovery.clone();
         self.recovery.copied_from = Some(old_id);
-        let old_name = std::mem::replace(&mut self.name, new_name);
+        self.recovery.copy_number = copy_number;
+        let old_name = std::mem::replace(&mut self.name, base_name);
         self.dirty = true;
         match self.save() {
             Ok(()) => {
@@ -3243,7 +3434,15 @@ impl Run {
             .find(|run| run.standing == Standing::Unfinished)
             && close_order.get(&run.path).is_some_and(|order| *order > 0)
         {
-            run.label.insert_str(0, "Closed last · ");
+            if let Some((copy, rest)) = run
+                .label
+                .split_once(" · ")
+                .filter(|(word, _)| word.starts_with("Copy "))
+            {
+                run.label = format!("{copy} · Closed last · {rest}");
+            } else {
+                run.label.insert_str(0, "Closed last · ");
+            }
         }
         let all_recent = runs
             .iter()
@@ -3302,11 +3501,18 @@ impl Run {
             label.push_str(&format!(" · Last: {last}"));
         }
         label.push_str(&saved);
+        let legacy = self.name.split_once(" · saved ");
+        let copy_number = self.recovery.number(&self.name);
+        if copy_number > 0 {
+            label.insert_str(0, &format!("Copy {copy_number} · "));
+        }
         SavedRunInfo {
             path,
             id: Some(self.id),
             source: self.source,
-            encounter: self.name.clone(),
+            encounter: legacy
+                .map_or(self.name.as_str(), |(name, _)| name)
+                .to_owned(),
             label,
             standing,
             saved_at,
@@ -3991,6 +4197,26 @@ mod tests {
         assert_eq!(run.state.phase, Phase::Running);
         run.apply(Command::Next).unwrap();
     }
+
+    #[test]
+    fn iter_2_b_concentration_undo_names_the_recorded_direction() {
+        let mut run = run();
+        let name = run.state.participants[0].name.clone();
+        run.apply(Command::Concentration(0, true)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: start concentration for {name}")
+        );
+        run.apply(Command::Concentration(0, false)).unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: stop concentration for {name}")
+        );
+        run.undo();
+        assert!(run.state.participants[0].concentration);
+        run.undo();
+        assert!(!run.state.participants[0].concentration);
+    }
     #[test]
     fn render_setup_running_and_ended_views_without_changing_state() {
         let mut run = run();
@@ -4165,7 +4391,8 @@ mod tests {
         let copy = Run::open(&new_path, campaign).unwrap();
         assert_eq!(copy.state.participants[0].hp, hp);
         assert_ne!(copy.id, Run::open(&path, campaign).unwrap().id);
-        assert!(copy.name.starts_with("Ambush · saved "));
+        assert_eq!(copy.name, "Ambush");
+        assert!(copy.live_info().unwrap().label.starts_with("Copy 1 · "));
     }
     #[test]
     fn recovery_copies_resume_the_last_closed_run_and_preserve_external_bytes() {
@@ -4183,8 +4410,8 @@ mod tests {
         let latest = run.id;
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
-        assert!(copies[0].encounter.contains(" · saved "));
-        assert!(copies[0].label.starts_with("Closed last · "));
+        assert_eq!(copies[0].encounter, "Ambush");
+        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -4243,7 +4470,7 @@ mod tests {
             assert!(run.close_run(), "{phase:?}");
         }
     }
-    fn linked(run: &mut Run, index: usize, character: &str) {
+    pub(super) fn linked(run: &mut Run, index: usize, character: &str) {
         let mut definition = (*run.state.participants[index].definition).clone();
         definition.fields.insert(
             "splat_external".into(),
@@ -5375,12 +5602,74 @@ mod tests {
     }
 
     #[test]
-    fn recovery_copies_have_different_names_even_in_the_same_second() {
-        let (_dir, mut run, _, _, _) = run_with_changed_file();
+    fn iter_3_b_legacy_recovery_copy_keeps_its_number_and_file() {
+        let (dir, mut run, _, _, campaign) = run_with_changed_file();
+        run.keep_this_run().unwrap();
+        run.name = "Ambush · saved 03:00:00 (2)".into();
+        run.dirty = true;
+        run.save().unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        let bytes = fs::read(&path).unwrap();
+        let rows = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(rows[0].encounter, "Ambush");
+        assert!(rows[0].label.starts_with("Copy 2 · "));
+        assert_eq!(fs::read(&path).unwrap(), bytes);
         run.save_as_new_run().unwrap();
-        let first = run.name.clone();
+        assert!(run.live_info().unwrap().label.starts_with("Copy 3 · "));
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn recovery_copies_keep_the_name_and_number_each_copy() {
+        let (_dir, mut run, _, _, campaign) = run_with_changed_file();
+        let name = run.name.clone();
         run.save_as_new_run().unwrap();
-        assert_ne!(first, run.name);
+        let first_path = run.path().unwrap().to_path_buf();
+        let first_bytes = fs::read(&first_path).unwrap();
+        assert_eq!(run.name, name);
+        assert!(run.live_info().unwrap().label.starts_with("Copy 1 · "));
+        run.save_as_new_run().unwrap();
+        assert_eq!(run.name, name);
+        assert_ne!(run.path().unwrap(), first_path);
+        assert_eq!(fs::read(first_path).unwrap(), first_bytes);
+        let reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(reopened.name, name);
+        assert!(reopened.live_info().unwrap().label.starts_with("Copy 2 · "));
+    }
+
+    #[test]
+    fn iter_3_b_exhaustion_undo_names_both_levels_and_restores_them() {
+        let mut run = run();
+        run.apply(Command::Condition(0, "Exhaustion (2)".into()))
+            .unwrap();
+        for (old, new) in [(2, 3), (3, 1), (1, 0)] {
+            let command = if new == 0 {
+                Command::RemoveCondition(0, 1)
+            } else {
+                Command::Several(vec![
+                    Command::RemoveCondition(0, 1),
+                    Command::Condition(0, format!("Exhaustion ({new})")),
+                ])
+            };
+            let expected = format!(
+                "exhaustion {old} → {new} on {}",
+                run.state.participants[0].name
+            );
+            assert_eq!(run.describe(&command), expected);
+            run.apply(command).unwrap();
+            run.undo();
+            assert_eq!(
+                run.state.participants[0].conditions,
+                vec!["Poisoned".to_owned(), format!("Exhaustion ({old})")]
+            );
+            if new > 0 {
+                run.apply(Command::Several(vec![
+                    Command::RemoveCondition(0, 1),
+                    Command::Condition(0, format!("Exhaustion ({new})")),
+                ]))
+                .unwrap();
+            }
+        }
     }
 
     #[test]
@@ -5500,13 +5789,172 @@ mod tests {
             run.apply(Command::Initiative(0, Some(total))).unwrap();
             let notice = run.notice.as_deref().unwrap();
             assert!(
-                notice.contains(&format!("joins at\u{a0}{total}")),
+                notice.contains(&format!("moves to\u{a0}{total}")),
                 "{notice}"
             );
             assert_eq!(notice.contains("acts next round"), waits, "{notice}");
+            // It acted at 20, and 8 is still to come in this round.
+            assert_eq!(notice.contains("acts again this round"), !waits, "{notice}");
             assert_arrival_wraps(notice);
             assert_eq!(run.current(), current);
         }
+    }
+
+    /// The order by participant, and whose turn it is.
+    fn turns(run: &Run) -> (Vec<usize>, Option<usize>) {
+        (run.state.order.clone(), run.current())
+    }
+
+    #[test]
+    fn a_change_to_another_row_moves_it_and_keeps_the_turn() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        // The row below the current one passes it, and acts next round.
+        run.apply(Command::Initiative(2, Some(18))).unwrap();
+        assert_eq!(turns(&run), (vec![0, 2, 1], Some(1)));
+        assert!(run.notice.as_deref().unwrap().contains("acts next round"));
+        run.apply(Command::Next).unwrap();
+        assert_eq!((run.current(), run.state.round), (Some(0), 2));
+        // One undo step takes it back.
+        let mut run = self::run();
+        begin(&mut run);
+        run.apply(Command::Initiative(2, Some(18))).unwrap();
+        run.undo();
+        assert_eq!(turns(&run), (vec![0, 1, 2], Some(0)));
+    }
+
+    #[test]
+    fn a_tie_keeps_its_order_unless_the_campaign_uses_the_roster() {
+        for (roster_ties, order) in [(false, vec![0, 2, 1]), (true, vec![0, 1, 2])] {
+            let mut run = run();
+            run.initiative.roster_ties = roster_ties;
+            begin(&mut run);
+            // The DM put the later roster row first in a tie of their own.
+            run.state.participants[1].initiative = Some(12);
+            run.state.order = vec![0, 2, 1];
+            run.state.participants[2].initiative = Some(12);
+            run.apply(Command::Initiative(2, Some(12))).unwrap();
+            assert_eq!(run.state.order, order, "roster ties: {roster_ties}");
+            assert_eq!(run.current(), Some(0));
+        }
+    }
+
+    #[test]
+    fn the_current_row_keeps_its_turn_and_moves_when_it_ends() {
+        // Up: it has acted, and the row it passed has too, so the next turn is the one after.
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Initiative(2, Some(18))).unwrap();
+        assert_eq!(turns(&run), (vec![0, 1, 2], Some(2)));
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("when this turn ends"), "{notice}");
+        assert!(notice.contains("acts next round"), "{notice}");
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![0, 2, 1], Some(0)));
+        assert_eq!(run.state.round, 2);
+        // Down, as a delay: the next row acts, and then this one.
+        let mut run = self::run();
+        begin(&mut run);
+        run.apply(Command::Initiative(0, Some(12))).unwrap();
+        assert_eq!(turns(&run), (vec![0, 1, 2], Some(0)));
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("acts later this round"), "{notice}");
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![1, 0, 2], Some(1)));
+        run.apply(Command::Next).unwrap();
+        assert_eq!((run.current(), run.state.round), (Some(0), 1));
+        // To the top from the last place: it opens the next round.
+        let mut run = self::run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Initiative(2, Some(25))).unwrap();
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![2, 0, 1], Some(2)));
+        assert_eq!(run.state.round, 2);
+        // A total that keeps its place keeps the turn, and says so.
+        let mut run = self::run();
+        begin(&mut run);
+        run.apply(Command::Initiative(0, Some(17))).unwrap();
+        assert!(run.notice.as_deref().unwrap().contains("The turn stays"));
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![0, 1, 2], Some(1)));
+    }
+
+    /// Whose turn each Next gives, as (round, participant).
+    fn next_turns(run: &mut Run, count: usize) -> Vec<(u64, usize)> {
+        (0..count)
+            .map(|_| {
+                run.apply(Command::Next).unwrap();
+                (run.state.round, run.current().unwrap())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_change_with_nobody_present_ends_and_says_so() {
+        let mut run = run();
+        begin(&mut run);
+        for index in 0..3 {
+            run.apply(Command::Presence(index, false)).unwrap();
+        }
+        run.apply(Command::Initiative(0, Some(1))).unwrap();
+        assert!(
+            run.notice
+                .as_deref()
+                .unwrap()
+                .contains("when this turn ends")
+        );
+        assert_eq!(run.apply(Command::Next), Err(NOBODY_PRESENT.into()));
+    }
+
+    #[test]
+    fn a_tie_out_of_roster_order_is_no_change_to_wait_for() {
+        // An arrival moved within a tie, or a tie set by hand before the campaign chose
+        // roster order. Each row still acts once a round.
+        let mut run = run();
+        begin(&mut run);
+        run.state.participants[2].initiative = Some(15);
+        run.state.order = vec![0, 2, 1];
+        run.initiative.roster_ties = true;
+        assert_eq!(
+            next_turns(&mut run, 5),
+            vec![(1, 2), (1, 1), (2, 0), (2, 2), (2, 1)]
+        );
+    }
+
+    #[test]
+    fn a_delay_past_an_absent_row_acts_later_this_round() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Presence(1, false)).unwrap();
+        // 12 is above the 10 whose turn is next, so this row acts before it.
+        run.apply(Command::Initiative(0, Some(12))).unwrap();
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("acts later this round"), "{notice}");
+        assert_eq!(next_turns(&mut run, 3), vec![(1, 0), (1, 2), (2, 0)]);
+        assert_eq!(run.state.order, vec![1, 0, 2]);
+    }
+
+    #[test]
+    fn a_row_placed_while_the_current_row_waits_goes_beside_the_others() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        // The current row waits at 1, where 15 was.
+        run.apply(Command::Initiative(1, Some(1))).unwrap();
+        // 5 goes after 10, not before the 1 that waits.
+        run.apply(Command::Initiative(0, Some(5))).unwrap();
+        assert_eq!(turns(&run), (vec![1, 2, 0], Some(1)));
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![2, 0, 1], Some(2)));
+        run.apply(Command::Next).unwrap();
+        assert_eq!(turns(&run), (vec![2, 0, 1], Some(0)));
+        run.apply(Command::Next).unwrap();
+        assert_eq!((run.current(), run.state.round), (Some(1), 1));
     }
 
     fn assert_arrival_wraps(message: &str) {
@@ -6085,7 +6533,7 @@ mod tests {
         assert_eq!(run.state.order[..2], [3, 4]);
         let log = run.state.log.last().unwrap();
         assert!(
-            log.contains("Wave") && log.contains("Guard 4") && log.contains("10 +2 = 12"),
+            log.contains("Wave") && log.contains("Guard 4") && log.contains("10 + 2 = 12"),
             "{log}"
         );
         // Combat can begin with them in it.

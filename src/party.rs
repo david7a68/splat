@@ -441,7 +441,7 @@ impl Party {
                 "Connect D&D Beyond"
             };
             let actions = if connected {
-                vec!["Show file", action]
+                vec![action, "Show file"]
             } else {
                 vec!["Connect to refresh", "Show file"]
             };
@@ -449,11 +449,10 @@ impl Party {
                 if !connected && design::link(ui, "Connect to refresh").clicked() {
                     self.wants_settings = true;
                 }
-                show_file(ui, path);
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
                 } else if connected
-                    && Action::quiet(action)
+                    && Action::secondary(action)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -464,6 +463,7 @@ impl Party {
                         self.reader.force_read_character(id);
                     }
                 }
+                show_file(ui, path);
             });
         }
         for id in self.reader.conflicts.keys() {
@@ -644,8 +644,7 @@ impl Party {
     }
 }
 
-/// The later of two reads of a sheet. Off this page combat sync is idle, so the reader can be ahead.
-/// Actions stay on the first line; the message owns both lines and its full-height bar.
+/// Keep each storage message and its actions together at the list measure.
 fn storage_notice(
     ui: &mut egui::Ui,
     tone: Tone,
@@ -653,22 +652,46 @@ fn storage_notice(
     actions: &[&str],
     add: impl FnOnce(&mut egui::Ui),
 ) {
-    let room: f32 = actions
-        .iter()
-        .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::S * 3.0)
-        .sum();
-    ui.horizontal_top(|ui| {
-        let width = (ui.available_width() - room - design::S).max(design::S);
-        ui.allocate_ui_with_layout(
-            egui::vec2(width, 0.0),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.set_width(width);
-                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                design::message(ui, tone, words);
-            },
-        );
-        add(ui);
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+        let actions_width = actions
+            .iter()
+            // Measure each action as a bordered button: never narrower than it draws.
+            .map(|word| {
+                Action::secondary(word)
+                    .density(Density::Read)
+                    .natural_width(ui)
+            })
+            .sum::<f32>()
+            + design::L * actions.len().saturating_sub(1) as f32;
+        let text_width = words
+            .lines()
+            .map(|line| design::number_width(ui, line, &Type::Body.font(ui)))
+            .fold(0.0_f32, f32::max)
+            + design::L
+            + Type::Body.size();
+        if text_width + design::L + actions_width <= ui.available_width() {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = design::L;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(text_width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        design::message(ui, tone, words);
+                    },
+                );
+                add(ui);
+            });
+        } else {
+            let left = ui.cursor().left();
+            let text = design::message(ui, tone, words);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = design::L;
+                ui.add_space((text.rect.left() - left).max(0.0));
+                add(ui);
+            });
+        }
     });
 }
 
@@ -1557,34 +1580,44 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                     .rich(ui, signed(record, &skill.stat))
                     .color(colors().text),
             );
-            let flags = format!(
-                "{}{}{}",
-                if skill.expertise {
-                    " (E)"
-                } else if skill.proficient {
-                    " (P)"
-                } else if skill.half_proficient {
-                    " (½)"
-                } else {
-                    ""
+            let mut marks = Vec::new();
+            if skill.expertise {
+                marks.push("Expertise");
+            } else if skill.proficient {
+                marks.push("Proficient");
+            } else if skill.half_proficient {
+                marks.push("Half");
+            }
+            if skill.advantage {
+                marks.push("Advantage");
+            }
+            if skill.disadvantage {
+                marks.push("Disadvantage");
+            }
+            let mut job = egui::text::LayoutJob::default();
+            job.append(
+                &skill.name,
+                0.0,
+                egui::TextFormat {
+                    font_id: Type::Body.font(ui),
+                    color: colors().text,
+                    ..Default::default()
                 },
-                if skill.advantage { " Adv" } else { "" },
-                if skill.disadvantage { " Dis" } else { "" }
             );
-            ui.add(egui::Label::new(format!("{}{flags}", skill.name)).wrap());
+            if !marks.is_empty() {
+                job.append(
+                    &format!(" {}", marks.join(" · ")),
+                    0.0,
+                    egui::TextFormat {
+                        font_id: Type::Small.font(ui),
+                        color: colors().muted,
+                        ..Default::default()
+                    },
+                );
+            }
+            ui.add(egui::Label::new(job).wrap());
         });
     });
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(
-                    ui,
-                    "P: proficient · E: expertise · ½: half proficiency · Adv/Dis: advantage/disadvantage",
-                )
-                .color(colors().muted),
-        )
-        .wrap(),
-    );
     section_heading(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
         ui.weak("No limited-use pools returned.");
@@ -2055,6 +2088,48 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
 mod sheet_now_tests {
     use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
     use serde_json::json;
+    #[test]
+    fn iter_3_b_storage_actions_stay_with_their_message() {
+        use crate::design::{self, Action, Density, Tone};
+        use eframe::egui;
+        use egui_kittest::kittest::Queryable;
+        for width in [440.0, 960.0, 1920.0] {
+            let words = "Sable's sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy.";
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 640.0))
+                .build(|ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        super::storage_notice(
+                            ui,
+                            Tone::Warning,
+                            words,
+                            &["Replace with D&D Beyond sheet", "Show file"],
+                            |ui| {
+                                Action::secondary("Replace with D&D Beyond sheet")
+                                    .density(Density::Read)
+                                    .show(ui);
+                                design::link(ui, "Show file");
+                            },
+                        );
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let message = harness.get_by_label(words).rect();
+            let action = harness.get_by_label("Replace with D&D Beyond sheet").rect();
+            assert!(action.right() <= design::LIST_MEASURE + design::L);
+            if action.top() >= message.bottom() {
+                assert!(
+                    (action.left() - message.left()).abs() <= design::XS,
+                    "{width}: {message:?}, {action:?}"
+                );
+            } else {
+                assert!(action.left() >= message.right());
+                assert!(action.left() - message.right() <= design::L + design::XS);
+            }
+        }
+    }
+
     #[test]
     fn overview_death_saves_covers_live_stored_hidden_and_all_counts() {
         for successes in 0..=2 {

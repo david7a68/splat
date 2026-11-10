@@ -21,7 +21,8 @@ use crate::{
     timeline::{
         self, Book, Kind,
         page::{
-            SessionLink, long_rest_added_message, problems, quick_add, rest_ruling, undo_removed,
+            SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
+            rest_ruling, undo_removed,
         },
     },
 };
@@ -250,7 +251,11 @@ pub struct Sessions {
     notice_session: Option<Uuid>,
     /// A job ended while the DM may be elsewhere.
     job_done: bool,
-    /// It finished with something the DM must look at.
+    /// The latest result stays after its completion notice is acknowledged.
+    processed_session: Option<Uuid>,
+    /// The recording that result came from, so deleting it clears the result.
+    processed_recording: Option<PathBuf>,
+    /// The latest result has something the DM must look at.
     job_warned: bool,
     alerts: Vec<Alert>,
     added: Option<Added>,
@@ -390,7 +395,7 @@ fn plan_summary(summary: &str) -> String {
 }
 
 /// Keep each summary item and its separator together, including the rest ruling.
-fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
+fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: Option<bool>) {
     let mut job = egui::text::LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
@@ -398,17 +403,19 @@ fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
         ..Default::default()
     };
     job.append(&plan_summary(summary), 0.0, format.clone());
-    if restores {
+    if let Some(restores) = restores {
+        let status = long_rest_status(restores);
         let words = format!(
-            "{}{}\u{a0}Everyone\u{a0}at\u{a0}full",
+            "{}{}\u{a0}{}",
             if summary.is_empty() { "" } else { " ·\u{a0}" },
-            icons::OK
+            status.icon,
+            status.word.replace(' ', "\u{a0}")
         );
         job.append(
             &words,
             0.0,
             egui::TextFormat {
-                color: colors().document.saved,
+                color: status.color,
                 ..format
             },
         );
@@ -772,8 +779,13 @@ fn recap_preview(body: &str) -> Option<String> {
     None
 }
 
-/// Keep a note's plan links in its file, but avoid listing the same fights twice in Read.
-fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> String {
+/// Keep plan links in the file, but do not repeat fights and groups in Read.
+fn compact_plan_for_reading(
+    body: &str,
+    fights: &[PlanFight],
+    groups: &[std::sync::Arc<crate::encounter_run::RunGroup>],
+    beside: bool,
+) -> String {
     let Some(plan) = section_text(body, "Plan for tonight") else {
         return body.to_owned();
     };
@@ -781,7 +793,7 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let only_fights = !lines.is_empty()
+    let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
             let link = line
                 .trim()
@@ -792,20 +804,52 @@ fn compact_plan_for_reading(body: &str, fights: &[PlanFight], beside: bool) -> S
                     .and_then(|link| link.strip_suffix("]]"))
             })
             .is_some_and(|name| {
-                fights.iter().any(|fight| {
-                    fight
-                        .name
-                        .eq_ignore_ascii_case(name.split('|').next().unwrap_or(name))
-                })
+                let name = name.split('|').next().unwrap_or(name);
+                fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                    || groups
+                        .iter()
+                        .any(|group| group.name.eq_ignore_ascii_case(name))
             })
         });
-    if !only_fights {
+    if !only_planned_links {
         return body.to_owned();
     }
-    let words = format!(
-        "{}, in the plan",
-        design::count(lines.len(), "fight", "fights")
-    );
+    let fight_count = lines
+        .iter()
+        .filter(|line| {
+            let name = line
+                .trim()
+                .trim_start_matches(['-', '*', ' '])
+                .trim_start_matches("[[")
+                .trim_end_matches("]]")
+                .split('|')
+                .next()
+                .unwrap_or("");
+            fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+        })
+        .count();
+    // The working plan lists a linked group once, even when its link is repeated.
+    let group_count = linked_names(&plan)
+        .iter()
+        .filter(|name| {
+            !fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+        })
+        .count();
+    let counts = [
+        (fight_count, "fight", "fights"),
+        (group_count, "group", "groups"),
+    ]
+    .into_iter()
+    .filter(|(count, _, _)| *count > 0)
+    .map(|(count, one, many)| design::count(count, one, many))
+    .collect::<Vec<_>>();
+    let words = format!("{}, in the plan", counts.join(" and "));
     let heading = body
         .split_inclusive('\n')
         .scan(0, |offset, line| {
@@ -1359,6 +1403,8 @@ impl Sessions {
         self.notice_session = Some(session);
         match result {
             Ok(None) => {
+                self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
                 self.notice = Some((
@@ -1369,6 +1415,8 @@ impl Sessions {
                 ));
             }
             Ok(Some(warning)) => {
+                self.processed_session = Some(session);
+                self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = true;
                 // The recording's row has the words, for as long as the result stands.
@@ -1444,6 +1492,8 @@ impl Sessions {
             .filter(|(campaign, _)| Some(*campaign) == active.map(|c| c.id))
             .map(|(_, session)| session);
         self.alerts.clear();
+        self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.deleted_template = None;
@@ -1666,6 +1716,7 @@ impl Sessions {
             .map(|live| live.session)
             .or_else(|| self.job.as_ref().map(|(_, session)| *session))
             .or_else(|| self.alerts.last().map(|alert| alert.session))
+            .or(self.processed_session)
             .or(self.notice_session)
         {
             self.open(session);
@@ -1881,7 +1932,7 @@ impl Sessions {
                 ..processed_warning()
             });
         }
-        if self.job_done() {
+        if self.processed_session.is_some() {
             return Some(Status {
                 icon: icons::SUCCESS,
                 word: "Processed",
@@ -2081,6 +2132,10 @@ impl Sessions {
         let path = new_recording_path(folder, session);
         match Recorder::start(tool, settings.input(), path) {
             Ok(recorder) => {
+                self.processed_session = None;
+                self.processed_recording = None;
+                self.job_done = false;
+                self.job_warned = false;
                 self.notice = None;
                 self.notice_session = None;
                 // A new recording answers an old failure of this session.
@@ -2158,6 +2213,8 @@ impl Sessions {
         self.notice = None;
         self.notice_session = None;
         let _ = fs::remove_file(recording.with_extension("state.txt"));
+        self.processed_session = None;
+        self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
         self.alerts
@@ -2834,7 +2891,7 @@ impl Sessions {
                 ui.add_enabled_ui(!locked, |ui| {
                     for note in &self.notes {
                         let job = self.job.as_ref().map(|(_, session)| *session);
-                        let result = self.notice_session.filter(|_| self.job_done);
+                        let result = self.processed_session;
                         let state = if live == Some(note.id) || job == Some(note.id) {
                             self.rail_recording_status()
                         } else {
@@ -3272,18 +3329,25 @@ impl Sessions {
             });
     }
 
-    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
+    fn note_body(&self) -> String {
         let Some(draft) = &self.draft else {
-            return;
+            return String::new();
         };
         let note = self
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
-        let body = note.map_or_else(
+        note.map_or_else(
             || draft.body.clone(),
             |note| without_own_heading(&draft.body, note),
-        );
-        let compact = compact_plan_for_reading(&body, plan.fights, beside);
+        )
+    }
+
+    fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
+        if self.draft.is_none() {
+            return;
+        }
+        let body = self.note_body();
+        let compact = compact_plan_for_reading(&body, plan.fights, plan.groups, beside);
         let summary = (!beside && compact != body)
             .then(|| section_text(&compact, "Plan for tonight"))
             .flatten();
@@ -3598,57 +3662,6 @@ impl Sessions {
         if problems(ui, book) {
             return;
         }
-        if plan.group_open && self.not_being_played().is_none() {
-            let label = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(|| "another session".to_owned(), Note::label);
-            if design::message_with_action(
-                ui,
-                Tone::Info,
-                &format!("A group is being assembled in the plan of {label}."),
-                "Go to it",
-            ) {
-                self.select(self.group_session);
-            }
-        }
-        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
-            self.wants_group_undo = true;
-        }
-        if let Some(problem) = &self.rename_problem {
-            design::message(ui, Tone::Warning, problem);
-        }
-        let mut added = None;
-        egui::TopBottomPanel::bottom(egui::Id::new(("session_plan_add", session)))
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                top: design::XS as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| {
-                self.plan_messages(ui, book, session, plan);
-                added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
-                    self.fight_menu(ui, plan);
-                    self.group_menu(ui, plan);
-                });
-                if let Some(id) = &added {
-                    if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
-                        event.title = event.kind.word().to_owned();
-                    }
-                    let days = timeline::day_numbers(&book.events);
-                    let index = book.events.iter().position(|event| event.id == *id);
-                    self.added = Some(Added {
-                        id: id.clone(),
-                        label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                        at: Instant::now(),
-                        count: book.events.len(),
-                    });
-                    self.open_event = None;
-                }
-            });
-        let days = timeline::day_numbers(&book.events);
         let body = self
             .draft
             .as_ref()
@@ -3703,6 +3716,47 @@ impl Sessions {
                 + planned.len()
                 + planned_groups.len(),
         );
+        let added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
+            self.fight_menu(ui, plan);
+            self.group_menu(ui, plan);
+        });
+        if plan.group_open && self.not_being_played().is_none() {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(|| "another session".to_owned(), Note::label);
+            if design::message_with_action(
+                ui,
+                Tone::Info,
+                &format!("A group is being assembled in the plan of {label}."),
+                "Go to it",
+            ) {
+                self.select(self.group_session);
+            }
+        }
+        if plan.group_discarded && here && design::draft_discarded(ui, &plan.group_discarded_name) {
+            self.wants_group_undo = true;
+        }
+        if let Some(problem) = &self.rename_problem {
+            design::message(ui, Tone::Warning, problem);
+        }
+        self.plan_messages(ui, book, session, plan);
+        if let Some(id) = &added {
+            if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
+                event.title = event.kind.word().to_owned();
+            }
+            let days = timeline::day_numbers(&book.events);
+            let index = book.events.iter().position(|event| event.id == *id);
+            self.added = Some(Added {
+                id: id.clone(),
+                label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
+                at: Instant::now(),
+                count: book.events.len(),
+            });
+            self.open_event = None;
+        }
+        let days = timeline::day_numbers(&book.events);
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
@@ -3761,7 +3815,7 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
                             } else if !(is_open && event.kind == Kind::LongRest) {
-                                plan_event_summary(ui, &summary, event.kind == Kind::LongRest && event.restores);
+                                plan_event_summary(ui, &summary, (event.kind == Kind::LongRest).then_some(event.restores));
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
@@ -3936,7 +3990,7 @@ impl Sessions {
                 undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
                 if !any && self.removed_group.is_none() {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet.",
-                        "Use Add below to plan a fight, a group, or an event.", |_| {});
+                        "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
             });
         });
@@ -4814,7 +4868,7 @@ impl Sessions {
             Type::Small
                 .rich(
                     ui,
-                    "These are suggestions from the LLM. Only what you add goes on the timeline.",
+                    "These events were suggested from the transcript. Only events you add go on the timeline.",
                 )
                 .color(c.muted),
         );
@@ -5029,7 +5083,7 @@ impl Sessions {
                 Type::Small
                     .rich(
                         ui,
-                        "This is a draft from an LLM. Check it against your own memory.",
+                        "This draft was written automatically. Check it against your memory.",
                     )
                     .color(c.muted),
             );
@@ -5267,12 +5321,12 @@ impl Sessions {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
+            design::dialog_actions(
+                ui,
                 |ui| {
                     delete = Action::destructive("Delete recording").show(ui).clicked();
-                    ui.add_space(design::L);
+                },
+                |ui| {
                     let response = Action::secondary("Keep the recording").show(ui);
                     if !ui.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false)) {
                         response.request_focus();
@@ -5291,6 +5345,13 @@ impl Sessions {
             ctx.data_mut(|data| data.remove::<bool>(focus_id));
             self.reading = None;
             self.notice_session = None;
+            // A deleted recording takes its result with it, so the rail stops saying Processed.
+            if self.processed_recording.as_deref() == Some(path.as_path()) {
+                self.processed_session = None;
+                self.processed_recording = None;
+                self.job_done = false;
+                self.job_warned = false;
+            }
             self.notice = Some(match delete_recording(&path) {
                 Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
                 Err(error) => (Tone::Error, format!("Not deleted. {error}")),
@@ -5378,9 +5439,8 @@ impl Sessions {
         }
         self.expire_move(book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
-        if shown && self.job_done {
+        if shown && self.job_done() {
             self.job_done = false;
-            self.job_warned = false;
         }
         if let Some((tone, words)) = self.notice.clone().filter(|_| shown) {
             if let Some(session) = self
@@ -5417,20 +5477,16 @@ impl Sessions {
             }
         }
         for copy in &note.also {
-            design::message(
+            let filename = copy.file_name().unwrap_or_default().to_string_lossy();
+            if design::message_with_action(
                 ui,
                 Tone::Warning,
                 &format!(
-                    "Another file claims this session: {}. Splat edits {}. Give the copy a new identity to keep both sessions.",
-                    copy.file_name().unwrap_or_default().to_string_lossy(),
+                    "{} and {filename} claim to be the same session.",
                     note.path.file_name().unwrap_or_default().to_string_lossy()
                 ),
-            );
-            if Action::secondary("New identity")
-                .name(&format!("New identity: {}", copy.display()))
-                .show(ui)
-                .clicked()
-            {
+                &crate::world::separate_entry_action(&filename),
+            ) {
                 match super::new_identity(copy) {
                     Ok(undo) => {
                         self.identity_undo = Some(undo);
@@ -5440,13 +5496,21 @@ impl Sessions {
                 }
             }
         }
-        if self.identity_undo.is_some() && Action::quiet("Undo new identity").show(ui).clicked() {
-            match self.identity_undo.as_ref().unwrap().undo() {
-                Ok(()) => {
-                    self.identity_undo = None;
-                    self.refresh();
+        if let Some(undo) = &self.identity_undo {
+            let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
+            if design::undo_message(
+                ui,
+                Tone::Success,
+                &crate::world::separate_entry_result(&filename),
+                crate::world::SEPARATE_ENTRY_UNDO,
+            ) {
+                match undo.undo() {
+                    Ok(()) => {
+                        self.identity_undo = None;
+                        self.refresh();
+                    }
+                    Err(error) => self.notice = Some((Tone::Error, error)),
                 }
-                Err(error) => self.notice = Some((Tone::Error, error)),
             }
         }
         let today = self.today();
@@ -5505,7 +5569,12 @@ impl Sessions {
             return;
         }
         let editing_group_here = plan.group_open && self.group_session == self.selected;
-        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM && !editing_group_here;
+        let beside_from = if editing_group_here {
+            design::LIST_MEASURE + design::L + design::READER_MEASURE
+        } else {
+            PLAN_BESIDE_NOTE_FROM
+        };
+        let beside = ui.available_width() >= beside_from;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
         let mut shown = if beside && self.tab == Tab::Note {
             Tab::Plan
@@ -5536,7 +5605,15 @@ impl Sessions {
                 if title_on_own_line {
                     self.session_details_action(ui, &note);
                 }
-                if shown == Tab::Note || (shown == Tab::Plan && beside) {
+                if (shown == Tab::Note || (shown == Tab::Plan && beside))
+                    && (!self.reading_note
+                        || has_written_text(&compact_plan_for_reading(
+                            &self.note_body(),
+                            plan.fights,
+                            plan.groups,
+                            beside,
+                        )))
+                {
                     let (word, icon) = if self.reading_note {
                         ("Write", icons::EDIT)
                     } else {
@@ -5557,20 +5634,33 @@ impl Sessions {
         match shown {
             Tab::Plan if beside => {
                 let height = ui.available_height();
-                let plan_width = (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH);
+                let plan_width = if editing_group_here {
+                    design::LIST_MEASURE
+                } else {
+                    (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
+                };
                 let note_width = ui.available_width() - plan_width - design::L;
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
-                        self.plan_pane(ui, book, plan);
+                        fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                            self.plan_pane(ui, book, plan)
+                        });
                     });
                     page_column(ui, note_width, height, |ui| {
-                        self.note_pane(ui, book, plan, beside)
+                        fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                            self.note_pane(ui, book, plan, beside)
+                        })
                     });
                 });
             }
-            Tab::Plan => self.plan_pane(ui, book, plan),
-            Tab::Note => self.note_pane(ui, book, plan, beside),
+            // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
+            Tab::Plan => fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                self.plan_pane(ui, book, plan)
+            }),
+            Tab::Note => fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
+                self.note_pane(ui, book, plan, beside)
+            }),
             Tab::Recordings => {
                 self.recordings_tab(ui, settings, book);
             }
@@ -6149,7 +6239,17 @@ impl Sessions {
                         self.folder_error = None;
                     }
                 }
-                if locked.is_none() {
+                if !changed {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::OK,
+                            word: "No changes",
+                            color: colors().document.clean,
+                        },
+                    );
+                }
+                if locked.is_none() && changed {
                     design::blocked_reason(ui, blocked);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -6346,6 +6446,10 @@ impl Sessions {
     pub fn simulate_job(&mut self, progress: processing::Progress) {
         self.notice = None;
         self.notice_session = None;
+        self.processed_session = None;
+        self.processed_recording = None;
+        self.job_done = false;
+        self.job_warned = false;
         let session = self.selected.expect("an open session");
         let path = self.recordings[0].path.clone();
         if let processing::Progress::Transcribing { part, of } = &progress {
@@ -6384,6 +6488,22 @@ impl Sessions {
     }
 }
 
+/// Draw a pane under a fixed id while `fixed`, so a group draft keeps its typed text, focus and
+/// scroll when the page crosses the side-by-side width. Otherwise the pane keeps its usual ids.
+fn fixed_scope<R>(
+    ui: &mut egui::Ui,
+    fixed: bool,
+    id: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    if fixed {
+        ui.scope_builder(egui::UiBuilder::new().id(egui::Id::new(id)), add)
+            .inner
+    } else {
+        add(ui)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6391,6 +6511,7 @@ mod tests {
     #[test]
     fn iter1_c_completed_processing_uses_processed_in_the_rail() {
         let mut page = Sessions {
+            processed_session: Some(Uuid::new_v4()),
             job_done: true,
             ..Default::default()
         };
@@ -6473,6 +6594,22 @@ mod tests {
     }
 
     #[test]
+    fn iter3_c_closed_plan_rest_shows_not_at_full() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::builder().build(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                plan_event_summary(ui, "Old mill", Some(false));
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label(&format!(
+            "Old\u{a0}mill ·\u{a0}{}\u{a0}Not\u{a0}at\u{a0}full",
+            icons::LONG_REST
+        ));
+    }
+
+    #[test]
     fn a_rest_ruling_uses_one_line_when_the_summary_fits() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
@@ -6480,12 +6617,12 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.set_width(design::FORM_WIDTH);
                 let plain = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", false))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", None))
                     .response
                     .rect
                     .height();
                 let restored = ui
-                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", true))
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", Some(true)))
                     .response
                     .rect
                     .height();
@@ -6775,26 +6912,84 @@ mod tests {
             summary: String::new(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
-        let compact = compact_plan_for_reading(source, &fights, true);
+        let compact = compact_plan_for_reading(source, &fights, &[], true);
         assert!(!compact.contains("Plan for tonight"));
         assert!(!compact.contains("[[Bridge Ambush]]"));
         assert!(compact.contains("We crossed the bridge."));
         assert_eq!(source.matches("[[Bridge Ambush]]").count(), 2);
-        let tab = compact_plan_for_reading(source, &fights, false);
+        let tab = compact_plan_for_reading(source, &fights, &[], false);
         assert!(tab.contains("2 fights, in the plan"));
         assert!(!tab.contains("at left"));
         let empty = source.replace("We crossed the bridge.", "");
         assert!(!has_written_text(&compact_plan_for_reading(
-            &empty, &fights, true
+            &empty,
+            &fights,
+            &[],
+            true
         )));
         let repeated = format!(
             "## Recap of last time\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n{source}"
         );
-        let compact = compact_plan_for_reading(&repeated, &fights, true);
+        let compact = compact_plan_for_reading(&repeated, &fights, &[], true);
         assert_eq!(compact.matches("[[Bridge Ambush]]").count(), 2);
         assert!(compact.starts_with("## Recap of last time\n\n- [[Bridge Ambush]]"));
         let mixed = source.replace("- [[Bridge Ambush]]\n\n##", "- Ask the ferryman.\n\n##");
-        assert_eq!(compact_plan_for_reading(&mixed, &fights, true), mixed);
+        assert_eq!(compact_plan_for_reading(&mixed, &fights, &[], true), mixed);
+    }
+
+    #[test]
+    fn iter_2_c_read_plan_compacts_groups_and_keeps_prose_and_unknown_links() {
+        let groups = [std::sync::Arc::new(crate::encounter_run::RunGroup {
+            id: Uuid::new_v4(),
+            path: "Group.md".into(),
+            name: "Ash Pack".into(),
+            side: "enemies".into(),
+            encounter: None,
+            encounter_name: None,
+            members: vec![],
+            notes: String::new(),
+            xp: 0,
+            xp_unknown: vec![],
+            unavailable: 0,
+            unavailable_members: vec![],
+            problem: None,
+            warnings: vec![],
+        })];
+        let fights = [PlanFight {
+            saved: None,
+            name: "Bridge Ambush".into(),
+            path: String::new(),
+            summary: String::new(),
+        }];
+        for (links, count) in [
+            ("- [[ash pack|The wolves]]", "1 group"),
+            ("- [[Ash Pack]]\n- [[Bridge Ambush]]", "1 fight and 1 group"),
+            ("- [[Ash Pack]]\n- [[Ash Pack]]", "1 group"),
+        ] {
+            let source = format!(
+                "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"
+            );
+            let before = source.clone();
+            let compact = compact_plan_for_reading(&source, &fights, &groups, true);
+            assert!(!compact.contains("Plan for tonight"));
+            assert!(compact.contains("We reached the mill."));
+            assert!(
+                compact_plan_for_reading(&source, &fights, &groups, false)
+                    .contains(&format!("{count}, in the plan"))
+            );
+            assert_eq!(source, before);
+        }
+        for lines in [
+            "- [[Ash Pack]]\nAsk the ferryman.",
+            "- [[Unknown group]]",
+            "- [[Ash Pack]] extra words",
+        ] {
+            let source = format!("## Plan for tonight\n\n{lines}\n");
+            assert_eq!(
+                compact_plan_for_reading(&source, &fights, &groups, true),
+                source
+            );
+        }
     }
 
     #[test]

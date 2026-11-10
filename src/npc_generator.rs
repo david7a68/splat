@@ -125,13 +125,21 @@ impl Table {
     }
 }
 
+/// A table fault in plain words, with its source marker kept for hover details.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TableProblem {
+    pub path: String,
+    pub marker: String,
+    pub message: String,
+}
+
 /// The campaign's tables for the generator. A part with no table uses its built-in list.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tables {
     name: Option<Table>,
     attributes: [Option<Table>; 3],
     /// Tables that cannot be used, and why. The DM sees these with the result.
-    pub problems: Vec<String>,
+    pub problems: Vec<TableProblem>,
     pub sources: Vec<String>,
 }
 
@@ -146,10 +154,10 @@ impl Tables {
                 let Ok((key, dice)) = marker else {
                     continue;
                 };
-                let slot = if key == NAME_KEY {
-                    &mut tables.name
+                let (slot, label) = if key == NAME_KEY {
+                    (&mut tables.name, "name".to_owned())
                 } else if let Some(at) = ATTRIBUTE_KEYS.iter().position(|k| *k == key) {
-                    &mut tables.attributes[at]
+                    (&mut tables.attributes[at], ATTRIBUTES[at].to_lowercase())
                 } else {
                     continue;
                 };
@@ -161,15 +169,19 @@ impl Tables {
                         *slot = Some(Table { dice, rows });
                         tables.sources.push(format!("{key}: {path}"));
                     }
-                    Err(error) => tables.problems.push(format!(
-                        "{path}: {} Built-in {} stand in until it is fixed.",
-                        error.replacen("the table", &format!("the {key} table"), 1),
-                        if key == NAME_KEY {
-                            "names"
-                        } else {
-                            "attributes"
-                        }
-                    )),
+                    Err(error) => tables.problems.push(TableProblem {
+                        path: path.to_owned(),
+                        marker: key.clone(),
+                        message: format!(
+                            "{path}: {} Built-in {} stand in until it is fixed.",
+                            error.replacen("the table", &format!("the {label} table"), 1),
+                            if key == NAME_KEY {
+                                "names"
+                            } else {
+                                "attributes"
+                            }
+                        ),
+                    }),
                 }
             }
         }
@@ -279,8 +291,10 @@ mod tests {
         assert_eq!(tables.problems.len(), 1);
         assert!(
             tables.problems[0]
-                .contains("Names.md: the npc-name table stops at 1, but 1d6 rolls up to 6.")
+                .message
+                .contains("Names.md: the name table stops at 1, but 1d6 rolls up to 6.")
         );
+        assert_eq!(tables.problems[0].marker, NAME_KEY);
         let npc = generate(&tables, &mut Random::seeded(3)).unwrap();
         assert!(NAMES.contains(&npc.name.as_str()));
     }

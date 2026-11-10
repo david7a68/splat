@@ -193,6 +193,7 @@ pub mod creature_filter {
         d.press(Key::Escape);
         d.expect(UNDERDARK);
         d.expect(ABERRATION);
+        d.expect("MATCHES 9");
         d.state("underdark-aberrations", Sizes::All);
         d.goal("find the aberrations of the Underdark");
         d.observe(
@@ -247,7 +248,7 @@ pub mod library_author {
     const CHANGED_ON_DISK: &str = "This entry changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
-    const MANAGE_TITLE: &str = "MANAGE PACKAGES";
+    const MANAGE_TITLE: &str = "Manage packages";
     const CLOSE_WINDOW: &str = "Close the package form";
     const NEW_ENTRY: &str = "New entry";
     const CREATE_ENTRY: &str = "Create entry";
@@ -751,6 +752,7 @@ pub mod campaign_content {
 
         d.click(TAB_ENTRIES);
         d.expect(CAMPAIGN_ENTRY);
+        assert!(d.visible_text("Campaign entries"));
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
         let in_list = |d: &Driver<'_>, name: &str| {
@@ -1040,7 +1042,7 @@ pub mod party {
             .simulate(crate::settings::Account::Connected);
         d.settle();
         d.expect(FORCE_READ);
-        d.state("copy-has-local-edits", Sizes::Default);
+        d.state("copy-has-local-edits", Sizes::All);
         d.click(FORCE_READ);
         d.settle();
         d.expect(REPLACED);
@@ -1470,6 +1472,11 @@ pub mod encounter_run {
             !d.visible_text("%% splat") && !d.visible_text("Field"),
             "Lookup hides machine lines and empty field rows",
         );
+        d.observe_both(
+            "AT3/FT-6",
+            "Lookup omits the reserved Splat data section",
+            |d| !d.visible_text("Splat data"),
+        );
         d.state("lookup-by-keyboard", Sizes::All);
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
@@ -1565,6 +1572,10 @@ pub mod settings {
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
+        d.expect(COOKIE_FIELD);
+        assert!(!d.has("Connect…"));
+        d.expect_same("The wide layout already shows the cookie form. Connect opens that same form in the narrow layout.");
+        d.state("cookie-placeholder", Sizes::All);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
@@ -1658,7 +1669,7 @@ pub mod settings {
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
-        d.state("confirm-remove-campaign", Sizes::Default);
+        d.state("confirm-remove-campaign", Sizes::All);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
         d.click(EDIT_DETAILS);
@@ -1828,6 +1839,31 @@ pub mod dialogs {
                 && d.has_containing(MODULE)
                 && d.has_containing(CLOSE_PROMPT),
             "The prompt names the entry, and the package it is in",
+        );
+        d.observe_both(
+            "FD-12",
+            "The destructive close action stays left of the safe actions on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (lose, keep, save) = (
+                    rect("Discard and close"),
+                    rect("Keep editing"),
+                    rect("Save and close"),
+                );
+                lose.right() < keep.left()
+                    && keep.right() < save.left()
+                    && (lose.center().y - keep.center().y).abs() < 1.0
+                    && (save.center().y - keep.center().y).abs() < 1.0
+            },
         );
         d.state("unsaved-changes-on-close", Sizes::All);
         d.goal("ask to close with unsaved changes");
@@ -2784,7 +2820,7 @@ pub mod run_sync_conflict {
         d.click(BACK_TO_RUN);
         d.begin_task();
 
-        d.click_containing(SYNCED);
+        d.click_row(SYNCED);
         d.row_of(USE_REMOTE);
         d.expect(CONFLICT_TEXT);
         d.state("conflict-panel", Sizes::All);
@@ -2794,7 +2830,7 @@ pub mod run_sync_conflict {
             "The conflict panel names the conflict, and its buttons name the values",
         );
         d.click(USE_REMOTE);
-        d.state("conflict-resolved", Sizes::Default);
+        d.state("conflict-resolved", Sizes::All);
         d.goal_within("T3.2", "resolve a conflict", 2);
         let resolved = d
             .row_node(SYNCED)
@@ -2901,6 +2937,11 @@ pub mod nav_state {
         d.begin_task();
         search_library(d, QUERY);
         d.click_containing(CREATURE);
+        d.observe_both(
+            "FD-9",
+            "The reader starts with its title, without a repeated Library breadcrumb",
+            |d| !d.visible_text("Library / Creatures"),
+        );
         d.state("library-set-up", Sizes::DefaultAndHiDpi);
 
         go_party(d);
@@ -3056,7 +3097,7 @@ pub mod party_from_run {
         for condition in MANY_CONDITIONS {
             d.click(condition);
         }
-        d.state("zero-absent-many-conditions", Sizes::Default);
+        d.state("zero-absent-many-conditions", Sizes::All);
         d.review("T1.8", "0 HP and absent are distinct without colour");
         // A crowded row keeps its first conditions and a count. The count opens all of them.
         d.click(SHEET_TAB);
@@ -3067,10 +3108,15 @@ pub mod party_from_run {
             .filter(|condition| !full.contains(condition))
             .collect();
         let zero = d.row_words(MEMBER);
+        let shown = MANY_CONDITIONS
+            .iter()
+            .filter(|condition| row.contains(**condition))
+            .count();
+        let hidden = MANY_CONDITIONS.len() - shown;
         d.observe(
             "T1.8",
             unread.is_empty() && row.contains("Absent") && row.contains("Blinded")
-                && row.contains("Charmed") && row.contains("3 more") && zero.contains("0 HP"),
+                && hidden > 0 && (row.contains(&format!("{hidden} more")) || row.contains(&format!("+{hidden}"))) && zero.contains("0 HP"),
             format!("At 960x640, {ABSENT_ROW} paints: {row}. {MEMBER} paints: {zero}. Missing: {unread:?}"),
         );
         d.click("Read all conditions");
@@ -3204,7 +3250,31 @@ pub mod run_folder_defect {
             "Run settings state the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
-        d.state("run-folder-edited", Sizes::Default);
+        d.observe_both(
+            "iter-3-C-FT10",
+            "The switch reason follows Discard on the save row",
+            |d| {
+                d.place_of("Discard")
+                    .zip(d.place_of(crate::encounters::draft_switch_reason()))
+                    .is_some_and(|(discard, reason)| {
+                        reason.left() > discard.right()
+                            && (reason.center().y - discard.center().y).abs() < crate::design::S
+                    })
+            },
+        );
+        d.observe_both(
+            "iter-3-C-FT10-spacing",
+            "Full save actions stay directly below their state and reason",
+            |d| {
+                d.place_of("Discard")
+                    .zip(d.place_of("Move runs and save"))
+                    .is_some_and(|(discard, save)| {
+                        save.top() >= discard.bottom()
+                            && save.top() - discard.bottom() <= crate::design::L
+                    })
+            },
+        );
+        d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();
@@ -3292,6 +3362,25 @@ pub mod gallery {
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
+        d.scroll_until(pos2(600.0, 300.0), "Group actions", 30);
+        d.state_prepared("submenu-spacing", Sizes::All, |d| {
+            d.press(Key::Escape);
+            d.click("Group actions");
+            d.expect("Move to…");
+            let edges = (
+                d.painted_left("Move to…"),
+                d.painted_left("Make available to any encounter"),
+            );
+            d.observe(
+                "iter-4-A-FD-13",
+                edges
+                    .0
+                    .zip(edges.1)
+                    .is_some_and(|(a, b)| (a - b).abs() < 1.0),
+                format!("The submenu and quiet menu action share a text edge: {edges:?}"),
+            );
+        });
+        d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
@@ -3426,7 +3515,7 @@ pub mod column_resize {
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
         d.state("session-read-fills-its-column", Sizes::All);
-        d.click("Add Major event");
+        d.click_add_event("Add Major event");
         d.wait_for_text("Major event added to Session");
         d.wait_for_text("Add to notes");
         let action = d
@@ -3549,6 +3638,29 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
         the_session_tabs_fill_their_column(d);
+
+        // Keyboard proof follows the existing task-cost checks.
+        d.click(NAV_LIBRARY);
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize Library entries column"));
+        d.press(Key::Home);
+        d.state_prepared("keyboard-column-handle", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        let edge = entries_edge(d);
+        d.press(Key::ArrowRight);
+        assert!(near(entries_edge(d), edge + crate::design::L));
+        // A second press without tabbing back: the handle kept focus and keeps resizing.
+        d.press(Key::ArrowRight);
+        assert!(
+            near(entries_edge(d), edge + 2.0 * crate::design::L),
+            "the column handle lost focus after the first arrow key"
+        );
+        d.state_prepared("keyboard-column-width", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        d.press(Key::Home);
+        assert!(near(entries_edge(d), edge));
     }
 }
 
@@ -3670,6 +3782,13 @@ pub mod run_edge_states {
             "The crowded row keeps one condition and a count for the long effect",
         );
         d.goal("record a long effect");
+        d.begin_task();
+        d.click("Concentrating");
+        d.expect(&format!("Undo: start concentration for {TARGET}"));
+        d.state("start-concentration-undo", Sizes::All);
+        d.click("Concentrating");
+        d.expect(&format!("Undo: stop concentration for {TARGET}"));
+        d.state("stop-concentration-undo", Sizes::All);
         d.click("Sheet");
         d.click("Read all conditions");
         d.observe(
@@ -3791,9 +3910,12 @@ pub mod run_edge_states {
             closed && std::fs::read_to_string(&new_path).is_ok_and(|text| text == before + "\n"),
             "Save as a new run and close keeps the other file and closes the run",
         );
-        d.state("saved-new-run-and-closed", Sizes::Default);
-        d.observe("Recovery selection", d.has_containing("Changed elsewhere") && d.has_containing("saved "),
-            "Recovery copies show their save time, and the preserved file is marked Changed elsewhere");
+        d.state("saved-new-run-and-closed", Sizes::All);
+        d.observe(
+            "Recovery selection",
+            d.has_containing("Changed elsewhere") && d.has_containing("Copy 2"),
+            "Recovery copies show their number, and the preserved file is marked Changed elsewhere",
+        );
         d.click(RESUME);
         let resumed_copy = d
             .app_mut()
@@ -3826,7 +3948,7 @@ pub mod run_sync_states {
         ("Oren Thistlewick", SyncState::ReadOnly, "Sync read-only"),
         ("Sable Harrowgate", SyncState::Error, "Sync error"),
     ];
-    /// The first read shows after `Sync party`, and "off" is a row with no word at all.
+    /// Linked rows keep their word during the first read and while sync is off.
     const FIRST_READ: (&str, SyncState, &str) =
         ("Sable Harrowgate", SyncState::FirstRead, "Reading sheet…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
@@ -3882,6 +4004,26 @@ pub mod run_sync_states {
         d.settle();
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
+        d.begin_task();
+        d.app_mut()
+            .encounters
+            .simulate_sync_state("Sable Harrowgate", SyncState::Off);
+        d.settle();
+        d.observe_both(
+            "AT1",
+            "A linked row says Sync off; unlinked creatures keep no sync word",
+            |d| {
+                d.row_words("Sable Harrowgate").contains("Sync off")
+                    && !d.row_words(UNSYNCED_ROW).contains("Sync")
+            },
+        );
+        d.click_row("Sable Harrowgate");
+        d.state("linked-row-sync-off", Sizes::All);
+        d.click_row("Cinder Wolf 2");
+        d.app_mut()
+            .encounters
+            .simulate_sync_state("Sable Harrowgate", SyncState::Error);
+        d.settle();
 
         // At the default size, 8 rows have the room, and a two-line message takes none
         // of it from them. Each row's height, then the same places with the message up.
@@ -4110,7 +4252,7 @@ pub mod run_roster_conflict {
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
         d.click(STOP_SYNC);
-        d.click_containing(SYNCED);
+        d.click_row(SYNCED);
         d.click(USE_REMOTE);
         // Other rows still hold simulated changes, so closing says so first.
         d.click(CLOSE_RUN);
@@ -4469,7 +4611,7 @@ pub mod nav_table {
         d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
-        let entry_scroll = d.scroll_position_of_reader();
+        let entry_scroll = d.scroll_position_of_reader(ENTRY);
         d.begin_task();
 
         // Open run: selection, amount, scroll, undo, and sync.
@@ -4527,7 +4669,7 @@ pub mod nav_table {
         go_library(d);
         let scope = d.visible_text(EVERYTHING);
         let entry = d.has_label(ENTRY);
-        let scroll = d.scroll_position_of_reader();
+        let scroll = d.scroll_position_of_reader(ENTRY);
         d.observe(
             "G2",
             scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
@@ -4854,6 +4996,16 @@ pub mod session_notes {
             "The new note holds the template, filled in",
         );
 
+        d.state_prepared("empty-note-read", Sizes::All, |d| {
+            read_note(d);
+            let writes = d.nodes().iter().filter(|node| node.name == "Write").count();
+            d.observe(
+                "iter-3-C-ST3-empty",
+                writes == 1 && d.visible_text("Nothing written yet."),
+                "An empty Read view has one inline Write action",
+            );
+        });
+        write_note(d);
         d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
@@ -4865,11 +5017,26 @@ pub mod session_notes {
         // A rest, on the session's own page, with no step away from it.
         show_plan(d);
         d.wait_for_text("Nothing planned yet.");
+        d.expect("Use Add to plan a fight, a group, or an event.");
+        assert!(d.has("Add a group"));
+        d.expect_same(
+            "The narrow view opens Plan; the wide view keeps the empty plan beside the note.",
+        );
+        d.state("empty-plan-add-at-top", Sizes::All);
         d.state_prepared("session-plan-fight-picker", Sizes::Default, |d| {
             if !d.has("Plan Bridge Ambush") {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+        });
+        d.press(Key::Escape);
+        d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
+            d.press(Key::Escape);
+            // Long rest is a visible button, one click away, before More opens.
+            d.expect(ADD_LONG_REST);
+            d.click("More Add actions");
+            d.expect(ADD_SHORT_REST);
+            d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
         d.begin_task();
@@ -4878,7 +5045,7 @@ pub mod session_notes {
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
-        d.click(ADD_SHORT_REST);
+        d.click_add_event(ADD_SHORT_REST);
         d.observe(
             "T11.2",
             d.has_containing("Short rest added to Session 1."),
@@ -4896,7 +5063,7 @@ pub mod session_notes {
         d.click("More actions for Short rest");
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
-        d.click(ADD_TRAVEL);
+        d.click_add_event(ADD_TRAVEL);
         d.observe(
             "iter-2-S2",
             !d.has("Title"),
@@ -4916,7 +5083,7 @@ pub mod session_notes {
             "A new event starts with its kind as its title",
         );
         d.state("plan-event-title", Sizes::Default);
-        d.click(ADD_EVENT);
+        d.click_add_event(ADD_EVENT);
         d.state("session-events", Sizes::Default);
         d.click("Add to notes: Long rest");
         d.expect("In notes");
@@ -4964,9 +5131,11 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.expect("Long rest");
         d.expect("Everyone at full");
+        d.expect("Adds to");
+        assert!(!d.has("Adds to:"));
         d.state("timeline-session-events", Sizes::All);
         d.check_tab_order("timeline");
-        d.click(ADD_DAY);
+        d.click_add_event(ADD_DAY);
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
         d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
@@ -4981,8 +5150,15 @@ pub mod session_notes {
         d.expect("Copy link");
         d.click("Copy link");
         d.expect("Copied");
-        d.expect("MENTIONED IN");
-        d.state("timeline-event", Sizes::AllAndHiDpi);
+        d.expect("Mentioned in");
+        d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            let label_visible = d.visible_text("TITLE") || d.visible_text("Title");
+            d.observe(
+                "iter-2-C-FT12",
+                label_visible,
+                "The Title label stays visible with its field after a rename",
+            );
+        });
         d.observe(
             "T11.4",
             d.has_containing(&format!("Session 1: {TITLE}")),
@@ -5164,6 +5340,12 @@ pub mod session_notes {
         d.click("Campaign");
         d.click("Link and folder");
         d.expect("SESSION FOLDER");
+        d.observe_both(
+            "iter-2-C-FT11",
+            "The clean session folder has a No changes status",
+            |d| d.visible_text("No changes") && !d.visible_text("No changes to save."),
+        );
+        d.expect("Not connected · showing the name saved on this computer");
         d.state("session-folder-in-campaign", Sizes::All);
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
@@ -5194,6 +5376,8 @@ pub mod session_notes {
                     .is_some_and(|(field, save)| {
                         (field.rect.right() - save.rect.right()).abs() < 1.0
                             && field.rect.width() <= crate::design::FORM_WIDTH + 1.0
+                            && d.place_of("Edit details")
+                                .is_some_and(|edit| (field.rect.right() - edit.right()).abs() < 1.0)
                     })
             },
         );
@@ -5604,7 +5788,13 @@ pub mod session_notes {
             "iter-10-S3",
             "Timeline header actions end at the form edge",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6046,7 +6236,19 @@ pub mod session_recording {
             "A saved key does not follow the DM to a different service",
         );
         d.expect("Remove speech key (OpenAI)");
-        d.state("key-for-another-service", Sizes::Default);
+        d.state_prepared("key-for-another-service", Sizes::All, |d| {
+            d.scroll_until(
+                pos2(600.0, 400.0),
+                "Remove transcript and summary key (OpenAI): LLM API key",
+                12,
+            );
+            d.expect("Remove transcript and summary key (OpenAI)");
+            d.observe(
+                "iter-2-C-AT5",
+                d.has_containing("Remove transcript and summary key (OpenAI)"),
+                "The key removal action names the transcript and summary task",
+            );
+        });
         d.click("LLM service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
@@ -6174,6 +6376,15 @@ pub mod session_recording {
                     .count()
                     == 1
         });
+        let notice_seen = !d.app_mut().sessions.job_done();
+        d.observe(
+            "iter-4-C-ST1-AT3",
+            d.rail_words().contains("Processed")
+                && !d.rail_words().contains("Recording saved")
+                && notice_seen,
+            "Opening a processed session acknowledges the notice and keeps Processed in the rail",
+        );
+        d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state("marker-added", Sizes::All);
         d.observe(
             "T11.7",
@@ -6204,7 +6415,13 @@ pub mod session_recording {
             "iter-10-S3-wide",
             "Wide Timeline keeps its header and form edges aligned",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6246,6 +6463,7 @@ pub mod session_recording {
             viewer_layout,
             "Navigation and Add to notes share a line; all four view choices stay on the next line",
         );
+        d.expect("This draft was written automatically. Check it against your memory.");
         d.state("recording-summary", Sizes::All);
         d.click("Back to recordings");
 
@@ -6270,7 +6488,13 @@ pub mod session_recording {
             d.has_containing("Processed, with a warning"),
             "The recording's own row keeps the warning",
         );
-        d.state("recording-warned", Sizes::Default);
+        let rail_warned = d.app_mut().sessions.job_warned();
+        d.observe(
+            "iter-4-C-ST1-AT3-warning",
+            d.rail_words().contains("Processed") && rail_warned,
+            "Opening a warned session keeps the processed warning in the rail",
+        );
+        d.state("recording-warned", Sizes::All);
 
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
@@ -6284,9 +6508,15 @@ pub mod session_recording {
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
-        d.state("recording-delete", Sizes::Default);
+        d.state("recording-delete", Sizes::All);
         d.click("Delete recording");
         d.expect("Recording deleted.");
+        let warned_after_delete = d.app_mut().sessions.job_warned();
+        d.observe(
+            "iter-4-C-ST1-deleted",
+            !d.rail_words().contains("Processed") && !warned_after_delete,
+            "Deleting the processed recording takes Processed out of the rail",
+        );
 
         // A recorder that ends by itself says so, wherever the DM is.
         d.click("Record this session");
@@ -6376,6 +6606,7 @@ pub mod session_recording {
         d.click("Speech service");
         d.click("Another service");
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
+        d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
     }
 }
@@ -6511,10 +6742,10 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 50 + unknown")
+            d.visible_text("XP 50")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
-                && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
-            "A broken member has a readable name in both its summary and its fault",
+                && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
+            "The summary names the joining member; excluded members stay under Cannot join",
         );
         d.observe(
             "T13.1",
@@ -6523,7 +6754,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("1 of 3 members can join")
+            d.visible_text("1 of 3 can join")
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
@@ -6564,7 +6795,13 @@ pub mod encounter_groups {
 
         // A typed total, as players give one.
         d.type_into(TOTAL_FOR_RIVALS, "14");
-        d.state("group-total-typed", Sizes::Default);
+        d.observe(
+            "Typed arrival total",
+            d.field_text(TOTAL_FOR_RIVALS).as_deref() == Some("14"),
+            "The typed initiative is kept before Add",
+        );
+        d.expect_same("Only the typed initiative differs from the group panel; the form and roster stay in place.");
+        d.state("group-total-typed", Sizes::All);
         d.click(&add_group(GROUP_RIVALS));
         d.expect(RIVAL_NAME);
         d.observe(
@@ -6626,7 +6863,7 @@ pub mod encounter_groups {
             d.click(NEXT_TURN);
         }
         d.expect(RIVAL_NAME);
-        d.state("a-named-side-on-its-turn", Sizes::Default);
+        d.state("a-named-side-on-its-turn", Sizes::All);
         d.goal("add groups by a total and by dragging");
 
         // A new arrival tie is checked outside the existing measured workflow.
@@ -6656,7 +6893,7 @@ pub mod encounter_groups {
         d.state("group-panel-in-setup", Sizes::Default);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
-        d.state("group-added-in-setup", Sizes::Default);
+        d.state("group-added-in-setup", Sizes::All);
         let overflow = d.at_size((960.0, 640.0), |d| {
             d.visible_text("2 below") && !d.has_containing("2 ties") && !d.has_containing("2 tied")
         });
@@ -6822,7 +7059,7 @@ pub mod encounter_owned_groups {
             "Groups opens one flat list, with headings for each encounter and deleted encounters last",
         );
         d.expect(&edit_group(GROUP_SHRINE));
-        d.state("groups-for-encounters-open", Sizes::Default);
+        d.state("groups-for-encounters-open", Sizes::All);
         d.observe(
             "T13.5",
             d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
@@ -6975,7 +7212,8 @@ pub mod encounter_owned_groups {
             roster_places(d).len() == rows_before + 2,
             "Dragging an encounter's own group in combat adds each member",
         );
-        d.state("own-group-dragged-in-combat", Sizes::Default);
+        d.expect("Maximum HP would become −28. It must be 1 or more.");
+        d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
@@ -7045,6 +7283,11 @@ pub mod run_overrides {
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
         d.observe_both(
+            "FT-10",
+            "A changed roster slot keeps its base creature",
+            |d| d.visible_text("as\u{a0}Ember\u{a0}Cultist"),
+        );
+        d.observe_both(
             "iter-18-A-changes",
             "The whole hand-change link stays in view",
             |d| d.in_view("Changed · 3 to add by hand"),
@@ -7097,7 +7340,7 @@ pub mod run_add_creature {
             "Arrivals rows start at the search edge and all fields fit",
             |d| {
                 let search = d.place_of(FIELD).or_else(|| d.place_of("Wolf")).unwrap();
-                ["Count", "Total"].iter().all(|name| {
+                ["Count", "Initiative"].iter().all(|name| {
                     d.place_of(name)
                         .is_some_and(|r| (r.left() - search.left()).abs() < 1.0)
                 }) && [
@@ -7213,7 +7456,23 @@ pub mod session_plan_groups {
         d.click("New group");
         d.expect("Back to the plan");
         d.type_text("Ash Pack");
-        d.state("plan-group-empty", Sizes::All);
+        d.state_prepared("plan-group-empty", Sizes::All, |d| {
+            let layout = if d.has("Plan and notes") {
+                d.place_of("Note text")
+                    .zip(d.place_of("Save group"))
+                    .is_some_and(|(note, save)| {
+                        note.left() > save.right()
+                            && note.width() >= crate::design::READER_MEASURE - crate::design::L
+                    })
+            } else {
+                d.has("Note") && !d.has("Note text")
+            };
+            d.observe(
+                "iter-4-C-AT2",
+                layout,
+                "A wide group editor keeps the note beside it; smaller pages keep the Note tab",
+            );
+        });
         d.observe(
             "T14.6",
             d.has_containing("Session 1: The Crossing"),
@@ -7252,7 +7511,28 @@ pub mod session_plan_groups {
         d.click("Add a group");
         d.click(&format!("Plan {GROUP_RIVALS}"));
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
-        d.state("plan-with-groups", Sizes::All);
+        d.state_prepared("plan-with-groups", Sizes::All, |d| {
+            show_plan(d);
+            let toolbar = d
+                .place_of("Add a group")
+                .zip(d.place_of("Edit group Ash Pack"))
+                .is_some_and(|(add, row)| add.bottom() < row.top());
+            d.observe("iter-3-C-ST2-FT2", toolbar, "Add stays above the plan rows");
+        });
+        d.state_prepared("plan-groups-read", Sizes::All, |d| {
+            read_note(d);
+            if d.has("Plan and notes") {
+                let writes = d.nodes().iter().filter(|node| node.name == "Write").count();
+                d.observe("iter-3-C-ST3", writes == 1, "The empty note has one Write action");
+            }
+            let compact = if d.has("Plan and notes") {
+                !d.visible_text("Plan for tonight") && d.has("Edit group Ash Pack") && d.has(&format!("Edit group {GROUP_RIVALS}"))
+            } else {
+                d.visible_text("2 groups, in the plan")
+            };
+            d.observe("iter-2-C-ST3", compact, "Read compacts group links already shown in the working plan, and keeps the tab count");
+        });
+        show_plan(d);
         d.begin_task();
         d.click(&format!("More actions for {GROUP_RIVALS}"));
         d.click(&format!("Remove group {GROUP_RIVALS} from the plan"));
@@ -7338,6 +7618,34 @@ pub mod session_plan_groups {
             stays_out && !d.has("Go to Arrivals for Border Watch"),
             "A group is linked in the plan it began in, with another note open on the way",
         );
+
+        d.click(NAV_CAMPAIGN);
+        d.expect("1 content issue to repair");
+        d.click("1 content issue to repair");
+        d.expect("Lost Patrol needs a creature that cannot be found.");
+        let missing_id = splat::character::stable_id("visual:group:lost:creature").to_string();
+        d.observe_both(
+            "iter-2-C-missing-member",
+            "The missing member names its owner and keeps its reference folded",
+            |d| {
+                d.visible_text("Lost Patrol needs a creature that cannot be found.")
+                    && d.has("Repair Lost Patrol")
+                    && !d.visible_text(&missing_id)
+            },
+        );
+        d.state("missing-group-member", Sizes::All);
+        d.click("Technical details");
+        d.expect(&missing_id);
+        d.state("missing-member-technical-details", Sizes::All);
+        d.click("Repair Lost Patrol");
+        d.expect("Markdown editor");
+        d.observe(
+            "iter-2-C-member-repair",
+            d.editor_text()
+                .is_some_and(|text| text.contains(&missing_id)),
+            "Repair opens the referring member's file without changing it",
+        );
+        d.state("missing-member-repair", Sizes::All);
     }
 }
 
@@ -7568,7 +7876,8 @@ pub mod session_plan {
         d.click("Exhaustion");
         d.click("More exhaustion");
         d.click("More exhaustion");
-        d.state("exhaustion-level", Sizes::Default);
+        d.expect("exhaustion 2 → 3 on Oren Thistlewick");
+        d.state("exhaustion-level", Sizes::All);
         let row = d.row_words("Oren Thistlewick");
         d.observe(
             "T14.3",
@@ -7693,13 +8002,23 @@ pub mod session_plan {
         );
         d.click("Add Long rest");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
-        d.state("long-rest-restores", Sizes::Default);
+        d.state("long-rest-restores", Sizes::All);
         d.click("Long rest");
         d.click("Mark not at full");
         d.expect("Undo ruling");
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("plan-rest-ruling-off", Sizes::All);
+        d.click("Long rest");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.state_prepared("closed-plan-rest-ruling-off", Sizes::All, |d| {
+            d.observe(
+                "iter-3-C-ST1-plan",
+                d.visible_text("Not\u{a0}at\u{a0}full") && !d.has("Mark everyone at full"),
+                "The closed rest keeps its Not at full ruling in view",
+            );
+        });
+        d.click("Long rest");
         let sizes = [(960.0, 640.0), (1200.0, 800.0)];
         let before = sizes.map(|size| {
             d.at_size(size, |d| {
@@ -7792,7 +8111,16 @@ pub mod session_plan {
         );
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.state("timeline-rest-ruling-off", Sizes::All);
+        d.state_prepared("timeline-rest-ruling-off", Sizes::All, |d| {
+            let row = d.nodes().iter().any(|node| {
+                node.name.starts_with("Long rest ·") && node.name.contains("Not at full")
+            });
+            d.observe(
+                "iter-3-C-ST1-timeline",
+                row,
+                "The Timeline rest row keeps its Not at full ruling in view",
+            );
+        });
         d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
@@ -7854,6 +8182,21 @@ pub mod session_plan {
 
         // What is unfinished can go on or go away. What is over is in the history.
         go_encounters(d);
+        d.observe_both(
+            "iter-2-C-FT4",
+            "Duplicate paused runs show one save time",
+            |d| {
+                let nodes = d.nodes();
+                let duplicates: Vec<_> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name.contains(" · Setup · Paused") && node.name.contains("2026-01-01")
+                    })
+                    .collect();
+                !duplicates.is_empty()
+                    && duplicates.iter().all(|node| !node.name.contains("Saved "))
+            },
+        );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
             "T14.1",
@@ -7999,7 +8342,7 @@ pub mod package_to_table {
         d.begin_task();
         d.type_text("Copper Coast");
         d.expect("Use in this campaign");
-        d.state("create-package-location", Sizes::Default);
+        d.state("create-package-location", Sizes::All);
         d.click("Create package");
         d.expect("Copper Coast");
         d.type_text("Copper Drake");
@@ -8093,6 +8436,7 @@ pub mod share_to_package {
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
+        d.expect("Also copies Captain Varra, because Watch Orders links to it.");
         assert!(!d.visible_text("Required entries: 1"));
         d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Ashen Marches/Watch Orders.md");
@@ -8143,6 +8487,24 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.expect("Unregister Ashen Marches?");
+        d.observe_both(
+            "FD-12",
+            "Unregister stays left of Keep the package on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (remove, keep) = (rect("Unregister"), rect("Keep the package"));
+                remove.right() < keep.left() && (remove.center().y - keep.center().y).abs() < 1.0
+            },
+        );
         d.state("package-in-use-warning", Sizes::All);
         d.click("Unregister");
         d.observe(

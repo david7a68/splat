@@ -161,6 +161,32 @@ fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> 
     )
 }
 
+fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
+    let color = if selected {
+        colors().text
+    } else {
+        colors().muted
+    };
+    let font = if selected { Type::Strong } else { Type::Body };
+    let galley = ui.painter().layout(
+        label.to_owned(),
+        font.font(ui),
+        color,
+        (ui.available_width() - design::S * 2.0).max(design::XXL),
+    );
+    let height = (galley.size().y + design::XS * 2.0).max(Density::Read.row());
+    design::row(ui, height, selected, label, |ui, rect| {
+        ui.painter().galley(
+            egui::pos2(
+                rect.left() + design::S,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            color,
+        );
+    })
+}
+
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 enum Scope {
@@ -172,6 +198,18 @@ enum Scope {
     Campaign,
 }
 
+/// How many entries leave Splat's lists when a package is unregistered. The manifest is not one.
+fn unregister_count(notes: &[Note], package: Uuid) -> usize {
+    notes
+        .iter()
+        .filter(|n| {
+            n.owner.id() == Some(package)
+                && !n.is_manifest()
+                && n.entry.as_ref().is_none_or(|e| e.kind != "reference")
+        })
+        .count()
+}
+
 struct Note {
     path: String,
     text: String,
@@ -181,13 +219,16 @@ struct Note {
 }
 impl Note {
     fn is_manifest(&self) -> bool {
+        // A readable note is a manifest only by its kind; the file name and the kind line are
+        // guesses for a note that cannot be read.
         matches!(self.owner, Owner::Package(_))
-            && (self
-                .entry
-                .as_ref()
-                .is_some_and(|entry| entry.kind == "package")
-                || matches!(self.path.as_str(), "Package.md" | "Module.md")
-                || self.text.lines().any(|line| line == "splat_kind: package"))
+            && match &self.entry {
+                Some(entry) => entry.kind == "package",
+                None => {
+                    matches!(self.path.as_str(), "Package.md" | "Module.md")
+                        || self.text.lines().any(|line| line == "splat_kind: package")
+                }
+            }
     }
 
     fn about_label(&self) -> String {
@@ -472,11 +513,7 @@ impl Loaded {
     }
 
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
-        if note
-            .entry
-            .as_ref()
-            .is_some_and(|entry| entry.kind == "package")
-        {
+        if note.is_manifest() {
             return false;
         }
         match scope {
@@ -583,7 +620,7 @@ impl Loaded {
                     .as_ref()
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
-                    format!("{} Duplicate identity · {line}", icons::WARN)
+                    format!("{} Same entry in two files · {line}", icons::WARN)
                 } else {
                     line
                 };
@@ -2218,7 +2255,7 @@ impl Library {
                 module.name,
                 module.path.display()
             );
-            if design::message_with_action(ui, Tone::Info, &message, "Undo unregister") {
+            if design::undo_message(ui, Tone::Info, &message, "Undo unregister") {
                 let result = local_module(&module.path).and_then(|found| {
                     if found.id != module.id {
                         return Err("That folder now holds a different package.".into());
@@ -2324,6 +2361,10 @@ impl Library {
         };
         // Each scope has its own counts. Search and sections stay within the scope.
         let scope = self.scope;
+        let about_open = self.selected.is_some_and(|at| {
+            loaded.notes[at].is_manifest()
+                && matches!(scope, Scope::Package(id) if loaded.notes[at].owner.id() == Some(id))
+        });
         if self
             .scope_counts
             .as_ref()
@@ -2432,7 +2473,7 @@ impl Library {
                             .iter()
                             .enumerate()
                             .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && design::link(ui, &note.about_label()).clicked()
+                        && about_row(ui, &note.about_label(), about_open).clicked()
                         && !dirty
                     {
                         self.selected = Some(index);
@@ -2495,7 +2536,8 @@ impl Library {
                                                 ui,
                                                 label,
                                                 count,
-                                                self.section == section
+                                                !about_open
+                                                    && self.section == section
                                                     && self.unreadable_kind == Some(kind)
                                                     && !searching,
                                             )
@@ -2509,10 +2551,15 @@ impl Library {
                                         }
                                         continue;
                                     }
-                                    let selected = self.section == section && !searching;
+                                    let selected =
+                                        self.section == section && !searching && !about_open;
                                     let label = section.label();
                                     let response = section_row(ui, label, count, selected);
                                     if response.clicked() {
+                                        if about_open && !dirty {
+                                            self.selected = None;
+                                            self.draft.clear();
+                                        }
                                         self.section = section;
                                         self.unreadable_kind = None;
                                         self.search.clear();
@@ -2525,6 +2572,8 @@ impl Library {
         // A query always searches the whole scope. Clearing it returns to the selected section.
         let query = self.search.trim().to_lowercase();
         let searching = !query.is_empty();
+        let filtering =
+            (self.section == Section::Creatures || searching) && !self.filter.is_empty();
         if self.matches_scope != Some(scope)
             || self
                 .matches
@@ -2547,8 +2596,6 @@ impl Library {
             self.matches_scope = Some(scope);
             let parsed = Query::parse(&query);
             let facets = loaded.facets();
-            let filtering = (self.section == Section::Creatures || !query.is_empty())
-                && !self.filter.is_empty();
             let mut found: Vec<usize> = loaded
                 .notes
                 .iter()
@@ -2588,13 +2635,9 @@ impl Library {
         // The whole catalogue has no first entry worth opening for the DM.
         let whole_catalogue = self.section == Section::All && query.is_empty();
         if !dirty
-            && self.selected.is_none_or(|i| {
-                !matches.contains(&i)
-                    && loaded.notes[i]
-                        .entry
-                        .as_ref()
-                        .is_none_or(|e| e.kind != "package")
-            })
+            && self
+                .selected
+                .is_none_or(|i| !matches.contains(&i) && !loaded.notes[i].is_manifest())
         {
             select = matches.first().copied().filter(|_| !whole_catalogue);
             if select.is_none() {
@@ -2638,14 +2681,14 @@ impl Library {
                         });
                         let combo = egui::ComboBox::from_id_salt("library_section")
                             .icon(design::combo_icon).width(half).truncate()
-                            .selected_text(match self.section { Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
+                            .selected_text(match self.section { _ if about_open => "About", Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
                             .show_ui(ui, |ui| {
                                 for &(_, sections) in Section::GROUPS {
                                     for &section in sections {
                                         if count_of(section, &counts) == 0 { continue; }
-                                        let response = ui.selectable_label(self.section == section, section.label());
+                                        let response = ui.selectable_label(self.section == section && !about_open, section.label());
                                         design::named(ui, &response, &format!("Library section: {}", section.label()));
-                                        if response.clicked() { self.section = section; self.search.clear(); }
+                                        if response.clicked() { if about_open && !dirty { self.selected = None; self.draft.clear(); } self.section = section; self.search.clear(); }
                                     }
                                 }
                             });
@@ -2653,7 +2696,7 @@ impl Library {
                     });
                     if let Scope::Package(package) = scope
                         && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
-                        && design::link(ui, &note.about_label()).clicked() && !dirty
+                        && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
                     { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 }
                 ui.horizontal(|ui| {
@@ -2691,8 +2734,8 @@ impl Library {
                     }
                 }
                 ui.add_space(design::XS);
-                if searching || (compact && self.section != Section::All) {
-                    design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
+                if searching || filtering || (compact && self.section != Section::All) {
+                    design::group_heading(ui, if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, matches.len());
                 }
                 if matches.is_empty() {
                     ui.add_space(design::S);
@@ -2856,15 +2899,19 @@ impl Library {
             let selected = match scope {
                 Scope::Uses => "Can use".to_owned(),
                 Scope::Builtin => "D&D 2024".to_owned(),
-                Scope::Campaign => "Own entries".to_owned(),
+                Scope::Campaign => "Campaign entries".to_owned(),
                 _ => label(scope),
             };
             let budget = width - design::XXL - design::L;
-            let fitted = scope_label(ui, &selected, budget);
+            let fitted = if matches!(scope, Scope::Package(_)) {
+                scope_label(ui, &selected, budget)
+            } else {
+                selected
+            };
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
-                .truncate()
+                .wrap()
                 .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);
@@ -2910,17 +2957,10 @@ impl Library {
         let Some(module) = self.confirm_unregister.clone() else {
             return;
         };
-        let count = self.loaded.as_ref().map_or(0, |l| {
-            l.notes
-                .iter()
-                .filter(|n| {
-                    n.owner.id() == Some(module.id)
-                        && n.entry
-                            .as_ref()
-                            .is_none_or(|e| !matches!(e.kind.as_str(), "package" | "reference"))
-                })
-                .count()
-        });
+        let count = self
+            .loaded
+            .as_ref()
+            .map_or(0, |l| unregister_count(&l.notes, module.id));
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut remove = false;
         let title = format!("Unregister {}?", module.name);
@@ -2985,11 +3025,15 @@ impl Library {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.horizontal(|ui| {
-                keep |= Action::secondary("Keep the package").show(ui).clicked();
-                ui.add_space(design::L);
-                remove = Action::destructive("Unregister").show(ui).clicked();
-            });
+            design::dialog_actions(
+                ui,
+                |ui| {
+                    remove = Action::destructive("Unregister").show(ui).clicked();
+                },
+                |ui| {
+                    keep |= Action::secondary("Keep the package").show(ui).clicked();
+                },
+            );
         });
         if keep {
             self.confirm_unregister = None;
@@ -3024,7 +3068,11 @@ impl Library {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.add_space(design::L);
                 ui.horizontal(|ui| {
-                    ui.label(Type::Label.rich(ui, "MANAGE PACKAGES").color(colors().text));
+                    ui.label(
+                        Type::Heading
+                            .rich(ui, "Manage packages")
+                            .color(colors().text),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if Action::quiet("Close")
                             .name("Close the package form")
@@ -3056,15 +3104,25 @@ impl Library {
                         self.path = path.display().to_string();
                     }
                 });
+                if self.copied_package.as_ref().is_some_and(|copy| {
+                    Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
+                }) {
+                    self.copied_package = None;
+                    self.copy_name_open = false;
+                }
+                let add_reason = locked
+                    .or(self
+                        .copied_package
+                        .is_some()
+                        .then_some("Register it as a new package below."))
+                    .or(self
+                        .path
+                        .trim()
+                        .is_empty()
+                        .then_some("Choose a folder first."));
                 ui.horizontal(|ui| {
                     if Action::secondary("Add folder")
-                        .blocked(
-                            locked.or(self
-                                .path
-                                .trim()
-                                .is_empty()
-                                .then_some("Choose a folder first.")),
-                        )
+                        .blocked(add_reason)
                         .show(ui)
                         .clicked()
                     {
@@ -3074,9 +3132,17 @@ impl Library {
                                 .iter()
                                 .find(|m| m.id == module.id && m.path != module.path)
                             {
-                                self.copied_package = Some(module);
                                 self.copy_name = format!("{} copy", original.name);
                                 self.copy_name_open = false;
+                                self.copy_not_used = campaigns
+                                    .active_campaign()
+                                    .and_then(|campaign| CampaignDocument::load(&campaign).ok())
+                                    .is_some_and(|document| {
+                                        document.selections.iter().any(|selection| {
+                                            selection.package.id == Some(module.id)
+                                        })
+                                    });
+                                self.copied_package = Some(module);
                                 self.error = None;
                                 return Ok(None);
                             }
@@ -3092,13 +3158,7 @@ impl Library {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    design::blocked_reason(
-                        ui,
-                        self.path
-                            .trim()
-                            .is_empty()
-                            .then_some("Choose a folder first."),
-                    );
+                    design::blocked_reason(ui, add_reason);
                     ui.add_space(design::L);
                 });
 
@@ -3112,15 +3172,10 @@ impl Library {
                             .iter()
                             .find(|m| m.id == copy.id)
                             .map_or(copy.name.as_str(), |m| m.name.as_str());
-                        design::message(
-                            ui,
-                            Tone::Warning,
-                            &format!("This folder is a copy of {name}."),
-                        );
-                        design::quiet_section(ui, "Technical details", |ui| {
-                            ui.label(copy.id.to_string());
-                        });
+                        let warning = format!("This folder is a copy of {name}.");
                         if self.copy_name_open {
+                            design::message(ui, Tone::Warning, &warning);
+                            form_heading(ui, "Register a copy");
                             design::text_field(
                                 ui,
                                 "New package name",
@@ -3129,11 +3184,15 @@ impl Library {
                                 None,
                             );
                             if campaigns.active_campaign().is_some() {
-                                use_checkbox(
-                                    ui,
-                                    &mut self.copy_not_used,
-                                    "Uses every entry in this package, including future entries.",
-                                );
+                                let mut enabled = !self.copy_not_used;
+                                ui.checkbox(&mut enabled, "Use in this campaign");
+                                self.copy_not_used = !enabled;
+                                let help = if enabled {
+                                    "Uses every entry in this package, including future entries."
+                                } else {
+                                    "This campaign keeps the original. The copy is registered but not used."
+                                };
+                                ui.label(Type::Small.rich(ui, help).color(colors().muted));
                             }
                         }
                         let label = if self.copy_name_open && self.copy_name.trim().is_empty() {
@@ -3146,25 +3205,34 @@ impl Library {
                         let reason = locked
                             .or((self.copy_name_open && self.copy_name.trim().is_empty())
                                 .then_some("Type a name first."));
-                        ui.horizontal_wrapped(|ui| {
-                            if Action::quiet(&label).blocked(reason).show(ui).clicked() {
-                                if self.copy_name_open {
-                                    if let Err(error) = self.register_copy(campaigns) {
-                                        self.error = Some(error);
-                                    }
-                                } else {
-                                    self.copy_not_used = campaigns
-                                        .active_campaign()
-                                        .and_then(|campaign| CampaignDocument::load(&campaign).ok())
-                                        .is_some_and(|document| {
-                                            document.selections.iter().any(|selection| {
-                                                selection.package.id == Some(copy.id)
-                                            })
-                                        });
-                                    self.copy_name_open = true;
+                        let register = if self.copy_name_open {
+                            ui.horizontal_wrapped(|ui| {
+                                let clicked =
+                                    Action::secondary(&label).blocked(reason).show(ui).clicked();
+                                design::blocked_reason(ui, reason);
+                                ui.add_space(design::L);
+                                if Action::quiet("Cancel").show(ui).clicked() {
+                                    self.copy_name_open = false;
                                 }
+                                clicked
+                            })
+                            .inner
+                        } else {
+                            design::locked(ui, reason, |ui| {
+                                design::message_with_action(ui, Tone::Warning, &warning, &label)
+                            })
+                        };
+                        if register {
+                            if self.copy_name_open {
+                                if let Err(error) = self.register_copy(campaigns) {
+                                    self.error = Some(error);
+                                }
+                            } else {
+                                self.copy_name_open = true;
                             }
-                            design::blocked_reason(ui, reason);
+                        }
+                        design::quiet_section(ui, "Technical details", |ui| {
+                            ui.label(copy.id.to_string());
                         });
                     }
                 }
@@ -4317,11 +4385,7 @@ impl Library {
             );
         }
         if !duplicate_indices.is_empty() {
-            design::message(
-                ui,
-                Tone::Warning,
-                "These two files claim to be the same entry. Choose which one becomes a separate entry.",
-            );
+            design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
             let loaded = self.loaded.as_ref().unwrap();
             let users: Vec<_> = loaded
                 .notes
@@ -4351,43 +4415,55 @@ impl Library {
                 } else {
                     filename.into_owned()
                 };
-                if Action::quiet(&format!("Make {filename} a separate entry"))
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-                {
-                    new_identity = Some(at);
+                if position > 0 {
+                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
                 }
-                if position > 0 && !users.is_empty() {
-                    let remaining = &loaded.notes[duplicate_indices[0]].path;
-                    let remaining = Path::new(remaining)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    let remaining = if same_filename {
-                        format!(
-                            "{remaining} in {}/",
-                            loaded.notes[duplicate_indices[0]].owner.folder()
-                        )
-                    } else {
-                        remaining.into_owned()
-                    };
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!("{} will then use {remaining}.", name_list(&users)),
-                            )
-                            .color(colors().muted),
-                    );
-                }
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    let action = crate::world::separate_entry_action(&filename);
+                    if Action::secondary(&action)
+                        .hint(&action)
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                    {
+                        new_identity = Some(at);
+                    }
+                    if !users.is_empty() {
+                        let remaining = duplicate_indices
+                            .iter()
+                            .copied()
+                            .find(|&other| other != at)
+                            .unwrap();
+                        let note = &loaded.notes[remaining];
+                        let remaining = Path::new(&note.path)
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let remaining = if same_filename {
+                            format!("{remaining} in {}/", note.owner.folder())
+                        } else {
+                            remaining.into_owned()
+                        };
+                        let verb = if position == 0 {
+                            "keeps"
+                        } else {
+                            "will then use"
+                        };
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} {verb} {remaining}.", name_list(&users)))
+                                .color(colors().muted),
+                        );
+                    }
+                });
             }
             let mut shown = std::collections::HashSet::new();
             for &at in &duplicate_indices {
                 let owner = &loaded.notes[at].owner;
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    && Action::quiet(&format!(
+                    && Action::secondary(&format!(
                         "Make all {} files in {}/ separate entries",
                         paths.len(),
                         owner.folder()
@@ -4415,8 +4491,8 @@ impl Library {
                 undo_identity = design::undo_message(
                     ui,
                     Tone::Success,
-                    &format!("{filename} is now a separate entry."),
-                    "Undo separate entry",
+                    &crate::world::separate_entry_result(&filename),
+                    crate::world::SEPARATE_ENTRY_UNDO,
                 );
             });
         }
@@ -4498,12 +4574,7 @@ impl Library {
         }
         if !save_row
             && discard_is_for(self.discarded.as_ref(), note)
-            && design::undo_message(
-                ui,
-                Tone::Info,
-                &format!("{} draft discarded.", note.name()),
-                &format!("Undo discard of {}", note.name()),
-            )
+            && design::draft_discarded(ui, note.name())
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
@@ -4781,16 +4852,13 @@ impl Library {
                     ui.push_id(&note.path, |ui| {
                         reader_style::measure(ui, |ui| {
                             ui.add_space(design::XS);
-                            if !about {
-                                ui.label(Type::Small.rich(ui, format!("Library / {}", note.section().label())).color(colors().muted));
-                            }
                             let reading_subtitle = match &note.owner {
                                 Owner::Package(module) => reading_subtitle.strip_suffix(&format!(" · {}", module.name)).unwrap_or(&reading_subtitle),
                                 _ => &reading_subtitle,
                             };
                             let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if note.error.is_some() { "" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
+                            let subtitle = if note.error.is_some() { "Cannot be read" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(
@@ -5315,6 +5383,107 @@ mod tests {
     }
 
     #[test]
+    fn iter2_d_copied_folder_blocks_add_until_the_path_changes() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let folder = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let library = Library {
+            path: folder.path().display().to_string(),
+            copied_package: Some(Module {
+                id: Uuid::new_v4(),
+                name: "Copied package".into(),
+                path: folder.path().canonicalize().unwrap(),
+            }),
+            ..Default::default()
+        };
+        let mut campaigns = Campaigns::default();
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            move |ui, library| library.package_form(ui, &mut campaigns),
+            library,
+        );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(
+            harness
+                .get_by_label("Add folder")
+                .accesskit_node()
+                .is_disabled()
+        );
+        harness.get_by_label("Package folder").focus();
+        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::A);
+        harness
+            .get_by_label("Package folder")
+            .type_text(&other.path().display().to_string());
+        harness.run_steps(2);
+        assert!(
+            !harness
+                .get_by_label("Add folder")
+                .accesskit_node()
+                .is_disabled()
+        );
+        assert!(harness.state().copied_package.is_none());
+    }
+
+    #[test]
+    fn iter2_d_about_selects_its_own_navigation_row() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut library = navigation_library();
+        let owner = library.loaded.as_ref().unwrap().notes[0].owner.clone();
+        let package = owner.id().unwrap();
+        let text = note_text("First", "package", Some("first"));
+        library.loaded.as_mut().unwrap().notes[0] = Note {
+            path: "Package.md".into(),
+            entry: Some(Entry::parse("Package.md", &text).unwrap()),
+            text,
+            error: None,
+            owner,
+        };
+        library.loaded.as_mut().unwrap().notes[1].owner =
+            library.loaded.as_ref().unwrap().notes[0].owner.clone();
+        library.scope = Scope::Package(package);
+        let mut campaigns = Campaigns::default();
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            move |ui, library| library.show(ui, &mut campaigns),
+            library,
+        );
+        harness.set_size(egui::vec2(1920.0, 1080.0));
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("About First").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .get_by_label("About First")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        assert_eq!(
+            harness
+                .get_by_label("All entries   1")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        harness.get_by_label("All entries   1").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .get_by_label("About First")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        assert_eq!(
+            harness
+                .get_by_label("All entries   1")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+    }
+
+    #[test]
     fn i19_w9_header_counts_only_editable_old_files_and_hides_at_zero() {
         for size in [egui::vec2(960.0, 640.0), egui::vec2(1200.0, 800.0)] {
             let mut library = navigation_library();
@@ -5621,7 +5790,7 @@ mod tests {
         assert_eq!(wolves.len(), 2);
         for (at, _) in wolves {
             assert_eq!(loaded.duplicates(at).len(), 1);
-            assert!(loaded.build_subtitles()[at].contains("Duplicate identity"));
+            assert!(loaded.build_subtitles()[at].contains("Same entry in two files"));
         }
     }
 
@@ -5962,7 +6131,7 @@ mod tests {
                 let response = entry_row(
                     ui,
                     "Cinder Wolf",
-                    "Duplicate identity · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
+                    "Same entry in two files · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
                     false,
                 );
                 assert_eq!(response.rect.height(), ENTRY_ROW_HEIGHT);
@@ -7023,6 +7192,78 @@ mod tests {
                     .diagnostics
                     .iter()
                     .any(|message| message.contains("Package.md"))
+            );
+        }
+    }
+
+    #[test]
+    fn iter3_d_a_readable_entry_named_like_a_manifest_stays_an_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            note_text("Package Wolf", "creature", None),
+        )
+        .unwrap();
+        fs::write(module.path.join("Module.md"), "---\nsplat_id: [\n---\n").unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        let wolf = loaded
+            .notes
+            .iter()
+            .find(|note| note.path == "Package.md")
+            .unwrap();
+        assert!(!wolf.is_manifest());
+        assert!(loaded.in_scope(wolf, Scope::Package(module.id)));
+        assert_eq!(unregister_count(&loaded.notes, module.id), 1);
+    }
+
+    #[test]
+    fn iter3_d_manifests_never_enter_content_counts_or_results() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::write(
+            module.path.join("Wolf.md"),
+            note_text("Wolf", "creature", None),
+        )
+        .unwrap();
+        for text in [
+            "---\nsplat_id: [\n---\n",
+            "---\nsplat_kind: package\nsplat_id: [\n---\n",
+        ] {
+            fs::write(module.path.join("Module.md"), text).unwrap();
+            let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+            let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
+            assert!(manifest.error.is_some());
+            assert!(manifest.about_label().contains(icons::WARN));
+            assert!(
+                loaded
+                    .diagnostics
+                    .iter()
+                    .any(|line| line.contains("Module.md"))
+            );
+            for scope in [Scope::All, Scope::Uses, Scope::Package(module.id)] {
+                assert!(
+                    !loaded.in_scope(manifest, scope),
+                    "manifest entered {scope:?}"
+                );
+            }
+            assert_eq!(
+                loaded
+                    .notes
+                    .iter()
+                    .filter(|note| loaded.in_scope(note, Scope::Package(module.id)))
+                    .count(),
+                1
+            );
+            assert_eq!(unregister_count(&loaded.notes, module.id), 1);
+            assert_eq!(
+                loaded
+                    .notes
+                    .iter()
+                    .filter(|note| loaded.in_scope(note, Scope::Package(module.id))
+                        && note.section() == Section::Unreadable)
+                    .count(),
+                0
             );
         }
     }

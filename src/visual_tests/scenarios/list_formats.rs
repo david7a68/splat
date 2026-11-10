@@ -13,7 +13,53 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_containing("/Timeline.md");
     d.expect("BEFORE");
     d.expect("AFTER");
+    let converted = crate::timeline::formats::convert(&before, &Default::default()).unwrap();
+    let source_lines: std::collections::BTreeSet<_> =
+        before.lines().chain(converted.lines()).collect();
+    d.observe_both(
+        "iter-4-D-FD8",
+        "The conversion preview keeps whole source rows and both actions visible",
+        |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.in_view()
+                        && (source_lines.contains(node.name.as_str()) || node.name == "No line")
+                })
+                .collect();
+            !rows.is_empty()
+                && rows
+                    .iter()
+                    .all(|node| (node.shown.height() - node.rect.height()).abs() < 1.0)
+                && d.visible_text("Cancel")
+                && d.visible_text("Convert files")
+        },
+    );
     d.state("timeline-conversion-preview", Sizes::All);
+    // Where the later change's line sits in the small window, before and after the click.
+    let later = |d: &mut Driver<'_>| {
+        d.at_size(SMALL, |d| {
+            d.nodes()
+                .iter()
+                .filter(|node| node.name == "## Day 1: The crossing" && node.in_view())
+                .map(|node| node.rect.top().round() as i32)
+                .min()
+        })
+    };
+    let before_click = later(d);
+    d.click("Next difference");
+    d.expect("## Day 1: The crossing");
+    let after_click = later(d);
+    d.observe(
+        "iter-4-D-FD8-next",
+        after_click.is_some() && after_click != before_click,
+        format!(
+            "Next difference moves the small preview to the later change: {before_click:?} -> {after_click:?}"
+        ),
+    );
+    d.state("timeline-next-change-group", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
@@ -112,7 +158,7 @@ pub fn run(d: &mut Driver<'_>) {
 
     d.click(NAV_ENCOUNTERS);
     d.click_starting("GROUPS");
-    d.expect("2 of 3 members can join");
+    d.expect("2 of 3 can join");
     d.expect("Scout (as Goblin Warrior) needs fixing");
     d.state("flagged-group-in-groups-list", Sizes::All);
     d.click(NAV_SESSIONS);
@@ -120,7 +166,7 @@ pub fn run(d: &mut Driver<'_>) {
     show_plan(d);
     d.click("Add a group");
     d.click("Plan Bridge guards");
-    d.expect("2 of 3 members can join");
+    d.expect("2 of 3 can join");
     d.state("flagged-group-in-the-plan", Sizes::All);
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
@@ -142,7 +188,7 @@ pub fn run(d: &mut Driver<'_>) {
             let first = find("1. Scout");
             let next = find("2. Goblin Warrior");
             let warning = find("Line 15: Changes \"HP lots\" not read.");
-            let summary = find("Count 1 · CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
+            let summary = find("CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
                     first.rect.bottom() <= summary.rect.top()
@@ -154,7 +200,7 @@ pub fn run(d: &mut Driver<'_>) {
             ) && d.visible_text("This member cannot join a fight until its Changes cell is fixed. Other members can join.")
         },
     );
-    d.expect("XP 100 + unknown");
+    d.expect("XP 100");
     d.expect("Edit in Obsidian");
     d.expect("Show file");
     d.expect("Changes for Scout");

@@ -25,6 +25,18 @@ use std::{
 };
 use uuid::Uuid;
 
+/// The last sentence of a deleted-entry roster fault; it marks the message as a warning.
+const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
+
+/// `Copy N` from a run's list label, or `None` for the original run.
+fn run_copy_word(label: &str) -> Option<String> {
+    label
+        .split(" · ")
+        .next()
+        .filter(|word| word.starts_with("Copy "))
+        .map(str::to_owned)
+}
+
 fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<String, String> {
     let stem: String = name
         .trim()
@@ -459,9 +471,9 @@ impl Draft {
                         let name = roster_name(&named, None, &snapshot.known_creature_names);
                         snapshot.catalogue.unreadable_ref(reference)
                             .map_or_else(|| if count > 1 {
-                                format!("{count} {name} rows have no creature. Their package entry was deleted. Choose a replacement in the roster.")
+                                format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             } else {
-                                format!("{name} has no creature. Its package entry was deleted. Choose a replacement in the roster.")
+                                format!("{name} has no creature. Its package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             },
                                 |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) })
                     })?;
@@ -665,6 +677,7 @@ impl CreatureEditor {
     }
 }
 struct Creature {
+    unavailable: Option<String>,
     id: Uuid,
     name: String,
     lower: String,
@@ -908,7 +921,7 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
     while !parts.is_empty() {
         let priority = |part: &str| {
             if part.starts_with("as ") {
-                0
+                6
             } else if !(["CR ", "HP ", "AC "]
                 .iter()
                 .any(|prefix| part.starts_with(prefix)))
@@ -981,11 +994,26 @@ fn creature_result_row(
         ui.set_min_height(RESULT_ROW);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.set_max_width((ui.available_width() - design::S * 12.0).max(design::S * 10.0));
+            let controls = if c.unavailable.is_some() {
+                Action::secondary(action)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + Action::secondary("Open in World")
+                        .density(Density::Read)
+                        .natural_width(ui)
+                    + design::M
+            } else {
+                design::S * 12.0
+            };
+            ui.set_max_width((ui.available_width() - controls).max(design::S * 10.0));
             read = creature_name_link(ui, &c.name)
                 .on_hover_text("Read this entry in Lookup")
                 .clicked();
-            detail_columns(ui, &c.detail, c.source.as_deref());
+            if let Some(reason) = &c.unavailable {
+                ui.label(Type::Small.rich(ui, reason).color(colors().result.warning));
+            } else {
+                detail_columns(ui, &c.detail, c.source.as_deref());
+            }
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if already {
@@ -999,8 +1027,19 @@ fn creature_result_row(
                 chosen = Action::secondary(action)
                     .name(&name)
                     .density(Density::Read)
+                    .blocked(c.unavailable.as_deref())
                     .show(ui)
                     .clicked();
+                if c.unavailable.is_some()
+                    && Action::secondary("Open in World")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new("reveal_encounter_npc"), c.id)
+                    });
+                }
             }
         });
     });
@@ -1020,7 +1059,12 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let undo_key = egui::Id::new(("encounter_identity_undo", campaign.id));
     let undo = ui.data(|data| data.get_temp::<crate::world::Change>(undo_key));
     if let Some(undo) = undo
-        && Action::quiet("Undo new identity").show(ui).clicked()
+        && design::undo_message(
+            ui,
+            Tone::Success,
+            undo.message(),
+            crate::world::SEPARATE_ENTRY_UNDO,
+        )
     {
         match undo.undo(campaign) {
             Ok(()) => {
@@ -1056,18 +1100,11 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
         if !seen.insert(identity) {
             continue;
         }
-        let files = paths
-            .iter()
-            .map(|path| path.rsplit('/').next().unwrap_or(path))
-            .collect::<Vec<_>>()
-            .join(" and ");
-        design::message(ui, Tone::Warning, &format!("{files} share one ID."));
+        design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
         for path in paths {
             let filename = path.rsplit('/').next().unwrap_or(path);
-            if Action::quiet(&format!("New identity for {filename}"))
-                .show(ui)
-                .clicked()
-            {
+            let action = crate::world::separate_entry_action(filename);
+            if Action::secondary(&action).hint(&action).show(ui).clicked() {
                 match crate::world::new_identity(campaign, path) {
                     Ok((undo, _)) => ui.data_mut(|data| {
                         data.insert_temp(undo_key, undo);
@@ -1237,10 +1274,23 @@ impl Snapshot {
     }
     fn npc_name_for(&self, entry: &Entry, overrides: &Mapping) -> Option<String> {
         let name = overrides.get("name")?.as_str()?;
-        self.catalogue.entries.values().find_map(|candidate| {
-            let (stat, npc_name) = self.npc_stat_block(candidate.entry.id)?;
-            (stat == entry.id && name == npc_name).then_some(npc_name)
-        })
+        self.catalogue
+            .entries
+            .values()
+            .chain(&self.catalogue.duplicate_world)
+            .find_map(|candidate| {
+                let npc = &candidate.entry;
+                if npc.kind != "world" || npc.name != name {
+                    return None;
+                }
+                let world = npc.fields.get("splat_world")?;
+                if world.get("type")?.as_str()? != "npc" {
+                    return None;
+                }
+                let reference: EntryRef =
+                    serde_yaml_ng::from_value(world.get("creature")?.clone()).ok()?;
+                (self.catalogue.resolve_ref(&reference).ok()? == entry.id).then(|| npc.name.clone())
+            })
     }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load_with_modules(campaign, modules)?;
@@ -1267,6 +1317,7 @@ impl Snapshot {
                                     == campaign.dndbeyond_campaign_id.as_deref()
                         });
                 Creature {
+                    unavailable: None,
                     id: *id,
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
@@ -1312,14 +1363,29 @@ impl Snapshot {
                 }
                 let value = npc.fields.get("splat_world")?.get("creature")?;
                 let reference: EntryRef = serde_yaml_ng::from_value(value.clone()).ok()?;
-                let id = catalogue.resolve_ref(&reference).ok()?;
-                let stat = creatures.iter().find(|c| c.id == id && !c.linked)?;
+                let stat = catalogue
+                    .resolve_ref(&reference)
+                    .ok()
+                    .and_then(|id| creatures.iter().find(|c| c.id == id && !c.linked));
+                let missing_name = reference
+                    .link
+                    .as_deref()
+                    .map(crate::sessions::plain_links)
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| "This NPC's".into());
+                let unavailable = stat
+                    .is_none()
+                    .then(|| format!("{missing_name} stat block not found"));
                 Some(Creature {
+                    unavailable: unavailable.clone(),
                     id: npc.id,
                     name: npc.name.clone(),
                     lower: npc.name.to_lowercase(),
-                    detail: format!("NPC · as {} · {}", stat.name, stat.detail),
-                    facets: stat.facets.clone(),
+                    detail: stat.map_or_else(
+                        || unavailable.clone().unwrap_or_default(),
+                        |stat| format!("NPC · as {} · {}", stat.name, stat.detail),
+                    ),
+                    facets: stat.and_then(|stat| stat.facets.clone()),
                     origin: crate::lookup::entry_origin(Some(npc), entry.private),
                     source: None,
                     party: false,
@@ -1380,7 +1446,8 @@ impl Snapshot {
         let run_creatures = Arc::new(
             creatures
                 .iter()
-                .filter(|creature| !creature.linked)
+                // An NPC whose stat block is gone stays out of the live run's Add creature.
+                .filter(|creature| !creature.linked && creature.unavailable.is_none())
                 .map(|creature| {
                     Arc::new(crate::encounter_run::RunCreature {
                         entry: Arc::new(catalogue.run_entry(creature.id)),
@@ -1651,12 +1718,8 @@ impl Encounters {
                         == run.encounter.split(" · saved ").next()
                 })
         });
-        others.then(|| {
-            run.encounter
-                .split_once(" · ")
-                .map_or(run.encounter.as_str(), |(_, copy)| copy)
-                .to_owned()
-        })
+        // A recovery copy's label starts with `Copy N`; the original has none, so the two differ.
+        others.then(|| run_copy_word(&run.label)).flatten()
     }
     pub fn settings_unsaved(&self) -> bool {
         self.snapshot
@@ -3343,7 +3406,12 @@ impl Encounters {
         }
         self.refresh_validation_error(false);
         if let Some(e) = &self.error {
-            design::message(ui, Tone::Error, e);
+            let tone = if e.ends_with(REPLACE_DELETED_ENTRY) {
+                Tone::Warning
+            } else {
+                Tone::Error
+            };
+            design::message(ui, tone, e);
         }
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
@@ -3645,6 +3713,7 @@ impl Encounters {
             && !query.is_empty()
             && let Some(first) = matches.first()
             && !(roster.already)(first)
+            && first.unavailable.is_none()
         {
             chosen = Some((first.id, first.party));
             *focus_search = true;
@@ -3693,10 +3762,16 @@ impl Encounters {
             );
         }
         ui.spacing_mut().item_spacing.y = 0.0;
+        let row_height = RESULT_ROW
+            + if matches.iter().any(|c| c.unavailable.is_some()) {
+                Type::Small.line()
+            } else {
+                0.0
+            };
         egui::ScrollArea::vertical()
             .id_salt(("encounter_results", &query))
             .auto_shrink([false, false])
-            .show_rows(ui, RESULT_ROW, matches.len(), |ui, range| {
+            .show_rows(ui, row_height, matches.len(), |ui, range| {
                 for c in &matches[range] {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -3743,9 +3818,9 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
-                design::group_heading(ui, "Read-aloud and notes", 0);
+                design::field(ui, "Read-aloud and notes", None, None, |ui| {
                 let output = egui::TextEdit::multiline(&mut draft.body)
-                    .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
+                    .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
                     .desired_width(ui.available_width() - 2.0 * design::S - design::M)
                     .desired_rows(5)
                     .margin(egui::vec2(design::S, design::S))
@@ -3754,6 +3829,7 @@ impl Encounters {
                     crate::markdown_view::send_note_link(ui.ctx(), note, None);
                 }
                 design::named(ui, &output.response, "Read-aloud and notes");
+                });
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner
@@ -4166,14 +4242,10 @@ impl Encounters {
                     });
                 design::named(ui, &combo.response, "Roll NPC initiative");
             });
+            ui.label(Type::Small.rich(ui, "Run setup starts with this choice. You can change it there for one roll. Groups that arrive later use it too.").color(colors().muted));
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",
-            );
-            ui.label(
-                Type::Small
-                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and initiative groups use the first NPC's bonus and roll mode. Players keep their entered initiative. An encounter group follows this rule when it arrives, and the run's Arrivals tab says how.")
-                    .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
@@ -4194,9 +4266,10 @@ impl Encounters {
                 };
                 design::message(ui, Tone::Warning, &words);
             }
-            ui.horizontal(|ui| {
+            ui.vertical(|ui| {
                 let save_key = changed && blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                ui.horizontal(|ui| {
                 if changed {
                     self.discarded_options = None;
                     design::status(
@@ -4224,8 +4297,14 @@ impl Encounters {
                 {
                     snapshot.options = options;
                 }
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, Some(draft_switch_reason()));
+                }
+                });
                 let pressed = ui
-                    .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    .allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if run_files > 0 && !run_open {
                             let move_runs = Action::primary("Move runs and save").show(ui).clicked();
                             let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
@@ -4252,9 +4331,6 @@ impl Encounters {
                     }
                 }
             });
-            if snapshot.options != snapshot.saved_options {
-                design::blocked_reason(ui, Some(draft_switch_reason()));
-            }
         });
         });
         if draft_open {
@@ -4323,6 +4399,63 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn run_copy_word_names_copies_and_not_the_original() {
+        assert_eq!(
+            super::run_copy_word("Copy 2 · Closed last · Round 2 · Paused").as_deref(),
+            Some("Copy 2")
+        );
+        assert_eq!(super::run_copy_word("Round 2 · Paused"), None);
+        assert_eq!(super::run_copy_word("Copying · Round 1"), None);
+    }
+
+    #[test]
+    fn iter_2_b_npc_with_deleted_stat_block_stays_in_search_and_cannot_be_added() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let text = splat::content::formats::convert("Fixture.md", &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Watchkeeper\nsplat_world:\n  type: npc\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n---\n",
+            Uuid::new_v4(),
+            Uuid::new_v4()
+        )).unwrap();
+        fs::create_dir_all(dir.path().join("NPCs")).unwrap();
+        fs::write(dir.path().join("NPCs/Watchkeeper.md"), text).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        assert!(snapshot.creatures.iter().any(|c| c.name == "Watchkeeper"));
+        assert!(
+            !snapshot
+                .run_creatures
+                .iter()
+                .any(|creature| creature.entry.name == "Watchkeeper"),
+            "the live run cannot add an NPC whose stat block is missing"
+        );
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let chosen = Encounters::creature_search(
+                    ui,
+                    snapshot.creatures.iter(),
+                    &mut "Watchkeeper".to_owned(),
+                    &mut false,
+                    &mut None,
+                    SearchRoster {
+                        already: &|_| false,
+                    },
+                );
+                assert!(chosen.is_none());
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        assert!(harness.query_by_label("No creatures match").is_none());
+        assert!(
+            harness
+                .query_by_label("Watchkeeper Guard stat block not found")
+                .is_some()
+        );
+        assert!(harness.query_by_label("Open in World").is_some());
+        assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
+    }
     #[test]
     fn editor_save_row_has_one_height_in_every_state() {
         let ctx = egui::Context::default();
@@ -4414,7 +4547,7 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
         harness
-            .get_by_label("New identity for Rook copy.md")
+            .get_by_label("Make Rook copy.md a separate entry")
             .click();
         harness.run_steps(2);
         let snapshot = Snapshot::load(&active, &[]).unwrap();
@@ -4426,7 +4559,7 @@ mod tests {
                 .count(),
             2
         );
-        harness.get_by_label("Undo new identity").click();
+        harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
@@ -4467,26 +4600,26 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(
             harness
-                .query_all_by_label("New identity for Rook copy.md")
+                .query_all_by_label("Make Rook copy.md a separate entry")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("New identity for Rook.md")
+                .query_all_by_label("Make Rook.md a separate entry")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("Rook copy.md and Rook.md share one ID.")
+                .query_all_by_label("These two files claim to be the same entry.")
                 .count(),
             1
         );
     }
 
     #[test]
-    fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
+    fn iter_2_b_changed_row_keeps_base_and_full_hand_change_link() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
@@ -4495,14 +4628,9 @@ mod tests {
                 let word = "Changed · 3 to add by hand";
                 for width in [280.0, 320.0, 356.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
-                    assert!(fitted.ends_with('…'), "{fitted}");
+                    assert!(fitted.contains("as Ember Cultist"), "{fitted}");
+                    assert!(!fitted.contains("Ashen Marches"), "{fitted}");
                     assert!(!fitted.contains(word));
-                    let shown = fitted.trim_end_matches(" …").trim_end_matches('…');
-                    let mut previous = 0;
-                    for part in shown.split(" · ").filter(|part| !part.is_empty()) {
-                        let at = detail[previous..].find(part).unwrap(); previous += at + part.len();
-                    }
-                    if width == 356.0 { assert!(fitted.contains("AC 15"), "{fitted}"); }
                     let font = Type::Small.font(ui);
                     let used = design::number_width(ui, &fitted, &font)
                         + design::number_width(ui, word, &font)
@@ -4817,6 +4945,43 @@ mod tests {
             reopened.setup.roster[0].overrides,
             draft.setup.roster[0].overrides
         );
+    }
+
+    #[test]
+    fn iter2_d_duplicate_npc_keeps_its_name_classification() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let stat = creature(dir.path(), "Guard", false);
+        let text = splat::content::formats::convert("Fixture.md", &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n---\n",
+            Uuid::new_v4()
+        )).unwrap();
+        write_note(dir.path(), "Rook.md", None, &text).unwrap();
+        let overrides = yaml("{name: Rook Ambry}").as_mapping().unwrap().clone();
+        for copies in 0..=2 {
+            if copies > 0 {
+                fs::write(dir.path().join(format!("Rook copy {copies}.md")), &text).unwrap();
+            }
+            let snapshot = Snapshot::load(&active, &[]).unwrap();
+            let guard = &snapshot.catalogue.entries[&stat].entry;
+            assert_eq!(
+                snapshot.npc_name_for(guard, &overrides).as_deref(),
+                Some("Rook Ambry"),
+                "copy count: {copies}"
+            );
+            let other_name = yaml("{name: Someone else}").as_mapping().unwrap().clone();
+            assert_eq!(snapshot.npc_name_for(guard, &other_name), None);
+            let other_stat = snapshot
+                .catalogue
+                .entries
+                .values()
+                .find(|item| item.entry.kind == "creature" && item.entry.id != stat)
+                .unwrap();
+            assert_eq!(snapshot.npc_name_for(&other_stat.entry, &overrides), None);
+            if copies > 0 {
+                assert!(!snapshot.catalogue.duplicate_world.is_empty());
+            }
+        }
     }
 
     #[test]

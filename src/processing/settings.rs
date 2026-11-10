@@ -385,7 +385,7 @@ impl ProcessingSettings {
                     .split('/')
                     .next()
                     .filter(|s| !s.is_empty())
-                    .unwrap_or("service")
+                    .unwrap_or("this service")
             }
         }
         let owner = service_name(saved_for);
@@ -394,12 +394,12 @@ impl ProcessingSettings {
             KeySlot::Llm => &self.config.llm_url,
         });
         let warning = format!(
-            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for this service."
+            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for it."
         );
         let slot_word = if slot == KeySlot::Speech {
             "speech"
         } else {
-            "LLM"
+            "transcript and summary"
         };
         let remove = format!("Remove {slot_word} key ({owner})");
         let remove_name = format!("{remove}: {label}");
@@ -428,11 +428,14 @@ impl ProcessingSettings {
                         .password(true)
                         .desired_width(width)
                         .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(if saved && fits {
-                            "Paste a new key to replace it"
-                        } else {
-                            "Paste the key"
-                        }),
+                        .hint_text(design::placeholder(
+                            ui,
+                            if saved && fits {
+                                "Paste a new key to replace it"
+                            } else {
+                                "Paste the key"
+                            },
+                        )),
                 );
                 design::named(ui, &response, label);
                 if focus {
