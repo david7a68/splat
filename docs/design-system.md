@@ -126,9 +126,10 @@ header stays at the reader’s top edge until the table leaves view. Ordinary wh
 the note. The ergonomics check permits side clipping only where a real horizontal scroll bar can reveal the
 text; it still rejects clipping in ordinary readers and text cut to an ellipsis.
 
-A column's drag handle is the same kind of chrome: 10 px wide and as tall as the column. Tab steps over it
-too. It has no keyboard control. A column keeps a usable width without a drag. At the table, the rail uses its
-natural width; a wider desk width stays saved.
+A column's drag handle stays egui chrome: 10 px wide and as tall as the column. Tab gives it focus, shown
+by an accent line. Left and Right move its edge by `L`. Home restores its natural width, which follows the
+window again. The chosen width is saved after a drag or key press. Each handle has an accessible name and
+key help. At the table, the rail uses its natural width; a wider desk width stays saved.
 
 ## Widgets
 
@@ -145,7 +146,7 @@ eye during long sessions.
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name |
-| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits |
+| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows; `quiet_section` for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and hairline for Markdown tables and sheets; no stripes; height follows text |
@@ -161,7 +162,7 @@ eye during long sessions.
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge: Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
 | Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
-| Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
+| Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
@@ -202,6 +203,10 @@ full path.
 
 ## Keeping a draft
 
+Conversion and draft comparisons align unchanged lines before drawing. Blank rows mark actual additions
+and deletions. Highlights and line counts use these aligned rows. Adjacent changed rows form one group.
+`Next difference` moves to the start of the next group, wraps to the first, and stays hidden for one group.
+
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
 discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library uses
 its reserved reason line, aligned with the editor's left edge. Keeping a draft in the close dialog restores
@@ -219,8 +224,7 @@ Show draft and disk text side by side in Write's styled source face. Hide the pl
 body, with choices above the comparison. Library uses its editor's monospace face and line height. Text wraps
 at word boundaries. Selected fill and a line mark show differences. Open at the first difference with two
 whole context lines above it. Show `N lines differ` and the nearest heading beside that count, such as `Under
-the heading “Recovery”`; let the sentence wrap. Adjacent differing lines form one change. Show `Next
-difference` only for separate changes. Missing rows stay blank with a muted hatch and the accessible name `No
+the heading “Recovery”`; let the sentence wrap. Missing rows stay blank with a muted hatch and the accessible name `No
 line`.
 
 ## The Reader
@@ -380,9 +384,10 @@ Convert files groups files and its picker by owner. Initially only the campaign 
 packages start unchecked but can be selected; warn that their converter overwrites these files on its
 next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
 words and skipped files. Omit the kinds line when it has no text. Short previews fit content; long
-previews use about 60% of window height. Source lines do not wrap. Mark changes, scroll both panes
-together and open at the first difference. Encounter and group conflict comparisons use disk layout and
-include outside properties and prose that Overwrite keeps.
+previews use about 60% of window height. Source lines do not wrap. Mark changes from aligned rows,
+scroll both panes together and open at the first difference. Use the same change-group navigation as
+draft comparisons. Encounter and group conflict comparisons use disk layout and include outside
+properties and prose that Overwrite keeps.
 
 Writes check their baseline. Keep skipped files and next steps visible; count changed and skipped files, with
 warning tone for any skip. Each skipped file offers Convert files… beside it. Keep `Undo convert` when

@@ -1572,6 +1572,10 @@ pub mod settings {
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
+        d.expect(COOKIE_FIELD);
+        assert!(!d.has("Connect…"));
+        d.expect_same("The wide layout already shows the cookie form. Connect opens that same form in the narrow layout.");
+        d.state("cookie-placeholder", Sizes::All);
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
@@ -3615,6 +3619,29 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
         the_session_tabs_fill_their_column(d);
+
+        // Keyboard proof follows the existing task-cost checks.
+        d.click(NAV_LIBRARY);
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize Library entries column"));
+        d.press(Key::Home);
+        d.state_prepared("keyboard-column-handle", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        let edge = entries_edge(d);
+        d.press(Key::ArrowRight);
+        assert!(near(entries_edge(d), edge + crate::design::L));
+        // A second press without tabbing back: the handle kept focus and keeps resizing.
+        d.press(Key::ArrowRight);
+        assert!(
+            near(entries_edge(d), edge + 2.0 * crate::design::L),
+            "the column handle lost focus after the first arrow key"
+        );
+        d.state_prepared("keyboard-column-width", Sizes::All, |d| {
+            assert!(d.tab_to("Resize Library entries column"));
+        });
+        d.press(Key::Home);
+        assert!(near(entries_edge(d), edge));
     }
 }
 

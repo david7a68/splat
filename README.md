@@ -2,14 +2,15 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-Form labels use sentence case. Reader headings appear only above visible content;
+Form labels use sentence case. Placeholders use faint body text. Reader headings appear only above visible content;
 Splat data stays out of the reading view. Dialogs keep red actions at the left and
 keep and commit actions at the right on one line.
 The sidebar has one flat level: **Run** (while a run is open), **Paused run** (one unfinished fight) or **Paused runs** (several unfinished fights), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
 opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
-change its width. The app keeps that width after a restart. Simulation is later work.
+change its width. Tab also focuses the edge: Left and Right move it by 16 px, and
+Home restores its natural width. The app keeps a chosen width after a restart. Simulation is later work.
 
 ## Development
 
@@ -113,6 +114,10 @@ The reader also accepts `Encounter` and `Event`, in any case, with or without a 
 Each save renumbers day headings. Separate edits in Splat and in Obsidian save together;
 changes to the same event require a choice. A flagged day names the file and line and
 provides `Edit in Obsidian` and `Show file`.
+
+Conversion and draft comparisons align unchanged lines. Their highlights and counts
+show actual changes. **Next difference** moves between separate change groups and
+stays hidden when there is only one group.
 
 Converted creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP

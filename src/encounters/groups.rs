@@ -2159,7 +2159,10 @@ fn group_fields(
             egui::TextEdit::multiline(&mut draft.notes)
                 .desired_rows(if open.is_some() { 2 } else { 4 })
                 .desired_width(ui.available_width() - design::M)
-                .hint_text("When they arrive, what they want. Markdown is fine."),
+                .hint_text(design::placeholder(
+                    ui,
+                    "When they arrive, what they want. Markdown is fine.",
+                )),
         );
         design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
     });

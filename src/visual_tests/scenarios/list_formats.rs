@@ -14,6 +14,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("BEFORE");
     d.expect("AFTER");
     d.state("timeline-conversion-preview", Sizes::All);
+    d.click("Next difference");
+    d.expect("## Day 1: The crossing");
+    d.state("timeline-next-change-group", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
 

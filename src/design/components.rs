@@ -1,5 +1,5 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
-use super::{icons, tokens::*};
+use super::{comparison::Comparison, icons, tokens::*};
 use eframe::egui::{
     self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Rect, Response, Sense, Stroke,
     StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
@@ -954,6 +954,11 @@ fn text_field_label(
     })
 }
 
+/// Placeholder text for any text field: `Body` size in the faint colour.
+pub fn placeholder(ui: &Ui, hint: &str) -> egui::RichText {
+    Type::Body.rich(ui, hint).color(colors().faint)
+}
+
 /// A short text field with a target of at least 26 px, and an accessible name.
 pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width: f32) -> Response {
     // The desired width excludes the margins.
@@ -962,7 +967,7 @@ pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width:
             .desired_width(width - 2.0 * S)
             .min_size(vec2(width, 26.0))
             .margin(vec2(S, 4.0))
-            .hint_text(Type::Small.rich(ui, hint).color(colors().faint)),
+            .hint_text(placeholder(ui, hint)),
     );
     named(ui, &response, name);
     response
@@ -1002,7 +1007,7 @@ pub fn number_field_with_id(
                 (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
             ))
             .font(Type::Numeral.font(ui))
-            .hint_text(Type::Small.rich(ui, hint).color(colors().faint)),
+            .hint_text(placeholder(ui, hint)),
     );
     text.retain(|c| c.is_ascii_digit() || c == '-');
     named(ui, &response, name);
@@ -2055,19 +2060,172 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
 }
 
 /// Consecutive differing lines are one destination for Next difference.
+#[cfg(test)]
 pub fn comparison_changes(draft: &str, disk: &str) -> (usize, Vec<usize>) {
-    let left: Vec<_> = draft.lines().collect();
-    let right: Vec<_> = disk.lines().collect();
-    let lines: Vec<_> = (0..left.len().max(right.len()))
-        .filter(|&line| left.get(line) != right.get(line))
-        .collect();
-    let starts = lines
+    let comparison = Comparison::new([draft, disk]);
+    (comparison.changed, comparison.groups)
+}
+
+#[test]
+fn iter3_comparisons_count_only_actual_insertions_and_deletions() {
+    for (left, right, expected) in [
+        ("one\nremoved\ntwo\nthree", "one\ntwo\nthree", (1, vec![1])),
+        ("one\ntwo\nthree", "added\none\ntwo\nthree", (1, vec![0])),
+        (
+            "one\nold\ntwo\nthree",
+            "one\nnew\nextra\ntwo\nthree",
+            (2, vec![1]),
+        ),
+        (
+            "same\nold\nsame\nlast",
+            "same\nsame\nnew\nlast",
+            (2, vec![1, 3]),
+        ),
+        ("", "added", (1, vec![0])),
+        ("one\ntwo", "one\ntwo", (0, vec![])),
+    ] {
+        assert_eq!(
+            comparison_changes(left, right),
+            expected,
+            "{left:?} vs {right:?}"
+        );
+    }
+}
+
+#[test]
+fn iter3_conversion_navigation_skips_whole_change_groups() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    for source in [true, false] {
+        for (before, after, groups) in [
+            ("old\nolder\nsame", "new\nnewer\nsame", vec![0]),
+            (
+                "old\nolder\nsame\nlast",
+                "new\nnewer\nsame\nend",
+                vec![0, 3],
+            ),
+        ] {
+            let state = std::cell::Cell::new(Id::NULL);
+            let installed = std::cell::Cell::new(false);
+            let mut harness = Harness::new(|ctx| {
+                if !installed.replace(true) {
+                    super::theme::install(ctx);
+                    ctx.request_repaint();
+                    return;
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if source {
+                        state.set(
+                            ui.make_persistent_id(("source_comparison", "test"))
+                                .with("line"),
+                        );
+                        source_comparison(ui, [before, after], "test");
+                    } else {
+                        state.set(ui.make_persistent_id(("draft_difference", "test")));
+                        grouped_draft_comparison(ui, before, after, "test", true);
+                    }
+                });
+            });
+            harness.run_steps(2);
+            if groups.len() == 1 {
+                assert!(harness.query_by_label("Next difference").is_none());
+            } else {
+                for expected in [3, 0, 3] {
+                    harness.get_by_label("Next difference").click();
+                    harness.run();
+                    assert_eq!(
+                        harness.ctx.data(|data| data.get_temp::<usize>(state.get())),
+                        Some(expected)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn iter3_unchanged_text_aligns_without_highlights_in_both_comparisons() {
+    for source in [true, false] {
+        for width in [600.0, 1500.0] {
+            let ctx = egui::Context::default();
+            super::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 300.0))),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let before = "old\nremoved\n# Rook\nA note for tonight.";
+                        let after = "new\n# Rook\nA note for tonight.";
+                        if source {
+                            source_comparison(ui, [before, after], "aligned");
+                        } else {
+                            draft_comparison(ui, before, after, "aligned");
+                        }
+                    });
+                },
+            );
+            for line in ["# Rook", "A note for tonight."] {
+                let text: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text() == line => Some(text),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(text.len(), 2);
+                assert_eq!(text[0].pos.y, text[1].pos.y);
+                for text in text {
+                    assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+                        egui::Shape::Rect(rect) if rect.fill == colors().selected && rect.rect.contains(text.visual_bounding_rect().center())
+                    )), "Unchanged text must not have a change highlight");
+                }
+            }
+            assert_eq!(
+                output
+                    .platform_output
+                    .accesskit_update
+                    .unwrap()
+                    .nodes
+                    .iter()
+                    .filter(|(_, node)| node.label() == Some("No line"))
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn iter3_text_input_placeholder_uses_body_and_faint() {
+    let ctx = egui::Context::default();
+    super::theme::install(&ctx);
+    let output = ctx.run(Default::default(), |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            text_input(
+                ui,
+                "Folder",
+                &mut String::new(),
+                "Choose a folder",
+                FORM_WIDTH,
+            );
+        });
+    });
+    let text = output
+        .shapes
         .iter()
-        .enumerate()
-        .filter(|(at, line)| *at == 0 || **line != lines[*at - 1] + 1)
-        .map(|(_, line)| *line)
-        .collect();
-    (lines.len(), starts)
+        .find_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if text.galley.text() == "Choose a folder" => Some(text),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        text.galley.job.sections[0].format.font_id.size,
+        Type::Body.size()
+    );
+    assert_eq!(text.galley.job.sections[0].format.color, colors().faint);
 }
 
 #[test]
@@ -2131,11 +2289,12 @@ fn grouped_comparison_shows_the_first_change_without_a_next_control() {
 }
 
 /// Keep the count and its heading in one sentence, on one baseline.
-fn comparison_summary(ui: &mut Ui, count: &str, lines: &[&str], line: usize) {
+fn comparison_summary(ui: &mut Ui, count: &str, lines: &[Option<&str>], line: usize) {
     let heading = lines
         .iter()
         .take(line + 1)
         .rev()
+        .flatten()
         .find(|line| line.trim_start().starts_with('#'));
     let words = heading.map_or_else(
         || count.to_owned(),
@@ -2167,144 +2326,7 @@ pub fn grouped_draft_comparison(
     } else {
         super::reader::prose_type(ui).line()
     };
-    let (count, changes) = comparison_changes(draft, disk);
-    if count == changes.len() {
-        draft_comparison_styled(ui, draft, disk, id, face, line_height);
-        return;
-    }
-    let left: Vec<_> = draft.lines().collect();
-    let right: Vec<_> = disk.lines().collect();
-    let (line_count, differences) = comparison_changes(draft, disk);
-    let state = ui.make_persistent_id(("grouped_difference", id));
-    let first = differences.first().copied().unwrap_or(0);
-    let current = ui.data(|data| data.get_temp::<usize>(state));
-    let size = ui.available_size();
-    let previous_size = ui.data(|data| data.get_temp::<egui::Vec2>(state.with("size")));
-    ui.data_mut(|data| data.insert_temp(state.with("size"), size));
-    let mut target =
-        (current.is_none() || previous_size != Some(size)).then_some(current.unwrap_or(first));
-    ui.horizontal_wrapped(|ui| {
-        let words = if differences.is_empty() {
-            "No lines differ".into()
-        } else {
-            super::count(line_count, "line differs", "lines differ")
-        };
-        comparison_summary(ui, &words, &left, target.or(current).unwrap_or(first));
-        if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
-            target = Some(
-                differences
-                    .iter()
-                    .copied()
-                    .find(|&line| line > current.unwrap_or(first))
-                    .unwrap_or(first),
-            );
-        }
-    });
-    if let Some(line) = target {
-        ui.data_mut(|data| data.insert_temp(state, line));
-    }
-    ui.columns(2, |columns| {
-        group_label(&mut columns[0], "Your draft");
-        group_label(&mut columns[1], "In the file now");
-    });
-    let height = ui.available_height();
-    let row_gap = ui.spacing().item_spacing.y;
-    ui.spacing_mut().item_spacing.y = 0.0;
-    // Set the offset before painting. A scroll request inside the body takes effect
-    // on a later frame and can inherit the old reader's position on opening.
-    let column_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-    let text_width = column_width - XS - ui.spacing().item_spacing.x;
-    let heights: Vec<f32> = (0..left.len().max(right.len()))
-        .map(|line| {
-            [&left, &right]
-                .into_iter()
-                .map(|lines| {
-                    ui.fonts_mut(|fonts| {
-                        fonts.layout(
-                            lines.get(line).copied().unwrap_or("").to_owned(),
-                            face.clone(),
-                            colors().text,
-                            text_width,
-                        )
-                    })
-                    .size()
-                    .y
-                    .max(line_height)
-                    .ceil()
-                })
-                .fold(0.0, f32::max)
-                + ui.spacing().item_spacing.y
-        })
-        .collect();
-    let padding = if face.family != egui::FontFamily::Monospace {
-        (height - line_height * 3.0).max(0.0)
-    } else {
-        // A whole row lets the clamped offset keep the final line fully in view.
-        line_height
-    };
-    let mut scroll = egui::ScrollArea::vertical().id_salt(state);
-    if let Some(line) = target {
-        let mut scroll_heights = heights.clone();
-        scroll_heights.push(padding);
-        scroll = scroll.vertical_scroll_offset(comparison_offset(&scroll_heights, line, height));
-    }
-    scroll.auto_shrink([false, false]).show(ui, |ui| {
-        for (line, &row_height) in heights.iter().enumerate() {
-            let differs = left.get(line) != right.get(line);
-            ui.columns(2, |columns| {
-                for (at, lines) in [&left, &right].into_iter().enumerate() {
-                    egui::Frame::new()
-                        .fill(if differs {
-                            colors().selected
-                        } else {
-                            colors().page
-                        })
-                        .show(&mut columns[at], |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.set_min_height(row_height - ui.spacing().item_spacing.y);
-                            if lines.get(line).is_none() {
-                                let (rect, _) = ui.allocate_exact_size(
-                                    vec2(
-                                        ui.available_width(),
-                                        row_height - ui.spacing().item_spacing.y,
-                                    ),
-                                    Sense::hover(),
-                                );
-                                comparison_missing_row(ui, rect);
-                                return;
-                            }
-                            ui.horizontal_top(|ui| {
-                                let (mark, _) = ui.allocate_exact_size(
-                                    egui::vec2(XS, line_height),
-                                    egui::Sense::hover(),
-                                );
-                                if differs {
-                                    ui.painter().vline(
-                                        mark.center().x,
-                                        mark.y_range(),
-                                        egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
-                                    );
-                                }
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(lines.get(line).copied().unwrap_or(""))
-                                            .font(face.clone())
-                                            .color(if lines.get(line).is_some() {
-                                                colors().text
-                                            } else {
-                                                colors().muted
-                                            }),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                        });
-                }
-            });
-        }
-        ui.add_space(padding);
-    });
-    ui.spacing_mut().item_spacing.y = row_gap;
+    draft_comparison_styled(ui, draft, disk, id, face, line_height);
 }
 
 pub fn folder_group_heading(ui: &mut Ui, path: &str, count: usize) {
@@ -2339,15 +2361,13 @@ pub fn draft_comparison_styled(
 
 /// Two source panes share their scroll position. Source lines never wrap.
 pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash) {
-    let lines = [
-        text[0].lines().collect::<Vec<_>>(),
-        text[1].lines().collect::<Vec<_>>(),
-    ];
-    let count = lines[0].len().max(lines[1].len());
-    let differences: Vec<_> = (0..count)
-        .filter(|&at| lines[0].get(at) != lines[1].get(at))
-        .collect();
     let state = ui.make_persistent_id(("source_comparison", id));
+    let Comparison {
+        columns: lines,
+        changed,
+        groups: differences,
+    } = Comparison::cached(ui.ctx(), state.with("layout"), text);
+    let count = lines[0].len();
     let previous = ui.data(|data| data.get_temp::<egui::Vec2>(state));
     let mut offset = previous.unwrap_or_default();
     let mut target = previous
@@ -2359,10 +2379,7 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
     ui.horizontal(|ui| {
         ui.label(
             Type::Small
-                .rich(
-                    ui,
-                    super::count(differences.len(), "line differs", "lines differ"),
-                )
+                .rich(ui, super::count(changed, "line differs", "lines differ"))
                 .color(colors().muted),
         );
         if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
@@ -2415,8 +2432,8 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
                             .show(ui, |ui| {
                                 ui.set_min_width(min_width);
                                 ui.set_min_height(line_height);
-                                if let Some(line) = lines[side].get(at) {
-                                    ui.add(egui::Label::new(Type::Mono.rich(ui, *line)).extend());
+                                if let Some(line) = lines[side][at] {
+                                    ui.add(egui::Label::new(Type::Mono.rich(ui, line)).extend());
                                 } else {
                                     let (rect, _) = ui.allocate_exact_size(
                                         vec2(min_width, line_height),
@@ -2489,13 +2506,12 @@ pub fn draft_comparison_labeled(
     face: egui::FontId,
     line_height: f32,
 ) {
-    let [draft, disk] = text;
-    let left: Vec<_> = draft.lines().collect();
-    let right: Vec<_> = disk.lines().collect();
-    let differences: Vec<_> = (0..left.len().max(right.len()))
-        .filter(|&line| left.get(line) != right.get(line))
-        .collect();
     let state = ui.make_persistent_id(("draft_difference", id));
+    let Comparison {
+        columns: [left, right],
+        changed,
+        groups: differences,
+    } = Comparison::cached(ui.ctx(), state.with("layout"), text);
     let first = differences.first().copied().unwrap_or(0);
     let current = ui.data(|data| data.get_temp::<usize>(state));
     let size = ui.available_size();
@@ -2507,7 +2523,7 @@ pub fn draft_comparison_labeled(
         let words = if differences.is_empty() {
             "No lines differ".into()
         } else {
-            super::count(differences.len(), "line differs", "lines differ")
+            super::count(changed, "line differs", "lines differ")
         };
         comparison_summary(ui, &words, &left, target.or(current).unwrap_or(first));
         if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
@@ -2541,7 +2557,7 @@ pub fn draft_comparison_labeled(
                 .map(|lines| {
                     ui.fonts_mut(|fonts| {
                         fonts.layout(
-                            lines.get(line).copied().unwrap_or("").to_owned(),
+                            lines.get(line).copied().flatten().unwrap_or("").to_owned(),
                             face.clone(),
                             colors().text,
                             text_width,
@@ -2608,14 +2624,14 @@ pub fn draft_comparison_labeled(
                             .max_rect(text_rect)
                             .layout(Layout::top_down(Align::Min)),
                     );
-                    if lines.get(line).is_none() {
+                    if lines.get(line).is_none_or(Option::is_none) {
                         comparison_missing_row(&mut cell, text_rect);
                         continue;
                     }
                     let color = colors().text;
                     let galley = cell.fonts_mut(|fonts| {
                         fonts.layout(
-                            lines.get(line).copied().unwrap_or("").to_owned(),
+                            lines.get(line).copied().flatten().unwrap_or("").to_owned(),
                             face.clone(),
                             color,
                             text_rect.width(),

@@ -428,11 +428,14 @@ impl ProcessingSettings {
                         .password(true)
                         .desired_width(width)
                         .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(if saved && fits {
-                            "Paste a new key to replace it"
-                        } else {
-                            "Paste the key"
-                        }),
+                        .hint_text(design::placeholder(
+                            ui,
+                            if saved && fits {
+                                "Paste a new key to replace it"
+                            } else {
+                                "Paste the key"
+                            },
+                        )),
                 );
                 design::named(ui, &response, label);
                 if focus {
