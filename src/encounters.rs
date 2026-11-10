@@ -71,7 +71,7 @@ mod disk;
 mod groups;
 mod history;
 use groups::GroupDraft;
-use history::Template;
+pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Slot {

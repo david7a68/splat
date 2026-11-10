@@ -101,16 +101,31 @@ pub struct Plan<'a> {
     pub open_encounter: Option<&'a str>,
 }
 
-/// Legacy runs have no source ID. Encounters matches those by the saved name.
+/// Source-ID matches take priority. Legacy names must identify one planned encounter.
 fn planned_saved_run<'a>(
     fight: &'a PlanFight,
+    fights: &[PlanFight],
     runs: &'a [crate::encounter_run::SavedRunInfo],
 ) -> Option<&'a crate::encounter_run::SavedRunInfo> {
     fight.saved.as_ref().or_else(|| {
+        let mut named = fights.iter().filter(|other| other.name == fight.name);
+        named.next()?;
+        if named.next().is_some() {
+            return None;
+        }
+        // One row descriptor, not a rebuilt catalogue. The shared helper owns saved-name
+        // suffix handling; no source ID is inferred for a legacy run.
+        let templates = [crate::encounters::Template {
+            path: String::new(),
+            id: Uuid::nil(),
+            name: fight.name.clone(),
+            summary: None,
+            repeatable: false,
+        }];
         runs.iter().find(|run| {
             run.standing == crate::encounter_run::Standing::Unfinished
                 && run.source.is_none()
-                && run.encounter == fight.name
+                && crate::encounters::template_of(run, &templates).is_some()
         })
     })
 }
@@ -1227,6 +1242,22 @@ impl Sessions {
         })
     }
 
+    fn recording_recovery_row(&self) -> Option<usize> {
+        self.recordings.iter().position(|recording| {
+            let stalled = self.live.as_ref().is_some_and(|live| {
+                live.recorder.path() == recording.path
+                    && matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+            });
+            stalled
+                || (self.live.is_none()
+                    && self.job.is_none()
+                    && recording
+                        .status
+                        .as_deref()
+                        .is_some_and(|words| words.starts_with("Stopped by itself:")))
+        })
+    }
+
     /// One enabled recovery action owns primary across the composed screen.
     fn banner_primary_owner(&self, settings: &ProcessingSettings, run_open: bool) -> Option<usize> {
         if run_open || self.confirm_record {
@@ -1247,6 +1278,13 @@ impl Sessions {
                         || (self.live.is_none() && self.job.is_none()))
             })
             .or_else(|| {
+                if self
+                    .selected
+                    .is_some_and(|session| self.recording_row_here(session))
+                    && self.recording_recovery_row().is_some()
+                {
+                    return None;
+                }
                 self.alerts.iter().enumerate().find(|(_, alert)| {
                     visible(alert)
                         && alert.retry.as_ref().is_some_and(|path| path.exists())
@@ -4128,7 +4166,7 @@ impl Sessions {
                     self.removed_fight_message(ui, session, position);
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
-                    let saved = planned_saved_run(fight, plan.saved_runs);
+                    let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
                     ui.push_id((&fight.path, position), |ui| {
                         let row_widths = if running {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
@@ -4294,7 +4332,7 @@ impl Sessions {
                             planned
                                 .iter()
                                 .position(|fight| {
-                                    planned_saved_run(fight, plan.saved_runs)
+                                    planned_saved_run(fight, plan.fights, plan.saved_runs)
                                         .is_some_and(|run| run.id == saved.id)
                                 })
                                 .map(|at| event_count + at)
@@ -5593,22 +5631,7 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                let recovery = recordings.iter().position(|recording| {
-                    let stalled = self.live.as_ref().is_some_and(|live| {
-                        live.recorder.path() == recording.path
-                            && matches!(
-                                live.recorder.health(),
-                                Health::Stalled | Health::Stopped(_)
-                            )
-                    });
-                    stalled
-                        || (self.live.is_none()
-                            && self.job.is_none()
-                            && recording
-                                .status
-                                .as_deref()
-                                .is_some_and(|words| words.starts_with("Stopped by itself:")))
-                });
+                let recovery = self.recording_recovery_row();
                 let destination = recordings.iter().position(|recording| {
                     !recording.summary
                         && recording.path.exists()
@@ -6902,6 +6925,68 @@ mod tests {
         assert!(sessions.not_being_played().is_none());
         sessions.selected = None;
         assert!(sessions.not_being_played().is_none());
+    }
+
+    fn legacy_plan_run(name: &str) -> crate::encounter_run::SavedRunInfo {
+        crate::encounter_run::SavedRunInfo {
+            path: PathBuf::from("legacy.json"),
+            id: Some(Uuid::new_v4()),
+            source: None,
+            encounter: name.into(),
+            label: "Round 2".into(),
+            standing: crate::encounter_run::Standing::Unfinished,
+            saved_at: None,
+            unsent: vec![],
+        }
+    }
+
+    fn planned_fight(name: &str, path: &str) -> PlanFight {
+        PlanFight {
+            saved: None,
+            name: name.into(),
+            path: path.into(),
+            summary: String::new(),
+        }
+    }
+
+    #[test]
+    fn iter9_c2_legacy_recovery_copy_matches_the_unique_planned_fight() {
+        let fights = [planned_fight("Bridge Ambush", "Bridge.md")];
+        let mut runs = [legacy_plan_run("Bridge Ambush · saved 03:00:00 (2)")];
+        assert_eq!(
+            planned_saved_run(&fights[0], &fights, &runs).and_then(|run| run.id),
+            runs[0].id,
+            "FT-1 case A: a legacy recovery copy resumes its unique planned encounter"
+        );
+        for standing in [
+            crate::encounter_run::Standing::Ended,
+            crate::encounter_run::Standing::Unreadable,
+        ] {
+            runs[0].standing = standing;
+            assert!(planned_saved_run(&fights[0], &fights, &runs).is_none());
+        }
+    }
+
+    #[test]
+    fn iter9_c2_legacy_run_does_not_guess_between_equal_planned_names() {
+        let fights = [
+            planned_fight("New encounter", "First.md"),
+            planned_fight("New encounter", "Second.md"),
+        ];
+        let runs = [legacy_plan_run("New encounter")];
+        for fight in &fights {
+            assert!(
+                planned_saved_run(fight, &fights, &runs).is_none(),
+                "FT-1 case B: neither equal-named plan row can claim the legacy run"
+            );
+        }
+        let mut sourced = planned_fight("New encounter", "First.md");
+        sourced.saved = Some(runs[0].clone());
+        assert_eq!(
+            planned_saved_run(&sourced, &fights, &runs).and_then(|run| run.id),
+            runs[0].id,
+            "An existing source-ID match still takes priority"
+        );
     }
 
     #[test]

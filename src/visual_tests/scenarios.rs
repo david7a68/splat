@@ -6720,6 +6720,42 @@ pub mod session_recording {
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
+        let original_recordings: Vec<_> = crate::sessions::list_recordings(&folder, second)
+            .into_iter()
+            .map(|recording| recording.path)
+            .collect();
+        // Two faults at once: A can retry processing, while B needs recording recovery.
+        d.click("Record this session");
+        d.click("Start recording");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("microphone stopped".to_owned()));
+        d.settle();
+        d.state_prepared("failed-processing-and-stopped-recording", Sizes::All, |d| {
+            d.expect("Processing Session 1: Failed processing failed");
+            d.expect("microphone stopped");
+            assert!(!d.app_mut().encounters.has_run());
+            assert!(d.in_view("Continue processing") && !d.is_disabled("Continue processing"));
+            check_one_primary(d, "Record again", "iter-9-C2-ST1-two-alerts");
+            check_processing_action(d, "Process:", false);
+        });
+        assert!(d.in_view("Record again"));
+        d.click("Record again");
+        d.expect("Stop recording");
+        d.click("Stop recording");
+        d.expect("Processing Session 1: Failed processing failed");
+        // Restore B's original plain recording for the existing blocked-retry checks.
+        for recording in crate::sessions::list_recordings(&folder, second) {
+            if !original_recordings.contains(&recording.path) {
+                crate::sessions::delete_recording(&recording.path).unwrap();
+            }
+        }
+        d.app_mut().sessions.open(first);
+        d.app_mut().sessions.open(second);
+        d.settle();
+        d.click_starting("Recordings");
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let folder = crate::sessions::folder(&campaign).unwrap();
         let failed = crate::sessions::list_recordings(&folder, first)
             .remove(0)
             .path;
@@ -6919,6 +6955,13 @@ pub mod session_recording {
             })
             .collect();
         assert_eq!(rows.len(), 1, "The processed session row is visible");
+        let lines = d.painted_lines_in(rows[0].rect);
+        assert!(!lines.is_empty(), "The processed row has laid-out text");
+        d.observe(
+            "iter-9-C2-FT4-lines",
+            lines.iter().all(|line| !line.trim_start().starts_with('·')),
+            format!("No laid-out session row line starts with a separator: {lines:?}"),
+        );
         d.observe(
             "iter-9-C-FT4",
             !rows[0].name.contains("2026-01-01")
@@ -9101,7 +9144,15 @@ pub mod session_plan {
         assert!(d.in_view(&format!("Resume: {FIRST}")));
         d.click(&format!("Resume: {FIRST}"));
         d.expect(NEXT_TURN);
-        assert!(d.app_mut().encounters.run().is_some());
+        assert_eq!(
+            d.app_mut()
+                .encounters
+                .run()
+                .and_then(|run| run.live_info())
+                .and_then(|run| run.id),
+            paused.id,
+            "iter-9-C2-FT1-resume-id: Resume opens the paused run, not a new run"
+        );
         close_run(d);
         d.click(NAV_SESSIONS);
         show_plan(d);

@@ -870,8 +870,11 @@ text's inner edge.
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
 is not a planned note link.
-Find a timeline row’s saved run by its run ID among all unfinished runs. For a planned encounter, use its saved source ID; a legacy run without a source ID matches the encounter name, as in Encounters. Delete the saved run stays in the menu;
-Start a new run is available when a planned encounter supplies its source. Open fights use a status link
+Find a timeline row’s saved run by its run ID among all unfinished runs. For a planned encounter, use its
+saved source ID. For a legacy run without a source ID, use the Encounters matching rule: remove the
+` · saved …` suffix and require exactly one encounter with that name. The plan also requires exactly one
+planned fight with that name. Delete the saved run stays in the menu. Start a new run is available for
+planned encounters with a saved run, including legacy runs without a source ID. Open fights use a status link
 while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
 A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap to two lines, then shorten
@@ -998,8 +1001,9 @@ Errors and setup help call the chosen text service the transcript and summary se
 Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Process and
 Continue processing are primary when no open run owns Next turn and no other primary action is in view.
 Only the first recording that needs processing owns that primary action; later rows use secondary actions.
-An enabled recovery action in a row or bottom banner takes priority over processing. A blocked banner action
-does not take primary from an enabled row.
+An enabled recovery action in a row or bottom banner takes priority over processing. A visible row's
+recording recovery also takes priority over a processing retry in another session's banner. A blocked
+banner action does not take primary from an enabled row.
 While recording consent is open, Start recording owns primary.
 They are secondary while a run is open. An unresolved recording recovery keeps Choose an input or Record
 again primary. Put destination below the first enabled Process or Continue processing only, in Small muted

@@ -1005,6 +1005,21 @@ impl<'a> Driver<'a> {
         out.join(" ")
     }
 
+    /// Visible laid-out lines inside an AccessKit control's pixel bounds.
+    pub fn painted_lines_in(&self, bounds: egui::Rect) -> Vec<String> {
+        let bounds = bounds * (1.0 / self.harness.ctx.pixels_per_point());
+        let mut lines = Vec::new();
+        self.each_painted_text(|text, clip| {
+            for row in &text.galley.rows {
+                let rect = row.rect().translate(text.pos.to_vec2());
+                if bounds.contains(rect.center()) && clip.intersects(rect) {
+                    lines.push(row.glyphs.iter().map(|glyph| glyph.chr).collect());
+                }
+            }
+        });
+        lines
+    }
+
     /// The first source line must fit inside the editor's visible clip.
     pub fn first_source_line_visible(&self, prefix: &str) -> bool {
         let mut visible = false;
