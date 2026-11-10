@@ -1041,7 +1041,7 @@ pub mod party {
             .simulate(crate::settings::Account::Connected);
         d.settle();
         d.expect(FORCE_READ);
-        d.state("copy-has-local-edits", Sizes::Default);
+        d.state("copy-has-local-edits", Sizes::All);
         d.click(FORCE_READ);
         d.settle();
         d.expect(REPLACED);
@@ -2815,7 +2815,7 @@ pub mod run_sync_conflict {
         d.click(BACK_TO_RUN);
         d.begin_task();
 
-        d.click_containing(SYNCED);
+        d.click_row(SYNCED);
         d.row_of(USE_REMOTE);
         d.expect(CONFLICT_TEXT);
         d.state("conflict-panel", Sizes::All);
@@ -2825,7 +2825,7 @@ pub mod run_sync_conflict {
             "The conflict panel names the conflict, and its buttons name the values",
         );
         d.click(USE_REMOTE);
-        d.state("conflict-resolved", Sizes::Default);
+        d.state("conflict-resolved", Sizes::All);
         d.goal_within("T3.2", "resolve a conflict", 2);
         let resolved = d
             .row_node(SYNCED)
@@ -3706,6 +3706,13 @@ pub mod run_edge_states {
             "The crowded row keeps one condition and a count for the long effect",
         );
         d.goal("record a long effect");
+        d.begin_task();
+        d.click("Concentrating");
+        d.expect(&format!("Undo: start concentration for {TARGET}"));
+        d.state("start-concentration-undo", Sizes::All);
+        d.click("Concentrating");
+        d.expect(&format!("Undo: stop concentration for {TARGET}"));
+        d.state("stop-concentration-undo", Sizes::All);
         d.click("Sheet");
         d.click("Read all conditions");
         d.observe(
@@ -3862,7 +3869,7 @@ pub mod run_sync_states {
         ("Oren Thistlewick", SyncState::ReadOnly, "Sync read-only"),
         ("Sable Harrowgate", SyncState::Error, "Sync error"),
     ];
-    /// The first read shows after `Sync party`, and "off" is a row with no word at all.
+    /// Linked rows keep their word during the first read and while sync is off.
     const FIRST_READ: (&str, SyncState, &str) =
         ("Sable Harrowgate", SyncState::FirstRead, "Reading sheet…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
@@ -3918,6 +3925,26 @@ pub mod run_sync_states {
         d.settle();
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
+        d.begin_task();
+        d.app_mut()
+            .encounters
+            .simulate_sync_state("Sable Harrowgate", SyncState::Off);
+        d.settle();
+        d.observe_both(
+            "AT1",
+            "A linked row says Sync off; unlinked creatures keep no sync word",
+            |d| {
+                d.row_words("Sable Harrowgate").contains("Sync off")
+                    && !d.row_words(UNSYNCED_ROW).contains("Sync")
+            },
+        );
+        d.click_row("Sable Harrowgate");
+        d.state("linked-row-sync-off", Sizes::All);
+        d.click_row("Cinder Wolf 2");
+        d.app_mut()
+            .encounters
+            .simulate_sync_state("Sable Harrowgate", SyncState::Error);
+        d.settle();
 
         // At the default size, 8 rows have the room, and a two-line message takes none
         // of it from them. Each row's height, then the same places with the message up.
@@ -4146,7 +4173,7 @@ pub mod run_roster_conflict {
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
         d.click(STOP_SYNC);
-        d.click_containing(SYNCED);
+        d.click_row(SYNCED);
         d.click(USE_REMOTE);
         // Other rows still hold simulated changes, so closing says so first.
         d.click(CLOSE_RUN);
@@ -6583,10 +6610,10 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 50 + unknown")
+            d.visible_text("XP 50 for 1 that can join")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
-                && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
-            "A broken member has a readable name in both its summary and its fault",
+                && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
+            "The summary names the joining member; excluded members stay under Cannot join",
         );
         d.observe(
             "T13.1",
@@ -7117,6 +7144,11 @@ pub mod run_overrides {
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
+        d.observe_both(
+            "FT-10",
+            "A changed roster slot keeps its base creature",
+            |d| d.visible_text("as\u{a0}Ember\u{a0}Cultist"),
+        );
         d.observe_both(
             "iter-18-A-changes",
             "The whole hand-change link stays in view",

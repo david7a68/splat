@@ -988,6 +988,13 @@ impl Splat {
             self.lookup.close();
             self.page = Page::World;
         }
+        if let Some(id) = ctx
+            .data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("reveal_encounter_npc")))
+            && let Some(campaign) = self.campaigns.active_campaign()
+        {
+            self.world_page.reveal(campaign.id, id);
+            self.page = Page::World;
+        }
         if let Some(id) = self.library.open_world_npc.take()
             && let Some(campaign) = self.campaigns.active_campaign()
         {
