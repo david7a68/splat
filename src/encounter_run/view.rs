@@ -1268,19 +1268,21 @@ impl Run {
             .get(&index)
             .map(crate::combat_sync::CombatSync::state)
             .or_else(|| {
+                // A linked row with no sync says Sync off, unless sync starts again by itself:
+                // the party stays synced, or this row's sync waits for the connection.
                 self.state
                     .participants
                     .get(index)
                     .filter(|p| super::remote_identity(p).is_some())
+                    .filter(|p| !self.keep_party_synced && !self.sync_to_restore.contains(&p.key))
                     .map(|_| SyncState::Off)
             })
     }
 
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
-        self.sync_word(index).map(|state| match state {
-            SyncState::Stopped => SyncState::Off,
-            state => state,
-        })
+        // A lost connection stops sync, and it starts again by itself: not the DM's Sync off.
+        self.sync_word(index)
+            .filter(|state| *state != SyncState::Stopped)
     }
 
     /// Every row's layout at this width. Rows with only a name can give up height when
@@ -2363,13 +2365,10 @@ impl Run {
         let status = self.save_status_value();
         let base_word = status.word;
         let path = self.path().map(|path| path.display().to_string());
-        let word = self.copy_label.as_ref().map(|copy| {
-            format!(
-                "{} · copy {}",
-                status.word,
-                copy.strip_prefix("saved ").unwrap_or(copy)
-            )
-        });
+        let word = self
+            .copy_label
+            .as_ref()
+            .map(|copy| format!("{} · {copy}", status.word));
         let status = Status {
             word: word.as_deref().unwrap_or(status.word),
             ..status
@@ -3359,6 +3358,23 @@ impl Run {
                         self.wants_group_editor = Some(group.path.clone());
                     }
                 }
+            }
+            // Every fault gives one link; when all point to packages, the group editor
+            // stays one click away.
+            if problem
+                .lines()
+                .all(|fault| fault.contains("not in this campaign's packages"))
+                && design::status_link(
+                    ui,
+                    Status {
+                        icon: icons::EDIT,
+                        word: "Edit group",
+                        color: colors().accent,
+                    },
+                )
+                .clicked()
+            {
+                self.wants_group_editor = Some(group.path.clone());
             }
         }
 
@@ -6988,7 +7004,15 @@ mod tests {
         stopped.start();
         stopped.session_ended();
         run.syncs.insert(1, stopped);
-        assert_eq!(run.row_sync_word(1), Some(SyncState::Off));
+        // A lost connection stopped it; sync starts again by itself, so the row is not Sync off.
+        assert_eq!(run.row_sync_word(1), None);
+        // Rows that wait for the connection, or a party kept in sync, are not Sync off either.
+        run.syncs.clear();
+        run.sync_to_restore = vec![run.state.participants[2].key.clone()];
+        assert_eq!(run.row_sync_word(2), None);
+        assert_eq!(run.row_sync_word(3), Some(SyncState::Off));
+        run.keep_party_synced = true;
+        assert_eq!(run.row_sync_word(3), None);
     }
 
     #[test]

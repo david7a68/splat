@@ -28,6 +28,15 @@ use uuid::Uuid;
 /// The last sentence of a deleted-entry roster fault; it marks the message as a warning.
 const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
 
+/// `Copy N` from a run's list label, or `None` for the original run.
+fn run_copy_word(label: &str) -> Option<String> {
+    label
+        .split(" · ")
+        .next()
+        .filter(|word| word.starts_with("Copy "))
+        .map(str::to_owned)
+}
+
 fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<String, String> {
     let stem: String = name
         .trim()
@@ -1709,12 +1718,8 @@ impl Encounters {
                         == run.encounter.split(" · saved ").next()
                 })
         });
-        others.then(|| {
-            run.encounter
-                .split_once(" · ")
-                .map_or(run.encounter.as_str(), |(_, copy)| copy)
-                .to_owned()
-        })
+        // A recovery copy's label starts with `Copy N`; the original has none, so the two differ.
+        others.then(|| run_copy_word(&run.label)).flatten()
     }
     pub fn settings_unsaved(&self) -> bool {
         self.snapshot
@@ -4394,6 +4399,16 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn run_copy_word_names_copies_and_not_the_original() {
+        assert_eq!(
+            super::run_copy_word("Copy 2 · Closed last · Round 2 · Paused").as_deref(),
+            Some("Copy 2")
+        );
+        assert_eq!(super::run_copy_word("Round 2 · Paused"), None);
+        assert_eq!(super::run_copy_word("Copying · Round 1"), None);
+    }
+
     #[test]
     fn iter_2_b_npc_with_deleted_stat_block_stays_in_search_and_cannot_be_added() {
         use egui_kittest::kittest::{NodeT, Queryable};

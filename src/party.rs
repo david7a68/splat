@@ -656,14 +656,11 @@ fn storage_notice(
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         let actions_width = actions
             .iter()
+            // Measure each action as a bordered button: never narrower than it draws.
             .map(|word| {
-                if *word == "Replace with D&D Beyond sheet" {
-                    Action::secondary(word)
-                        .density(Density::Read)
-                        .natural_width(ui)
-                } else {
-                    design::number_width(ui, word, &Type::Body.font(ui))
-                }
+                Action::secondary(word)
+                    .density(Density::Read)
+                    .natural_width(ui)
             })
             .sum::<f32>()
             + design::L * actions.len().saturating_sub(1) as f32;
