@@ -7619,11 +7619,19 @@ mod tests {
 
     #[test]
     fn iter9_e_plain_manifest_named_readme_is_never_replaced() {
-        for filename in ["Package.md", "Module.md"] {
+        // A divider and a heading underline are prose, not front matter.
+        for (filename, readme) in [
+            (
+                "Package.md",
+                "A package description without front matter.\n",
+            ),
+            ("Module.md", "A package description without front matter.\n"),
+            ("Package.md", "Overview\n---\n\nNotes.\n\n---\n\nMore.\n"),
+            ("Module.md", "Notes.\r\n\r\n---\r\n\r\nMore.\r\n"),
+        ] {
             let temp = tempfile::tempdir().unwrap();
             let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
             fs::remove_file(module.path.join("Package.md")).unwrap();
-            let readme = "A package description without front matter.\n";
             let path = module.path.join(filename);
             fs::write(&path, readme).unwrap();
             let loaded = load(Some(&module)).unwrap();

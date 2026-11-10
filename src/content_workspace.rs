@@ -99,13 +99,18 @@ pub(crate) fn manifest_path_in(folder: &content::Folder, module: &Module) -> Str
         .into()
 }
 
-/// Plain prose belongs to the DM, even when its file has a manifest name.
+/// Plain prose belongs to the DM, even when its file has a manifest name. Front matter starts
+/// the file, as the content reader requires; a `---` divider or heading underline later in the
+/// prose does not make the file a manifest.
 fn plain_package_readme(path: &Path) -> bool {
     fs::read_to_string(path).is_ok_and(|text| {
+        let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+        let front_matter = text.starts_with("---\n") || text.trim_end() == "---";
         !text.trim().is_empty()
+            && !front_matter
             && !text
                 .lines()
-                .any(|line| line.trim() == "---" || line.trim_start().starts_with("splat_"))
+                .any(|line| line.trim_start().starts_with("splat_"))
     })
 }
 
