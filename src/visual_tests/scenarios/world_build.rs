@@ -2938,7 +2938,7 @@ const COPY_HEADING_WARNING: &str =
 
 /// The Library reader's title: the topmost painted text that is exactly `title`, below the
 /// `Read` tab and right of its edge, so the list row and the body heading do not count.
-fn reader_title(d: &Driver<'_>, title: &str) -> Option<egui::Rect> {
+pub(super) fn reader_title(d: &Driver<'_>, title: &str) -> Option<egui::Rect> {
     let read = d.place_of("Read")?;
     let mut found: Option<egui::Rect> = None;
     d.each_painted_text(|text, clip| {
