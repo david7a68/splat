@@ -288,6 +288,40 @@ pub fn run(d: &mut Driver<'_>) {
     }
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
+    // Two unread rows name one file: its name and actions show once.
+    let one_row = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let mut two_flagged = flagged_roster.clone();
+    let first = &splat::content::layout::Document::new(&flagged_roster)
+        .table(splat::content::list_formats::ROSTER)
+        .unwrap()
+        .rows[0][3];
+    two_flagged.replace_range(first.range.clone(), "HP lots");
+    fs::write(&roster_path, &two_flagged).unwrap();
+    d.app_mut()
+        .encounters
+        .run_mut()
+        .unwrap()
+        .guard_campaign(&campaign.path);
+    d.settle();
+    let warnings = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let show_file = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Show file")
+        .count();
+    d.observe(
+        "iter-5-B-FD8-two-rows",
+        one_row > 0 && warnings == 2 * one_row && show_file == 1,
+        format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
+    );
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 

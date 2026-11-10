@@ -4198,8 +4198,13 @@ impl Run {
         design::rule(ui);
         if let Some(path) = &self.roster_source {
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
-            for fault in &self.roster_faults {
+            for (index, fault) in self.roster_faults.iter().enumerate() {
                 let words = format!("{} · line {}: {}", fault.name, fault.line, fault.problem);
+                // One file names every unread row, so its name and actions show once.
+                if index > 0 {
+                    design::message(ui, Tone::Warning, &words);
+                    continue;
+                }
                 ui.scope(|ui| {
                     ui.spacing_mut().item_spacing.y = design::XS;
                     let gap = ui.spacing().item_spacing.x;
