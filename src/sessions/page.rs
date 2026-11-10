@@ -59,6 +59,7 @@ const PLAN_KINDS: [Kind; 5] = [
 ];
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
+const MISSING_INPUT_ERROR: &str = "no such device";
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -958,6 +959,22 @@ fn insert_at_caret(
     egui::TextEdit::store_state(ctx, id, state);
 }
 
+/// Session numbers can repeat after a missing note is saved as a new file.
+fn session_warning_names(open: &Note, destination: &Note) -> (String, String) {
+    let name = |note: &Note| {
+        if open.number == destination.number {
+            note.path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        } else {
+            format!("Session {}", note.number)
+        }
+    };
+    (name(open), name(destination))
+}
+
 /// A list row whose title wraps, because a session's title is often long.
 fn session_row(
     ui: &mut egui::Ui,
@@ -1174,6 +1191,36 @@ impl Sessions {
         book.poll(ctx);
     }
 
+    fn recording_row_here(&self, session: Uuid) -> bool {
+        self.on_page
+            && self.selected == Some(session)
+            && self.tab == Tab::Recordings
+            && self.view == View::Notes
+            && self.form.is_none()
+            && (self.list_beside || !self.list_only)
+            && self.reading.is_none()
+    }
+
+    fn stalled_elsewhere(&self) -> Option<&Live> {
+        self.live.as_ref().filter(|live| {
+            !self.recording_row_here(live.session)
+                && matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_))
+        })
+    }
+
+    fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
+        !run_open
+            && (self.stalled_elsewhere().is_some()
+                || self.alerts.iter().any(|alert| {
+                    !self.recording_row_here(alert.session)
+                        && (alert.retry.is_some()
+                            || (alert.can_record
+                                && (self.live.is_none()
+                                    || settings.input_missing()
+                                    || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR))))
+                }))
+    }
+
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
@@ -1184,34 +1231,20 @@ impl Sessions {
         book: &Book,
         run_open: bool,
     ) {
-        let mut stalled = self
-            .live
-            .as_ref()
-            .filter(|live| matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_)))
-            .map(|live| {
-                format!(
-                    "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
-                    live.label,
-                    spoken_length(live.recorder.seconds())
-                )
-            });
-        let row_here = |session| {
-            self.on_page
-                && self.selected == Some(session)
-                && self.tab == Tab::Recordings
-                && self.view == View::Notes
-                && self.form.is_none()
-                && (self.list_beside || !self.list_only)
-                && self.reading.is_none()
-        };
-        if self
-            .live
-            .as_ref()
-            .is_some_and(|live| row_here(live.session))
+        let banner_primary = self.banner_has_primary(settings, run_open);
+        let stalled = self.stalled_elsewhere().map(|live| {
+            format!(
+                "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
+                live.label,
+                spoken_length(live.recorder.seconds())
+            )
+        });
+        if stalled.is_none()
+            && self
+                .alerts
+                .iter()
+                .all(|alert| self.recording_row_here(alert.session))
         {
-            stalled = None;
-        }
-        if stalled.is_none() && self.alerts.iter().all(|alert| row_here(alert.session)) {
             return;
         }
         let mut retry = None;
@@ -1229,10 +1262,10 @@ impl Sessions {
                     let session = self.live.as_ref().map(|live| live.session);
                     design::message(ui, Tone::Error, words);
                     ui.horizontal(|ui| {
-                        if (if run_open {
-                            Action::secondary("Record again")
-                        } else {
+                        if (if banner_primary {
                             Action::primary("Record again")
+                        } else {
+                            Action::secondary("Record again")
                         })
                         .show(ui)
                         .clicked()
@@ -1251,15 +1284,13 @@ impl Sessions {
                     });
                 }
                 let mut dismiss = None;
-                for (index, alert) in self
-                    .alerts
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, alert)| !row_here(alert.session))
-                {
+                for (index, alert) in self.alerts.iter().enumerate() {
+                    if self.recording_row_here(alert.session) {
+                        continue;
+                    }
                     let missing_input = alert.can_record
                         && (settings.input_missing()
-                            || alert.words.to_lowercase().contains("no such device"));
+                            || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR));
                     let words = if alert.word == "Recording stopped" {
                         format!("{} {}", alert.words, recording_recovery(missing_input))
                     } else {
@@ -1268,10 +1299,10 @@ impl Sessions {
                     design::message(ui, Tone::Error, &words);
                     ui.horizontal_wrapped(|ui| {
                         if missing_input
-                            && (if run_open {
-                                Action::secondary("Choose an input")
-                            } else {
+                            && (if banner_primary {
                                 Action::primary("Choose an input")
+                            } else {
+                                Action::secondary("Choose an input")
                             })
                             .show(ui)
                             .clicked()
@@ -1279,10 +1310,10 @@ impl Sessions {
                             self.wants_recording_input = true;
                         }
                         if let Some(path) = &alert.retry
-                            && (if run_open {
-                                Action::secondary("Continue processing")
-                            } else {
+                            && (if banner_primary {
                                 Action::primary("Continue processing")
+                            } else {
+                                Action::secondary("Continue processing")
                             })
                             .blocked_if(
                                 self.job.is_some() || self.live.is_some(),
@@ -1297,10 +1328,10 @@ impl Sessions {
                             && self.live.is_none()
                             && (if missing_input {
                                 Action::quiet("Record again")
-                            } else if run_open {
-                                Action::secondary("Record again")
-                            } else {
+                            } else if banner_primary {
                                 Action::primary("Record again")
+                            } else {
+                                Action::secondary("Record again")
                             })
                             .show(ui)
                             .clicked()
@@ -1701,10 +1732,23 @@ impl Sessions {
             .notes
             .iter()
             .find(|note| Some(note.id) == self.selected)?;
-        Some(format!(
-            "Session {} is not the session being played. What you write and add goes here.",
-            note.number
-        ))
+        let played = self
+            .notes
+            .iter()
+            .find(|note| Some(note.id) == self.current());
+        Some(
+            if let Some(played) = played.filter(|played| played.number == note.number) {
+                let (open, played) = session_warning_names(note, played);
+                format!(
+                    "{open} is not the session being played. The session being played is {played}. What you write and add goes here."
+                )
+            } else {
+                format!(
+                    "Session {} is not the session being played. What you write and add goes here.",
+                    note.number
+                )
+            },
+        )
     }
 
     /// The DM chose where new events and runs go.
@@ -3089,6 +3133,10 @@ impl Sessions {
         ui.scope_builder(
             egui::UiBuilder::new().id(("session_editor_scope", self.selected, in_panel)),
             |ui| {
+                ui.set_max_width(
+                    ui.available_width()
+                        .min(design::READER_MEASURE + frame.total_margin().sum().x),
+                );
                 frame.show(ui, |ui| {
                     let visible_height = ui.available_height().max(design::XL);
                     let mut scroll = egui::ScrollArea::vertical().id_salt((
@@ -4507,6 +4555,7 @@ impl Sessions {
         recording: &Recording,
         settings: &ProcessingSettings,
         book: &Book,
+        primary: bool,
     ) {
         let c = colors();
         let live = self
@@ -4601,7 +4650,7 @@ impl Sessions {
         let missing_input = settings.input_missing()
             || stored
                 .as_ref()
-                .is_some_and(|words| words.to_lowercase().contains("no such device"));
+                .is_some_and(|words| words.to_lowercase().contains(MISSING_INPUT_ERROR));
         let (icon, word, color) = if live {
             self.recording_status()
                 .unwrap_or((icons::RECORD, "Recording", c.recording))
@@ -4728,7 +4777,7 @@ impl Sessions {
         let mut record_again = false;
         ui.horizontal_wrapped(|ui| {
             if stalled {
-                record_again = (if self.run_open {
+                record_again = (if self.run_open || !primary {
                     Action::secondary("Record again")
                 } else {
                     Action::primary("Record again")
@@ -4826,11 +4875,15 @@ impl Sessions {
                     "Process"
                 };
                 let destination = recording_destination(settings, recording);
-                let response = Action::secondary(label)
-                    .name(&format!("{label}: {}", recording.name))
-                    .density(Density::Read)
-                    .blocked(reason.as_deref())
-                    .show(ui);
+                let response = (if self.run_open || !primary || stalled {
+                    Action::secondary(label)
+                } else {
+                    Action::primary(label)
+                })
+                .name(&format!("{label}: {}", recording.name))
+                .density(Density::Read)
+                .blocked(reason.as_deref())
+                .show(ui);
                 ui.ctx().accesskit_node_builder(response.id, |node| {
                     node.set_description(reason.as_deref().unwrap_or(&destination))
                 });
@@ -4988,105 +5041,139 @@ impl Sessions {
                 )
                 .color(c.muted),
         );
-        let action = 120.0;
-        let widths = [ui.available_width() - action - design::XL, action];
         let mut read_at: Option<(String, crate::timeline::Marker, String)> = None;
         let days = timeline::day_numbers(&book.events);
-        for (index, marker) in recording.markers.iter().enumerate() {
-            let title = if marker.title.is_empty() {
-                marker.kind.word()
-            } else {
-                marker.title.as_str()
-            };
-            let key = marker.key(&recording.name);
-            let added = book.event_of_marker(&key).map(|event| event.id.clone());
-            let mut facts = vec![marker.kind.word()];
-            for fact in [&marker.duration, &marker.place] {
-                if !fact.is_empty() {
-                    facts.push(fact);
+        let rows: Vec<_> = recording
+            .markers
+            .iter()
+            .map(|marker| {
+                let title = if marker.title.is_empty() {
+                    marker.kind.word()
+                } else {
+                    marker.title.as_str()
+                };
+                let key = marker.key(&recording.name);
+                let added = book.event_of_marker(&key).map(|event| event.id.clone());
+                let mut facts = vec![marker.kind.word()];
+                for fact in [&marker.duration, &marker.place] {
+                    if !fact.is_empty() {
+                        facts.push(fact);
+                    }
                 }
-            }
-            design::table_row(ui, &widths, design::S, |ui, cell| {
-                if cell == 0 {
-                    ui.horizontal_top(|ui| {
-                        ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
-                        ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(Type::Body.rich(ui, title).color(c.text)).wrap(),
-                            );
-                            ui.horizontal_wrapped(|ui| {
-                                if !marker.at.is_empty()
-                                    && recording.marked
-                                    && design::link(ui, &marker.at)
-                                        .on_hover_text("Read the transcript here")
-                                        .clicked()
-                                {
-                                    read_at =
-                                        Some((marker.at.clone(), marker.clone(), key.clone()));
-                                }
-                                let mut facts = facts.join(" · ");
-                                if let Some(id) = &added {
-                                    let at = book.events.iter().position(|event| event.id == *id);
-                                    let before = at.and_then(|at| at.checked_sub(1));
-                                    facts.push_str(&before.map_or_else(
-                                        || " · First on the timeline".to_owned(),
-                                        |before| {
-                                            format!(
-                                                " · After {}",
-                                                book.events[before].label(days[before])
-                                            )
-                                        },
-                                    ));
-                                }
+                let mut facts = facts.join(" · ");
+                if let Some(id) = &added {
+                    let at = book.events.iter().position(|event| event.id == *id);
+                    let before = at.and_then(|at| at.checked_sub(1));
+                    facts.push_str(&before.map_or_else(
+                        || " · First on the timeline".to_owned(),
+                        |before| format!(" · After {}", book.events[before].label(days[before])),
+                    ));
+                }
+                (marker, title, key, added, facts)
+            })
+            .collect();
+        let measure = |text: &str, role: Type| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), role.font(ui), c.text)
+                .size()
+                .x
+        };
+        let action = measure(&format!("{} On the timeline", icons::OK), Type::Small)
+            .max(Action::secondary("Add").natural_width(ui));
+        let text = rows
+            .iter()
+            .map(|(marker, title, _, _, facts)| {
+                let time = if recording.marked && !marker.at.is_empty() {
+                    measure(&marker.at, Type::Body) + design::S
+                } else {
+                    0.0
+                };
+                measure(marker.kind.icon(), Type::Body)
+                    + design::S
+                    + measure(title, Type::Body).max(time + measure(facts, Type::Small))
+            })
+            .fold(0.0, f32::max)
+            .min(design::READER_MEASURE)
+            .min((ui.available_width() - action - design::L).max(0.0));
+        let widths = [text, action];
+        ui.scope(|ui| {
+            ui.set_width(text + design::L + action);
+            for (index, (marker, title, key, added, facts)) in rows.iter().enumerate() {
+                design::table_row(ui, &widths, design::L, |ui, cell| {
+                    ui.spacing_mut().item_spacing.x = design::S;
+                    if cell == 0 {
+                        ui.horizontal_top(|ui| {
+                            ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
+                            ui.vertical(|ui| {
                                 ui.add(
-                                    egui::Label::new(Type::Small.rich(ui, facts).color(c.muted))
+                                    egui::Label::new(Type::Body.rich(ui, *title).color(c.text))
                                         .wrap(),
                                 );
+                                ui.horizontal_wrapped(|ui| {
+                                    if !marker.at.is_empty()
+                                        && recording.marked
+                                        && design::link(ui, &marker.at)
+                                            .on_hover_text("Read the transcript here")
+                                            .clicked()
+                                    {
+                                        read_at = Some((
+                                            marker.at.clone(),
+                                            (*marker).clone(),
+                                            key.clone(),
+                                        ));
+                                    }
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, facts).color(c.muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
                             });
                         });
-                    });
-                } else {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                        if let Some(id) = &added {
-                            if design::status_link(
-                                ui,
-                                Status {
-                                    icon: icons::OK,
-                                    word: "On the timeline",
-                                    color: c.result.success,
-                                },
-                            )
-                            .clicked()
+                    } else {
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                            if let Some(id) = &added {
+                                if design::status_link(
+                                    ui,
+                                    Status {
+                                        icon: icons::OK,
+                                        word: "On the timeline",
+                                        color: c.result.success,
+                                    },
+                                )
+                                .clicked()
+                                {
+                                    self.wants_event = Some(id.clone());
+                                }
+                            } else if Action::secondary("Add")
+                                .name(&format!("Add to timeline: {title} ({index})"))
+                                .density(Density::Read)
+                                .blocked_if(
+                                    book.unreadable.is_some(),
+                                    "The timeline file must be repaired first.",
+                                )
+                                .show(ui)
+                                .clicked()
                             {
-                                self.wants_event = Some(id.clone());
+                                let id = book.add_marker(marker, key, session);
+                                book.save();
+                                self.recording_added = Some(id);
                             }
-                        } else if Action::secondary("Add")
-                            .name(&format!("Add to timeline: {title} ({index})"))
-                            .density(Density::Read)
-                            .blocked_if(
-                                book.unreadable.is_some(),
-                                "The timeline file must be repaired first.",
-                            )
-                            .show(ui)
-                            .clicked()
-                        {
-                            let id = book.add_marker(marker, &key, session);
-                            book.save();
-                            self.recording_added = Some(id);
-                        }
-                    });
-                }
-            });
-            if added.as_ref() == self.recording_added.as_ref()
-                && let Some(id) = &added
-            {
-                let words = format!("{title} added to the timeline.");
-                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                    book.undo_add(id);
-                    self.recording_added = None;
+                        });
+                    }
+                });
+                if added.as_ref() == self.recording_added.as_ref()
+                    && let Some(id) = &added
+                {
+                    let words = format!("{title} added to the timeline.");
+                    if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                        book.undo_add(id);
+                        self.recording_added = None;
+                    }
                 }
             }
-        }
+        });
         if let Some((at, marker, key)) = read_at {
             self.open_reading(recording, Made::Marked, Some(&at), Some((marker, key)));
         }
@@ -5370,6 +5457,7 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
+        let banner_primary = self.banner_has_primary(settings, self.run_open);
         let recordings = self.recordings.clone();
         if recordings.is_empty() {
             ui.add_space(design::M);
@@ -5403,12 +5491,19 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                for recording in &recordings {
+                let primary = recordings.iter().position(|recording| !recording.summary);
+                for (index, recording) in recordings.iter().enumerate() {
                     ui.add_space(design::S);
                     ui.scope_builder(
                         egui::UiBuilder::new().id(("recording_row", &recording.path)),
                         |ui| {
-                            self.recording_row(ui, recording, settings, book);
+                            self.recording_row(
+                                ui,
+                                recording,
+                                settings,
+                                book,
+                                primary == Some(index) && !self.confirm_record && !banner_primary,
+                            );
                         },
                     );
                     self.markers(ui, recording, book);
@@ -5644,24 +5739,29 @@ impl Sessions {
             } else {
                 self.current()
             };
-            if plan.group_open {
-                let number = self
+            if plan.group_open
+                && let Some(group) = self
                     .notes
                     .iter()
                     .find(|note| Some(note.id) == self.group_session)
-                    .map(|note| note.number);
-                if let Some(number) = number {
-                    words = format!(
-                        "Session {} is not the session being played. A group is being assembled in Session {number}.",
-                        note.number
-                    );
-                }
+            {
+                let (open, group) = session_warning_names(&note, group);
+                words = format!(
+                    "{open} is not the session being played. A group is being assembled in {group}."
+                );
             }
             let next = self
                 .notes
                 .iter()
                 .find(|note| Some(note.id) == current)
-                .map(|note| format!("Open Session {}", note.number));
+                .map(|destination| {
+                    if current == self.current() {
+                        "Return to the session being played".to_owned()
+                    } else {
+                        let (_, destination) = session_warning_names(&note, destination);
+                        format!("Open {destination}")
+                    }
+                });
             let mut open = false;
             if let Some(next) = next {
                 open = design::message_with_action(ui, Tone::Warning, &words, &next);
@@ -6623,6 +6723,43 @@ fn fixed_scope<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter8_c_st2_warning_names_duplicate_number_files_and_keeps_ordinary_numbers() {
+        let played = Note {
+            id: Uuid::new_v4(),
+            number: 1,
+            title: "The Bridge".into(),
+            date: "2026-01-01".into(),
+            path: PathBuf::from("Session 1 - The Bridge.md"),
+            also: Vec::new(),
+        };
+        let mut open = played.clone();
+        open.id = Uuid::new_v4();
+        open.path = PathBuf::from("Session 1 - The Bridge 2.md");
+        let mut sessions = Sessions {
+            notes: vec![played.clone(), open.clone()],
+            selected: Some(open.id),
+            events_to: Some(Some(played.id)),
+            ..Default::default()
+        };
+        assert_eq!(
+            sessions.not_being_played().as_deref(),
+            Some(
+                "Session 1 - The Bridge 2.md is not the session being played. The session being played is Session 1 - The Bridge.md. What you write and add goes here."
+            ),
+            "iter-8-C-ST2-files"
+        );
+        sessions.notes[1].number = 2;
+        assert_eq!(
+            sessions.not_being_played().as_deref(),
+            Some("Session 2 is not the session being played. What you write and add goes here.")
+        );
+        sessions.selected = Some(played.id);
+        assert!(sessions.not_being_played().is_none());
+        sessions.selected = None;
+        assert!(sessions.not_being_played().is_none());
+    }
 
     #[test]
     fn iter5_c_timeline_fight_resumes_by_run_id_without_a_planned_source() {
