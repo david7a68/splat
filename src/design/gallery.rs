@@ -361,7 +361,7 @@ pub fn components(ui: &mut egui::Ui) {
                 .density(Density::Read)
         })
         .collect(),
-        Some(1),
+        &[1],
     );
     let menu = Action::quiet("Group actions").show(ui);
     egui::Popup::menu(&menu).show(|ui| {

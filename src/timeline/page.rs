@@ -109,8 +109,14 @@ pub fn quick_add(
                 .blocked_if(blocked, "The timeline file must be repaired first.")
         })
         .collect();
-    let always_visible = kinds.iter().position(|kind| *kind == Kind::LongRest);
-    design::hanging_add_strip(ui, first, actions, always_visible).map(|index| {
+    // Fight and Long rest stay visible; the rarer kinds share More when space is short.
+    let always_visible: Vec<usize> = kinds
+        .iter()
+        .enumerate()
+        .filter(|(_, kind)| matches!(kind, Kind::Encounter | Kind::LongRest))
+        .map(|(index, _)| index)
+        .collect();
+    design::hanging_add_strip(ui, first, actions, &always_visible).map(|index| {
         let kind = kinds[index];
         if kind == Kind::LongRest {
             book.add_long_rest(session)

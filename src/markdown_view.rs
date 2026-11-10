@@ -367,7 +367,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         && source[range.end..].trim_start().starts_with('|');
                     if !(words.is_empty() || words.ends_with(['.', ':']) || table_caption)
                         && index.as_ref().is_some_and(|index| {
-                            matches!(index.resolve_link(words, from), crate::world::Go::Item(..))
+                            matches!(
+                                index.resolve_link(words, from),
+                                crate::world::Go::Item(..) | crate::world::Go::Many(_)
+                            )
                         })
                     {
                         for section in &mut job.sections {

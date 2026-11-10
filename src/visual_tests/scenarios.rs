@@ -5032,13 +5032,15 @@ pub mod session_notes {
         d.press(Key::Escape);
         d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
             d.press(Key::Escape);
+            // Long rest is a visible button, one click away, before More opens.
+            d.expect(ADD_LONG_REST);
             d.click("More Add actions");
             d.expect(ADD_SHORT_REST);
             d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
         d.begin_task();
-        d.click_add_event(ADD_LONG_REST);
+        d.click(ADD_LONG_REST);
         d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
         d.expect("Long rest added. Everyone starts the next fight at full.");
@@ -7943,7 +7945,7 @@ pub mod session_plan {
         );
         close_run(d);
         show_plan(d);
-        d.click_add_event("Add Long rest");
+        d.click("Add Long rest");
         d.observe(
             "S4",
             d.has("Undo add") && !d.has("Undo everyone to full"),
@@ -7955,7 +7957,7 @@ pub mod session_plan {
             !d.has("Everyone at full"),
             "Undo removes both the rest and the full-HP ruling",
         );
-        d.click_add_event("Add Long rest");
+        d.click("Add Long rest");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::All);
         d.click("Long rest");
@@ -8030,11 +8032,11 @@ pub mod session_plan {
         d.click("Long rest");
         d.click("Mark not at full");
         d.click(NAV_TIMELINE);
-        d.click_add_event("Add Long rest");
+        d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
         d.click("Undo add");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.click_add_event("Add Long rest");
+        d.click("Add Long rest");
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.observe_both(
