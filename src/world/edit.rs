@@ -1032,16 +1032,16 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of: [Guild, {id: 1}] # A note.\n".to_owned(),
-                Some(format!("Part of \"[Guild, {{id: 1}}]\" not read (line 7). {help}")),
+                Some(format!("Part of “[Guild, {{id: 1}}]” not read (line 7). {help}")),
             ),
             (
                 "splat_part_of: 17\n".to_owned(),
-                Some(format!("Part of \"17\" not read (line 7). {help}")),
+                Some(format!("Part of “17” not read (line 7). {help}")),
             ),
             (
                 "splat_part_of: # Kept.\n- '[[Zarel]]'\n- [[Verori]]\n\n- {link: '[[Lost]]'} # Old.\n"
                     .to_owned(),
-                Some(format!("Part of \"{{link: '[[Lost]]'}}\" not read (line 11). {help}")),
+                Some(format!("Part of “{{link: '[[Lost]]'}}” not read (line 11). {help}")),
             ),
             (
                 "splat_part_of:\n- '[[Zarel]]'\n- [[Verori]]\n".to_owned(),
@@ -1070,12 +1070,12 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of:\n  x: 1\n",
-                Some(format!("Part of \"\" not read (line 7). {help}")),
+                Some(format!("Part of “” not read (line 7). {help}")),
             ),
             ("splat_part_of:\n", None),
             (
                 "splat_in:\n  x: 1\n",
-                Some("In \"\" not read (line 7). Use one place name or link.".to_owned()),
+                Some("In “” not read (line 7). Use one place name or link.".to_owned()),
             ),
         ] {
             let file = format!(
@@ -1102,7 +1102,7 @@ mod tests {
         let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
         assert!(super::super::fields::unread_groups(&entry, &file).is_none());
         assert!(entry.flags.iter().any(|flag| flag.message
-            == "Status \"[alive]\" not read (line 7). Use a short word, such as alive."));
+            == "Status “[alive]” not read (line 7). Use a short word, such as alive."));
     }
 
     #[test]
@@ -1186,7 +1186,7 @@ mod tests {
             .find_map(|line| line.strip_prefix("- {id:"))
             .unwrap();
         format!(
-            "Part of \"{{id:{value}\" not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+            "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
         )
     }
 

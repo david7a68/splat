@@ -133,7 +133,10 @@ fn checked<T>(
             };
             flags.push(Flag {
                 line,
-                message: format!("{name} {raw:?} not read (line {line}). {fix}"),
+                message: format!(
+                    "{name} {} not read (line {line}). {fix}",
+                    super::formats::quoted(&raw)
+                ),
             });
             None
         }
