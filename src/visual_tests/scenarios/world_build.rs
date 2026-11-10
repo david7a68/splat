@@ -260,7 +260,29 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     d.wait_for_text("Note repaired.");
     d.expect("The watchkeeper is back.");
+    // FD2: `Note repaired.` is a success message below the file line, so the title does not
+    // move. Another note's title shows where a title sits with no result.
+    let (below, detail) = result_below_file_line(
+        d,
+        "Note repaired.",
+        "Notes/Broken.md",
+        design::colors().result.success,
+    );
+    let repaired = title_rect(d, "Repaired watchkeeper");
     d.state("broken-note-repaired", Sizes::Default);
+    d.click("Setting · ");
+    d.settle();
+    let plain = title_rect(d, "Setting");
+    d.observe("iter-16-D-FD2-repaired", below, detail);
+    d.observe(
+        "iter-16-D-FD2-repaired-title",
+        repaired
+            .zip(plain)
+            .is_some_and(|(repaired, plain)| (repaired.top() - plain.top()).abs() <= 0.5),
+        format!("The repaired title at {repaired:?}, another note's title at {plain:?}"),
+    );
+    d.click_starting("Repaired watchkeeper · ");
+    d.expect("Note repaired.");
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
@@ -1301,7 +1323,33 @@ pub fn generator(d: &mut Driver<'_>) {
             && !d.visible_text("splat:rolls"),
         "The World card says how to use your own names in words, and copies the marker",
     );
+    // FD4: the action starts a line, so its icon starts at the card's text edge, with the help
+    // above it and `Will save` below it. Its target reaches into the gutter.
+    let icon = d
+        .place_of(crate::lookup::COPY_MARKER)
+        .map(|rect| rect.left() + design::S);
+    let help = d.painted_left(crate::lookup::OWN_NAMES_HELP);
+    let save = d.painted_left("Will save ");
+    d.observe(
+        "iter-16-D-FD4",
+        icon.zip(help)
+            .zip(save)
+            .is_some_and(|((icon, help), save)| {
+                (icon - help).abs() <= 1.0 && (save - help).abs() <= 1.0
+            }),
+        format!("Copy the marker's icon starts at the card's text edge: icon {icon:?}, help {help:?}, Will save {save:?}"),
+    );
     d.state("generator-own-names-on-world", Sizes::Default);
+    // FD3: after the copy, the card says where the line goes and which dice to change.
+    d.click(crate::lookup::COPY_MARKER);
+    d.observe(
+        "iter-16-D-FD3-copied",
+        d.visible_text(crate::lookup::MARKER_COPIED)
+            && d.visible_text("Paste the marker on the line above the table.")
+            && !d.has(crate::lookup::COPY_MARKER),
+        "The card says Copied, which dice to change, and where the marker goes",
+    );
+    d.state("generator-marker-copied", Sizes::Default);
     // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
     d.click(NAV_LOOKUP);
     d.observe(
@@ -1419,6 +1467,15 @@ pub fn held_npc(d: &mut Driver<'_>) {
     reload(d);
     d.click(NAV_WORLD);
     let people_before = fs::read_dir(root(d).join("People")).unwrap().count();
+    // Where Wren's title sits with no result above or below it.
+    d.click_starting("Wren · ");
+    d.expect("People/Wren.md");
+    let plain_title = title_rect(d, "Wren");
+    d.observe(
+        "iter-16-D-FD1-none",
+        !d.rail_words().contains(crate::world::page::UNSAVED_NPC),
+        "With no generated NPC, the rail has no Unsaved NPC",
+    );
     d.click("New ▾");
     d.click("Generate NPC");
     d.expect("Save NPC");
@@ -1474,6 +1531,27 @@ pub fn held_npc(d: &mut Driver<'_>) {
         ),
     );
     d.state("held-npc-row-over-problems", Sizes::All);
+    // FD1: the rail names the held NPC once, with the draft word, and leads to its card from
+    // another page.
+    let rail = d.rail_words();
+    d.observe(
+        "iter-16-D-FD1",
+        rail.matches(crate::world::page::UNSAVED_NPC).count() == 1 && !rail.contains("World draft"),
+        format!("The rail names the held NPC once: {rail:?}"),
+    );
+    d.click(NAV_ENCOUNTERS);
+    let away = d.current_page() == "Encounters" && !d.has("Save NPC");
+    d.click(&format!(
+        "{}: {npc}. Show its card on World.",
+        crate::world::page::UNSAVED_NPC
+    ));
+    d.observe(
+        "iter-16-D-FD1-link",
+        away && d.current_page() == "World"
+            && d.in_view("Save NPC")
+            && d.has(&format!("Will save {file}")),
+        "From Encounters, the rail's Unsaved NPC opens the same NPC's card on World",
+    );
     d.click_containing("Open questions · ");
     kept(d, "iter-15-D-AD1-questions", "Who rings the bells?");
     d.click_starting("Wren · ");
@@ -1499,6 +1577,31 @@ pub fn held_npc(d: &mut Driver<'_>) {
         "iter-15-D-AD1-discard",
         d.visible_text(&notice) && !d.has("Save NPC"),
         "Discard lets the NPC go with Undo discard",
+    );
+    // FD2: the result is a message below the file line, and the title stays where it was.
+    let (below, detail) =
+        result_below_file_line(d, &notice, "People/Wren.md", design::colors().result.info);
+    d.observe("iter-16-D-FD2-discard", below, detail);
+    let title = title_rect(d, "Wren");
+    d.observe(
+        "iter-16-D-FD2-discard-title",
+        title
+            .zip(plain_title)
+            .is_some_and(|(title, plain)| (title.top() - plain.top()).abs() <= 0.5),
+        format!("Wren's title at {title:?}, with no result at {plain_title:?}"),
+    );
+    // A discarded NPC is no draft: the rail word goes with it.
+    d.observe(
+        "iter-16-D-FD1-discarded",
+        !d.rail_words().contains(crate::world::page::UNSAVED_NPC),
+        "After Discard, the rail no longer says Unsaved NPC",
+    );
+    // FD5: Edit's icon sits one `L` after a short title, whatever the kind line's width.
+    let gap = edit_gap(d, "Wren");
+    d.observe(
+        "iter-16-D-FD5-short",
+        gap.is_some_and(|gap| (gap - design::L).abs() <= 1.0),
+        format!("Edit's icon is {gap:?} px after the title Wren"),
     );
     d.state("held-npc-discarded", Sizes::All);
     d.click(&format!("Undo discard of {npc}"));
@@ -1546,6 +1649,50 @@ pub fn held_npc(d: &mut Driver<'_>) {
         root(d).join(&file).is_file() && people_after == people_before + 1 && !d.has(&row),
         "Save NPC writes the held NPC to the promised file, once",
     );
+    // Must stay true: a saved NPC is no draft, so the rail word goes with it.
+    d.observe(
+        "iter-16-D-FD1-saved",
+        !d.rail_words().contains(crate::world::page::UNSAVED_NPC),
+        "After Save NPC, the rail no longer says Unsaved NPC",
+    );
+}
+
+/// The reader pane: right of the World list at its default width.
+fn reader_pane(d: &Driver<'_>) -> egui::Rect {
+    let (width, height) = d.window_size();
+    egui::Rect::from_min_max(egui::pos2(405.0, 0.0), egui::pos2(width, height))
+}
+
+/// A World reader's title, painted in the reader pane.
+fn title_rect(d: &Driver<'_>, title: &str) -> Option<egui::Rect> {
+    d.painted_word_rect(title, reader_pane(d))
+}
+
+/// From the end of the painted title to Edit's icon, which sits `S` inside its target.
+fn edit_gap(d: &Driver<'_>, title: &str) -> Option<f32> {
+    let edit = d.place_of(&format!("Edit {title}"))?;
+    Some(edit.left() + design::S - title_rect(d, title)?.right())
+}
+
+/// FD2: a World result is a message with its tone bar, below the file line.
+fn result_below_file_line(
+    d: &Driver<'_>,
+    result: &str,
+    file: &str,
+    tone: egui::Color32,
+) -> (bool, String) {
+    let pane = reader_pane(d);
+    let message = d.painted_rect_in(result, pane);
+    let file_line = d.painted_rect_in(file, pane);
+    let bar = message.is_some_and(|message| d.has_tone_bar(message, tone));
+    (
+        bar && message
+            .zip(file_line)
+            .is_some_and(|(message, file_line)| message.top() >= file_line.bottom()),
+        format!(
+            "{result:?} at {message:?} with a tone bar {bar}, below the file line {file:?} at {file_line:?}"
+        ),
+    )
 }
 
 /// The NPC keeps both reference links beside a live fight.
@@ -3493,6 +3640,44 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                 && !links.iter().any(|name| name == "Rook Ambry")
         },
     );
+    // FD6: a Lookup row shortens by whole parts. It drops the kind and keeps the whole file that
+    // tells the rows apart. At 1200 the fault is whole; at 960 it ends on a whole word. No row
+    // cuts inside a word or ends on a separator before `…`.
+    for size in [SMALL, DEFAULT] {
+        let (whole, detail) = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Rook Ambry · ") && node.in_view())
+                .collect();
+            let painted: Vec<String> = rows.iter().map(|row| d.painted_in(row.rect)).collect();
+            let files = ["NPCs/Rook Ambry copy.md", "NPCs/Rook Ambry.md"];
+            (
+                rows.len() == 2
+                    && painted.iter().all(|text| {
+                        let fault = format!("{} Same note in two files", design::icons::WARN);
+                        let tail = text.rsplit(" · ").next().unwrap_or_default();
+                        (if size == DEFAULT {
+                            tail == fault
+                        } else {
+                            tail.strip_suffix('…').is_some_and(|kept| {
+                                fault.starts_with(kept) && fault[kept.len()..].starts_with(' ')
+                            })
+                        }) && !text.split(" · ").any(|part| part.trim() == "NPC")
+                            && !text.contains("· …")
+                    })
+                    && files
+                        .iter()
+                        .all(|file| painted.iter().any(|text| text.contains(file))),
+                format!("{size:?}: {painted:?}"),
+            )
+        });
+        d.observe(
+            "iter-16-D-FD6",
+            whole,
+            format!("Lookup rows drop the kind and keep the file and the whole fault: {detail}"),
+        );
+    }
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
@@ -3522,6 +3707,13 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     reload(d);
     d.expect("Rook Ambry.md");
     d.expect("Rook Ambry copy.md");
+    // FD5, must stay true: after a long title, Edit's icon also sits one `L` after it.
+    let gap = edit_gap(d, "Rook Ambry copy");
+    d.observe(
+        "iter-16-D-FD5-long",
+        gap.is_some_and(|gap| (gap - design::L).abs() <= 1.0),
+        format!("Edit's icon is {gap:?} px after the title Rook Ambry copy"),
+    );
     d.state("same-name-npcs-show-file-names", Sizes::All);
 }
 

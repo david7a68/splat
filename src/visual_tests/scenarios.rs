@@ -2042,6 +2042,9 @@ pub mod encounter_run {
             |d| !d.visible_text("Splat data"),
         );
         d.state("lookup-by-keyboard", Sizes::All);
+        // FT1: Lookup's Show all is the quiet action Arrivals uses. It lists every match in
+        // place, and the list follows keyboard focus. These proof steps end where they began.
+        d.aside(|d| lookup_show_all(d, KEYBOARD_LOOKUP));
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
         let keys = d.goal("run a turn, damage, undo and a lookup by keyboard alone");
@@ -11887,4 +11890,161 @@ pub mod remove_package_in_use {
         );
         d.state("paused-run-after-package-removal", Sizes::All);
     }
+}
+
+/// Lookup's result rows in view order: buttons named `<title> · <detail>` below the search field.
+fn lookup_results(d: &Driver<'_>) -> Vec<crate::visual_tests::driver::Found> {
+    let Some(field) = d.place_of(SEARCH_LOOKUP) else {
+        return Vec::new();
+    };
+    d.nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == egui::accesskit::Role::Button
+                && node.name.contains(" · ")
+                && node.rect.left() >= field.left() - 2.0
+                && node.rect.top() >= field.bottom()
+        })
+        .collect()
+}
+
+/// The `Show all N` count, if Lookup or Arrivals offers it.
+fn show_all_count(d: &Driver<'_>) -> Option<usize> {
+    d.nodes().into_iter().find_map(|node| {
+        node.name
+            .strip_prefix("Show all ")
+            .and_then(|count| count.parse::<usize>().ok())
+    })
+}
+
+/// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
+/// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
+fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
+    let before = lookup_results(d).len();
+    let count = show_all_count(d);
+    let label = format!("Show all {}", count.unwrap_or_default());
+    let frame = d.control_frame(&label);
+    let quiet = frame
+        .as_ref()
+        .is_none_or(|frame| frame.stroke.width == 0.0 && frame.fill.a() == 0);
+    if count.is_some() {
+        d.click(&label);
+    }
+    let rows = lookup_results(d);
+    d.observe(
+        "iter-16-D-FT1",
+        before == 5
+            && quiet
+            && count.is_some_and(|count| count > before && rows.len() == count)
+            && rows.iter().all(|row| row.fully_in_view())
+            && show_all_count(d).is_none()
+            && d.in_view(SEARCH_LOOKUP),
+        format!(
+            "Quiet {label} (frame {frame:?}) lists every match in place: {before} rows before, {} after, \
+             all in view",
+            rows.len()
+        ),
+    );
+    d.state("lookup-show-all", Sizes::All);
+    // Must stay true: new words return to five, as in Arrivals.
+    d.replace_text_in(SEARCH_LOOKUP, &words[..words.len() - 1]);
+    d.replace_text_in(SEARCH_LOOKUP, words);
+    d.observe(
+        "iter-16-D-FT1-reset",
+        lookup_results(d).len() == 5 && show_all_count(d) == count,
+        "Changed words return Lookup to five results and its Show all",
+    );
+    // A broad search scrolls past eight rows. Tab reaches a row below the edge, and so do the
+    // arrow keys from the search field; the list follows each.
+    d.replace_text_in(SEARCH_LOOKUP, "dragon");
+    let broad = show_all_count(d);
+    if let Some(broad) = broad {
+        d.click(&format!("Show all {broad}"));
+    }
+    let rows = lookup_results(d);
+    // The list's own visible area now: the clip its top row's words are painted in. Opening a
+    // result can move the list, so each check measures it again.
+    let list_clip = |d: &Driver<'_>| {
+        let top = lookup_results(d).into_iter().find(|row| row.in_view())?;
+        let title = top.name.split(" · ").next()?.to_owned();
+        let mut found = None;
+        d.each_painted_text(|text, clip| {
+            if title == text.galley.job.text
+                && top.rect.contains(text.pos + text.galley.size() / 2.0)
+            {
+                found = Some(clip);
+            }
+        });
+        found
+    };
+    let clip = list_clip(d);
+    let inside_of = |clip: Option<egui::Rect>, rect: egui::Rect| {
+        clip.is_some_and(|clip| clip.expand(0.5).contains_rect(rect))
+    };
+    let inside = |rect: egui::Rect| inside_of(clip, rect);
+    let place = |d: &Driver<'_>, row: &Option<crate::visual_tests::driver::Found>| {
+        row.as_ref().and_then(|row| d.place_of(&row.name))
+    };
+    let shown = rows.iter().filter(|row| inside(row.rect)).count();
+    // The whole row shows, not only the part inside egui's clip margin.
+    let whole = |d: &Driver<'_>, row: &Option<crate::visual_tests::driver::Found>| {
+        row.as_ref().is_some_and(|row| {
+            lookup_results(d)
+                .iter()
+                .any(|now| now.name == row.name && now.fully_in_view())
+        })
+    };
+    let ninth = rows.get(8).cloned();
+    let tenth = rows.get(9).cloned();
+    if let Some(ninth) = &ninth {
+        let mut tabs = 0;
+        while d.focused_name().as_deref() != Some(ninth.name.as_str()) && tabs < 40 {
+            d.press(Key::Tab);
+            tabs += 1;
+        }
+    }
+    let reached = place(d, &ninth);
+    let reached_clip = list_clip(d);
+    d.observe(
+        "iter-16-D-FT1-tab",
+        broad.is_some_and(|broad| broad > 9 && rows.len() == broad)
+            && shown == crate::lookup::RESULTS_LISTED
+            && ninth.as_ref().is_some_and(|ninth| !inside(ninth.rect))
+            && ninth
+                .as_ref()
+                .is_some_and(|ninth| d.focused_name().as_deref() == Some(ninth.name.as_str()))
+            && reached.is_some_and(|rect| inside_of(reached_clip, rect))
+            && whole(d, &ninth),
+        format!(
+            "Show all {broad:?}: {} rows named, {shown} inside the list clip {clip:?}; Tab \
+             reaches the ninth ({:?}) and the list scrolls it inside {reached_clip:?}: {reached:?}",
+            rows.len(),
+            ninth.as_ref().map(|row| (&row.name, row.rect)),
+        ),
+    );
+    d.replace_text_in(SEARCH_LOOKUP, "drago");
+    d.replace_text_in(SEARCH_LOOKUP, "dragon");
+    if let Some(broad) = broad {
+        d.click(&format!("Show all {broad}"));
+    }
+    d.type_into(SEARCH_LOOKUP, "");
+    let before = place(d, &tenth);
+    let before_clip = list_clip(d);
+    for _ in 0..9 {
+        d.press(Key::ArrowDown);
+    }
+    let after = place(d, &tenth);
+    let after_clip = list_clip(d);
+    d.observe(
+        "iter-16-D-FT1-arrows",
+        before.is_some_and(|before| !inside_of(before_clip, before))
+            && after.is_some_and(|after| inside_of(after_clip, after))
+            && whole(d, &tenth),
+        format!(
+            "Nine Down presses from the search field bring the tenth row ({:?}) inside the list: \
+             before {before:?} in {before_clip:?}, after {after:?} in {after_clip:?}",
+            tenth.as_ref().map(|row| &row.name)
+        ),
+    );
+    d.replace_text_in(SEARCH_LOOKUP, words);
 }
