@@ -297,6 +297,19 @@ impl CopyDialog {
                     .map_or(destination.2.as_str(), |(_, name)| name);
                 crate::library::creation_path(ui, &plan.root, &plan.relative, name);
                 for dependency in &plan.shared {
+                    if let Ok(entry) = Entry::parse(&dependency.relative, &dependency.text) {
+                        ui.label(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "Also copies {}, because {} links to it.",
+                                        entry.name, self.source.entry.name
+                                    ),
+                                )
+                                .color(colors().muted),
+                        );
+                    }
                     crate::library::creation_path(ui, &dependency.root, &dependency.relative, name);
                 }
                 let shared_names: Vec<_> = plan

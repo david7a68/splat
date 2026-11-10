@@ -791,9 +791,44 @@ pub(crate) struct Change {
 }
 
 impl Change {
+    pub(crate) fn message(&self) -> &str {
+        &self.word
+    }
+
     pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
         write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
     }
+}
+
+pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
+pub(crate) const SEPARATE_ENTRY_UNDO: &str = "Undo separate entry";
+
+pub(crate) fn separate_entry_action(filename: &str) -> String {
+    format!("Make {filename} a separate entry")
+}
+
+/// Long filenames keep the complete repair action inside its secondary border.
+pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
+    let label = separate_entry_action(filename);
+    if Action::secondary(&label).natural_width(ui) <= ui.available_width() {
+        return Action::secondary(&label).show(ui).clicked();
+    }
+    let response = ui.add(
+        egui::Button::new(Type::Strong.rich(ui, &label))
+            .wrap()
+            .min_size(egui::vec2(0.0, Density::Scan.control()))
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::new(
+                design::HAIRLINE_WIDTH,
+                colors().field_border,
+            )),
+    );
+    design::named(ui, &response, &label);
+    response.clicked()
+}
+
+pub(crate) fn separate_entry_result(filename: &str) -> String {
+    format!("{filename} is now a separate entry.")
 }
 
 pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
@@ -807,7 +842,13 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
             path: relative.into(),
             before,
             after,
-            word: "New identity saved.".into(),
+            word: separate_entry_result(
+                Path::new(relative)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .as_ref(),
+            ),
         },
         id,
     ))
@@ -1108,10 +1149,7 @@ impl Reader {
                 self.identity_undo = None;
             }
             if let Some((_, undo)) = &self.identity_undo
-                && Action::quiet("Undo new identity")
-                    .icon(design::icons::UNDO)
-                    .show(ui)
-                    .clicked()
+                && design::undo_message(ui, Tone::Success, undo.message(), SEPARATE_ENTRY_UNDO)
             {
                 match undo.undo(campaign) {
                     Ok(()) => {
@@ -1123,11 +1161,7 @@ impl Reader {
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    "These files share an identity. Choose which file gets a new one.",
-                );
+                design::message(ui, Tone::Warning, DUPLICATE_ENTRY);
                 let mut paths = paths.clone();
                 let first = crate::content_workspace::duplicate_repair_path(
                     paths.iter().map(|path| campaign.path.join(path)),
@@ -1138,13 +1172,7 @@ impl Reader {
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy();
-                    let label = format!("New identity for {filename}");
-                    let clicked = if Action::quiet(&label).natural_width(ui) > ui.available_width()
-                    {
-                        design::wrapped_link(ui, &label).clicked()
-                    } else {
-                        Action::quiet(&label).show(ui).clicked()
-                    };
+                    let clicked = separate_entry_button(ui, &filename);
                     if clicked {
                         match new_identity(campaign, path) {
                             Ok((undo, id)) => {
@@ -1400,7 +1428,7 @@ impl Reader {
             .name(&name);
         let stacked = ui.available_width() < design::XXL * 12.0;
         let width = if stacked {
-            ui.available_width() - change.natural_width(ui) - design::S
+            ui.available_width() - change.natural_width(ui) - design::L
         } else {
             width
         };
@@ -1428,11 +1456,11 @@ impl Reader {
                         egui::vec2(width, design::Density::Scan.control()),
                         egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                         |ui| {
-                            ui.set_min_width(width);
                             ui.set_max_width(width);
                             value(ui);
                         },
                     );
+                    ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
                     let clicked = change.show(ui).clicked();
                     if let Some(word) = notice {
                         ui.allocate_ui_with_layout(
@@ -2393,6 +2421,54 @@ mod tests {
             scan(dir.path(), &dir.path().join("Sessions")).notes.len(),
             1
         );
+    }
+
+    #[test]
+    fn iter2_d_relationship_change_follows_the_value() {
+        for width in [300.0, 600.0, 1000.0] {
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let mut value_rect = egui::Rect::NOTHING;
+            let mut output = None;
+            for _ in 0..2 {
+                output = Some(ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 640.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let width = Reader::relationship_width(ui);
+                            Reader::relationship_row(
+                                ui,
+                                "Status",
+                                width,
+                                |ui| {
+                                    value_rect = ui.label(Type::Small.rich(ui, "not set")).rect;
+                                },
+                                None,
+                            );
+                        });
+                    },
+                ));
+            }
+            let output = output.unwrap();
+            let change = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Change" => Some(text.pos),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(
+                change.x - value_rect.right() <= design::L * 2.0,
+                "Change is too far from the value at {width}: {change:?}, {value_rect:?}"
+            );
+        }
     }
 
     #[test]

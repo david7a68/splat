@@ -507,7 +507,7 @@ impl WorldPage {
                     entry.name.clone()
                 };
                 let detail = if duplicate {
-                    format!("{} Duplicate identity", icons::WARN)
+                    format!("{} Same entry in two files", icons::WARN)
                 } else if !entry.flags.is_empty() {
                     format!(
                         "{} {}",

@@ -8075,6 +8075,7 @@ pub mod share_to_package {
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
+        d.expect("Also copies Captain Varra, because Watch Orders links to it.");
         assert!(!d.visible_text("Required entries: 1"));
         d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Ashen Marches/Watch Orders.md");

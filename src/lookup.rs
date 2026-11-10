@@ -327,7 +327,7 @@ impl ContentIndex {
                     lower: e.entry.name.to_lowercase(),
                     subtitle: if duplicate_identity {
                         format!(
-                            "{} · {} Duplicate identity",
+                            "{} · {} Same entry in two files",
                             presentation::subtitle(&e.entry),
                             icons::WARN
                         )
@@ -2145,7 +2145,7 @@ mod tests {
         for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
             assert_eq!(
                 item.subtitle,
-                format!("NPC · {} Duplicate identity", icons::WARN)
+                format!("NPC · {} Same entry in two files", icons::WARN)
             );
             assert!(!item.subtitle.contains(&item.entry.path));
             assert!(
