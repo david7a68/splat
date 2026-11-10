@@ -987,7 +987,9 @@ impl LinkTarget {
     }
 }
 
-/// A paragraph stays one paragraph, and only its links can be pressed.
+/// A paragraph stays one paragraph. Each link in it is its own control: Tab reaches the
+/// links in reading order, Enter or Space follows the focused one, and the pointer presses
+/// only a link's own target.
 fn draw_with_links(
     ui: &mut egui::Ui,
     mut job: LayoutJob,
@@ -1000,51 +1002,72 @@ fn draw_with_links(
     let text = job.text.clone();
     let (position, galley, response) = egui::Label::new(job)
         .wrap()
-        .sense(egui::Sense::click())
+        .sense(egui::Sense::hover())
         .layout_in_ui(ui);
     ui.painter().galley(position, galley.clone(), colors().text);
-    for (range, destination) in &links {
+    // The paragraph reads as plain text, as an unlinked one does. Its links follow as controls.
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
+    egui::text_selection::accesskit_text::update_accesskit_for_text_widget(
+        ui.ctx(),
+        response.id,
+        None,
+        egui::accesskit::Role::Label,
+        egui::emath::TSTransform::from_translation(position.to_vec2()),
+        &galley,
+    );
+    let words = link_words(&galley, position, &links);
+    for ((_, destination), parts) in links.iter().zip(&words) {
         if matches!(destination, LinkTarget::Missing) {
-            let mut byte_at = 0;
-            for row in &galley.rows {
-                let mut run: Option<(f32, f32, f32)> = None;
-                for glyph in &row.glyphs {
-                    if range.contains(&byte_at) {
-                        let x = position.x + row.pos.x + glyph.pos.x;
-                        let y = position.y + row.pos.y + glyph.pos.y + design::HAIRLINE_WIDTH * 2.0;
-                        let start = run.map_or(x, |(start, _, _)| start);
-                        run = Some((start, x + glyph.advance_width, y));
-                    }
-                    byte_at += glyph.chr.len_utf8();
-                }
-                if let Some((start, end, y)) = run {
-                    let mut dot = start;
-                    while dot < end {
-                        ui.painter().circle_filled(
-                            egui::pos2(dot, y),
-                            design::HAIRLINE_WIDTH / 2.0,
-                            colors().muted,
-                        );
-                        dot += design::XS;
-                    }
-                }
-                if row.ends_with_newline {
-                    byte_at += 1;
+            for part in parts {
+                let y = part.y + design::HAIRLINE_WIDTH * 2.0;
+                let mut dot = part.left;
+                while dot < part.right {
+                    ui.painter().circle_filled(
+                        egui::pos2(dot, y),
+                        design::HAIRLINE_WIDTH / 2.0,
+                        colors().muted,
+                    );
+                    dot += design::XS;
                 }
             }
         }
     }
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
-    let Some(pointer) = response.hover_pos() else {
-        return response.rect;
-    };
-    let at = galley.cursor_from_pos(pointer - position).index;
-    let byte = text
-        .char_indices()
-        .nth(at)
-        .map_or(text.len(), |(byte, _)| byte);
-    if let Some((_, destination)) = links.iter().find(|(range, _)| range.contains(&byte)) {
-        match press(ui, &response, destination) {
+    let targets = link_targets(&words, response.rect);
+    let links_id = paragraph_id(ui.ctx(), &text);
+    for (index, ((range, destination), rects)) in links.iter().zip(&targets).enumerate() {
+        let name = link_name(&text[range.clone()], destination);
+        let id = links_id.with(index);
+        // Only the first part of a wrapped link takes focus, so Tab stops once per link.
+        let parts: Vec<egui::Response> = rects
+            .iter()
+            .enumerate()
+            .map(|(part, rect)| {
+                let first = part == 0 && !matches!(destination, LinkTarget::Missing);
+                let sense = if first {
+                    egui::Sense::click()
+                } else {
+                    egui::Sense::CLICK
+                };
+                let part_response = ui.interact(*rect, id.with(part), sense);
+                let role = if first {
+                    egui::WidgetType::Link
+                } else {
+                    egui::WidgetType::Label
+                };
+                part_response.widget_info(|| egui::WidgetInfo::labeled(role, true, &name));
+                part_response
+            })
+            .collect();
+        if parts.first().is_some_and(egui::Response::has_focus) {
+            // The ring sits just outside the words, so it never cuts a letter.
+            for part in &words[index] {
+                design::focus_ring(ui, part.rect.expand2(egui::vec2(design::XS / 2.0, 0.0)));
+            }
+        }
+        let Some(pressed) = parts.iter().find(|part| part.hovered() || part.clicked()) else {
+            continue;
+        };
+        match press(ui, pressed, destination) {
             Some(LinkTarget::Note(note)) => {
                 let from = ui
                     .ctx()
@@ -1058,6 +1081,160 @@ fn draw_with_links(
         }
     }
     response.rect
+}
+
+/// The paragraph's links keep their ids, and so keyboard focus, when the layout around them
+/// changes: at a breakpoint, or when a pane opens beside the reader. The id comes from the
+/// paragraph's words. The same words twice in one frame count up in drawing order.
+fn paragraph_id(ctx: &egui::Context, text: &str) -> egui::Id {
+    #[derive(Clone, Default)]
+    struct Seen {
+        pass: u64,
+        count: std::collections::HashMap<egui::Id, u32>,
+    }
+    let words = egui::Id::new(("markdown_paragraph_links", text));
+    let pass = ctx.cumulative_pass_nr();
+    let nth = ctx.data_mut(|data| {
+        let seen = data.get_temp_mut_or_default::<Seen>(egui::Id::new("markdown_paragraph_seen"));
+        if seen.pass != pass {
+            *seen = Seen {
+                pass,
+                ..Default::default()
+            };
+        }
+        let nth = seen.count.entry(words).or_default();
+        *nth += 1;
+        *nth
+    });
+    words.with(nth)
+}
+
+/// One row's part of a link's words, on the screen.
+#[derive(Clone, Copy, Debug)]
+struct LinkPart {
+    left: f32,
+    right: f32,
+    /// The words' baseline area, where a missing link's dots go.
+    y: f32,
+    /// The whole row's height across the words.
+    rect: egui::Rect,
+}
+
+/// Where each link's words are drawn, one part for each row it is on.
+fn link_words(
+    galley: &egui::Galley,
+    position: egui::Pos2,
+    links: &[(std::ops::Range<usize>, LinkTarget)],
+) -> Vec<Vec<LinkPart>> {
+    links
+        .iter()
+        .map(|(range, _)| {
+            let mut parts = Vec::new();
+            let mut byte_at = 0;
+            for row in &galley.rows {
+                let mut run: Option<(f32, f32, f32)> = None;
+                for glyph in &row.glyphs {
+                    if range.contains(&byte_at) {
+                        let x = position.x + row.pos.x + glyph.pos.x;
+                        let y = position.y + row.pos.y + glyph.pos.y;
+                        let start = run.map_or(x, |(start, _, _)| start);
+                        run = Some((start, x + glyph.advance_width, y));
+                    }
+                    byte_at += glyph.chr.len_utf8();
+                }
+                if let Some((left, right, y)) = run {
+                    let row_rect = row.rect().translate(position.to_vec2());
+                    parts.push(LinkPart {
+                        left,
+                        right,
+                        y,
+                        rect: egui::Rect::from_x_y_ranges(left..=right, row_rect.y_range()),
+                    });
+                }
+                if row.ends_with_newline {
+                    byte_at += 1;
+                }
+            }
+            parts
+        })
+        .collect()
+}
+
+/// Each link part's press target: at least `XL` square where the paragraph has room, growing
+/// right from the words first, as `text_link` does. Two targets never share a point: where
+/// grown targets meet, they split halfway between the words. The paragraph's own layout stays.
+fn link_targets(words: &[Vec<LinkPart>], bounds: egui::Rect) -> Vec<Vec<egui::Rect>> {
+    let grow = |words: egui::Rect| {
+        let mut x = words.left()..=words.left() + words.width().max(design::XL);
+        if *x.end() > bounds.right() {
+            let left = (bounds.right() - words.width().max(design::XL)).max(bounds.left());
+            x = left..=bounds.right().max(words.right());
+        }
+        let height = words.height().max(design::XL);
+        let mut top = words.center().y - height / 2.0;
+        top = top.min(bounds.bottom() - height).max(bounds.top());
+        // Inside the paragraph, so a target never reaches past its own text.
+        egui::Rect::from_x_y_ranges(x, top..=top + height).intersect(bounds)
+    };
+    let mut targets: Vec<Vec<egui::Rect>> = words
+        .iter()
+        .map(|parts| parts.iter().map(|part| grow(part.rect)).collect())
+        .collect();
+    let all: Vec<(usize, usize)> = words
+        .iter()
+        .enumerate()
+        .flat_map(|(link, parts)| (0..parts.len()).map(move |part| (link, part)))
+        .collect();
+    for (at, &(a_link, a_part)) in all.iter().enumerate() {
+        for &(b_link, b_part) in &all[at + 1..] {
+            let shared = targets[a_link][a_part].intersect(targets[b_link][b_part]);
+            if shared.width() <= 0.0 || shared.height() <= 0.0 {
+                continue;
+            }
+            let (a_words, b_words) = (words[a_link][a_part].rect, words[b_link][b_part].rect);
+            let same_row = a_words.y_range().intersection(b_words.y_range()).span() > 0.0;
+            let (first, second, split) = if same_row {
+                let (left, right) = if a_words.center().x <= b_words.center().x {
+                    ((a_link, a_part), (b_link, b_part))
+                } else {
+                    ((b_link, b_part), (a_link, a_part))
+                };
+                let mid = (words[left.0][left.1].rect.right()
+                    + words[right.0][right.1].rect.left())
+                    / 2.0;
+                (left, right, (mid, true))
+            } else {
+                let (upper, lower) = if a_words.center().y <= b_words.center().y {
+                    ((a_link, a_part), (b_link, b_part))
+                } else {
+                    ((b_link, b_part), (a_link, a_part))
+                };
+                let mid = (words[upper.0][upper.1].rect.bottom()
+                    + words[lower.0][lower.1].rect.top())
+                    / 2.0;
+                (upper, lower, (mid, false))
+            };
+            let (mid, sideways) = split;
+            if sideways {
+                targets[first.0][first.1].max.x = targets[first.0][first.1].max.x.min(mid);
+                targets[second.0][second.1].min.x = targets[second.0][second.1].min.x.max(mid);
+            } else {
+                targets[first.0][first.1].max.y = targets[first.0][first.1].max.y.min(mid);
+                targets[second.0][second.1].min.y = targets[second.0][second.1].min.y.max(mid);
+            }
+        }
+    }
+    targets
+}
+
+/// A link's accessible name: its words, then where it goes.
+fn link_name(words: &str, destination: &LinkTarget) -> String {
+    match destination {
+        LinkTarget::Missing => format!("{words} (not found in this campaign)"),
+        LinkTarget::Note(note) => format!("{words} (opens {note})"),
+        LinkTarget::Lookup(_) => format!("{words} (opens in Lookup)"),
+        LinkTarget::Url(url) => format!("{words} (opens {url})"),
+    }
 }
 
 /// Show that the pointer is on a link that can be pressed. A pressed web link opens here.
@@ -1648,5 +1825,269 @@ mod tests {
         assert!(!Arc::ptr_eq(&seen[2], &seen[3]), "a reloaded index");
         assert_eq!(&*seen[2], &*seen[3]);
         assert_eq!(*seen[0], *index.reader_markdown(note, None));
+    }
+
+    /// The Reader with a paragraph, in a test harness with the app's theme.
+    fn reader(markdown: &'static str) -> egui_kittest::Harness<'static> {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .build_ui(move |ui| show(ui, markdown));
+        design::theme::install(&harness.ctx);
+        harness.run_ok();
+        harness
+    }
+
+    fn focused<S>(harness: &egui_kittest::Harness<'_, S>) -> Option<String> {
+        use egui_kittest::kittest::NodeT;
+        harness
+            .root()
+            .children_recursive()
+            .find(|node| node.is_focused())
+            .and_then(|node| node.accesskit_node().label())
+    }
+
+    fn link_names(harness: &egui_kittest::Harness<'_>) -> Vec<String> {
+        use egui_kittest::kittest::NodeT;
+        harness
+            .root()
+            .children_recursive()
+            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Link)
+            .filter_map(|node| node.accesskit_node().label())
+            .collect()
+    }
+
+    #[test]
+    fn iter16_a_ad1_tab_reaches_each_link_and_enter_follows_the_focused_one() {
+        let mut harness =
+            reader("Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.");
+        // Each link is its own control with its own name: its words and where it goes.
+        assert_eq!(
+            link_names(&harness),
+            ["Wren (opens Wren)", "Oskar (opens Oskar)"],
+            "AD1-names"
+        );
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Wren (opens Wren)"),
+            "AD1-tab-1"
+        );
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Oskar (opens Oskar)"),
+            "AD1-tab-2"
+        );
+        assert_eq!(take_note_link(&harness.ctx), None, "AD1-no-early-follow");
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        assert_eq!(
+            take_note_link(&harness.ctx).as_deref(),
+            Some("Oskar"),
+            "AD1-enter"
+        );
+        // Space follows the focused link as well, without the pointer.
+        harness.key_press(egui::Key::Space);
+        harness.step();
+        assert_eq!(
+            take_note_link(&harness.ctx).as_deref(),
+            Some("Oskar"),
+            "AD1-space"
+        );
+    }
+
+    #[test]
+    fn iter16_a_ad1_the_focus_ring_is_on_the_focused_link_only() {
+        let mut harness =
+            reader("Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.");
+        let ring = |harness: &egui_kittest::Harness<'_>| -> Vec<egui::Rect> {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect) if rect.stroke.color == colors().focus => {
+                        Some(rect.rect)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let word = |harness: &egui_kittest::Harness<'_>, words: &str| {
+            use egui_kittest::kittest::NodeT;
+            harness
+                .root()
+                .children_recursive()
+                .find(|node| {
+                    node.accesskit_node()
+                        .label()
+                        .is_some_and(|name| name.starts_with(words))
+                })
+                .map(|node| node.rect())
+                .expect("the link is in the tree")
+        };
+        assert!(ring(&harness).is_empty(), "AD1-ring-none");
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        let rings = ring(&harness);
+        let oskar = word(&harness, "Oskar");
+        let wren = word(&harness, "Wren");
+        assert!(
+            rings.len() == 1 && rings[0].intersects(oskar) && !rings[0].intersects(wren),
+            "AD1-ring-one: rings {rings:?}, Oskar {oskar:?}, Wren {wren:?}"
+        );
+    }
+
+    #[test]
+    fn iter16_a_ad1_edge_paragraphs() {
+        // Empty: a paragraph with no link has no link control.
+        assert!(
+            link_names(&reader("The bells ring at dusk.")).is_empty(),
+            "AD1-empty"
+        );
+        // A missing link is not a stop: Enter cannot follow it.
+        let mut missing = reader("Ask [Nobody](splat-missing:Nobody) or [Wren](splat-note:Wren).");
+        assert_eq!(
+            link_names(&missing),
+            ["Wren (opens Wren)"],
+            "AD1-missing-names"
+        );
+        // Long: a link that wraps is one Tab stop and keeps its whole name.
+        let mut long = reader(
+            "Read [the long account of the night the bells of the old harbour chapel rang without a ringer](splat-note:Bells) and then [Wren](splat-note:Wren).",
+        );
+        let names = link_names(&long);
+        assert_eq!(names.len(), 2, "AD1-long-one-link: {names:?}");
+        long.key_press(egui::Key::Tab);
+        long.run_ok();
+        long.key_press(egui::Key::Tab);
+        long.run_ok();
+        assert_eq!(
+            focused(&long).as_deref(),
+            Some("Wren (opens Wren)"),
+            "AD1-long-tab"
+        );
+        missing.key_press(egui::Key::Tab);
+        missing.run_ok();
+        assert_eq!(
+            focused(&missing).as_deref(),
+            Some("Wren (opens Wren)"),
+            "AD1-missing-skip"
+        );
+    }
+
+    #[test]
+    fn iter16_a_ad1_crowded_short_links_never_share_a_target() {
+        // Two short links with no space between them, and one on the next row.
+        let part = |left: f32, right: f32, top: f32| LinkPart {
+            left,
+            right,
+            y: top + 16.0,
+            rect: egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, top + 22.0)),
+        };
+        let words = vec![
+            vec![part(10.0, 24.0, 0.0)],
+            vec![part(24.0, 38.0, 0.0)],
+            vec![part(12.0, 26.0, 22.0)],
+        ];
+        let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 44.0));
+        let targets = link_targets(&words, bounds);
+        let all: Vec<egui::Rect> = targets.iter().flatten().copied().collect();
+        for (at, a) in all.iter().enumerate() {
+            assert!(bounds.contains_rect(*a), "AD1-inside: {a:?}");
+            for b in &all[at + 1..] {
+                let shared = a.intersect(*b);
+                assert!(
+                    shared.width() <= 0.0 || shared.height() <= 0.0,
+                    "AD1-crowded: {a:?} and {b:?}"
+                );
+            }
+        }
+        // Each target still covers its own words.
+        for (target, parts) in all.iter().zip(words.iter().flatten()) {
+            assert!(
+                target.contains_rect(parts.rect.shrink2(egui::vec2(0.0, 1.0))),
+                "AD1-covers"
+            );
+        }
+    }
+
+    #[test]
+    fn iter16_a_ad1_focus_survives_a_layout_change() {
+        // A pane or a breakpoint can add a widget above the reader. That moves every automatic
+        // id below it, but not the link the DM has focused.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(480.0, 320.0))
+            .build_ui_state(
+                |ui, wide: &mut bool| {
+                    if *wide {
+                        ui.label("A pane beside the reader");
+                    }
+                    show(
+                        ui,
+                        "Ask [Wren](splat-note:Wren) or [Oskar](splat-note:Oskar) about the bells.",
+                    );
+                },
+                false,
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        *harness.state_mut() = true;
+        harness.run_ok();
+        assert_eq!(
+            focused(&harness).as_deref(),
+            Some("Oskar (opens Oskar)"),
+            "AD1-layout-focus"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        assert_eq!(
+            take_note_link(&harness.ctx).as_deref(),
+            Some("Oskar"),
+            "AD1-layout-enter"
+        );
+    }
+
+    #[test]
+    fn iter16_a_ad1_the_same_paragraph_twice_has_two_sets_of_links() {
+        let mut harness = reader(
+            "Ask [Wren](splat-note:Wren) about the bells.\n\nAsk [Wren](splat-note:Wren) about the bells.",
+        );
+        assert_eq!(link_names(&harness).len(), 2, "AD1-twice-names");
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        harness.key_press(egui::Key::Tab);
+        harness.run_ok();
+        // The second copy has focus, so only one ring shows, on the lower line.
+        let rings: Vec<egui::Rect> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.stroke.color == colors().focus => Some(rect.rect),
+                _ => None,
+            })
+            .collect();
+        let links: Vec<egui::Rect> = {
+            use egui_kittest::kittest::NodeT;
+            harness
+                .root()
+                .children_recursive()
+                .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Link)
+                .map(|node| node.rect())
+                .collect()
+        };
+        assert!(
+            rings.len() == 1 && links.len() == 2 && rings[0].center().y > links[0].bottom(),
+            "AD1-twice-ring: rings {rings:?}, links {links:?}"
+        );
     }
 }
