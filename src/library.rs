@@ -9,7 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
-    history::{self, Step},
+    history::{self, Step, Trail},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
@@ -1841,9 +1841,7 @@ pub struct Library {
     pub copy_to_package: Option<Uuid>,
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
-    history: Vec<BackStep>,
-    /// What Back left, newest last.
-    forward: Vec<BackStep>,
+    history: Trail<BackStep>,
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
@@ -2160,8 +2158,7 @@ impl Library {
             return;
         };
         if self.selected != Some(index) {
-            self.forward.clear();
-            self.history.extend(self.here());
+            self.history.leave(self.here());
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
@@ -4206,33 +4203,20 @@ impl Library {
         })
     }
 
-    fn trail(&self, step: Step) -> &[BackStep] {
-        match step {
-            Step::Back => &self.history,
-            Step::Forward => &self.forward,
-        }
-    }
-
     fn go(&mut self, step: Step) {
         if self.dirty() {
             return;
         }
         let here = self.here();
-        let (from, to) = match step {
-            Step::Back => (&mut self.history, &mut self.forward),
-            Step::Forward => (&mut self.forward, &mut self.history),
-        };
-        let Some(target) = from.pop() else {
-            return;
-        };
-        let Some(index) = self.loaded.as_ref().and_then(|l| {
-            l.notes
+        let Some((target, index)) = self.history.go(step, here, |target| {
+            self.loaded
+                .as_ref()?
+                .notes
                 .iter()
                 .position(|n| n.owner.id() == target.owner && n.path == target.path)
         }) else {
             return;
         };
-        to.extend(here);
         self.selected = Some(index);
         self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
@@ -4741,7 +4725,7 @@ impl Library {
         };
         let base_width = Action::quiet("Read").natural_width(ui)
             + Action::quiet(edit_label).natural_width(ui)
-            + if self.history.is_empty() {
+            + if self.history.peek(Step::Back).is_none() {
                 0.0
             } else {
                 back.natural_width(ui) + design::S
@@ -4793,7 +4777,7 @@ impl Library {
                         .clicked();
                 }
             }
-            if !self.history.is_empty()
+            if self.history.peek(Step::Back).is_some()
                 && (if show_key { back.key("Alt+Left") } else { back })
                     .hint(
                         "Return to the entry before this link. During a draft, read it in Lookup.",
@@ -5776,7 +5760,7 @@ impl Library {
         }
         if let Some(step) = step {
             if dirty {
-                self.peek = self.trail(step).last().and_then(|target| {
+                self.peek = self.history.peek(step).and_then(|target| {
                     self.loaded
                         .as_ref()?
                         .notes
@@ -7068,7 +7052,7 @@ mod tests {
         library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.draft, draft);
-        assert_eq!(library.history.len(), 1);
+        assert!(library.history.peek(Step::Back).is_some());
     }
 
     #[test]
@@ -7082,7 +7066,10 @@ mod tests {
         assert_eq!(library.selected, Some(1));
         library.go(Step::Back);
         library.open_entry(2);
-        assert!(library.forward.is_empty(), "a new link starts a new trail");
+        assert!(
+            library.history.peek(Step::Forward).is_none(),
+            "a new link starts a new trail"
+        );
         library.go(Step::Back);
         assert_eq!(library.selected, Some(0));
         library.go(Step::Forward);

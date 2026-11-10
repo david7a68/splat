@@ -5,7 +5,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
     design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
-    history::{self, Step},
+    history::{self, Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
@@ -1372,9 +1372,7 @@ pub struct Lookup {
     /// The note or event being read, in place of an entry.
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
-    history: Vec<Uuid>,
-    /// What Back left, newest last.
-    forward: Vec<Uuid>,
+    trail: Trail<Uuid>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
@@ -1638,10 +1636,7 @@ impl Lookup {
 
     fn navigate(&mut self, position: usize) {
         if self.current != Some(position) {
-            self.forward.clear();
-            if let Some(id) = self.current_id() {
-                self.history.push(id);
-            }
+            self.trail.leave(self.current_id());
         }
         self.current = Some(position);
     }
@@ -1673,19 +1668,15 @@ impl Lookup {
 
     /// With nothing that way, nothing changes, so a stray press keeps a written note open.
     fn step(&mut self, step: Step) {
-        let here = self.current_id();
-        let (from, to) = match step {
-            Step::Back => (&mut self.history, &mut self.forward),
-            Step::Forward => (&mut self.forward, &mut self.history),
-        };
-        if from.is_empty() {
+        if self.trail.peek(step).is_none() {
             return;
         }
         self.reading_written = None;
-        if let Some(id) = from.pop()
-            && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
+        let here = self.current_id();
+        if let Some((_, position)) = self
+            .trail
+            .go(step, here, |id| self.index.as_ref()?.position(*id))
         {
-            to.extend(here);
             self.current = Some(position);
             self.results_open = false;
         }
@@ -1739,7 +1730,7 @@ impl Lookup {
         let mut close = false;
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
-            if !self.history.is_empty()
+            if self.trail.peek(Step::Back).is_some()
                 && Action::quiet("Back")
                     .icon(icons::BACK)
                     .key("Alt+Left")
@@ -2439,7 +2430,10 @@ mod tests {
         assert_eq!(lookup.current, Some(1));
         lookup.step(Step::Back);
         lookup.navigate(2);
-        assert!(lookup.forward.is_empty(), "a new entry starts a new trail");
+        assert!(
+            lookup.trail.peek(Step::Forward).is_none(),
+            "a new entry starts a new trail"
+        );
         lookup.step(Step::Back);
         assert_eq!(lookup.current, Some(0));
         lookup.step(Step::Forward);
