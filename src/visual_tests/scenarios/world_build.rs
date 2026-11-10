@@ -1097,6 +1097,34 @@ pub fn round_trip(d: &mut Driver<'_>) {
         },
     );
     d.type_into("Status", "ready");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (inside, detail) = d.at_size(size, |d| {
+            d.expect(&reason);
+            d.expect("Status");
+            let warning = d.place_of(&reason).unwrap();
+            let form = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Status" && node.role == Role::TextInput)
+                .unwrap()
+                .rect;
+            (
+                warning.right() <= form.right() + 1.0,
+                format!(
+                    "warning ends at {}, form at {}",
+                    warning.right(),
+                    form.right()
+                ),
+            )
+        });
+        d.observe(
+            "iter-15-D-FD6-edit",
+            inside,
+            format!(
+                "The unread warning wraps inside the Edit form's right edge at {size:?}: {detail}"
+            ),
+        );
+    }
     d.state("unread-part-of-edit", Sizes::All);
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
@@ -1263,11 +1291,15 @@ pub fn generator(d: &mut Driver<'_>) {
     d.settle();
     d.observe(
         "iter-14-D-FD5-world",
-        d.current_page() == "World"
-            && !d.has("Close Lookup")
-            && saves(d) == rolled
-            && d.visible_text("<!-- splat:rolls key=npc-name dice=1d6 -->"),
-        "Use your own names opens the same NPC on the World page, with the table marker",
+        d.current_page() == "World" && !d.has("Close Lookup") && saves(d) == rolled,
+        "Use your own names opens the same NPC on the World page",
+    );
+    d.observe(
+        "iter-15-D-FD3",
+        d.visible_text(crate::lookup::OWN_NAMES_HELP)
+            && d.in_view(crate::lookup::COPY_MARKER)
+            && !d.visible_text("splat:rolls"),
+        "The World card says how to use your own names in words, and copies the marker",
     );
     d.state("generator-own-names-on-world", Sizes::Default);
     // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
@@ -1363,6 +1395,156 @@ pub fn generator(d: &mut Driver<'_>) {
         "iter-14-D2-FD5-both-saved",
         written == [true, true],
         "Saving both NPCs writes two files",
+    );
+}
+
+/// AD1/SD1/FD1: an unsaved generated NPC is a held draft. Each path to another view keeps it in
+/// one row, Show brings its card back, Discard has Undo, and Save writes it once. AD2: the
+/// card names the campaign's own NPC folder.
+pub fn held_npc(d: &mut Driver<'_>) {
+    // Ilsa is shorter than a link's minimum target.
+    for name in ["Wren", "Oskar", "Ilsa"] {
+        entry(d, &format!("People/{name}.md"), name, "npc", "");
+    }
+    fs::write(
+        root(d).join("Bells.md"),
+        "# Bells\n\nThe bells ring at dusk.\n\n- [ ] Who rings the bells?\n",
+    )
+    .unwrap();
+    fs::write(
+        root(d).join("Broken.md"),
+        "---\nsplat_schema: 2\nsplat_id: [\n---\n",
+    )
+    .unwrap();
+    reload(d);
+    d.click(NAV_WORLD);
+    let people_before = fs::read_dir(root(d).join("People")).unwrap().count();
+    d.click("New ▾");
+    d.click("Generate NPC");
+    d.expect("Save NPC");
+    let promised: Vec<String> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == Role::Label)
+        .filter_map(|node| node.name.strip_prefix("Will save ").map(str::to_owned))
+        .collect();
+    d.observe(
+        "iter-15-D-AD2",
+        promised.len() == 1 && promised[0].starts_with("People/"),
+        format!("The card names the campaign's NPC folder: {promised:?}"),
+    );
+    let file = promised[0].clone();
+    let npc = file
+        .trim_start_matches("People/")
+        .trim_end_matches(".md")
+        .to_owned();
+    let row = format!("Unsaved NPC: {npc}");
+    d.observe(
+        "iter-15-D-FD3-sizes",
+        d.visible_text(crate::lookup::OWN_NAMES_HELP)
+            && d.in_view(crate::lookup::COPY_MARKER)
+            && !d.visible_text("splat:rolls"),
+        "The World card asks for a marked table of names in words",
+    );
+    d.state("held-npc-card", Sizes::All);
+
+    // Each path to another view keeps the NPC in one row above that view.
+    let kept = |d: &mut Driver<'_>, id: &str, view: &str| {
+        d.expect(view);
+        d.observe(
+            id,
+            d.in_view(&row) && d.in_view("Show") && !d.has("Save NPC"),
+            format!("{view} opens below one row that keeps the unsaved NPC"),
+        );
+    };
+    d.click_containing("Problems · ");
+    kept(d, "iter-15-D-AD1-problems", "Problems");
+    let short = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "Ilsa" && node.role == Role::Link && node.in_view());
+    d.observe(
+        "iter-15-D2-short-link",
+        short
+            .as_ref()
+            .is_some_and(|node| node.rect.width() >= design::XL),
+        format!(
+            "A short link's press target is at least XL wide: {:?}",
+            short.as_ref().map(|node| node.rect)
+        ),
+    );
+    d.state("held-npc-row-over-problems", Sizes::All);
+    d.click_containing("Open questions · ");
+    kept(d, "iter-15-D-AD1-questions", "Who rings the bells?");
+    d.click_starting("Wren · ");
+    kept(d, "iter-15-D-AD1-other-note", "Show file");
+    d.state("held-npc-row-over-note", Sizes::Default);
+    d.click_starting("Broken.md · ");
+    kept(d, "iter-15-D-AD1-repair", "Broken.md");
+    d.click("New ▾");
+    d.click("NPC");
+    kept(d, "iter-15-D-AD1-new-npc", "Create NPC");
+    d.click("Cancel");
+
+    // Show brings back the same NPC, whose save writes the promised file.
+    d.click("Show");
+    d.observe(
+        "iter-15-D-AD1-show",
+        d.has("Save NPC") && !d.has(&row) && d.has(&format!("Will save {file}")),
+        "Show brings back the same NPC's card",
+    );
+    let notice = format!("{npc} draft discarded.");
+    d.click("Discard");
+    d.observe(
+        "iter-15-D-AD1-discard",
+        d.visible_text(&notice) && !d.has("Save NPC"),
+        "Discard lets the NPC go with Undo discard",
+    );
+    d.state("held-npc-discarded", Sizes::All);
+    d.click(&format!("Undo discard of {npc}"));
+    d.observe(
+        "iter-15-D-AD1-undo",
+        d.has(&format!("Will save {file}")) && !d.visible_text(&notice),
+        "Undo discard brings back the same NPC",
+    );
+
+    // Closing the app or changing the campaign asks about the held NPC, as for other drafts.
+    let unsaved = format!("The generated NPC \u{201c}{npc}\u{201d} is not saved.");
+    d.request_close();
+    d.observe(
+        "iter-15-D-AD1-close",
+        d.in_view_containing(&unsaved) && d.in_view("Keep editing"),
+        "The close dialog names the unsaved NPC",
+    );
+    // The check above requires the dialog. Without it, the rest still reports its own checks.
+    if d.has("Keep editing") {
+        d.click("Keep editing");
+    }
+    d.observe(
+        "iter-15-D-AD1-close-kept",
+        !d.has_containing(&unsaved) && d.has(&format!("Will save {file}")),
+        "Keep editing leaves the same NPC on its card",
+    );
+    let switch = "Save or discard your changes to change campaigns.";
+    d.observe(
+        "iter-15-D-AD1-switch-start",
+        !d.in_view_containing(switch),
+        "The campaign list is closed before the check",
+    );
+    d.click_starting("Active campaign: ");
+    d.observe(
+        "iter-15-D-AD1-switch",
+        d.in_view_containing(switch),
+        "The campaign selector is blocked while the NPC is unsaved",
+    );
+    d.press(Key::Escape);
+    d.click("Save NPC");
+    d.settle();
+    let people_after = fs::read_dir(root(d).join("People")).unwrap().count();
+    d.observe(
+        "iter-15-D-AD1-saved",
+        root(d).join(&file).is_file() && people_after == people_before + 1 && !d.has(&row),
+        "Save NPC writes the held NPC to the promised file, once",
     );
 }
 
@@ -3293,6 +3475,24 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("Lookup's duplicate choices start at the message text at {size:?}: {detail}"),
         );
     }
+    d.observe_both(
+        "iter-15-D-FD7",
+        "Also linked from never names the note itself, and names a copy by its path",
+        |d| {
+            let links: Vec<String> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.role == Role::Link && node.in_view())
+                .map(|node| node.name)
+                .collect();
+            // World reads Rook Ambry.md and Lookup reads the copy: each names only the other.
+            let count = |path: &str| links.iter().filter(|name| *name == path).count();
+            d.visible_text("Also linked from")
+                && count("NPCs/Rook Ambry.md") == 1
+                && count("NPCs/Rook Ambry copy.md") == 1
+                && !links.iter().any(|name| name == "Rook Ambry")
+        },
+    );
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
@@ -3909,6 +4109,23 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             links.len() == 1 && message.top() >= file.bottom() && !d.in_view(design::icons::ERROR)
         },
     );
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (inside, detail) = d.at_size(size, |d| {
+            d.expect(reason);
+            let warning = d.place_of(reason).unwrap();
+            let pane = d.place_of("Resize World notes column").unwrap().right();
+            let measure = pane + design::S + design::READER_MEASURE;
+            (
+                warning.right() <= measure + 1.0,
+                format!("warning ends at {}, measure at {measure}", warning.right()),
+            )
+        });
+        d.observe(
+            "iter-15-D-FD6-read",
+            inside,
+            format!("The unread warning wraps at the reader measure at {size:?}: {detail}"),
+        );
+    }
     d.state("read-picker-unread-disk-kept", Sizes::All);
 
     fs::write(&path, &readable).unwrap();

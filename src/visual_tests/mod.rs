@@ -61,7 +61,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 75] = [
+const SCENARIOS: [(&str, Seed, Script); 76] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -303,6 +303,11 @@ const SCENARIOS: [(&str, Seed, Script); 75] = [
         "generator-tables",
         Seed::World,
         scenarios::world_build::generator,
+    ),
+    (
+        "world-held-npc",
+        Seed::World,
+        scenarios::world_build::held_npc,
     ),
     (
         "session-recording",

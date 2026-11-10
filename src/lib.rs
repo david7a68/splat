@@ -450,6 +450,7 @@ impl Splat {
         } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
+            || self.world_page.has_generated()
             || self.any_unsaved_edits()
             || self.campaign_content.dirty()
             || self.encounters.dirty()
@@ -488,6 +489,12 @@ impl Splat {
         if self.world_page.dirty() {
             items.push((
                 "A World note repair has unsaved changes.".into(),
+                Page::World,
+            ));
+        }
+        if let Some(name) = self.world_page.held_npc() {
+            items.push((
+                format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
                 Page::World,
             ));
         }
@@ -2232,6 +2239,7 @@ impl eframe::App for Splat {
             self.timeline.save();
             if (self.library.dirty()
                 || self.world_page.dirty()
+                || self.world_page.has_generated()
                 || self.any_unsaved_edits()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()

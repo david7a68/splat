@@ -2119,6 +2119,7 @@ impl Lookup {
                     &self.generator_sources,
                     self.run_open,
                     NamesHelp::Link,
+                    &world::new_entry_path(Some(&*index), &npc.name, "npc"),
                 );
                 reroll = choice.again;
                 if choice.save {
@@ -2283,9 +2284,13 @@ pub(crate) enum NamesHelp {
     Plain,
 }
 
-/// The text a World note needs for the generator to use its own names.
-pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, put \
-     <!-- splat:rolls key=npc-name dice=1d6 --> on the line above a table of names in any note.";
+/// The World page's words for using the campaign's own names. The marker itself is copied, not
+/// shown, because the DM types it in another program.
+pub(crate) const OWN_NAMES_HELP: &str =
+    "Built-in names. To use your own, add a table of names to a note and mark it.";
+/// The exact line that marks a table of names, for `Copy the marker`.
+pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
+pub(crate) const COPY_MARKER: &str = "Copy the marker";
 pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
 pub(crate) const USE_OWN_NAMES: &str = "Use your own names";
 
@@ -2307,8 +2312,17 @@ pub(crate) fn generated_card(
     problems: &[crate::npc_generator::TableProblem],
     sources: &[String],
     run_open: bool,
+    save_path: &str,
 ) -> (bool, bool, bool) {
-    let choice = generator_card(ui, npc, problems, sources, run_open, NamesHelp::Plain);
+    let choice = generator_card(
+        ui,
+        npc,
+        problems,
+        sources,
+        run_open,
+        NamesHelp::Plain,
+        save_path,
+    );
     (choice.save, choice.again, choice.discard)
 }
 
@@ -2320,6 +2334,7 @@ pub(crate) fn generator_card(
     sources: &[String],
     run_open: bool,
     help: NamesHelp,
+    save_path: &str,
 ) -> CardChoice {
     let mut choice = CardChoice::default();
     design::group_label(ui, "Generated NPC");
@@ -2337,7 +2352,24 @@ pub(crate) fn generator_card(
     if sources.is_empty() && problems.is_empty() {
         match help {
             NamesHelp::Marker => {
-                ui.label(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted));
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted))
+                        .wrap(),
+                );
+                // `Copied` lasts until the card shows another NPC.
+                let id = ui.id().with("names_marker_copied");
+                let copied = ui
+                    .data(|data| data.get_temp::<String>(id))
+                    .is_some_and(|name| name == npc.name);
+                let response = Action::quiet(if copied { "Copied" } else { COPY_MARKER })
+                    .icon(if copied { icons::OK } else { icons::COPY })
+                    .density(Density::Read)
+                    .show(ui)
+                    .on_hover_text(NAMES_MARKER);
+                if response.clicked() {
+                    ui.ctx().copy_text(NAMES_MARKER.to_owned());
+                    ui.data_mut(|data| data.insert_temp(id, npc.name.clone()));
+                }
             }
             NamesHelp::Plain => {
                 ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
@@ -2391,13 +2423,7 @@ pub(crate) fn generator_card(
     });
     ui.label(
         Type::Small
-            .rich(
-                ui,
-                format!(
-                    "Will save NPCs/{}.md",
-                    crate::sessions::file_safe(&npc.name)
-                ),
-            )
+            .rich(ui, format!("Will save {save_path}"))
             .color(colors().muted),
     );
     ui.horizontal_wrapped(|ui| {
@@ -2445,7 +2471,16 @@ mod tests {
             let npc = npc.clone();
             let mut harness = egui_kittest::Harness::new_ui_state(
                 move |ui, pressed: &mut bool| {
-                    *pressed |= generator_card(ui, &npc, &[], &sources, false, help).own_names;
+                    *pressed |= generator_card(
+                        ui,
+                        &npc,
+                        &[],
+                        &sources,
+                        false,
+                        help,
+                        "People/Wren Hallam.md",
+                    )
+                    .own_names;
                 },
                 false,
             );
@@ -2473,6 +2508,39 @@ mod tests {
                 harness.get_by_label(USE_OWN_NAMES).click();
                 harness.run_steps(2);
                 assert!(*harness.state(), "{case}: the link reports its press");
+            }
+            // AD2: every card names the path it was given, which is the path the save writes.
+            assert!(
+                harness
+                    .query_by_label("Will save People/Wren Hallam.md")
+                    .is_some(),
+                "{case}"
+            );
+            // FD3: no card shows the raw marker. Only the World card can copy it.
+            assert!(
+                harness.query_by_label_contains("splat:rolls").is_none(),
+                "iter-15-D-FD3-hidden {case}"
+            );
+            assert_eq!(
+                harness.query_by_label(COPY_MARKER).is_some(),
+                marker,
+                "{case}"
+            );
+            if marker {
+                harness.get_by_label(COPY_MARKER).click();
+                harness.step();
+                let copied = harness.output().platform_output.commands.iter().any(
+                    |command| matches!(command, egui::OutputCommand::CopyText(text) if text == NAMES_MARKER),
+                );
+                assert!(
+                    copied,
+                    "iter-15-D-FD3-copy: the action copies the exact marker"
+                );
+                harness.run_steps(2);
+                assert!(
+                    harness.query_by_label("Copied").is_some(),
+                    "iter-15-D-FD3-copied: the action says the marker was copied"
+                );
             }
         }
     }

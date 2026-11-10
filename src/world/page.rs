@@ -43,6 +43,13 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
     )
 }
 
+/// A generated NPC with the table facts its card shows.
+type Held = (
+    crate::npc_generator::Generated,
+    Vec<crate::npc_generator::TableProblem>,
+    Vec<String>,
+);
+
 /// What the page's larger part shows.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum View {
@@ -67,7 +74,12 @@ pub struct WorldPage {
     repair: Option<super::repair::Repair>,
     kept_repairs: Vec<super::repair::Repair>,
     campaign: Option<Uuid>,
+    /// An unsaved generated NPC is a held draft. Only Save NPC and Discard end it.
     generated: Option<crate::npc_generator::Generated>,
+    /// Whether the held NPC's card is the view. If not, one row above the view names it.
+    generated_shown: bool,
+    /// The NPC that Discard let go, with its table facts, for one `Undo discard`.
+    discarded_npc: Option<Held>,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<String>,
@@ -123,6 +135,8 @@ impl WorldPage {
         }
     }
 
+    /// A campaign change is blocked while a draft or a generated NPC is unsaved, so these
+    /// belong to the campaign that was open.
     fn set_campaign(&mut self, id: Uuid) {
         if self.campaign != Some(id) {
             self.campaign = Some(id);
@@ -130,17 +144,33 @@ impl WorldPage {
             self.repair = None;
             self.kept_repairs.clear();
             self.reader = Reader::default();
+            self.generated = None;
+            self.generated_shown = false;
+            self.discarded_npc = None;
         }
     }
 
     pub fn reveal(&mut self, campaign: Uuid, id: Uuid) {
         self.set_campaign(campaign);
+        self.view = View::Reader;
+        self.new_kind = None;
+        self.error = None;
+        self.open_note(id);
+    }
+
+    /// Opens a note in the reader. A held NPC goes to its row above the reader.
+    fn open_note(&mut self, id: Uuid) {
         self.selected = Some(id);
         self.view = View::Reader;
         self.keep_repair();
-        self.new_kind = None;
-        self.generated = None;
-        self.error = None;
+        self.leave_card();
+    }
+
+    /// Another view takes the pane. A held NPC keeps its row; the Undo for a discarded NPC
+    /// ends, as an Undo message ends when the DM moves on.
+    fn leave_card(&mut self) {
+        self.generated_shown = false;
+        self.discarded_npc = None;
     }
 
     /// An unsaved generated NPC, which Lookup's link must not replace.
@@ -148,9 +178,27 @@ impl WorldPage {
         self.generated.is_some()
     }
 
-    /// Lookup's link kept Lookup's NPC because this page holds its own.
+    /// The name of the unsaved generated NPC, for the app's list of unsaved work.
+    pub fn held_npc(&self) -> Option<&str> {
+        self.generated.as_ref().map(|npc| npc.name.as_str())
+    }
+
+    /// Lookup's link kept Lookup's NPC because this page holds its own. The page opens on
+    /// its own card.
     pub fn lookup_kept(&mut self) {
         self.lookup_kept = true;
+        self.show_held();
+    }
+
+    /// The held NPC's card becomes the view again.
+    fn show_held(&mut self) {
+        if self.generated.is_some() {
+            self.view = View::Reader;
+            self.keep_repair();
+            self.new_kind = None;
+            self.error = None;
+            self.generated_shown = true;
+        }
     }
 
     /// Whether the app should tell this page which NPC Lookup holds.
@@ -173,6 +221,8 @@ impl WorldPage {
         self.error = None;
         self.lookup_kept = false;
         self.generated = Some(card.npc);
+        self.generated_shown = true;
+        self.discarded_npc = None;
         self.generator_problems = card.problems;
         self.generator_sources = card.sources;
     }
@@ -190,7 +240,7 @@ impl WorldPage {
                 self.repair = Some(repair);
                 self.error = None;
                 self.new_kind = None;
-                self.generated = None;
+                self.leave_card();
             }
             Err(error) => self.error = Some(error),
         }
@@ -268,7 +318,7 @@ impl WorldPage {
                                     || crate::roll_table::fault_count(&item.entry.body) > 0)
                                     && design::link(ui, &item.entry.name).clicked()
                                 {
-                                    self.selected = Some(item.entry.id);
+                                    self.open_note(item.entry.id);
                                     ui.close();
                                 }
                             }
@@ -422,6 +472,7 @@ impl WorldPage {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
+                self.held_row(ui);
                 if let Some(repair) = &mut self.repair {
                     if repair.show(ui, campaign) {
                         self.view = View::Reader;
@@ -432,7 +483,7 @@ impl WorldPage {
                     }
                     return;
                 }
-                if self.new_kind.is_some() || self.generated.is_some() || self.error.is_some() {
+                if self.new_kind.is_some() || self.card_shown() || self.error.is_some() {
                     self.creation_form(ui, index, campaign);
                     return;
                 }
@@ -445,8 +496,7 @@ impl WorldPage {
                         })
                         .inner;
                     if let Some((page, heading)) = opened {
-                        self.selected = Some(index.items[page].entry.id);
-                        self.view = View::Reader;
+                        self.open_note(index.items[page].entry.id);
                         self.reader.show_heading(heading);
                     }
                     return;
@@ -501,22 +551,70 @@ impl WorldPage {
         }
     }
 
+    /// New note, NPC or location keeps a held NPC in its row. Generate NPC shows the held
+    /// NPC's card, where Reroll rolls another.
     fn begin_new(&mut self, kind: &'static str, index: Option<&ContentIndex>) {
+        if kind == "generate" && self.generated.is_some() {
+            self.show_held();
+            return;
+        }
         self.view = View::Reader;
         self.error = None;
         self.keep_repair();
         self.new_kind = (kind != "generate").then_some(kind);
-        self.generated = None;
-        if kind == "generate"
-            && let Some(index) = index
-        {
-            let tables = index.npc_tables();
-            match crate::npc_generator::roll(&tables) {
-                Ok(npc) => self.generated = Some(npc),
-                Err(error) => self.error = Some(error),
+        if kind != "generate" {
+            self.leave_card();
+        } else if let Some(index) = index {
+            self.roll(index);
+        }
+    }
+
+    /// A new NPC for the card. A failed roll keeps the NPC the card had.
+    fn roll(&mut self, index: &ContentIndex) {
+        let tables = index.npc_tables();
+        match crate::npc_generator::roll(&tables) {
+            Ok(npc) => {
+                self.generated = Some(npc);
+                self.generated_shown = true;
+                self.discarded_npc = None;
+                self.generator_sources = tables.sources;
+                self.generator_problems = tables.problems;
             }
-            self.generator_sources = tables.sources;
-            self.generator_problems = tables.problems;
+            Err(error) => self.error = Some(error),
+        }
+    }
+
+    /// Whether the held NPC's card is the view.
+    fn card_shown(&self) -> bool {
+        self.generated.is_some() && self.generated_shown
+    }
+
+    /// Above another view: the held NPC's one row, or the Undo for the NPC Discard let go.
+    fn held_row(&mut self, ui: &mut egui::Ui) {
+        if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown) {
+            let mut show = false;
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Body
+                        .rich(ui, format!("Unsaved NPC: {}", npc.name))
+                        .color(colors().text),
+                );
+                ui.label(Type::Body.rich(ui, "·").color(colors().muted));
+                show = design::link(ui, "Show").clicked();
+            });
+            ui.add_space(design::S);
+            if show {
+                self.show_held();
+            }
+        } else if let Some((npc, _, _)) = &self.discarded_npc
+            && self.generated.is_none()
+            && design::draft_discarded(ui, &npc.name)
+            && let Some((npc, problems, sources)) = self.discarded_npc.take()
+        {
+            self.generated = Some(npc);
+            self.generator_problems = problems;
+            self.generator_sources = sources;
+            self.show_held();
         }
     }
 
@@ -533,20 +631,10 @@ impl WorldPage {
             );
             design::text_field(ui, "Name", &mut self.new_name, None, None);
             if kind == "npc" && !self.new_name.trim().is_empty() {
-                let folder = match index.type_folder("npc") {
-                    Some(folder) if folder.is_empty() => folder,
-                    Some(folder) => format!("{folder}/"),
-                    None => "NPCs/".into(),
-                };
+                let path = super::new_entry_path(Some(index), &self.new_name, "npc");
                 ui.label(
                     Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "Will create {folder}{}.md",
-                                crate::sessions::file_safe(&self.new_name)
-                            ),
-                        )
+                        .rich(ui, format!("Will create {path}"))
                         .color(colors().muted),
                 );
             }
@@ -596,7 +684,7 @@ impl WorldPage {
                 }
             });
         }
-        if let Some(npc) = &self.generated {
+        if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
             if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
                 ui.label(
                     Type::Small
@@ -616,22 +704,36 @@ impl WorldPage {
                 &self.generator_sources,
                 self.run_open,
                 crate::lookup::NamesHelp::Marker,
+                &super::new_entry_path(Some(index), &npc.name, "npc"),
             );
             if choice.save {
                 made = Some(super::create_generated(campaign, npc));
             }
             if choice.again {
-                self.begin_new("generate", Some(index));
+                self.roll(index);
             }
-            if choice.discard {
-                self.generated = None;
+            if choice.discard
+                && let Some(npc) = self.generated.take()
+            {
+                self.discarded_npc = Some((
+                    npc,
+                    std::mem::take(&mut self.generator_problems),
+                    std::mem::take(&mut self.generator_sources),
+                ));
+                self.generated_shown = false;
+                self.error = None;
             }
         }
         match made {
             Some(Ok(id)) => {
                 self.selected = Some(id);
+                self.view = View::Reader;
                 self.new_kind = None;
-                self.generated = None;
+                // A New form's save leaves a held NPC in its row.
+                if self.generated_shown {
+                    self.generated = None;
+                    self.generated_shown = false;
+                }
                 self.new_name.clear();
                 self.note_type.clear();
                 self.error = None;
@@ -643,7 +745,7 @@ impl WorldPage {
         if let Some(error) = &self.error {
             design::message(ui, design::Tone::Error, error);
             if self.new_kind.is_none()
-                && self.generated.is_none()
+                && !self.card_shown()
                 && design::Action::quiet("Cancel").show(ui).clicked()
             {
                 self.error = None;
@@ -677,7 +779,7 @@ impl WorldPage {
                 self.view = view;
                 self.keep_repair();
                 self.new_kind = None;
-                self.generated = None;
+                self.leave_card();
                 self.error = None;
             }
         }
@@ -881,7 +983,7 @@ impl WorldPage {
                 let selected = self.view == View::Reader
                     && self.repair.is_none()
                     && self.new_kind.is_none()
-                    && self.generated.is_none()
+                    && !self.card_shown()
                     && self.error.is_none()
                     && self.selected == Some(entry.id);
                 ui.horizontal(|ui| {
@@ -915,9 +1017,7 @@ impl WorldPage {
                             .on_hover_text(&entry.path)
                     };
                     if response.clicked() {
-                        self.selected = Some(entry.id);
-                        self.view = View::Reader;
-                        self.keep_repair();
+                        self.open_note(entry.id);
                     }
                 });
             }
@@ -953,6 +1053,346 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT, Queryable},
+    };
+
+    fn note(path: &str, name: &str, kind: &str, body: &str) -> String {
+        format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_type: {kind}\n---\n\n# {name}\n\n{body}",
+            splat::character::stable_id(path)
+        )
+    }
+
+    /// A campaign with an open question, a problem and a note that cannot be read.
+    fn held_npc_campaign(dir: &std::path::Path) -> (Campaign, Arc<ContentIndex>) {
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Held".into(),
+            path: dir.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        for (path, text) in [
+            (
+                "NPCs/Rook.md",
+                note(
+                    "NPCs/Rook.md",
+                    "Rook",
+                    "npc",
+                    "Rook keeps the gate.\n\n- [ ] Who pays Rook?\n",
+                ),
+            ),
+            ("Lore/Bells.md", note("Lore/Bells.md", "Bells", "lore", "")),
+            (
+                "Broken.md",
+                "---\nsplat_schema: 2\nsplat_id: [\n---\n".into(),
+            ),
+        ] {
+            let file = dir.join(path);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, text).unwrap();
+        }
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
+        (campaign, index)
+    }
+
+    fn held(page: &WorldPage) -> Option<String> {
+        page.generated.as_ref().map(|npc| npc.name.clone())
+    }
+
+    fn npc_files(dir: &std::path::Path) -> Vec<String> {
+        let mut files: Vec<_> = std::fs::read_dir(dir.join("NPCs"))
+            .unwrap()
+            .map(|file| file.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|file| file != "Rook.md")
+            .collect();
+        files.sort();
+        files
+    }
+
+    /// AD1/SD1/FD1: an unsaved generated NPC is a held draft. Every path to another view keeps
+    /// it in one row above that view, Show brings its card back, and Save writes it once.
+    /// Each path's failure is collected, so one fault build names every path it breaks.
+    #[test]
+    fn iter15_d_ad1_every_path_keeps_a_held_npc() {
+        let dir = tempfile::tempdir().unwrap();
+        let (campaign, index) = held_npc_campaign(dir.path());
+        assert_eq!(index.broken_world.len(), 1, "the fixture has a repair");
+        let rook = index
+            .items
+            .iter()
+            .find(|item| item.entry.name == "Rook")
+            .unwrap()
+            .entry
+            .id;
+        let shown = campaign.clone();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_ui_state(
+                {
+                    let index = index.clone();
+                    move |ui, page: &mut WorldPage| page.show(ui, Some(&index), &shown)
+                },
+                WorldPage::default(),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.state_mut().begin_new("generate", Some(&index));
+        harness.run_steps(2);
+        let npc = held(harness.state()).expect("the generator rolled an NPC");
+        let rolled = harness.state().generated.clone().unwrap();
+        let row = format!("Unsaved NPC: {npc}");
+        assert!(harness.query_by_label("Save NPC").is_some());
+        assert!(
+            harness.query_by_label(&row).is_none(),
+            "no row while the card shows"
+        );
+
+        type Path<'a> = (
+            &'a str,
+            Box<dyn Fn(&mut Harness<'_, WorldPage>) -> bool + 'a>,
+        );
+        let label_starting = |harness: &Harness<'_, WorldPage>, start: &str| {
+            harness
+                .query_all_by_label_contains(start)
+                .find(|node| {
+                    node.accesskit_node()
+                        .label()
+                        .is_some_and(|label| label.starts_with(start))
+                })
+                .map(|node| node.accesskit_node().label().unwrap())
+        };
+        let click_starting = move |harness: &mut Harness<'_, WorldPage>, start: &str| {
+            let label = label_starting(harness, start).unwrap_or_else(|| panic!("{start}"));
+            harness.get_by_label(&label).click();
+            harness.run_steps(2);
+        };
+        let paths: Vec<Path> = vec![
+            (
+                "AD1-problems",
+                Box::new(|harness| {
+                    click_starting(harness, "Problems · ");
+                    harness.state().view == View::Problems
+                        && harness.query_by_label("Where a fact has no home, or has two. Splat only lists them. You change the notes.").is_some()
+                }),
+            ),
+            (
+                "AD1-questions",
+                Box::new(|harness| {
+                    click_starting(harness, "Open questions · ");
+                    harness.state().view == View::Questions
+                        && harness.query_by_label("Who pays Rook?").is_some()
+                }),
+            ),
+            (
+                "AD1-reveal",
+                Box::new(|harness| {
+                    let id = campaign.id;
+                    harness.state_mut().reveal(id, rook);
+                    harness.run_steps(2);
+                    harness.state().selected == Some(rook)
+                        && harness.query_by_label("Rook keeps the gate.").is_some()
+                }),
+            ),
+            (
+                "AD1-repair-opens",
+                Box::new(|harness| {
+                    harness.state_mut().open_repair(&campaign, "Broken.md");
+                    harness.run_steps(2);
+                    harness.state().repair.is_some()
+                }),
+            ),
+            (
+                "AD1-repair-ends-on-another-note",
+                Box::new(|harness| {
+                    harness.state_mut().open_repair(&campaign, "Broken.md");
+                    harness.run_steps(2);
+                    let opened = harness.state().repair.is_some();
+                    click_starting(harness, "Bells · ");
+                    opened
+                        && harness.state().repair.is_none()
+                        && harness.state().selected
+                            == index
+                                .items
+                                .iter()
+                                .find(|item| item.entry.name == "Bells")
+                                .map(|item| item.entry.id)
+                }),
+            ),
+            (
+                "AD1-new-note",
+                Box::new(|harness| {
+                    harness.state_mut().begin_new("note", Some(&index));
+                    harness.run_steps(2);
+                    let form = harness.query_by_label("Create note").is_some();
+                    harness.get_by_label("Cancel").click();
+                    harness.run_steps(2);
+                    form && harness.state().new_kind.is_none()
+                }),
+            ),
+            (
+                "AD1-new-npc-saved",
+                Box::new(|harness| {
+                    harness.state_mut().begin_new("npc", Some(&index));
+                    harness.run_steps(2);
+                    let form = harness.query_by_label("Create NPC").is_some();
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
+                        .focus();
+                    harness.run_steps(1);
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
+                        .type_text("Tam");
+                    harness.run_steps(2);
+                    harness.get_by_label("Create NPC").click();
+                    harness.run_steps(2);
+                    // The New form's save writes only its own note.
+                    form && harness.state().new_kind.is_none()
+                        && npc_files(dir.path()) == ["Tam.md"]
+                }),
+            ),
+        ];
+        let mut failed = Vec::new();
+        for (id, path) in &paths {
+            let reached = path(&mut harness);
+            let kept = held(harness.state()).as_deref() == Some(npc.as_str());
+            let row_shown = harness.query_by_label(&row).is_some()
+                && harness.query_by_label("Save NPC").is_none();
+            if !(reached && kept && row_shown) {
+                failed.push(format!(
+                    "{id}: reached {reached}, kept {kept}, row {row_shown}"
+                ));
+                // Hold the same NPC again so the next path starts from the same state.
+                let page = harness.state_mut();
+                page.generated = Some(rolled.clone());
+                page.generated_shown = true;
+                harness.run_steps(2);
+                continue;
+            }
+            harness.get_by_label("Show").click();
+            harness.run_steps(2);
+            if harness.query_by_label("Save NPC").is_none()
+                || harness.query_by_label(&row).is_some()
+            {
+                failed.push(format!("{id}: Show did not bring the card back"));
+            }
+        }
+        // Lookup's link and Generate NPC open the held card, never a new NPC.
+        for (id, open) in [
+            (
+                "AD1-lookup-link",
+                WorldPage::lookup_kept as fn(&mut WorldPage),
+            ),
+            ("AD1-generate-again", |page: &mut WorldPage| {
+                page.begin_new("generate", None)
+            }),
+        ] {
+            click_starting(&mut harness, "Problems · ");
+            open(harness.state_mut());
+            harness.run_steps(2);
+            if held(harness.state()).as_deref() != Some(npc.as_str())
+                || harness.query_by_label("Save NPC").is_none()
+            {
+                failed.push(format!("{id}: the held card is not shown"));
+            }
+        }
+        assert!(failed.is_empty(), "{failed:#?}");
+
+        harness.get_by_label("Save NPC").click();
+        harness.run_steps(2);
+        let mut expected = vec![format!("{npc}.md"), "Tam.md".to_owned()];
+        expected.sort();
+        assert_eq!(
+            npc_files(dir.path()),
+            expected,
+            "AD1-saved: the held NPC saves to one file, beside the New form's note"
+        );
+        assert!(held(harness.state()).is_none());
+        assert!(harness.query_by_label(&row).is_none());
+    }
+
+    /// Discard lets the NPC go with `Undo discard`, which brings the same NPC back. Moving on
+    /// ends the Undo, and a new NPC replaces it.
+    #[test]
+    fn iter15_d_ad1_discard_has_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let (campaign, index) = held_npc_campaign(dir.path());
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_ui_state(
+                {
+                    let index = index.clone();
+                    move |ui, page: &mut WorldPage| page.show(ui, Some(&index), &campaign)
+                },
+                WorldPage::default(),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.state_mut().begin_new("generate", Some(&index));
+        harness.run_steps(2);
+        let npc = held(harness.state()).unwrap();
+        let attributes = harness.state().generated.clone().unwrap().attributes;
+        let notice = format!("{npc} draft discarded.");
+        harness.get_by_label("Discard").click();
+        harness.run_steps(2);
+        assert!(held(harness.state()).is_none(), "Discard lets the NPC go");
+        assert!(harness.query_by_label("Save NPC").is_none());
+        assert!(
+            harness.query_by_label(&notice).is_some(),
+            "AD1-discard-notice"
+        );
+        harness
+            .get_by_label(&format!("Undo discard of {npc}"))
+            .click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .state()
+                .generated
+                .as_ref()
+                .map(|n| (&n.name, &n.attributes)),
+            Some((&npc, &attributes)),
+            "AD1-undo-discard: the same NPC comes back"
+        );
+        assert!(harness.query_by_label("Save NPC").is_some());
+        assert!(harness.query_by_label(&notice).is_none());
+
+        // Moving on ends the Undo. The NPC is then gone and nothing was written.
+        harness.get_by_label("Discard").click();
+        harness.run_steps(2);
+        assert!(harness.query_by_label(&notice).is_some());
+        let problems = harness
+            .query_all_by_label_contains("Problems · ")
+            .next()
+            .unwrap()
+            .accesskit_node()
+            .label()
+            .unwrap();
+        harness.get_by_label(&problems).click();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label(&notice).is_none() && harness.state().discarded_npc.is_none(),
+            "AD1-undo-ends: another view ends the Undo"
+        );
+        assert!(npc_files(dir.path()).is_empty(), "Discard writes nothing");
+
+        // A new NPC replaces a waiting Undo, so Undo never replaces an unsaved NPC.
+        harness.state_mut().begin_new("generate", Some(&index));
+        harness.run_steps(2);
+        harness.get_by_label("Discard").click();
+        harness.run_steps(2);
+        harness.state_mut().begin_new("generate", Some(&index));
+        harness.run_steps(2);
+        assert!(harness.state().discarded_npc.is_none());
+        assert!(
+            harness
+                .query_all_by_label_contains("Undo discard")
+                .next()
+                .is_none()
+        );
+    }
 
     #[test]
     fn repair_details_read_once_per_index_and_follow_recovery() {
