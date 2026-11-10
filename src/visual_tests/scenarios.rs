@@ -5440,6 +5440,12 @@ pub mod nav_table {
                     title.as_deref() == Some("Encounters"),
                     "Several paused runs open the Encounters list",
                 );
+            } else if name == crate::no_run_name() {
+                d.observe(
+                    "G3",
+                    title.as_deref() == Some("Encounters"),
+                    "The empty Run slot opens the Encounters list",
+                );
             } else {
                 titles.push((name, title));
             }
@@ -9791,6 +9797,126 @@ pub mod session_plan {
         d.click_starting(session);
     }
 
+    /// The top edge of each main rail item, found at the rail's left edge, not on the page.
+    fn rail_tops(d: &Driver<'_>) -> Vec<(&'static str, Option<f32>)> {
+        let nodes = d.nodes();
+        [
+            NAV_ENCOUNTERS,
+            NAV_SESSIONS,
+            NAV_TIMELINE,
+            NAV_WORLD,
+            NAV_PARTY,
+            NAV_LIBRARY,
+            NAV_CAMPAIGN,
+        ]
+        .map(|name| {
+            let top = nodes
+                .iter()
+                .find(|node| node.name == name && node.rect.left() < crate::design::XL)
+                .map(|node| node.rect.top());
+            (name, top)
+        })
+        .to_vec()
+    }
+
+    /// FT4: the played fight's `Log`, `Whole run` and `Timeline` start their words at the text
+    /// edge of the HP grid above, with no spaces in the words, and each target is at least `XL`
+    /// square from the link's own size.
+    fn played_fight_links_at_the_text_edge(d: &mut Driver<'_>) {
+        use egui::accesskit::Role;
+        let size = d.window_size();
+        let xl = crate::design::XL;
+        let nodes = d.nodes();
+        let links = ["Log", "Whole run", "Timeline"].map(|name| {
+            nodes
+                .iter()
+                .find(|node| node.name == name && node.role == Role::Link && node.in_view())
+                .map(|node| node.rect)
+        });
+        // The word as painted, alone in its galley: a padded ` Log ` does not match.
+        let words: Vec<_> = ["Log", "Whole run", "Timeline"]
+            .iter()
+            .zip(&links)
+            .map(|(name, link)| {
+                link.and_then(|link| d.painted_word_rect(name, link.expand(crate::design::XS)))
+            })
+            .collect();
+        let edge = d.painted_left("Kestrel 7/41");
+        let log = words[0];
+        d.observe(
+            "iter-14-C-FT4",
+            links.iter().all(|link| {
+                link.is_some_and(|link| link.width() >= xl - 0.5 && link.height() >= xl - 0.5)
+            }) && words.iter().all(Option::is_some)
+                && edge
+                    .zip(log)
+                    .is_some_and(|(edge, log)| (log.left() - edge).abs() <= 0.5),
+            format!(
+                "At {size:?}, Log starts at the HP grid's text edge {edge:?}: words {words:?}, \
+                 targets {links:?}"
+            ),
+        );
+        // Must stay true: the links stay on one line, in order.
+        d.observe(
+            "iter-14-C-FT4-order",
+            words.iter().flatten().count() == 3
+                && words.windows(2).all(|pair| {
+                    pair[0].zip(pair[1]).is_some_and(|(a, b)| {
+                        a.right() < b.left() && (a.center().y - b.center().y).abs() <= 0.5
+                    })
+                }),
+            format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
+        );
+    }
+
+    /// FT1: the party bar says where its numbers come from whenever the room after the players
+    /// holds it. Its words are the last fact of each player's accessible name.
+    fn party_bar_names_its_source(d: &mut Driver<'_>) {
+        use egui::accesskit::Role;
+        let size = d.window_size();
+        let nodes = d.nodes();
+        let hide = nodes
+            .iter()
+            .find(|node| node.name == "Hide the party")
+            .map(|node| node.rect);
+        let players: Vec<_> = nodes
+            .iter()
+            .filter(|node| {
+                node.role == Role::Button
+                    && node.name.contains(" · HP ")
+                    && hide.is_some_and(|hide| {
+                        (node.rect.center().y - hide.center().y).abs() <= crate::design::S
+                    })
+            })
+            .collect();
+        let kestrel = players
+            .iter()
+            .find(|node| node.name.starts_with("Kestrel Dunmoor · HP 7/41"));
+        let source = kestrel.and_then(|node| node.name.rsplit(" · ").next());
+        let last = players
+            .iter()
+            .map(|node| node.rect.right())
+            .fold(0.0, f32::max);
+        let status = source.and_then(|source| {
+            nodes
+                .iter()
+                .find(|node| node.name.ends_with(source) && !node.name.contains(" · HP "))
+                .map(|node| node.rect)
+        });
+        let placed = status
+            .zip(hide)
+            .is_some_and(|(status, hide)| status.left() >= last && status.right() <= hide.left());
+        d.observe(
+            "iter-14-C-FT1",
+            kestrel.is_some() && (size == SMALL || placed),
+            format!(
+                "At {size:?}, the bar after {} players (to x {last}) shows its source {source:?} \
+                 at {status:?}, before Hide the party at {hide:?}",
+                players.len()
+            ),
+        );
+    }
+
     const FIRST: &str = "Bridge Ambush";
     const SECOND: &str = "Shrine of Cinders";
     const PLAYERS: [(&str, &str); 5] = [
@@ -10161,14 +10287,41 @@ pub mod session_plan {
         d.type_text("Held the bridge");
         d.press(Key::Enter);
         d.expect("Outcome: Held the bridge");
+        let with_run = rail_tops(d);
+        let had_slot = d.has(&crate::no_run_name());
         d.begin_task();
         d.click(CLOSE_RUN);
         d.goal_within("T12.1", "go back from a finished fight", 1);
+        // FT3: closing the last run leaves the quiet Run slot, and no main rail item moves.
+        let without_run = rail_tops(d);
+        d.observe(
+            "iter-14-C-FT3-close",
+            !had_slot
+                && d.has(&crate::no_run_name())
+                && without_run.iter().all(|(_, top)| top.is_some())
+                && without_run == with_run,
+            format!(
+                "Closing the run leaves the empty Run slot, and the rail items keep their places: \
+                 {with_run:?} then {without_run:?}"
+            ),
+        );
         d.observe(
             "T12.1",
             d.page_title().as_deref() == Some("Session"),
             "Close run goes back to the page the fight began on",
         );
+        // FT3: the empty Run slot is a working target. It opens the Encounters list.
+        assert!(
+            d.in_view(&crate::no_run_name()),
+            "the empty Run slot is in view"
+        );
+        d.click(&crate::no_run_name());
+        d.observe(
+            "iter-14-C-FT3-opens",
+            d.page_title().as_deref() == Some("Encounters"),
+            format!("The empty Run slot opens Encounters: {:?}", d.page_title()),
+        );
+        d.click(NAV_SESSIONS);
 
         // T12.5: how a fight ended, in place.
         show_plan(d);
@@ -10201,7 +10354,10 @@ pub mod session_plan {
             "A played fight gives its result and last round on one line",
         );
         d.goal_within("T12.5", "read how a fight ended", 1);
-        d.state("fight-in-place", Sizes::All);
+        d.state_prepared("fight-in-place", Sizes::All, |d| {
+            played_fight_links_at_the_text_edge(d);
+            party_bar_names_its_source(d);
+        });
         d.observe(
             "T12.5",
             d.visible_text("Kestrel 7/41") && d.page_title().as_deref() == Some("Session"),
@@ -10249,6 +10405,15 @@ pub mod session_plan {
                 .map_or_else(String::new, |node| node.name)
         };
         d.state("setup-carries-hp", Sizes::All);
+        // FT3: a run opening takes the slot in place, so the rail items do not move down.
+        let opened = rail_tops(d);
+        d.observe(
+            "iter-14-C-FT3-open",
+            !d.has(&crate::no_run_name()) && opened == without_run,
+            format!(
+                "Starting a fight keeps the rail items in place: {without_run:?} then {opened:?}"
+            ),
+        );
         d.observe(
             "T12.2",
             kestrel(d).contains("HP 7/41") && d.has_containing("Party HP carries over"),

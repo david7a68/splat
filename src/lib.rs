@@ -187,6 +187,14 @@ enum Connection {
     Offline,
 }
 
+/// The rail's Run slot with no fight open. It keeps the slot, so no rail target moves.
+pub(crate) const NO_FIGHT_OPEN: &str = "No fight open";
+
+/// The empty Run slot's accessible name. It does not start like an open run's `Run · …`.
+pub(crate) fn no_run_name() -> String {
+    format!("Run: {NO_FIGHT_OPEN}")
+}
+
 /// One flat level. A run is a place, not a mode of a tab.
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 enum Page {
@@ -787,13 +795,25 @@ impl Splat {
                         crate::encounters::run_state_word(run, false),
                     )
                 });
-                if let Some((path, name, state)) = paused
-                    && design::paused_run_nav(ui, fights, &name, &state).clicked()
-                {
-                    if fights > 1 {
+                if let Some((path, name, state)) = paused {
+                    if design::paused_run_nav(ui, fights, &name, &state).clicked() {
+                        if fights > 1 {
+                            self.page = Page::Encounters;
+                        } else if let Some(active) = self.campaigns.active_campaign() {
+                            self.encounters.open_saved_run(&path, &active);
+                        }
+                    }
+                } else {
+                    // The Run slot stays when no fight is open, as tall as a run's item, so
+                    // Encounters, Session and the rest never move when a run opens or closes.
+                    let response =
+                        design::nav_item(ui, icons::RUN, "Run", Some(NO_FIGHT_OPEN), false);
+                    design::named(ui, &response, &no_run_name());
+                    if response
+                        .on_hover_text(format!("{NO_FIGHT_OPEN}. Encounters lists the fights."))
+                        .clicked()
+                    {
                         self.page = Page::Encounters;
-                    } else if let Some(active) = self.campaigns.active_campaign() {
-                        self.encounters.open_saved_run(&path, &active);
                     }
                 }
             } else {

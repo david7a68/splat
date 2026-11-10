@@ -23,10 +23,12 @@ pub struct Glance {
     pub conditions: Vec<String>,
 }
 
-/// Where the numbers come from, as a status: an icon, a word and a colour.
+/// Where the numbers come from, as a status: an icon, a word and a colour. `short` names the
+/// same source in fewer words, for when the full words do not fit after the players.
 pub struct Source {
     pub icon: &'static str,
     pub word: String,
+    pub short: &'static str,
     pub color: Color32,
 }
 
@@ -227,8 +229,7 @@ struct Step {
     state_word: bool,
 }
 
-/// From the fullest bar down. The source gives way first, and stays on hover. Then the optional
-/// stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
+/// From the fullest bar down. The optional stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
 /// HP and temporary HP always stay. Only when first names and HP do not fit do the names
 /// shorten to an initial (`B.`). If that does not fit, initials stay and the HP state keeps its
 /// icon and colour without its word. No item is ever cut off: when even that does not fit, the
@@ -286,7 +287,6 @@ struct Hold {
     width: f32,
     party: Vec<String>,
     steps: usize,
-    show_source: bool,
     step: usize,
     kept: usize,
     widths: Vec<f32>,
@@ -307,19 +307,19 @@ pub fn show(
     let label =
         ui.painter()
             .layout_no_wrap("Party".to_owned(), Type::Label.font(ui), colors().muted);
-    let source_width = ui
-        .painter()
-        .layout_no_wrap(
-            format!("{} {}", source.icon, source.word),
-            Type::Small.font(ui),
-            source.color,
-        )
-        .size()
-        .x;
+    let source_width = |word: &str| {
+        ui.painter()
+            .layout_no_wrap(
+                format!("{} {word}", source.icon),
+                Type::Small.font(ui),
+                source.color,
+            )
+            .size()
+            .x
+    };
     let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
     let room =
         ui.available_width() - label.size().x - design::L - Density::Read.control() - design::S;
-    let with_source = room - source_width - design::L;
     let steps = steps(items.iter().map(|item| item.stats.len()).max().unwrap_or(0));
     let held = fight.and_then(|run| {
         ui.data(|data| data.get_temp::<Hold>(hold_id))
@@ -330,9 +330,6 @@ pub fn show(
                     && hold.steps == steps.len()
             })
     });
-    let show_source = needed(&mut items, steps[0], gap) <= with_source
-        && held.as_ref().is_none_or(|hold| hold.show_source);
-    let room = if show_source { with_source } else { room };
     let fitted = steps
         .iter()
         .position(|&step| needed(&mut items, step, gap) <= room)
@@ -415,7 +412,6 @@ pub fn show(
                 width: bar_width,
                 party,
                 steps: steps.len(),
-                show_source,
                 step: index,
                 kept,
                 widths: widths.clone(),
@@ -423,6 +419,23 @@ pub fn show(
         ),
         None => data.remove::<Hold>(hold_id),
     });
+    // The source is measured by itself, after the items are fitted: it shows whenever the room
+    // they leave holds it, at any level, in full or else in its short form. It never takes room
+    // from an item, so it never moves one, and a fight's hold does not keep it hidden.
+    let hidden = glances.len() - kept;
+    let used = widths[..kept].iter().sum::<f32>()
+        + gap * kept.saturating_sub(1) as f32
+        + if hidden == 0 {
+            0.0
+        } else {
+            gap + more(hidden).size().x + 2.0 * design::XS
+        };
+    let free = room - used - design::L;
+    let shown_source = [source.word.as_str(), source.short]
+        .into_iter()
+        .map(|word| (word, source_width(word)))
+        .find(|&(_, width)| width <= free);
+    let room = shown_source.map_or(room, |(_, width)| room - width - design::L);
     items.truncate(kept);
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = design::L;
@@ -450,19 +463,23 @@ pub fn show(
             if design::icon_button(ui, icons::CLOSE, "Hide the party").clicked() {
                 choice = Some(Choice::Hide);
             }
-            if show_source {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: source.icon,
-                        word: &source.word,
-                        color: source.color,
-                    },
-                );
+            if let Some((word, _)) = shown_source {
+                source_status(ui, source, word);
             }
         });
     });
     choice
+}
+
+/// The source as a status, as `design::status` draws one, in its full or short words. Hover and
+/// the accessible name always give the full words.
+fn source_status(ui: &mut egui::Ui, source: &Source, word: &str) {
+    let format = egui::TextFormat::simple(Type::Small.font(ui), source.color);
+    let mut job = egui::text::LayoutJob::default();
+    job.append(&format!("{} {word}", source.icon), 0.0, format);
+    let response = ui.add(egui::Label::new(job).truncate());
+    design::named(ui, &response, &format!("{} {}", source.icon, source.word));
+    response.on_hover_text(&source.word);
 }
 
 /// The players that do not fit, as a muted count. It takes keyboard focus. Hover, focus and the
@@ -654,6 +671,9 @@ mod tests {
         /// Each item's rect, and the rect of Hide the party at the bar's right edge.
         items: Vec<egui::Rect>,
         close: egui::Rect,
+        /// The source status's rect, when it shows, and its painted words.
+        source: Option<egui::Rect>,
+        source_words: Option<String>,
         /// The accessible name of `N more` and its rect, when some players do not fit.
         more: Option<String>,
         more_rect: Option<egui::Rect>,
@@ -699,6 +719,7 @@ mod tests {
         let source = Source {
             icon: icons::OK,
             word: "From tonight".to_owned(),
+            short: "Tonight",
             color: colors().muted,
         };
         let output = ctx.run(
@@ -790,6 +811,18 @@ mod tests {
                 })
                 .map(|(_, node)| rect(node)),
             cut,
+            source: nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.label()
+                        .or_else(|| node.value())
+                        .is_some_and(|words| words == format!("{} From tonight", icons::OK))
+                })
+                .map(|(_, node)| rect(node)),
+            source_words: texts
+                .iter()
+                .find(|text| text.starts_with(&format!("{} ", icons::OK)))
+                .cloned(),
             close: nodes
                 .iter()
                 .find(|(_, node)| node.label() == Some("Hide the party"))
@@ -809,6 +842,7 @@ mod tests {
         let source = Source {
             icon: icons::OK,
             word: "From tonight".to_owned(),
+            short: "Tonight",
             color: colors().muted,
         };
         let frame = |events: Vec<egui::Event>| {
@@ -1061,6 +1095,87 @@ mod tests {
         assert!(
             crowded > 3,
             "some widths need N more for five Bloodied players"
+        );
+    }
+
+    /// Round 14 FT1: the source is measured by itself, after the items are fitted. It shows
+    /// whenever the room the items leave holds it, at any level: in full, or else in its short
+    /// form, and never overlaps an item or Hide the party. Its accessible name keeps the full
+    /// words. Before, it showed only when the fullest level fitted beside it.
+    #[test]
+    fn the_source_shows_whenever_the_room_after_the_items_holds_it() {
+        let (full, short) = (
+            format!("{} From tonight", icons::OK),
+            format!("{} Tonight", icons::OK),
+        );
+        let (mut below_fullest, mut shortened) = (0, 0);
+        for (count, bloodied, temp) in [(5, 3, 2), (5, 0, 0), (6, 6, 6)] {
+            let glances = party(count, bloodied, temp);
+            let drawn: Vec<_> = (30..=200)
+                .map(|step| (step as f32 * 10.0, draw(step as f32 * 10.0, &glances)))
+                .collect();
+            let case = format!("{count} players, {bloodied} Bloodied, {temp} with temporary HP");
+            let width = |words: &str| {
+                drawn
+                    .iter()
+                    .find(|(_, at)| at.source_words.as_deref() == Some(words))
+                    .and_then(|(_, at)| at.source)
+                    .map(|source| source.width())
+                    .unwrap_or_else(|| panic!("{case}: some width shows {words:?}"))
+            };
+            let (full_width, short_width) = (width(&full), width(&short));
+            assert!(
+                short_width < full_width,
+                "{case}: the short form is shorter"
+            );
+            let fullest = drawn.last().unwrap().1.parts();
+            let mut shown = 0;
+            for (bar, at) in &drawn {
+                assert!(at.whole(*bar), "{case}: cut off at {bar}: {at:?}");
+                // The right edge of what the items use: the last item, or `N more`.
+                let last = at
+                    .items
+                    .iter()
+                    .chain(&at.more_rect)
+                    .map(|rect| rect.right())
+                    .fold(0.0, f32::max);
+                let free = at.close.left() - last;
+                // A form gives way only when the room the items leave cannot hold it: the
+                // gap to Hide the party is less than the words, a gap either side, and the
+                // spacing beside the button.
+                let holds = |width: f32| free >= width + 3.0 * design::L;
+                match at.source {
+                    Some(source) => {
+                        shown += 1;
+                        assert!(
+                            source.left() >= last + design::L - 0.5
+                                && source.right() <= at.close.left(),
+                            "{case}: the source sits after the items at {bar}: {at:?}"
+                        );
+                        below_fullest += usize::from(at.parts() != fullest);
+                        let words = at.source_words.as_deref();
+                        assert!(
+                            words == Some(full.as_str())
+                                || words == Some(short.as_str()) && !holds(full_width),
+                            "{case}: the full words show when they fit at {bar}: {at:?}"
+                        );
+                        shortened += usize::from(words == Some(short.as_str()));
+                    }
+                    None => assert!(
+                        !holds(short_width) && at.source_words.is_none(),
+                        "{case}: {free} px free but no source at {bar}: {at:?}"
+                    ),
+                }
+            }
+            assert!(
+                shown > 0 && drawn[0].1.source.is_none(),
+                "{case}: the narrowest bar has no room for the source"
+            );
+        }
+        assert!(
+            below_fullest > 10 && shortened > 3,
+            "the source shows at levels below the fullest, in short form where full words do \
+             not fit: {below_fullest}, {shortened}"
         );
     }
 
