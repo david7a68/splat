@@ -5984,7 +5984,7 @@ pub mod world {
         d.state("world-generated-npc-saved", Sizes::Default);
 
         look_up_again(d, NPC);
-        d.click(&format!("New NPC \"{NPC}\""));
+        d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
         d.expect("NPC · alive · Campaign");
@@ -7184,6 +7184,14 @@ pub mod session_notes {
         );
         d.click(NAV_SESSIONS);
         d.expect("All sessions");
+        // FT2: Generate NPC starts a line at the search field's edge.
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-FT2-generate",
+            "Generate NPC",
+            &[DEFAULT],
+            |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
+        );
         d.state("session-beside-lookup", Sizes::Default);
         d.click("All sessions");
         d.expect("Session 1: ");
@@ -11093,6 +11101,56 @@ pub mod session_plan {
         // T12.9: words the DM wrote, found beside the fight.
         d.press_ctrl(Key::K);
         d.type_text("miller");
+        // FT2 and FT4: `New NPC “Miller”` starts a line at the search field's edge, with curly
+        // quotation marks. `New location “Miller”` follows it on its line, or starts the next
+        // line at the same edge when it wraps.
+        let field_left = |d: &Driver<'_>| d.place_of(SEARCH_LOOKUP).map(|field| field.left());
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-FT2-new",
+            "New NPC “Miller”",
+            &[SMALL, DEFAULT, LARGE],
+            field_left,
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (npc, location, edge, splitter) = d.at_size(size, |d| {
+                d.expect("New location “Miller”");
+                (
+                    d.place_of("New NPC “Miller”"),
+                    d.place_of("New location “Miller”"),
+                    field_left(d),
+                    d.place_of(LOOKUP_SPLITTER),
+                )
+            });
+            let placed = npc
+                .zip(location)
+                .zip(edge)
+                .is_some_and(|((npc, location), edge)| {
+                    if (location.top() - npc.top()).abs() < 1.0 {
+                        location.left() >= npc.right()
+                    } else {
+                        (location.left() + crate::design::S - edge).abs() <= 1.0
+                    }
+                });
+            d.observe(
+                "iter-17-D-FT2-new-location",
+                placed
+                    && location
+                        .zip(splitter)
+                        .is_some_and(|(location, splitter)| location.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, New location {location:?} follows New NPC {npc:?} or starts at the \
+                     edge {edge:?}, right of the splitter {splitter:?}"
+                ),
+            );
+        }
+        d.observe(
+            "iter-17-D-FT4",
+            d.has("New NPC “Miller”")
+                && d.has("New location “Miller”")
+                && !d.has_containing("\"Miller\""),
+            "Lookup's New actions name the new note in curly quotation marks",
+        );
         d.state("lookup-finds-a-note", Sizes::All);
         d.observe(
             "T12.9",
@@ -12076,12 +12134,62 @@ fn show_all_count(d: &Driver<'_>) -> Option<usize> {
     })
 }
 
+/// FT2: a quiet Lookup action that starts a line uses `line_start`: its icon or word (`S` inside
+/// its target) starts at `edge`, the text edge of what is above it, and its press area stays right
+/// of the Lookup column's splitter. It runs at each size given, the sizes its state is captured at.
+fn lookup_action_at_text_edge(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    sizes: &[(f32, f32)],
+    edge: impl Fn(&Driver<'_>) -> Option<f32>,
+) {
+    for &size in sizes {
+        let (target, edge, splitter) = d.at_size(size, |d| {
+            d.expect(action);
+            d.expect(LOOKUP_SPLITTER);
+            (d.place_of(action), edge(d), d.place_of(LOOKUP_SPLITTER))
+        });
+        let start = target.map(|target| target.left() + crate::design::S);
+        d.observe(
+            id,
+            start
+                .zip(edge)
+                .is_some_and(|(start, edge)| (start - edge).abs() <= 1.0)
+                && target
+                    .zip(splitter)
+                    .is_some_and(|(target, splitter)| target.left() >= splitter.right()),
+            format!(
+                "At {size:?}, {action:?} starts at {start:?}, the text edge is at {edge:?}; its press \
+                 area {target:?} is right of the splitter {splitter:?}"
+            ),
+        );
+    }
+}
+
+/// The left of the first Lookup result's painted name: the text edge of the result rows.
+fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
+    let row = lookup_results(d).into_iter().next()?;
+    let name = row.name.split(" · ").next()?.to_owned();
+    d.painted_rect_in(&name, row.rect).map(|rect| rect.left())
+}
+
+const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
 fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());
+    // FT2: Show all starts a line, so its word starts at the result rows' text.
+    lookup_action_at_text_edge(
+        d,
+        "iter-17-D-FT2-show-all",
+        &label,
+        &[SMALL, DEFAULT, LARGE],
+        lookup_row_text_left,
+    );
     let frame = d.control_frame(&label);
     let quiet = frame
         .as_ref()

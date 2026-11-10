@@ -165,7 +165,7 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
         let first = row.first().map_or("", String::as_str);
         let Some((min, max)) = parse_range(first) else {
             return Err(format!(
-                "The first column must be a number or a range such as 2–5, not \"{first}\"."
+                "The first column must be a number or a range such as 2–5, not “{first}”."
             ));
         };
         parsed.push(RollRow {
@@ -334,6 +334,16 @@ mod tests {
         assert!(table_rows("1d6", &short).unwrap_err().contains("up to 6"));
         let words = [head, row("2 to 5", "a")];
         assert!(table_rows("1d6", &words).unwrap_err().contains("2 to 5"));
+    }
+
+    #[test]
+    fn a_bad_first_column_is_named_in_curly_quotes() {
+        let row = |a: &str, b: &str| vec![a.to_owned(), b.to_owned()];
+        let words = [row("d6", "Result"), row("2 to 5", "a")];
+        assert_eq!(
+            table_rows("1d6", &words).unwrap_err(),
+            "The first column must be a number or a range such as 2–5, not “2 to 5”."
+        );
     }
 
     #[test]

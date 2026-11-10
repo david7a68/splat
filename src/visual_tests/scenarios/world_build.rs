@@ -283,6 +283,40 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     d.click_starting("Repaired watchkeeper · ");
     d.expect("Note repaired.");
+    // FD1: an edit-form save result takes the same place on the same note. It replaces
+    // `Note repaired.`, the older result.
+    let pane = reader_pane(d);
+    let repaired_at = d.painted_rect_in("Note repaired.", pane);
+    d.click("Edit Repaired watchkeeper");
+    d.type_into("Status", "on watch");
+    d.click("Save changes");
+    d.wait_for_text("Changes saved.");
+    let saved_at = d.painted_rect_in("Changes saved.", pane);
+    let (below, detail) = result_below_file_line(
+        d,
+        "Changes saved.",
+        "Notes/Broken.md",
+        design::colors().result.info,
+    );
+    // An Undo message centres its words on its Undo target's line, so its words start that
+    // much below the top of the place.
+    let centred = (design::Density::Read.control() - design::Type::Body.line()) / 2.0;
+    d.observe(
+        "iter-17-D-FD1-same-place",
+        below
+            && !d.visible_text("Note repaired.")
+            && repaired_at.zip(saved_at).is_some_and(|(repaired, saved)| {
+                (repaired.top() - (saved.top() - centred)).abs() <= 0.5
+            }),
+        format!("`Note repaired.` at {repaired_at:?}, `Changes saved.` at {saved_at:?}; {detail}"),
+    );
+    d.state("repaired-note-saved", Sizes::Default);
+    d.click("Undo changes");
+    d.observe(
+        "iter-17-D-FD1-undo",
+        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo changes"),
+        "Undo changes restores the repaired note",
+    );
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
@@ -462,6 +496,59 @@ pub fn facts(d: &mut Driver<'_>) {
             && !d.has_containing("notes need fixing"),
         "An empty optional place has no list warning",
     );
+    // FD3: a typed note with no set values shows its prose as a plain note does, with the same
+    // gap from the file line to the first prose line.
+    let mut typed = Vec::new();
+    for size in [SMALL, DEFAULT, LARGE] {
+        typed.push(d.at_size(size, |d| {
+            prose_gap(d, "Horn Rings.md", "Tieflings wear one ring")
+        }));
+    }
+    d.click("Setting · ");
+    d.expect("Edit in Obsidian");
+    for (size, typed) in [SMALL, DEFAULT, LARGE].into_iter().zip(typed) {
+        let plain = d.at_size(size, |d| {
+            prose_gap(d, "Setting.md", "A cold war around an inner sea.")
+        });
+        d.observe(
+            "iter-17-D-FD3",
+            typed
+                .zip(plain)
+                .is_some_and(|(typed, plain)| (typed - plain).abs() <= 1.0),
+            format!(
+                "At {size:?}, Horn Rings has {typed:?} px from its file line to its prose, Setting {plain:?} px"
+            ),
+        );
+    }
+    // Must stay true: a typed note with values keeps its rows between the file line and its
+    // prose.
+    d.click_containing("Zarel · ");
+    d.expect("Change Status");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (file_line, first, last, prose) = d.at_size(size, |d| {
+            let pane = reader_pane(d);
+            (
+                d.painted_rect_in("Zarel.md", pane),
+                d.place_of("Change Part of"),
+                d.place_of("Change Status"),
+                d.painted_rect_in("Tiefling. The Games-Master", pane),
+            )
+        });
+        d.observe(
+            "iter-17-D-FD3-rows",
+            file_line
+                .zip(first)
+                .zip(last.zip(prose))
+                .is_some_and(|((file_line, first), (last, prose))| {
+                    first.top() >= file_line.bottom() && prose.top() >= last.bottom()
+                }),
+            format!(
+                "At {size:?}, Zarel's rows {first:?} to {last:?} sit below the file line {file_line:?} and above the prose {prose:?}"
+            ),
+        );
+    }
+    d.click_containing("Horn Rings · ");
+    d.expect("Edit Horn Rings");
     d.state("lines-from-other-pages", Sizes::All);
     d.expect("Edit Horn Rings");
     d.click("Edit Horn Rings");
@@ -872,6 +959,18 @@ pub fn places(d: &mut Driver<'_>) {
         !d.has("Change In") && d.in_view("Undo place change"),
         "A cleared place row disappears and its Undo stays visible",
     );
+    // FD1, must stay true: a change that names a row value, with no row to sit beside, sits
+    // below the row block, not in the page-result place.
+    let (undo, row) = (
+        d.place_of("Undo place change"),
+        d.place_of("Change Stat block"),
+    );
+    d.observe(
+        "iter-17-D-FD1-row-change",
+        undo.zip(row)
+            .is_some_and(|(undo, row)| undo.top() >= row.bottom()),
+        format!("Undo place change at {undo:?}, below the last row at {row:?}"),
+    );
     d.state("cleared-place-keeps-undo", Sizes::All);
     d.click("Undo place change");
     assert_eq!(
@@ -1279,7 +1378,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.wait_for_text("Names");
     d.observe(
         "W9",
-        d.has("Close Lookup") && !d.has("New NPC \"Names.md\""),
+        d.has("Close Lookup") && !d.has("New NPC “Names.md”"),
         "The warning opens its source note in Lookup",
     );
 
@@ -1717,6 +1816,39 @@ fn result_below_file_line(
             "{result:?} at {message:?} with a tone bar {bar}, below the file line {file:?} at {file_line:?}"
         ),
     )
+}
+
+/// FD3: from the bottom of the painted file line to the top of the first prose line.
+fn prose_gap(d: &Driver<'_>, file: &str, prose: &str) -> Option<f32> {
+    let pane = reader_pane(d);
+    let file_line = d.painted_rect_in(file, pane)?;
+    Some(d.painted_rect_in(prose, pane)?.top() - file_line.bottom())
+}
+
+/// FD4: how a warning link paints `⚠ <words>`: whether the icon is underlined, whether the
+/// words are, and the icon's colour.
+fn warning_link_parts(d: &Driver<'_>, words: &str) -> Option<(bool, bool, egui::Color32)> {
+    let whole = format!("{} {words}", design::icons::WARN);
+    let mut found = None;
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if job.text != whole || !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        let section = |part: &str| {
+            job.sections
+                .iter()
+                .find(|section| job.text[section.byte_range.clone()].contains(part))
+        };
+        if let Some((icon, name)) = section(design::icons::WARN).zip(section(words)) {
+            found = Some((
+                icon.format.underline.width > 0.0,
+                name.format.underline.width > 0.0,
+                icon.format.color,
+            ));
+        }
+    });
+    found
 }
 
 /// The NPC keeps both reference links beside a live fight.
@@ -3341,6 +3473,19 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
                 && !d.has_containing("Place not found")
         },
     );
+    // FD4: the warning icon is its own glyph before the link words. Only the words are
+    // underlined, and the accessible name keeps the warning.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let parts = d.at_size(size, |d| {
+            d.expect(&format!("{} Watch House · 2 matches", design::icons::WARN));
+            warning_link_parts(d, "Watch House · 2 matches")
+        });
+        d.observe(
+            "iter-17-D-FD4",
+            parts == Some((false, true, design::colors().result.warning)),
+            format!("At {size:?}, (icon underlined, words underlined, icon colour) is {parts:?}"),
+        );
+    }
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
     d.expect("Undo place change");
@@ -4724,6 +4869,32 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             !d.has("Save changes")
         },
     );
+    // FD1: the edit-form save result is a page result, below the file line and above the rows.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            d.expect("Change Status");
+            let (below, detail) = result_below_file_line(
+                d,
+                "Changes saved.",
+                "Safe Rook.md",
+                design::colors().result.info,
+            );
+            let message = d.painted_rect_in("Changes saved.", reader_pane(d));
+            let row = d.place_of("Change Status");
+            (
+                below
+                    && message
+                        .zip(row)
+                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
+                format!("{detail}; first row at {row:?}"),
+            )
+        });
+        d.observe(
+            "iter-17-D-FD1",
+            placed,
+            format!("At {size:?}, `Changes saved.` sits above the value rows: {detail}"),
+        );
+    }
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
     d.click("Undo changes");
     assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
