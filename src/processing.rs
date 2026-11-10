@@ -252,10 +252,10 @@ impl Config {
             return Some("Enter the speech model's name in Settings.".into());
         }
         if self.provider != Provider::CodexCli && self.llm_url.trim().is_empty() {
-            return Some("Enter the LLM's address in Settings.".into());
+            return Some("Enter the transcript and summary service's address in Settings.".into());
         }
         if self.llm_model.trim().is_empty() {
-            return Some("Enter the LLM model's name in Settings.".into());
+            return Some("Enter the transcript and summary model's name in Settings.".into());
         }
         service_url(&self.speech_url).err().or_else(|| {
             (self.provider != Provider::CodexCli)
@@ -745,7 +745,7 @@ fn anthropic_event(event: &Value, out: &mut Stream) -> Result<(), String> {
         }
         Some("error") => {
             return Err(format!(
-                "The LLM stopped with an error: {}",
+                "The transcript and summary service stopped with an error: {}",
                 event["error"]["message"].as_str().unwrap_or("no details")
             ));
         }
@@ -757,7 +757,7 @@ fn anthropic_event(event: &Value, out: &mut Stream) -> Result<(), String> {
 fn openai_event(event: &Value, out: &mut Stream) -> Result<(), String> {
     if let Some(error) = event.get("error") {
         return Err(format!(
-            "The LLM stopped with an error: {}",
+            "The transcript and summary service stopped with an error: {}",
             error
                 .get("message")
                 .and_then(Value::as_str)
@@ -790,7 +790,9 @@ fn read_events(
         if cancel.load(Ordering::Relaxed) {
             return Err(CANCELLED.into());
         }
-        let line = line.map_err(|_| "The connection to the LLM ended early.".to_owned())?;
+        let line = line.map_err(|_| {
+            "The connection to the transcript and summary service ended early.".to_owned()
+        })?;
         let Some(data) = line.strip_prefix("data:").map(str::trim) else {
             continue;
         };
@@ -841,7 +843,7 @@ fn ask_codex(
         .spawn()
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => {
-                "The codex command was not found. Install Codex, or choose another LLM in Settings."
+                "The codex command was not found. Install Codex, or choose another transcript and summary service in Settings."
                     .to_owned()
             }
             _ => format!("Codex did not start. {e}"),
@@ -898,7 +900,10 @@ fn ask_service(
     });
     let client = client()?;
     let unreachable = |error: reqwest::Error| Failure {
-        words: format!("Could not reach the LLM. {}", kind_of(&error)),
+        words: format!(
+            "Could not reach the transcript and summary service. {}",
+            kind_of(&error)
+        ),
         retryable: true,
     };
     let key = request.llm_key.as_ref().map(|key| key.as_str());
@@ -935,7 +940,7 @@ fn ask_service(
             (post.send().map_err(unreachable)?, openai_event)
         };
         if !response.status().is_success() {
-            return Err(failure("The LLM", response));
+            return Err(failure("The transcript and summary service", response));
         }
         read_events(response, cancel, report, pass, on_event).map_err(|words| Failure {
             words,
@@ -2019,6 +2024,28 @@ mod tests {
     }
 
     #[test]
+    fn transcript_service_failures_use_the_settings_role() {
+        for provider in [Provider::Anthropic, Provider::OpenAiCompatible] {
+            let dir = tempfile::tempdir().unwrap();
+            let (url, _) = serve(vec![(401, String::new())]);
+            let request = request(dir.path(), &url, &url, provider, 1);
+            let error = ask_service(
+                &request,
+                Pass::Clean,
+                "system",
+                "user",
+                &AtomicBool::new(false),
+                &|_| {},
+            )
+            .unwrap_err();
+            assert!(
+                error.starts_with("The transcript and summary service did not accept the API key."),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
     fn config_problems_are_named() {
         let mut config = Config {
             provider: Provider::Anthropic,
@@ -2031,7 +2058,7 @@ mod tests {
         config.speech_model = "m".into();
         assert_eq!(config.problem(), None);
         config.llm_model = " ".into();
-        assert!(config.problem().unwrap().contains("LLM"));
+        assert!(config.problem().unwrap().contains("transcript and summary"));
         config.llm_model = "m".into();
         config.llm_url = "http://far.test".into();
         assert!(config.problem().unwrap().contains("https://"));
