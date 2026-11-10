@@ -4260,9 +4260,10 @@ impl Encounters {
                 };
                 design::message(ui, Tone::Warning, &words);
             }
-            ui.horizontal(|ui| {
+            ui.vertical(|ui| {
                 let save_key = changed && blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                ui.horizontal(|ui| {
                 if changed {
                     self.discarded_options = None;
                     design::status(
@@ -4290,6 +4291,10 @@ impl Encounters {
                 {
                     snapshot.options = options;
                 }
+                if snapshot.options != snapshot.saved_options {
+                    design::blocked_reason(ui, Some(draft_switch_reason()));
+                }
+                });
                 let pressed = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if run_files > 0 && !run_open {
@@ -4318,9 +4323,6 @@ impl Encounters {
                     }
                 }
             });
-            if snapshot.options != snapshot.saved_options {
-                design::blocked_reason(ui, Some(draft_switch_reason()));
-            }
         });
         });
         if draft_open {

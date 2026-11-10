@@ -3240,7 +3240,19 @@ pub mod run_folder_defect {
             "Run settings state the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
-        d.state("run-folder-edited", Sizes::Default);
+        d.observe_both(
+            "iter-3-C-FT10",
+            "The switch reason follows Discard on the save row",
+            |d| {
+                d.place_of("Discard")
+                    .zip(d.place_of(crate::encounters::draft_switch_reason()))
+                    .is_some_and(|(discard, reason)| {
+                        reason.left() > discard.right()
+                            && (reason.center().y - discard.center().y).abs() < crate::design::S
+                    })
+            },
+        );
+        d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();
@@ -4917,6 +4929,16 @@ pub mod session_notes {
             "The new note holds the template, filled in",
         );
 
+        d.state_prepared("empty-note-read", Sizes::All, |d| {
+            read_note(d);
+            let writes = d.nodes().iter().filter(|node| node.name == "Write").count();
+            d.observe(
+                "iter-3-C-ST3-empty",
+                writes == 1 && d.visible_text("Nothing written yet."),
+                "An empty Read view has one inline Write action",
+            );
+        });
+        write_note(d);
         d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
@@ -5239,6 +5261,7 @@ pub mod session_notes {
             "The clean session folder has a No changes status",
             |d| d.visible_text("No changes") && !d.visible_text("No changes to save."),
         );
+        d.expect("Not connected · showing the name saved on this computer");
         d.state("session-folder-in-campaign", Sizes::All);
         d.app_mut().timeline.save();
         d.replace_text_in("Folder", "30 Sessions");
@@ -7357,9 +7380,20 @@ pub mod session_plan_groups {
         d.click("Add a group");
         d.click(&format!("Plan {GROUP_RIVALS}"));
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
-        d.state("plan-with-groups", Sizes::All);
+        d.state_prepared("plan-with-groups", Sizes::All, |d| {
+            show_plan(d);
+            let toolbar = d
+                .place_of("Add a group")
+                .zip(d.place_of("Edit group Ash Pack"))
+                .is_some_and(|(add, row)| add.bottom() < row.top());
+            d.observe("iter-3-C-ST2-FT2", toolbar, "Add stays above the plan rows");
+        });
         d.state_prepared("plan-groups-read", Sizes::All, |d| {
             read_note(d);
+            if d.has("Plan and notes") {
+                let writes = d.nodes().iter().filter(|node| node.name == "Write").count();
+                d.observe("iter-3-C-ST3", writes == 1, "The empty note has one Write action");
+            }
             let compact = if d.has("Plan and notes") {
                 !d.visible_text("Plan for tonight") && d.has("Edit group Ash Pack") && d.has(&format!("Edit group {GROUP_RIVALS}"))
             } else {
@@ -7836,13 +7870,23 @@ pub mod session_plan {
         );
         d.click("Add Long rest");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
-        d.state("long-rest-restores", Sizes::Default);
+        d.state("long-rest-restores", Sizes::All);
         d.click("Long rest");
         d.click("Mark not at full");
         d.expect("Undo ruling");
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("plan-rest-ruling-off", Sizes::All);
+        d.click("Long rest");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.state_prepared("closed-plan-rest-ruling-off", Sizes::All, |d| {
+            d.observe(
+                "iter-3-C-ST1-plan",
+                d.visible_text("Not\u{a0}at\u{a0}full") && !d.has("Mark everyone at full"),
+                "The closed rest keeps its Not at full ruling in view",
+            );
+        });
+        d.click("Long rest");
         let sizes = [(960.0, 640.0), (1200.0, 800.0)];
         let before = sizes.map(|size| {
             d.at_size(size, |d| {
@@ -7935,7 +7979,16 @@ pub mod session_plan {
         );
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.state("timeline-rest-ruling-off", Sizes::All);
+        d.state_prepared("timeline-rest-ruling-off", Sizes::All, |d| {
+            let row = d.nodes().iter().any(|node| {
+                node.name.starts_with("Long rest ·") && node.name.contains("Not at full")
+            });
+            d.observe(
+                "iter-3-C-ST1-timeline",
+                row,
+                "The Timeline rest row keeps its Not at full ruling in view",
+            );
+        });
         d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
