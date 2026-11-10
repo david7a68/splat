@@ -11646,130 +11646,109 @@ pub mod remove_package_in_use {
     }
 }
 
-/// T16: roll from a stat block during a run. An open roll holds the panel on its roller, so the
-/// target is chosen on the roster and the attack's text stays. Damage fills Amount. A save DC
-/// starts a call whose targets are roster rows, with each save shown where the row's AC is.
+/// T16: roll from the action strip under the selected row. A chip rolls an attack and its
+/// damage; a click on the target's HP applies it. A save rolls every creature's save onto its
+/// row, and each HP click applies full or half. Outside a run, a reader's line previews.
 pub mod run_rolls {
     use super::*;
     const ATTACKER: &str = "Cinder Wolf 1";
     const TARGET: &str = "Cinder Wolf 2";
     const CASTER: &str = "Ember Cultist";
-    const ATTACK_BONUS: &str = "+4";
-    const SAVE_DC: &str = "DC 12";
-    const ROLL_DAMAGE: &str = "Roll damage";
-    const ROLL_SAVES: &str = "Roll saves";
-    const HALF_MADE: &str = "Half for those at or above DC";
-    const HELD: &str = "Held on ";
+    const BITE: &str = "Bite +4";
+    const BURST: &str = "Ember Burst DC 12";
 
-    fn plain(d: &mut Driver<'_>, words: &str) {
-        d.click_words(words, egui::Modifiers::NONE, egui::PointerButton::Primary);
+    /// Click the HP target of `name`, whose words name the waiting amount.
+    fn apply_to(d: &mut Driver<'_>, name: &str) {
+        let target = d
+            .nodes()
+            .into_iter()
+            .map(|node| node.name)
+            .find(|words| {
+                words.starts_with("Apply ") && words.ends_with(&format!(" damage to {name}"))
+            })
+            .unwrap_or_else(|| panic!("run-rolls: no HP target for {name}"));
+        d.click(&target);
     }
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
         d.click_row(ATTACKER);
-        d.state("attacker-stat-block", Sizes::All);
+        d.state("strip-under-selected-row", Sizes::All);
 
         d.begin_task();
-        plain(d, ATTACK_BONUS);
+        d.click(BITE);
         d.expect("to hit");
-        d.goal_within("T16.1", "roll the current creature's attack", 1);
+        d.goal_within(
+            "T16.1",
+            "roll the selected creature's attack and its damage",
+            1,
+        );
         d.state("attack-rolled", Sizes::All);
 
         d.begin_task();
-        d.click_row(TARGET);
-        d.observe(
-            "T16.2",
-            d.has_containing(&format!("AC 13 {TARGET}"))
-                && d.has_containing(HELD)
-                && d.visible_text("Bite."),
-            "After a target is chosen, the result shows its AC and the panel keeps the attack",
-        );
-        d.goal_within(
-            "T16.2",
-            "choose a target and see its AC beside the attack",
-            1,
-        );
-        d.state("attack-and-target", Sizes::All);
-
-        d.begin_task();
         let before = d.row_hp(TARGET);
-        d.click(ROLL_DAMAGE);
-        d.state("damage-rolled", Sizes::All);
-        d.press(Key::Enter);
+        apply_to(d, TARGET);
         let after = d.row_hp(TARGET);
         d.observe(
-            "T16.3",
-            before != after,
-            format!("The rolled damage fills Amount and applies to the target: {before:?} then {after:?}"),
+            "T16.2",
+            before != after && participant_is_selected(d, ATTACKER),
+            format!("A click on the target's HP applies the damage and keeps the attacker selected: {before:?} then {after:?}"),
         );
-        d.goal_within("T16.3", "roll the damage and apply it to the target", 2);
+        d.goal_within("T16.2", "apply the damage by the target's HP", 1);
         d.state("damage-applied", Sizes::Default);
 
-        // The next attack of a Multiattack starts from the same text, still in view.
         d.begin_task();
-        plain(d, ATTACK_BONUS);
-        d.click(ROLL_DAMAGE);
-        d.press(Key::Enter);
-        d.goal_within("T16.4", "make a second attack against the same target", 3);
+        d.click(BITE);
+        apply_to(d, TARGET);
+        d.goal_within("T16.3", "make a second attack and apply its damage", 2);
 
-        // The keyboard finishes an attack: D, then Enter.
-        plain(d, ATTACK_BONUS);
-        let before = d.row_hp(TARGET);
         d.begin_task();
-        d.press(Key::D);
-        d.press(Key::Enter);
-        let after = d.row_hp(TARGET);
+        d.click("Roll it again with advantage");
         d.observe(
-            "T16.8",
-            before != after,
-            format!("D and Enter apply the attack's damage: {before:?} then {after:?}"),
+            "T16.5",
+            d.has_containing("with advantage"),
+            "The result line rolls the action again with advantage",
         );
-        d.goal_within("T16.8", "roll and apply damage by keyboard", 2);
+        d.goal_within("T16.5", "roll the attack again with advantage", 1);
 
-        // Escape closes the result, and the panel follows the selection again.
-        d.press(Key::Escape);
+        d.begin_task();
+        d.type_into("Bonus", "1d4");
+        d.click(BITE);
         d.observe(
-            "T16.2",
-            !d.has_containing(HELD),
-            "Closing the result lets the panel follow the selected row",
+            "T16.6",
+            d.has_containing("+ 1d4"),
+            "A bonus in the strip adds to the creature's d20",
         );
+        d.goal_within("T16.6", "roll an attack with a Bless bonus", 3);
+        d.state("bonus-rolled", Sizes::Default);
 
-        // A call for a save, with its targets on the roster.
+        // A save: every creature's result stands where its AC is.
         d.click_row(CASTER);
         d.begin_task();
-        plain(d, SAVE_DC);
-        d.expect("Click a row to make it a target.");
-        d.state("call-open", Sizes::All);
-        d.click_row(ATTACKER);
-        d.click_row(TARGET);
-        d.click(ROLL_SAVES);
+        d.click(BURST);
         d.observe(
-            "T16.5",
+            "T16.4",
             d.has_containing(&format!("{ATTACKER},")) && d.has_containing(", DEX save "),
-            "Each target's save shows on its row, and the panel keeps the caster's text",
+            "Each creature's save shows on its row",
         );
-        d.state("call-saves-rolled", Sizes::All);
-        if d.has(HALF_MADE) {
-            d.click(HALF_MADE);
-        }
-        d.click(ROLL_DAMAGE);
-        d.press(Key::Enter);
+        d.state("save-rolled", Sizes::All);
+        apply_to(d, ATTACKER);
+        d.click("Half");
+        apply_to(d, TARGET);
         d.goal_within(
-            "T16.5",
-            "call a save from two creatures and apply the damage",
-            7,
+            "T16.4",
+            "an area save against two creatures, one taking half",
+            4,
         );
-        d.state("call-applied", Sizes::Default);
+        d.state("save-applied", Sizes::Default);
 
-        // Outside a run, a roll is a preview: it shows beside the link and changes nothing.
-        d.press(Key::Escape);
+        // Outside a run, a reader's actions roll as a preview and change nothing.
         go_library(d);
         open_local_package(d, MODULE);
         d.click_containing("Cinder Wolf");
         d.begin_task();
         d.click_words(
-            ATTACK_BONUS,
+            BITE,
             egui::Modifiers {
                 shift: true,
                 ..Default::default()
@@ -11778,20 +11757,10 @@ pub mod run_rolls {
         );
         d.observe(
             "T16.7",
-            d.has_containing("to hit"),
-            "Shift+click on a bonus rolls with advantage beside the link",
+            d.has_containing("with advantage"),
+            "Shift+click on an action in the reader previews it with advantage",
         );
+        d.goal_within("T16.7", "preview an attack with advantage by pointer", 1);
         d.state("library-preview-advantage", Sizes::All);
-        d.press(Key::Escape);
-        d.begin_task();
-        d.click_words(
-            ATTACK_BONUS,
-            egui::Modifiers::NONE,
-            egui::PointerButton::Secondary,
-        );
-        d.expect("Roll with disadvantage");
-        d.state("roll-menu", Sizes::Default);
-        d.click("Roll with disadvantage");
-        d.goal_within("T16.7", "roll with disadvantage by pointer only", 2);
     }
 }

@@ -1004,17 +1004,10 @@ fn draw_with_links(
         .first_row_min_height
         .max(design::Density::Read.control());
     let text = job.text.clone();
-    let (position, galley, placed) = egui::Label::new(job)
+    let (position, galley, response) = egui::Label::new(job)
         .wrap()
-        .sense(egui::Sense::hover())
+        .sense(egui::Sense::click())
         .layout_in_ui(ui);
-    // The paragraph's id comes from its words, not from how many widgets are above it, so
-    // a roll's result stays beside its link when a line appears above the reader.
-    let response = ui.interact(
-        placed.rect,
-        ui.id().with(("linked_paragraph", &text)),
-        egui::Sense::click(),
-    );
     ui.painter().galley(position, galley.clone(), colors().text);
     for (range, destination) in &links {
         if matches!(destination, LinkTarget::Missing) {
@@ -1048,12 +1041,6 @@ fn draw_with_links(
         }
     }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
-    if links
-        .iter()
-        .any(|(_, destination)| matches!(destination, LinkTarget::Roll(_)))
-    {
-        crate::rolls::follow(ui, &response);
-    }
     let Some(pointer) = response.hover_pos() else {
         return response.rect;
     };
@@ -1064,7 +1051,7 @@ fn draw_with_links(
         .map_or(text.len(), |(byte, _)| byte);
     if let Some((_, destination)) = links.iter().find(|(range, _)| range.contains(&byte)) {
         if let LinkTarget::Roll(link) = destination {
-            crate::rolls::press(ui, &response, link);
+            crate::rolls::interact(ui, &response, link);
             return response.rect;
         }
         match press(ui, &response, destination) {

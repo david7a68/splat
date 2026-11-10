@@ -554,12 +554,12 @@ pub(crate) struct Run {
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
-    /// The last roll of this turn. Undo keeps it; Next turn ends it.
-    last: Option<rolling::LastRoll>,
-    /// The roller whose open result holds the panel. Never saved.
-    held: Option<usize>,
-    /// A call for a save, with its own targets. Never saved.
-    call: Option<rolling::Call>,
+    /// The selected row's last action, until Next turn or another row. Never saved.
+    turn: Option<rolling::Turn>,
+    /// A bonus for a row's d20 rolls, such as 1d4 for Bless, until cleared. Never saved.
+    bonuses: BTreeMap<usize, String>,
+    /// The dice field's last roll, beside it in the dock.
+    dock_roll: Option<crate::rolls::Rolled>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     condition: String,
@@ -867,9 +867,9 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: 0,
-            last: None,
-            held: None,
-            call: None,
+            turn: None,
+            bonuses: BTreeMap::new(),
+            dock_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
@@ -1366,15 +1366,11 @@ impl Run {
             label: String::new(),
             dice: expression.to_owned(),
         };
-        let rolled = self.record(|random| {
-            crate::rolls::roll("DM", &link, crate::rolls::Mode::Normal, 0, random)
-        })?;
-        if matches!(self.state.phase, Phase::Running) {
-            self.last = Some(rolling::LastRoll {
-                roller: None,
-                rolled,
-            });
-        }
+        let rolled = self.record(
+            |random| crate::rolls::roll("DM", &link, crate::rolls::Mode::Normal, 0, random),
+            |rolled| vec![rolled.line()],
+        )?;
+        self.dock_roll = Some(rolled);
         Ok(())
     }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
@@ -3457,9 +3453,9 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
-            last: None,
-            held: None,
-            call: None,
+            turn: None,
+            bonuses: BTreeMap::new(),
+            dock_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),

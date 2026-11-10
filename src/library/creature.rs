@@ -289,11 +289,11 @@ fn prose(
                 if let Some(printed) = line.strip_prefix("Speed ") {
                     changed_speed(ui, printed, speed);
                 } else {
-                    rollable_prose(ui, line);
+                    reader_style::source_prose(ui, line);
                 }
             }
         } else {
-            rollable_prose(ui, paragraph);
+            reader_style::source_prose(ui, paragraph);
         }
         if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
             && let Some(values) = values
@@ -314,29 +314,6 @@ fn prose(
             spell_links(ui, paragraph);
         }
     }
-}
-
-/// Rules prose with each rollable number as a dice link: an attack bonus, a damage group,
-/// a save DC and other dice. A paragraph's run-in title names its rolls.
-pub(super) fn rollable_prose(ui: &mut egui::Ui, text: &str) {
-    let text = text
-        .split("\n\n")
-        .map(rollable)
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    reader_style::source_prose(ui, &text);
-}
-
-fn rollable(paragraph: &str) -> String {
-    let trimmed = paragraph.trim_start();
-    // Tables, headings, quotes and markup keep their own syntax.
-    if trimmed.starts_with(['|', '#', '<', '>']) {
-        return paragraph.to_owned();
-    }
-    let label = reader_style::run_in_title(trimmed)
-        .map(|title| title.split(" (").next().unwrap_or(title))
-        .unwrap_or("");
-    dice_text::with_links(paragraph, label)
 }
 
 /// These stat rows share the reader's label column, including changed values.
@@ -823,6 +800,14 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     heavy_rule(ui);
     ui.add_space(design::S);
     ui.spacing_mut().item_spacing.y = design::XS;
+    // Outside a run its actions roll here as a preview. In a run the roster's strip has them.
+    if values.is_none() {
+        let chips = crate::rolls::chips(&entry.body);
+        if !chips.is_empty() {
+            crate::rolls::preview_line(ui, &entry.name, &chips);
+            ui.add_space(design::S);
+        }
+    }
 }
 
 pub(super) fn show(
@@ -849,7 +834,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            rollable_prose(ui, &body);
+            reader_style::source_prose(ui, &body);
         }
     }
 }

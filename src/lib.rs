@@ -1906,44 +1906,15 @@ impl Splat {
     /// A press on a dice link. Beside the run, the run rolls it on its own dice and keeps it in
     /// the Log; anywhere else it is a preview roll that changes nothing.
     fn route_rolls(&mut self, ctx: &egui::Context) {
-        let in_run = self.page == Page::Run;
-        if let Some(ask) = rolls::take_ask(ctx) {
-            let at = ask.at;
-            let shown = match self.encounters.run_mut().filter(|_| in_run) {
-                Some(run) => run.roll_link(ask),
-                None => rolls::preview(ctx, &ask).map(|rolled| {
-                    Some(rolls::Shown {
-                        rolled: Some(rolled),
-                        call: None,
-                        at,
-                        held: false,
-                        armor: None,
-                    })
-                }),
-            };
-            match shown {
-                Ok(Some(shown)) => rolls::show_result(ctx, shown),
-                Ok(None) | Err(_) => rolls::close_result(ctx),
+        let Some(ask) = rolls::take_ask(ctx) else {
+            return;
+        };
+        match self.encounters.run_mut().filter(|_| self.page == Page::Run) {
+            Some(run) => run.roll_link(ask),
+            // Its result shows on the entry's own action line.
+            None => {
+                let _ = rolls::preview(ctx, &ask);
             }
-        }
-        if in_run && let Some(run) = self.encounters.run_mut() {
-            match rolls::shown(ctx) {
-                // The run let go: Show, Next turn, or damage that ended a call.
-                Some(shown) if shown.held && !run.holding() => rolls::close_result(ctx),
-                // The selection and the call change under an open result.
-                Some(shown) => rolls::show_result(ctx, run.refreshed(&shown)),
-                // Escape or a click closed it: the panel follows the selection again.
-                None if run.holding() => run.release(),
-                None => {}
-            }
-        }
-        rolls::show_menu(ctx);
-        let at = rolls::shown(ctx).map(|shown| shown.at);
-        if let Some(action) = rolls::show_popover(ctx)
-            && let Some(run) = self.encounters.run_mut().filter(|_| in_run)
-            && let Some(shown) = run.rolled_action(action, at.unwrap_or_default())
-        {
-            rolls::show_result(ctx, shown);
         }
     }
 
@@ -2308,8 +2279,6 @@ impl eframe::App for Splat {
         if !self.confirm_close {
             ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("app_close_default_focused")));
         }
-        // An open roll result or roll menu takes Escape before Lookup or the run.
-        rolls::escape(ctx);
         self.apply_focus_step(ctx);
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();

@@ -117,9 +117,9 @@ impl RollLink {
 
 /// One rollable number in a text, by its byte range.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Span {
-    range: Range<usize>,
-    link: RollLink,
+pub struct Span {
+    pub range: Range<usize>,
+    pub link: RollLink,
 }
 
 /// Book minus signs and dashes read as minus in a dice expression.
@@ -246,7 +246,7 @@ fn sentence_end(text: &str, from: usize) -> usize {
 }
 
 /// Every rollable number in one paragraph, in order. `label` names the paragraph's feature.
-fn find(text: &str, label: &str) -> Vec<Span> {
+pub fn find(text: &str, label: &str) -> Vec<Span> {
     let mut groups: Vec<(Range<usize>, DamagePart, bool)> = Vec::new();
     // Damage groups first: an average, then its dice in brackets.
     let mut at = 0;
@@ -431,22 +431,6 @@ pub fn skills(text: &str) -> Vec<(Range<usize>, String, i64)> {
         }
         start += part.len() + 1;
     }
-    out
-}
-
-/// A Markdown paragraph with each rollable number as a link that rolls.
-pub fn with_links(text: &str, label: &str) -> String {
-    let mut out = String::with_capacity(text.len() * 2);
-    let mut at = 0;
-    for span in find(text, label) {
-        if span.range.start < at {
-            continue;
-        }
-        out.push_str(&text[at..span.range.start]);
-        out.push_str(&span.link.markdown(&text[span.range.clone()]));
-        at = span.range.end;
-    }
-    out.push_str(&text[at..]);
     out
 }
 

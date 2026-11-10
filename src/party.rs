@@ -1,4 +1,5 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
+use crate::rolls::Chip;
 use crate::{
     auth::Session,
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
@@ -1447,6 +1448,10 @@ pub fn sheet_page(
     live: Option<&LiveValues>,
 ) {
     crate::rolls::set_entry(ui.ctx(), &record.definition.splat_name);
+    // Outside a run, the actions roll as a preview; in a run, the roster's strip has them.
+    if page == 1 && live.is_none() {
+        crate::rolls::preview_line(ui, &record.definition.splat_name, &sheet_chips(record));
+    }
     match page {
         0 => overview(ui, record, live),
         BACKGROUND_PAGE => background(ui, record),
@@ -2187,59 +2192,70 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
     entries
 }
 
-/// One attack: its name, then its bonus or save DC and its damage as dice links.
-fn attack_line(ui: &mut egui::Ui, attack: &Value, hit: &str, damage: &str) {
-    let name = text(&attack["name"]);
+/// An attack's damage as the sheet prints it: `1d4+3`, or a fixed number.
+fn attack_damage(attack: &Value) -> String {
+    let value = &attack["damage"]["value"];
+    if let Some(n) = value.as_i64() {
+        return n.to_string();
+    }
+    format!(
+        "{}{}",
+        text(&value["diceString"]),
+        value["fixedValue"]
+            .as_i64()
+            .filter(|n| *n != 0)
+            .map(|n| format!("{n:+}"))
+            .unwrap_or_default()
+    )
+}
+
+/// One attack as an action: its bonus with its damage, or its save DC, or its damage alone.
+fn attack_chip(attack: &Value) -> Option<Chip> {
+    let name = text(&attack["name"]).to_owned();
     let kind = text(&attack["damage"]["type"]);
     let parts: Vec<DamagePart> = attack["damage"]["value"]["diceString"]
         .as_str()
         .filter(|_| attack["damage"]["value"].as_i64().is_none())
         .map(|_| DamagePart {
-            dice: splat::content::dice_text::plain_dice(damage),
+            dice: splat::content::dice_text::plain_dice(&attack_damage(attack)),
             kind: (!kind.is_empty()).then(|| design::reader::human_label(kind)),
         })
         .into_iter()
         .collect();
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = design::XS;
-        ui.label(format!("{name} ·"));
-        if let Some(bonus) = attack["toHit"].as_i64() {
-            let link = RollLink::D20 {
-                what: D20::Attack,
-                bonus,
-                label: name.to_owned(),
-                damage: parts.clone(),
-            };
-            crate::rolls::link(ui, &format!("{bonus:+}"), Type::Body, &link);
-            ui.label("to hit ·");
-        } else if let (Some(dc), Some(ability)) = (
-            attack["saveInfo"]["value"].as_i64(),
-            ability_name(text(&attack["saveInfo"]["label"])),
-        ) {
-            ui.label(format!("{ability} save"));
-            let link = RollLink::SaveDc {
-                label: name.to_owned(),
-                ability: ability.to_owned(),
-                dc,
-                half: false,
-                damage: parts.clone(),
-            };
-            crate::rolls::link(ui, &format!("DC {dc}"), Type::Body, &link);
-            ui.label("·");
-        } else {
-            ui.label(format!("{hit} ·"));
+    let link = if let Some(bonus) = attack["toHit"].as_i64() {
+        RollLink::D20 {
+            what: D20::Attack,
+            bonus,
+            label: name,
+            damage: parts,
         }
-        if parts.is_empty() {
-            ui.label(format!("{damage} {kind}"));
-        } else {
-            let link = RollLink::Damage {
-                label: name.to_owned(),
-                parts,
-            };
-            crate::rolls::link(ui, damage, Type::Body, &link);
-            ui.label(kind);
+    } else if let (Some(dc), Some(ability)) = (
+        attack["saveInfo"]["value"].as_i64(),
+        ability_name(text(&attack["saveInfo"]["label"])),
+    ) {
+        RollLink::SaveDc {
+            label: name,
+            ability: ability.to_owned(),
+            dc,
+            half: false,
+            damage: parts,
         }
-    });
+    } else if !parts.is_empty() {
+        RollLink::Damage { label: name, parts }
+    } else {
+        return None;
+    };
+    Chip::new(link)
+}
+
+/// A character's actions, from its sheet's attacks.
+pub(crate) fn sheet_chips(record: &EntitySnapshot) -> Vec<Chip> {
+    record
+        .character
+        .attacks
+        .iter()
+        .filter_map(attack_chip)
+        .collect()
 }
 
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
@@ -2247,20 +2263,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         1 => {
             sheet_heading(ui, "Attacks", record.character.attacks.len());
             for attack in &record.character.attacks {
-                let value = &attack["damage"]["value"];
-                let damage = if let Some(n) = value.as_i64() {
-                    n.to_string()
-                } else {
-                    format!(
-                        "{}{}",
-                        text(&value["diceString"]),
-                        value["fixedValue"]
-                            .as_i64()
-                            .filter(|n| *n != 0)
-                            .map(|n| format!("{n:+}"))
-                            .unwrap_or_default()
-                    )
-                };
+                let damage = attack_damage(attack);
                 let hit = attack["toHit"]
                     .as_i64()
                     .map(|n| format!("{n:+} to hit"))
@@ -2275,7 +2278,11 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                     .to_lowercase()
                     .contains(&search.to_lowercase())
                 {
-                    attack_line(ui, attack, &hit, &damage);
+                    ui.label(format!(
+                        "{} · {hit} · {damage} {}",
+                        text(&attack["name"]),
+                        text(&attack["damage"]["type"])
+                    ));
                 }
             }
             ui.add_space(design::S);

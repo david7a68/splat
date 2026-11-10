@@ -202,7 +202,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 14] = [
+const KEYS: [(&str, &str); 12] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -212,8 +212,6 @@ const KEYS: [(&str, &str); 14] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
-    ("D", "Roll damage for the open attack or call"),
-    ("T", "Use the last roll's total as the amount"),
     ("Ctrl+G", "Add to fight"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
     ("Ctrl+J", "Open or close Notes. Escape also closes them"),
@@ -332,6 +330,7 @@ impl Run {
     }
 
     pub(super) fn select(&mut self, index: usize) {
+        self.forget_turn_unless(index);
         self.clear_targets();
         if self.selected != index {
             self.selected = index;
@@ -494,23 +493,10 @@ impl Run {
             self.run_command(self.amount_command(amount, make));
             self.amount.clear();
             self.clear_targets();
-            self.after_amount();
             self.follow_with_keyboard();
         }
         if conditions {
             self.open_conditions_tab();
-        }
-        let (damage, use_total) = ui.input_mut(|i| {
-            if !letters || i.modifiers.shift || i.modifiers.alt {
-                return (false, false);
-            }
-            (i.consume_key(plain, Key::D), i.consume_key(plain, Key::T))
-        });
-        if damage {
-            self.roll_damage(None);
-        }
-        if use_total {
-            self.use_last_total();
         }
     }
 
@@ -1447,6 +1433,13 @@ impl Run {
     /// `room` is what the list has now, and `lent` what a message under it has taken. A list
     /// that fits leaves that much free at all times, so a message moves none of its rows.
     fn roster(&mut self, ui: &mut egui::Ui, room: f32, lent: f32) {
+        // The selected row's action strip is part of the list, so the rows fit around it.
+        let full = room;
+        let room = if self.strip_shown() {
+            room - super::rolling::STRIP_HEIGHT
+        } else {
+            room
+        };
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
@@ -1506,8 +1499,9 @@ impl Run {
                 ))
             );
         }
-        let list_height = if overflow { room - OVERFLOW_LINE } else { room };
+        let list_height = if overflow { full - OVERFLOW_LINE } else { full };
         let mut clicked = None;
+        let mut apply = None;
         let mut rule = None;
         let mut toggle_half = None;
         // A changed window size must not leave the selected row out of view.
@@ -1794,11 +1788,70 @@ impl Run {
                             toggle_half = Some(index);
                         }
                     }
+                    // While damage waits, a target's HP applies it. The row is not selected,
+                    // so the actor's strip and stat block stay.
+                    if let Some(words) = self.apply_words(index) {
+                        let cell = Rect::from_min_max(
+                            pos2(
+                                rect.left() + layout.temp_right + design::XS,
+                                rect.top() + 2.0,
+                            ),
+                            pos2(
+                                rect.left() + layout.hp_right + design::S,
+                                rect.bottom() - 2.0,
+                            ),
+                        )
+                        .intersect(rect);
+                        let target = ui
+                            .interact(
+                                cell,
+                                ui.id().with(("apply_damage", &p.key)),
+                                egui::Sense::click(),
+                            )
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        target.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::WidgetType::Link, true, &words)
+                        });
+                        // A quiet frame says the HP takes a click; hover shows it in accent.
+                        let c = colors();
+                        let edge = if target.hovered() {
+                            ui.painter()
+                                .rect_filled(cell, design::RADIUS_CONTROL, c.hover);
+                            c.accent
+                        } else {
+                            c.rule
+                        };
+                        ui.painter().rect_stroke(
+                            cell,
+                            design::RADIUS_CONTROL,
+                            egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
+                            egui::StrokeKind::Inside,
+                        );
+                        if target.has_focus() {
+                            design::focus_ring(ui, cell);
+                        }
+                        if target.on_hover_text(&words).clicked() {
+                            apply = Some(index);
+                            clicked = None;
+                        }
+                    }
                     if self.selected == index {
                         selected_rect = Some(rect);
                     }
                     if turn == TurnMark::Next {
                         next_rect = Some(rect);
+                    }
+                    if self.selected == index && self.strip_shown() {
+                        let indent = layout.name_left;
+                        ui.horizontal(|ui| {
+                            ui.add_space(indent);
+                            ui.vertical(|ui| {
+                                ui.set_width(width - indent - design::S);
+                                ui.add_space(design::XS);
+                                self.action_strip(ui, index);
+                                ui.add_space(design::S - design::XS);
+                            });
+                        });
                     }
                 }
                 if scroll && let Some(rect) = selected_rect {
@@ -1837,9 +1890,12 @@ impl Run {
             }
             self.focus_amount = true;
         }
+        if let Some(index) = apply {
+            self.apply_waiting(index);
+        }
         match clicked {
             Some((index, true)) => self.toggle_target(index),
-            Some((index, false)) => self.row_click(index),
+            Some((index, false)) => self.select(index),
             None => {}
         }
         if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
@@ -1944,7 +2000,6 @@ impl Run {
         let c = colors();
         let index = self.selected;
         let mut command = None;
-        let mut use_total = false;
         let mut open_conditions = false;
         let mut open_side = false;
         let frame = egui::Frame::new()
@@ -2051,11 +2106,9 @@ impl Run {
                         open_conditions = true;
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        if narrow
-                            && let Some((total, line)) = self.dock_roll()
-                            && dock_total(ui, total, &line, Type::Strong)
-                        {
-                            use_total = true;
+                        if narrow && let Some((total, line)) = self.dock_roll() {
+                            ui.label(Type::Strong.rich(ui, format!("= {total}")))
+                                .on_hover_text(line);
                         }
                         // Beside the actions at the minimum window it gives up size, not letters.
                         let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui))
@@ -2094,12 +2147,8 @@ impl Run {
             if applied {
                 self.amount.clear();
                 self.clear_targets();
-                self.after_amount();
                 self.follow_with_keyboard();
             }
-        }
-        if use_total {
-            self.use_last_total();
         }
     }
 
@@ -2129,17 +2178,19 @@ impl Run {
     /// right to left: the result, then the button, then the field.
     fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
         ui.spacing_mut().item_spacing.x = design::XS;
-        let mut use_total = false;
         if !narrow {
             ui.allocate_ui_with_layout(
                 vec2(DICE_RESULT_WIDTH, Density::Read.control()),
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some((total, line)) = self.dock_roll()
-                        && dock_total(ui, total, &line, Type::Heading)
-                    {
-                        use_total = true;
+                    if let Some((total, line)) = self.dock_roll() {
+                        ui.label(
+                            Type::Heading
+                                .rich(ui, format!("= {total}"))
+                                .color(colors().text),
+                        )
+                        .on_hover_text(line);
                     }
                 },
             );
@@ -2172,15 +2223,12 @@ impl Run {
             }
             self.follow_with_keyboard();
         }
-        if use_total {
-            self.use_last_total();
-        }
     }
 
-    /// The last roll's total beside the dice, which puts it in Amount.
+    /// The dice field's last roll, beside it.
     fn dock_roll(&self) -> Option<(i64, String)> {
-        let last = self.last.as_ref()?;
-        Some((last.rolled.total, last.rolled.line()))
+        let rolled = self.dock_roll.as_ref()?;
+        Some((rolled.total, rolled.line()))
     }
 
     fn open_conditions_tab(&mut self) {
@@ -2917,12 +2965,7 @@ impl Run {
     // ---- Side panel -------------------------------------------------------------
 
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        // While a roll is open, its roller's stat block stays; the other tabs follow the row.
-        let index = if self.panel == Panel::Reference {
-            self.panel_row()
-        } else {
-            self.selected
-        };
+        let index = self.selected;
         let p = &self.state.participants[index];
         let (successes, failures) = (p.successes, p.failures);
         let death_saves = p.shows_death_saves();
@@ -2938,9 +2981,6 @@ impl Run {
         ));
         design::named(ui, &response, title);
         response.on_hover_text(title);
-        if self.panel == Panel::Reference && self.held_line(ui) {
-            self.release();
-        }
 
         let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
@@ -5863,21 +5903,6 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
 }
 
 /// Keep the copy suffix when a name needs fewer words.
-/// The last roll's total in the dock, `= 9`. A click puts it in Amount, as T does.
-fn dock_total(ui: &mut egui::Ui, total: i64, line: &str, role: Type) -> bool {
-    let words = format!("= {total}");
-    let response = ui.add(
-        egui::Label::new(role.rich(ui, &words).color(colors().text)).sense(egui::Sense::click()),
-    );
-    design::named(ui, &response, &format!("Use {total}"));
-    if response.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
-    response
-        .on_hover_text(format!("{line}\nClick to use {total} as the amount (T)."))
-        .clicked()
-}
-
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     let fitted = design::words_that_fit(ui, name, font, width);
     if fitted == name {

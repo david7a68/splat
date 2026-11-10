@@ -436,7 +436,7 @@ pub(super) fn show(
                 }
                 // A hand-written stat block's actions read as the book's do.
                 if entry.is_some_and(super::creature::has_stats) {
-                    super::creature::rollable_prose(ui, section.body);
+                    style::source_prose(ui, section.body);
                 } else {
                     style::markdown(ui, section.body);
                 }
