@@ -4630,6 +4630,38 @@ pub mod signed_in {
         let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
         d.state("party-sync-on", Sizes::All);
+        // After a read, every value Splat can send has − and + beside it.
+        d.app_mut().party.simulate_sheet_read(
+            62,
+            &serde_json::json!({
+                "id": 9100001, "canEdit": true, "removedHitPoints": 4, "temporaryHitPoints": 5,
+                "inspiration": true, "bonusHitPoints": 0,
+                "deathSaves": {"successCount": 0, "failCount": 0}, "conditions": [],
+                "currencies": {"cp": 12, "sp": 30, "ep": 0, "gp": 145, "pp": 2},
+                "actions": {"class": [{"id": 1, "entityTypeId": 2, "name": "Second Wind", "limitedUse": {"numberUsed": 1}}]},
+                "inventory": [
+                    {"id": 3, "quantity": 18, "definition": {"name": "Crossbow Bolts"}},
+                    {"id": 4, "quantity": 1, "limitedUse": {"maxUses": 3, "numberUsed": 1}, "definition": {"name": "Wand of Web"}}
+                ],
+                "creatures": [{"id": 5, "name": "Grit", "removedHitPoints": 2, "temporaryHitPoints": 0, "definition": {"name": "Mastiff", "averageHitPoints": 5}}],
+                "classes": [{"id": 6, "level": 6, "hitDiceUsed": 2, "definition": {"name": "Fighter", "hitDice": 10}}]
+            }),
+        );
+        d.settle();
+        d.observe(
+            "T7.3",
+            d.has("Increase Current HP")
+                && d.has("Increase Temporary HP")
+                && d.has_containing("Values with − and + are editable"),
+            "After a read, editable values have steppers and the panel says what they do",
+        );
+        d.click_containing("Short rest");
+        d.state("party-short-rest", Sizes::Default);
+        d.click("Cancel");
+        for section in ["Currency", "Inventory", "Companions and summons"] {
+            d.click_containing(section);
+        }
+        d.state("party-sync-editable", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
@@ -4649,7 +4681,12 @@ pub mod signed_in {
             d.has_containing(SYNC_OFF) && !d.has_containing(STOPPED),
             "Turned off by the DM, sync stays off and nothing calls that a fault",
         );
-        d.click_containing(SYNC_SECTION);
+        // The panel stays open when sync turns off, so the box is still there.
+        d.observe(
+            "T7.3",
+            d.has(SYNC_TOGGLE),
+            "Turning sync off keeps its panel open",
+        );
         d.click(SYNC_TOGGLE);
         d.begin_task();
 
