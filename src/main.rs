@@ -1589,17 +1589,6 @@ impl Splat {
                             .hint("This campaign's own entries, in the Library")
                             .show(ui)
                             .clicked();
-                        if Action::quiet("Convert files…")
-                            .blocked(
-                                self.encounters
-                                    .has_run()
-                                    .then_some("Close the run before converting files."),
-                            )
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.campaign_content.layouts.scan(&self.campaigns);
-                        }
                     },
                 );
                 if open_entries {

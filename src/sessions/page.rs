@@ -3100,7 +3100,7 @@ impl Sessions {
                                 .font(design::reader::prose_type(ui).font(ui))
                                 .layouter(&mut layouter)
                                 .margin(egui::Vec2::ZERO)
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width().min(design::READER_MEASURE))
                                 .min_size(egui::vec2(0.0, visible_height + heading_offset))
                                 .show(ui);
                             crate::markdown_source::paint_section_rules(ui, &output);

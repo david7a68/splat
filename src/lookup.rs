@@ -1613,13 +1613,21 @@ impl Lookup {
             } else {
                 format!("{} files use the old layout.", old.len())
             };
-            crate::formats_ui::old_notice(
-                ui,
-                &message,
-                old.iter()
-                    .map(|(path, _)| std::path::PathBuf::from(path))
-                    .collect(),
-            );
+            if self.run_open {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!("{message} Close the run to convert these files."),
+                );
+            } else {
+                crate::formats_ui::old_notice(
+                    ui,
+                    &message,
+                    old.iter()
+                        .map(|(path, _)| std::path::PathBuf::from(path))
+                        .collect(),
+                );
+            }
         }
         if !broken.is_empty() {
             ui.horizontal_wrapped(|ui| {

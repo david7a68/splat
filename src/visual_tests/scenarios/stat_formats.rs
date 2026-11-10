@@ -60,7 +60,13 @@ pub fn run(d: &mut Driver<'_>) {
     look_up(d, "Slate Wolf");
     d.expect("22 (4d8 + 4)");
     d.expect(NEXT_TURN);
-    d.state("schema-2-creature-beside-run", Sizes::All);
+    d.state_prepared("schema-2-creature-beside-run", Sizes::All, |d| {
+        d.observe(
+            "iter-6-C-FD10",
+            d.visible_text("Close the run to convert these files.") && !d.has("Convert files…"),
+            "Lookup states why conversion waits, with no disabled conversion action",
+        );
+    });
     d.click("Close Lookup");
     close_run(d);
     go_campaign(d);
