@@ -1580,6 +1580,36 @@ pub fn spinner(ui: &mut Ui) {
     ui.spinner();
 }
 
+/// A small spinner just after a rail status, so work in progress needs no line of its own and
+/// nothing below it moves. It is as tall as the text's capitals, with a line near the text's weight;
+/// egui's own spinner has a 3-point line, which is heavy beside small text.
+pub fn busy_after(ui: &Ui, status: Rect, color: Color32) {
+    const STROKE: f32 = 1.5;
+    // The outer edge is 9 points across, the height of the small text's capitals.
+    let radius = (9.0 - STROKE) / 2.0;
+    let center = pos2(
+        status.right() + XS + radius + STROKE / 2.0,
+        status.top() + Type::Small.line() / 2.0,
+    );
+    // Tests draw one fixed frame, so captures repeat between runs.
+    #[cfg(test)]
+    let turn = 0.0;
+    #[cfg(not(test))]
+    let turn = {
+        ui.ctx().request_repaint();
+        ui.input(|i| i.time) as f32 * std::f32::consts::TAU
+    };
+    let arc = 1.5 * std::f32::consts::PI;
+    let points = (0..=24)
+        .map(|i| {
+            let angle = turn + arc * i as f32 / 24.0;
+            center + radius * vec2(angle.cos(), angle.sin())
+        })
+        .collect();
+    ui.painter()
+        .add(egui::Shape::line(points, Stroke::new(STROKE, color)));
+}
+
 /// The state comes before Discard on every save row.
 pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Option<&str>) -> bool {
     status(ui, state);
