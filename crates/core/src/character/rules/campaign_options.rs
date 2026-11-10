@@ -31,7 +31,7 @@ fn catalogue() -> &'static OptionRegistry {
     static OPTIONS: OnceLock<OptionRegistry> = OnceLock::new();
     OPTIONS.get_or_init(|| {
         serde_json::from_str(include_str!(
-            "../../../builtin/dndbeyond/campaign-options.json"
+            "../../../../../builtin/dndbeyond/campaign-options.json"
         ))
         .expect("checked campaign option catalogue")
     })

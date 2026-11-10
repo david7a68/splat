@@ -88,7 +88,8 @@ fn directory_keeps_readable_entries_skips_hidden_files_and_names_unreadable_note
 
 #[test]
 fn reads_all_seventeen_design_notes_together() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/design/examples");
+    let root =
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("docs/design/examples");
     let (entries, errors) = read_directory(&root).unwrap();
     assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(entries.len(), 17);

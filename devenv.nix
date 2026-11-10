@@ -78,7 +78,7 @@
     fi
     out="$PWD/artifacts/screenshots/$label"
     SPLAT_VISUAL_DIR="$out" SPLAT_VISUAL_VIDEO="''${SPLAT_VISUAL_VIDEO:-1}" \
-      cargo test --locked --bin splat visual_suite -- --nocapture
+      cargo test --locked --package splat --lib visual_suite -- --nocapture
     status=$?
     if [ -n "''${SPLAT_VISUAL_SCENARIOS:-}" ]; then
       echo "Partial run: no contact sheet."
@@ -100,7 +100,7 @@
       "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
     esac
     SPLAT_VISUAL_BASELINE_RUN="$PWD/artifacts/screenshots/$1" \
-      cargo test --locked --bin splat visual_update_chrome -- --ignored --nocapture
+      cargo test --locked --package splat --lib visual_update_chrome -- --ignored --nocapture
   '';
   # A sheet is optional and can be made from existing captures without rerunning tests.
   scripts.visual-contact-sheet.exec = ''
@@ -132,7 +132,7 @@
       exit 2
     fi
     VISUAL_COMPARE_A="$PWD/artifacts/screenshots/$1" VISUAL_COMPARE_B="$PWD/artifacts/screenshots/$2" \
-      cargo test --locked --bin splat visual_compare -- --ignored --nocapture
+      cargo test --locked --package splat --lib visual_compare -- --ignored --nocapture
   '';
   enterTest = "cargo test --locked";
 }

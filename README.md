@@ -53,10 +53,20 @@ It avoids running the scenarios once without captures and again with captures.
 The separate `cargo test --locked`, `check`, and full `visual-test` commands remain
 valid. `--only` is for local feedback.
 
-Splat's test profile keeps file and line information for backtraces, but omits
-local-variable debug information. Normal app builds keep full debug information.
-To debug a test with locals, use
-`cargo test --locked --config 'profile.test.package.splat.debug=2'`.
+The workspace separates bundled assets (`crates/assets`), content and rules
+(`crates/core`), verification tools (`crates/cli`), and desktop code (`src`).
+The desktop library can start compiling when core metadata is ready, while core
+code generation continues. The tools depend on core and do not compile the GUI.
+The `splat` library keeps its content, character, and execution APIs.
+`cargo test --locked` runs tests in all workspace crates.
+
+Development and test builds use 16 code-generation units, disable incremental
+compilation, and keep file and line information for backtraces. Set
+`CARGO_INCREMENTAL=1` to enable incremental compilation while editing. To include
+local variables when debugging, use `--config 'profile.dev.debug=2'` with
+`cargo run`, or `--config 'profile.test.debug=2'` with `cargo test`.
+External dependencies keep their existing optimization level. Release settings
+are unchanged.
 
 ## Visual tests
 
