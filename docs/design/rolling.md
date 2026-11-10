@@ -1,7 +1,7 @@
 # Rolling from the stat block and the sheet
 
-Status: proposed design, revised after three reviews. It does not authorize
-implementation.
+Status: implemented, after three reviews of the design. The notes under "Engine
+and data" and "As built" say where the build differs from the earlier text.
 
 The DM clicks a number on a stat block or a character sheet, and Splat rolls it.
 This covers ability checks, saving throws, skills, attacks, damage, and calls
@@ -353,12 +353,11 @@ Nothing in the call changes a participant until that last Damage.
   slots, and writes to `state.log`, and Undo restores `state.random`.
   Standalone rolls change:
   - They do not go through `apply` and take no history slot.
-  - They use their own random stream, outside `State`, saved with the run. Undo
-    never rewinds it, so undoing and rolling again does not give the same
-    number. `state.random` stays for rolls that belong to a step.
-  - Their Log line goes in `state.log` and in every state in `history`, as the
-    run already does for "Sheet update removed undo steps"
-    (`src/encounter_run.rs:2814`). So Undo keeps the line, in its place.
+  - Their Log line goes in `state.log` and in every state in `history`, and the
+    dice's new position goes in every state's `random` too (`Run::record`, from
+    the dock's `roll_dice` on `main`). So Undo keeps the line in its place, and
+    undoing and rolling again does not give the same number. This replaces the
+    separate stream that the earlier text proposed.
   - The Arrivals notice reads `state.log.last()` to find the last addition
     (`src/encounter_run/view.rs:3050`). It must skip roll lines.
   - The test `undo_takes_a_group_back_whole_and_its_dice_with_it` still holds:
@@ -371,6 +370,18 @@ Nothing in the call changes a participant until that last Damage.
 - Dice links are ranges in the reader's laid-out text, hit-tested by pointer
   position, as reader links are today (`src/markdown_view.rs:1003`). They need
   a right-click menu, which reader links do not have yet.
+
+## As built
+
+- Parsing is `splat::content::dice_text`; rolling and the result beside a link
+  are `src/rolls.rs`; the strip and the call view are
+  `src/encounter_run/rolling.rs`.
+- An empty `Save` cell has no link. A call for a save uses the save bonus, or
+  else the ability modifier, from the creature's stat block.
+- Character rows in a call have a typed total, `Half`, and `Roll for them` when
+  the participant's entry has the bonus.
+- The `run-rolls` visual scenario measures T16.1 to T16.5, T16.7 and T16.8.
+  T16.6 has no script yet.
 
 ## Glossary change
 

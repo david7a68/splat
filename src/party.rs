@@ -7,6 +7,7 @@ use crate::{
 use eframe::egui;
 use serde_json::Value;
 use splat::character::{ABILITIES, EntitySnapshot};
+use splat::content::dice_text::{D20, DamagePart, RollLink};
 use std::time::Duration;
 #[derive(Default)]
 pub struct Party {
@@ -1428,6 +1429,7 @@ pub fn sheet_page(
     search: &str,
     live: Option<&LiveValues>,
 ) {
+    crate::rolls::set_entry(ui.ctx(), &record.definition.splat_name);
     match page {
         0 => overview(ui, record, live),
         BACKGROUND_PAGE => background(ui, record),
@@ -1704,6 +1706,48 @@ fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
         design::stat_tile(ui, label, &value.to_string());
     });
 }
+/// A tile whose number rolls.
+fn roll_metric(ui: &mut egui::Ui, label: &str, value: &str, link: &RollLink) {
+    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
+        ui.set_min_height(design::XXL + design::M);
+        ui.set_width(TILE_WIDTH);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add(egui::Label::new(Type::Small.rich(ui, label).color(colors().muted)).truncate());
+            crate::rolls::link(ui, value, Type::NumeralLarge, link);
+        });
+    });
+}
+
+/// A bonus in the sheet's numeral type that rolls, or a dash when the sheet has none.
+fn numeral_link(ui: &mut egui::Ui, bonus: Option<i64>, link: impl FnOnce(i64) -> RollLink) {
+    match bonus {
+        Some(bonus) => {
+            crate::rolls::link(ui, &design::signed(bonus), Type::Numeral, &link(bonus));
+        }
+        None => {
+            ui.label(Type::Numeral.rich(ui, "—").color(colors().text));
+        }
+    }
+}
+
+/// A d20 roll for an ability, a save or a skill, named in book case.
+fn d20(what: D20, bonus: i64, name: &str) -> RollLink {
+    RollLink::D20 {
+        what,
+        bonus,
+        label: design::reader::human_label(name),
+        damage: Vec::new(),
+    }
+}
+
+/// `DEX` or `dexterity` as the book names it.
+fn ability_name(short: &str) -> Option<&'static str> {
+    splat::content::dice_text::ABILITIES
+        .into_iter()
+        .find(|name| short.len() >= 3 && name.to_lowercase().starts_with(&short.to_lowercase()))
+}
+
 fn val(record: &EntitySnapshot, key: &str) -> String {
     record
         .stat(key)
@@ -1780,16 +1824,17 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     section_heading(ui, "Ability scores");
     tiles(ui, |ui| {
         for ability in ABILITIES {
-            metric(
-                ui,
-                &format!(
-                    "{}{} {}",
-                    ability[..1].to_uppercase(),
-                    &ability[1..3],
-                    val(record, ability)
-                ),
-                signed(record, &format!("{ability}_modifier")),
+            let label = format!(
+                "{}{} {}",
+                ability[..1].to_uppercase(),
+                &ability[1..3],
+                val(record, ability)
             );
+            let value = signed(record, &format!("{ability}_modifier"));
+            match record.stat(&format!("{ability}_modifier")) {
+                Some(bonus) => roll_metric(ui, &label, &value, &d20(D20::Check, bonus, ability)),
+                None => metric(ui, &label, value),
+            }
         }
     });
     section_heading(ui, "Passive scores & movement");
@@ -1815,11 +1860,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     sheet_columns(ui, ABILITIES.len(), |ui, at| {
         let ability = ABILITIES[at];
         ui.horizontal(|ui| {
-            ui.label(
-                Type::Numeral
-                    .rich(ui, signed(record, &format!("{ability}_save")))
-                    .color(colors().text),
-            );
+            numeral_link(ui, record.stat(&format!("{ability}_save")), |bonus| {
+                d20(D20::Save, bonus, ability)
+            });
             let mut name = ability.to_string();
             name[..1].make_ascii_uppercase();
             ui.label(name);
@@ -1830,11 +1873,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
     sheet_columns(ui, skills.len(), |ui, at| {
         let skill = &record.character.skills[skills[at]];
         ui.horizontal(|ui| {
-            ui.label(
-                Type::Numeral
-                    .rich(ui, signed(record, &skill.stat))
-                    .color(colors().text),
-            );
+            numeral_link(ui, record.stat(&skill.stat), |bonus| {
+                d20(D20::Skill, bonus, &skill.name)
+            });
             let mut marks = Vec::new();
             if skill.expertise {
                 marks.push("Expertise");
@@ -2131,6 +2172,63 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
     entries
 }
 
+/// One attack: its name, then its bonus or save DC and its damage as dice links.
+fn attack_line(ui: &mut egui::Ui, attack: &Value, hit: &str, damage: &str) {
+    let name = text(&attack["name"]);
+    let kind = text(&attack["damage"]["type"]);
+    let dice = attack["damage"]["value"]["diceString"]
+        .as_str()
+        .filter(|_| attack["damage"]["value"].as_i64().is_none())
+        .map(|_| splat::content::dice_text::plain_dice(damage));
+    let parts: Vec<DamagePart> = dice
+        .iter()
+        .map(|dice| DamagePart {
+            dice: dice.clone(),
+            kind: (!kind.is_empty()).then(|| design::reader::human_label(kind)),
+        })
+        .collect();
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        ui.label(format!("{name} ·"));
+        if let Some(bonus) = attack["toHit"].as_i64() {
+            let link = RollLink::D20 {
+                what: D20::Attack,
+                bonus,
+                label: name.to_owned(),
+                damage: parts.clone(),
+            };
+            crate::rolls::link(ui, &format!("{bonus:+}"), Type::Body, &link);
+            ui.label("to hit ·");
+        } else if let (Some(dc), Some(ability)) = (
+            attack["saveInfo"]["value"].as_i64(),
+            ability_name(text(&attack["saveInfo"]["label"])),
+        ) {
+            ui.label(format!("{ability} save"));
+            let link = RollLink::SaveDc {
+                label: name.to_owned(),
+                ability: ability.to_owned(),
+                dc,
+                half: false,
+                damage: parts.clone(),
+            };
+            crate::rolls::link(ui, &format!("DC {dc}"), Type::Body, &link);
+            ui.label("·");
+        } else {
+            ui.label(format!("{hit} ·"));
+        }
+        if parts.is_empty() {
+            ui.label(format!("{damage} {kind}"));
+        } else {
+            let link = RollLink::Damage {
+                label: name.to_owned(),
+                parts,
+            };
+            crate::rolls::link(ui, damage, Type::Body, &link);
+            ui.label(kind);
+        }
+    });
+}
+
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     match page {
         1 => {
@@ -2164,11 +2262,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                     .to_lowercase()
                     .contains(&search.to_lowercase())
                 {
-                    ui.label(format!(
-                        "{} · {hit} · {damage} {}",
-                        text(&attack["name"]),
-                        text(&attack["damage"]["type"])
-                    ));
+                    attack_line(ui, attack, &hit, &damage);
                 }
             }
             ui.add_space(design::S);

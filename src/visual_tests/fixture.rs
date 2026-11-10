@@ -293,6 +293,7 @@ fn write_module(root: &Path) -> Result<Module, String> {
     for (path, text) in [
         (
             "Creatures/Cinder Wolf.md",
+            // A full attribute table, so its checks and saves roll.
             creature(
                 "cinder_wolf",
                 "Cinder Wolf",
@@ -301,6 +302,10 @@ fn write_module(root: &Path) -> Result<Module, String> {
                 2,
                 "beast",
                 "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage plus 3 (1d6) Fire damage.",
+            )
+            .replace(
+                "  initiative: {value: 2}\n",
+                "  initiative: {value: 2}\n  strength: {value: 13}\n  dexterity: {value: 15}\n  constitution: {value: 14}\n  intelligence: {value: 3}\n  wisdom: {value: 12}\n  charisma: {value: 6}\n",
             ),
         ),
         (
@@ -312,7 +317,7 @@ fn write_module(root: &Path) -> Result<Module, String> {
                 12,
                 1,
                 "humanoid",
-                "Scorching Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage.\n\nSpellcasting. The cultist casts Ashfall, using Wisdom as the spellcasting ability.",
+                "Scorching Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage.\n\nEmber Burst. Dexterity Saving Throw: DC 12, each creature in a 10-foot Emanation originating from the cultist. Failure: 7 (2d6) Fire damage. Success: Half damage.\n\nSpellcasting. The cultist casts Ashfall, using Wisdom as the spellcasting ability.",
             ),
         ),
         (

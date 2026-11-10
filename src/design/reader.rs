@@ -54,6 +54,14 @@ const DETAIL_MEASURE: f32 = 330.0;
 
 /// One row of a reference table: a label column, then a wrapped value.
 pub fn detail(ui: &mut Ui, label: &str, value: &str) {
+    let color = colors().text;
+    detail_with(ui, label, |ui| {
+        ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(color)).wrap());
+    });
+}
+
+/// A reference row whose value is drawn by `value`, such as one with dice links.
+pub fn detail_with(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
     let c = colors();
     let label = human_label(label);
     let font = Type::StatLabel.font(ui);
@@ -61,7 +69,7 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
     // A long label takes its own line. A label is never cut.
     if galley.size().x > LABEL_WIDTH - XS {
         ui.label(Type::StatLabel.rich(ui, label).color(c.text));
-        ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(c.text)).wrap());
+        value(ui);
         return;
     }
     ui.horizontal_top(|ui| {
@@ -71,9 +79,7 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
         ui.painter().galley(rect.min, galley, c.text);
         // A long value keeps the reader's measure in this smaller type.
         let room = vec2(ui.available_width().min(DETAIL_MEASURE), 0.0);
-        ui.allocate_ui(room, |ui| {
-            ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(c.text)).wrap());
-        });
+        ui.allocate_ui(room, value);
     });
 }
 

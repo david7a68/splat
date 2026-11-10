@@ -211,6 +211,7 @@ fn show_inner(
     values: Option<&RunValues>,
     related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
 ) -> Option<usize> {
+    crate::rolls::set_entry(ui.ctx(), name);
     if let Some(entry) = entry {
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));

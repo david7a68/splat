@@ -6,7 +6,10 @@ use crate::design::{
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use splat::content::{Entry, Reference};
+use splat::content::{
+    Entry, Reference,
+    dice_text::{self, D20, RollLink},
+};
 
 const ABILITIES: [&str; 6] = [
     "strength",
@@ -286,11 +289,11 @@ fn prose(
                 if let Some(printed) = line.strip_prefix("Speed ") {
                     changed_speed(ui, printed, speed);
                 } else {
-                    reader_style::source_prose(ui, line);
+                    rollable_prose(ui, line);
                 }
             }
         } else {
-            reader_style::source_prose(ui, paragraph);
+            rollable_prose(ui, paragraph);
         }
         if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
             && let Some(values) = values
@@ -311,6 +314,29 @@ fn prose(
             spell_links(ui, paragraph);
         }
     }
+}
+
+/// Rules prose with each rollable number as a dice link: an attack bonus, a damage group,
+/// a save DC and other dice. A paragraph's run-in title names its rolls.
+pub(super) fn rollable_prose(ui: &mut egui::Ui, text: &str) {
+    let text = text
+        .split("\n\n")
+        .map(rollable)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    reader_style::source_prose(ui, &text);
+}
+
+fn rollable(paragraph: &str) -> String {
+    let trimmed = paragraph.trim_start();
+    // Tables, headings, quotes and markup keep their own syntax.
+    if trimmed.starts_with(['|', '#', '<', '>']) {
+        return paragraph.to_owned();
+    }
+    let label = reader_style::run_in_title(trimmed)
+        .map(|title| title.split(" (").next().unwrap_or(title))
+        .unwrap_or("");
+    dice_text::with_links(paragraph, label)
 }
 
 /// These stat rows share the reader's label column, including changed values.
@@ -358,26 +384,49 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
             c.text,
         );
         cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
-        cell(
-            ui,
-            26.0,
-            &modifier.map_or_else(|| "—".into(), design::signed),
-            Type::Stat,
-            c.muted,
-        );
-        cell(
-            ui,
-            56.0,
-            &save.map_or_else(String::new, |v| format!("Save {}", design::signed(v))),
-            Type::Stat,
-            c.muted,
-        );
+        let name = dice_text::ABILITIES
+            .iter()
+            .find(|name| name.eq_ignore_ascii_case(ability))
+            .copied()
+            .unwrap_or(ability);
+        match modifier {
+            Some(bonus) => link_cell(
+                ui,
+                26.0,
+                &design::signed(bonus),
+                &RollLink::D20 {
+                    what: D20::Check,
+                    bonus,
+                    label: name.to_owned(),
+                    damage: Vec::new(),
+                },
+            ),
+            None => cell(ui, 26.0, "—", Type::Stat, c.muted),
+        }
+        match save {
+            Some(bonus) => link_cell(
+                ui,
+                56.0,
+                &format!("Save {}", design::signed(bonus)),
+                &RollLink::D20 {
+                    what: D20::Save,
+                    bonus,
+                    label: name.to_owned(),
+                    damage: Vec::new(),
+                },
+            ),
+            None => cell(ui, 56.0, "", Type::Stat, c.muted),
+        }
     });
 }
 
+/// An attribute row is as tall as a pointer target, as its numbers roll.
+const ABILITY_ROW: f32 = 24.0;
+
 fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, role.line()), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
     let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
+    let top = rect.center().y - galley.size().y / 2.0;
     // Numbers line up on their right edge, so that a column of them can be read down.
     let numeric = text.starts_with(|c: char| c.is_ascii_digit() || "+\u{2212}\u{2014}".contains(c));
     let left = if numeric {
@@ -385,8 +434,60 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Colo
     } else {
         rect.left()
     };
-    ui.painter()
-        .galley(egui::pos2(left, rect.top()), galley, color);
+    ui.painter().galley(egui::pos2(left, top), galley, color);
+}
+
+/// A right-aligned number in the attribute table that rolls.
+fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
+    let c = colors();
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::click());
+    let color = if response.hovered() {
+        c.focus
+    } else {
+        c.accent
+    };
+    let galley = design::one_line(ui, text, Type::Stat.font(ui), color, width + design::S);
+    let left = rect.right() - galley.size().x;
+    let top = rect.center().y - galley.size().y / 2.0;
+    let bottom = top + galley.size().y - 1.0;
+    ui.painter().hline(
+        left..=rect.right(),
+        bottom,
+        egui::Stroke::new(1.0, color.gamma_multiply(0.6)),
+    );
+    ui.painter().galley(egui::pos2(left, top), galley, color);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Link, true, crate::rolls::hint(link))
+    });
+    if response.hovered() || response.clicked() || response.secondary_clicked() {
+        crate::rolls::press(ui, &response, link);
+    }
+}
+
+/// The Skills row, with each bonus a dice link.
+fn skills_detail(ui: &mut egui::Ui, text: &str) {
+    let mut markdown = String::new();
+    let mut at = 0;
+    for (range, name, bonus) in dice_text::skills(text) {
+        markdown.push_str(&text[at..range.start]);
+        let link = RollLink::D20 {
+            what: D20::Skill,
+            bonus,
+            label: name,
+            damage: Vec::new(),
+        };
+        markdown.push_str(&format!(
+            "[{}](<{}>)",
+            &text[range.clone()],
+            link.destination()
+        ));
+        at = range.end;
+    }
+    markdown.push_str(&text[at..]);
+    reader_style::detail_with(ui, "Skills", |ui| {
+        crate::markdown_view::show_compact(ui, &markdown);
+    });
 }
 
 /// Armor class, hit points and initiative, under capital labels. Only what the entry has.
@@ -682,7 +783,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
             ui.spacing_mut().item_spacing.x = design::M;
             for column in ABILITIES.chunks(3) {
                 ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     for ability in column {
                         ability_row(ui, entry, ability);
                     }
@@ -690,7 +791,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
             }
         });
     } else {
-        ui.spacing_mut().item_spacing.y = 1.0;
+        ui.spacing_mut().item_spacing.y = 0.0;
         for ability in ABILITIES {
             ability_row(ui, entry, ability);
         }
@@ -707,6 +808,8 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
                 && let Some(speed) = values.and_then(|values| values.speed.as_ref())
             {
                 changed_speed(ui, &text, speed);
+            } else if label == "Skills" && !dice_text::skills(&text).is_empty() {
+                skills_detail(ui, &text);
             } else {
                 reader_style::detail(ui, label, &text);
             }
@@ -742,7 +845,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            reader_style::source_prose(ui, &body);
+            rollable_prose(ui, &body);
         }
     }
 }

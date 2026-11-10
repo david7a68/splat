@@ -1,6 +1,7 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
 mod loot;
+mod rolling;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
@@ -12,7 +13,7 @@ use splat::{
         Entry,
         overrides::{Base, Overrides, Resolved, condition_names, same_condition},
     },
-    execution::dice::{Dice, Random},
+    execution::dice::Random,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -517,12 +518,6 @@ struct CarriedHp {
     /// Fights whose runs could not be read, so their HP is not here.
     missing: Vec<String>,
 }
-/// The last roll, beside the dice.
-struct LastRoll {
-    total: String,
-    /// The log line behind the total.
-    line: String,
-}
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -559,7 +554,10 @@ pub(crate) struct Run {
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
-    last_roll: Option<LastRoll>,
+    /// The last roll of this turn, above the panel. Undo keeps it; Next turn ends it.
+    strip: Option<rolling::Strip>,
+    /// A call for a save, with its own targets. Never saved.
+    call: Option<rolling::Call>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     condition: String,
@@ -654,6 +652,8 @@ enum Panel {
     Encounter,
     Groups,
     Keys,
+    /// A call for a save. Like Arrivals, it has no tab.
+    Call,
 }
 /// How an added group's log line starts. The group panel shows that line while it is the last.
 const GROUP_ADDED: &str = "Encounter group ";
@@ -867,7 +867,8 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: 0,
-            last_roll: None,
+            strip: None,
+            call: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
@@ -1360,19 +1361,19 @@ impl Run {
     /// The dock's roll. It changes no game state, so it goes to the Log and is not an Undo
     /// step. Undo of an earlier step keeps its line, and the dice do not roll the same again.
     pub(super) fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
-        if matches!(self.state.phase, Phase::Ended { .. }) {
-            return Err("This encounter has ended. Undo the ending to continue.".into());
+        let link = splat::content::dice_text::RollLink::Dice {
+            label: String::new(),
+            dice: expression.to_owned(),
+        };
+        let rolled = self.record(|random| {
+            crate::rolls::roll("DM", &link, crate::rolls::Mode::Normal, 0, random)
+        })?;
+        if matches!(self.state.phase, Phase::Running) {
+            self.strip = Some(rolling::Strip {
+                roller: None,
+                rolled,
+            });
         }
-        let mut random = self.state.random.clone();
-        let roll = Dice::parse(expression)?.roll(&mut random, false)?;
-        let line = format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total);
-        for state in self.history.iter_mut().chain([&mut self.state]) {
-            state.log.push(line.clone());
-            state.random = random.clone();
-        }
-        self.dm_steps += 1;
-        self.dirty = true;
-        self.error = None;
         Ok(())
     }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
@@ -1740,6 +1741,7 @@ impl Run {
             // Whichever way the turn moved, targets chosen for it no longer stand.
             self.also.clear();
             self.halved.clear();
+            self.end_turn_rolls();
         }
         self.dirty = true;
         self.error = None;
@@ -1992,6 +1994,7 @@ impl Run {
         ] {
             *place = place.filter(|index| *index < count);
         }
+        self.forget_removed_rollers();
     }
     /// The rules a single NPC roll can use. Initiative groups need a group to be different
     /// from individual rolls.
@@ -3449,7 +3452,8 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
-            last_roll: None,
+            strip: None,
+            call: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),

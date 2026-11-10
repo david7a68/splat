@@ -811,6 +811,30 @@ the value trio. Add by hand comes first, in larger type on one summary line. An 
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
 Paused snapshots state when they differ from the current file.
 
+### Rolls
+
+Dice links look like reader links: accent text and an underline, at least 24 px tall. Attribute-table rows are
+24 px so their Mod and Save links are full targets; numbers stay right-aligned. A click rolls, Shift+click rolls
+with advantage, Ctrl+click with disadvantage, and right-click opens a menu with the same choices and critical
+damage. Each result opens beside its link, below it, or above it when there is no room: the roller and feature
+in muted Small, the total and its words in Heading, then each die in Small with a dropped die struck through.
+`Natural 20` and `Natural 1` appear in words, with an icon, only on attacks and death saves. Escape or a click
+elsewhere closes it. Outside a run that is all a roll does.
+
+In live play the last roll also stays in a two-line strip at the top of the side panel, above the title and tabs:
+the total in Strong, the selected target's AC beside an attack, then the roller, feature and dice in muted Small,
+which drop dice first, then the feature. Line two has one action, `Roll damage` or `Use N`, and `Back to <roller>`
+when the roller is neither selected nor the current creature; its name shortens as dock names do. `Use` on a
+feature's damage is blocked with `Choose a target first.` while only the roller is selected. Undo keeps the strip;
+Next turn clears it. With the panel hidden, the dock keeps its `= N` and the result beside a link carries the
+strip's actions. D rolls the strip's damage and T uses its total.
+
+A save DC opens the call view in the side panel, like Arrivals, titled `This fight · Call for a save`. It shows
+the feature's paragraph, then one tick box per present participant except the caster, with Roll or a typed total,
+the total against the DC in words, and a Half toggle. `Roll all creatures`, `Half for those at or above DC`, the
+damage link and primary `Use N on K targets` follow. Ctrl+click on a roster row ticks it in the call. Escape and
+the other tabs leave it; the same DC reopens it with its ticks until Next turn.
+
 ### Arrivals
 
 Only search shows until a name is typed; then the made-up creature form has two fixed field rows. Its side

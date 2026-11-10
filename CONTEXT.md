@@ -114,9 +114,20 @@ A named game behavior, such as taking a long rest, for which the campaign choose
 the applicable rule. Content using that mechanic follows the campaign's choice.
 
 **Inline control**:
-An interactive element within rendered descriptive text that invokes a defined
-roll or other supported interaction. Its behavior comes from structured mechanics,
-not from interpreting the surrounding prose.
+An interactive element within rendered descriptive text that uses an ability or
+changes state. Its behavior comes from structured mechanics, not from interpreting
+the surrounding prose. A dice link is the exception, for rolls that change nothing.
+
+**Dice link**:
+A number or dice expression in an entry's text, such as `Attack Roll: +4`,
+`9 (2d6 + 2) Bludgeoning damage` or `Dexterity Saving Throw: DC 14`, that makes a
+standalone or preview roll from its printed value. Structured data and run changes
+can add to it. A save DC link starts a call for a save and is never rolled itself.
+
+**Call for a save**:
+A list of targets that save against one DC during a run. Its ticks, totals and
+half-damage marks belong to the call until the DM uses its damage, which sets the
+run's targets for one Damage step.
 
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its
@@ -421,8 +432,9 @@ One instance of damage against a participant, with its cause and applicable
 components. Its rules determine adjustments and the effects it triggers.
 
 **Standalone roll**:
-A roll of an ability's dice expression that displays a result without using
-the ability, spending resources, or changing a participant's state. A later
+A roll of an ability's dice expression, or of any dice expression during a run,
+that displays a result without using the ability, spending resources, or changing
+a participant's state. It goes to the run's Log and is not an Undo step. A later
 ability use does not automatically reuse this result.
 
 **Reaction opportunity**:

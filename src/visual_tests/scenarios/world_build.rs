@@ -1912,6 +1912,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.state("package-draft-changed-on-disk", Sizes::All);
     d.click("Reload and lose my draft");
     d.click("Read");
+    // The attribute table's rows are pointer targets, so the actions can start lower.
+    d.scroll_at(super::READER, 3);
     d.wait_for_text("Ash Bite");
     d.expect("Undo discard of Cinder Wolf");
     assert!(!d.app_mut().library.dirty());
@@ -2011,6 +2013,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.replace_editor_text(&valid);
     d.click("Save");
     d.click("Read");
+    // The attribute table's rows are pointer targets, so the actions can start lower.
+    d.scroll_at(super::READER, 3);
     d.wait_for_text("Ash Bite");
     d.expect("Ashen Marches · Used here");
     d.state("package-yaml-repaired", Sizes::All);

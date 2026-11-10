@@ -44,6 +44,7 @@ mod persistence;
 mod processing;
 mod recording;
 mod roll_table;
+mod rolls;
 mod sessions;
 mod settings;
 mod sheet_writer;
@@ -1859,6 +1860,49 @@ impl Splat {
         }
     }
 
+    /// A press on a dice link. Beside the run, the run rolls it on its own dice and keeps it in
+    /// the Log; anywhere else it is a preview roll that changes nothing.
+    fn route_rolls(&mut self, ctx: &egui::Context) {
+        let in_run = self.page == Page::Run;
+        if let Some(ask) = rolls::take_ask(ctx) {
+            let at = ask.at;
+            let shown = match self.encounters.run_mut().filter(|_| in_run) {
+                Some(run) => run.roll_link(ask),
+                None => rolls::preview(ctx, &ask).map(|rolled| {
+                    Some(rolls::Shown {
+                        rolled,
+                        at,
+                        actions: false,
+                        use_blocked: None,
+                        armor: None,
+                    })
+                }),
+            };
+            match shown {
+                Ok(Some(shown)) => rolls::show_result(ctx, shown),
+                Ok(None) | Err(_) => rolls::close_result(ctx),
+            }
+        }
+        if let Some(shown) = rolls::shown(ctx).filter(|_| in_run)
+            && let Some(run) = self.encounters.run_mut()
+        {
+            // The selection moves under an open result: its AC and Use follow it.
+            if shown.actions && !run.has_strip() {
+                rolls::close_result(ctx);
+            } else {
+                rolls::show_result(ctx, run.refreshed(&shown));
+            }
+        }
+        rolls::show_menu(ctx);
+        let at = rolls::shown(ctx).map(|shown| shown.at);
+        if let Some(action) = rolls::show_popover(ctx)
+            && let Some(run) = self.encounters.run_mut().filter(|_| in_run)
+            && let Some(shown) = run.rolled_action(action, at.unwrap_or_default())
+        {
+            rolls::show_result(ctx, shown);
+        }
+    }
+
     /// Requests that cross pages: read beside a draft, or open an entry where it lives.
     fn route(&mut self, ctx: &egui::Context) {
         if let Some(target) = markdown_view::take_note_link(ctx) {
@@ -2219,6 +2263,8 @@ impl eframe::App for Splat {
         if !self.confirm_close {
             ctx.data_mut(|data| data.remove::<bool>(egui::Id::new("app_close_default_focused")));
         }
+        // An open roll result or roll menu takes Escape before Lookup or the run.
+        rolls::escape(ctx);
         self.apply_focus_step(ctx);
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
@@ -2367,6 +2413,7 @@ impl eframe::App for Splat {
         );
         design::reserve_primary(ctx, false);
         self.lookup.back_key(ctx, self.page == Page::Library);
+        self.route_rolls(ctx);
         self.run_strip(ctx);
         self.party_bar(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);

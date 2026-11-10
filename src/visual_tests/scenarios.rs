@@ -10892,3 +10892,142 @@ pub mod remove_package_in_use {
         d.state("paused-run-after-package-removal", Sizes::All);
     }
 }
+
+/// T16: roll from a stat block during a run. An attack, a target, its damage and Use, then a
+/// call for a save with its own targets, and a preview roll in the Library.
+pub mod run_rolls {
+    use super::*;
+    const ATTACKER: &str = "Cinder Wolf 1";
+    const TARGET: &str = "Cinder Wolf 2";
+    const CASTER: &str = "Ember Cultist";
+    const ATTACK_BONUS: &str = "+4";
+    const SAVE_DC: &str = "DC 12";
+    const ROLL_DAMAGE: &str = "Roll damage";
+    const ROLL_ALL: &str = "Roll all creatures";
+    const HALF_MADE: &str = "Half for those at or above DC";
+    const TARGETS: &str = "Tick each target";
+
+    fn plain(d: &mut Driver<'_>, words: &str) {
+        d.click_words(words, egui::Modifiers::NONE, egui::PointerButton::Primary);
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run_from_cold_start(d);
+        d.click_row(ATTACKER);
+        d.state("attacker-stat-block", Sizes::All);
+
+        d.begin_task();
+        plain(d, ATTACK_BONUS);
+        d.expect("to hit");
+        d.goal_within("T16.1", "roll the current creature's attack", 1);
+        d.state("attack-rolled", Sizes::All);
+        d.press(Key::Escape);
+
+        d.begin_task();
+        d.click_row(TARGET);
+        d.observe(
+            "T16.2",
+            d.has_containing(&format!("AC 13 {TARGET}")) && d.has_containing("to hit"),
+            "After a target is chosen, the strip keeps the attack and shows the target's AC",
+        );
+        d.goal_within("T16.2", "choose a target and see its AC", 1);
+        d.state("attack-and-target", Sizes::All);
+
+        d.begin_task();
+        let before = d.row_hp(TARGET);
+        d.click(ROLL_DAMAGE);
+        d.state("damage-rolled", Sizes::All);
+        d.click_starting("Use ");
+        d.press(Key::Enter);
+        let after = d.row_hp(TARGET);
+        d.observe(
+            "T16.3",
+            before != after,
+            format!("The rolled damage applies to the target: {before:?} then {after:?}"),
+        );
+        d.goal_within("T16.3", "roll the damage and apply it to the target", 3);
+        d.state("damage-applied", Sizes::Default);
+
+        // The next attack of a Multiattack starts from the strip.
+        d.begin_task();
+        d.click_starting("Back to ");
+        plain(d, ATTACK_BONUS);
+        d.click_row(TARGET);
+        d.click(ROLL_DAMAGE);
+        d.click_starting("Use ");
+        d.press(Key::Enter);
+        d.goal_within("T16.4", "make a second attack against the same target", 6);
+
+        // After a pointer roll and target, the keyboard finishes the attack: D, T, Enter.
+        d.click_starting("Back to ");
+        plain(d, ATTACK_BONUS);
+        d.click_row(TARGET);
+        let before = d.row_hp(TARGET);
+        d.begin_task();
+        d.press(Key::D);
+        d.press(Key::T);
+        d.press(Key::Enter);
+        let after = d.row_hp(TARGET);
+        d.observe(
+            "T16.8",
+            before != after,
+            format!("D, T and Enter apply the attack's damage: {before:?} then {after:?}"),
+        );
+        d.goal_within("T16.8", "roll, use and apply damage by keyboard", 3);
+
+        // A call for a save, with its own targets.
+        d.click_row(CASTER);
+        d.begin_task();
+        plain(d, SAVE_DC);
+        d.expect(TARGETS);
+        d.state("call-open", Sizes::All);
+        d.click_below(TARGETS, ATTACKER);
+        d.click_below(TARGETS, TARGET);
+        d.click(ROLL_ALL);
+        d.state("call-saves-rolled", Sizes::All);
+        if d.has(HALF_MADE) {
+            d.click(HALF_MADE);
+        }
+        d.click_containing("Ember Burst damage");
+        d.click_starting("Use ");
+        d.press(Key::Enter);
+        d.goal_within(
+            "T16.5",
+            "call a save from three creatures and apply the damage",
+            9,
+        );
+        d.state("call-applied", Sizes::Default);
+
+        // Outside a run, a roll is a preview: it shows beside the link and changes nothing.
+        d.press(Key::Escape);
+        go_library(d);
+        open_local_package(d, MODULE);
+        d.click_containing("Cinder Wolf");
+        d.begin_task();
+        d.click_words(
+            ATTACK_BONUS,
+            egui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+            egui::PointerButton::Primary,
+        );
+        d.observe(
+            "T16.7",
+            d.has_containing("to hit"),
+            "Shift+click on a bonus rolls with advantage beside the link",
+        );
+        d.state("library-preview-advantage", Sizes::All);
+        d.press(Key::Escape);
+        d.begin_task();
+        d.click_words(
+            ATTACK_BONUS,
+            egui::Modifiers::NONE,
+            egui::PointerButton::Secondary,
+        );
+        d.expect("Roll with disadvantage");
+        d.state("roll-menu", Sizes::Default);
+        d.click("Roll with disadvantage");
+        d.goal_within("T16.7", "roll with disadvantage by pointer only", 2);
+    }
+}

@@ -27,6 +27,7 @@ pub mod character;
 pub mod contracts;
 pub mod creature_filter;
 pub mod definitions;
+pub mod dice_text;
 pub mod encounter_group;
 pub mod overrides;
 mod reading;

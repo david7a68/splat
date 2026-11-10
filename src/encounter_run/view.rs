@@ -2,7 +2,7 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, LastRoll, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
+    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
     SHEET_SOURCE, display, mode_label,
 };
 use crate::{
@@ -202,7 +202,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 12] = [
+const KEYS: [(&str, &str); 14] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -212,6 +212,8 @@ const KEYS: [(&str, &str); 12] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
+    ("D", "Roll damage for the last attack"),
+    ("T", "Use the last roll's total as the amount"),
     ("Ctrl+G", "Add to fight"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
     ("Ctrl+J", "Open or close Notes. Escape also closes them"),
@@ -265,7 +267,6 @@ impl Run {
                     self.scroll_to_selected = true;
                     self.amount.clear();
                     self.clear_targets();
-                    self.last_roll = None;
                     if self.panel == Panel::Conditions {
                         self.panel = Panel::Reference;
                     }
@@ -420,6 +421,9 @@ impl Run {
             self.live_initiative = None;
             return;
         }
+        if self.call_escape(ui) {
+            return;
+        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -497,6 +501,18 @@ impl Run {
         }
         if conditions {
             self.open_conditions_tab();
+        }
+        let (damage, use_total) = ui.input_mut(|i| {
+            if !letters || i.modifiers.shift || i.modifiers.alt {
+                return (false, false);
+            }
+            (i.consume_key(plain, Key::D), i.consume_key(plain, Key::T))
+        });
+        if damage {
+            self.roll_strip_damage(None);
+        }
+        if use_total {
+            self.use_strip_total();
         }
     }
 
@@ -1798,7 +1814,7 @@ impl Run {
             self.focus_amount = true;
         }
         match clicked {
-            Some((index, true)) => self.toggle_target(index),
+            Some((index, true)) => self.ctrl_click(index),
             Some((index, false)) => self.select(index),
             None => {}
         }
@@ -2010,9 +2026,9 @@ impl Run {
                         open_conditions = true;
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        if narrow && let Some(roll) = &self.last_roll {
-                            ui.label(Type::Strong.rich(ui, format!("= {}", roll.total)))
-                                .on_hover_text(&roll.line);
+                        if narrow && let Some((total, line)) = self.dock_roll() {
+                            ui.label(Type::Strong.rich(ui, format!("= {total}")))
+                                .on_hover_text(line);
                         }
                         // Beside the actions at the minimum window it gives up size, not letters.
                         let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui))
@@ -2088,13 +2104,13 @@ impl Run {
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some(roll) = &self.last_roll {
+                    if let Some((total, line)) = self.dock_roll() {
                         ui.label(
                             Type::Heading
-                                .rich(ui, format!("= {}", roll.total))
+                                .rich(ui, format!("= {total}"))
                                 .color(colors().text),
                         )
-                        .on_hover_text(&roll.line);
+                        .on_hover_text(line);
                     }
                 },
             );
@@ -2125,22 +2141,14 @@ impl Run {
                     self.note.clear();
                 }
             }
-            self.last_roll = self
-                .error
-                .is_none()
-                .then(|| self.state.log.last().cloned())
-                .flatten()
-                .map(|line| LastRoll {
-                    total: line
-                        .rsplit(" = ")
-                        .next()
-                        .unwrap_or_default()
-                        .trim_end_matches('.')
-                        .to_owned(),
-                    line,
-                });
             self.follow_with_keyboard();
         }
+    }
+
+    /// The last roll's total beside the dice, only while the panel and its strip are hidden.
+    fn dock_roll(&self) -> Option<(i64, String)> {
+        let strip = self.strip.as_ref().filter(|_| self.hide_panel)?;
+        Some((strip.rolled.total, strip.rolled.line()))
     }
 
     fn open_conditions_tab(&mut self) {
@@ -2877,12 +2885,16 @@ impl Run {
     // ---- Side panel -------------------------------------------------------------
 
     fn side_panel(&mut self, ui: &mut egui::Ui) {
+        self.strip_view(ui);
         let index = self.selected;
         let p = &self.state.participants[index];
         let (successes, failures) = (p.successes, p.failures);
         let death_saves = p.shows_death_saves();
         let is_sheet = p.definition.fields.contains_key("splat_external");
-        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
+        let title = if matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
+        ) {
             self.fight_panel_title()
         } else {
             &p.name
@@ -2894,7 +2906,10 @@ impl Run {
         design::named(ui, &response, title);
         response.on_hover_text(title);
 
-        let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
+        let participant_tab = !matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
+        );
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
         self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
@@ -2937,6 +2952,7 @@ impl Run {
             Panel::Log => "This fight · Log",
             Panel::Encounter => "This fight · Prep",
             Panel::Groups => "This fight · Arrivals",
+            Panel::Call => "This fight · Call for a save",
             _ => "This fight",
         }
     }
@@ -3011,6 +3027,7 @@ impl Run {
             Panel::Keys => self.keys_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
             Panel::Groups => self.groups_tab(ui),
+            Panel::Call => self.call_tab(ui),
         }
     }
 
@@ -3720,6 +3737,21 @@ impl Run {
             {
                 command = Some(Command::DeathSaves(index, successes, failures + 1));
             }
+            // The roll records nothing. The DM adds the success or failure it gives.
+            crate::rolls::set_roller(ui.ctx(), Some(index));
+            crate::rolls::set_entry(ui.ctx(), &self.state.participants[index].name);
+            crate::rolls::link(
+                ui,
+                "Roll",
+                Type::Body,
+                &splat::content::dice_text::RollLink::D20 {
+                    what: splat::content::dice_text::D20::DeathSave,
+                    bonus: 0,
+                    label: String::new(),
+                    damage: Vec::new(),
+                },
+            );
+            crate::rolls::set_roller(ui.ctx(), None);
         });
         if let Some(command) = command {
             self.run_command(command);
@@ -3846,7 +3878,10 @@ impl Run {
                 .id_salt(("run_sheet", record.definition.splat_id, page))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    crate::rolls::set_roller(ui.ctx(), Some(index));
+                    crate::rolls::set_entry(ui.ctx(), &record.definition.splat_name);
                     crate::party::sheet_page(ui, &record, page, "", Some(&live));
+                    crate::rolls::set_roller(ui.ctx(), None);
                 });
             return;
         }
@@ -3928,6 +3963,7 @@ impl Run {
                                 .collect()
                         }),
                     };
+                    crate::rolls::set_roller(ui.ctx(), Some(index));
                     link = view::show_run(
                         ui,
                         definition,
@@ -3939,6 +3975,7 @@ impl Run {
                         links,
                         &values,
                     );
+                    crate::rolls::set_roller(ui.ctx(), None);
                 }
             });
         if link.is_some() {
@@ -4945,7 +4982,10 @@ impl Run {
     }
 
     fn setup_panel(&mut self, ui: &mut egui::Ui) {
-        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
+        let title = if matches!(
+            self.panel,
+            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
+        ) {
             self.fight_panel_title()
         } else {
             &self.state.participants[self.selected].name
@@ -4975,6 +5015,7 @@ impl Run {
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
             Panel::Groups => self.groups_tab(ui),
+            Panel::Call => self.call_tab(ui),
         }
     }
 
@@ -5780,7 +5821,7 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
 }
 
 /// Keep the copy suffix when a name needs fewer words.
-fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
+pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     let fitted = design::words_that_fit(ui, name, font, width);
     if fitted == name {
         return fitted;
