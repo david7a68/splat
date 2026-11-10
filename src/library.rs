@@ -2330,7 +2330,7 @@ impl Library {
             }
         }
         if self.package_copy.is_some()
-            && design::message_with_action(
+            && design::undo_message(
                 ui,
                 Tone::Success,
                 &format!(
@@ -4506,20 +4506,53 @@ impl Library {
                 });
             }
             let mut shown = std::collections::HashSet::new();
-            for &at in &duplicate_indices {
+            for (position, &at) in duplicate_indices.iter().enumerate() {
                 let owner = &loaded.notes[at].owner;
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    && Action::secondary(&format!(
-                        "Make all {} files in {}/ separate entries",
-                        paths.len(),
-                        owner.folder()
-                    ))
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
                 {
-                    new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+                    let users: Vec<_> = loaded
+                        .notes
+                        .iter()
+                        .filter_map(|other| {
+                            let encounter = other.entry.as_ref()?;
+                            (encounter.kind == "encounter"
+                                && loaded.notes.iter().any(|target| {
+                                    target.owner.id() == owner.id()
+                                        && paths.contains(&target.path)
+                                        && target.entry.as_ref().is_some_and(|entry| {
+                                            encounter_uses_entry(encounter, entry)
+                                        })
+                                }))
+                            .then(|| encounter.name.clone())
+                        })
+                        .collect();
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = design::XS;
+                        if Action::secondary(&format!(
+                            "Make all {} files in {}/ separate entries",
+                            paths.len(),
+                            owner.folder()
+                        ))
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                        {
+                            new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                        }
+                        let remaining = duplicate_indices
+                            .iter()
+                            .map(|&other| &loaded.notes[other].owner)
+                            .find(|other| other.id() != owner.id())
+                            .expect("a folder repair has another owner");
+                        duplicate_repair_consequence(
+                            ui,
+                            &users,
+                            &format!("the files in {}/", remaining.folder()),
+                            position == 0,
+                        );
+                    });
                 }
             }
         }

@@ -202,8 +202,8 @@ An empty fight **Prep** tab offers **Edit encounter** while the encounter exists
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
 open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
-with **Always use this one**. Empty World notes say **Nothing written yet.** and
-offer **Edit in Obsidian**.
+with **Always use this one**. Empty World notes say **Nothing written yet.**.
+The file line keeps the one **Edit in Obsidian** link.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
