@@ -258,6 +258,13 @@ impl PackageCopy {
         self.apply(true)
     }
 
+    /// True while every copied file still holds what registration wrote.
+    pub fn on_disk(&self) -> bool {
+        self.files
+            .iter()
+            .all(|(path, _, after)| holds(&self.module.path, path, after))
+    }
+
     pub fn undo_with(
         &self,
         mut extra: Vec<(PathBuf, String, String, String)>,
@@ -304,11 +311,30 @@ impl PackageCopy {
     }
 }
 
+/// Why a kept result's Undo is blocked: a file it wrote changed after the write.
+pub(crate) const UNDO_ENDED: &str =
+    "A file changed on disk after this change. Undo is no longer available.";
+
+/// True while the file holds exactly these bytes. A missing or unreadable file does not.
+/// Undo results use this on reload: a result whose files changed would only refuse its Undo.
+pub(crate) fn holds(root: &Path, path: &str, text: &str) -> bool {
+    note_path(root, path)
+        .ok()
+        .and_then(|path| fs::read(path).ok())
+        .is_some_and(|bytes| bytes == text.as_bytes())
+}
+
 /// A repair keeps the registered identity and never overwrites a later disk edit.
 pub(crate) struct ContentEdits {
     files: Vec<(PathBuf, String, String, String)>,
 }
 impl ContentEdits {
+    /// True while every file still holds what these edits wrote, so Undo can run.
+    pub fn on_disk(&self) -> bool {
+        self.files
+            .iter()
+            .all(|(root, path, _, after)| holds(root, path, after))
+    }
     pub fn inverse_files(&self) -> Vec<(PathBuf, String, String, String)> {
         self.files
             .iter()
@@ -469,10 +495,7 @@ impl ManifestWrite {
     }
     /// True while the written file still holds the exact text this write left.
     pub fn on_disk(&self) -> bool {
-        note_path(&self.root, &self.path)
-            .ok()
-            .and_then(|path| fs::read_to_string(path).ok())
-            .is_some_and(|text| text == self.after)
+        holds(&self.root, &self.path, &self.after)
     }
     /// On reload, a result whose file changed since the write is stale, and its Undo would only
     /// refuse. Forget both. Call this once per reload, not every frame: it reads the file.

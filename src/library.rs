@@ -231,6 +231,162 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
         })
 }
 
+/// The duplicate-identity warning and its repair choices. The reader draws them inside its
+/// scroll area, so the title and body scroll into view; source mode draws them above the editor.
+fn duplicate_choices(
+    ui: &mut egui::Ui,
+    loaded: &Loaded,
+    note: &Note,
+    duplicate_indices: &[usize],
+    draft_reason: Option<&'static str>,
+    new_identity: &mut Option<usize>,
+    new_identities: &mut Option<(PathBuf, Vec<String>)>,
+) {
+    // The repair choices start at the message text edge, as in World and Lookup.
+    design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
+        let users: Vec<_> = loaded
+            .notes
+            .iter()
+            .filter_map(|other| {
+                let entry = other.entry.as_ref()?;
+                (entry.kind == "encounter"
+                    && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
+                .then(|| entry.name.clone())
+            })
+            .collect();
+        for (position, &at) in duplicate_indices.iter().enumerate() {
+            let target = &loaded.notes[at];
+            let filename = Path::new(&target.path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let same_filename = duplicate_indices.iter().any(|&other| {
+                other != at
+                    && Path::new(&loaded.notes[other].path).file_name()
+                        == Path::new(&target.path).file_name()
+            });
+            let filename = if same_filename {
+                format!("{filename} in {}/", target.owner.folder())
+            } else {
+                filename.into_owned()
+            };
+            if position > 0 {
+                ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+            }
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = design::XS;
+                let action = crate::world::separate_entry_action(&filename);
+                if Action::secondary(&action)
+                    .hint(&action)
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+                {
+                    *new_identity = Some(at);
+                }
+                if !users.is_empty() {
+                    let remaining = duplicate_indices
+                        .iter()
+                        .copied()
+                        .find(|&other| other != at)
+                        .unwrap();
+                    let note = &loaded.notes[remaining];
+                    let remaining = Path::new(&note.path)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let remaining = if same_filename {
+                        format!("{remaining} in {}/", note.owner.folder())
+                    } else {
+                        remaining.into_owned()
+                    };
+                    duplicate_repair_consequence(ui, &users, &remaining, position == 0);
+                }
+            });
+        }
+        let mut shown = std::collections::HashSet::new();
+        for (position, &at) in duplicate_indices.iter().enumerate() {
+            let owner = &loaded.notes[at].owner;
+            if shown.insert(owner.id())
+                && let Some(paths) = loaded.duplicate_folder_paths(owner)
+            {
+                ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+                // Encounters outside the batch whose source changes; worked out once per load.
+                let slot = egui::Id::new((
+                    "duplicate_folder_users",
+                    owner.id(),
+                    std::ptr::from_ref(loaded) as usize,
+                    loaded.notes.len(),
+                    // A reload in place changes some text; this cheap sum notices it.
+                    loaded
+                        .notes
+                        .iter()
+                        .map(|note| note.text.len())
+                        .sum::<usize>(),
+                ));
+                let users = ui
+                    .data(|data| data.get_temp::<Vec<String>>(slot))
+                    .unwrap_or_else(|| {
+                        let batch: std::collections::HashSet<&String> = paths.iter().collect();
+                        let targets: Vec<&Entry> = loaded
+                            .notes
+                            .iter()
+                            .filter(|target| {
+                                target.owner.id() == owner.id() && batch.contains(&target.path)
+                            })
+                            .filter_map(|target| target.entry.as_ref())
+                            .collect();
+                        let mut users: Vec<String> = Vec::new();
+                        for other in &loaded.notes {
+                            // An encounter inside the batch gets the new identities with it.
+                            if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                                continue;
+                            }
+                            let Some(encounter) = other.entry.as_ref() else {
+                                continue;
+                            };
+                            if encounter.kind == "encounter"
+                                && !users.contains(&encounter.name)
+                                && targets
+                                    .iter()
+                                    .any(|entry| encounter_uses_entry(encounter, entry))
+                            {
+                                users.push(encounter.name.clone());
+                            }
+                        }
+                        ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                        users
+                    });
+                ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    if Action::secondary(&format!(
+                        "Make all {} files in {}/ separate entries",
+                        paths.len(),
+                        owner.folder()
+                    ))
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+                    {
+                        *new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                    }
+                    let remaining = duplicate_indices
+                        .iter()
+                        .map(|&other| &loaded.notes[other].owner)
+                        .find(|other| other.id() != owner.id())
+                        .expect("a folder repair has another owner");
+                    duplicate_repair_consequence(
+                        ui,
+                        &users,
+                        &format!("the files in {}/", remaining.folder()),
+                        position == 0,
+                    );
+                });
+            }
+        }
+    });
+}
+
 /// Shared consequence wording for the two identity-repair choices.
 pub(crate) fn duplicate_repair_consequence(
     ui: &mut egui::Ui,
@@ -1843,6 +1999,11 @@ pub struct Library {
     history: Vec<BackStep>,
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
+    /// The last reload found a registration file changed, so `Undo package registration` would
+    /// refuse. The message stays for its other action; its Undo is blocked with the reason.
+    registration_changed: bool,
+    /// The same for `Undo source change`.
+    rosters_changed: bool,
     link_choices: Vec<Uuid>,
     vital_undo: Option<(String, String, String)>,
     heading_undo: Option<(String, String, String)>,
@@ -1977,6 +2138,8 @@ impl Library {
                 Some((document.campaign, document.path, before, document.text));
         }
         self.package_copy = Some(copy);
+        self.registration_changed = false;
+        self.rosters_changed = false;
         self.copied_package = None;
         self.copy_name_open = false;
         self.form = false;
@@ -2020,6 +2183,62 @@ impl Library {
         self.copied_rosters = None;
         self.stale = true;
         Ok(())
+    }
+
+    /// On reload, each result with an Undo checks that its files still hold what its action
+    /// wrote. If any file differs, Undo would only refuse: the result and its Undo go. A message
+    /// with another action stays and blocks its Undo instead. Call this once per reload, not every
+    /// frame: it reads the files.
+    fn forget_changed_undos(&mut self) {
+        use crate::content_workspace::{CampaignDocument, ManifestWrite, holds};
+        ManifestWrite::forget_if_changed(&mut self.manifest_write);
+        if self
+            .identities_undo
+            .as_ref()
+            .is_some_and(|(edits, _)| !edits.on_disk())
+        {
+            self.identities_undo = None;
+        }
+        if self
+            .identity_undo
+            .as_ref()
+            .is_some_and(|undo| !holds(&undo.root, &undo.path, &undo.after))
+        {
+            self.identity_undo = None;
+        }
+        if self.dependency_undo.as_ref().is_some_and(|undo| {
+            !holds(&undo.root, &undo.path, &undo.after)
+                || !holds(&undo.root, &undo.copied_path, &undo.copied_text)
+        }) {
+            self.dependency_undo = None;
+        }
+        // Its Undo checks the package choices only, so other campaign edits keep it.
+        if self.selection_undo.as_ref().is_some_and(|undo| {
+            !CampaignDocument::load(&undo.campaign)
+                .is_ok_and(|document| document.selections == undo.after)
+        }) {
+            self.selection_undo = None;
+        }
+        if self
+            .link_edits
+            .as_ref()
+            .is_some_and(|edits| !edits.on_disk())
+        {
+            self.link_edits = None;
+        }
+        self.rosters_changed = self
+            .copied_rosters
+            .as_ref()
+            .is_some_and(|edits| !edits.on_disk());
+        self.registration_changed = self.rosters_changed
+            || self
+                .package_copy
+                .as_ref()
+                .is_some_and(|copy| !copy.on_disk())
+            || self
+                .copy_campaign_before
+                .as_ref()
+                .is_some_and(|(campaign, path, _, after)| !holds(&campaign.path, path, after));
     }
 
     fn give_new_identity(&mut self) -> Result<(), String> {
@@ -2412,9 +2631,7 @@ impl Library {
                             self.reveal_row |= self.selected.is_some();
                             self.focus_repair =
                                 self.selected.is_some_and(|i| l.notes[i].error.is_some());
-                            crate::content_workspace::ManifestWrite::forget_if_changed(
-                                &mut self.manifest_write,
-                            );
+                            self.forget_changed_undos();
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -2796,6 +3013,10 @@ impl Library {
                         .icon(icons::UNDO)
                         .density(Density::Read)
                         .line_start()
+                        .blocked(
+                            self.registration_changed
+                                .then_some(crate::content_workspace::UNDO_ENDED),
+                        )
                         .show(ui)
                         .clicked();
                     let use_copy = campaigns.active_campaign().is_some()
@@ -2823,6 +3044,7 @@ impl Library {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
                     self.copied_rosters = Some(edits);
+                    self.rosters_changed = false;
                     self.content_changed = Some(campaign.path);
                     self.stale = true;
                 }
@@ -2832,6 +3054,10 @@ impl Library {
         if let Some(edits) = &self.copied_rosters
             && Action::quiet("Undo source change")
                 .icon(icons::UNDO)
+                .blocked(
+                    self.rosters_changed
+                        .then_some(crate::content_workspace::UNDO_ENDED),
+                )
                 .show(ui)
                 .clicked()
         {
@@ -4562,6 +4788,8 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
+        // The reader draws the duplicate choices in its scroll area, after the title.
+        let choices_in_reader = !self.source && !conflict;
         let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
         if !duplicate_indices.is_empty() {
             duplicate_indices.push(i);
@@ -4962,154 +5190,16 @@ impl Library {
                 },
             );
         }
-        if !duplicate_indices.is_empty() {
-            // The repair choices start at the message text edge, as in World and Lookup.
-            design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
-                let loaded = self.loaded.as_ref().unwrap();
-                let users: Vec<_> = loaded
-                    .notes
-                    .iter()
-                    .filter_map(|other| {
-                        let entry = other.entry.as_ref()?;
-                        (entry.kind == "encounter"
-                            && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
-                        .then(|| entry.name.clone())
-                    })
-                    .collect();
-                for (position, &at) in duplicate_indices.iter().enumerate() {
-                    let target = &loaded.notes[at];
-                    let filename = Path::new(&target.path)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy();
-                    let same_filename = duplicate_indices.iter().any(|&other| {
-                        other != at
-                            && Path::new(&loaded.notes[other].path).file_name()
-                                == Path::new(&target.path).file_name()
-                    });
-                    let filename = if same_filename {
-                        format!("{filename} in {}/", target.owner.folder())
-                    } else {
-                        filename.into_owned()
-                    };
-                    if position > 0 {
-                        ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                    }
-                    ui.scope(|ui| {
-                        ui.spacing_mut().item_spacing.y = design::XS;
-                        let action = crate::world::separate_entry_action(&filename);
-                        if Action::secondary(&action)
-                            .hint(&action)
-                            .blocked(draft_reason)
-                            .show(ui)
-                            .clicked()
-                        {
-                            new_identity = Some(at);
-                        }
-                        if !users.is_empty() {
-                            let remaining = duplicate_indices
-                                .iter()
-                                .copied()
-                                .find(|&other| other != at)
-                                .unwrap();
-                            let note = &loaded.notes[remaining];
-                            let remaining = Path::new(&note.path)
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy();
-                            let remaining = if same_filename {
-                                format!("{remaining} in {}/", note.owner.folder())
-                            } else {
-                                remaining.into_owned()
-                            };
-                            duplicate_repair_consequence(ui, &users, &remaining, position == 0);
-                        }
-                    });
-                }
-                let mut shown = std::collections::HashSet::new();
-                for (position, &at) in duplicate_indices.iter().enumerate() {
-                    let owner = &loaded.notes[at].owner;
-                    if shown.insert(owner.id())
-                        && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    {
-                        ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
-                        // Encounters outside the batch whose source changes; worked out once per load.
-                        let slot = egui::Id::new((
-                            "duplicate_folder_users",
-                            owner.id(),
-                            std::ptr::from_ref(loaded) as usize,
-                            loaded.notes.len(),
-                            // A reload in place changes some text; this cheap sum notices it.
-                            loaded
-                                .notes
-                                .iter()
-                                .map(|note| note.text.len())
-                                .sum::<usize>(),
-                        ));
-                        let users = ui
-                            .data(|data| data.get_temp::<Vec<String>>(slot))
-                            .unwrap_or_else(|| {
-                                let batch: std::collections::HashSet<&String> =
-                                    paths.iter().collect();
-                                let targets: Vec<&Entry> = loaded
-                                    .notes
-                                    .iter()
-                                    .filter(|target| {
-                                        target.owner.id() == owner.id()
-                                            && batch.contains(&target.path)
-                                    })
-                                    .filter_map(|target| target.entry.as_ref())
-                                    .collect();
-                                let mut users: Vec<String> = Vec::new();
-                                for other in &loaded.notes {
-                                    // An encounter inside the batch gets the new identities with it.
-                                    if other.owner.id() == owner.id() && batch.contains(&other.path)
-                                    {
-                                        continue;
-                                    }
-                                    let Some(encounter) = other.entry.as_ref() else {
-                                        continue;
-                                    };
-                                    if encounter.kind == "encounter"
-                                        && !users.contains(&encounter.name)
-                                        && targets
-                                            .iter()
-                                            .any(|entry| encounter_uses_entry(encounter, entry))
-                                    {
-                                        users.push(encounter.name.clone());
-                                    }
-                                }
-                                ui.data_mut(|data| data.insert_temp(slot, users.clone()));
-                                users
-                            });
-                        ui.scope(|ui| {
-                            ui.spacing_mut().item_spacing.y = design::XS;
-                            if Action::secondary(&format!(
-                                "Make all {} files in {}/ separate entries",
-                                paths.len(),
-                                owner.folder()
-                            ))
-                            .blocked(draft_reason)
-                            .show(ui)
-                            .clicked()
-                            {
-                                new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
-                            }
-                            let remaining = duplicate_indices
-                                .iter()
-                                .map(|&other| &loaded.notes[other].owner)
-                                .find(|other| other.id() != owner.id())
-                                .expect("a folder repair has another owner");
-                            duplicate_repair_consequence(
-                                ui,
-                                &users,
-                                &format!("the files in {}/", remaining.folder()),
-                                position == 0,
-                            );
-                        });
-                    }
-                }
-            });
+        if !duplicate_indices.is_empty() && !choices_in_reader {
+            duplicate_choices(
+                ui,
+                self.loaded.as_ref().unwrap(),
+                note,
+                &duplicate_indices,
+                draft_reason,
+                &mut new_identity,
+                &mut new_identities,
+            );
         }
         if let Some((_, words)) = &self.identities_undo {
             design::locked(ui, draft_reason, |ui| {
@@ -5492,6 +5582,9 @@ impl Library {
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                             if let Some(problem) = &repair_problem {
                                 repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false, skipped_here);
+                            }
+                            if choices_in_reader && !duplicate_indices.is_empty() {
+                                duplicate_choices(ui, self.loaded.as_ref().unwrap(), note, &duplicate_indices, draft_reason, &mut new_identity, &mut new_identities);
                             }
                         });
                         open_link = view::show_with_related(
@@ -8351,6 +8444,183 @@ mod tests {
                 readme.as_bytes()
             );
         }
+    }
+
+    /// AD1: on reload, every Undo result checks that its files still hold what its action wrote.
+    /// Each caller is given one outside change; the check never writes a file.
+    #[test]
+    fn iter14_e_changed_files_end_every_undo_result() {
+        use crate::content_workspace::ContentEdits;
+        let temp = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            temp.path(),
+            &temp.path().join("cache"),
+            "undo-ends",
+            crate::visual_tests::fixture::Seed::Campaign,
+        )
+        .unwrap();
+        let mut app = world.app();
+        let original = app.campaigns.modules()[0].clone();
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let root = original.path.clone();
+        let paths: Vec<String> = content::read_directory(&root)
+            .unwrap()
+            .0
+            .into_iter()
+            .filter(|entry| entry.kind != "package")
+            .map(|entry| entry.path)
+            .take(2)
+            .collect();
+        assert_eq!(paths.len(), 2, "fixture: two package entries");
+        let outside = b"---\nsplat_kind: [\n---\nAn outside edit.\n".to_vec();
+        // Writes `after` over each file and returns the edits, as an action would.
+        let edit = |tag: &str| {
+            let files = paths
+                .iter()
+                .map(|path| {
+                    let before = fs::read_to_string(root.join(path)).unwrap();
+                    let after = format!("{before}\n{tag}\n");
+                    (root.clone(), path.clone(), before, after)
+                })
+                .collect();
+            ContentEdits::write(files).unwrap()
+        };
+        // Changes one file outside Splat, reloads, and returns the raw bytes left on disk.
+        let change_outside = |library: &mut Library| {
+            let target = root.join(&paths[1]);
+            let kept = fs::read(&target).unwrap();
+            fs::write(&target, &outside).unwrap();
+            let first = fs::read(root.join(&paths[0])).unwrap();
+            library.forget_changed_undos();
+            assert_eq!(
+                fs::read(&target).unwrap(),
+                outside,
+                "the reload wrote nothing"
+            );
+            assert_eq!(fs::read(root.join(&paths[0])).unwrap(), first);
+            fs::write(&target, kept).unwrap();
+        };
+
+        // `Undo separate entries`: the batch.
+        let mut library = Library {
+            identities_undo: Some((edit("batch"), "2 files are now separate entries.".into())),
+            ..Default::default()
+        };
+        library.forget_changed_undos();
+        assert!(
+            library.identities_undo.is_some(),
+            "unchanged files keep Undo"
+        );
+        change_outside(&mut library);
+        assert!(library.identities_undo.is_none());
+
+        // `Undo separate entry`: one file.
+        let text = fs::read_to_string(root.join(&paths[1])).unwrap();
+        library.identity_undo = Some(IdentityUndo {
+            root: root.clone(),
+            path: paths[1].clone(),
+            before: "before".into(),
+            after: text,
+        });
+        library.forget_changed_undos();
+        assert!(library.identity_undo.is_some());
+        change_outside(&mut library);
+        assert!(library.identity_undo.is_none());
+
+        // `Undo dependency copy`: the changed file is the copy.
+        library.dependency_undo = Some(DependencyUndo {
+            root: root.clone(),
+            path: paths[0].clone(),
+            before: "before".into(),
+            after: fs::read_to_string(root.join(&paths[0])).unwrap(),
+            copied_path: paths[1].clone(),
+            copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
+        });
+        library.forget_changed_undos();
+        assert!(library.dependency_undo.is_some());
+        change_outside(&mut library);
+        assert!(library.dependency_undo.is_none());
+
+        // `Undo link update`.
+        library.link_edits = Some(edit("links"));
+        library.forget_changed_undos();
+        assert!(library.link_edits.is_some());
+        change_outside(&mut library);
+        assert!(library.link_edits.is_none());
+
+        // `Undo source change` keeps its data for registration, and blocks both Undos.
+        library.copied_rosters = Some(edit("rosters"));
+        library.forget_changed_undos();
+        assert!(!library.rosters_changed && !library.registration_changed);
+        change_outside(&mut library);
+        assert!(library.copied_rosters.is_some());
+        assert!(library.rosters_changed && library.registration_changed);
+        // The file holds the written text again: Undo comes back.
+        library.forget_changed_undos();
+        assert!(!library.rosters_changed && !library.registration_changed);
+        library.copied_rosters = None;
+
+        // `Undo package use`: only the package choices count.
+        let mut document = CampaignDocument::load(&campaign).unwrap();
+        library.selection_undo = Some(SelectionUndo {
+            campaign: campaign.clone(),
+            before: Vec::new(),
+            after: document.selections.clone(),
+        });
+        let campaign_file = campaign.path.join(&document.path);
+        let edited = format!("{}\nA later note.\n", document.text);
+        fs::write(&campaign_file, &edited).unwrap();
+        library.forget_changed_undos();
+        assert!(
+            library.selection_undo.is_some(),
+            "other campaign edits keep Undo"
+        );
+        let saved = fs::read(&campaign_file).unwrap();
+        document = CampaignDocument::load(&campaign).unwrap();
+        document.selections.clear();
+        document.save().unwrap();
+        let cleared = fs::read(&campaign_file).unwrap();
+        library.forget_changed_undos();
+        assert!(library.selection_undo.is_none());
+        assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
+        fs::write(&campaign_file, saved).unwrap();
+
+        // `Undo package registration`: a copied file or the campaign file changed.
+        let copied = temp.path().join("copied");
+        fs::create_dir(&copied).unwrap();
+        for entry in content::read_directory(&original.path).unwrap().0 {
+            let path = copied.join(&entry.path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::copy(original.path.join(&entry.path), path).unwrap();
+        }
+        let mut library = Library {
+            copied_package: Some(local_module(&copied).unwrap()),
+            copy_name: "Reaches".into(),
+            ..Default::default()
+        };
+        library.register_copy(&mut app.campaigns).unwrap();
+        library.forget_changed_undos();
+        assert!(!library.registration_changed);
+        let manifest = copied.join("Module.md");
+        let written = fs::read(&manifest).unwrap();
+        fs::write(&manifest, &outside).unwrap();
+        library.forget_changed_undos();
+        assert!(library.registration_changed && library.package_copy.is_some());
+        assert_eq!(fs::read(&manifest).unwrap(), outside);
+        fs::write(&manifest, &written).unwrap();
+        library.forget_changed_undos();
+        assert!(!library.registration_changed);
+        let (_, path, _, _) = library.copy_campaign_before.clone().unwrap();
+        let campaign_text = fs::read(campaign.path.join(&path)).unwrap();
+        fs::write(campaign.path.join(&path), &outside).unwrap();
+        library.forget_changed_undos();
+        assert!(library.registration_changed);
+        fs::write(campaign.path.join(&path), campaign_text).unwrap();
+        library.forget_changed_undos();
+        assert!(!library.registration_changed);
+        library
+            .undo_package_registration(&mut app.campaigns)
+            .unwrap();
     }
 
     #[test]
