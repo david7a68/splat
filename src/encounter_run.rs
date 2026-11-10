@@ -1030,7 +1030,11 @@ impl Run {
             commands.push(Command::Health(*index, *hp, p.max_hp));
             commands.push(Command::TempHp(*index, *temp));
         }
+        let start = self.state.log.len();
         self.apply(Command::Several(commands))?;
+        // One summary names the step before each hero's line. Undo takes the whole state back,
+        // so the summary goes with it, like the long rest's own line.
+        self.state.log.insert(start, SAVED_HP_USED.into());
         if let Some(label) = self.history_labels.last_mut() {
             *label = SAVED_HP_STEP.into();
         }
@@ -6510,11 +6514,25 @@ mod tests {
         assert_eq!(hp(&run), full);
         assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
 
+        let before = run.state.log.len();
         run.use_saved_hp().unwrap();
         assert_eq!(
             hp(&run),
             saved,
             "Use the saved HP puts back every hero's HP"
+        );
+        assert_eq!(
+            run.state
+                .log
+                .iter()
+                .filter(|line| *line == SAVED_HP_USED)
+                .count(),
+            1,
+            "The Log names the step once"
+        );
+        assert_eq!(
+            run.state.log[before], SAVED_HP_USED,
+            "before each hero's line"
         );
         // A named step, so the rest's full HP is still one Undo away.
         assert_eq!(run.history.len(), 2);
@@ -6525,6 +6543,7 @@ mod tests {
 
         run.undo();
         assert_eq!(hp(&run), full, "Undo gives back the full HP");
+        assert!(!run.state.log.iter().any(|line| line == SAVED_HP_USED));
         assert_eq!(run.undo_label(), "Undo: full HP after long rest");
         assert!(run.rest_filled_saved_hp() && !run.saved_hp_used());
         run.undo();
