@@ -17,6 +17,7 @@ use eframe::egui::{self, Key, Pos2, pos2};
 pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
+pub mod markdown_links;
 pub mod stat_formats;
 pub mod world_build;
 
@@ -910,7 +911,8 @@ pub mod library_navigation {
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo dependency copy");
         d.wait_for_text("Captain Varra is in this campaign only.");
-        d.click("Wiki watch spell");
+        // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
+        d.click("Wiki watch spell (opens Ashfall)");
         d.wait_for_text("Hot ash falls");
         d.observe(
             "C4",

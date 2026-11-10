@@ -945,17 +945,17 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
     let galley = one_line(ui, label, role.font(ui), c.accent, room);
-    // The words take their own width in the layout. A short word's press target grows
-    // evenly to `XL`, so a link such as `Ilsa` is as easy to hit as a longer one.
-    let (rect, word) = ui.allocate_exact_size(
-        vec2(galley.size().x, galley.size().y.max(XL)),
-        Sense::hover(),
+    // The press target is the link's own space in the layout, at least `XL` wide. A short
+    // word such as `Ox` sits at its left, and the next item starts after the whole target,
+    // so two short links side by side never share a press area.
+    let (target, response) = ui.allocate_exact_size(
+        vec2(galley.size().x.max(XL), galley.size().y.max(XL)),
+        Sense::click(),
     );
-    let target = rect.expand2(vec2(((XL - rect.width()) / 2.0).max(0.0), 0.0));
-    let response = ui.interact(target, word.id.with("link"), Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
-    if ui.is_rect_visible(rect) {
-        let y = rect.center().y - galley.size().y / 2.0;
+    if ui.is_rect_visible(target) {
+        let word = Rect::from_min_size(target.min, vec2(galley.size().x, target.height()));
+        let y = word.center().y - galley.size().y / 2.0;
         let underline = y + galley.size().y - 1.0;
         let color = if response.hovered() {
             c.focus
@@ -963,13 +963,13 @@ fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
             c.accent
         };
         ui.painter().hline(
-            rect.x_range(),
+            word.x_range(),
             underline,
             Stroke::new(1.0, color.gamma_multiply(0.6)),
         );
-        ui.painter().galley(pos2(rect.left(), y), galley, color);
+        ui.painter().galley(pos2(word.left(), y), galley, color);
         if response.has_focus() {
-            focus_ring(ui, rect);
+            focus_ring(ui, target);
         }
     }
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -3469,6 +3469,77 @@ mod tests {
         assert_eq!(hp_state(Some(6), Some(11)), HpState::Damaged);
         assert_eq!(hp_state(Some(0), Some(10)), HpState::Zero);
         assert_eq!(hp_state(Some(0), None), HpState::Zero);
+    }
+
+    /// Lays out links side by side in one horizontal row, as World Problems does. Returns each
+    /// link's press target and the left edge of its painted words.
+    fn links_in_a_row(names: &[&str]) -> Vec<(Rect, f32, f32)> {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut targets = Vec::new();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    for name in names {
+                        targets.push(link(ui, name).rect);
+                    }
+                });
+            });
+        });
+        names
+            .iter()
+            .zip(targets)
+            .map(|(name, target)| {
+                let (left, width) = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == *name => {
+                            Some((text.pos.x, text.galley.size().x))
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| panic!("{name} is painted"));
+                (target, left, width)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn iter16_a_sd1_short_links_side_by_side_never_share_a_target() {
+        let links = links_in_a_row(&["Al", "Il", "Ilsa"]);
+        for pair in links.windows(2) {
+            let shared = pair[0].0.intersect(pair[1].0);
+            assert!(
+                shared.width() <= 0.0 || shared.height() <= 0.0,
+                "SD1-no-overlap: {:?} and {:?} share {shared:?}",
+                pair[0].0,
+                pair[1].0
+            );
+        }
+        for (target, left, width) in &links {
+            assert!(
+                target.width() >= XL && target.height() >= XL,
+                "SD1-size: {target:?}"
+            );
+            // Must stay true: the word starts at the target's left edge.
+            assert!(
+                (left - target.left()).abs() <= 0.5 && *width < XL,
+                "SD1-word-left: words at {left}, target {target:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn iter16_a_sd1_a_link_as_wide_as_its_target_keeps_its_look() {
+        // Must stay true: words of `XL` or wider take exactly their own width, as before.
+        for (target, left, width) in links_in_a_row(&["Whole run", "Timeline"]) {
+            assert!(width >= XL, "fixture: {width}");
+            assert!(
+                (target.width() - width).abs() <= 1.0 && (left - target.left()).abs() <= 0.5,
+                "SD1-wide-look: words {left}+{width}, target {target:?}"
+            );
+        }
     }
 }
 

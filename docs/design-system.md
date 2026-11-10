@@ -175,7 +175,7 @@ eye during long sessions.
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
+| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
@@ -275,6 +275,11 @@ new one.” Library omits the creation offer without a campaign or package desti
 Ordinary bold and bold italic keep the prose colour and emphasis. A bold phrase links to Lookup only when
 it resolves to one entry. Explicit Markdown and wiki links stay interactive.
 Reader links use accent text and an underline. Library links open in place; other readers open them in Lookup.
+Each link in a paragraph is its own control: Tab reaches the links in reading order, a focus ring shows on that
+link only, and Enter or Space follows it. Its accessible name is its words and where it goes (`the bell keeper
+(opens Oskar)`); a missing link is not a Tab stop. The paragraph keeps its layout and wrapping, and each link's
+press target stays inside the paragraph. Short links grow toward 24 px where the paragraph has room, and two
+grown targets split the space between them. Focus stays on the link when the layout around it changes.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
 found in this campaign` on hover. Broken campaign and package links also have a warning icon before the dotted

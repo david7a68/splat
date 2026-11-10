@@ -171,7 +171,8 @@ uses the same width rule. An empty note has one inline Write link. The note file
 that needs repair and keep raw references in Technical details.
 
 The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
-only when it resolves to an entry. Explicit Markdown and wiki links still work.
+only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
+link in a paragraph in turn, and Enter or Space follows it.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.
