@@ -2,6 +2,12 @@
 pub use splat_core::{character, content, execution};
 extern crate self as splat;
 
+// The visual suite runs many app instances at once. With glibc's malloc it used
+// more memory and CPU; see `visual_tests::limit_allocator`.
+#[cfg(all(test, not(target_env = "msvc")))]
+#[global_allocator]
+static TEST_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 mod art;
 pub mod auth;
 mod campaign_content;

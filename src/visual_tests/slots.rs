@@ -1,4 +1,4 @@
-//! Bound machine-wide visual-suite memory before entering a private namespace.
+//! Bound machine-wide visual-suite load before entering a private namespace.
 use std::{
     env,
     fs::{self, File, OpenOptions},
@@ -7,9 +7,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Shared parsed fields reduced a full suite to 6.25 GiB on the 31 GiB host.
-// Two suites leave ample memory for the app, builds and filesystem cache.
-const DEFAULT_SLOTS: usize = 2;
+// At the default four workers, a full capture run keeps about six cores busy
+// and needs about 1.1 GiB. Each 4 GiB slot leaves room for builds and the app.
+const CORES_PER_SLOT: usize = 6;
+const GIB_PER_SLOT: u64 = 4;
 
 pub(super) struct Permit {
     index: usize,
@@ -35,7 +36,8 @@ pub(super) fn acquire() -> Option<Permit> {
     let value = value
         .as_deref()
         .map(|value| value.to_str().expect("SPLAT_VISUAL_SLOTS must be UTF-8"));
-    let count = slot_count(value).expect("SPLAT_VISUAL_SLOTS must be a positive integer");
+    let count =
+        slot_count(value, default_slots()).expect("SPLAT_VISUAL_SLOTS must be a positive integer");
     let started = Instant::now();
     let permit = acquire_in(&env::temp_dir(), count).expect("lock a visual suite slot");
     if env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
@@ -48,10 +50,37 @@ pub(super) fn acquire() -> Option<Permit> {
     Some(permit)
 }
 
-fn slot_count(value: Option<&str>) -> Result<usize, &'static str> {
+/// Every worktree on a computer computes the same count, so they share the limit.
+fn default_slots() -> usize {
+    let cores = std::thread::available_parallelism().map_or(1, usize::from);
+    slots_for(cores, total_memory_gib())
+}
+
+fn slots_for(cores: usize, memory_gib: Option<u64>) -> usize {
+    let by_memory = memory_gib.map_or(usize::MAX, |gib| {
+        usize::try_from(gib / GIB_PER_SLOT).unwrap_or(usize::MAX)
+    });
+    (cores / CORES_PER_SLOT).min(by_memory).max(1)
+}
+
+/// Whole GiB of RAM, where the system reports it.
+fn total_memory_gib() -> Option<u64> {
+    let info = fs::read_to_string("/proc/meminfo").ok()?;
+    let kib: u64 = info
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))?
+        .trim()
+        .strip_suffix("kB")?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(kib >> 20)
+}
+
+fn slot_count(value: Option<&str>, default: usize) -> Result<usize, &'static str> {
     let count = match value {
         Some(value) => value.parse().map_err(|_| "invalid slot count")?,
-        None => DEFAULT_SLOTS,
+        None => default,
     };
     (count > 0).then_some(count).ok_or("zero slots")
 }
@@ -95,11 +124,23 @@ pub(super) fn try_acquire(temp: &Path, count: usize) -> io::Result<Option<Permit
 
 #[test]
 fn slot_count_requires_a_positive_integer() {
-    assert_eq!(slot_count(None), Ok(2));
-    assert_eq!(slot_count(Some("2")), Ok(2));
+    assert_eq!(slot_count(None, 3), Ok(3));
+    assert_eq!(slot_count(Some("2"), 3), Ok(2));
     for invalid in ["", "0", "-1", "two", "1.5"] {
-        assert!(slot_count(Some(invalid)).is_err(), "{invalid}");
+        assert!(slot_count(Some(invalid), 3).is_err(), "{invalid}");
     }
+}
+
+#[test]
+fn default_slots_follow_cores_and_memory() {
+    // A 20-core laptop with 15 GiB, and a 16-core desktop with 31 GiB.
+    assert_eq!(slots_for(20, Some(15)), 3);
+    assert_eq!(slots_for(16, Some(31)), 2);
+    // Memory limits a computer with many cores.
+    assert_eq!(slots_for(64, Some(8)), 2);
+    // Small or unknown computers still run one suite.
+    assert_eq!(slots_for(4, Some(2)), 1);
+    assert_eq!(slots_for(12, None), 2);
 }
 
 #[test]

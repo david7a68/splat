@@ -170,6 +170,11 @@ pub mod closed {
         NEXT_FOLDER.with(|folder| folder.borrow_mut().take())
     }
 
+    /// Forget a folder that an earlier test on this thread did not pick.
+    pub fn clear_next_folder() {
+        NEXT_FOLDER.with(|folder| *folder.borrow_mut() = None);
+    }
+
     pub fn next_folder(path: PathBuf) {
         NEXT_FOLDER.with(|folder| *folder.borrow_mut() = Some(path));
     }
