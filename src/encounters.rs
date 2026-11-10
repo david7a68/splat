@@ -219,6 +219,14 @@ struct Draft {
     saved_name: String,
     saved_setup: Setup,
     saved_body: String,
+    /// The note's `## Loot` list, one line each, kept apart from `body` while this owns it.
+    loot: Vec<String>,
+    saved_loot: Vec<String>,
+    /// Whether the loot field owns the list. A section with other words in it stays in `body`,
+    /// so that nothing in it is lost.
+    loot_owned: bool,
+    /// The heading after the note's Loot section, so a save puts the list back in its place.
+    loot_before: Option<String>,
     flags: Vec<splat::content::layout::Flag>,
     /// The groups that belong to this encounter. They are built here and saved with it.
     groups: Vec<GroupDraft>,
@@ -255,6 +263,10 @@ impl Draft {
             body: String::new(),
             saved_setup: Setup::default(),
             saved_body: String::new(),
+            loot: Vec::new(),
+            saved_loot: Vec::new(),
+            loot_owned: true,
+            loot_before: None,
             flags: Vec::new(),
             groups: Vec::new(),
             deleted_groups: Vec::new(),
@@ -276,6 +288,19 @@ impl Draft {
             .map_err(|e| {
                 format!("This encounter needs repair in Campaign → Campaign entries: {e}")
             })?;
+        let prose = splat::content::list_formats::prose(&entry);
+        // A second Loot section, or one with more than a list, stays in the notes as written.
+        let loot_owned = splat::content::loot::only_items(&prose)
+            && !splat::content::loot::has_section(&splat::content::loot::without(&prose));
+        let loot_before = splat::content::loot::heading_after(&prose);
+        let (body, loot) = if loot_owned {
+            (
+                splat::content::loot::without(&prose),
+                splat::content::loot::items(&prose),
+            )
+        } else {
+            (prose, Vec::new())
+        };
         Ok(Self {
             recovery: Default::default(),
             id: entry.id,
@@ -286,8 +311,12 @@ impl Draft {
             name: entry.name.clone(),
             saved_setup: setup.clone(),
             setup,
-            body: splat::content::list_formats::prose(&entry),
-            saved_body: splat::content::list_formats::prose(&entry),
+            saved_body: body.clone(),
+            body,
+            saved_loot: loot.clone(),
+            loot,
+            loot_owned,
+            loot_before,
             flags: entry.flags.clone(),
             groups: Vec::new(),
             deleted_groups: Vec::new(),
@@ -304,6 +333,7 @@ impl Draft {
             || self.name != self.saved_name
             || self.setup != self.saved_setup
             || self.body != self.saved_body
+            || self.loot != self.saved_loot
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
     }
@@ -361,10 +391,10 @@ impl Draft {
             .as_ref()
             .and_then(|change| change.text.as_deref())
             .unwrap_or(&self.source);
-        let source = if self.body == self.saved_body {
+        let source = if self.body == self.saved_body && self.loot == self.saved_loot {
             disk_source.to_owned()
         } else {
-            splat::content::list_formats::with_prose(disk_source, &self.body)?
+            splat::content::list_formats::with_prose(disk_source, &self.prose())?
         };
         let text = splat::content::formats::patch_model(
             &source,
@@ -377,6 +407,14 @@ impl Draft {
             ],
         )?;
         Ok(text)
+    }
+    /// The note's own words, with the loot list at their end while the field owns it.
+    fn prose(&self) -> String {
+        if self.loot_owned {
+            splat::content::loot::with(&self.body, &self.loot, self.loot_before.as_deref())
+        } else {
+            self.body.clone()
+        }
     }
     fn comparison_text(&self, snapshot: &Snapshot) -> Result<String, String> {
         disk::comparison_text(&self.path, self.text()?, snapshot)
@@ -499,6 +537,7 @@ impl Draft {
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.saved_body = self.body.clone();
+        self.saved_loot = self.loot.clone();
         self.recovery = Default::default();
         for (index, text) in group_texts {
             let group = &mut self.groups[index];
@@ -525,6 +564,10 @@ impl Draft {
         }
         if self.name.trim().is_empty() {
             return Err("Enter an encounter name.".into());
+        }
+        // The Loot list writes that section, so a second one typed in the notes would be lost.
+        if self.loot_owned && splat::content::loot::has_section(&self.body) {
+            return Err("Read-aloud and notes has a Loot heading. Put those lines in the Loot list, or rename the heading.".into());
         }
         let mut keys = BTreeSet::new();
         for (side, data) in &self.setup.sides {
@@ -990,7 +1033,11 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
             format!("{} × {name}", design::count(count, "", "").trim())
         }
     }));
-    if setup.roster.iter().any(|slot| !slot.overrides.is_empty()) {
+    // Loot alone does not change a creature.
+    if setup.roster.iter().any(|slot| {
+        Overrides::parse(&slot.overrides)
+            .map_or(!slot.overrides.is_empty(), |o| o.changes_creature())
+    }) {
         parts.push("Changed".to_owned());
     }
     parts.join(" · ")
@@ -1692,6 +1739,9 @@ const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
+const LOOT_FIELD: &str = "Loot";
+const ENCOUNTER_LOOT_HELP: &str =
+    "What the party finds when this fight ends. A creature's own loot is in its Changes.";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -3970,6 +4020,8 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
+                Self::loot_field(ui, draft);
+                ui.add_space(design::M);
                 design::field(ui, "Read-aloud and notes", None, None, |ui| {
                 let output = egui::TextEdit::multiline(&mut draft.body)
                     .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
@@ -3985,6 +4037,30 @@ impl Encounters {
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner
+    }
+
+    /// What the party finds when this fight is over, one line each. The note keeps it as its
+    /// `## Loot` list, which Obsidian shows too.
+    fn loot_field(ui: &mut egui::Ui, draft: &mut Draft) {
+        design::group_heading(ui, LOOT_FIELD, draft.loot.len());
+        if !draft.loot_owned {
+            blocked_reason(
+                ui,
+                Some(
+                    "The Loot section of this note has more than a list. Edit it in Read-aloud and notes.",
+                ),
+            );
+            return;
+        }
+        ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, ENCOUNTER_LOOT_HELP)
+                    .color(colors().muted),
+            )
+            .wrap(),
+        );
+        crate::loot_editor::show(ui, draft.id, "the encounter", &mut draft.loot, false);
     }
 
     /// Whether this encounter uses the party as D&D Beyond has it now. With it on, the DM sees
@@ -4185,7 +4261,7 @@ impl Encounters {
                                     ui.spacing_mut().interact_size.y = 0.0;
                                     ui.horizontal(|ui| {
                                         ui.spacing_mut().item_spacing.x = design::XS;
-                                        let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side))).unwrap_or_else(|| "Changed".into());
+                                        let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
                                         let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
                                         let fitted = changed_detail(ui, &detail, &word, ui.available_width());
                                         let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
@@ -4290,6 +4366,7 @@ impl Encounters {
                     if let Some(entry) = definition {
                         let done = groups::overrides_form(
                             ui,
+                            &format!("{}:{}", draft.id, slot.key),
                             &mut slot.overrides,
                             entry,
                             &slot.side,
@@ -5214,6 +5291,67 @@ mod tests {
         );
         assert!(d.dirty());
     }
+    #[test]
+    fn the_loot_field_owns_a_plain_loot_list_and_leaves_any_other_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut d = Draft::new();
+        d.body = "Read this.".into();
+        d.loot = vec!["30 gp".into(), "Roll 2× gems".into()];
+        d.save(&campaign, &[]).unwrap();
+        let saved = fs::read_to_string(dir.path().join(&d.path)).unwrap();
+        assert!(
+            saved.contains("Read this.\n\n## Loot\n\n- 30 gp\n- Roll 2× gems\n"),
+            "{saved}"
+        );
+        let reopened = Draft::open(dir.path(), &d.path).unwrap();
+        assert_eq!(
+            (reopened.body.as_str(), reopened.loot.join("\n").as_str()),
+            ("Read this.", "30 gp\nRoll 2× gems")
+        );
+        assert!(!reopened.dirty());
+        // A section with more than a list stays in the notes, where nothing in it is lost.
+        let mixed = saved.replace("- 30 gp\n", "In the chest:\n- 30 gp\n");
+        fs::write(dir.path().join(&d.path), &mixed).unwrap();
+        let mut reopened = Draft::open(dir.path(), &d.path).unwrap();
+        assert!(!reopened.loot_owned);
+        assert!(reopened.body.contains("In the chest:"));
+        reopened.body.push_str("\nMore.");
+        reopened.save(&campaign, &[]).unwrap();
+        let saved = fs::read_to_string(dir.path().join(&d.path)).unwrap();
+        assert!(
+            saved.contains("In the chest:\n- 30 gp\n- Roll 2× gems\nMore."),
+            "{saved}"
+        );
+        // A Loot section between others keeps its place, and a second one stays as written.
+        let middle = saved
+            .replace("In the chest:\n", "")
+            .replace("\nMore.", "\n\n## Tactics\n\nHide.");
+        fs::write(dir.path().join(&d.path), &middle).unwrap();
+        let mut reopened = Draft::open(dir.path(), &d.path).unwrap();
+        assert!(reopened.loot_owned);
+        reopened.loot.push("A map".into());
+        reopened.save(&campaign, &[]).unwrap();
+        let saved = fs::read_to_string(dir.path().join(&d.path)).unwrap();
+        assert!(
+            saved.contains("## Loot\n\n- 30 gp\n- Roll 2× gems\n- A map\n\n## Tactics\n\nHide."),
+            "{saved}"
+        );
+        let twice = saved.replace("Hide.", "Hide.\n\n## Loot\n\n- A second list");
+        fs::write(dir.path().join(&d.path), &twice).unwrap();
+        assert!(!Draft::open(dir.path(), &d.path).unwrap().loot_owned);
+        // A Loot heading typed in the notes would be lost, so the save says so.
+        fs::write(dir.path().join(&d.path), &saved).unwrap();
+        let mut typed = Draft::open(dir.path(), &d.path).unwrap();
+        typed.body = "## Loot\n\nIn the chest: a map".into();
+        assert!(
+            typed
+                .save(&campaign, &[])
+                .unwrap_err()
+                .contains("Loot heading")
+        );
+    }
+
     #[test]
     fn a_body_is_replaced_and_the_frontmatter_stays() {
         let text = "---\nsplat_name: A\nsplat_note: \"a\\n---b\"\n---\n\nOld words.\n";

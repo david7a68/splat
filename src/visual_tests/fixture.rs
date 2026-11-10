@@ -4,7 +4,9 @@ use crate::{
     Splat,
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, EntryRef, PackageSelection, Selection},
-    encounter_run::{Participant, write_ended_run, write_in_progress_run},
+    encounter_run::{
+        Participant, write_ended_run, write_in_progress_run, write_in_progress_run_with,
+    },
     hermetic,
     persistence::{Campaign, Module, Store, UserData},
 };
@@ -31,6 +33,7 @@ pub const RUN: &str = "Bridge Ambush";
 pub const RUN_12: &str = "Border Skirmish";
 pub const RUN_20: &str = "Siege of Emberfall";
 pub const RUN_ARENA: &str = "Arena Final";
+pub const RUN_VAULT: &str = "Sunken Vault";
 pub const RUN_PAST: &str = "Goblin Crossing";
 pub const RUN_OLD: &str = "Old Mill Raid";
 pub const PAST_SESSION: &str = "The Road North";
@@ -64,6 +67,9 @@ pub enum Seed {
     History,
     /// `Groups`, plus groups that belong to an encounter, and one whose encounter is gone.
     OwnedGroups,
+    /// `Campaign`, plus a run with the encounter's loot, a creature at 0 HP that carries loot,
+    /// and the roll table its loot names.
+    Loot,
 }
 
 #[derive(Clone)]
@@ -143,6 +149,9 @@ fn seed_campaigns(
     }
     if seed == Seed::OwnedGroups {
         write_owned_groups(&active.path)?;
+    }
+    if seed == Seed::Loot {
+        write_loot(&active, &module.path, &party)?;
     }
     if matches!(seed, Seed::World | Seed::Formats) {
         write_world_notes(&active.path)?;
@@ -747,6 +756,67 @@ fn write_groups(
         &root.join("Encounter Runs"),
         RUN_ARENA,
         participants,
+    )
+}
+
+/// A run in progress whose encounter has loot, with a guard at 0 HP that carries some, and the
+/// campaign table both roll on.
+fn write_loot(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> Result<(), String> {
+    // A plain world note, as Obsidian writes one.
+    fs::write(
+        campaign.path.join("Treasure.md"),
+        "# Treasure\n\n<!-- splat:rolls key=gems dice=1d4 -->\n\n| d4 | Gem |\n| --- | --- |\n| 1 | A cracked garnet (10 gp) |\n| 2 | A river pearl (50 gp) |\n| 3 | A smoky quartz (50 gp) |\n| 4 | A star ruby (100 gp) |\n",
+    )
+    .map_err(|e| e.to_string())?;
+    let mut participants = Vec::new();
+    for (index, hero) in party.iter().enumerate() {
+        participants.push((
+            Participant::new(
+                format!("actor_hero_{}", hero.source.character_id),
+                "party".into(),
+                hero.entry()?,
+                &Mapping::new(),
+                true,
+            )?,
+            18 - index as i64 * 2,
+        ));
+    }
+    let file = "Creatures/Ember Cultist.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    let guard: Mapping = serde_yaml_ng::from_str("{name: Vault Guard, loot: Vault key; Roll gems}")
+        .map_err(|e| e.to_string())?;
+    let down: Mapping = serde_yaml_ng::from_str("{hp: 0}").map_err(|e| e.to_string())?;
+    participants.push((
+        Participant::with_overrides(
+            "actor_guard".into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &down,
+            &Overrides::parse(&guard)?,
+            true,
+        )?,
+        15,
+    ));
+    let file = "Creatures/Cinder Wolf.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    participants.push((
+        Participant::new(
+            "actor_hound".into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &Mapping::new(),
+            true,
+        )?,
+        9,
+    ));
+    write_in_progress_run_with(
+        campaign.id,
+        &campaign.path.join("Encounter Runs"),
+        RUN_VAULT,
+        participants,
+        &format!(
+            "# {RUN_VAULT}\n\nWater to the knees.\n\n## Loot\n\n- 120 gp in a locked coffer\n- Roll 2× gems\n"
+        ),
     )
 }
 

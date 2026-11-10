@@ -1,5 +1,6 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
+mod loot;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
@@ -133,9 +134,16 @@ impl RunGroup {
         if self
             .members
             .iter()
-            .any(|member| !member.overrides.is_empty())
+            .any(|member| member.overrides.changes_creature())
         {
             summary.push_str(" · Changed");
+        }
+        if self
+            .members
+            .iter()
+            .any(|member| member.overrides.loot.is_some())
+        {
+            summary.push_str(" · Loot");
         }
         let members = self.member_summary();
         if !members.is_empty() {
@@ -277,7 +285,7 @@ impl Participant {
             if self.npc_identity() {
                 overrides.name = None;
             }
-            !overrides.is_empty()
+            overrides.changes_creature()
         })
     }
     #[cfg(test)]
@@ -485,6 +493,9 @@ struct State {
     #[serde(default)]
     last_change: Option<String>,
     random: Random,
+    /// What each loot line rolled, by its place: `loot::place`. Saves from before loot have none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    loot: BTreeMap<String, Vec<loot::Found>>,
 }
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
@@ -698,6 +709,9 @@ enum Command {
     Several(Vec<Command>),
     /// A roll on a marked table in a note, on this run's dice, with its row in the log.
     TableRoll(crate::roll_table::TableRoll),
+    /// Rolls for loot on campaign tables, for the encounter or its creatures, as one step. It
+    /// still works once the fight has ended, because that is when the party searches.
+    Loot(Vec<loot::LootRoll>),
 }
 /// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
@@ -824,6 +838,7 @@ impl Run {
                     "DM run prepared from saved encounter. Rules are resolved by the DM.".into(),
                 ],
                 last_change: None,
+                loot: BTreeMap::new(),
                 random: Random::seeded(seed),
             },
             history: Vec::new(),
@@ -1374,7 +1389,7 @@ impl Run {
                 return Err(reason.into());
             }
         }
-        if matches!(self.state.phase, Phase::Ended { .. }) {
+        if matches!(self.state.phase, Phase::Ended { .. }) && !matches!(command, Command::Loot(_)) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
         // The sheet decides the maximum while sync reads it, and sync cannot write one. A value
@@ -1651,6 +1666,12 @@ impl Run {
                 last
             }
             Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
+            Command::Loot(rolls) => {
+                let mut lines = loot::roll(&mut next, rolls)?;
+                let last = lines.pop().ok_or("Choose a loot roll first.")?;
+                next.log.append(&mut lines);
+                last
+            }
             other => Self::participant_command(&mut next, other, roster_ties)?,
         };
         next.log.push(label);
@@ -2074,6 +2095,8 @@ impl Run {
                 format!("{word} {} participants{saved}", commands.len())
             }
             Command::TableRoll(roll) => format!("roll {}", roll.dice),
+            // Short, because the ended view's header holds it beside the title.
+            Command::Loot(rolls) => loot::describe(rolls),
         }
     }
     fn undo_label(&self) -> String {
@@ -3969,12 +3992,26 @@ pub(crate) fn write_in_progress_run(
     name: &str,
     participants: Vec<(Participant, i64)>,
 ) -> Result<(), String> {
-    let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
-    let mut run = Run::new(
-        name.into(),
+    write_in_progress_run_with(
+        campaign,
+        directory,
+        name,
         participants,
-        format!("# {name}\n\nPhases and completion are resolved manually."),
-    )?;
+        &format!("# {name}\n\nPhases and completion are resolved manually."),
+    )
+}
+
+/// As `write_in_progress_run`, with the encounter's own text.
+#[cfg(test)]
+pub(crate) fn write_in_progress_run_with(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    participants: Vec<(Participant, i64)>,
+    details: &str,
+) -> Result<(), String> {
+    let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
+    let mut run = Run::new(name.into(), participants, details.to_owned())?;
     run.state.random = Random::seeded(20_260_101);
     for (index, total) in initiatives.into_iter().enumerate() {
         run.apply(Command::Initiative(index, Some(total)))?;
@@ -6468,6 +6505,85 @@ mod tests {
             run.roll_table(table(Some(3))).unwrap(),
             "Typed 3 on 1d6: A potion"
         );
+    }
+
+    #[test]
+    fn loot_rolls_after_the_end_and_keeps_each_lines_results_apart() {
+        let mut run = run();
+        run.setup_details = format!(
+            "Ash falls.\n\n## Loot\n\n- 30 gp\n- Roll 2× gems\n- Roll gems\n\n{SETUP_HEADING}\n\n```yaml\nroster: []\n```"
+        );
+        let carries = |loot: &str| {
+            Some(Changes {
+                base: Base::default(),
+                overrides: Overrides {
+                    loot: Some(loot.into()),
+                    ..Overrides::default()
+                },
+            })
+        };
+        run.state.participants[1].changes = carries("Iron key; Roll gems");
+        run.state.participants[2].changes = carries("Roll gems");
+        assert!(!run.state.participants[1].stat_changes());
+        begin(&mut run);
+        let open = |run: &Run| {
+            run.holders()
+                .into_iter()
+                .filter(|holder| holder.open)
+                .map(|holder| holder.key)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(open(&run), ["encounter"]);
+        run.apply(Command::Damage(1, 1000)).unwrap();
+        assert!(run.state.participants[1].loot_ready());
+        assert!(view::row_words_for_test(&run.state.participants[1]).ends_with("Loot"));
+        run.apply(Command::End("Won".into())).unwrap();
+        assert_eq!(open(&run), ["encounter", "slot1"]);
+        let holders: Vec<_> = run.holders().into_iter().filter(|h| h.open).collect();
+        // Both of the encounter's rolls and the guard's, with the standing creature's left out.
+        assert_eq!(run.unrolled(&holders).len(), 3);
+        let gems = || crate::roll_table::TableRoll {
+            key: "gems".into(),
+            dice: "1d2".into(),
+            typed: None,
+            rows: vec![crate::roll_table::RollRow {
+                min: 1,
+                max: 2,
+                text: "Ruby".into(),
+            }],
+        };
+        let roll = |place: &str, times| loot::LootRoll {
+            place: place.into(),
+            owner: "Ambush".into(),
+            roll: gems(),
+            times,
+        };
+        let before = run.state.log.len();
+        // Roll all is one step.
+        run.apply(Command::Loot(vec![
+            roll(&loot::place("encounter", 1), 2),
+            roll(&loot::place("slot1", 1), 1),
+        ]))
+        .unwrap();
+        assert_eq!(run.state.log.len(), before + 3);
+        assert_eq!(run.state.loot[&loot::place("encounter", 1)].len(), 2);
+        // The other line on the same table has no result of its own yet.
+        assert!(!run.state.loot.contains_key(&loot::place("encounter", 2)));
+        assert_eq!(run.unrolled(&holders).len(), 1);
+        assert!(
+            run.loot_markdown(&holders)
+                .contains("- Ruby\n- Ruby\n- gems (not rolled)")
+        );
+        assert!(
+            run.apply(Command::Loot(vec![roll(&loot::place("encounter", 1), 1)]))
+                .is_err()
+        );
+        // Undo takes all of them back, and the run is still ended.
+        assert!(run.apply(Command::Next).is_err());
+        run.undo();
+        assert!(run.state.loot.is_empty());
+        assert_eq!(run.state.log.len(), before);
+        assert!(run.ended());
     }
 
     #[test]

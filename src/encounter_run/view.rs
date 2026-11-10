@@ -3173,7 +3173,7 @@ impl Run {
         let changed = group
             .members
             .iter()
-            .any(|member| !member.overrides.is_empty());
+            .any(|member| member.overrides.changes_creature());
         let change_hint = if changed { " Changed." } else { "" };
         let added = self
             .state
@@ -3586,6 +3586,7 @@ impl Run {
     }
 
     fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+        self.card_loot(ui, index);
         let p = &self.state.participants[index];
         let definition = &p.definition;
         if definition.path == "Made up in this fight" {
@@ -4942,7 +4943,6 @@ impl Run {
                 ..egui::Margin::ZERO
             }))
             .show_inside(ui, |ui| {
-                design::group_label(ui, "Final state");
                 let scale = RunScale::fit(
                     ui.available_height(),
                     ui.available_width(),
@@ -4952,8 +4952,11 @@ impl Run {
                     .id_salt("run_final_state")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
                         ui.set_max_width(ui.available_width().min(scale.max_width));
+                        // What the party takes comes first, then how everyone ended.
+                        self.loot_section(ui);
+                        design::group_label(ui, "Final state");
+                        ui.spacing_mut().item_spacing.y = 0.0;
                         roster_right = ui.available_rect_before_wrap().right();
                         for index in &self.state.order {
                             let p = &self.state.participants[*index];
@@ -5638,6 +5641,9 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
         parts.push("Changed".into());
         parts.extend(changes.overrides.table_bonuses(&changes.base));
     }
+    if p.loot_ready() {
+        parts.push("Loot".into());
+    }
     if let Some(sync) = sync {
         parts.push(sync_status(sync).word.into());
     }
@@ -5919,6 +5925,10 @@ impl RowLayout {
             {
                 condition_spans.push(("Run changes".into(), add("more", c.participant.changed)));
             }
+        }
+        // Down, with something to take: the DM rolls it from the card or the ended view.
+        if p.loot_ready() {
+            add(&format!("{}\u{a0}Loot", icons::LOOT), c.accent);
         }
         if inline_state && let Some(sync) = sync {
             let status = sync_status(sync);

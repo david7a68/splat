@@ -1295,16 +1295,37 @@ pub(super) fn override_error(error: &str) -> String {
     out
 }
 
-pub(super) fn change_words(overrides: &Overrides, entry: &Entry, side: &str) -> String {
+/// `missing` are the loot's table keys that cannot roll, which the row names so that a typo
+/// shows before play.
+pub(super) fn change_words(
+    overrides: &Overrides,
+    entry: &Entry,
+    side: &str,
+    missing: &[String],
+) -> String {
     let count = overrides
         .rows(&Base::of(entry, side))
         .iter()
         .filter(|row| row.by_hand)
         .count();
-    if count == 0 {
+    let mut words = Vec::new();
+    if overrides.changes_creature() {
+        words.push("Changed".to_owned());
+    }
+    if count > 0 {
+        words.push(format!("{count} to add by hand"));
+    }
+    if overrides.loot.is_some() {
+        words.push(match missing {
+            [] => "Loot".to_owned(),
+            [key] => format!("Loot · no table {key}"),
+            keys => format!("Loot · no tables {}", keys.join(", ")),
+        });
+    }
+    if words.is_empty() {
         "Changed".to_owned()
     } else {
-        format!("Changed · {count} to add by hand")
+        words.join(" · ")
     }
 }
 
@@ -1321,7 +1342,8 @@ pub(super) fn changes_link(
     match Overrides::parse(block) {
         Ok(overrides) => {
             let rows = overrides.rows(&Base::of(entry, side));
-            let word = change_words(&overrides, entry, side);
+            let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
+            let word = change_words(&overrides, entry, side, &missing);
             let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
                 design::message(ui, Tone::Error, &override_error(&error));
@@ -1477,6 +1499,7 @@ fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &s
 /// change or clear it. A group can arrive anywhere, so its members can name any side.
 pub(super) fn overrides_form(
     ui: &mut egui::Ui,
+    id: &str,
     block: &mut Mapping,
     entry: &Entry,
     side: &str,
@@ -1629,6 +1652,14 @@ pub(super) fn overrides_form(
         conditions_row(ui, &mut overrides.conditions);
     }
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
+    // A group of rows, as Starting conditions is.
+    design::group_label(ui, "Loot");
+    crate::loot_editor::show_cell(
+        ui,
+        id,
+        &shown_name(block, entry.name.clone()),
+        &mut overrides.loot,
+    );
     if overrides != before {
         *block = overrides.to_mapping();
     }
@@ -2336,7 +2367,7 @@ fn members(
                 if changes_link(ui, &member.overrides, entry, &side, is_open) {
                     show_form_when_it_opens(ui); *expanded = Some(key.clone());
                 }
-                if is_open && overrides_form(ui, &mut member.overrides, entry, &side, None) { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
+                if is_open && overrides_form(ui, &key, &mut member.overrides, entry, &side, None) { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
             }
             design::rule(ui);
         });
@@ -2508,7 +2539,10 @@ fn unread_member(
                 if let Some(row) = &row {
                     block = splat::content::list_formats::changes("", &row[2].value, &row[4].value)
                         .unwrap_or_default();
-                    for term in raw.split(',') {
+                    // Loot is the last term, and its words can hold commas.
+                    let (stats, loot) = splat::content::loot::split_changes(&raw);
+                    let loot = loot.map(|loot| format!("Loot {loot}"));
+                    for term in stats.split(',').chain(loot.as_deref()) {
                         if let Ok(read) = splat::content::list_formats::changes(term.trim(), "", "")
                         {
                             for (key, value) in read {
@@ -2534,6 +2568,8 @@ fn unread_member(
         });
     });
     let mut apply = None;
+    // A loot list's typing belongs to this group and this row.
+    let repair_id = format!("{}:repair", draft.path());
     if let Some((repair_line, block)) = &mut draft.repair
         && *repair_line == line
     {
@@ -2564,7 +2600,8 @@ fn unread_member(
                 .color(colors().muted),
         );
         if let Some(entry) = entry {
-            if overrides_form(ui, block, &entry.entry, &draft.setup.side, None) {
+            let id = format!("{repair_id}:{line}");
+            if overrides_form(ui, &id, block, &entry.entry, &draft.setup.side, None) {
                 apply = Some(block.clone());
             }
         } else {
