@@ -172,7 +172,8 @@ eye during long sessions.
 All form labels use sentence-case muted `Small`, including `field`, `text_field`, `small_field` and
 `small_text_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. An empty section inside a list page
 has one muted line below its heading, with no zero count or full empty state. Tabs and page headers omit zero
-counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Fight and Packages
+counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Overflow tabs use a quiet
+caret menu without a button border; it names and underlines the selected page when that page is inside. Fight and Packages
 menus put the caret after the word. Keep remains the default focus when closing could lose work.
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and
@@ -561,6 +562,10 @@ the full change link, removing source before base creature.
 
 An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
+The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
+and row actions. Add participants sits directly beside that column; extra space stays at the far right.
+Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
+
 The editor header keeps Save and Start on line one; the name field gives up width. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
@@ -644,9 +649,11 @@ Name lines keep one height with or without detail. Scale sets type; spare room g
 scale height. Name-only rows shrink to 25 px before scrolling. Natural rows keep at least scale height. Rows
 share columns and picture size; shortening bonuses changes none of these.
 
-Setup reserves initiative, Roll, Absent and menu columns on the name line, centred on initiative. Empty Roll
-slots align player totals. Only tied rows have fixed up and down arrow slots, in that order, with unused slots
-empty. Other rows fit two text lines and Scan padding, at least RUN_REGULAR height. Setup retains its first
+Setup reserves initiative, Absent and menu columns on the name line, centred on initiative. Only NPC rows
+reserve Roll, before initiative, so party names use that room and all initiative fields stay aligned. Reserve
+the tie column only while the roster has tied rows, and the place column only while ordinals show. Tied rows
+keep fixed up and down arrow slots, in that order, with unused directions empty. Rows use the height of their name line (at least a Scan control), their Small detail line, and an XS gap.
+Do not add the live roster's minimum height to setup rows. Setup retains its first
 condition and counts the rest when needed. Shared-roll brackets stay beside fields and stop before detail.
 Shared NPC rolls are one roll group with quiet brackets and ordering arrows; only equal totals across
 independent rolls warn as ties. Header and overflow count those tied rows; the band says `2 tied`. Arrows
@@ -706,7 +713,9 @@ Prep. Arrivals has no tab: a secondary Add to fight button opens it, selected wh
 play it is `S` left of Next turn, at the same height, as the strip pairs Back to run with Next turn. Below the
 dock's all-words width it keeps the plus icon and the word Add. The full accessible name stays Add to fight. In setup it is `S` left of Undo, at Undo's height, and Undo shortens first. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
 numbers when shortened. When tight, fight tabs share a Fight caret menu with tab underline. Never wrap the tab
-row. Death-save counts and actions occupy one line below tabs at zero HP; clicking a count edits it. Sheet
+row. At zero HP, party-side participants show death-save counts and actions on one line below the tabs.
+Other participants show them only if a success or failure is already recorded, so no existing count is hidden.
+Clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. Correct has no duplicate fields; HP owns
 its help. Correct initiative says This row moves. The current turn stays. Labels share one column; blocked
 initiative and DM-note commits have a short adjacent reason. Correct HP has an `L` gap after death saves.
@@ -744,7 +753,7 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 ### Saving and closing
 
 Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
-The last closed run owns primary Resume. `Closed last` follows a copy number; Changed elsewhere marks a preserved disk version. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+The last closed run owns primary Resume. `Closed last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run

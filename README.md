@@ -14,7 +14,7 @@ Home restores its natural width. The app keeps a chosen width after a restart. S
 
 The run's **Add to fight** button keeps its plus icon and the word **Add** at narrow widths.
 Turn headings drop “’s turn” before shortening a name and keep each creature's copy number.
-Party sheet tabs stay on one line; later pages appear in **More**. Stopped-sync notices sit below the Party header.
+Party sheet tabs stay on one line; later pages appear in a quiet **More** menu. The menu names and underlines a selected page inside it. Stopped-sync notices sit below the Party header.
 
 ## Development
 
@@ -564,6 +564,7 @@ run's log, and Undo takes it back. Otherwise it only shows.
 
 ### Loot
 
+The encounter editor keeps roster actions, loot and notes within the list width, with **Add participants** directly beside them.
 An encounter's **Loot** list, under its roster, holds what the party finds when the fight is over. Type in **Add loot**
 and press Enter to add the words as a line, such as `30 gp`. While you type, the field offers the campaign's roll
 tables and Library items; the arrow keys and Enter, or a click, choose one. **Roll on a table** lists every table.
@@ -814,7 +815,8 @@ Participants at zero HP stay in turn order until you mark them absent.
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and the mark on each of those rows
 gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
-each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Conditions**, **Correct** (HP and initiative corrections, notes, sync), **Log**, and **Prep**. **Add to fight** opens Arrivals beside the run. At zero HP, editable death-save counts and **+ Success** and **+ Failure** sit below the tabs. The tabs keep their place. A spell named in a stat block opens
+each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Conditions**, **Correct** (HP and initiative corrections, notes, sync), **Log**, and **Prep**. **Add to fight** opens Arrivals beside the run. At zero HP, party members show editable death-save counts and **+ Success** and **+ Failure** below the tabs.
+Other participants show them only when a success or failure is already recorded. The tabs keep their place. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
@@ -871,7 +873,10 @@ inside the campaign, and accepts another relative folder or an absolute path.
 Saved JSON files contain the run state, combat log, initiative rule, random state,
 and frozen creature definitions. Saves use atomic replacement and detect external
 edits. If the file changed, saving stops until you choose **Replace the file with this run** or **Save as a new
-run**. Recovery copies use their save time in the name, such as `Bridge Ambush · saved 21:14` (UTC). **Resume** is primary on the run closed last. Each saved row shows its last change, and a file preserved after a disk conflict says **Changed elsewhere**. Other failed saves keep the current run in memory and show an error. Undo history
+run**. Recovery copies keep the encounter name. Their detail starts with **Copy 1**, **Copy 2**, and so on.
+**Resume** is primary on the run closed last. Each saved row shows its last change. A file preserved after a disk
+conflict says **Changed on disk**, after its copy number if it has one. Other failed saves keep the current run
+in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
 The same settings select how the campaign rolls NPC initiative: in groups of

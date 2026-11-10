@@ -832,7 +832,7 @@ struct Creature {
     /// Habitat, type, size and the other facts that search and the filter use.
     facets: Option<Facets>,
 }
-const ROSTER_MAX_WIDTH: f32 = 860.0;
+const ROSTER_MAX_WIDTH: f32 = design::LIST_MEASURE;
 const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = design::XL + design::L + design::S;
@@ -1236,7 +1236,6 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
         if !seen.insert(identity) {
             continue;
         }
-        design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
         let users: Vec<_> = index
             .items
             .iter()
@@ -1246,30 +1245,32 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
             })
             .map(|other| other.entry.name.clone())
             .collect();
-        for (position, path) in paths.iter().enumerate() {
-            let filename = path.rsplit('/').next().unwrap_or(path);
-            let action = crate::world::separate_entry_action(filename);
-            if Action::secondary(&action).hint(&action).show(ui).clicked() {
-                match crate::world::new_identity(campaign, path) {
-                    Ok((undo, _)) => ui.data_mut(|data| {
-                        data.insert_temp(undo_key, undo);
-                        data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-                    }),
-                    Err(error) => {
-                        design::message(ui, Tone::Warning, &error);
+        design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
+            for (position, path) in paths.iter().enumerate() {
+                let filename = path.rsplit('/').next().unwrap_or(path);
+                let action = crate::world::separate_entry_action(filename);
+                if Action::secondary(&action).hint(&action).show(ui).clicked() {
+                    match crate::world::new_identity(campaign, path) {
+                        Ok((undo, _)) => ui.data_mut(|data| {
+                            data.insert_temp(undo_key, undo);
+                            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
+                        }),
+                        Err(error) => {
+                            design::message(ui, Tone::Warning, &error);
+                        }
                     }
                 }
+                if let Some(remaining) = paths.iter().find(|other| *other != path) {
+                    crate::library::duplicate_repair_consequence(
+                        ui,
+                        &users,
+                        remaining.rsplit('/').next().unwrap_or(remaining),
+                        position == 0,
+                    );
+                }
+                ui.add_space(design::XS);
             }
-            if let Some(remaining) = paths.iter().find(|other| *other != path) {
-                crate::library::duplicate_repair_consequence(
-                    ui,
-                    &users,
-                    remaining.rsplit('/').next().unwrap_or(remaining),
-                    position == 0,
-                );
-            }
-            ui.add_space(design::XS);
-        }
+        });
     }
     !seen.is_empty()
 }
@@ -3663,50 +3664,68 @@ impl Encounters {
         }
         // In a wide window the roster keeps a name near its controls, and the two panes
         // stay together at the left.
-        let width = design::side_panel_width(ui.ctx().content_rect().width())
-            .max(ui.available_width() - ROSTER_MAX_WIDTH)
-            .min(ADD_PANE_MAX_WIDTH);
-        let creature = &mut self.creature;
-        design::Column::right(
-            ADD_PANE,
-            width,
-            design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH,
-        )
-        .page_keeps(design::RUN_LIST_KEEPS)
-        .frame(egui::Frame::new().inner_margin(egui::Margin {
-            left: design::S as i8,
-            right: 0,
-            top: design::S as i8,
-            bottom: 0,
-        }))
-        .show_inside(ui, |ui| match creature {
-            Some(editor) => creature_step = Self::creature_pane(ui, editor),
-            None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact),
-        });
-        egui::CentralPanel::default()
-            // The panel's drag handle lies on this edge, so the roster stops short of it.
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: 0,
-                right: design::S as i8,
-                top: design::S as i8,
-                bottom: 0,
-            }))
-            .show_inside(ui, |ui| {
-                // A name stays near its controls in a wide window, until the DM moves the panel.
-                if !design::column_dragged(ui.ctx(), ADD_PANE) {
-                    ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                }
-                Self::roster_pane(
-                    ui,
-                    draft,
-                    snapshot,
-                    focus_search,
-                    expanded,
-                    linked.then_some(party),
-                    &mut make_yours,
-                    false,
-                );
-            });
+        let add_width = if design::column_dragged(ui.ctx(), ADD_PANE) {
+            design::column_widths(ui.ctx())
+                .get(ADD_PANE)
+                .copied()
+                .unwrap_or(ADD_PANE_MAX_WIDTH)
+        } else {
+            ADD_PANE_MAX_WIDTH
+        };
+        let panes_width = ui
+            .available_width()
+            .min(ROSTER_MAX_WIDTH + add_width + design::S);
+        ui.allocate_ui_with_layout(
+            egui::vec2(panes_width, ui.available_height()),
+            egui::Layout::top_down(egui::Align::LEFT),
+            |ui| {
+                ui.set_width(panes_width);
+                let width = design::side_panel_width(ui.ctx().content_rect().width())
+                    .max(ui.available_width() - ROSTER_MAX_WIDTH)
+                    .min(ADD_PANE_MAX_WIDTH);
+                let creature = &mut self.creature;
+                design::Column::right(
+                    ADD_PANE,
+                    width,
+                    design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH,
+                )
+                .page_keeps(design::RUN_LIST_KEEPS)
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    left: design::S as i8,
+                    right: 0,
+                    top: design::S as i8,
+                    bottom: 0,
+                }))
+                .show_inside(ui, |ui| match creature {
+                    Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                    None => {
+                        Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                    }
+                });
+                egui::CentralPanel::default()
+                    // The panel's drag handle lies on this edge, so the roster stops short of it.
+                    .frame(egui::Frame::new().inner_margin(egui::Margin {
+                        left: 0,
+                        right: design::S as i8,
+                        top: design::S as i8,
+                        bottom: 0,
+                    }))
+                    .show_inside(ui, |ui| {
+                        // The content cap also holds after the DM moves the panel.
+                        ui.set_width(ui.available_width().min(ROSTER_MAX_WIDTH));
+                        Self::roster_pane(
+                            ui,
+                            draft,
+                            snapshot,
+                            focus_search,
+                            expanded,
+                            linked.then_some(party),
+                            &mut make_yours,
+                            false,
+                        );
+                    });
+            },
+        );
 
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
@@ -4013,10 +4032,12 @@ impl Encounters {
         tabbed: bool,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
+        ui.scope_builder(egui::UiBuilder::new().id(("encounter_roster", draft.id)), |ui| {
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_width(ui.available_width().min(design::LIST_MEASURE));
                 if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
@@ -4035,6 +4056,7 @@ impl Encounters {
                 ui.add_space(design::M);
                 design::field(ui, "Read-aloud and notes", None, None, |ui| {
                 let output = egui::TextEdit::multiline(&mut draft.body)
+                    .id(egui::Id::new(("encounter_notes", draft.id)))
                     .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
                     .desired_width(ui.available_width() - 2.0 * design::S - design::M)
                     .desired_rows(5)
@@ -4048,6 +4070,7 @@ impl Encounters {
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner
+        }).inner
     }
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
@@ -4263,7 +4286,7 @@ impl Encounters {
                             if missing {
                                 let split = detail.find(icons::WARN).unwrap_or(0);
                                 let mut job = egui::text::LayoutJob::default();
-                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..], colors().result.warning)] {
+                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + icons::WARN.len()], colors().result.warning), (&detail[split + icons::WARN.len()..], colors().muted)] {
                                     job.append(text, 0.0, egui::TextFormat { font_id: Type::Small.font(ui), color, ..Default::default() });
                                 }
                                 ui.add(egui::Label::new(job).wrap());
@@ -4813,7 +4836,7 @@ mod tests {
     }
 
     #[test]
-    fn i20_w1_duplicate_npc_has_one_warning_and_one_action_per_file() {
+    fn iter7_b_duplicate_npc_has_aligned_single_repair_choices() {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
@@ -4860,6 +4883,153 @@ mod tests {
                 .query_all_by_label("These two files claim to be the same entry.")
                 .count(),
             1
+        );
+        let warning = harness
+            .get_by_label("These two files claim to be the same entry.")
+            .rect();
+        for label in [
+            "Make Rook copy.md a separate entry",
+            "Make Rook.md a separate entry",
+        ] {
+            let action = harness.get_by_label(label).rect();
+            assert!(
+                (action.left() - warning.left()).abs() < 1.0,
+                "iter7-B-FD3: repair {action:?} must align with warning text {warning:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn iter7_b_roster_keeps_unsent_notes_focus_and_scroll_across_parent_changes() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let draft = std::rc::Rc::new(std::cell::RefCell::new(Draft::new()));
+        let shown = draft.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let parent = if ui.available_width() > 760.0 {
+                        "wide"
+                    } else {
+                        "compact"
+                    };
+                    ui.push_id(parent, |ui| {
+                        Encounters::roster_pane(
+                            ui,
+                            &mut shown.borrow_mut(),
+                            &snapshot,
+                            &mut false,
+                            &mut None,
+                            None,
+                            &mut None,
+                            parent == "compact",
+                        );
+                    });
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .query_all_by_label("Read-aloud and notes")
+            .max_by(|a, b| a.rect().width().total_cmp(&b.rect().width()))
+            .unwrap()
+            .click();
+        harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
+        harness.run_steps(2);
+        let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
+        let text = draft.borrow().body.clone();
+        assert!(text.contains("Unsent tactics."));
+        // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
+        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
+            .with(egui::Id::new("encounter_editor"));
+        let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+            .unwrap()
+            .offset
+            .y;
+        assert!(offset > 0.0, "Exercise a scrolled editor");
+        for width in [600.0, 960.0] {
+            harness.set_size(egui::vec2(width, 640.0));
+            harness.run_steps(2);
+            assert_eq!(draft.borrow().body, text, "Unsent text survives");
+            assert_eq!(
+                harness.ctx.memory(|memory| memory.focused()),
+                Some(focus),
+                "The same notes control keeps focus"
+            );
+            let current = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+                .unwrap()
+                .offset
+                .y;
+            assert!(
+                (current - offset).abs() < 1.0,
+                "Scroll survives parent changes: {offset} -> {current}"
+            );
+        }
+    }
+
+    #[test]
+    fn iter7_b_roster_scroll_content_keeps_list_measure_and_warning_words_muted() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        fs::copy(
+            dir.path().join("Cinder Wolf.md"),
+            dir.path().join("Cinder Wolf copy.md"),
+        )
+        .unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        draft.add(id, false);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 1080.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    Encounters::roster_pane(
+                        ui, &mut draft, &snapshot, &mut false, &mut None, None, &mut None, false,
+                    );
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let notes = harness
+            .query_all_by_label("Read-aloud and notes")
+            .map(|node| node.rect())
+            .max_by(|a, b| a.width().total_cmp(&b.width()))
+            .unwrap();
+        // Width is checked after the colour, so each fault has its own red evidence.
+        let warnings: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().contains("These two files claim") => {
+                    Some(text)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            warnings.len(),
+            2,
+            "Two repeated roster warnings must be checked"
+        );
+        for text in warnings {
+            for section in &text.galley.job.sections {
+                let words = &text.galley.text()[section.byte_range.clone()];
+                assert!(
+                    section.format.color == colors().muted || words.trim() == icons::WARN,
+                    "iter7-B-FD8: warning colour is only for the icon: {words}"
+                );
+            }
+        }
+        assert!(
+            notes.width() <= design::LIST_MEASURE,
+            "iter7-B-AT1: {notes:?}"
         );
     }
 

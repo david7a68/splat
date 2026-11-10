@@ -288,6 +288,16 @@ impl Participant {
             overrides.changes_creature()
         })
     }
+    /// Keep existing counts visible even when the participant is not on the party side.
+    fn shows_death_saves(&self) -> bool {
+        // A linked player sheet makes death saves on any side name the DM chose.
+        self.hp == Some(0)
+            && (self.side == "party"
+                || self.definition.fields.contains_key("splat_external")
+                || self.successes > 0
+                || self.failures > 0)
+    }
+
     #[cfg(test)]
     pub fn new(
         key: String,
@@ -3461,6 +3471,7 @@ impl Run {
         }
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
+        let mut copy_numbers = BTreeMap::new();
         let mut changed_elsewhere = BTreeSet::new();
         for file in fs::read_dir(directory).map_err(|e| e.to_string())? {
             let path = file.map_err(|e| e.to_string())?.path();
@@ -3469,6 +3480,7 @@ impl Run {
                 match Self::open(&path, campaign) {
                     Ok(run) => {
                         close_order.insert(path.clone(), run.recovery.closed_order);
+                        copy_numbers.insert(path.clone(), run.recovery.number(&run.name));
                         if let Some(original) = run.recovery.copied_from {
                             changed_elsewhere.insert(original);
                         }
@@ -3490,9 +3502,15 @@ impl Run {
                 }
             }
         }
+        let after_copy = |run: &SavedRunInfo| {
+            copy_numbers
+                .get(&run.path)
+                .filter(|number| **number > 0)
+                .map_or(0, |number| format!("Copy {number} · ").len())
+        };
         for run in &mut runs {
             if run.id.is_some_and(|id| changed_elsewhere.contains(&id)) {
-                run.label.insert_str(0, "Changed elsewhere · ");
+                run.label.insert_str(after_copy(run), "Changed on disk · ");
             }
         }
         let mut identities = BTreeMap::<Uuid, Vec<PathBuf>>::new();
@@ -3533,15 +3551,12 @@ impl Run {
             .find(|run| run.standing == Standing::Unfinished)
             && close_order.get(&run.path).is_some_and(|order| *order > 0)
         {
-            if let Some((copy, rest)) = run
-                .label
-                .split_once(" · ")
-                .filter(|(word, _)| word.starts_with("Copy "))
-            {
-                run.label = format!("{copy} · Closed last · {rest}");
-            } else {
-                run.label.insert_str(0, "Closed last · ");
-            }
+            let duplicate = run
+                .id
+                .and_then(|id| identities.get(&id))
+                .is_some_and(|paths| paths.len() > 1);
+            let at = if duplicate { 0 } else { after_copy(run) };
+            run.label.insert_str(at, "Closed last · ");
         }
         let all_recent = runs
             .iter()
@@ -4603,7 +4618,7 @@ mod tests {
             .iter()
             .find(|copy| copy.id == Some(original_id))
             .unwrap();
-        assert!(old.label.contains("Changed elsewhere"));
+        assert!(old.label.starts_with("Changed on disk · "));
         assert_eq!(
             fs::read(&original).unwrap(),
             [bytes.as_slice(), b"\n"].concat()
@@ -4614,6 +4629,27 @@ mod tests {
             Run::list(dir.path(), campaign).unwrap()[0].id,
             Some(original_id)
         );
+    }
+
+    #[test]
+    fn iter7_b_preserved_recovery_copy_starts_with_copy_number() {
+        let (dir, mut run, _, _, campaign) = run_with_changed_file();
+        run.save_as_new_run().unwrap();
+        let first = run.id;
+        let path = run.path().unwrap().to_path_buf();
+        let bytes = fs::read(&path).unwrap();
+        fs::write(&path, [bytes.as_slice(), b"\n"].concat()).unwrap();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        assert!(run.save().is_err());
+        run.save_as_new_run().unwrap();
+        let rows = Run::list(dir.path(), campaign).unwrap();
+        let preserved = rows.iter().find(|row| row.id == Some(first)).unwrap();
+        assert!(
+            preserved.label.starts_with("Copy 1 · Changed on disk · "),
+            "iter7-B-FT2: {}",
+            preserved.label
+        );
+        assert_eq!(fs::read(path).unwrap(), [bytes.as_slice(), b"\n"].concat());
     }
 
     #[test]

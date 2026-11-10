@@ -2239,6 +2239,34 @@ mod sheet_now_tests {
     use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
     use serde_json::json;
     #[test]
+    fn iter7_b_overflow_tabs_have_no_button_border_and_keep_selected_underline() {
+        use crate::design::{self, colors};
+        use eframe::egui;
+        use egui_kittest::kittest::Queryable;
+        for selected in [0, 5] {
+            let mut page = selected;
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(350.0, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        design::overflow_tabs(ui, &mut page, &super::SHEET_PAGES)
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let menu = harness.get_by_label("More sheet pages").rect();
+            assert!(!harness.output().shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Rect(rect) if rect.rect.contains(menu.center()) && rect.rect.width() <= menu.width() + 1.0 && rect.stroke.width > 0.0)),
+                "iter7-B-FD7: overflow tabs must have no button border");
+            if selected == 5 {
+                assert!(harness.output().shapes.iter().any(|shape| matches!(&shape.shape,
+                    egui::Shape::LineSegment { points, stroke } if stroke.color == colors().accent && (points[0].y - menu.bottom()).abs() < 1.0)),
+                    "iter7-B-FD7: the selected overflow page keeps its underline");
+            }
+        }
+    }
+
+    #[test]
     fn iter_3_b_storage_actions_stay_with_their_message() {
         use crate::design::{self, Action, Density, Tone};
         use eframe::egui;
