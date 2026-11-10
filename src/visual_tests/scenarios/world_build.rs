@@ -293,6 +293,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
             .contains("type: faction"),
         "New Note accepts an optional World type and offers the file editor",
     );
+    d.expect("Nothing written yet.");
     d.state("new-faction-note", Sizes::All);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -703,8 +704,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
     d.state("manifest-deleted-library-keeps-entries", Sizes::All);
-    search_library(d, "Package.md");
-    d.click_starting("Package.md · ");
+    search_library(d, "");
+    open_local_package(d, MODULE);
+    d.click_containing("About Ashen Marches");
     d.expect("Write Package.md again");
     d.state("manifest-deleted-library-repair", Sizes::All);
     d.click("Write Package.md again");
@@ -758,6 +760,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.click("Reload and lose my draft");
     d.click("Read");
     d.wait_for_text("Ash Bite");
+    d.expect("Undo discard of Cinder Wolf");
+    assert!(!d.app_mut().library.dirty());
     d.state("package-disk-version-kept", Sizes::All);
 
     d.click("What the Library shows: Can use");
@@ -1016,6 +1020,25 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     go_library(d);
     search_library(d, "Cinder Wolf");
     d.wait_for_text("Same entry in two files");
+    d.expect("Bridge Ambush keeps Cinder Wolf.md.");
+    d.expect("Bridge Ambush will then use Cinder Wolf copy.md.");
+    d.observe_both(
+        "iter-3-D-FD4",
+        "Each repair consequence stays under its own choice",
+        |d| {
+            let first = d
+                .place_of("Make Cinder Wolf copy.md a separate entry")
+                .unwrap();
+            let keeps = d.place_of("Bridge Ambush keeps Cinder Wolf.md.").unwrap();
+            let second = d.place_of("Make Cinder Wolf.md a separate entry").unwrap();
+            let changes = d
+                .place_of("Bridge Ambush will then use Cinder Wolf copy.md.")
+                .unwrap();
+            (keeps.top() - first.bottom() - crate::design::XS).abs() < 1.0
+                && second.top() - keeps.bottom() >= crate::design::L
+                && (changes.top() - second.bottom() - crate::design::XS).abs() < 1.0
+        },
+    );
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
@@ -1171,6 +1194,21 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     d.click_containing("Rook Ambry · ");
     d.click_containing("Watch House · 2 matches");
     d.expect("This link matches more than one note. Choose one.");
+    d.observe_both(
+        "iter-3-D-FD9-10",
+        "Each place choice pairs its file and bordered action",
+        |d| {
+            ["Locations/Watch House.md", "Other/Watch House.md"]
+                .iter()
+                .all(|path| {
+                    let link = d.place_of(path).unwrap();
+                    let action = d.place_of(&format!("Always use {path}")).unwrap();
+                    action.left() >= link.right() + crate::design::L - 1.0
+                        && action.top() < link.bottom()
+                        && link.top() < action.bottom()
+                })
+        },
+    );
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
     d.state("place-choice-kept-with-undo", Sizes::All);
@@ -1382,7 +1420,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.expect("Rook Ambry");
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("Use Mara Vell");
+    d.click("Rename the note to Mara Vell");
     d.wait_for_text("Undo name change");
     d.state("renamed-npc-name-updated", Sizes::All);
     look_up(d, "Mara Vell");
@@ -1390,7 +1428,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.state("renamed-npc-new-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Undo name change");
-    d.wait_for_text("Use Mara Vell");
+    d.wait_for_text("Rename the note to Mara Vell");
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {
@@ -1415,7 +1453,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.type_into("Package folder", &copied.to_string_lossy());
     d.click("Add folder");
     d.expect("This folder is a copy of Ashen Marches.");
-    d.expect("This folder is a copy.");
+    d.expect("Register it as a new package below.");
     assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     d.state("copied-package-names-duplicate-identity", Sizes::All);

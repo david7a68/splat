@@ -353,27 +353,29 @@ impl State {
                         *kinds.entry(kind).or_default() += 1;
                     }
                 }
-                ui.label(
-                    Type::Small.rich(
-                        ui,
-                        kinds
-                            .iter()
-                            .map(|(kind, n)| {
-                                let label = if kind == "world" {
-                                    "World note".into()
-                                } else {
-                                    kind.replace('_', " ")
-                                };
-                                if kind == "timeline" {
-                                    "the Timeline".into()
-                                } else {
-                                    design::count(*n, &label, &format!("{label}s"))
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                    ),
-                );
+                if !kinds.is_empty() {
+                    ui.label(
+                        Type::Small.rich(
+                            ui,
+                            kinds
+                                .iter()
+                                .map(|(kind, n)| {
+                                    let label = if kind == "world" {
+                                        "World note".into()
+                                    } else {
+                                        kind.replace('_', " ")
+                                    };
+                                    if kind == "timeline" {
+                                        "the Timeline".into()
+                                    } else {
+                                        design::count(*n, &label, &format!("{label}s"))
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(" · "),
+                        ),
+                    );
+                }
                 if let Some(file) = files.get(self.selected) {
                     let picker = egui::ComboBox::from_id_salt("convert_file")
                         .icon(design::combo_icon)
