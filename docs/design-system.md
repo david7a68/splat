@@ -543,6 +543,8 @@ pickers offer Party, Enemies and Other…; only Other opens a name field and rep
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
 the full change link, removing source before base creature.
 
+An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+
 The editor header keeps Save and Start on line one; the name field gives up width. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
@@ -552,6 +554,8 @@ side, members and notes. The target frame has an accent outline. The Encounters 
 closed section. Frames use Move to… for ownership; full editors use Belongs to.
 
 ### Groups and changes
+
+The group name field ends at `FORM_WIDTH`. Member rows and Group notes end at `LIST_MEASURE`, inside the scroll content and anchored left. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
 
 A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
 Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
@@ -592,9 +596,10 @@ starts with this choice. You can change it there for one roll. Groups that arriv
 
 The roster is the screen. Fixed columns hold initiative, side mark, name, AC, temporary HP, HP and bar, then
 Bloodied, 0 HP and sync state. A lone sync state sits beside HP; a second state uses line two. Sheet loading
-says Reading sheet…. Linked rows with disabled sync retain Sync off and its icon; unlinked creatures have no
-sync word. Header and row conflict words are underlined review links. The sheet colours only its connection
+says Reading sheet…. When every linked row has sync off by the DM, header line two says Sync off for the party and the rows omit it. When linked rows differ, disabled rows retain Sync off and its icon. Sync that restarts by itself never says Sync off. Unlinked creatures have no sync word. Header and row conflict words are underlined review links. The sheet colours only its connection
 icon and Connected; sheet and HP facts use muted Small.
+
+Names that need more than two lines use `RUN_COMPACT.name`. On that row, the numeric columns can move into unused state space to keep the name whole and compact. The other rows keep their shared columns. Pictures align with the first name line.
 
 Conditions take one second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
 drop the bonus before more if needed. Measure sync before folding conditions into a count. Keep the first
@@ -618,6 +623,8 @@ Shared NPC rolls are one roll group with quiet brackets and ordering arrows; onl
 independent rolls warn as ties. Header and overflow count those tied rows; the band says `2 tied`. Arrows
 still work inside shared rolls.
 
+Setup has a `Label` column heading INITIATIVE above empty, labelled number fields.
+
 An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
 have initiative, a muted ordinal follows each field, updates with totals or tie rulings, and the ready line
 names who goes first. Setup names its Undo action. Begin combat's blocked reason sits below the button; the
@@ -639,6 +646,9 @@ say sheet changed. Sync-panel choices stay in Log and Undo.
 
 Notice priority is conflict, recording silence, other sync notices, next name. Silence and short sync state
 stay together when space is tight. Connect to sync loses its link before either state loses its word. Keep the
+full `Sync off for the party` beside recording silence. If the Undo target cannot fit, show `Undo` and keep
+its full target in hover and accessibility. An empty Undo can omit its adjacent reason when it cannot fit;
+the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
 once below the roster, keeping Undo visible. Stat-block errors use the notice icon and one fitted line, with
@@ -856,7 +866,7 @@ taller height. Use a true minus for negative modifiers. Rows without detail use 
 or fewer, omit filters and separate count lines; count in the group heading. Death-save counts use words.
 Compact rows omit a missing spell save DC; wide tables keep the empty cell.
 
-Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
+Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
 to sync; first-sheet-read help keeps Settings inside its Small sentence. Spell levels have counts without an
 extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below Equipment & coins. Party

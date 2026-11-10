@@ -1388,6 +1388,8 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
         !d.has("Changed"),
         "A copied NPC note does not change its roster values"
     );
+    d.expect("Rook's watch keeps Rook Ambry.md.");
+    d.expect("Rook's watch will then use Rook Ambry copy.md.");
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
     d.click("Make Rook Ambry copy.md a separate entry");
     d.wait_for_text("Undo separate entry");

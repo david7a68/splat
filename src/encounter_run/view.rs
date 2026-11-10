@@ -537,9 +537,11 @@ impl Run {
             .hint(full)
             .show(ui)
             .clicked();
-        let reason = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-        design::named(ui, &reason, full);
-        reason.on_hover_text(full);
+        if design::number_width(ui, shown, &Type::Small.font(ui)) <= room {
+            let reason = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+            design::named(ui, &reason, full);
+            reason.on_hover_text(full);
+        }
         clicked
     }
 
@@ -963,7 +965,8 @@ impl Run {
         let undo_label = self.undo_label();
         let mut undo = false;
         let mut review_conflict = false;
-        let needs_connection = strip.sync_stopped || self.sync_needs_sign_in();
+        let party_sync_off = self.party_sync_off();
+        let needs_connection = strip.sync_stopped || (self.sync_needs_sign_in() && !party_sync_off);
         let offline_color = self
             .account_status
             .map_or(c.connection.offline, |status| status.color);
@@ -981,7 +984,7 @@ impl Run {
                 "Signed out",
                 offline_color,
             ))
-        } else if self.sync_needs_sign_in() {
+        } else if self.sync_needs_sign_in() && !party_sync_off {
             Some(SyncAlert::new(
                 icons::SYNC_OFF,
                 "Not connected",
@@ -995,15 +998,22 @@ impl Run {
                 "Not sent",
                 c.result.warning,
             ))
+        } else if let Some(name) = &strip.sync_error {
+            Some(SyncAlert::new(
+                icons::ERROR,
+                &format!("Sync error: {name}"),
+                "Sync error",
+                c.result.error,
+            ))
+        } else if party_sync_off {
+            Some(SyncAlert::new(
+                icons::SYNC_OFF,
+                "Sync off for the party",
+                "Sync off for the party",
+                c.muted,
+            ))
         } else {
-            strip.sync_error.as_ref().map(|name| {
-                SyncAlert::new(
-                    icons::ERROR,
-                    &format!("Sync error: {name}"),
-                    "Sync error",
-                    c.result.error,
-                )
-            })
+            None
         };
         let mut sheet_notice_in_header = false;
         ui.allocate_ui_with_layout(
@@ -1066,6 +1076,12 @@ impl Run {
                     } else {
                         0.0
                     };
+                // Keep both facts whole. Undo keeps its full accessible name and hover text.
+                let minimum = if party_sync_off && self.recording_notice.is_some() {
+                    self.undo_action("Undo").natural_width(ui) + design::XS
+                } else {
+                    minimum
+                };
                 let notice_width = design::number_width(ui, &notice, &font) + design::S;
                 let sheet_room =
                     (ui.available_width() - minimum - notice_width - design::L).max(0.0);
@@ -1097,13 +1113,20 @@ impl Run {
                     .min((ui.available_width() - minimum - design::L).max(0.0));
                 let slot = ui.available_width() - notice_width - design::L;
                 let overhead = self.undo_action("").natural_width(ui);
-                let shown = undo_words(
-                    ui,
-                    &undo_label,
-                    &self.state.participants,
-                    &Type::Strong.font(ui),
-                    slot - overhead - design::XS,
-                );
+                let shown = if party_sync_off
+                    && self.recording_notice.is_some()
+                    && self.undo_action(&fitted).natural_width(ui) > slot
+                {
+                    "Undo".to_owned()
+                } else {
+                    undo_words(
+                        ui,
+                        &undo_label,
+                        &self.state.participants,
+                        &Type::Strong.font(ui),
+                        slot - overhead - design::XS,
+                    )
+                };
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
                     Layout::right_to_left(Align::Center),
@@ -1279,10 +1302,23 @@ impl Run {
             })
     }
 
+    fn party_sync_off(&self) -> bool {
+        let mut linked = self
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| super::remote_identity(p).is_some())
+            .peekable();
+        linked.peek().is_some()
+            && linked.all(|(index, _)| self.sync_word(index) == Some(SyncState::Off))
+    }
+
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
         // A lost connection stops sync, and it starts again by itself: not the DM's Sync off.
-        self.sync_word(index)
-            .filter(|state| *state != SyncState::Stopped)
+        self.sync_word(index).filter(|state| {
+            *state != SyncState::Stopped && !(*state == SyncState::Off && self.party_sync_off())
+        })
     }
 
     /// Every row's layout at this width. Rows with only a name can give up height when
@@ -1581,7 +1617,7 @@ impl Run {
                                 ui,
                                 &name,
                                 text,
-                                "Init",
+                                "",
                                 field.width(),
                                 Density::Read.control(),
                             );
@@ -3136,22 +3172,23 @@ impl Run {
                 ),
             )
         });
-        let totals_text = if group.warnings.is_empty() {
-            format!(
-                "{} · {} · {}",
-                style::human_label(&group.side),
-                group.count_label(),
-                group.xp_label()
-            )
-        } else {
+        let totals_text = format!(
+            "{} · {} · {}",
+            style::human_label(&group.side),
+            group.count_label(),
             group.xp_label()
-        };
+        );
         let heading_width = design::number_width(
             ui,
             &format!("{} {name}", icons::DRAG),
             &Type::Strong.font(ui),
         );
-        let status_in_heading = !status.is_empty()
+        let totals_in_heading = heading_width
+            + design::L
+            + design::number_width(ui, &totals_text, &Type::Small.font(ui))
+            <= grip.rect.width();
+        let status_in_heading = totals_in_heading
+            && !status.is_empty()
             && heading_width
                 + design::L
                 + design::number_width(
@@ -3163,7 +3200,11 @@ impl Run {
         let totals = ui.painter().text(
             grip.rect.right_center(),
             Align2::RIGHT_CENTER,
-            totals_text,
+            if totals_in_heading {
+                totals_text.clone()
+            } else {
+                String::new()
+            },
             Type::Small.font(ui),
             c.muted,
         );
@@ -3236,22 +3277,8 @@ impl Run {
                 painter.galley(place, galley, c.accent);
             }
         }
-        if !group.warnings.is_empty() {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} · {}",
-                                style::human_label(&group.side),
-                                group.count_label()
-                            ),
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
+        if !totals_in_heading {
+            ui.add(egui::Label::new(Type::Small.rich(ui, totals_text).color(c.muted)).wrap());
         }
         let members = group.member_summary_wrapped();
         let mut add = false;
@@ -3932,6 +3959,30 @@ impl Run {
     }
 
     fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
+        self.refresh_roster_faults();
+        if let Some(path) = &self.roster_source {
+            for fault in &self.roster_faults {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "{} · {}, line {}: {}",
+                        fault.name,
+                        path.file_name().unwrap_or_default().to_string_lossy(),
+                        fault.line,
+                        fault.problem
+                    ),
+                );
+            }
+            if !self.roster_faults.is_empty() {
+                crate::world::entry_file_actions(
+                    ui,
+                    path.parent().unwrap_or(path),
+                    &path.file_name().unwrap_or_default().to_string_lossy(),
+                    true,
+                );
+            }
+        }
         let mut closed = false;
         let missing_initiative = self
             .state
@@ -3945,7 +3996,9 @@ impl Run {
             .iter()
             .filter(|p| !matches!((p.hp, p.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max))
             .count();
-        let blocked = if missing_hp > 0 {
+        let blocked = if let Some(reason) = self.roster_blocked() {
+            Some(reason.to_owned())
+        } else if missing_hp > 0 {
             Some(format!("{missing_hp} need valid HP."))
         } else if missing_initiative > 0 {
             Some(format!("{missing_initiative} need initiative."))
@@ -4153,6 +4206,19 @@ impl Run {
                     .show(ui, |ui| {
                         // Each measured row includes its own padding and hairline.
                         ui.spacing_mut().item_spacing.y = 0.0;
+                        let presence = design::number_width(
+                            ui,
+                            &format!("{} Absent", icons::ABSENT),
+                            &Type::Body.font(ui),
+                        ) + ui.spacing().button_padding.x * 2.0
+                            + design::S;
+                        let right =
+                            design::XL + Density::Read.control() * 3.0 + design::L * 4.0 + presence;
+                        let number = design::L * 3.0;
+                        ui.horizontal(|ui| {
+                            ui.add_space((ui.available_width() - right - number).max(0.0));
+                            ui.label(Type::Label.rich(ui, "INITIATIVE").color(colors().muted));
+                        });
                         let origin = ui.cursor().min.y;
                         // Roster order. Rows hold still while the DM types (T4.3).
                         for index in 0..self.state.participants.len() {
@@ -4424,7 +4490,7 @@ impl Run {
                         ui,
                         &field_name,
                         text,
-                        "Init",
+                        "",
                         number_slot,
                         Density::Scan.control(),
                     );
@@ -5878,7 +5944,7 @@ impl RowLayout {
                 }
             }
         }
-        let name = ui.fonts_mut(|fonts| {
+        let mut name = ui.fonts_mut(|fonts| {
             fonts.layout(
                 p.name.clone(),
                 Type::Name.sized(ui, scale.name),
@@ -5886,6 +5952,28 @@ impl RowLayout {
                 name_width,
             )
         });
+        let (mut ac_right, mut temp_right, mut hp_right) = (ac_right, temp_right, hp_right);
+        if name.rows.len() > 2 {
+            let spare = if sync.is_none() && hp_word(p).is_none() {
+                state_width
+            } else {
+                0.0
+            };
+            let widened = (name_width + spare)
+                .min(width - name_left - ac_width - temp_width - hp_width - design::S);
+            name = ui.fonts_mut(|fonts| {
+                fonts.layout(
+                    p.name.clone(),
+                    Type::Name.sized(ui, design::RUN_COMPACT.name.min(scale.name)),
+                    egui::Color32::PLACEHOLDER,
+                    widened.max(name_width),
+                )
+            });
+            let extra = (widened - name_width).max(0.0);
+            ac_right += extra;
+            temp_right += extra;
+            hp_right += extra;
+        }
         let tight = fit != RowFit::Natural
             && second_line.is_none()
             && sync.is_none()
@@ -6169,7 +6257,7 @@ fn paint_row(
         Rect::from_center_size(
             pos2(
                 name_left - PICTURE_GAP - layout.picture / 2.0,
-                if layout.second_left < layout.name_left {
+                if layout.name.rows.len() > 1 || layout.second_left < layout.name_left {
                     line_y
                 } else {
                     rect.center().y
@@ -6973,7 +7061,7 @@ mod tests {
     }
 
     #[test]
-    fn iter_3_b_all_five_linked_rows_show_sync_off_without_workers() {
+    fn iter4_b_party_sync_off_is_once_in_header_and_mixed_rows_keep_their_state() {
         let mut run = super::super::tests::run();
         while run.state.participants.len() < 6 {
             run.state
@@ -6989,8 +7077,10 @@ mod tests {
                 run.syncs
                     .insert(index, crate::combat_sync::CombatSync::default());
             }
+            assert!(run.party_sync_off());
             for index in 0..5 {
-                assert_eq!(run.row_sync_word(index), Some(SyncState::Off));
+                assert_eq!(run.sync_word(index), Some(SyncState::Off));
+                assert_eq!(run.row_sync_word(index), None);
             }
             assert_eq!(run.row_sync_word(5), None);
         }
