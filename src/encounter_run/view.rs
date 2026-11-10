@@ -761,7 +761,13 @@ impl Run {
                                 } else {
                                     notice.as_str()
                                 };
-                                let text_room = ui.available_width() - design::L * 6.0 - design::S;
+                                // small_message draws its bar and icon before the words.
+                                let lead = design::S
+                                    + design::HAIRLINE_WIDTH
+                                    + design::number_width(ui, icons::WARN, &Type::Small.font(ui))
+                                    - design::XS;
+                                let text_room =
+                                    ui.available_width() - design::L * 6.0 - design::S - lead;
                                 let fitted = sheet_notice_words(
                                     ui,
                                     self.notice_summary.as_deref().unwrap_or(shown),

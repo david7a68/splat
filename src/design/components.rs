@@ -2207,19 +2207,33 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
         segmented(ui, selected, choices);
         return;
     }
-    let mut used = width("More") + L;
-    let mut count = 0;
-    for (_, label) in choices {
-        if used + width(label) > ui.available_width() {
-            break;
+    // When the selected page is in the menu, the menu button names it, so the selected page
+    // always shows in the row.
+    let fit = |reserve: f32| {
+        let mut used = reserve + L;
+        let mut count = 0;
+        for (_, label) in choices {
+            if used + width(label) > ui.available_width() {
+                break;
+            }
+            used += width(label);
+            count += 1;
         }
-        used += width(label);
-        count += 1;
+        count
+    };
+    let mut count = fit(width("More"));
+    let mut menu_label = "More";
+    if let Some((_, label)) = choices[count..]
+        .iter()
+        .find(|(value, _)| *value == *selected)
+    {
+        menu_label = label;
+        count = fit(width(label).max(width("More")));
     }
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         segmented(ui, selected, &choices[..count]);
-        let menu = ui.menu_button(format!("More {}", icons::DOWN), |ui| {
+        let menu = ui.menu_button(format!("{menu_label} {}", icons::DOWN), |ui| {
             for (value, label) in &choices[count..] {
                 if ui.selectable_label(*selected == *value, *label).clicked() {
                     *selected = *value;

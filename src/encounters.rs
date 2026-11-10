@@ -199,7 +199,14 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
             path,
             faults
                 .iter()
-                .map(|fault| format!("{} (line {}): {}", fault.name, fault.line, fault.problem))
+                .map(|fault| {
+                    format!(
+                        "{} (line {}): {}",
+                        fault.name,
+                        fault.line,
+                        fault.problem.trim_end_matches('.')
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("; ")
         )
