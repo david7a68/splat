@@ -7840,6 +7840,103 @@ pub mod session_notes {
             },
         );
         d.state("timeline-disk-conflict", Sizes::All);
+        links_beside_lookup(d);
+    }
+
+    /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
+    /// Lookup's written-note card gives the same link an XL target on its own line.
+    fn links_beside_lookup(d: &mut Driver<'_>) {
+        const LINK: &str = "Wren (opens Wren)";
+        const NOTE_TEXT: &str = "Wren runs the ferry at dusk.";
+        let id = splat::character::stable_id("Wren.md");
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Wren\n\
+             splat_world:\n  type: npc\n---\n\n# Wren\n\n{NOTE_TEXT}\n"
+        );
+        let text = splat::content::formats::convert("World.md", &text).unwrap();
+        std::fs::write(d.root.join("campaigns/emberfall/Wren.md"), text).unwrap();
+        d.app_mut().lookup.refresh();
+        d.settle();
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "Ferry Watch");
+        d.click("Create session");
+        d.expect("Ferry Watch");
+        write_note(d);
+        d.replace_editor_text(
+            "The ferry crosses the inner sea twice each day. On the way back, ask [[Wren]] \
+             about the rope, the toll at the old mill, and the bells that ring at dusk.\n",
+        );
+        d.press_ctrl(Key::S);
+        d.expect("Notes saved");
+        read_note(d);
+        let reached = d.tab_to(LINK);
+        let before = !d.visible_text(NOTE_TEXT);
+        // Lookup opens a document reader beside the page, without taking focus.
+        d.app_mut().lookup.open_name("Wren");
+        d.settle();
+        d.observe(
+            "iter-17-A-L1-sessions-focus",
+            reached
+                && before
+                && d.visible_text(NOTE_TEXT)
+                && d.focused_name().as_deref() == Some(LINK),
+            format!(
+                "Focus stays on the Sessions link when Lookup opens Wren beside it: {:?}",
+                d.focused_name()
+            ),
+        );
+        // Lookup's written-note card shows the session note in compact rows.
+        d.app_mut().lookup.search_for("toll at the old mill");
+        d.settle();
+        d.click_containing("Ferry Watch · Session note");
+        d.expect("Open this session");
+        // The card's link, right of the Sessions page, and the card's next line of words.
+        let card_link = |d: &Driver<'_>| {
+            let nodes = d.nodes();
+            let page_right = nodes
+                .iter()
+                .find(|node| node.name == "New session")
+                .map(|node| node.rect.right())?;
+            let link = nodes
+                .iter()
+                .filter(|node| {
+                    node.name == LINK && node.role == egui::accesskit::Role::Link && node.in_view()
+                })
+                .find(|node| node.rect.left() > page_right)?
+                .rect;
+            let runs: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::TextRun && node.rect.left() > page_right
+                })
+                .map(|node| node.rect)
+                .collect();
+            // The card's lines just above and just below the link's line.
+            let above = runs
+                .iter()
+                .filter(|run| run.bottom() <= link.center().y && run.bottom() > link.top() - 30.0)
+                .max_by(|a, b| a.bottom().total_cmp(&b.bottom()))?;
+            let below = runs
+                .iter()
+                .filter(|run| run.top() >= link.center().y && run.top() < link.bottom() + 30.0)
+                .min_by(|a, b| a.top().total_cmp(&b.top()))?;
+            Some((link, *above, *below))
+        };
+        d.observe_both(
+            "iter-17-A-AD1-written-card",
+            "In Lookup's written-note card, Wren's target is XL square on its own line, clear of \
+             the lines above and below it",
+            |d| {
+                card_link(d).is_some_and(|(link, above, below)| {
+                    link.width() >= crate::design::XL
+                        && link.height() >= crate::design::XL
+                        && link.top() >= above.bottom() - 0.01
+                        && link.bottom() <= below.top() + 0.01
+                })
+            },
+        );
+        d.state("lookup-written-card-link", Sizes::Default);
     }
 }
 
