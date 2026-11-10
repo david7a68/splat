@@ -907,6 +907,11 @@ impl Run {
                     .blocked(nobody_present.then_some(NOBODY_PRESENT))
                     .show(ui)
                     .clicked();
+                // As the strip pairs Back to run with Next turn: one height, one small gap.
+                ui.add_space(design::S);
+                let roster_width = ui.max_rect().width();
+                self.add_to_fight(ui, roster_width, Density::Glance);
+                ui.add_space(design::S);
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let response = ui.label(
                         Type::Round
@@ -2747,6 +2752,30 @@ impl Run {
         self.panel_body(ui, index, self.panel);
     }
 
+    /// Opens Arrivals. It is beside the fight's own controls, not among the panel's tabs,
+    /// so that the DM finds it when something arrives.
+    /// It takes the height of the controls in its row.
+    fn add_to_fight(&mut self, ui: &mut egui::Ui, roster_width: f32, density: Density) {
+        let open = self.panel == Panel::Groups && !self.hide_panel;
+        // A narrow roster keeps its room for the turn's name.
+        let label = if roster_width < DOCK_ALL_WORDS_FROM {
+            "Add"
+        } else {
+            "Add to fight"
+        };
+        if Action::secondary(label)
+            .icon(icons::ADD)
+            .name("Add to fight")
+            .hint("Add an encounter group or a creature (Ctrl+G)")
+            .density(density)
+            .selected(open)
+            .show(ui)
+            .clicked()
+        {
+            self.show_arrivals();
+        }
+    }
+
     /// One row, with participant controls on the left and fight controls on the right.
     fn fight_panel_title(&self) -> &'static str {
         match self.panel {
@@ -2768,11 +2797,8 @@ impl Run {
         if reference.is_some() {
             participant.push((Panel::Record, "Correct"));
         }
-        let fight = [
-            (Panel::Log, "Log"),
-            (Panel::Encounter, "Prep"),
-            (Panel::Groups, "Arrivals"),
-        ];
+        // Arrivals has no tab. Add to fight, beside the fight's controls, opens it.
+        let fight = [(Panel::Log, "Log"), (Panel::Encounter, "Prep")];
         let width = |items: &[(Panel, &str)]| {
             items
                 .iter()
@@ -2802,11 +2828,6 @@ impl Run {
                     egui::Popup::menu(&button).show(|ui| {
                         for (panel, label) in fight {
                             let action = egui::Button::new(label).selected(self.panel == panel);
-                            let action = if panel == Panel::Groups {
-                                action.shortcut_text("Ctrl+G")
-                            } else {
-                                action
-                            };
                             if ui.add(action).clicked() {
                                 self.panel = panel;
                                 ui.close();
@@ -4025,6 +4046,8 @@ impl Run {
                         if roll.clicked() {
                             command = Some(Command::RollNpcs(default_roll));
                         }
+                        ui.add_space(design::XS);
+                        self.add_to_fight(ui, setup_width, Density::Read);
                     },
                 );
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
