@@ -225,11 +225,17 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
         ui.available_width(),
     );
     // A pointer target is at least 24 px tall, as the reader's other links are.
-    let (rect, response) = ui.allocate_exact_size(
+    let (rect, _) = ui.allocate_exact_size(
         egui::vec2(
             galley.size().x.max(24.0),
             galley.size().y.max(role.line()).max(24.0),
         ),
+        egui::Sense::hover(),
+    );
+    // An id from the link, so its result follows it when lines appear above it.
+    let response = ui.interact(
+        rect,
+        ui.id().with(("dice_link", link.destination(), text)),
         egui::Sense::click(),
     );
     response.widget_info(|| {
@@ -277,8 +283,10 @@ fn place(ctx: &egui::Context, id: Id, at: Pos2) -> Pos2 {
         at.x.min(screen.right() - size.x - design::S)
             .max(screen.left());
     let y = if at.y + size.y > screen.bottom() - design::S {
-        // Above the link: its line is just above `at`.
-        (at.y - Type::Body.line() - design::XS - size.y).max(screen.top())
+        // Above the link, clear of its whole line: `at` is a line below the pointer, which
+        // can be anywhere on a line of prose. The link stays free for its next roll.
+        let line = Type::Body.line().max(Type::Prose.line());
+        (at.y - 2.0 * line - design::XS - size.y).max(screen.top())
     } else {
         at.y
     };
@@ -447,13 +455,6 @@ impl Rolled {
         if self.flat != 0 {
             push(&format!(" {}", signed_spaced(self.flat)), false);
         }
-    }
-
-    /// `d20 13, 6 + 4` or `2d6+2 bludgeoning 3, 4 · 1d6 fire 5 + 2`.
-    pub fn parts(&self) -> String {
-        let mut out = String::new();
-        self.each_part(|text, _| out.push_str(text));
-        out
     }
 
     /// The parts with dropped dice struck through, in Small type.
@@ -664,22 +665,36 @@ pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) -> Result<Rolled, String> 
 }
 
 /// What the result beside a link can ask the run to do.
+/// What a held result beside a link can ask the run to do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     RollDamage,
-    Use,
+    RollSaves,
+    HalfMade,
 }
 
-/// The result shown beside its link.
+/// A call for a save, beside its DC: what it is and what can follow.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CallCard {
+    pub who: String,
+    pub label: String,
+    pub ability: String,
+    pub dc: i64,
+    pub targets: usize,
+    pub can_roll: bool,
+    pub can_half: bool,
+    pub damage: bool,
+}
+
+/// The result shown beside its link: a roll, or a call for a save.
 #[derive(Clone, Debug)]
 pub(crate) struct Shown {
-    pub rolled: Rolled,
+    pub rolled: Option<Rolled>,
+    pub call: Option<CallCard>,
     pub at: Pos2,
-    /// In a run whose side panel is hidden, the result carries the strip's actions and
-    /// stays open across a click on the roster.
-    pub actions: bool,
-    /// Why `Use` cannot be pressed now, if it cannot.
-    pub use_blocked: Option<&'static str>,
+    /// In a run, a result from a stat block holds the panel on its roller. It stays open
+    /// across clicks on the roster, until Escape, the next roll or Next turn.
+    pub held: bool,
     /// The selected row's AC beside an attack, such as `AC 15 Oren`.
     pub armor: Option<String>,
 }
@@ -740,7 +755,8 @@ pub(crate) fn result_lines(ui: &mut egui::Ui, rolled: &Rolled, armor: Option<&st
     }
 }
 
-/// The result beside its link, until Escape, a click elsewhere or the next roll.
+/// The result beside its link, until Escape, a click elsewhere or the next roll. A held
+/// result stays open across clicks elsewhere.
 pub(crate) fn show_popover(ctx: &egui::Context) -> Option<Action> {
     let shown = shown(ctx)?;
     let mut action = None;
@@ -751,59 +767,95 @@ pub(crate) fn show_popover(ctx: &egui::Context) -> Option<Action> {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(320.0);
                 ui.spacing_mut().item_spacing.y = design::XS;
-                result_lines(ui, &shown.rolled, shown.armor.as_deref());
-                if shown.actions {
-                    action = actions(ui, &shown.rolled, shown.use_blocked);
+                if let Some(rolled) = &shown.rolled {
+                    result_lines(ui, rolled, shown.armor.as_deref());
+                    if shown.held {
+                        action = roll_actions(ui, rolled);
+                    }
+                }
+                if let Some(call) = &shown.call {
+                    action = call_lines(ui, call);
                 }
             });
         });
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed())
         && !response.response.contains_pointer()
         && !response.response.hovered();
-    if pressed_outside && !shown.actions {
-        close_result(ctx);
-    }
-    if action == Some(Action::Use) {
+    if pressed_outside && !shown.held {
         close_result(ctx);
     }
     action
 }
 
-/// `Roll damage` after an attack, `Use` after damage or dice. Shared by the strip and the popover.
-pub(crate) fn actions(
-    ui: &mut egui::Ui,
-    rolled: &Rolled,
-    use_blocked: Option<&str>,
-) -> Option<Action> {
+/// `Roll damage` after an attack. Damage itself goes into Amount, so it has no action.
+fn roll_actions(ui: &mut egui::Ui, rolled: &Rolled) -> Option<Action> {
+    if !rolled.attack() || rolled.damage().is_empty() {
+        return None;
+    }
+    let word = if rolled.natural == Some(20) {
+        "Roll critical damage"
+    } else {
+        "Roll damage"
+    };
+    design::Action::secondary(word)
+        .density(design::Density::Read)
+        .hint("Roll this attack's damage into Amount. D also does it.")
+        .show(ui)
+        .clicked()
+        .then_some(Action::RollDamage)
+}
+
+/// A call's card: the save, how to choose targets, and the steps that can follow.
+fn call_lines(ui: &mut egui::Ui, call: &CallCard) -> Option<Action> {
+    let c = colors();
+    ui.label(
+        Type::Small
+            .rich(ui, format!("{} · {}", call.who, call.label))
+            .color(c.muted),
+    );
+    ui.label(
+        Type::Heading
+            .rich(ui, format!("DC {} {} save", call.dc, call.ability))
+            .color(c.text),
+    );
+    let targets = match call.targets {
+        0 => "Click a row to make it a target.".to_owned(),
+        1 => "1 target. Click more rows to add them.".to_owned(),
+        n => format!("{n} targets. Click a row to add or remove it."),
+    };
+    ui.add(egui::Label::new(Type::Small.rich(ui, targets).color(c.muted)).wrap());
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
-        if rolled.attack() && !rolled.damage().is_empty() {
-            let word = if rolled.natural == Some(20) {
-                "Roll critical damage"
-            } else {
-                "Roll damage"
-            };
-            if design::Action::secondary(word)
-                .density(design::Density::Read)
-                .hint("Roll this attack's damage. D also does it.")
-                .show(ui)
-                .clicked()
+        for (shown, word, hint, picked) in [
+            (
+                call.can_roll,
+                "Roll saves",
+                "Roll each creature target's save. Results show on their rows.",
+                Action::RollSaves,
+            ),
+            (
+                call.can_half,
+                "Half for those at or above DC",
+                "Mark the targets whose save is at or above the DC to take half.",
+                Action::HalfMade,
+            ),
+            (
+                call.damage && call.targets > 0,
+                "Roll damage",
+                "Roll the damage once for every target, into Amount. D also does it.",
+                Action::RollDamage,
+            ),
+        ] {
+            if shown
+                && design::Action::secondary(word)
+                    .density(design::Density::Read)
+                    .hint(hint)
+                    .show(ui)
+                    .clicked()
             {
-                action = Some(Action::RollDamage);
+                action = Some(picked);
             }
-        } else if rolled.usable() {
-            let word = format!("Use {}", rolled.total);
-            let clicked = design::Action::secondary(&word)
-                .density(design::Density::Read)
-                .hint("Put this total in Amount. T also does it.")
-                .blocked(use_blocked)
-                .show(ui)
-                .clicked();
-            if clicked && use_blocked.is_none() {
-                action = Some(Action::Use);
-            }
-            design::blocked_reason(ui, use_blocked);
         }
     });
     action
@@ -838,7 +890,6 @@ mod tests {
         assert_eq!(rolled.total, 17);
         assert_eq!(rolled.natural, Some(13));
         assert_eq!(rolled.headline(), "17 to hit");
-        assert_eq!(rolled.parts(), "d20 6, 13 + 4");
         assert_eq!(
             rolled.line(),
             "Bugbear Warrior 2, Grab: to hit 2d20kh1 + 4 with advantage: [6, 13] = 17."

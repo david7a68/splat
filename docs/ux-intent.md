@@ -594,12 +594,12 @@ reading the code, not from a test run.
 | T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line | world-facts | state | New |
 | T15.5 | The World page lists the open questions and the problems, and each opens its page | world-facts | state | New |
 | T16.1 | A creature's attack rolls from its stat block in 1 | run-rolls | cost | New |
-| T16.2 | A target's AC shows beside the attack total in 1 more, and the result stays | run-rolls | cost | New |
-| T16.3 | The attack's damage rolls and applies to that target in 3 more | run-rolls | cost | New |
-| T16.4 | A second Multiattack attack against the same target, with damage, in ≤ 6 | run-rolls | cost | New |
-| T16.5 | Three creatures save against an area effect, and its damage applies, in ≤ 9 | run-rolls | cost | New |
+| T16.2 | Choosing a target shows its AC beside the attack total in 1 more, and the attack's text stays | run-rolls | cost | New |
+| T16.3 | The attack's damage rolls into Amount and applies to that target in 2 more | run-rolls | cost | New |
+| T16.4 | A second Multiattack attack against the same target, with damage, in 3 | run-rolls | cost | New |
+| T16.5 | Two creatures save against an area effect, and its damage applies, in ≤ 7 | run-rolls | cost | New |
 | T16.7 | A bonus rolls with disadvantage by pointer only in 2 | run-rolls | cost | New |
-| T16.8 | After a pointer roll and target, D, T and Enter apply the damage in 3 keys | run-rolls | cost | New |
+| T16.8 | After a pointer roll and target, D and Enter apply the damage in 2 keys | run-rolls | cost | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

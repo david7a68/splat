@@ -212,7 +212,7 @@ const KEYS: [(&str, &str); 14] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
-    ("D", "Roll damage for the last attack"),
+    ("D", "Roll damage for the open attack or call"),
     ("T", "Use the last roll's total as the amount"),
     ("Ctrl+G", "Add to fight"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
@@ -421,9 +421,6 @@ impl Run {
             self.live_initiative = None;
             return;
         }
-        if self.call_escape(ui) {
-            return;
-        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -497,6 +494,7 @@ impl Run {
             self.run_command(self.amount_command(amount, make));
             self.amount.clear();
             self.clear_targets();
+            self.after_amount();
             self.follow_with_keyboard();
         }
         if conditions {
@@ -509,10 +507,10 @@ impl Run {
             (i.consume_key(plain, Key::D), i.consume_key(plain, Key::T))
         });
         if damage {
-            self.roll_strip_damage(None);
+            self.roll_damage(None);
         }
         if use_total {
-            self.use_strip_total();
+            self.use_last_total();
         }
     }
 
@@ -1547,8 +1545,12 @@ impl Run {
                     let selected = self.selected == index || self.also.contains(&index);
                     let p = &self.state.participants[index];
                     let sync = self.row_sync_word(index);
+                    let save = self.save_on_row(index);
                     let turn = TurnMark::of(index, current, next_up);
-                    let name = row_name(p, turn, sync);
+                    let mut name = row_name(p, turn, sync);
+                    if let Some((ability, total)) = &save {
+                        name.push_str(&format!(", {ability} save {total}"));
+                    }
                     let response = ui.push_id(&p.key, |ui| {
                         if self.live_initiative == Some(index) {
                             let (rect, _) = ui.allocate_exact_size(
@@ -1579,7 +1581,16 @@ impl Run {
                             let response = ui
                                 .scope_builder(egui::UiBuilder::new().max_rect(target), |ui| {
                                     design::row(ui, rect.height(), selected, &name, |ui, _| {
-                                        paint_row(ui, rect, p, turn, sync, scale, layout);
+                                        paint_row(
+                                            ui,
+                                            rect,
+                                            p,
+                                            turn,
+                                            sync,
+                                            scale,
+                                            layout,
+                                            save.as_ref(),
+                                        );
                                     })
                                 })
                                 .inner;
@@ -1591,7 +1602,16 @@ impl Run {
                                 selected,
                                 &name,
                                 |ui, rect| {
-                                    paint_row(ui, rect, p, turn, sync, scale, layout);
+                                    paint_row(
+                                        ui,
+                                        rect,
+                                        p,
+                                        turn,
+                                        sync,
+                                        scale,
+                                        layout,
+                                        save.as_ref(),
+                                    );
                                 },
                             );
                             let rect = response.rect;
@@ -1818,8 +1838,8 @@ impl Run {
             self.focus_amount = true;
         }
         match clicked {
-            Some((index, true)) => self.ctrl_click(index),
-            Some((index, false)) => self.select(index),
+            Some((index, true)) => self.toggle_target(index),
+            Some((index, false)) => self.row_click(index),
             None => {}
         }
         if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
@@ -1924,6 +1944,7 @@ impl Run {
         let c = colors();
         let index = self.selected;
         let mut command = None;
+        let mut use_total = false;
         let mut open_conditions = false;
         let mut open_side = false;
         let frame = egui::Frame::new()
@@ -2030,9 +2051,11 @@ impl Run {
                         open_conditions = true;
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        if narrow && let Some((total, line)) = self.dock_roll() {
-                            ui.label(Type::Strong.rich(ui, format!("= {total}")))
-                                .on_hover_text(line);
+                        if narrow
+                            && let Some((total, line)) = self.dock_roll()
+                            && dock_total(ui, total, &line, Type::Strong)
+                        {
+                            use_total = true;
                         }
                         // Beside the actions at the minimum window it gives up size, not letters.
                         let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui))
@@ -2071,8 +2094,12 @@ impl Run {
             if applied {
                 self.amount.clear();
                 self.clear_targets();
+                self.after_amount();
                 self.follow_with_keyboard();
             }
+        }
+        if use_total {
+            self.use_last_total();
         }
     }
 
@@ -2102,19 +2129,17 @@ impl Run {
     /// right to left: the result, then the button, then the field.
     fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
         ui.spacing_mut().item_spacing.x = design::XS;
+        let mut use_total = false;
         if !narrow {
             ui.allocate_ui_with_layout(
                 vec2(DICE_RESULT_WIDTH, Density::Read.control()),
                 Layout::left_to_right(Align::Center),
                 |ui| {
                     ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some((total, line)) = self.dock_roll() {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("= {total}"))
-                                .color(colors().text),
-                        )
-                        .on_hover_text(line);
+                    if let Some((total, line)) = self.dock_roll()
+                        && dock_total(ui, total, &line, Type::Heading)
+                    {
+                        use_total = true;
                     }
                 },
             );
@@ -2147,12 +2172,15 @@ impl Run {
             }
             self.follow_with_keyboard();
         }
+        if use_total {
+            self.use_last_total();
+        }
     }
 
-    /// The last roll's total beside the dice, only while the panel and its strip are hidden.
+    /// The last roll's total beside the dice, which puts it in Amount.
     fn dock_roll(&self) -> Option<(i64, String)> {
-        let strip = self.strip.as_ref().filter(|_| self.hide_panel)?;
-        Some((strip.rolled.total, strip.rolled.line()))
+        let last = self.last.as_ref()?;
+        Some((last.rolled.total, last.rolled.line()))
     }
 
     fn open_conditions_tab(&mut self) {
@@ -2889,16 +2917,17 @@ impl Run {
     // ---- Side panel -------------------------------------------------------------
 
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        self.strip_view(ui);
-        let index = self.selected;
+        // While a roll is open, its roller's stat block stays; the other tabs follow the row.
+        let index = if self.panel == Panel::Reference {
+            self.panel_row()
+        } else {
+            self.selected
+        };
         let p = &self.state.participants[index];
         let (successes, failures) = (p.successes, p.failures);
         let death_saves = p.shows_death_saves();
         let is_sheet = p.definition.fields.contains_key("splat_external");
-        let title = if matches!(
-            self.panel,
-            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
-        ) {
+        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
             self.fight_panel_title()
         } else {
             &p.name
@@ -2909,11 +2938,11 @@ impl Run {
         ));
         design::named(ui, &response, title);
         response.on_hover_text(title);
+        if self.panel == Panel::Reference && self.held_line(ui) {
+            self.release();
+        }
 
-        let participant_tab = !matches!(
-            self.panel,
-            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
-        );
+        let participant_tab = !matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups);
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
         self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
@@ -2956,7 +2985,6 @@ impl Run {
             Panel::Log => "This fight · Log",
             Panel::Encounter => "This fight · Prep",
             Panel::Groups => "This fight · Arrivals",
-            Panel::Call => "This fight · Call for a save",
             _ => "This fight",
         }
     }
@@ -3031,7 +3059,6 @@ impl Run {
             Panel::Keys => self.keys_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
             Panel::Groups => self.groups_tab(ui),
-            Panel::Call => self.call_tab(ui),
         }
     }
 
@@ -4985,10 +5012,7 @@ impl Run {
     }
 
     fn setup_panel(&mut self, ui: &mut egui::Ui) {
-        let title = if matches!(
-            self.panel,
-            Panel::Log | Panel::Encounter | Panel::Groups | Panel::Call
-        ) {
+        let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
             self.fight_panel_title()
         } else {
             &self.state.participants[self.selected].name
@@ -5018,7 +5042,6 @@ impl Run {
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
             Panel::Groups => self.groups_tab(ui),
-            Panel::Call => self.call_tab(ui),
         }
     }
 
@@ -5205,7 +5228,7 @@ impl Run {
                             )
                             .with_art(self.row_art(ui.ctx(), p));
                             design::row(ui, layout.height(scale), false, &name, |ui, rect| {
-                                paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
+                                paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout, None);
                             });
                         }
                     });
@@ -5840,6 +5863,21 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
 }
 
 /// Keep the copy suffix when a name needs fewer words.
+/// The last roll's total in the dock, `= 9`. A click puts it in Amount, as T does.
+fn dock_total(ui: &mut egui::Ui, total: i64, line: &str, role: Type) -> bool {
+    let words = format!("= {total}");
+    let response = ui.add(
+        egui::Label::new(role.rich(ui, &words).color(colors().text)).sense(egui::Sense::click()),
+    );
+    design::named(ui, &response, &format!("Use {total}"));
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response
+        .on_hover_text(format!("{line}\nClick to use {total} as the amount (T)."))
+        .clicked()
+}
+
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     let fitted = design::words_that_fit(ui, name, font, width);
     if fitted == name {
@@ -6614,6 +6652,8 @@ fn condition_links(
     opened
 }
 
+/// `save` is a call's result for this row, such as `DEX` and 19, shown where AC is.
+#[allow(clippy::too_many_arguments)]
 fn paint_row(
     ui: &egui::Ui,
     rect: Rect,
@@ -6622,6 +6662,7 @@ fn paint_row(
     sync: Option<SyncState>,
     scale: RunScale,
     layout: &RowLayout,
+    save: Option<&(String, i64)>,
 ) {
     let c = colors();
     let painter = ui.painter();
@@ -6718,21 +6759,27 @@ fn paint_row(
         text,
     );
     // AC, then temporary HP, then HP, directly after the name.
+    // During a call for a save, a target's save stands where its AC is: AC does not
+    // matter to a save, and the result sits beside the HP it will change.
     let ac_right = x + layout.ac_right;
+    let (value, label, strong) = match save {
+        Some((ability, total)) => (total.to_string(), ability.as_str(), true),
+        None => (display(p.armor_class), "AC", false),
+    };
     let left = design::number(
         painter,
         ac_right,
         line_y,
-        &display(p.armor_class),
+        &value,
         &numeral,
-        if p.present { c.muted } else { text },
+        if strong || !p.present { text } else { c.muted },
     );
     painter.text(
         pos2(left - 4.0, line_y + 1.0),
         Align2::RIGHT_CENTER,
-        "AC",
+        label,
         Type::Small.font(ui),
-        if current { c.muted } else { c.faint },
+        if current || strong { c.muted } else { c.faint },
     );
     if p.temporary_hp > 0 {
         let left = design::number(

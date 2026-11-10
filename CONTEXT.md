@@ -125,9 +125,8 @@ standalone or preview roll from its printed value. Structured data and run chang
 can add to it. A save DC link starts a call for a save and is never rolled itself.
 
 **Call for a save**:
-A list of targets that save against one DC during a run. Its ticks, totals and
-half-damage marks belong to the call until the DM uses its damage, which sets the
-run's targets for one Damage step.
+One DC that the run's selected rows save against during a run. Each rolled save
+shows on its row until the DM applies the damage, which ends the call.
 
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its

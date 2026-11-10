@@ -82,7 +82,7 @@ impl RollLink {
     }
 
     /// A Markdown link destination, inside `<…>`, so spaces are allowed.
-    fn destination(&self) -> String {
+    pub fn destination(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_default();
         let mut out = String::from(ROLL_LINK);
         for c in json.chars() {

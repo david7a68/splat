@@ -554,8 +554,10 @@ pub(crate) struct Run {
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
-    /// The last roll of this turn, above the panel. Undo keeps it; Next turn ends it.
-    strip: Option<rolling::Strip>,
+    /// The last roll of this turn. Undo keeps it; Next turn ends it.
+    last: Option<rolling::LastRoll>,
+    /// The roller whose open result holds the panel. Never saved.
+    held: Option<usize>,
     /// A call for a save, with its own targets. Never saved.
     call: Option<rolling::Call>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
@@ -652,8 +654,6 @@ enum Panel {
     Encounter,
     Groups,
     Keys,
-    /// A call for a save. Like Arrivals, it has no tab.
-    Call,
 }
 /// How an added group's log line starts. The group panel shows that line while it is the last.
 const GROUP_ADDED: &str = "Encounter group ";
@@ -867,7 +867,8 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: 0,
-            strip: None,
+            last: None,
+            held: None,
             call: None,
             amount: String::new(),
             condition: String::new(),
@@ -1369,7 +1370,7 @@ impl Run {
             crate::rolls::roll("DM", &link, crate::rolls::Mode::Normal, 0, random)
         })?;
         if matches!(self.state.phase, Phase::Running) {
-            self.strip = Some(rolling::Strip {
+            self.last = Some(rolling::LastRoll {
                 roller: None,
                 rolled,
             });
@@ -3456,7 +3457,8 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
-            strip: None,
+            last: None,
+            held: None,
             call: None,
             amount: String::new(),
             condition: String::new(),

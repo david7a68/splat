@@ -1913,10 +1913,10 @@ impl Splat {
                 Some(run) => run.roll_link(ask),
                 None => rolls::preview(ctx, &ask).map(|rolled| {
                     Some(rolls::Shown {
-                        rolled,
+                        rolled: Some(rolled),
+                        call: None,
                         at,
-                        actions: false,
-                        use_blocked: None,
+                        held: false,
                         armor: None,
                     })
                 }),
@@ -1926,14 +1926,15 @@ impl Splat {
                 Ok(None) | Err(_) => rolls::close_result(ctx),
             }
         }
-        if let Some(shown) = rolls::shown(ctx).filter(|_| in_run)
-            && let Some(run) = self.encounters.run_mut()
-        {
-            // The selection moves under an open result: its AC and Use follow it.
-            if shown.actions && !run.has_strip() {
-                rolls::close_result(ctx);
-            } else {
-                rolls::show_result(ctx, run.refreshed(&shown));
+        if in_run && let Some(run) = self.encounters.run_mut() {
+            match rolls::shown(ctx) {
+                // The run let go: Show, Next turn, or damage that ended a call.
+                Some(shown) if shown.held && !run.holding() => rolls::close_result(ctx),
+                // The selection and the call change under an open result.
+                Some(shown) => rolls::show_result(ctx, run.refreshed(&shown)),
+                // Escape or a click closed it: the panel follows the selection again.
+                None if run.holding() => run.release(),
+                None => {}
             }
         }
         rolls::show_menu(ctx);

@@ -442,8 +442,13 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Colo
 /// A right-aligned number in the attribute table that rolls.
 fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
     let c = colors();
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::click());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
+    // An id from the link, so its result follows it when lines appear above the table.
+    let response = ui.interact(
+        rect,
+        ui.id().with(("dice_cell", link.destination())),
+        egui::Sense::click(),
+    );
     let color = if response.hovered() {
         c.focus
     } else {

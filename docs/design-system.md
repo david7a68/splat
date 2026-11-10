@@ -856,25 +856,25 @@ Skills row with links drops its label to the links' line. A click rolls, Shift+c
 Ctrl+click with disadvantage, and right-click opens a menu of plain quiet items with the same choices and
 critical damage. Each result opens beside its link, below it, or above it when there is no room: the roller and
 feature in muted Small, the total and its words in Heading, then each die in Small with a dropped die struck
-through. It follows its link when the page moves, such as when the strip opens above the stat block, so it
-never covers the link. `Natural 20` and `Natural 1` appear in words, with an icon, only on attacks and death
-saves. Escape or a click elsewhere closes it. Outside a run that is all a roll does.
+through. It follows its link when the page moves, and when it opens above a link it ends clear of the link's
+whole line, so the link stays free for its next roll. `Natural 20` and `Natural 1` appear in words, with an icon,
+only on attacks and death saves. Escape or a click elsewhere closes it. Outside a run that is all a roll does.
 
-In live play the last roll also stays in a two-line strip at the top of the side panel, above the title and tabs:
-the total in Strong, then `· AC 15 Oren` beside an attack, then, after an `L` gap, the roller, feature and dice in
-muted Small, which drop dice first, then the feature. Line two is a `Read` control tall even when empty, so the
-panel never moves. It has one action, `Roll damage` or `Use N`, and `Back to <roller>` when the roller is neither
-selected nor the current creature; its name shortens as dock names do. `Use` on a feature's damage is blocked
-while only the roller is selected, and says `Choose a target first.` beside it in muted Small. Undo keeps the strip;
-Next turn clears it. With the panel hidden, the dock keeps its `= N` and the result beside a link carries the
-strip's actions. D rolls the strip's damage and T uses its total.
+In live play a roll from a stat block or sheet holds the panel on its roller while its result is open. A click on a
+roster row selects the target for the dock, and the Stat block tab stays on the roller; Conditions and Correct
+follow the selected row. Below the title, muted Small says `Held on <roller> while its roll is open ·` with a
+Small link `Show <selected>`, which closes the result. Escape, Next turn and a click on the roller's own row also
+end the hold. The held result shows `AC 13 Cinder Wolf 2` beside an attack total and offers `Roll damage`, or
+`Roll critical damage` after a natural 20. Damage goes straight into Amount when a target other than the roller is
+selected; Enter applies it. The dock shows the last total as `= N` beside the dice; a click on it, or T, puts it
+in Amount. D rolls damage for the open attack or call.
 
-A save DC opens the call view in the side panel, like Arrivals, titled `This fight · Call for a save`. It shows
-the feature's paragraph, then one tick box per present participant except the caster, with Roll or a typed total,
-the total against the DC in words, and a Half toggle. Names, results and Half are columns when every row fits on
-one line; otherwise rows wrap. `Roll all creatures`, `Half for those at or above DC`, the damage link and primary
-`Use N on K targets` follow. A blocked Use says why beside it. Ctrl+click on a roster row ticks it in the call. Escape and
-the other tabs leave it; the same DC reopens it with its ticks until Next turn.
+A save DC opens a call card beside the link, held in the same way: who and which feature in muted Small, `DC 12
+Dexterity save` in Heading, then how many targets. Targets are roster rows: a click adds or removes one, and the
+caster's row does nothing. Each rolled save stands in the row's AC cell, `DEX 19`, in text colour with its label
+muted. The card offers `Roll saves`, `Half for those at or above DC`, which sets the rows' half marks, and `Roll
+damage` once there is a target. Damage fills Amount for every target; a lone half target takes the halved number.
+Applying it ends the call.
 
 ### Arrivals
 

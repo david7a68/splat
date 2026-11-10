@@ -11646,8 +11646,9 @@ pub mod remove_package_in_use {
     }
 }
 
-/// T16: roll from a stat block during a run. An attack, a target, its damage and Use, then a
-/// call for a save with its own targets, and a preview roll in the Library.
+/// T16: roll from a stat block during a run. An open roll holds the panel on its roller, so the
+/// target is chosen on the roster and the attack's text stays. Damage fills Amount. A save DC
+/// starts a call whose targets are roster rows, with each save shown where the row's AC is.
 pub mod run_rolls {
     use super::*;
     const ATTACKER: &str = "Cinder Wolf 1";
@@ -11656,9 +11657,9 @@ pub mod run_rolls {
     const ATTACK_BONUS: &str = "+4";
     const SAVE_DC: &str = "DC 12";
     const ROLL_DAMAGE: &str = "Roll damage";
-    const ROLL_ALL: &str = "Roll all creatures";
+    const ROLL_SAVES: &str = "Roll saves";
     const HALF_MADE: &str = "Half for those at or above DC";
-    const TARGETS: &str = "Tick each target";
+    const HELD: &str = "Held on ";
 
     fn plain(d: &mut Driver<'_>, words: &str) {
         d.click_words(words, egui::Modifiers::NONE, egui::PointerButton::Primary);
@@ -11674,80 +11675,90 @@ pub mod run_rolls {
         d.expect("to hit");
         d.goal_within("T16.1", "roll the current creature's attack", 1);
         d.state("attack-rolled", Sizes::All);
-        d.press(Key::Escape);
 
         d.begin_task();
         d.click_row(TARGET);
         d.observe(
             "T16.2",
-            d.has_containing(&format!("AC 13 {TARGET}")) && d.has_containing("to hit"),
-            "After a target is chosen, the strip keeps the attack and shows the target's AC",
+            d.has_containing(&format!("AC 13 {TARGET}"))
+                && d.has_containing(HELD)
+                && d.visible_text("Bite."),
+            "After a target is chosen, the result shows its AC and the panel keeps the attack",
         );
-        d.goal_within("T16.2", "choose a target and see its AC", 1);
+        d.goal_within(
+            "T16.2",
+            "choose a target and see its AC beside the attack",
+            1,
+        );
         d.state("attack-and-target", Sizes::All);
 
         d.begin_task();
         let before = d.row_hp(TARGET);
         d.click(ROLL_DAMAGE);
         d.state("damage-rolled", Sizes::All);
-        d.click_starting("Use ");
         d.press(Key::Enter);
         let after = d.row_hp(TARGET);
         d.observe(
             "T16.3",
             before != after,
-            format!("The rolled damage applies to the target: {before:?} then {after:?}"),
+            format!("The rolled damage fills Amount and applies to the target: {before:?} then {after:?}"),
         );
-        d.goal_within("T16.3", "roll the damage and apply it to the target", 3);
+        d.goal_within("T16.3", "roll the damage and apply it to the target", 2);
         d.state("damage-applied", Sizes::Default);
 
-        // The next attack of a Multiattack starts from the strip.
+        // The next attack of a Multiattack starts from the same text, still in view.
         d.begin_task();
-        d.click_starting("Back to ");
         plain(d, ATTACK_BONUS);
-        d.click_row(TARGET);
         d.click(ROLL_DAMAGE);
-        d.click_starting("Use ");
         d.press(Key::Enter);
-        d.goal_within("T16.4", "make a second attack against the same target", 6);
+        d.goal_within("T16.4", "make a second attack against the same target", 3);
 
-        // After a pointer roll and target, the keyboard finishes the attack: D, T, Enter.
-        d.click_starting("Back to ");
+        // The keyboard finishes an attack: D, then Enter.
         plain(d, ATTACK_BONUS);
-        d.click_row(TARGET);
         let before = d.row_hp(TARGET);
         d.begin_task();
         d.press(Key::D);
-        d.press(Key::T);
         d.press(Key::Enter);
         let after = d.row_hp(TARGET);
         d.observe(
             "T16.8",
             before != after,
-            format!("D, T and Enter apply the attack's damage: {before:?} then {after:?}"),
+            format!("D and Enter apply the attack's damage: {before:?} then {after:?}"),
         );
-        d.goal_within("T16.8", "roll, use and apply damage by keyboard", 3);
+        d.goal_within("T16.8", "roll and apply damage by keyboard", 2);
 
-        // A call for a save, with its own targets.
+        // Escape closes the result, and the panel follows the selection again.
+        d.press(Key::Escape);
+        d.observe(
+            "T16.2",
+            !d.has_containing(HELD),
+            "Closing the result lets the panel follow the selected row",
+        );
+
+        // A call for a save, with its targets on the roster.
         d.click_row(CASTER);
         d.begin_task();
         plain(d, SAVE_DC);
-        d.expect(TARGETS);
+        d.expect("Click a row to make it a target.");
         d.state("call-open", Sizes::All);
-        d.click_below(TARGETS, ATTACKER);
-        d.click_below(TARGETS, TARGET);
-        d.click(ROLL_ALL);
+        d.click_row(ATTACKER);
+        d.click_row(TARGET);
+        d.click(ROLL_SAVES);
+        d.observe(
+            "T16.5",
+            d.has_containing(&format!("{ATTACKER},")) && d.has_containing(", DEX save "),
+            "Each target's save shows on its row, and the panel keeps the caster's text",
+        );
         d.state("call-saves-rolled", Sizes::All);
         if d.has(HALF_MADE) {
             d.click(HALF_MADE);
         }
-        d.click_containing("Ember Burst damage");
-        d.click_starting("Use ");
+        d.click(ROLL_DAMAGE);
         d.press(Key::Enter);
         d.goal_within(
             "T16.5",
-            "call a save from three creatures and apply the damage",
-            9,
+            "call a save from two creatures and apply the damage",
+            7,
         );
         d.state("call-applied", Sizes::Default);
 

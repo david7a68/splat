@@ -1,24 +1,25 @@
-//! Rolls from dice links during a run: the roll strip above the panel, its follow-ups, and
-//! calls for a save. A roll changes no participant. It goes to the Log, and Undo keeps it.
-use super::{Panel, Phase, Run};
-use crate::design::{self, Action, Density, Type, colors};
+//! Rolls from dice links during a run. A roll changes no participant: it goes to the Log, and
+//! Undo keeps it. A roll from a stat block holds the panel on its roller while its result is
+//! open, so a click on a target's row chooses the target without hiding the attack's text.
+//! A save DC starts a call: rows chosen on the roster save, and their results show on them.
+use super::{Phase, Run};
+use crate::design::{self, Type, colors};
 use crate::rolls::{self, Ask, Mode, Rolled, Shown};
-use eframe::egui::{self, Align, Layout};
+use eframe::egui;
 use splat::content::Entry;
-use splat::content::dice_text::{self, D20, DamagePart, RollLink};
+use splat::content::dice_text::{D20, DamagePart, RollLink};
 use splat::execution::dice::Random;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-/// The last roll of this turn, above the panel's tabs. It belongs to its roller, not to the
-/// selected row, so it stays when the DM chooses a target.
+/// The last roll of this turn. It belongs to its roller, not to the selected row.
 #[derive(Clone, Debug)]
-pub(super) struct Strip {
+pub(super) struct LastRoll {
     /// The row that rolled. A roll from Lookup or the dice field has none.
     pub roller: Option<usize>,
     pub rolled: Rolled,
 }
 
-/// A call for a save: its own targets, until `Use` puts them in the run's selection.
+/// A call for a save. Its targets are the run's own selection; its results are by row.
 #[derive(Clone, Debug)]
 pub(super) struct Call {
     pub caster: Option<usize>,
@@ -26,54 +27,17 @@ pub(super) struct Call {
     pub label: String,
     pub ability: String,
     pub dc: i64,
+    /// True when the feature's text says a success takes half damage.
     pub half: bool,
     pub damage: Vec<DamagePart>,
-    /// The feature's whole paragraph, so its failure and success can be read.
-    pub paragraph: Option<String>,
-    pub rows: BTreeMap<usize, CallRow>,
-}
-
-impl Call {
-    /// Tick a row, or take its tick away.
-    fn tick(&mut self, row: usize) {
-        if self.rows.remove(&row).is_none() {
-            self.rows.insert(row, CallRow::default());
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub(super) struct CallRow {
-    pub total: Option<i64>,
-    /// A player's own roll, as typed.
-    pub typed: String,
-    pub half: bool,
+    /// Each rolled save, by row.
+    pub totals: BTreeMap<usize, i64>,
+    /// Rows that take half. One target has no run half mark, so the call keeps them too.
+    pub halves: BTreeSet<usize>,
 }
 
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
-
-/// The width of a player's typed save in a call row.
-const TYPED_WIDTH: f32 = 52.0;
-
-/// A call row's word for a save total against the DC.
-fn verdict(total: i64, dc: i64) -> &'static str {
-    if total >= dc {
-        "At or above DC"
-    } else {
-        "Below DC"
-    }
-}
-
-/// A call row's button that rolls a save. A player's sheet is rolled for them.
-fn roll_word(character: bool) -> &'static str {
-    if character { "Roll for them" } else { "Roll" }
-}
-
-/// A linked player sheet rolls its own saves.
-fn character(entry: &Entry) -> bool {
-    entry.fields.contains_key("splat_external")
-}
 
 /// A save bonus from a stat block: its Save value, or else its ability modifier.
 fn save_bonus(entry: &Entry, ability: &str) -> Option<i64> {
@@ -90,28 +54,8 @@ fn save_bonus(entry: &Entry, ability: &str) -> Option<i64> {
         .or_else(|| stat(&ability).map(|score| (score - 10).div_euclid(2)))
 }
 
-/// The paragraph whose run-in title starts with `label`, from a stat block's text.
-fn feature_paragraph(entry: &Entry, label: &str) -> Option<String> {
-    if label.is_empty() {
-        return None;
-    }
-    entry
-        .body
-        .split("\n\n")
-        .map(str::trim)
-        .find(|paragraph| {
-            design::reader::run_in_title(paragraph).is_some_and(|title| {
-                title == label
-                    || title
-                        .strip_prefix(label)
-                        .is_some_and(|rest| rest.starts_with(" ("))
-            })
-        })
-        .map(str::to_owned)
-}
-
 impl Run {
-    /// Make the roll a dice link asked for. A save DC opens a call for the save instead.
+    /// Make the roll a dice link asked for. A save DC starts a call for the save instead.
     /// Returns the result to show beside the link.
     pub(crate) fn roll_link(&mut self, ask: Ask) -> Result<Option<Shown>, String> {
         let result = self.try_roll_link(ask);
@@ -125,6 +69,7 @@ impl Run {
         if self.ended() {
             return Err(ENDED.into());
         }
+        let live = matches!(self.state.phase, Phase::Running);
         let roller = self.existing(ask.roller);
         let who = match roller {
             Some(row) => self.state.participants[row].name.clone(),
@@ -138,10 +83,11 @@ impl Run {
             damage,
         } = ask.link
         {
-            let paragraph = roller.and_then(|row| {
-                feature_paragraph(&self.state.participants[row].definition, &label)
-            });
-            self.open_call(Call {
+            // Targets and their results live on the roster, which setup does not have yet.
+            if !live {
+                return Ok(None);
+            }
+            self.call = Some(Call {
                 caster: roller,
                 who,
                 label,
@@ -149,10 +95,16 @@ impl Run {
                 dc,
                 half,
                 damage,
-                paragraph,
-                rows: BTreeMap::new(),
+                totals: BTreeMap::new(),
+                halves: BTreeSet::new(),
             });
-            return Ok(None);
+            self.also.clear();
+            self.halved.clear();
+            if let Some(row) = roller {
+                self.select(row);
+            }
+            self.held = roller;
+            return Ok(self.call_shown(ask.at));
         }
         let change = self.change(roller, &ask.link);
         let rolled =
@@ -204,21 +156,29 @@ impl Run {
         Ok(rolled)
     }
 
+    /// Keep the roll, hold the panel on its roller, and put damage in Amount when it has a
+    /// target that is not the roller.
     fn after_roll(&mut self, roller: Option<usize>, rolled: Rolled, at: egui::Pos2) -> Shown {
         let live = matches!(self.state.phase, Phase::Running);
         if live {
-            self.strip = Some(Strip {
+            self.last = Some(LastRoll {
                 roller,
                 rolled: rolled.clone(),
             });
-            // The run's keys work again, so D, T and Enter can follow.
+            if roller.is_some() {
+                self.held = roller;
+            }
+            if rolled.feature_damage() && self.use_blocked(roller).is_none() {
+                self.use_last_total();
+            }
+            // The run's keys work again, so D and Enter can follow.
             self.follow_with_keyboard();
         }
         Shown {
             armor: self.armor_words(roller, &rolled),
-            use_blocked: self.use_blocked(roller, &rolled),
-            actions: live && self.hide_panel,
-            rolled,
+            held: live && roller.is_some(),
+            rolled: Some(rolled),
+            call: None,
             at,
         }
     }
@@ -232,32 +192,68 @@ impl Run {
         Some(format!("AC {} {}", p.armor_class?, p.name))
     }
 
-    /// `Use` must not put a feature's damage on the creature that dealt it by mistake.
-    fn use_blocked(&self, roller: Option<usize>, rolled: &Rolled) -> Option<&'static str> {
-        (rolled.feature_damage() && roller == Some(self.selected) && self.also.is_empty())
-            .then_some("Choose a target first.")
+    /// Damage must not land on the creature that dealt it by mistake.
+    fn use_blocked(&self, roller: Option<usize>) -> Option<&'static str> {
+        (roller == Some(self.selected) && self.also.is_empty()).then_some("Choose a target first.")
     }
 
-    /// `Roll damage` after an attack: the same feature's damage, by the roller's values.
-    /// A natural 20 rolls it as a critical hit.
-    /// `at` places the result beside its link, when the side panel is hidden.
-    pub(super) fn roll_strip_damage(&mut self, at: Option<egui::Pos2>) -> Option<Shown> {
-        let strip = self.strip.as_ref()?;
-        let attack = &strip.rolled;
-        if !attack.attack() || attack.damage().is_empty() {
+    /// The panel's participant: the roller while its roll is open, or else the selected row.
+    pub(super) fn panel_row(&self) -> usize {
+        match self.held {
+            Some(row) if row < self.state.participants.len() => row,
+            _ => self.selected,
+        }
+    }
+
+    /// True while a roll or a call holds the panel.
+    pub(crate) fn holding(&self) -> bool {
+        self.held.is_some() || self.call.is_some()
+    }
+
+    /// The result beside the link has closed: the panel follows the selection again.
+    pub(crate) fn release(&mut self) {
+        self.held = None;
+        self.call = None;
+    }
+
+    /// `Roll damage` after an attack, or the call's damage. A natural 20 rolls it as a
+    /// critical hit. Damage with a target goes into Amount.
+    pub(super) fn roll_damage(&mut self, at: Option<egui::Pos2>) -> Option<Shown> {
+        let (link, mode, roller, who) = if let Some(call) = &self.call {
+            (
+                RollLink::Damage {
+                    label: call.label.clone(),
+                    parts: call.damage.clone(),
+                },
+                Mode::Normal,
+                call.caster,
+                call.who.clone(),
+            )
+        } else {
+            let last = self.last.as_ref()?;
+            let attack = &last.rolled;
+            if !attack.attack() {
+                return None;
+            }
+            let mode = if attack.natural == Some(20) {
+                Mode::Critical
+            } else {
+                Mode::Normal
+            };
+            (
+                RollLink::Damage {
+                    label: attack.feature().unwrap_or_default().to_owned(),
+                    parts: attack.damage().to_vec(),
+                },
+                mode,
+                last.roller,
+                attack.who.clone(),
+            )
+        };
+        if matches!(&link, RollLink::Damage { parts, .. } if parts.is_empty()) {
             return None;
         }
-        let link = RollLink::Damage {
-            label: attack.feature().unwrap_or_default().to_owned(),
-            parts: attack.damage().to_vec(),
-        };
-        let mode = if attack.natural == Some(20) {
-            Mode::Critical
-        } else {
-            Mode::Normal
-        };
-        let who = attack.who.clone();
-        let roller = self.existing(strip.roller);
+        let roller = self.existing(roller);
         let change = self.change(roller, &link);
         match self.record(|random| rolls::roll(&who, &link, mode, change, random)) {
             Ok(rolled) => {
@@ -271,573 +267,243 @@ impl Run {
         }
     }
 
-    /// `Use`: put the strip's total in Amount, for the selected targets.
-    pub(super) fn use_strip_total(&mut self) {
-        let Some(strip) = &self.strip else {
+    /// `Use`: put the last total in Amount, for the selected targets. In a call, one target
+    /// that takes half takes the halved number.
+    pub(super) fn use_last_total(&mut self) {
+        let Some(last) = &self.last else {
             return;
         };
-        if !strip.rolled.usable() || self.use_blocked(strip.roller, &strip.rolled).is_some() {
+        if !last.rolled.usable()
+            || (last.rolled.feature_damage() && self.use_blocked(last.roller).is_some())
+        {
             return;
         }
-        self.amount = strip.rolled.total.max(0).to_string();
+        let total = last.rolled.total.max(0);
+        let half = self.also.is_empty()
+            && self
+                .call
+                .as_ref()
+                .is_some_and(|call| call.halves.contains(&self.selected));
+        self.amount = if half { total / 2 } else { total }.to_string();
         self.focus_amount = true;
     }
 
-    /// What a result beside a link asked for, with the side panel hidden.
+    /// What a result beside a link asked for.
     pub(crate) fn rolled_action(&mut self, action: rolls::Action, at: egui::Pos2) -> Option<Shown> {
         match action {
-            rolls::Action::RollDamage => self.roll_strip_damage(Some(at)),
-            rolls::Action::Use => {
-                self.use_strip_total();
-                None
+            rolls::Action::RollDamage => self.roll_damage(Some(at)),
+            rolls::Action::RollSaves => {
+                self.roll_saves();
+                self.call_shown(at)
+            }
+            rolls::Action::HalfMade => {
+                self.half_made();
+                self.call_shown(at)
             }
         }
     }
 
-    pub(crate) fn has_strip(&self) -> bool {
-        self.strip.is_some()
-    }
-
-    /// The strip's result again, as the selection has changed since the roll.
+    /// The result beside its link again, as the selection and the call change under it.
     pub(crate) fn refreshed(&self, shown: &Shown) -> Shown {
-        let roller = self.strip.as_ref().and_then(|strip| strip.roller);
+        if shown.call.is_some() {
+            return self.call_shown(shown.at).unwrap_or_else(|| shown.clone());
+        }
+        let roller = self.last.as_ref().and_then(|last| last.roller);
+        // A held result follows the run's last roll, such as damage rolled with D.
+        let rolled = match &self.last {
+            Some(last) if shown.held => Some(last.rolled.clone()),
+            _ => shown.rolled.clone(),
+        };
         Shown {
-            armor: self.armor_words(roller, &shown.rolled),
-            use_blocked: self.use_blocked(roller, &shown.rolled),
+            armor: rolled
+                .as_ref()
+                .and_then(|rolled| self.armor_words(roller, rolled)),
+            rolled,
             ..shown.clone()
         }
     }
 
-    /// Two lines above the panel's tabs: the last roll, then what can follow it.
-    pub(super) fn strip_view(&mut self, ui: &mut egui::Ui) {
-        let Some(strip) = self.strip.as_ref() else {
-            return;
-        };
-        let c = colors();
-        let rolled = &strip.rolled;
-        let roller = self.existing(strip.roller);
-        ui.spacing_mut().item_spacing.y = design::XS;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = design::S;
-            let headline = ui.label(Type::Strong.rich(ui, rolled.headline()).color(c.text));
-            design::named(ui, &headline, &rolled.line());
-            if let Some(armor) = self.armor_words(roller, rolled) {
-                ui.label(Type::Body.rich(ui, format!("· {armor}")).color(c.text));
-            }
-            if let Some(words) = rolled.natural_words() {
-                ui.label(
-                    Type::Body
-                        .rich(ui, format!("{} {words}", design::icons::INFO))
-                        .color(c.text),
-                );
-            }
-            // A wider gap before who rolled, so the target's name never runs into the roller's.
-            ui.add_space(design::S);
-            // The dice go first, then the feature; the roller's name stays.
-            let name = rolled.name();
-            let mut full = format!("{name} · {}", rolled.parts());
-            if let Some(words) = rolled.changed_words() {
-                full.push_str(&format!(" · {words}"));
-            }
-            let font = Type::Small.font(ui);
-            let room = ui.available_width();
-            let context = [full.as_str(), name.as_str(), rolled.who.as_str()]
-                .into_iter()
-                .find(|words| design::number_width(ui, words, &font) <= room)
-                .map(str::to_owned);
-            if let Some(context) = context {
-                ui.label(Type::Small.rich(ui, context).color(c.muted))
-                    .on_hover_text(rolled.line());
-            }
-        });
-        let mut damage = false;
-        let mut use_total = false;
-        let mut back = None;
-        ui.horizontal(|ui| {
-            // The strip keeps two lines with or without actions, so the panel never moves.
-            ui.set_min_height(Density::Read.control());
-            ui.spacing_mut().item_spacing.x = design::S;
-            if self.call.is_none() || self.panel != Panel::Call {
-                match rolls::actions(ui, rolled, self.use_blocked(roller, rolled)) {
-                    Some(rolls::Action::RollDamage) => damage = true,
-                    Some(rolls::Action::Use) => use_total = true,
-                    None => {}
-                }
-            }
-            if let Some(row) = roller
-                && Some(row) != self.current()
-                && row != self.selected
-            {
-                let name = &self.state.participants[row].name;
-                let words = format!("Back to {name}");
-                // After the buttons, in the room they leave, so it never passes the edge.
-                let font = Type::Body.font(ui);
-                let room =
-                    ui.available_width() - design::number_width(ui, "Back to ", &font) - design::S;
-                let shown = format!("Back to {}", super::view::dock_name(ui, name, &font, room));
-                let response = design::link(ui, &shown);
-                design::named(ui, &response, &words);
-                if response
-                    .on_hover_text(format!("Select {name} again, for its next roll."))
-                    .clicked()
-                {
-                    back = Some(row);
-                }
-            }
-        });
-        if damage {
-            self.roll_strip_damage(None);
-        }
-        if use_total {
-            self.use_strip_total();
-        }
-        if let Some(row) = back {
-            self.select(row);
-            self.panel = Panel::Reference;
-        }
-        design::rule(ui);
+    /// The call's card beside its DC: how many targets, and what can follow.
+    fn call_shown(&self, at: egui::Pos2) -> Option<Shown> {
+        let call = self.call.as_ref()?;
+        let targets = self.call_targets();
+        Some(Shown {
+            rolled: None,
+            call: Some(rolls::CallCard {
+                who: call.who.clone(),
+                label: call.label.clone(),
+                ability: call.ability.clone(),
+                dc: call.dc,
+                targets: targets.len(),
+                can_roll: !self.unrolled_creatures().is_empty(),
+                can_half: call.half
+                    && targets
+                        .iter()
+                        .any(|row| call.totals.get(row).is_some_and(|total| *total >= call.dc)),
+                damage: !call.damage.is_empty(),
+            }),
+            armor: None,
+            held: true,
+            at,
+        })
     }
 
-    fn open_call(&mut self, call: Call) {
-        // The same DC opens the same call again, with its ticks.
-        let same = self.call.as_ref().is_some_and(|open| {
-            open.caster == call.caster
-                && open.label == call.label
-                && open.dc == call.dc
-                && open.ability == call.ability
-        });
-        if !same {
-            self.call = Some(call);
-            self.also.clear();
-            self.halved.clear();
-        }
-        self.panel = Panel::Call;
-        self.close_lookup = true;
-    }
-
-    /// Ctrl+click adds a target: to the open call, or else to the run's amount.
-    pub(super) fn ctrl_click(&mut self, row: usize) {
-        if !self.call_toggle(row) {
-            self.toggle_target(row);
-        }
-    }
-
-    /// A Ctrl+click on a roster row while the call is open ticks that row in the call.
-    pub(super) fn call_toggle(&mut self, row: usize) -> bool {
-        let Some(call) = self.call.as_mut().filter(|_| self.panel == Panel::Call) else {
-            return false;
-        };
-        if Some(row) != call.caster {
-            call.tick(row);
-        }
-        true
-    }
-
-    /// The call's ticked creatures that have not saved yet and can roll here.
-    fn unrolled_creatures(&self, call: &Call) -> Vec<usize> {
-        call.rows
-            .iter()
-            .filter(|(row, entry)| {
-                let definition = &self.state.participants[**row].definition;
-                entry.total.is_none()
-                    && !character(definition)
-                    && save_bonus(definition, &call.ability).is_some()
-            })
-            .map(|(row, _)| *row)
+    /// The call's targets: the run's selection, without the caster.
+    fn call_targets(&self) -> Vec<usize> {
+        let caster = self.call.as_ref().and_then(|call| call.caster);
+        self.targets()
+            .into_iter()
+            .filter(|row| Some(*row) != caster)
             .collect()
     }
 
-    fn roll_save(&mut self, row: usize) {
+    /// Targets with a save bonus and no save yet. A linked sheet's player rolls their own.
+    fn unrolled_creatures(&self) -> Vec<usize> {
         let Some(call) = &self.call else {
-            return;
+            return Vec::new();
         };
-        let p = &self.state.participants[row];
-        let Some(bonus) = save_bonus(&p.definition, &call.ability) else {
-            return;
-        };
-        let link = RollLink::d20(D20::Save, bonus, call.ability.clone());
-        let name = p.name.clone();
-        match self.record(|random| rolls::roll(&name, &link, Mode::Normal, 0, random)) {
-            Ok(rolled) => {
-                if let Some(entry) = self.call.as_mut().and_then(|call| call.rows.get_mut(&row)) {
-                    entry.total = Some(rolled.total);
-                }
-            }
-            Err(error) => self.error = Some(error),
-        }
-    }
-
-    /// `Use 28 on 3 targets`: the call's ticks become the run's targets, then Damage applies.
-    fn use_call(&mut self, total: i64) {
-        let Some(call) = &self.call else {
-            return;
-        };
-        let rows: Vec<usize> = call.rows.keys().copied().collect();
-        let halved: Vec<usize> = call
-            .rows
-            .iter()
-            .filter(|(_, row)| row.half)
-            .map(|(at, _)| *at)
-            .collect();
-        let Some(&first) = rows.first() else {
-            return;
-        };
-        self.select(first);
-        if rows.len() == 1 {
-            // One target has no half set, so the halved number goes in Amount.
-            let amount = if halved.contains(&first) {
-                total / 2
-            } else {
-                total
-            };
-            self.amount = amount.max(0).to_string();
-        } else {
-            self.also = rows[1..].iter().copied().collect();
-            self.halved = halved.into_iter().collect();
-            self.amount = total.max(0).to_string();
-        }
-        self.focus_amount = true;
-    }
-
-    /// The call view: the feature, its targets with their saves, then the damage and `Use`.
-    pub(super) fn call_tab(&mut self, ui: &mut egui::Ui) {
-        let Some(call) = self.call.as_ref() else {
-            self.panel = Panel::Reference;
-            return;
-        };
-        let c = colors();
-        let mut close = false;
-        ui.horizontal(|ui| {
-            ui.label(
-                Type::Heading
-                    .rich(
-                        ui,
-                        format!("{} · DC {} {} save", call.label, call.dc, call.ability),
-                    )
-                    .color(c.text),
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if Action::quiet("Close")
-                    .density(Density::Read)
-                    .hint("Close the call. Its ticks stay until Next turn.")
-                    .show(ui)
-                    .clicked()
-                {
-                    close = true;
-                }
-            });
-        });
-        if close {
-            self.panel = Panel::Reference;
-            return;
-        }
-        let mut actions = Vec::new();
-        egui::ScrollArea::vertical()
-            .id_salt("run_call")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = design::XS;
-                if let Some(paragraph) = &call.paragraph {
-                    rolls::set_roller(ui.ctx(), call.caster);
-                    rolls::set_entry(ui.ctx(), &call.who);
-                    design::reader::measure(ui, |ui| {
-                        design::reader::source_prose(
-                            ui,
-                            &dice_text::with_links(paragraph, &call.label),
-                        );
-                    });
-                    rolls::set_roller(ui.ctx(), None);
-                }
-                ui.add_space(design::S);
-                design::group_heading(ui, "Targets", call.rows.len());
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Tick each target. Ctrl+click on a row also ticks it.")
-                        .color(c.muted),
-                );
-                let listed: Vec<usize> = self
-                    .state
-                    .order
-                    .iter()
-                    .copied()
-                    .filter(|&row| Some(row) != call.caster && self.state.participants[row].present)
-                    .collect();
-                // Name, result and Half are columns, so totals and toggles can be read down.
-                let columns = self.call_columns(ui, call, &listed);
-                for &row in &listed {
-                    let p = &self.state.participants[row];
-                    let ticked = call.rows.get(&row);
-                    let character = character(&p.definition);
-                    let bonus = save_bonus(&p.definition, &call.ability);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = design::S;
-                        let start = ui.cursor().min.x;
-                        let to_column = |ui: &mut egui::Ui, x: Option<f32>| {
-                            if let Some(x) = x {
-                                let gap = start + x - ui.cursor().min.x;
-                                if gap > 0.0 {
-                                    ui.add_space(gap);
-                                }
-                            }
-                        };
-                        let mut on = ticked.is_some();
-                        if ui.checkbox(&mut on, &p.name).changed() {
-                            actions.push(CallStep::Tick(row));
-                        }
-                        let Some(entry) = ticked else {
-                            return;
-                        };
-                        to_column(ui, columns.map(|(result, _)| result));
-                        if character {
-                            let mut typed = entry.typed.clone();
-                            let field = design::text_input(
-                                ui,
-                                &format!("Save of {}", p.name),
-                                &mut typed,
-                                "Total",
-                                TYPED_WIDTH,
-                            );
-                            if field.changed() {
-                                actions.push(CallStep::Typed(row, typed));
-                            }
-                        }
-                        if bonus.is_some()
-                            && entry.total.is_none()
-                            && Action::secondary(roll_word(character))
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        {
-                            actions.push(CallStep::Roll(row));
-                        }
-                        if let Some(total) = entry.total {
-                            ui.label(Type::Strong.rich(ui, total.to_string()).color(c.text));
-                            ui.label(Type::Small.rich(ui, verdict(total, call.dc)).color(c.muted));
-                        }
-                        to_column(ui, columns.map(|(_, half)| half));
-                        let mut half = entry.half;
-                        if ui.checkbox(&mut half, "Half").changed() {
-                            actions.push(CallStep::Half(row, half));
-                        }
-                    });
-                }
-                ui.add_space(design::S);
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = design::S;
-                    if !self.unrolled_creatures(call).is_empty()
-                        && Action::secondary("Roll all creatures")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        actions.push(CallStep::RollAll);
-                    }
-                    if call.half
-                        && call
-                            .rows
-                            .values()
-                            .any(|row| row.total.is_some_and(|t| t >= call.dc))
-                        && Action::secondary("Half for those at or above DC")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        actions.push(CallStep::HalfMade);
-                    }
-                });
-                if !call.damage.is_empty() {
-                    ui.add_space(design::S);
-                    let link = RollLink::Damage {
-                        label: call.label.clone(),
-                        parts: call.damage.clone(),
-                    };
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(Type::Body.rich(ui, "Damage").color(c.text));
-                        rolls::set_roller(ui.ctx(), call.caster);
-                        rolls::set_entry(ui.ctx(), &call.who);
-                        rolls::link(ui, &rolls::parts_text(&call.damage), Type::Body, &link);
-                        rolls::set_roller(ui.ctx(), None);
-                    });
-                }
-                let rolled = self.strip.as_ref().map(|strip| &strip.rolled).filter(|rolled| {
-                    matches!(&rolled.link, RollLink::Damage { label, .. } if *label == call.label)
-                });
-                let targets = call.rows.len();
-                let total = rolled.map(|rolled| rolled.total);
-                let half_one = targets == 1 && call.rows.values().all(|row| row.half);
-                let word = match total {
-                    Some(total) if half_one => {
-                        let name = call
-                            .rows
-                            .keys()
-                            .next()
-                            .map_or("", |row| self.state.participants[*row].name.as_str());
-                        format!("Use {} (half) on {name}", total / 2)
-                    }
-                    Some(total) => format!(
-                        "Use {total} on {targets} {}",
-                        if targets == 1 { "target" } else { "targets" }
-                    ),
-                    None => "Use".to_owned(),
-                };
-                let blocked = if targets == 0 {
-                    Some("Tick a target first.")
-                } else if total.is_none() {
-                    Some("Roll the damage first.")
-                } else {
-                    None
-                };
-                ui.add_space(design::S);
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = design::S;
-                    if Action::primary(&word)
-                        .density(Density::Read)
-                        .hint("Put the total in Amount for the ticked targets. Then press Damage.")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
-                        && let Some(total) = total
-                    {
-                        actions.push(CallStep::Use(total));
-                    }
-                    design::blocked_reason(ui, blocked);
-                });
-            });
-        for step in actions {
-            self.call_step(step);
-        }
-    }
-
-    /// Where a call row's result and its Half toggle start, from the row's left edge, when
-    /// every row fits them on one line. Otherwise rows wrap as they must.
-    fn call_columns(&self, ui: &egui::Ui, call: &Call, listed: &[usize]) -> Option<(f32, f32)> {
-        let width = |text: &str, role: Type| design::number_width(ui, text, &role.font(ui));
-        let tick = ui.spacing().icon_width + ui.spacing().icon_spacing;
-        let names = listed
-            .iter()
-            .map(|&row| width(&self.state.participants[row].name, Type::Body))
-            .fold(0.0, f32::max);
-        let total_width = |total: i64| {
-            width(&total.to_string(), Type::Strong)
-                + design::S
-                + width(verdict(total, call.dc), Type::Small)
-        };
-        let results = call
-            .rows
-            .iter()
-            .map(|(&row, entry)| {
-                let p = &self.state.participants[row];
-                let character = character(&p.definition);
-                let field = if character {
-                    TYPED_WIDTH + design::S
-                } else {
-                    0.0
-                };
-                let shown = match entry.total {
-                    Some(total) => total_width(total),
-                    None if save_bonus(&p.definition, &call.ability).is_some() => {
-                        Action::secondary(roll_word(character))
-                            .density(Density::Read)
-                            .natural_width(ui)
-                    }
-                    None => 0.0,
-                };
-                field + shown
+        self.call_targets()
+            .into_iter()
+            .filter(|row| {
+                let definition = &self.state.participants[*row].definition;
+                !call.totals.contains_key(row)
+                    && !definition.fields.contains_key("splat_external")
+                    && save_bonus(definition, &call.ability).is_some()
             })
-            .fold(total_width(call.dc), f32::max);
-        let result = tick + names + design::S;
-        let half = result + results + design::S;
-        let needed = half + tick + width("Half", Type::Body);
-        (needed <= ui.available_width()).then_some((result, half))
+            .collect()
     }
 
-    fn call_step(&mut self, step: CallStep) {
-        match step {
-            CallStep::Tick(row) => {
-                if let Some(call) = &mut self.call {
-                    call.tick(row);
-                }
-            }
-            CallStep::Typed(row, typed) => {
-                if let Some(entry) = self.call.as_mut().and_then(|call| call.rows.get_mut(&row)) {
-                    entry.total = typed.trim().parse().ok();
-                    entry.typed = typed;
-                }
-            }
-            CallStep::Roll(row) => self.roll_save(row),
-            CallStep::RollAll => {
-                let rows = self
-                    .call
-                    .as_ref()
-                    .map_or_else(Vec::new, |call| self.unrolled_creatures(call));
-                for row in rows {
-                    self.roll_save(row);
-                }
-            }
-            CallStep::Half(row, half) => {
-                if let Some(entry) = self.call.as_mut().and_then(|call| call.rows.get_mut(&row)) {
-                    entry.half = half;
-                }
-            }
-            CallStep::HalfMade => {
-                if let Some(call) = &mut self.call {
-                    let dc = call.dc;
-                    for entry in call.rows.values_mut() {
-                        if entry.total.is_some_and(|total| total >= dc) {
-                            entry.half = true;
-                        }
+    /// `Roll saves`: each creature target rolls its save, on the run's dice.
+    fn roll_saves(&mut self) {
+        let Some(ability) = self.call.as_ref().map(|call| call.ability.clone()) else {
+            return;
+        };
+        for row in self.unrolled_creatures() {
+            let p = &self.state.participants[row];
+            let Some(bonus) = save_bonus(&p.definition, &ability) else {
+                continue;
+            };
+            let link = RollLink::d20(D20::Save, bonus, &ability);
+            let name = p.name.clone();
+            match self.record(|random| rolls::roll(&name, &link, Mode::Normal, 0, random)) {
+                Ok(rolled) => {
+                    if let Some(call) = &mut self.call {
+                        call.totals.insert(row, rolled.total);
                     }
                 }
+                Err(error) => self.error = Some(error),
             }
-            CallStep::Use(total) => self.use_call(total),
         }
     }
 
-    /// Escape closes the call view, and keeps its ticks.
-    pub(super) fn call_escape(&mut self, ui: &egui::Ui) -> bool {
-        if self.panel == Panel::Call
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-        {
-            self.panel = Panel::Reference;
-            return true;
+    /// `Half for those at or above DC`: their rows take half of the damage that follows.
+    fn half_made(&mut self) {
+        let targets = self.call_targets();
+        let Some(call) = &mut self.call else {
+            return;
+        };
+        for row in targets {
+            if call.totals.get(&row).is_some_and(|total| *total >= call.dc) {
+                call.halves.insert(row);
+                if !self.also.is_empty() {
+                    self.halved.insert(row);
+                }
+            }
         }
-        false
     }
 
-    /// Next turn ends this turn's roll and its call.
+    /// A click on a roster row. During a call it chooses the call's targets; the caster
+    /// stays out. Otherwise it selects the row, and a held panel stays on its roller.
+    pub(super) fn row_click(&mut self, row: usize) {
+        if let Some(call) = &self.call {
+            if Some(row) == call.caster {
+                return;
+            }
+            if Some(self.selected) == call.caster {
+                self.select(row);
+            } else {
+                self.toggle_target(row);
+            }
+            return;
+        }
+        if self.held == Some(row) {
+            self.held = None;
+        }
+        self.select(row);
+    }
+
+    /// A save result in place of AC on a row, such as `DEX` and 19, while its call is open.
+    pub(super) fn save_on_row(&self, row: usize) -> Option<(String, i64)> {
+        let call = self.call.as_ref()?;
+        let total = *call.totals.get(&row)?;
+        Some((
+            call.ability
+                .chars()
+                .take(3)
+                .collect::<String>()
+                .to_uppercase(),
+            total,
+        ))
+    }
+
+    /// Under the panel's title while it is held: why, and a way to see the selected row.
+    /// Returns true when the DM asked to see it.
+    pub(super) fn held_line(&self, ui: &mut egui::Ui) -> bool {
+        let Some(held) = self.held.filter(|_| self.panel_row() != self.selected) else {
+            return false;
+        };
+        let held = &self.state.participants[held].name;
+        let selected = &self.state.participants[self.selected].name;
+        let mut show = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = design::XS;
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("Held on {held} while its roll is open ·"))
+                    .color(colors().muted),
+            );
+            let words = format!("Show {selected}");
+            let response = design::small_link(ui, &words);
+            design::named(ui, &response, &words);
+            show = response
+                .on_hover_text("Close the roll and show the selected row. Escape also does it.")
+                .clicked();
+        });
+        show
+    }
+
+    /// Damage was applied from the dock: a call is done, and the panel follows again.
+    pub(super) fn after_amount(&mut self) {
+        if self.call.is_some() {
+            self.release();
+        }
+    }
+
+    /// Next turn ends this turn's roll, its hold and its call.
     pub(super) fn end_turn_rolls(&mut self) {
-        self.strip = None;
-        self.call = None;
-        if self.panel == Panel::Call {
-            self.panel = Panel::Reference;
-        }
+        self.last = None;
+        self.release();
     }
 
     /// Undo can take away rows. A roll keeps its result, but not a roller that is gone.
     pub(super) fn forget_removed_rollers(&mut self) {
         let rows = self.state.participants.len();
-        if let Some(strip) = &mut self.strip
-            && strip.roller.is_some_and(|row| row >= rows)
+        if let Some(last) = &mut self.last
+            && last.roller.is_some_and(|row| row >= rows)
         {
-            strip.roller = None;
+            last.roller = None;
+        }
+        if self.held.is_some_and(|row| row >= rows) {
+            self.held = None;
         }
         if let Some(call) = &mut self.call {
-            call.rows.retain(|row, _| *row < rows);
+            call.totals.retain(|row, _| *row < rows);
+            call.halves.retain(|row| *row < rows);
             if call.caster.is_some_and(|row| row >= rows) {
                 call.caster = None;
             }
         }
     }
-}
-
-enum CallStep {
-    Tick(usize),
-    Typed(usize, String),
-    Roll(usize),
-    RollAll,
-    Half(usize, bool),
-    HalfMade,
-    Use(i64),
 }
 
 #[cfg(test)]
@@ -877,15 +543,19 @@ mod tests {
     }
 
     #[test]
-    fn attack_then_target_then_critical_damage_then_use() {
+    fn a_held_panel_keeps_the_attacker_while_a_target_is_chosen_and_damage_fills_amount() {
         let mut run = live();
         let roller = run.current().unwrap();
         run.state.random = Random::controlled([20, 3, 4, 5, 6]);
         let steps = run.history.len();
         let shown = run.roll_link(ask(attack(), Some(roller))).unwrap().unwrap();
-        assert_eq!(shown.rolled.total, 24);
-        assert_eq!(shown.rolled.natural_words(), Some("Natural 20"));
-        assert_eq!(shown.armor, None, "the roller is still selected");
+        let rolled = shown.rolled.unwrap();
+        assert_eq!(rolled.total, 24);
+        assert_eq!(rolled.natural_words(), Some("Natural 20"));
+        assert!(
+            shown.held && shown.armor.is_none(),
+            "the roller is still selected"
+        );
         assert_eq!(run.history.len(), steps, "a roll is not an Undo step");
         assert!(
             run.state
@@ -895,23 +565,30 @@ mod tests {
                 .contains("Spear: to hit 1d20 + 4")
         );
         let target = (0..3).find(|row| *row != roller).unwrap();
-        run.select(target);
-        let strip = run.strip.clone().unwrap();
+        run.row_click(target);
+        assert_eq!(run.selected, target);
+        assert_eq!(run.panel_row(), roller, "the panel stays on the attacker");
+        let last = run.last.clone().unwrap();
         let p = &run.state.participants[target];
         assert_eq!(
-            run.armor_words(strip.roller, &strip.rolled),
+            run.armor_words(last.roller, &last.rolled),
             Some(format!("AC {} {}", p.armor_class.unwrap(), p.name))
         );
-        // A natural 20 doubles the dice and adds the bonus once.
-        run.roll_strip_damage(None);
-        assert_eq!(run.strip.as_ref().unwrap().rolled.total, 3 + 4 + 5 + 6 + 2);
-        run.use_strip_total();
+        // A natural 20 doubles the dice and adds the bonus once; the total fills Amount.
+        run.roll_damage(None);
+        assert_eq!(run.last.as_ref().unwrap().rolled.total, 3 + 4 + 5 + 6 + 2);
         assert_eq!(run.amount, "20");
         assert!(run.focus_amount);
+        run.release();
+        assert_eq!(
+            run.panel_row(),
+            target,
+            "closing the result shows the selection"
+        );
     }
 
     #[test]
-    fn use_waits_for_a_target_undo_keeps_the_strip_and_next_turn_ends_it() {
+    fn damage_waits_for_a_target_undo_keeps_the_roll_and_next_turn_ends_it() {
         let mut run = live();
         let roller = run.current().unwrap();
         run.state.random = Random::controlled([2, 3]);
@@ -922,27 +599,27 @@ mod tests {
                 kind: None,
             }],
         };
-        let shown = run.roll_link(ask(damage, Some(roller))).unwrap().unwrap();
-        assert_eq!(shown.use_blocked, Some("Choose a target first."));
-        run.use_strip_total();
+        run.roll_link(ask(damage, Some(roller))).unwrap();
         assert!(
             run.amount.is_empty(),
             "no damage lands on its roller by mistake"
         );
+        run.use_last_total();
+        assert!(run.amount.is_empty());
         // Plain dice can be used on anyone.
         run.roll_dice("1d4").unwrap();
-        run.use_strip_total();
+        run.use_last_total();
         assert_eq!(run.amount, "3");
         run.amount.clear();
         run.apply(Command::Damage(roller, 1)).unwrap();
         run.undo();
-        assert!(run.strip.is_some(), "Undo keeps the roll");
+        assert!(run.last.is_some(), "Undo keeps the roll");
         run.apply(Command::Next).unwrap();
-        assert!(run.strip.is_none(), "Next turn ends it");
+        assert!(run.last.is_none() && !run.holding(), "Next turn ends it");
     }
 
     #[test]
-    fn a_call_ticks_its_own_targets_then_use_sets_the_run_selection_and_half() {
+    fn a_call_chooses_rows_on_the_roster_and_halves_those_at_or_above_the_dc() {
         let mut run = live();
         let caster = run.current().unwrap();
         let save = RollLink::SaveDc {
@@ -955,53 +632,39 @@ mod tests {
                 kind: Some("Fire".into()),
             }],
         };
-        assert!(
-            run.roll_link(ask(save.clone(), Some(caster)))
-                .unwrap()
-                .is_none()
-        );
-        assert!(run.panel == Panel::Call);
+        let shown = run.roll_link(ask(save, Some(caster))).unwrap().unwrap();
+        assert!(shown.call.is_some() && run.holding());
         let others: Vec<usize> = (0..3).filter(|row| *row != caster).collect();
-        run.select(others[0]);
-        assert!(run.panel == Panel::Call, "a roster click keeps the call");
-        assert!(run.call_toggle(others[0]));
-        assert!(run.call_toggle(others[1]));
-        assert!(
-            run.also.is_empty(),
-            "Ctrl+click ticks the call, not the run"
-        );
-        run.call_step(CallStep::Typed(others[0], "15".into()));
-        run.call_step(CallStep::Typed(others[1], "9".into()));
-        run.call_step(CallStep::HalfMade);
-        let call = run.call.clone().unwrap();
-        assert!(call.rows[&others[0]].half && !call.rows[&others[1]].half);
-        // Escape closes the view; the same DC opens it again with its ticks.
-        run.panel = Panel::Reference;
-        run.roll_link(ask(save, Some(caster))).unwrap();
-        assert_eq!(run.call.as_ref().unwrap().rows.len(), 2);
-        run.call_step(CallStep::Use(10));
-        assert_eq!(run.amount, "10");
-        let mut targets = run.targets();
+        run.row_click(caster);
+        assert_eq!(run.selected, caster, "the caster is never a target");
+        run.row_click(others[0]);
+        run.row_click(others[1]);
+        let mut targets = run.call_targets();
         targets.sort_unstable();
         assert_eq!(targets, others);
+        assert_eq!(run.panel_row(), caster, "the panel stays on the caster");
+        // The fixture has no ability scores, so the DM records the saves on the call.
+        let call = run.call.as_mut().unwrap();
+        call.totals.insert(others[0], 15);
+        call.totals.insert(others[1], 9);
+        assert_eq!(run.save_on_row(others[0]), Some(("DEX".into(), 15)));
+        run.half_made();
         assert_eq!(
             run.halved.iter().copied().collect::<Vec<_>>(),
             vec![others[0]]
         );
-        // One target with Half takes the halved number in Amount.
-        run.call_step(CallStep::Tick(others[1]));
-        run.call_step(CallStep::Use(11));
-        assert_eq!(run.amount, "5");
-        assert!(run.also.is_empty());
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.roll_damage(None);
+        assert_eq!(run.amount, "10", "the damage fills Amount for both targets");
+        run.after_amount();
+        assert!(!run.holding(), "applied damage ends the call");
     }
 
     #[test]
-    fn a_save_falls_back_to_the_modifier_and_a_feature_is_found_by_its_title() {
+    fn a_save_falls_back_to_the_modifier() {
         let source =
             splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
         let entry = Entry::parse("Aboleth.md", source).unwrap();
         assert!(save_bonus(&entry, "Dexterity").is_some());
-        let found = feature_paragraph(&entry, "Tentacle").unwrap_or_default();
-        assert!(found.starts_with("Tentacle."), "{found}");
     }
 }

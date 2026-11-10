@@ -124,36 +124,22 @@ run's dice field.
 
 ### Keys in a run
 
-Two new single keys act on the roll strip. They follow the same rules as N and
-U, and are added to `KEYS` (`src/encounter_run/view.rs:205`). Neither `Key::D`
-nor `Key::T` is used today, and Amount accepts only digits.
+Two single keys follow the same rules as N and U, and are in `KEYS`:
 
 | Key | Action |
 | --- | --- |
-| D | `Roll damage` (or `Roll critical damage`) for the strip's attack |
-| T | `Use` the strip's total: put it in Amount |
+| D | `Roll damage` (or `Roll critical damage`) for the open attack, or the call's damage |
+| T | Put the last roll's total in Amount |
 
-Run keys stop while any widget other than Amount has focus
-(`live_keys`, `src/encounter_run/view.rs:403`). So a click on a dice link in a
-run gives focus back to Amount after the roll, as `follow_with_keyboard` does
-after other run steps. Then the flow is: click the attack, Down or Up to the
-target, D, T, Enter.
+Run keys stop while any widget other than Amount has focus (`live_keys`). So a
+click on a dice link in a run gives focus back to Amount after the roll. Then the
+flow is: click the attack, click the target's row, D, Enter.
 
 ### Escape
 
-Escape closes one layer at a time. The existing layers keep their order, and two
-new layers join it:
-
-1. A dialog above the run (it takes the keyboard, as now).
-2. **New:** an open roll popover.
-3. Lookup and Notes, as now.
-4. A footer's second step, such as ending the encounter, as now.
-5. A row's initiative field, as now.
-6. **New:** the call view. Its ticks are kept until Next turn.
-7. The selection: select the current creature again, as now.
-
-The popover must take Escape before Lookup does, because a roll from a stat
-block in Lookup shows its popover inside Lookup.
+Escape closes one layer at a time. An open roll result or roll menu comes first,
+before Lookup and Notes; closing a held result ends the hold and any call. The
+run's own layers keep their order.
 
 ## The result
 
@@ -172,173 +158,62 @@ ruling.
 
 ### In a run
 
-#### One selection, two jobs
+Revised after a design review (2026-11-10). The first build kept the last roll
+in a strip above the side panel, with `Back to <roller>`, and called saves in a
+view that replaced the panel. The user found that it used the side panel too
+heavily: a click on the target's row replaced the attacker's text, `Use` was at
+the top of the panel while Amount is under the roster, and the call view was a
+second roster without HP. The strip, `Back to` and the call view are gone.
 
-The run has one selection. It chooses whose stat block or sheet the panel shows
-(`reference_tab(ui, self.selected)`), and who takes the amount when the DM
-presses Damage (with `also` for more targets and `halved` for half damage).
-Next turn selects the creature whose turn it is. So when the DM reads the
-attacker's stat block, the attacker is the selected row, and clicking the
-target's row changes the panel to the target.
-
-This design keeps that model. The DM rolls from the attacker's stat block, then
-chooses the target by clicking its row, as for any damage today. The roll's
-result must therefore not belong to the panel's content.
-
-#### The roll strip
-
-In live play, the last roll stays in a two-line **roll strip** at the very top
-of the side panel, above the participant's title and tabs. Line one is the
-result. Line two is its actions. It does not change when the selection changes,
-when the panel scrolls, or when the DM opens another tab. It belongs to the
-roll's roller, not to the selected row. It holds the roller by row index, as
-`selected` and `also` do, and moves with them when rows move.
-
-Its lifetime:
-
-- Next turn clears it, by either path (the run's own Next turn and the strip on
-  other pages). Clear it in `apply`, where `follow_turn` is handled
-  (`src/encounter_run.rs:1715`), not in the view.
-- Undo keeps it. Today Undo clears `last_roll` (`src/encounter_run.rs:1953`).
-  The strip must survive, so that "wrong target, Undo, choose the right row,
-  Use again" works.
-- If Undo removes the roller's row (an arrival taken back,
-  `forget_removed_participants`), the strip keeps its result and drops
-  `Back to` and `Roll damage`.
-
-A roll in a run from a definition in Lookup has no roller. It goes to the Log
-under the entry's name, and the strip shows it with `Use` and `Roll damage`,
-but no `Back to`.
-
-The strip replaces the dock's `= N` result while the side panel is shown. A
-roll from the dock's dice field shows in the strip with no roller. So the DM
-sees the result in one place in the run, plus the popover at a link.
-
-When the side panel is hidden (Lookup or Notes open at a small width;
-`hide_panel` in `src/lib.rs`), the strip is hidden too. Then:
-
-- The dock keeps its `= N` result, as today, for rolls from the dice field.
-- The popover at a link carries the strip's actions (`Roll damage`, `Use`).
-  It stays open across a click on a roster row, so the DM can roll, choose the
-  target, then use. A click elsewhere in the reader, or Escape, closes it.
-
-In setup there is no dock and no strip. Rolls in setup show in the popover and
-go to the Log.
+**An open roll holds the panel.** The run still has one selection, which chooses
+the dock's targets. While a roll from a stat block or sheet has its result open,
+the Stat block tab stays on the roller, and a click on a row only selects the
+target. Conditions and Correct follow the selected row. Under the title, muted
+Small says `Held on <roller> while its roll is open ·` with `Show <selected>`,
+which closes the result. Escape, Next turn and a click on the roller's own row
+also end the hold. The hold is tied to a visible result, so it is not a hidden
+mode.
 
 An attack, step by step, on the Bugbear Warrior's turn:
 
-1. Click `+4` in Grab. The strip shows
-   `Bugbear Warrior 2 · Grab · 17 to hit (d20 13 + 4)`.
-2. Click Oren's row. The panel shows Oren's sheet. The strip now adds Oren's
-   current AC: `· AC 15 Oren`. It shows no "hit" or "miss" word. The DM
-   decides, because a reaction such as Shield can still change the result.
-3. Click `Roll damage` in the strip, or press D. It rolls the damage of the
-   same feature, by the roller's values and run changes, although the panel
-   shows Oren. After a natural 20 the button is `Roll critical damage`, which
-   rolls the damage dice twice and adds bonuses once (2024 rule; `Dice::roll`
-   already takes a `critical` flag).
-4. Click `Use 9`, or press T. It puts 9 in Amount and moves focus there.
-5. Press Damage, or Enter. Undo names it as now: `Undo: 9 damage to Oren`.
+1. Click `+4` in Grab. The result opens beside it: `17 to hit`.
+2. Click Oren's row. The result adds `AC 15 Oren`, with no verdict; the Grab text
+   stays in the panel.
+3. Click `Roll damage` in the result, or press D. After a natural 20 it is
+   `Roll critical damage`. The damage fills Amount, because a target other than
+   the roller is selected.
+4. Press Enter, or Damage. Undo names it as before.
 
-That is five clicks from the stat block to applied damage.
+That is 3 clicks and Enter. The next attack of a Multiattack is the attack link,
+`Roll damage`, and Enter. Damage never fills Amount while only the roller is
+selected. The dock shows the last total as `= N`; a click on it, or T, puts it in
+Amount, for dice from the dock or a roll whose target changed.
 
-Rules for the strip:
-
-- The AC shows only for an attack, and only when the selected row is not the
-  roller. It is the selected row's AC. With several targets, hover lists the
-  others.
-- `Use` on damage from the roller's own attack or save feature is blocked while
-  the roller is the only selected row, and says `Choose a target first.` This
-  stops damage to the attacker by mistake. Other rolls (plain dice, healing,
-  the dice field) are never blocked. Choosing a row clears Amount, as it does
-  today, so `Use` comes after the target. The strip keeps `Use` until the next
-  roll, so the DM can press it again after choosing another row.
-- A damage result shows each part with its type, such as `14: 7 piercing,
-  7 fire`. `Use` puts the total in Amount. For one part, or for half, the DM
-  types the number, because Splat does not apply resistance.
-- `Back to Bugbear Warrior 2` shows only when the roller is not the current
-  creature and is not selected. When the roller has the turn, Escape already
-  does the same, and the strip says so in hover. It selects the roller again,
-  so the DM can make the next attack of a Multiattack.
-
-```
-Bugbear Warrior 2 · Grab · 17 to hit (d20 13 + 4) · AC 15 Oren
-[Roll damage]
-```
-
-```
-Bugbear Warrior 2 · Grab · 14 damage: 7 piercing, 7 fire
-[Use 14]
-```
-
-At 960×640 the panel is about 346 px wide (`src/design/components.rs:2181`).
-Line one keeps the total and the AC. It drops the dice parts first, then the
-feature name, then shortens the roller's name, keeping its copy number. Line
-two has one or two buttons, which fit. Hover and accessibility give the full
-lines.
-
-Every standalone roll writes one Log line, for example
-`Bugbear Warrior 2, Grab: to hit 1d20 + 4 with advantage: [13, 6] = 17.`
+Every standalone roll writes one Log line, as before.
 
 ## Calls for a save
 
-A save DC link (`Dexterity Saving Throw: DC 14`) starts a call for a save. The
-DC is on the caster's stat block, so the caster is the selected row when the DM
-clicks it. Choosing targets with the roster would change the panel. So a call
-for a save has its own list of targets, and it uses the run's selection only at
-the end.
+A save DC link (`Dexterity Saving Throw: DC 14`) starts a call. A call card opens
+beside the DC, held like a roll: `DC 14 Dexterity save` and how many targets.
 
-The **call view** opens in the side panel, as Arrivals does: it has no
-participant tab, and it stays open when the selection changes. Its title names
-the feature and the DC, such as `Fire Breath · DC 14 Dexterity save`, with
-Close. Below the title it shows the feature's whole paragraph, so the DM can
-read the failure and success effects while calling the save.
+1. Click rows to choose targets. A click adds or removes one; the caster's row
+   does nothing. These are the run's own targets (`selected` and `also`).
+2. `Roll saves` rolls each creature target's save, by its Save bonus or else its
+   ability modifier. Each result stands in the row's AC cell, `DEX 19`, beside
+   the HP it will change. A linked player's sheet rolls its own save; the DM uses
+   the row's half mark when the player says they made it.
+3. `Half for those at or above DC` sets the rows' half marks, when the feature's
+   text says a success takes half.
+4. `Roll damage` rolls once for all targets (the glossary's *roll scope*) into
+   Amount. Enter applies it as one Undo step, and the call ends.
 
-1. Click the DC. Opening a call clears `also` and `halved`. The call view lists
-   every present participant except the caster, in roster order, with side
-   marks and tick boxes. Nothing is ticked. Tick the targets. Ticks are view
-   state, never saved, like `also`.
-2. Each ticked creature row has `Roll`, with its save bonus for that ability.
-   `Roll all creatures` rolls every ticked creature row. Each ticked character
-   row has an optional number field for the player's own roll, because players
-   often roll their own saves at the table. Each roll and each typed total
-   writes one Log line.
-3. Each row with a total shows it and the DC, and says `Below DC` or
-   `At or above DC` in words.
-4. Each row has a `Half` toggle. It works with no total, so the DM can set it
-   when a player just says "I made it". When the feature does half damage on a
-   success, `Half for those at or above DC` turns it on for the rows with a
-   total at or above the DC. The DM can change any tick or toggle.
-5. The call view shows the feature's damage links. The damage is one roll for
-   all targets, as the 2024 rules give for most area effects (the glossary's
-   *roll scope*). It shows in the roll strip as usual. While the call view is
-   open, the strip hides its own `Use`, so there is one `Use` button.
-6. `Use 28 on 3 targets` sets the run's selection from the call. It calls
-   `select` first, because `select` clears `also`, `halved` and Amount
-   (`src/encounter_run/view.rs:333`). Then it puts the other ticked rows in
-   `also`, the rows with Half in `halved`, and 28 in Amount. The DM presses
-   Damage, which is one Undo step for all targets (`Command::Several`). The
-   dock names targets in turn order (`targets()`), not in tick order.
-   - With one target and Half on, the run's half set does not apply, because
-     `amount_command` uses `halved` only when `also` has rows
-     (`src/encounter_run/view.rs:318`). So the button puts the halved number,
-     rounded down, in Amount and says `Use 14 (half) on Oren`.
-   - With no target ticked, the button is blocked and says
-     `Tick a target first.`
+## As built
 
-While the call view is open:
-
-- A plain click on a roster row changes the selection and the dock, as with
-  Arrivals. The panel keeps the call view.
-- A Ctrl+click on a roster row ticks or unticks that row in the call, because
-  Ctrl+click already means "add a target". It does not change `also`.
-- A click on Stat block, Conditions, Correct, Log or Prep, or Ctrl+G for
-  Arrivals, replaces the call view. Its ticks, totals and Half toggles are
-  kept until Next turn. A click on the same DC link opens it again.
-- Next turn closes it and forgets its ticks. The ticks also stay through a
-  reaction or a legendary action, because those happen within the same turn.
-
-Nothing in the call changes a participant until that last Damage.
+- Parsing is `splat::content::dice_text`; rolling and the result beside a link
+  are `src/rolls.rs`; the hold and calls are `src/encounter_run/rolling.rs`.
+- An empty `Save` cell has no link.
+- The `run-rolls` visual scenario measures T16.1 to T16.5, T16.7 and T16.8:
+  1, 1, 2, 3, 7, 2 and 2.
 
 ## Engine and data
 
@@ -347,7 +222,7 @@ Nothing in the call changes a participant until that last Damage.
 - Add a labelled roll request: the roller (participant or entry), the source
   (ability, save, skill, attack, damage, dice), the mode (normal, advantage,
   disadvantage, critical). The result keeps every die, which were dropped, the
-  natural d20, and the total. The Log line, the popover and the strip are all
+  natural d20, and the total. The Log line and the result beside the link are both
   made from this one result.
 - Today `Command::Roll` goes through `apply`, takes one of the 100 history
   slots, and writes to `state.log`, and Undo restores `state.random`.
@@ -371,18 +246,6 @@ Nothing in the call changes a participant until that last Damage.
   position, as reader links are today (`src/markdown_view.rs:1003`). They need
   a right-click menu, which reader links do not have yet.
 
-## As built
-
-- Parsing is `splat::content::dice_text`; rolling and the result beside a link
-  are `src/rolls.rs`; the strip and the call view are
-  `src/encounter_run/rolling.rs`.
-- An empty `Save` cell has no link. A call for a save uses the save bonus, or
-  else the ability modifier, from the creature's stat block.
-- Character rows in a call have a typed total, `Half`, and `Roll for them` when
-  the participant's entry has the bonus.
-- The `run-rolls` visual scenario measures T16.1 to T16.5, T16.7 and T16.8.
-  T16.6 has no script yet.
-
 ## Glossary change
 
 - Add **Dice link**: "A number or dice expression in an entry's text that makes
@@ -396,6 +259,9 @@ Nothing in the call changes a participant until that last Damage.
   ability, spending resources, or changing a participant's state."
 
 ## Plan
+
+This was the build order. The strip and the call view it names were replaced
+after review; see "In a run".
 
 1. **1a, engine, tables and the strip.**
    - Keep-highest and keep-lowest; roll requests; standalone rolls outside Undo
@@ -422,13 +288,12 @@ to `docs/ux-intent.md`:
 | ID | Task | Target |
 | --- | --- | --- |
 | T16.1 | Roll the current creature's first attack | 1 |
-| T16.2 | Choose a target and see its AC beside the attack total, with the strip unchanged | 1 more |
-| T16.3 | Roll the damage and apply it to that target | 3 more (5 in all) |
-| T16.4 | Make the second attack of a Multiattack against the same target, with damage | 6 |
-| T16.5 | Three creatures (no characters) save against an area effect: open the call, tick them, roll the saves, set Half for those at or above the DC, roll damage, use it, apply | 9 |
-| T16.6 | A creature's area effect against three characters, two of whom say they made the save: open the call, tick them, turn on Half for two, roll damage, use it, apply | 9 |
-| T16.7 | Roll a character's skill with advantage, by pointer only | 2 |
-| T16.8 | After a pointer roll of an attack, choose the target, roll damage, use it and apply it by keyboard only: Down or Up, D, T, Enter | 4 keys, when the target is the next row |
+| T16.2 | Choose a target and see its AC beside the attack total, with the attack's text in view | 1 more |
+| T16.3 | Roll the damage into Amount and apply it to that target | 2 more |
+| T16.4 | Make the second attack of a Multiattack against the same target, with damage | 3 |
+| T16.5 | Two creatures save against an area effect: open the call, choose them, roll the saves, set Half, roll damage, apply | 7 |
+| T16.7 | Roll with disadvantage by pointer only | 2 |
+| T16.8 | After a pointer roll and target, D and Enter apply the damage | 2 keys |
 
 ## Later
 
@@ -439,15 +304,13 @@ to `docs/ux-intent.md`:
 - `Add a bonus…` on a dice link, and keeping it for later rolls by the same
   creature, such as Bless.
 - Recharge links: `(Recharge 5–6)` rolls a d6 against the range.
-- `Use` for one damage part, and `Use half`, on the strip.
-- `Untick those at or above DC`, for features that do no damage on a success.
+- Using one damage part, or half, without typing the number.
+- Clearing the targets at or above the DC, for features that do no damage on a
+  success.
 - Earlier preview rolls, and `Add to notes` for a session.
 - Reminders of conditions that can change a roll. These need a table of which
   conditions affect which rolls, and come close to a ruling.
 - `Roll all` for Multiattack. Its structured data has at least three shapes.
-- A separate actor and target: the panel stays on the creature whose turn it is,
-  and a row click only chooses the target. This makes Multiattack faster, but
-  changes the run's selection model. Consider it if T16.4 is slow in real play.
 - Upcast spell damage.
 - Sending rolls to the D&D Beyond game log, so players see them in their app.
   The write path is not verified (`docs/research/dndbeyond-api.md` covers only
