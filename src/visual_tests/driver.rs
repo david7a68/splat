@@ -401,6 +401,31 @@ impl<'a> Driver<'a> {
         left
     }
 
+    /// A tone bar beside a linked message, rather than a hand-built warning row.
+    pub fn has_message_bar(&self, first: egui::Rect, color: egui::Color32) -> bool {
+        fn contains(shape: &egui::Shape, first: egui::Rect, color: egui::Color32) -> bool {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().any(|shape| contains(shape, first, color))
+                }
+                egui::Shape::Rect(bar) => {
+                    bar.fill == color
+                        && bar.rect.width() <= crate::design::XS
+                        && bar.rect.right() < first.left()
+                        && first.left() - bar.rect.right() <= crate::design::XXL
+                        && (bar.rect.top() - first.top()).abs() <= crate::design::S
+                        && bar.rect.height() >= crate::design::Type::Body.line()
+                }
+                _ => false,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .any(|shape| contains(&shape.shape, first, color))
+    }
+
     pub fn painted_right(&self, words: &str) -> Option<f32> {
         let mut right = None;
         self.each_painted_text(|text, clip| {
@@ -485,6 +510,28 @@ impl<'a> Driver<'a> {
         found
             .into_iter()
             .min_by(|a, b| a.0.area().total_cmp(&b.0.area()))
+    }
+
+    /// The painted frame of a named control, for fill and border checks.
+    pub fn control_frame(&self, name: &str) -> Option<egui::epaint::RectShape> {
+        let bounds = self.place_of(name)?;
+        fn find(shape: &egui::Shape, bounds: egui::Rect) -> Option<egui::epaint::RectShape> {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, bounds)),
+                egui::Shape::Rect(rect)
+                    if (rect.rect.min - bounds.min).length() < 1.0
+                        && (rect.rect.max - bounds.max).length() < 1.0 =>
+                {
+                    Some(rect.clone())
+                }
+                _ => None,
+            }
+        }
+        self.harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|shape| find(&shape.shape, bounds))
     }
 
     /// Where a control is, by its exact name.
@@ -941,6 +988,24 @@ impl<'a> Driver<'a> {
                 && clip.intersects(rect)
             {
                 found = Some(rect);
+            }
+        });
+        found
+    }
+
+    /// Actual row bounds exclude a wrapping label's indentation before its first word.
+    pub fn painted_word_rect(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
+        let mut found = None;
+        self.each_painted_text(|text, clip| {
+            if text.galley.job.text == words {
+                for row in &text.galley.rows {
+                    let rect = row
+                        .rect_without_leading_space()
+                        .translate(text.pos.to_vec2());
+                    if area.contains(rect.center()) && clip.intersects(rect) {
+                        found = Some(rect);
+                    }
+                }
             }
         });
         found

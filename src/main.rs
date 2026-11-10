@@ -18,10 +18,13 @@ mod file_batch;
 mod formats_ui;
 mod hermetic;
 mod library;
+#[cfg(test)]
+mod load_bench;
 mod lookup;
 mod loot_editor;
 mod markdown_source;
 mod markdown_view;
+mod matching;
 mod npc_generator;
 mod party;
 mod party_stream;
@@ -1020,6 +1023,7 @@ impl Splat {
     /// What the World page, Lookup and the roll tables in them need from the rest of the app.
     fn follow_world(&mut self, ctx: &egui::Context) {
         let sides = self.encounters.run().map(|run| run.side_names());
+        let live = self.encounters.run().is_some_and(|run| run.strip().running);
         let in_run = self
             .encounters
             .run()
@@ -1053,8 +1057,16 @@ impl Splat {
             self.page = Page::World;
         }
         let mut refresh = std::mem::take(&mut self.world_page.reload);
+        let log_as = self.sessions.current_link().map(|session| {
+            match timeline::day_now(&self.timeline.events) {
+                Some(day) => format!("{session}, Day {day}"),
+                None => session,
+            }
+        });
         for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+            reader.log_as.clone_from(&log_as);
             reader.sides = sides.clone();
+            reader.live = live;
             reader.in_run = in_run.clone();
             if let Some(index) = reader.select_run.take()
                 && let Some(run) = self.encounters.run_mut()
@@ -1612,17 +1624,6 @@ impl Splat {
                             .hint("This campaign's own entries, in the Library")
                             .show(ui)
                             .clicked();
-                        if Action::quiet("Convert files…")
-                            .blocked(
-                                self.encounters
-                                    .has_run()
-                                    .then_some("Close the run before converting files."),
-                            )
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.campaign_content.layouts.scan(&self.campaigns);
-                        }
                     },
                 );
                 if open_entries {

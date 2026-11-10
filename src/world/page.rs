@@ -11,6 +11,17 @@ use uuid::Uuid;
 
 const ROW: f32 = 40.0;
 const LIST_WIDTH: f32 = 260.0;
+/// More rows than this in one check are counted, not shown.
+const CHECK_ROWS: usize = 40;
+
+/// What the page's larger part shows.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum View {
+    #[default]
+    Reader,
+    Questions,
+    Problems,
+}
 
 #[derive(Default)]
 pub struct WorldPage {
@@ -32,6 +43,9 @@ pub struct WorldPage {
     generator_sources: Vec<String>,
     error: Option<String>,
     repaired: Option<Uuid>,
+    view: View,
+    /// The checks for one load of the index.
+    checks: Option<(u64, super::checks::Checks)>,
 }
 
 impl WorldPage {
@@ -61,6 +75,7 @@ impl WorldPage {
     pub fn reveal(&mut self, campaign: Uuid, id: Uuid) {
         self.set_campaign(campaign);
         self.selected = Some(id);
+        self.view = View::Reader;
         self.keep_repair();
         self.new_kind = None;
         self.generated = None;
@@ -194,6 +209,13 @@ impl WorldPage {
             });
             return;
         };
+        if self
+            .checks
+            .as_ref()
+            .is_none_or(|(generation, _)| *generation != index.generation())
+        {
+            self.checks = Some((index.generation(), super::checks::run(index)));
+        }
         let groups = index.world_groups(&self.search.trim().to_lowercase());
         if broken == 0
             && groups.is_empty()
@@ -240,6 +262,9 @@ impl WorldPage {
                                     .rich(ui, "Nothing here matches.")
                                     .color(colors().muted),
                             );
+                        }
+                        if self.search.trim().is_empty() {
+                            self.check_rows(ui);
                         }
                         self.list(ui, index, &groups);
                         let broken: Vec<_> = index
@@ -299,6 +324,7 @@ impl WorldPage {
             .show_inside(ui, |ui| {
                 if let Some(repair) = &mut self.repair {
                     if repair.show(ui, campaign) {
+                        self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
                         self.repair = None;
@@ -308,6 +334,21 @@ impl WorldPage {
                 }
                 if self.new_kind.is_some() || self.generated.is_some() || self.error.is_some() {
                     self.creation_form(ui, index, campaign);
+                    return;
+                }
+                if self.view != View::Reader {
+                    let opened = egui::ScrollArea::vertical()
+                        .id_salt(("world_checks", self.view == View::Questions))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            design::reader::measure(ui, |ui| self.checks_view(ui, index))
+                        })
+                        .inner;
+                    if let Some((page, heading)) = opened {
+                        self.selected = Some(index.items[page].entry.id);
+                        self.view = View::Reader;
+                        self.reader.show_heading(heading);
+                    }
                     return;
                 }
                 nav = self.reader.choices(ui, index);
@@ -347,7 +388,10 @@ impl WorldPage {
             self.begin_new(kind, Some(index));
         }
         match nav {
-            Some(Nav::Item(position)) => self.selected = Some(index.items[position].entry.id),
+            Some(Nav::Item(position)) => {
+                self.selected = Some(index.items[position].entry.id);
+                self.view = View::Reader;
+            }
             Some(Nav::Missing(words)) => self.ask_lookup = Some(words),
             Some(Nav::Reload(id)) => {
                 self.reload = true;
@@ -358,6 +402,7 @@ impl WorldPage {
     }
 
     fn begin_new(&mut self, kind: &'static str, index: Option<&ContentIndex>) {
+        self.view = View::Reader;
         self.error = None;
         self.keep_repair();
         self.new_kind = (kind != "generate").then_some(kind);
@@ -388,12 +433,17 @@ impl WorldPage {
             );
             design::text_field(ui, "Name", &mut self.new_name, None, None);
             if kind == "npc" && !self.new_name.trim().is_empty() {
+                let folder = match index.type_folder("npc") {
+                    Some(folder) if folder.is_empty() => folder,
+                    Some(folder) => format!("{folder}/"),
+                    None => "NPCs/".into(),
+                };
                 ui.label(
                     Type::Small
                         .rich(
                             ui,
                             format!(
-                                "Will create NPCs/{}.md",
+                                "Will create {folder}{}.md",
                                 crate::sessions::file_safe(&self.new_name)
                             ),
                         )
@@ -488,6 +538,165 @@ impl WorldPage {
         }
     }
 
+    /// The two lists of what the notes still need, above the notes themselves.
+    fn check_rows(&mut self, ui: &mut egui::Ui) {
+        let Some((_, checks)) = &self.checks else {
+            return;
+        };
+        let rows = [
+            (
+                View::Questions,
+                "Open questions",
+                design::count(checks.questions.len(), "question", "questions"),
+                checks.questions.len(),
+            ),
+            (
+                View::Problems,
+                "Problems",
+                design::count(checks.problems(), "thing to check", "things to check"),
+                checks.problems(),
+            ),
+        ];
+        for (view, title, detail, count) in rows {
+            if count > 0
+                && design::two_line_row(ui, ROW, self.view == view, title, &detail).clicked()
+            {
+                self.view = view;
+                self.keep_repair();
+                self.new_kind = None;
+                self.generated = None;
+                self.error = None;
+            }
+        }
+    }
+
+    /// The open questions, or the problems. Returns the page a press asks for, with the
+    /// heading to show.
+    fn checks_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: &ContentIndex,
+    ) -> Option<(usize, Option<String>)> {
+        let (_, checks) = self.checks.as_ref()?;
+        let mut open = None;
+        let note = |ui: &mut egui::Ui, words: &str| {
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+        };
+        let more = |ui: &mut egui::Ui, count: usize| {
+            if count > CHECK_ROWS {
+                note(ui, &design::count(count - CHECK_ROWS, "more", "more"));
+            }
+        };
+        // One page's lines under its name, as the reader lists lines from other pages.
+        let mut by_page = |ui: &mut egui::Ui, found: &[super::checks::Found]| {
+            for group in found.chunk_by(|a, b| a.page == b.page).take(CHECK_ROWS) {
+                ui.push_id(group[0].page, |ui| {
+                    if design::link(ui, &index.items[group[0].page].entry.name).clicked() {
+                        open = Some((group[0].page, None));
+                    }
+                    for line in group {
+                        if design::line_link(ui, "", &line.words).clicked() {
+                            open = Some((line.page, line.heading.clone()));
+                        }
+                    }
+                });
+            }
+            more(ui, found.chunk_by(|a, b| a.page == b.page).count());
+        };
+        if self.view == View::Questions {
+            design::reader::title(ui, "Open questions");
+            design::reader::subtitle(
+                ui,
+                "Each unticked task line in the world's notes. Tick it in the note when you decide.",
+            );
+            ui.add_space(design::S);
+            by_page(ui, &checks.questions);
+            return open;
+        }
+        design::reader::title(ui, "Problems");
+        design::reader::subtitle(
+            ui,
+            "Where a fact has no home, or has two. Splat only lists them. You change the notes.",
+        );
+        if !checks.loose_dates.is_empty() {
+            design::reader::section_heading(ui, "Dates outside events");
+            note(
+                ui,
+                "A date in words belongs on an event's page. An event has a date that Splat can put in order.",
+            );
+            by_page(ui, &checks.loose_dates);
+        }
+        let mut pages = |ui: &mut egui::Ui, pages: &[usize]| {
+            for &page in pages {
+                if design::link(ui, &index.items[page].entry.name).clicked() {
+                    open = Some((page, None));
+                }
+            }
+        };
+        if !checks.wanted.is_empty() {
+            design::reader::section_heading(ui, "Pages to write");
+            note(
+                ui,
+                "A link names each of these, and no page has the name. The page that most lines want is first.",
+            );
+            for (name, lines, from) in checks.wanted.iter().take(CHECK_ROWS) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(Type::Body.rich(ui, name).color(colors().text));
+                    note(
+                        ui,
+                        &format!("{} in", design::count(*lines, "line", "lines")),
+                    );
+                    pages(ui, from);
+                });
+            }
+            more(ui, checks.wanted.len());
+        }
+        for (title, words, found) in [
+            (
+                "No summary",
+                "Start each of these with one paragraph that says what the subject is. Lists and Lookup show it.",
+                &checks.no_summary,
+            ),
+            (
+                "Nothing points here",
+                "These entries show on no other page. No line names them, they name no other entry, and they are in no place and part of no group.",
+                &checks.alone,
+            ),
+        ] {
+            if !found.is_empty() {
+                design::reader::section_heading(ui, title);
+                note(ui, words);
+                ui.horizontal_wrapped(|ui| pages(ui, &found[..found.len().min(CHECK_ROWS)]));
+                more(ui, found.len());
+            }
+        }
+        for (title, words, found) in [
+            (
+                "One name on two entries",
+                "A line that uses the name shows on each of these pages.",
+                &checks.shared_names,
+            ),
+            (
+                "Said twice",
+                "The same sentence is on each of these pages. Keep it on the page of its subject.",
+                &checks.repeated,
+            ),
+        ] {
+            if !found.is_empty() {
+                design::reader::section_heading(ui, title);
+                note(ui, words);
+                for (said, on) in found.iter().take(CHECK_ROWS) {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(Type::Small.rich(ui, said).color(colors().text));
+                        pages(ui, on);
+                    });
+                }
+                more(ui, found.len());
+            }
+        }
+        open
+    }
+
     fn list(&mut self, ui: &mut egui::Ui, index: &ContentIndex, groups: &WorldGroups) {
         for ((kind, title), rows) in groups {
             ui.add_space(design::XS);
@@ -551,10 +760,15 @@ impl WorldPage {
                             status => format!("{file} · {status}"),
                         }
                     } else {
-                        match super::status(entry) {
-                            "" => String::new(),
-                            status => status.to_owned(),
-                        }
+                        [
+                            super::date_words(entry),
+                            Some(super::status(entry).to_owned()),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .filter(|word| !word.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" · ")
                     }
                 } else {
                     String::new()
@@ -592,6 +806,7 @@ impl WorldPage {
                     };
                     if response.clicked() {
                         self.selected = Some(entry.id);
+                        self.view = View::Reader;
                         self.keep_repair();
                     }
                 });

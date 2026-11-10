@@ -1615,6 +1615,19 @@ impl Sessions {
         }
     }
 
+    /// A link to the note of the session being played, as a world entry's Log writes it.
+    /// A session is being played when its date is today. So what the DM changes while they
+    /// prepare, between sessions, is not put on the last session.
+    pub fn current_link(&mut self) -> Option<String> {
+        let today = self.today();
+        let current = self.current()?;
+        let note = self.notes.iter().find(|note| note.id == current)?;
+        (note.date == today)
+            .then(|| note.path.file_stem())
+            .flatten()
+            .map(|stem| format!("[[{}]]", stem.to_string_lossy()))
+    }
+
     /// Today, as of when the app started. A game that passes midnight is still tonight.
     fn today(&mut self) -> String {
         self.today
@@ -3100,7 +3113,7 @@ impl Sessions {
                                 .font(design::reader::prose_type(ui).font(ui))
                                 .layouter(&mut layouter)
                                 .margin(egui::Vec2::ZERO)
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width().min(design::READER_MEASURE))
                                 .min_size(egui::vec2(0.0, visible_height + heading_offset))
                                 .show(ui);
                             crate::markdown_source::paint_section_rules(ui, &output);
@@ -3424,10 +3437,58 @@ impl Sessions {
                     } else {
                         markdown_view::show_reader(ui, &text);
                     }
+                    self.world_changes(ui);
                 });
             });
         if let Some(target) = markdown_view::take_note_link(ui.ctx()) {
             self.open_note_link(target);
+        }
+    }
+
+    /// What play changed in the world in this session, from each entry's Log. The entry holds
+    /// the line, so this list needs no store of its own.
+    fn world_changes(&mut self, ui: &mut egui::Ui) {
+        let Some(index) = ui.ctx().data(|data| {
+            data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                "reader_link_index",
+            ))
+        }) else {
+            return;
+        };
+        let Some(note) = self
+            .selected
+            .and_then(|id| self.notes.iter().find(|note| note.id == id))
+        else {
+            return;
+        };
+        let changes = index.world_changes(&note.path);
+        if changes.is_empty() {
+            return;
+        }
+        let session = note
+            .path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        design::reader::section_heading(ui, "World changes");
+        let mut open = None;
+        for (source, line) in changes {
+            let words = line.words();
+            // Every line here is from this session, so its name is not said again.
+            let words = words.strip_prefix(&session).map_or(words.as_str(), |rest| {
+                rest.trim_start_matches([',', ':', ' '])
+            });
+            ui.horizontal_wrapped(|ui| {
+                if design::link(ui, &index.items[source].entry.name).clicked() {
+                    open = Some(source);
+                }
+                ui.label(Type::Small.rich(ui, words).color(colors().muted));
+            });
+        }
+        if let Some(source) = open {
+            let link = index.link_to(source);
+            self.wants_lookup = Some(link.trim_matches(['[', ']']).to_owned());
         }
     }
 

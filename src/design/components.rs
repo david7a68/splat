@@ -801,6 +801,60 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     response.on_hover_text(name)
 }
 
+/// A whole number that the DM can change. The value is in a well with a field border,
+/// as every input is, with − and + beside it. Drag, type or step it. Plain text beside a
+/// stepper is a value that cannot change, so the two never look alike. Returns true when
+/// the value changed. A value outside the range widens it: the stepper never changes a
+/// value that the DM did not touch.
+pub fn stepper(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+) -> bool {
+    let before = *value;
+    let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = XS / 2.0;
+        let down = ui
+            .add_enabled_ui(*value > low, |ui| {
+                icon_button(ui, icons::SUBTRACT, &format!("Decrease {name}"))
+            })
+            .inner;
+        if down.clicked() {
+            *value -= 1;
+        }
+        let field = ui
+            .scope(|ui| {
+                let c = colors();
+                let widgets = &mut ui.visuals_mut().widgets;
+                for state in [
+                    &mut widgets.inactive,
+                    &mut widgets.hovered,
+                    &mut widgets.active,
+                ] {
+                    state.bg_fill = c.well;
+                    state.weak_bg_fill = c.well;
+                }
+                widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
+                ui.spacing_mut().interact_size.y = Density::Read.control();
+                ui.add(egui::DragValue::new(value).range(low..=high).speed(0.1))
+            })
+            .inner;
+        named(ui, &field, name);
+        let up = ui
+            .add_enabled_ui(*value < high, |ui| {
+                icon_button(ui, icons::ADD, &format!("Increase {name}"))
+            })
+            .inner;
+        if up.clicked() {
+            *value += 1;
+        }
+    });
+    *value = (*value).clamp(low, high);
+    *value != before
+}
+
 /// An inline link with a real `Link` role, and a target of at least 24 px.
 pub fn link(ui: &mut Ui, label: &str) -> Response {
     text_link(ui, label, Type::Body)
@@ -861,6 +915,48 @@ pub fn wrapped_link(ui: &mut Ui, label: &str) -> Response {
         let top = rect.center().y - galley.size().y / 2.0;
         ui.painter()
             .galley(pos2(rect.left(), top), galley, c.accent);
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Small words that wrap and can be pressed, with a quiet label before them. It is a link to
+/// the page the words are from, and it reads as that page's text and not as a control.
+pub fn line_link(ui: &mut Ui, label: &str, words: &str) -> Response {
+    let c = colors();
+    let name = format!("{label}{words}");
+    let mut job = LayoutJob::default();
+    job.wrap.max_width = ui.available_width().max(1.0);
+    for (part, color) in [(label, c.muted), (words, c.text)] {
+        job.append(
+            part,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                line_height: Some(Type::Small.line()),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(24.0)),
+        Sense::click(),
+    );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), &name));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter().galley(pos2(rect.left(), top), galley, c.text);
+        if response.hovered() {
+            ui.painter().hline(
+                rect.x_range(),
+                rect.bottom() - 1.0,
+                Stroke::new(1.0, c.focus.gamma_multiply(0.6)),
+            );
+        }
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -1668,6 +1764,117 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
         });
     }
     pressed
+}
+
+/// A sentence of entry links, with explicit word spaces around its conjunctions.
+pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usize> {
+    let mut clicked = None;
+    let space = number_width(ui, " ", &Type::Body.font(ui));
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.horizontal_wrapped(|ui| {
+            for (at, name) in names.iter().enumerate() {
+                if at > 0 {
+                    ui.add_space(space);
+                    ui.add(
+                        egui::Label::new(Type::Body.rich(ui, "and"))
+                            .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                    ui.add_space(space);
+                }
+                if link(ui, name).clicked() {
+                    clicked = Some(at);
+                }
+            }
+            if !names.is_empty() {
+                ui.add_space(space);
+            }
+            ui.label(Type::Body.rich(ui, suffix));
+        });
+    });
+    clicked
+}
+
+/// An Undo message whose affected entries remain links on the message line.
+pub fn undo_message_with_links(
+    ui: &mut Ui,
+    tone: Tone,
+    names: &[&str],
+    suffix: &str,
+    action: &str,
+) -> (bool, Option<usize>) {
+    fn notice(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
+        let (icon, color) = tone.parts();
+        ui.horizontal_top(|ui| {
+            let start = ui.cursor().min;
+            ui.add_space(S + 1.0);
+            ui.label(Type::Body.rich(ui, icon).color(color));
+            ui.add_space(-XS);
+            let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
+            let bar =
+                Rect::from_min_max(start, pos2(start.x + 3.0, content.response.rect.bottom()));
+            ui.painter().rect_filled(bar, 0.0, color);
+            content.inner
+        })
+        .inner
+    }
+    let button = Action::quiet(action)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let button_width = button.natural_width(ui);
+    let inset = S
+        + 1.0
+        + number_width(ui, tone.parts().0, &Type::Body.font(ui))
+        + ui.spacing().item_spacing.x * 2.0
+        - XS;
+    let words = format!("{} {suffix}", names.join(" and "));
+    let gap = ui.spacing().item_spacing.x;
+    let mut pressed = false;
+    let clicked;
+    if ui.available_width()
+        < number_width(ui, &words, &Type::Body.font(ui)) + inset + gap + button_width
+    {
+        clicked = notice(ui, tone, names, suffix);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            pressed = button.line_start().show(ui).clicked();
+        });
+    } else {
+        clicked = ui
+            .horizontal_top(|ui| {
+                let width = (ui.available_width() - button_width - gap).max(0.0);
+                let clicked = ui
+                    .allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        notice(ui, tone, names, suffix)
+                    })
+                    .inner;
+                pressed = button.show(ui).clicked();
+                clicked
+            })
+            .inner;
+    }
+    (pressed, clicked)
+}
+
+/// A message with several actions below it, aligned with the message text.
+pub fn message_with_actions<R>(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    actions: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        let response = message(ui, tone, text);
+        let inset = response.rect.left() - ui.cursor().left();
+        ui.horizontal_top(|ui| {
+            ui.add_space(inset);
+            ui.vertical(actions).inner
+        })
+        .inner
+    })
+    .inner
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.

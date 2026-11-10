@@ -218,6 +218,206 @@ pub fn broken(d: &mut Driver<'_>) {
     );
 }
 
+fn flat_entry(d: &Driver<'_>, path: &str, name: &str, fields: &str, body: &str) {
+    let id = splat::character::stable_id(path);
+    let path = root(d).join(path);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\n{fields}\n---\n\n# {name}\n\n{body}"
+        ),
+    )
+    .unwrap();
+}
+
+/// One home for each fact: a page shows what other pages say about it, from their lines,
+/// their relations, their dates and their Logs. See `docs/design/world-data.md`.
+pub fn facts(d: &mut Driver<'_>) {
+    flat_entry(
+        d,
+        "Lore/Horn Rings.md",
+        "Horn Rings",
+        "splat_type: lore",
+        "Tieflings wear one ring on their horns for each kept ancestor.\n\n- [ ] Can a horn ring be sold?\n",
+    );
+    flat_entry(
+        d,
+        "Factions/Arena Guild.md",
+        "Arena Guild",
+        "splat_type: faction",
+        "The organizers of the race, under court supervision.\n",
+    );
+    flat_entry(
+        d,
+        "Places/The Arena.md",
+        "The Arena",
+        "splat_type: location",
+        "The arena at the capital, where the race starts.\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Zarel.md",
+        "Zarel",
+        "splat_type: npc\nsplat_status: alive\nsplat_part_of:\n- '[[Arena Guild]]'",
+        "Tiefling. The Games-Master, who runs the race.\n\n- **Look:** Gilded [[Horn Rings|horn rings]], loud and new.\n- **Says:** \"Filed!\"\n\nSee [[Horn Rings]].\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Haltha.md",
+        "Haltha",
+        "splat_type: npc\nsplat_status: alive",
+        "- **Look:** Dull iron [[Horn Rings|horn rings]], and old scars that look a little too even.\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Tordra.md",
+        "Tordra",
+        "splat_type: npc\nsplat_status: alive",
+        "An elf convict, who frees other prisoners.\n",
+    );
+    flat_entry(
+        d,
+        "History/The Revolt.md",
+        "The Revolt",
+        "splat_type: event\nsplat_when: 90 years ago\nsplat_until: 85 years ago",
+        "The miners took the Arena and held it for five years.\n",
+    );
+    flat_entry(
+        d,
+        "History/The Massacre.md",
+        "The Massacre",
+        "splat_type: event\nsplat_when: 120 years ago",
+        "Soldiers fired on protesting miners at [[The Arena]].\n",
+    );
+    fs::write(
+        root(d).join("Visitors.md"),
+        "# Visitors\n\nSee [[Horn Rings]].\n",
+    )
+    .unwrap();
+    let sessions = root(d).join(crate::sessions::DEFAULT_FOLDER);
+    fs::create_dir_all(&sessions).unwrap();
+    fs::write(
+        sessions.join("Session 1.md"),
+        format!(
+            "---\nsession_id: {}\nsession_number: 1\nsession_title: ''\nsession_date: {}\n---\n\nThe race began.\n",
+            splat::character::stable_id("visual:session:facts"),
+            // A change goes in the Log only while a session is played, which is on its date.
+            crate::hermetic::today()
+        ),
+    )
+    .unwrap();
+    d.app_mut().sessions.refresh();
+    reload(d);
+    d.click(NAV_WORLD);
+
+    d.click_containing("Horn Rings · ");
+    d.expect("From other pages");
+    d.observe(
+        "T15.1",
+        d.has("Look: Gilded horn rings, loud and new.")
+            && d.has_containing("Look: Dull iron horn rings")
+            && d.visible_text("Also linked from")
+            && d.has("Visitors"),
+        "A page shows each line that names it, under its page, and a line of links adds only its page",
+    );
+    d.state("lines-from-other-pages", Sizes::All);
+    d.click("Look: Gilded horn rings, loud and new.");
+    d.observe(
+        "T15.1",
+        d.visible_text("Tiefling. The Games-Master, who runs the race."),
+        "Pressing a line opens the page that holds it",
+    );
+
+    d.click_containing("Arena Guild · ");
+    d.expect("Members");
+    d.observe(
+        "T15.2",
+        d.has("Zarel") && d.visible_text("Tiefling. The Games-Master, who runs the race."),
+        "A group lists its members, each with what it is",
+    );
+    d.state("group-members", Sizes::All);
+
+    d.click_containing("The Arena · ");
+    d.expect("History");
+    let (first, second) = (
+        d.painted_rect_in("120 years ago", egui::Rect::EVERYTHING),
+        d.painted_rect_in("90 to 85 years ago", egui::Rect::EVERYTHING),
+    );
+    d.observe(
+        "T15.3",
+        first
+            .zip(second)
+            .is_some_and(|(first, second)| first.top() < second.top()),
+        "A place shows the events that concern it, oldest first, each with its date",
+    );
+    d.state("place-history", Sizes::All);
+
+    d.click_containing("Zarel · ");
+    let path = root(d).join("NPCs/Zarel.md");
+    let before = fs::read_to_string(&path).unwrap();
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    let after = fs::read_to_string(&path).unwrap();
+    d.observe(
+        "T15.4",
+        after.contains("splat_part_of:\n- '[[Arena Guild]]'\n- '[[The Arena]]'")
+            && after.ends_with(
+                "## Log\n\n- [[Session 1]]: Part of [[Arena Guild]] → [[Arena Guild]], [[The Arena]].\n",
+            ),
+        "A change in play writes the value and one Log line in the entry",
+    );
+    d.state("group-joined-with-log", Sizes::All);
+    d.click("Undo group change");
+    d.observe(
+        "T15.4",
+        fs::read_to_string(&path).unwrap() == before,
+        "One undo removes the value and its Log line",
+    );
+    // The index reads the entry again in the background, and the picker offers what it knows.
+    reload(d);
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    assert_eq!(fs::read_to_string(&path).unwrap(), after);
+    reload(d);
+    d.click(NAV_SESSIONS);
+    d.click_containing("Session 1 · ");
+    d.click("Note");
+    if d.has("Read") {
+        d.click("Read");
+    }
+    d.expect("World changes");
+    d.observe(
+        "T15.4",
+        d.has("Zarel") && d.visible_text("Part of Arena Guild → Arena Guild, The Arena."),
+        "The session lists what play changed, from the entry's Log",
+    );
+    d.state("session-world-changes", Sizes::All);
+    d.click(NAV_WORLD);
+
+    d.click_containing("Open questions · ");
+    d.expect("Can a horn ring be sold?");
+    d.state("open-questions", Sizes::All);
+    d.click("Can a horn ring be sold?");
+    d.observe(
+        "T15.5",
+        d.visible_text("Tieflings wear one ring on their horns for each kept ancestor."),
+        "An open question opens the page that holds it",
+    );
+    d.click_containing("Problems · ");
+    d.expect("No summary");
+    d.observe(
+        "T15.5",
+        d.has("Haltha") && d.visible_text("Nothing points here") && d.has("Tordra"),
+        "The problems name an entry with no summary and an entry that shows on no other page",
+    );
+    d.state("world-problems", Sizes::All);
+}
+
 pub fn places(d: &mut Driver<'_>) {
     entry(
         d,
@@ -358,7 +558,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     d.expect("Edit in Obsidian");
     d.observe(
         "W12",
-        fs::read_to_string(root(d).join("Notes/Ashfall Faction.md"))
+        fs::read_to_string(root(d).join("Factions/Ashfall Faction.md"))
             .unwrap()
             .contains("type: faction"),
         "New Note accepts an optional World type and offers the file editor",
@@ -380,6 +580,38 @@ pub fn round_trip(d: &mut Driver<'_>) {
         );
     }
     d.state("new-faction-note", Sizes::All);
+    let faction_path = root(d).join("Factions/Ashfall Faction.md");
+    let faction_before = fs::read_to_string(&faction_path).unwrap();
+    d.expect("Edit Ashfall Faction");
+    d.click("Edit Ashfall Faction");
+    d.type_into("Status", "ready");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let primary = d.at_size(size, |d| {
+            d.expect("Save changes");
+            d.expect("Cancel");
+            d.expect("Unsaved");
+            !d.has(NEXT_TURN)
+                && d.control_frame("Save changes").is_some_and(|frame| {
+                    frame.fill == design::colors().accent_fill
+                        || frame.fill == design::colors().accent_hover
+                })
+        });
+        d.observe(
+            "iter-6-D-ST1-desk",
+            primary,
+            format!("World Save owns primary without a live run at {size:?}"),
+        );
+    }
+    d.state("world-edit-without-run", Sizes::All);
+    d.click("Status");
+    d.press_ctrl(Key::S);
+    d.wait_for_text("Changes saved.");
+    assert!(
+        fs::read_to_string(&faction_path).unwrap().contains("ready"),
+        "iter-6-D-ST1-shortcut: Ctrl+S must save the focused form",
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
     go_campaign(d);
     d.click(TAB_ENTRIES);
     d.click_containing("Captain Varra · Creature");
@@ -475,6 +707,27 @@ pub fn generator(d: &mut Driver<'_>) {
         "A bad campaign table states why the built-in list stands in",
     );
     d.state("generator-bad-table", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let aligned = d.at_size(size, |d| {
+            d.expect("Open Names.md");
+            let action = d.place_of("Open Names.md").unwrap();
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|n| n.role == Role::Label && n.name.contains("the name table stops at 1"))
+                .unwrap();
+            action.top() >= warning.rect.bottom()
+                && (action.left() - warning.rect.left()).abs() <= 1.0
+                && d.control_frame("Open Names.md")
+                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+        });
+        d.observe(
+            "iter-6-D-FD11",
+            aligned,
+            format!("The generator repair action is bordered and aligned at {size:?}"),
+        );
+    }
+    d.expect("Open Names.md");
     d.click("Open Names.md");
     d.wait_for_text("Names");
     d.observe(
@@ -543,6 +796,20 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     };
     let at_start = turn(d);
     d.begin_task();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let named = d.at_size(size, |d| {
+            d.expect("Edit Rook Ambry");
+            let rect = d.place_of("Edit Rook Ambry").unwrap();
+            let words = d.painted_in(rect);
+            words.contains("Edit") && words.contains(design::icons::EDIT)
+        });
+        d.observe(
+            "iter-6-D-FD7",
+            named,
+            format!("Lookup's Edit action has its pencil and word at {size:?}"),
+        );
+    }
+    d.expect("Edit Rook Ambry");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
     d.click("Change In");
@@ -556,6 +823,26 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "Editing an NPC in Lookup leaves the run's turn as it was",
     );
     d.state("npc-edit-form-in-lookup", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let one_primary = d.at_size(size, |d| {
+            d.expect("Save changes");
+            d.expect(NEXT_TURN);
+            d.expect("Cancel");
+            d.expect("Unsaved");
+            d.control_frame("Save changes").is_some_and(|frame| {
+                frame.stroke.color == design::colors().field_border
+                    && frame.fill != design::colors().accent_fill
+            }) && d.control_frame(NEXT_TURN).is_some_and(|frame| {
+                frame.fill == design::colors().accent_fill
+                    || frame.fill == design::colors().accent_hover
+            })
+        });
+        d.observe(
+            "iter-6-D-ST1",
+            one_primary,
+            format!("Next turn owns primary while NPC Save stays secondary at {size:?}"),
+        );
+    }
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
     d.audit_goal_within("W2", "change an NPC's place and text beside the run", 9);
@@ -665,6 +952,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         let first = d.place_of("Bridge Ambush");
         let second = d.place_of("Shrine of Cinders");
         let and = d.nodes().into_iter().find(|node| node.name == "and");
+        check_link_spaces(d);
         let aligned = warning.zip(action).is_some_and(|(text, action)| {
             (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
         });
@@ -690,7 +978,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Find the folder…");
     d.wait_for_text("Undo folder recovery");
     d.expect("Ashen Marches found in modules/watch-package/.");
-    d.state("package-correct-folder-picked", Sizes::All);
+    d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
+        check_undo_icon(d, "Undo folder recovery", "iter-6-C-AD3");
+    });
     d.click("Undo folder recovery");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
@@ -805,7 +1095,30 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md cannot be read (line 4)");
     assert!(!d.has("Find the folder…"));
-    d.state("manifest-invalid-campaign", Sizes::All);
+    d.state_prepared("manifest-invalid-campaign", Sizes::All, |d| {
+        d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
+            && d.visible_text("including its description.")
+            && d.visible_text("The entries stay unchanged."),
+            "Manifest replacement states the package name, links, description and unchanged entries");
+    });
+    let broken = fs::read_to_string(&path).unwrap();
+    let creatures = folder.join("Creatures/Cinder Wolf.md");
+    let creature_before = fs::read_to_string(&creatures).unwrap();
+    d.click("Replace with a basic Package.md");
+    d.wait_for_text("Undo write Package.md");
+    let basic = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        crate::content_workspace::note_id(&basic),
+        crate::content_workspace::note_id(&valid)
+    );
+    assert!(basic.contains("splat_name: Ashen Marches"));
+    assert_eq!(fs::read_to_string(&creatures).unwrap(), creature_before);
+    d.state_prepared("manifest-replaced-with-undo", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Replaced");
+    });
+    d.click("Undo write Package.md");
+    d.wait_for_text("Package.md cannot be read (line 4)");
+    assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
@@ -855,7 +1168,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
-    d.state("manifest-written-again-campaign", Sizes::All);
+    d.state_prepared("manifest-written-again-campaign", Sizes::All, |d| {
+        check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Package");
+    });
     d.click("Undo write Package.md");
     d.wait_for_text("Package.md was deleted");
     assert!(!path.exists());
@@ -1462,6 +1777,19 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
     d.click_containing("Watchkeeper · ");
     d.wait_for_text("Watch House");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let named = d.at_size(size, |d| {
+            d.expect("Edit Watchkeeper");
+            let rect = d.place_of("Edit Watchkeeper").unwrap();
+            let words = d.painted_in(rect);
+            words.contains("Edit") && words.contains(design::icons::EDIT)
+        });
+        d.observe(
+            "iter-6-D-FD7-world",
+            named,
+            format!("World's Edit action has its pencil and word at {size:?}"),
+        );
+    }
     d.state("npc-before-place-deleted", Sizes::All);
     fs::remove_file(root(d).join("Locations/Watch House.md")).unwrap();
     d.focus_window(false);
@@ -1712,10 +2040,33 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("copied-package-registered-alongside-original", Sizes::All);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let aligned = d.at_size(size, |d| {
+            d.expect("Use the copy's entries");
+            let action = d.place_of("Use the copy's entries").unwrap();
+            let message = d
+                .nodes()
+                .into_iter()
+                .find(|n| {
+                    n.role == Role::Label && n.name.starts_with("Ashen Reaches is registered")
+                })
+                .unwrap();
+            action.top() >= message.rect.bottom()
+                && (action.left() - message.rect.left()).abs() <= 1.0
+                && d.control_frame("Use the copy's entries")
+                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+        });
+        d.observe(
+            "iter-6-D-FD4",
+            aligned,
+            format!("The copied-package action is bordered below the message at {size:?}"),
+        );
+    }
     go_campaign(d);
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);
     go_library(d);
+    d.expect("Use the copy's entries");
     d.click("Use the copy's entries");
     d.wait_for_text("Undo source change");
     go_encounters(d);

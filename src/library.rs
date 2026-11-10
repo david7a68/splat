@@ -9,6 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
+    matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
 use eframe::egui;
@@ -105,7 +106,7 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
     let Some(world) = entry
         .fields
         .get("splat_world")
-        .filter(|world| world.get("type").and_then(serde_yaml_ng::Value::as_str) == Some("npc"))
+        .filter(|_| entry.kind == "world" && crate::world::fights(entry))
     else {
         return false;
     };
@@ -272,7 +273,7 @@ fn unregister_count(notes: &[Note], package: Uuid) -> usize {
         .count()
 }
 
-struct Note {
+pub(crate) struct Note {
     path: String,
     text: String,
     entry: Option<Entry>,
@@ -338,19 +339,31 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
-    /// Plain words match the name, path or section, or a creature's facts. `habitat:forest`
-    /// and the other fact terms match creatures only.
-    fn matches(&self, section: Section, query: &Query, facets: Option<&Facets>) -> bool {
+    /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
+    /// words match the name (in any order, or with a typo), path or section, or a creature's
+    /// facts. `habitat:forest` and the other fact terms match creatures only.
+    fn search_rank(
+        &self,
+        section: Section,
+        query: &Query,
+        typed: &Typed,
+        facets: Option<&Facets>,
+    ) -> Option<Rank> {
         let words = query.words.as_str();
         if words.is_empty() && !query.names_facts() {
-            return section == Section::All || self.section() == section;
+            return (section == Section::All || self.section() == section)
+                .then_some(Rank::typed(0));
         }
-        let text = words.is_empty()
-            || self.name().to_lowercase().contains(words)
-            || self.path.to_lowercase().contains(words)
+        if query.names_facts() && !facets.is_some_and(|facets| query.matches_facts(facets)) {
+            return None;
+        }
+        if words.is_empty() {
+            return Some(Rank::typed(0));
+        }
+        let other = self.path.to_lowercase().contains(words)
             || self.section().label().to_lowercase().contains(words)
             || facets.is_some_and(|facets| query.words_in(self.name(), facets));
-        text && (!query.names_facts() || facets.is_some_and(|facets| query.matches_facts(facets)))
+        with_other(typed.name(&self.name().to_lowercase()), other)
     }
 }
 #[derive(Default)]
@@ -360,8 +373,8 @@ struct DuplicateIndex {
 }
 
 #[derive(Default)]
-struct Loaded {
-    notes: Vec<Note>,
+pub(crate) struct Loaded {
+    pub(crate) notes: Vec<Note>,
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     load_errors: Vec<String>,
@@ -1190,13 +1203,21 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
-        let (entries, errors) = content::read_directory(&path)?;
-        let manifest_path = crate::content_workspace::package_manifest_path(module);
+        let folder = content::read_folder(&path)?;
+        let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+        let manifest_path = crate::content_workspace::manifest_path_in(&folder, module);
         let missing_manifest = !entries.iter().any(|entry| entry.kind == "package")
             && !path.join(&manifest_path).exists();
+        // The folder was just read; its texts are the ones these entries came from.
+        let text_of = |path: &str| -> Result<String, String> {
+            let full = note_path(&module.path, path)?;
+            match folder.text(path) {
+                Some(text) => Ok(text.to_owned()),
+                None => fs::read_to_string(full).map_err(|e| e.to_string()),
+            }
+        };
         for entry in entries {
-            let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
-                .map_err(|e| e.to_string())?;
+            let text = text_of(&entry.path)?;
             let mismatched = entry.kind == "package" && entry.id != module.id;
             notes.push(Note {
                 path: entry.path.clone(),
@@ -1216,8 +1237,8 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             });
         }
         for error in errors {
-            let text =
-                fs::read_to_string(note_path(&module.path, &error.path)?).unwrap_or_default();
+            note_path(&module.path, &error.path)?;
+            let text = text_of(&error.path).unwrap_or_default();
             notes.push(Note {
                 path: error.path,
                 text,
@@ -1248,7 +1269,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 }
 
 /// The whole catalogue: built-in, every package, and the active campaign's own entries.
-fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
+pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
     all.owners = modules
         .iter()
@@ -1269,13 +1290,20 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
     }
     if let Some(campaign) = campaign {
         let owner = Owner::Campaign(campaign.clone());
-        match content::read_directory(&campaign.path) {
-            Ok((entries, errors)) => {
+        match content::read_folder(&campaign.path) {
+            Ok(folder) => {
+                let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+                let text_of = |path: &str| -> Result<String, String> {
+                    let full = note_path(&campaign.path, path)?;
+                    match folder.text(path) {
+                        Some(text) => Ok(text.to_owned()),
+                        None => fs::read_to_string(full).map_err(|e| e.to_string()),
+                    }
+                };
                 for entry in entries.into_iter().filter(|e| {
                     e.kind != "campaign" && !splat::character::campaign_package::is_manifest(e)
                 }) {
-                    let text = fs::read_to_string(note_path(&campaign.path, &entry.path)?)
-                        .map_err(|e| e.to_string())?;
+                    let text = text_of(&entry.path)?;
                     all.notes.push(Note {
                         path: entry.path.clone(),
                         text,
@@ -1285,8 +1313,8 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                     });
                 }
                 for error in errors {
-                    let text = fs::read_to_string(note_path(&campaign.path, &error.path)?)
-                        .unwrap_or_default();
+                    note_path(&campaign.path, &error.path)?;
+                    let text = text_of(&error.path).unwrap_or_default();
                     all.notes.push(Note {
                         path: error.path,
                         text,
@@ -1436,6 +1464,8 @@ pub struct Library {
     filter: Filter,
     /// The filter that `matches` used.
     matched_filter: Filter,
+    /// Where results found only with a typo start in `matches`.
+    typo_from: usize,
     section: Section,
     unreadable_kind: Option<Section>,
     error: Option<String>,
@@ -2333,33 +2363,47 @@ impl Library {
                 }
             }
         }
-        if self.package_copy.is_some()
-            && design::undo_message(
+        let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
+            design::message_with_actions(
                 ui,
                 Tone::Success,
                 &format!(
                     "{} is registered · {}",
-                    self.package_copy.as_ref().unwrap().module.name,
+                    copy.module.name,
                     if self.copy_campaign_before.is_some() {
                         "Used here"
                     } else {
                         "Not used here"
                     }
                 ),
-                "Undo package registration",
+                |ui| {
+                    let undo = Action::quiet("Undo package registration")
+                        .icon(icons::UNDO)
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked();
+                    let use_copy = campaigns.active_campaign().is_some()
+                        && self.copied_rosters.is_none()
+                        && Action::secondary("Use the copy's entries")
+                            .density(Density::Read)
+                            .blocked(self.draft_reason())
+                            .show(ui)
+                            .clicked();
+                    (undo, use_copy)
+                },
             )
-            && let Err(error) = self.undo_package_registration(campaigns)
-        {
+        } else {
+            (false, false)
+        };
+        if undo_copy && let Err(error) = self.undo_package_registration(campaigns) {
             self.error = Some(error);
         }
 
         if let Some(copy) = &self.package_copy
             && let Some(campaign) = campaigns.active_campaign()
             && self.copied_rosters.is_none()
-            && Action::quiet("Use the copy's entries")
-                .blocked(self.draft_reason())
-                .show(ui)
-                .clicked()
+            && use_copy
         {
             match copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
@@ -2657,14 +2701,14 @@ impl Library {
             self.reveal_row |= self.matches_scope != Some(scope);
             self.matches_scope = Some(scope);
             let parsed = Query::parse(&query);
+            let typed = Typed::new(&parsed.words);
             let facets = loaded.facets();
-            let mut found: Vec<usize> = loaded
+            let mut found: Vec<(Rank, usize)> = loaded
                 .notes
                 .iter()
                 .enumerate()
                 .filter(|(i, n)| {
                     loaded.in_scope(n, scope)
-                        && n.matches(self.section, &parsed, facets[*i].as_ref())
                         && (!filtering
                             || facets[*i].as_ref().is_some_and(|f| self.filter.matches(f)))
                         && (!query.is_empty()
@@ -2673,22 +2717,30 @@ impl Library {
                                 .unreadable_kind
                                 .is_none_or(|kind| n.unreadable_kind() == kind))
                 })
-                .map(|(i, _)| i)
+                .filter_map(|(i, n)| {
+                    n.search_rank(self.section, &parsed, &typed, facets[i].as_ref())
+                        .map(|rank| (rank, i))
+                })
                 .collect();
             if !parsed.words.is_empty() {
-                // Best first: the exact name, then a prefix, then a whole word.
-                found.sort_by_key(|i| {
-                    let name = loaded.notes[*i].name().to_lowercase();
-                    let rank = crate::lookup::name_rank(&name, &parsed.words).unwrap_or(4);
+                // Best first: the exact name, then a prefix, then a whole word, then each word in
+                // any order. A path, section or fact match comes next, and a typo comes last. The
+                // sort is stable, so the list's order stays inside each rank.
+                found.sort_by_key(|&(rank, i)| {
                     (
                         rank,
                         crate::lookup::entry_origin(
-                            loaded.notes[*i].entry.as_ref(),
-                            matches!(loaded.notes[*i].owner, Owner::Campaign(_)),
+                            loaded.notes[i].entry.as_ref(),
+                            matches!(loaded.notes[i].owner, Owner::Campaign(_)),
                         ),
                     )
                 });
             }
+            self.typo_from = found
+                .iter()
+                .position(|(rank, _)| rank.typo)
+                .unwrap_or(found.len());
+            let found = found.into_iter().map(|(_, i)| i).collect();
             self.matches = Some((self.section, query.clone(), found));
         }
         let matches = &self.matches.as_ref().unwrap().2;
@@ -2701,7 +2753,11 @@ impl Library {
                 .selected
                 .is_none_or(|i| !matches.contains(&i) && !loaded.notes[i].is_manifest())
         {
-            select = matches.first().copied().filter(|_| !whole_catalogue);
+            // A name found only with a typo is a guess. It does not open by itself.
+            select = matches
+                .first()
+                .copied()
+                .filter(|_| !whole_catalogue && self.typo_from > 0);
             if select.is_none() {
                 self.selected = None;
                 self.draft.clear();
@@ -2798,6 +2854,16 @@ impl Library {
                 ui.add_space(design::XS);
                 if searching || filtering || (compact && self.section != Section::All) {
                     design::group_heading(ui, if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, matches.len());
+                }
+                if searching && !matches.is_empty() && self.typo_from == 0 {
+                    ui.add_space(design::S);
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body.rich(ui, CLOSE_NAMES)
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
                 }
                 if matches.is_empty() {
                     ui.add_space(design::S);
