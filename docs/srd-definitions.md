@@ -94,12 +94,12 @@ registered adapter does not exist. The verifier lists these separately and
 also groups missing adapters by capability.
 
 The `engine_gaps` field in generated coverage names every contract a definition
-requires. [`content::adapters`](../src/content/adapters.rs) lists the implemented
+requires. [`content::adapters`](../crates/core/src/content/adapters.rs) lists the implemented
 contracts in Rust code. An open gap is a required contract that is not on that list.
 This keeps generated notes and saved character copies unchanged when a gap closes.
 
 The 35 implemented contracts are the 12 progression tables, 12 subclasses and 11 subclass
-selection features. [`character::build`](../src/character/build.rs) handles what they
+selection features. [`character::build`](../crates/core/src/character/build.rs) handles what they
 specify and rejects unknown fields. It returns results and never changes an actor's state,
 so rules such as "gaining a level does not refill Pact Magic slots" are returned for the
 caller. A test compares registered inputs, outputs and events with names the module handles,

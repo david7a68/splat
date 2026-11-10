@@ -29,7 +29,7 @@ fn all_old_note_kinds_are_flagged_and_not_loaded() {
         assert_eq!(Entry::parse(kind, &text).unwrap_err(), legacy::OLD_LAYOUT);
         std::fs::write(root.path().join(format!("{kind}.md")), text).unwrap();
     }
-    let character = include_str!("../../tests/fixtures/conversion/character.old.md");
+    let character = include_str!("../../../../tests/fixtures/conversion/character.old.md");
     assert_eq!(
         Entry::parse("Character.md", character).unwrap_err(),
         legacy::OLD_LAYOUT
@@ -47,7 +47,7 @@ fn all_old_note_kinds_are_flagged_and_not_loaded() {
 
 #[test]
 fn every_builtin_note_is_schema_two_without_flags() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("builtin");
+    let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")).join("builtin");
     let (entries, errors) = super::read_directory(&root).unwrap();
     assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(entries.len(), 3550);
@@ -66,7 +66,8 @@ fn every_builtin_note_is_schema_two_without_flags() {
 
 #[test]
 fn conversion_keeps_models_and_exact_output_for_every_note_kind() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/conversion");
+    let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+        .join("tests/fixtures/conversion");
     for file in std::fs::read_dir(&root).unwrap() {
         let path = file.unwrap().path();
         if !path.to_string_lossy().ends_with(".old.md") {

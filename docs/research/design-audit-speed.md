@@ -356,8 +356,8 @@ Source evidence: [suite and shared lock](../../src/visual_tests/mod.rs),
 [driver and timings](../../src/visual_tests/driver.rs),
 [baseline selection and comparison](../../src/visual_tests/ergonomics.rs),
 [fixtures](../../src/visual_tests/fixture.rs),
-[embedded SRD cache](../../src/content/builtin.rs),
-[definition cache](../../src/content/definitions.rs),
+[embedded SRD cache](../../crates/core/src/content/builtin.rs),
+[definition cache](../../crates/core/src/content/definitions.rs),
 [fonts](../../src/design/theme.rs),
 [video pipeline](../../src/visual_tests/video.rs), and
 [shell commands](../../devenv.nix). The linked primary Cargo/Mesa documentation
