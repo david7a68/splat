@@ -84,6 +84,14 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     }
 }
 
+fn arrival_add_word(group: &super::RunGroup) -> String {
+    if group.warnings.is_empty() {
+        "Add".to_owned()
+    } else {
+        format!("Add {}", group.joinable_count())
+    }
+}
+
 /// What sync needs from the DM, on the line above the roster.
 struct SyncAlert {
     text: String,
@@ -1079,7 +1087,7 @@ impl Run {
                         + design::number_width(ui, " Log ", &Type::Body.font(ui))
                         + Density::Read.control()
                         + design::L
-                        + design::S * 2.0
+                        + design::S * 3.0
                 };
                 let sheet = self
                     .notice_summary
@@ -1237,7 +1245,21 @@ impl Run {
                         }));
                     }
                     if let Some(summary) = &sheet {
-                        let response = design::small_message(ui, Tone::Warning, summary);
+                        ui.add_space(design::S);
+                        // The compact message's own top alignment is useful in stacked
+                        // notices. Here its text-height box is centred by the control row.
+                        let width =
+                            design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
+                                + design::S
+                                + design::HAIRLINE_WIDTH
+                                + design::XS;
+                        let response = ui
+                            .allocate_ui_with_layout(
+                                vec2(width, Type::Small.line()),
+                                Layout::left_to_right(Align::Center),
+                                |ui| design::small_message(ui, Tone::Warning, summary),
+                            )
+                            .inner;
                         let detail = self.notice.as_deref().unwrap_or(summary);
                         design::named(ui, &response, detail);
                         response.on_hover_text(detail);
@@ -3145,6 +3167,18 @@ impl Run {
         if !labelled {
             design::group_heading(ui, "Encounter groups", offered.any.len());
         }
+        let add_width = offered
+            .own
+            .iter()
+            .chain(&planned)
+            .chain(&any)
+            .chain(&offered.other)
+            .map(|group| {
+                Action::secondary(&arrival_add_word(group))
+                    .density(Density::Read)
+                    .natural_width(ui)
+            })
+            .fold(0.0, f32::max);
         let mut add = None;
         for (heading, list) in [
             ("For this encounter", offered.own.as_slice()),
@@ -3161,7 +3195,7 @@ impl Run {
             }
             for group in list {
                 ui.push_id(group.id, |ui| {
-                    if self.group_row(ui, group) {
+                    if self.group_row(ui, group, add_width) {
                         add = Some(group.id);
                     }
                 });
@@ -3182,7 +3216,7 @@ impl Run {
     }
 
     /// Returns true when the DM chooses to add this group.
-    fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup) -> bool {
+    fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup, add_width: f32) -> bool {
         let c = colors();
         let name = &group.name;
         let changed = group
@@ -3346,18 +3380,12 @@ impl Run {
         }
         let members = group.member_summary_wrapped();
         let mut add = false;
-        let add_word = if group.warnings.is_empty() {
-            "Add".to_owned()
-        } else {
-            format!("Add {}", group.joinable_count())
-        };
+        let add_word = arrival_add_word(group);
         ui.horizontal(|ui| {
             let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
                 + 72.0
                 + design::XS
-                + Action::secondary(&add_word)
-                    .density(Density::Read)
-                    .natural_width(ui)
+                + add_width
                 + 3.0 * ui.spacing().item_spacing.x;
             let width = (ui.available_width() - controls).max(design::XXL);
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
@@ -3412,12 +3440,21 @@ impl Run {
                     && may_roll
                     && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
                 .then_some("The first member has no initiative bonus. Type a total."));
-            add = Action::secondary(&add_word)
-                .density(Density::Read)
-                .name(&format!("Add {name} to the initiative list"))
-                .blocked(blocked)
-                .show(ui)
-                .clicked()
+            add = ui
+                .allocate_ui_with_layout(
+                    vec2(add_width, Density::Read.control()),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.set_width(add_width);
+                        Action::secondary(&add_word)
+                            .density(Density::Read)
+                            .name(&format!("Add {name} to the initiative list"))
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked()
+                    },
+                )
+                .inner
                 || (enter && blocked.is_none());
         });
         if let Err(reason) =
@@ -4411,8 +4448,8 @@ impl Run {
         closed
     }
 
-    /// Only visible controls reserve space. Roll precedes initiative so all totals align
-    /// while party names can use the room a Roll button would take.
+    /// Place has a slot from the start. Only the tie slot changes on blur.
+    /// Roll precedes initiative so party and NPC totals share one column.
     fn setup_slots(&self, ui: &egui::Ui, npc: bool) -> ((f32, f32, f32), f32) {
         let tie = if self
             .state
@@ -4424,25 +4461,16 @@ impl Run {
         } else {
             0.0
         };
-        let place = if self
-            .state
-            .participants
-            .iter()
-            .all(|p| !p.present || p.initiative.is_some())
-        {
-            design::XL
+        let place = design::XL;
+        // Freeze only the tie slot while a field has focus. Place numbers can appear
+        // immediately without moving the total under the cursor.
+        let slot_width = egui::Id::new("setup_tie_slot_width");
+        let tie = if ui.memory(|memory| memory.focused().is_some()) {
+            ui.data(|data| data.get_temp::<f32>(slot_width))
+                .unwrap_or(tie)
         } else {
-            0.0
-        };
-        // While a field has focus, keep the columns of the last frame without focus, so a
-        // typed total never moves the field under the cursor; the change lands on blur.
-        let slot_widths = egui::Id::new("setup_slot_widths");
-        let (tie, place) = if ui.memory(|memory| memory.focused().is_some()) {
-            ui.data(|data| data.get_temp::<(f32, f32)>(slot_widths))
-                .unwrap_or((tie, place))
-        } else {
-            ui.data_mut(|data| data.insert_temp(slot_widths, (tie, place)));
-            (tie, place)
+            ui.data_mut(|data| data.insert_temp(slot_width, tie));
+            tie
         };
         let roll = if npc { design::L * 4.0 } else { 0.0 };
         let presence = design::number_width(
@@ -4453,7 +4481,7 @@ impl Run {
             + design::S;
         (
             (tie, place, roll),
-            tie + place + Density::Read.control() + presence,
+            tie + place + design::S + Density::Read.control() + presence,
         )
     }
 
@@ -4540,7 +4568,7 @@ impl Run {
                 let next = format!("{detail} · {condition}");
                 let remaining = p.conditions.len() - at - 1;
                 let reserve = if remaining > 0 {
-                    format!(" · +{remaining}")
+                    format!(" · {remaining} more")
                 } else {
                     String::new()
                 };
@@ -4548,7 +4576,7 @@ impl Run {
                     && design::number_width(ui, &format!("{next}{reserve}"), &Type::Small.font(ui))
                         > detail_width
                 {
-                    detail.push_str(&format!(" · +{}", p.conditions.len() - at));
+                    detail.push_str(&format!(" · {} more", p.conditions.len() - at));
                     break;
                 }
                 detail = next;
@@ -4708,6 +4736,7 @@ impl Run {
                     },
                 );
             }
+            ui.add_space(design::S);
             let (word, hint) = presence_action(present);
             let accessible = format!("{word}: {name}");
             let pressed = ui
@@ -5937,12 +5966,8 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &if inline_state && sync.is_some() {
-                        format!("+{}", p.conditions.len() - condition_count)
-                    } else {
-                        design::count(p.conditions.len() - condition_count, "more", "more")
-                            .replace(' ', "\u{a0}")
-                    },
+                    &design::count(p.conditions.len() - condition_count, "more", "more")
+                        .replace(' ', "\u{a0}"),
                     c.participant.condition,
                 ),
             ));
@@ -6620,6 +6645,283 @@ fn optional_number(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn iter8_b_setup_places_show_while_typing_and_fields_hold_still() {
+        use egui_kittest::kittest::Queryable;
+        for width in [450.0, 960.0, 1920.0] {
+            let mut run = super::super::tests::run();
+            run.initiative.roster_ties = false;
+            for (index, total) in [Some(20), Some(15), None].into_iter().enumerate() {
+                run.state.participants[index].initiative = total;
+                run.state.participants[index].conditions.clear();
+            }
+            let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+            let shown = run.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = shown.borrow_mut();
+                        for i in 0..3 {
+                            let picked = ui.push_id(i, |ui| run.setup_row(ui, i)).inner;
+                            if let Some(command) = picked {
+                                run.apply(command).unwrap();
+                            }
+                        }
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let label = "Initiative for Guard 3";
+            harness.get_by_label(label).click();
+            harness.run_steps(2);
+            let before = harness.get_by_label(label).rect().min;
+            harness.event(egui::Event::Text("10".into()));
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+            assert!(harness.ctx.memory(|m| m.has_focus(design::focus_id(label))));
+            assert!(
+                harness
+                    .query(
+                        egui_kittest::kittest::By::new().predicate(|node| node.label().as_deref()
+                            == Some("Place for Guard 3: 3rd")
+                            && node.value().as_deref() == Some("3rd"))
+                    )
+                    .is_some(),
+                "iter8-B-FT2: the last focused total shows its place at {width}"
+            );
+            assert_eq!(
+                harness.get_by_label(label).rect().min,
+                before,
+                "iter8-B-FT1: last total keeps x and y"
+            );
+            // Replace 10 by 15, tied with Guard 2, without leaving the field.
+            harness.key_press(Key::Backspace);
+            harness.event(egui::Event::Text("5".into()));
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[2].initiative, Some(15));
+            assert_eq!(
+                harness.get_by_label(label).rect().min,
+                before,
+                "iter8-B-FT1: a typed tie keeps x and y"
+            );
+            assert!(
+                harness
+                    .query_by_label("Move Guard 3 before Guard 2")
+                    .is_none(),
+                "iter8-B-tie: the new tie slot waits for blur"
+            );
+            harness.key_press(Key::Backspace);
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[2].initiative, Some(1));
+            assert_eq!(
+                harness.get_by_label(label).rect().min,
+                before,
+                "iter8-B-FT1: backspace keeps x and y"
+            );
+            harness
+                .ctx
+                .memory_mut(|m| m.surrender_focus(design::focus_id(label)));
+            harness.run_steps(2);
+            assert_eq!(
+                harness.get_by_label(label).rect().min,
+                before,
+                "iter8-B-FT1: leaving an untied field keeps x and y"
+            );
+            for name in ["Guard 1", "Guard 2", "Guard 3"] {
+                let field = harness
+                    .get_by_label(&format!("Initiative for {name}"))
+                    .rect();
+                let absent = harness.get_by_label(&format!("Absent: {name}")).rect();
+                assert!(
+                    absent.left() - field.right() >= design::S,
+                    "iter8-B-FT1: S gap before Absent for {name}"
+                );
+            }
+            // A tie that is kept does expose its ordering actions after blur.
+            harness.get_by_label(label).click();
+            harness.event(egui::Event::Text("5".into()));
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[2].initiative, Some(15));
+            harness
+                .ctx
+                .memory_mut(|m| m.surrender_focus(design::focus_id(label)));
+            harness.run_steps(2);
+            assert!(
+                harness
+                    .query_by_label("Move Guard 3 before Guard 2")
+                    .is_some(),
+                "iter8-B-tie: a kept tie shows its controls on blur"
+            );
+        }
+    }
+
+    #[test]
+    fn iter8_b_arrival_fields_share_a_column_for_add_and_add_ten() {
+        use egui_kittest::kittest::Queryable;
+        for width in [440.0, 760.0] {
+            let mut run = super::super::tests::run();
+            let groups: Vec<_> = [("Scouts", false), ("Lost Patrol", true)]
+                .into_iter()
+                .map(|(name, partial)| {
+                    Arc::new(super::super::RunGroup {
+                        id: Uuid::new_v4(),
+                        path: format!("{name}.md"),
+                        name: name.into(),
+                        side: "enemies".into(),
+                        encounter: None,
+                        encounter_name: None,
+                        members: vec![super::super::GroupMember {
+                            entry: run.state.participants[0].definition.clone(),
+                            count: 10,
+                            overrides: Default::default(),
+                        }],
+                        notes: String::new(),
+                        xp: 0,
+                        xp_unknown: vec![],
+                        unavailable: 0,
+                        unavailable_members: vec![],
+                        problem: None,
+                        warnings: if partial {
+                            vec!["One unread member".into()]
+                        } else {
+                            vec![]
+                        },
+                    })
+                })
+                .collect();
+            run.groups = Some(Arc::new(groups));
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 800.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.group_list(ui);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let fields: Vec<_> = ["Scouts", "Lost Patrol"]
+                .map(|name| {
+                    harness
+                        .get_by_label(&format!("Initiative total for {name}"))
+                        .rect()
+                })
+                .to_vec();
+            for name in ["Scouts", "Lost Patrol"] {
+                harness.get_by_label(&format!("Add {name} to the initiative list"));
+            }
+            assert!(
+                (fields[0].left() - fields[1].left()).abs() <= 1.0,
+                "iter8-B-FT3: shared field column at {width}: {fields:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn iter8_b_condition_counts_keep_more_with_sync() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut p = super::super::tests::run().state.participants[0].clone();
+                p.conditions = [
+                    "Poisoned",
+                    "Prone",
+                    "Restrained",
+                    "Blinded",
+                    "Deafened",
+                    "Frightened",
+                ]
+                .map(str::to_owned)
+                .to_vec();
+                for sync in [SyncState::Off, SyncState::Conflict] {
+                    let layout = RowLayout::new(
+                        ui,
+                        442.0,
+                        &p,
+                        Some(sync),
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    assert!(line.text().contains("more"), "iter8-B-FT7: {}", line.text());
+                    assert!(!line.text().contains('+'), "iter8-B-FT7: {}", line.text());
+                    assert!(line.text().contains("Poisoned"));
+                    assert!(
+                        line.text()
+                            .contains(sync_status(sync).word.replace(' ', "\u{a0}").as_str())
+                    );
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn iter8_b_sheet_notice_centres_with_next_and_log_and_has_a_gap() {
+        use egui_kittest::kittest::Queryable;
+        for width in [1200.0, 1920.0] {
+            let mut run = super::super::tests::run();
+            for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                run.apply(Command::Initiative(index, Some(total))).unwrap();
+            }
+            run.apply(Command::Begin).unwrap();
+            run.notice = Some("Guard 1's sheet changed: HP 17 → 15. Undo stops here.".into());
+            run.notice_summary = Some("Guard 1: HP 17 → 15".into());
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 800.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        run.live_header(ui, design::RUN_REGULAR);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let log = harness.get_by_label("Log").rect();
+            let text = |prefix: &str| {
+                harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.text().starts_with(prefix) => {
+                            Some(text)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| panic!("Required text: {prefix}"))
+            };
+            let next = text("Next:");
+            let notice = text("Guard 1: HP");
+            let next_rect = Rect::from_min_size(next.pos, next.galley.size());
+            let notice_rect = Rect::from_min_size(notice.pos, notice.galley.size());
+            let bar = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect) if rect.fill == colors().result.warning => {
+                        Some(rect.rect)
+                    }
+                    _ => None,
+                })
+                .expect("Required warning bar");
+            assert!(
+                (notice_rect.center().y - next_rect.center().y).abs() <= 1.0
+                    && (notice_rect.center().y - log.center().y).abs() <= 1.0,
+                "iter8-B-AT2-centre: {notice_rect:?}, {next_rect:?}, {log:?}"
+            );
+            assert!(
+                bar.left() - next_rect.right() >= design::S,
+                "iter8-B-AT2-gap: {bar:?}, {next_rect:?}"
+            );
+            assert!(
+                (bar.center().y - notice_rect.center().y).abs() <= 1.0,
+                "iter8-B-AT2-bar: {bar:?}, {notice_rect:?}"
+            );
+        }
+    }
+
+    #[test]
     fn iter7_b_setup_counts_partly_hidden_rows_from_scroll_content_top() {
         use egui_kittest::kittest::Queryable;
         let mut checked = 0;
@@ -6874,7 +7176,7 @@ mod tests {
     use splat::content::{Entry, overrides::Overrides};
 
     #[test]
-    fn iter_3_b_crowded_linked_row_keeps_its_states_on_one_line() {
+    fn iter8_b_crowded_row_keeps_worded_count_and_states_within_its_bounds() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
@@ -6897,14 +7199,23 @@ mod tests {
                         RowFit::Summary,
                         0.0,
                     );
-                    let line = layout.second_line.unwrap();
-                    assert_eq!(
-                        line.rows.len(),
-                        1,
-                        "{} width={} rows={:?}",
-                        line.text(),
-                        line.job.wrap.max_width,
-                        line.rows.iter().map(|row| row.size).collect::<Vec<_>>()
+                    let line = layout.second_line.as_ref().unwrap();
+                    assert!(
+                        line.rows
+                            .iter()
+                            .all(|row| row.size.x <= line.job.wrap.max_width),
+                        "iter8-B-FT7-bounds: {}",
+                        line.text()
+                    );
+                    assert!(
+                        layout.height(design::RUN_COMPACT)
+                            >= layout.name_line(design::RUN_COMPACT) + line.size().y,
+                        "iter8-B-FT7-height: the row includes its full state text"
+                    );
+                    assert!(
+                        line.text().replace('\u{a0}', " ").contains("1 more"),
+                        "iter8-B-FT7-words: {}",
+                        line.text()
                     );
                     for word in ["Bloodied", "Absent", "Poisoned", "Sync", "off"] {
                         assert!(line.text().contains(word));
@@ -7292,7 +7603,7 @@ mod tests {
                                 .replace('\u{a0}', " ")
                                 .contains("Reading sheet…")
                         );
-                        assert!(line.text().contains("+1"));
+                        assert!(line.text().replace('\u{a0}', " ").contains("1 more"));
                         assert!(
                             layout
                                 .condition_spans

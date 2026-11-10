@@ -1087,11 +1087,7 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
             .map(|(at, _)| at)
             .unwrap();
         parts.remove(remove);
-        let text = if parts.is_empty() {
-            "…".into()
-        } else {
-            format!("{} …", parts.join(" · "))
-        };
+        let text = parts.join(" · ");
         if design::number_width(ui, &text, &font) <= width {
             return text;
         }
@@ -2506,10 +2502,15 @@ impl Encounters {
                     },
                 );
             } else {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "No changes to save.")
-                        .color(colors().muted),
+                design::save_row_state(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: colors().muted,
+                    },
+                    false,
+                    None,
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5030,6 +5031,59 @@ mod tests {
         assert!(
             notes.width() <= design::LIST_MEASURE,
             "iter7-B-AT1: {notes:?}"
+        );
+    }
+
+    #[test]
+    fn iter8_b_removed_source_has_no_ellipsis() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
+                let fitted = changed_detail(ui, detail, "Changed · 3 to add by hand", 400.0);
+                assert!(!fitted.contains("Ashen Marches"));
+                assert!(!fitted.contains('…'), "iter8-B-FT8: {fitted}");
+                assert!(fitted.contains("as Ember Cultist"));
+            });
+        });
+    }
+
+    #[test]
+    fn iter8_b_clean_creature_uses_shared_status() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let dir = tempfile::tempdir().unwrap();
+        creature(dir.path(), "Wolf", false);
+        let mut editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
+        let mut harness = egui_kittest::Harness::new(move |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                Encounters::creature_pane(ui, &mut editor);
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Done with this creature");
+        let save = harness.get_by_label("Save creature");
+        assert!(save.accesskit_node().is_disabled());
+        let texts: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.text()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts
+                .iter()
+                .any(|text| text.contains("No changes") && text.contains(icons::OK)),
+            "iter8-B-FT5: shared clean status: {texts:?}"
+        );
+        assert!(
+            !texts
+                .iter()
+                .any(|text| text.contains("No changes to save."))
         );
     }
 
