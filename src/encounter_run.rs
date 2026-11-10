@@ -3106,7 +3106,11 @@ impl Run {
         let Some(path) = &self.roster_source else {
             return;
         };
+        // A moved or deleted encounter file can no longer be repaired here; its old faults
+        // must not block Begin. The run's own participants are complete.
         let Ok(metadata) = fs::metadata(path) else {
+            self.roster_faults.clear();
+            self.roster_stamp = None;
             return;
         };
         let stamp = (metadata.modified().ok(), metadata.len());

@@ -667,18 +667,17 @@ fn storage_notice(
             Tone::Error => icons::ERROR,
             Tone::Info => icons::INFO,
         };
-        // The message uses this row's L spacing between its bar, icon and text.
+        // `design::message` draws S and the bar, the icon, one L gap, then the text, less XS.
         let inset = design::S
             + design::HAIRLINE_WIDTH
             + design::number_width(ui, icon, &Type::Body.font(ui))
-            + design::L * 2.0
+            + design::L
             - design::XS;
         let text_width = words
             .lines()
             .map(|line| design::number_width(ui, line, &Type::Body.font(ui)))
             .fold(0.0_f32, f32::max)
-            + inset
-            + design::HAIRLINE_WIDTH;
+            + inset;
         if text_width + design::L + actions_width <= ui.available_width() {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = design::L;

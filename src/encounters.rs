@@ -146,7 +146,8 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
         .filter_map(|row| {
             let line = row.first()?.line + entry.body_line.saturating_sub(1);
             let flag = entry.flags.iter().find(|flag| flag.line == line)?;
-            let label = &row[1].value;
+            // A row with missing cells is a fault too; never index past its end.
+            let label = row.get(1).map_or("", |cell| cell.value.as_str());
             let target = label
                 .split("%%")
                 .next()
@@ -154,13 +155,16 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
                 .trim()
                 .trim_start_matches("[[")
                 .trim_end_matches("]]");
-            let name = if row[2].value.is_empty() {
+            let named = row.get(2).map_or("", |cell| cell.value.as_str());
+            let name = if !named.is_empty() {
+                named.to_owned()
+            } else if target.is_empty() {
+                format!("Row on line {line}")
+            } else {
                 known
                     .get(target)
                     .cloned()
                     .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
-            } else {
-                row[2].value.clone()
             };
             Some(RosterFault {
                 name,
@@ -5508,6 +5512,35 @@ mod tests {
         fs::write(&path, format!("{original}External edit\n")).unwrap();
         assert!(editor.start_run(&campaign, &[]).is_err());
     }
+    #[test]
+    fn roster_faults_survive_a_row_with_missing_cells() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = stat_creature(dir.path(), "Wolf", 20);
+        let mut draft = Draft::new();
+        draft.add(wolf, false);
+        draft.save(&active, &[]).unwrap();
+        let path = draft.path.clone();
+        let saved = fs::read_to_string(dir.path().join(&path)).unwrap();
+        let table = splat::content::layout::Document::new(&saved)
+            .table(splat::content::list_formats::ROSTER)
+            .unwrap();
+        // Cut the row back to two cells, as a hand edit in Obsidian can.
+        let row = &table.rows[0];
+        let short = format!("| {} | {} |", row[0].value, row[1].value);
+        let start = saved[..row[0].range.start]
+            .rfind('\n')
+            .map_or(0, |at| at + 1);
+        let end = saved[row[0].range.start..]
+            .find('\n')
+            .map_or(saved.len(), |at| row[0].range.start + at);
+        let mut cut = saved.clone();
+        cut.replace_range(start..end, &short);
+        let entry = Entry::parse(&path, &cut).unwrap();
+        let faults = roster_faults(&entry, &BTreeMap::new());
+        assert_eq!(faults.len(), 1, "{cut}");
+    }
+
     #[test]
     fn iter4_b_unread_roster_blocks_direct_and_plan_starts_without_writing() {
         let dir = tempfile::tempdir().unwrap();
