@@ -92,9 +92,14 @@ devenv shell -- audit-gate final
 This also writes to `artifacts/screenshots/iter-0/`: PNGs at 960x640 and 1200x800,
 with 1920x1080 for width-sensitive layouts and recorded wide proof states. Selected
 states also have a 2x-density capture. The folder holds `ergonomics.json`, `ergonomics.md`,
-`manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
-software Vulkan driver, so captures repeat between runs. Video needs the host's
-`ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
+`manifest.txt`, `renderer.txt` and one `video/<scenario>.mp4` per scenario. Rendering uses
+Mesa's Vulkan driver for an Intel or AMD GPU, or its software rasterizer when there is no
+such GPU. `SPLAT_VISUAL_RENDERER=software` always uses the software rasterizer. Two runs
+on the same renderer give the same pixels. A GPU and the software rasterizer differ on a
+few edge pixels, so compare runs from the same computer. Video needs the host's
+`ffmpeg`. Videos are 12 frames per second, and each picture is stored once. They use the
+first H.264 encoder that works: VA-API for Intel or AMD, then NVIDIA's
+NVENC, then x264 on the CPU. `renderer.txt` names the encoder. The optional contact sheet needs `montage` and can use several GB of RAM.
 Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
 or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
@@ -130,6 +135,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- `SPLAT_VISUAL_ENCODER=vaapi`, `nvenc` or `x264` uses only that kind of video encoder.
+  An unavailable one falls back to x264. At most six videos at once use NVENC, because
+  NVIDIA drivers limit encode sessions. Other videos then use x264.
 - `Sizes::Standard` captures and checks 960x640 and 1200x800. `StandardAndHiDpi`
   adds 2x density. Use `All` or `AllAndHiDpi` for readers, forms, lists, panes,
   action notices and wide proof states where width matters. The older `Default`
