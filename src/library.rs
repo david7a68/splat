@@ -95,6 +95,64 @@ fn name_list(names: &[String]) -> String {
     }
 }
 
+/// NPC roster rows keep their stat block and display name, rather than the NPC identity.
+pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
+    if content::required_references(encounter)
+        .is_ok_and(|refs| refs.contains(&content::Reference::Id(entry.id)))
+    {
+        return true;
+    }
+    let Some(world) = entry
+        .fields
+        .get("splat_world")
+        .filter(|world| world.get("type").and_then(serde_yaml_ng::Value::as_str) == Some("npc"))
+    else {
+        return false;
+    };
+    let Some(creature) = world
+        .get("creature")
+        .and_then(|creature| creature.get("id"))
+        .and_then(serde_yaml_ng::Value::as_str)
+    else {
+        return false;
+    };
+    encounter
+        .fields
+        .get("splat_encounter")
+        .and_then(|setup| setup.get("roster"))
+        .and_then(serde_yaml_ng::Value::as_sequence)
+        .is_some_and(|roster| {
+            roster.iter().any(|slot| {
+                slot.get("creature")
+                    .and_then(|reference| reference.get("id"))
+                    .and_then(serde_yaml_ng::Value::as_str)
+                    == Some(creature)
+                    && slot
+                        .get("overrides")
+                        .and_then(|changes| changes.get("name"))
+                        .and_then(serde_yaml_ng::Value::as_str)
+                        == Some(entry.name.as_str())
+            })
+        })
+}
+
+/// Shared consequence wording for the two identity-repair choices.
+pub(crate) fn duplicate_repair_consequence(
+    ui: &mut egui::Ui,
+    users: &[String],
+    remaining: &str,
+    keeps: bool,
+) {
+    if !users.is_empty() {
+        let verb = if keeps { "keeps" } else { "will then use" };
+        ui.label(
+            Type::Small
+                .rich(ui, format!("{} {verb} {remaining}.", name_list(users)))
+                .color(colors().muted),
+        );
+    }
+}
+
 fn draft_words(campaign: bool) -> &'static str {
     if campaign {
         "Save or discard to copy, add an entry, change packages or switch campaign."
@@ -4393,9 +4451,7 @@ impl Library {
                 .filter_map(|other| {
                     let entry = other.entry.as_ref()?;
                     (entry.kind == "encounter"
-                        && content::required_references(entry).is_ok_and(|refs| {
-                            refs.contains(&content::Reference::Id(note.entry.as_ref().unwrap().id))
-                        }))
+                        && encounter_uses_entry(entry, note.entry.as_ref().unwrap()))
                     .then(|| entry.name.clone())
                 })
                 .collect();
@@ -4445,16 +4501,7 @@ impl Library {
                         } else {
                             remaining.into_owned()
                         };
-                        let verb = if position == 0 {
-                            "keeps"
-                        } else {
-                            "will then use"
-                        };
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} {verb} {remaining}.", name_list(&users)))
-                                .color(colors().muted),
-                        );
+                        duplicate_repair_consequence(ui, &users, &remaining, position == 0);
                     }
                 });
             }
