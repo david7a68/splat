@@ -163,7 +163,7 @@ pub(super) fn list_row(
                             ui.available_width() - if status { design::L } else { 0.0 },
                         );
                         let warning = visible_detail.split(" · ").position(|part| {
-                            matches!(part, "Changed elsewhere" | "Offered in no fight")
+                            matches!(part, "Changed on disk" | "Offered in no fight")
                         });
                         let mut job = egui::text::LayoutJob::default();
                         for (index, part) in visible_detail.split(" · ").enumerate() {

@@ -1042,7 +1042,14 @@ pub mod party {
             }
             assert!(d.in_view(page));
             d.click(page);
-            d.state(state, Sizes::Default);
+            d.state(
+                state,
+                if matches!(page, "Features" | "Background") {
+                    Sizes::All
+                } else {
+                    Sizes::Default
+                },
+            );
             if page == "Equipment" {
                 d.observe(
                     "P29",
@@ -3294,6 +3301,11 @@ pub mod party_from_run {
                     && !words.contains("0 successes")
             },
         );
+        d.observe_both(
+            "iter7-B-FT1",
+            "A player at zero HP keeps visible editable death saves",
+            |d| d.in_view("Add a death save success") && d.in_view("Add a death save failure"),
+        );
         d.state("live-death-saves-once", Sizes::All);
 
         // The third view of a run. It reads differently, and undo can reopen it.
@@ -4181,8 +4193,8 @@ pub mod run_edge_states {
         d.state("saved-new-run-and-closed", Sizes::All);
         d.observe(
             "Recovery selection",
-            d.has_containing("Changed elsewhere") && d.has_containing("Copy 2"),
-            "Recovery copies show their number, and the preserved file is marked Changed elsewhere",
+            d.has_containing("Changed on disk") && d.has_containing("Copy 2"),
+            "Recovery copies show their number, and the preserved file is marked Changed on disk",
         );
         d.click(RESUME);
         let resumed_copy = d
@@ -7921,6 +7933,15 @@ pub mod run_loot {
         );
         d.click_row(GUARD);
         d.expect("Vault key");
+        d.observe_both(
+            "iter7-B-FT1",
+            "A monster at zero HP keeps loot first without death-save controls",
+            |d| {
+                !d.has("Add a death save success")
+                    && !d.has("Add a death save failure")
+                    && d.in_view("Roll gems for Vault Guard")
+            },
+        );
         d.state("loot-on-the-card", Sizes::All);
         d.observe(
             "T14.8",
@@ -7969,6 +7990,37 @@ pub mod run_loot {
         d.press(Key::Enter);
         d.type_into(ADD, "veil");
         d.click_containing("Veilglass Lantern ·");
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let fits = d.at_size(size, |d| {
+                let roster = d.place_of("1. Brannoch Vale").unwrap();
+                let notes = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Read-aloud and notes"
+                            && node.role == egui::accesskit::Role::MultilineTextInput
+                    })
+                    .unwrap();
+                let actions: Vec<_> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.name
+                            == "Options: starting HP, temporary HP, initiative group and changes"
+                    })
+                    .collect();
+                !actions.is_empty()
+                    && actions.iter().all(|node| {
+                        node.rect.right() - roster.left() <= crate::design::LIST_MEASURE
+                    })
+                    && notes.rect.width() <= crate::design::LIST_MEASURE
+                    && d.place_of(FIND_CREATURE).is_some_and(|search| {
+                        search.left() > notes.rect.right()
+                            && search.left() - notes.rect.right() <= crate::design::XL * 2.0
+                    })
+            });
+            d.observe("iter7-B-AT1", fits, format!("Roster actions and notes keep LIST_MEASURE with Add directly beside them at {size:?}"));
+        }
         d.state("loot-in-the-editor", Sizes::All);
         d.observe(
             "T14.8",

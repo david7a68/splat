@@ -2773,7 +2773,8 @@ impl Run {
     fn side_panel(&mut self, ui: &mut egui::Ui) {
         let index = self.selected;
         let p = &self.state.participants[index];
-        let (hp, successes, failures) = (p.hp, p.successes, p.failures);
+        let (successes, failures) = (p.successes, p.failures);
+        let death_saves = p.shows_death_saves();
         let is_sheet = p.definition.fields.contains_key("splat_external");
         let title = if matches!(self.panel, Panel::Log | Panel::Encounter | Panel::Groups) {
             self.fight_panel_title()
@@ -2791,7 +2792,7 @@ impl Run {
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
         self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
-        if hp == Some(0)
+        if death_saves
             && !(self.panel == Panel::Reference
                 && self.sheet_for == Some(index)
                 && self.sheet.is_some())
@@ -3641,7 +3642,7 @@ impl Run {
                     successes: u64::from(p.successes),
                     failures: u64::from(p.failures),
                 },
-                death_saves_shown: p.hp == Some(0),
+                death_saves_shown: p.shows_death_saves(),
             };
             changes_block(ui, p, false);
             let freshness = crate::party::freshness(&record, self.connected);
@@ -3694,7 +3695,7 @@ impl Run {
                     ui.label(Type::Small.rich(ui, facts).color(colors().muted));
                 });
             }
-            if p.hp == Some(0) {
+            if p.shows_death_saves() {
                 ui.add_space(design::L);
                 self.death_saves(ui, index, p.successes, p.failures);
             }
@@ -4308,22 +4309,15 @@ impl Run {
                     .max_height((room - OVERFLOW_LINE).max(0.0))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        // Each measured row includes its own padding and hairline.
+                        // Include the heading when comparing rows with the scroll viewport.
+                        let origin = ui.cursor().min.y;
                         ui.spacing_mut().item_spacing.y = 0.0;
-                        let presence = design::number_width(
-                            ui,
-                            &format!("{} Absent", icons::ABSENT),
-                            &Type::Body.font(ui),
-                        ) + ui.spacing().button_padding.x * 2.0
-                            + design::S;
-                        let right =
-                            design::XL + Density::Read.control() * 3.0 + design::L * 4.0 + presence;
+                        let (_, right) = self.setup_slots(ui, false);
                         let number = design::L * 3.0;
                         ui.horizontal(|ui| {
                             ui.add_space((ui.available_width() - right - number).max(0.0));
                             ui.label(Type::Label.rich(ui, "INITIATIVE").color(colors().muted));
                         });
-                        let origin = ui.cursor().min.y;
                         // Roster order. Rows hold still while the DM types (T4.3).
                         for index in 0..self.state.participants.len() {
                             let row = ui.push_id(index, |ui| {
@@ -4417,7 +4411,43 @@ impl Run {
         closed
     }
 
-    /// Controls share the name line. Ties have a fixed slot before the ordinal.
+    /// Only visible controls reserve space. Roll precedes initiative so all totals align
+    /// while party names can use the room a Roll button would take.
+    fn setup_slots(&self, ui: &egui::Ui, npc: bool) -> ((f32, f32, f32), f32) {
+        let tie = if self
+            .state
+            .order
+            .iter()
+            .any(|&i| self.setup_tie_directions(i).is_some())
+        {
+            Density::Read.control() * 2.0
+        } else {
+            0.0
+        };
+        let place = if self
+            .state
+            .participants
+            .iter()
+            .all(|p| !p.present || p.initiative.is_some())
+        {
+            design::XL
+        } else {
+            0.0
+        };
+        let roll = if npc { design::L * 4.0 } else { 0.0 };
+        let presence = design::number_width(
+            ui,
+            &format!("{} Absent", icons::ABSENT),
+            &Type::Body.font(ui),
+        ) + ui.spacing().button_padding.x * 2.0
+            + design::S;
+        (
+            (tie, place, roll),
+            tie + place + Density::Read.control() + presence,
+        )
+    }
+
+    /// Controls share the name line. Ties reserve a column only while tied rows exist.
     /// Enter moves to the next missing total; rare controls wait in the row menu.
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
@@ -4467,16 +4497,9 @@ impl Run {
                 &Type::Body.font(ui),
             ) + ui.spacing().button_padding.x * 2.0
                 + design::S;
-            let roll_slot = design::L * 4.0;
+            let ((tie_slot, place_slot, roll_slot), right) = self.setup_slots(ui, npc);
             let number_slot = design::L * 3.0;
-            let place_slot = design::XL;
-            let tie_slot = Density::Read.control() * 2.0;
-            let actions = number_slot
-                + place_slot
-                + tie_slot
-                + roll_slot
-                + Density::Read.control()
-                + presence_slot;
+            let actions = number_slot + roll_slot + right;
             let name_width = (ui.available_width() - actions).max(design::XL);
             let side = "";
             let plain = format!("{absent}{side}{numbers}");
@@ -4534,9 +4557,7 @@ impl Run {
                 status.as_ref().map(|(word, color)| (word.as_str(), *color)),
                 detail_width,
             );
-            let row = design::RUN_REGULAR
-                .row
-                .max(first_line + detail.size().y + design::XS);
+            let row = first_line + detail.size().y + design::XS;
             let padding = (row - first_line - detail.size().y) / 2.0;
             let control_top = padding + (first_line - Density::Scan.control()) / 2.0;
             if selected {
@@ -4569,6 +4590,30 @@ impl Run {
             if response.clicked() {
                 self.selected = index;
                 self.return_focus = self.lookup_open;
+            }
+            if npc {
+                ui.allocate_ui_with_layout(
+                    vec2(roll_slot, Density::Scan.control()),
+                    Layout::top_down(Align::LEFT),
+                    |ui| {
+                        ui.set_width(roll_slot);
+                        ui.add_space(control_top);
+                        if Action::quiet("Roll")
+                            .plain()
+                            .icon(icons::DICE)
+                            .density(Density::Scan)
+                            .name(&format!("Roll for {name}"))
+                            .blocked_if(
+                                bonus.is_none(),
+                                "Set an initiative bonus, or type a total.",
+                            )
+                            .show(ui)
+                            .clicked()
+                        {
+                            command = Some(Command::RollInitiative(index));
+                        }
+                    },
+                );
             }
             let field_name = format!("Initiative for {name}");
             // Beside Notes, a letter goes to the note, and the number stays as it is.
@@ -4613,60 +4658,46 @@ impl Run {
                     }
                 },
             );
-            ui.allocate_ui_with_layout(vec2(tie_slot, row), Layout::top_down(Align::LEFT), |ui| {
-                ui.set_width(tie_slot);
-                ui.add_space(control_top);
-                if let Some(picked) = self.setup_tie_controls(ui, index) {
-                    command = Some(picked);
-                }
-            });
-            ui.allocate_ui_with_layout(
-                vec2(place_slot, row),
-                Layout::top_down(Align::LEFT),
-                |ui| {
-                    ui.add_space(control_top);
-                    let place = (present
-                        && self
-                            .state
-                            .participants
-                            .iter()
-                            .all(|p| !p.present || p.initiative.is_some()))
-                    .then(|| {
-                        initiative.and_then(|_| self.state.order.iter().position(|i| *i == index))
-                    })
-                    .flatten()
-                    .map(|place| ordinal(place + 1))
-                    .unwrap_or_default();
-                    let response = ui.add_sized(
-                        vec2(place_slot, Density::Scan.control()),
-                        egui::Label::new(Type::Small.rich(ui, &place).color(colors().muted)),
-                    );
-                    design::named(ui, &response, &format!("Place for {name}: {place}"));
-                },
-            );
-            ui.allocate_ui_with_layout(
-                vec2(roll_slot, Density::Scan.control()),
-                Layout::top_down(Align::LEFT),
-                |ui| {
-                    ui.set_width(roll_slot);
-                    ui.add_space(control_top);
-                    if npc
-                        && Action::quiet("Roll")
-                            .plain()
-                            .icon(icons::DICE)
-                            .density(Density::Scan)
-                            .name(&format!("Roll for {name}"))
-                            .blocked_if(
-                                bonus.is_none(),
-                                "Set an initiative bonus, or type a total.",
-                            )
-                            .show(ui)
-                            .clicked()
-                    {
-                        command = Some(Command::RollInitiative(index));
-                    }
-                },
-            );
+            if tie_slot > 0.0 {
+                ui.allocate_ui_with_layout(
+                    vec2(tie_slot, row),
+                    Layout::top_down(Align::LEFT),
+                    |ui| {
+                        ui.set_width(tie_slot);
+                        ui.add_space(control_top);
+                        if let Some(picked) = self.setup_tie_controls(ui, index) {
+                            command = Some(picked);
+                        }
+                    },
+                );
+            }
+            if place_slot > 0.0 {
+                ui.allocate_ui_with_layout(
+                    vec2(place_slot, row),
+                    Layout::top_down(Align::LEFT),
+                    |ui| {
+                        ui.add_space(control_top);
+                        let place = (present
+                            && self
+                                .state
+                                .participants
+                                .iter()
+                                .all(|p| !p.present || p.initiative.is_some()))
+                        .then(|| {
+                            initiative
+                                .and_then(|_| self.state.order.iter().position(|i| *i == index))
+                        })
+                        .flatten()
+                        .map(|place| ordinal(place + 1))
+                        .unwrap_or_default();
+                        let response = ui.add_sized(
+                            vec2(place_slot, Density::Scan.control()),
+                            egui::Label::new(Type::Small.rich(ui, &place).color(colors().muted)),
+                        );
+                        design::named(ui, &response, &format!("Place for {name}: {place}"));
+                    },
+                );
+            }
             let (word, hint) = presence_action(present);
             let accessible = format!("{word}: {name}");
             let pressed = ui
@@ -6578,6 +6609,129 @@ fn optional_number(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn iter7_b_setup_counts_partly_hidden_rows_from_scroll_content_top() {
+        use egui_kittest::kittest::Queryable;
+        let mut checked = 0;
+        for height in (300..640).step_by(4) {
+            let mut run = super::super::tests::run();
+            run.state.participants[2].name = "Last guard".into();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(600.0, height as f32))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| run.setup_body(ui));
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let row = harness.get_by_label_contains("Last guard ·").rect();
+            let Some(clip) = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == "Last guard" => {
+                        Some(shape.clip_rect)
+                    }
+                    _ => None,
+                })
+            else {
+                continue;
+            };
+            if row.top() < clip.bottom() && row.bottom() > clip.bottom() + 1.0 {
+                checked += 1;
+                assert!(harness.output().shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text().contains("below"))),
+                    "iter7-B-AD1: partly clipped row must count at height {height}: row {row:?}, clip {clip:?}");
+            }
+        }
+        assert!(checked > 0, "The probe must exercise a partly clipped row");
+    }
+
+    #[test]
+    fn iter7_b_death_saves_follow_party_and_recorded_counts() {
+        use egui_kittest::kittest::Queryable;
+        for (side, successes, failures, shown) in [
+            ("party", 0, 0, true),
+            ("enemies", 0, 0, false),
+            ("enemies", 1, 0, true),
+            ("other", 0, 1, true),
+        ] {
+            let mut run = super::super::tests::run();
+            run.selected = 0;
+            run.panel = Panel::Reference;
+            let p = &mut run.state.participants[0];
+            p.side = side.into();
+            p.hp = Some(0);
+            p.successes = successes;
+            p.failures = failures;
+            let mut harness = egui_kittest::Harness::new(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| run.side_panel(ui));
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.query_by_label("Add a death save success").is_some(),
+                shown,
+                "iter7-B-FT1: {side}, {successes} successes, {failures} failures"
+            );
+        }
+    }
+
+    #[test]
+    fn iter7_b_setup_names_fit_and_initiative_fields_align() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        run.state.participants.truncate(2);
+        run.state.order = vec![0, 1];
+        for (p, name, npc) in run
+            .state
+            .participants
+            .iter_mut()
+            .zip([("Kestrel Dunmoor", false), ("Ember Cultist", true)])
+            .map(|(p, (name, npc))| (p, name, npc))
+        {
+            p.name = name.into();
+            p.npc = npc;
+            p.initiative = None;
+        }
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(450.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    for i in 0..2 {
+                        ui.push_id(i, |ui| run.setup_row(ui, i));
+                    }
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let a = harness
+            .get_by_label("Initiative for Kestrel Dunmoor")
+            .rect();
+        let b = harness.get_by_label("Initiative for Ember Cultist").rect();
+        assert!(
+            a.left() > 240.0,
+            "iter7-B-FD1: unused slots must return room to the name: {a:?}"
+        );
+        assert!(
+            (a.left() - b.left()).abs() < 1.0,
+            "iter7-B-FD1 aligned fields: {a:?}, {b:?}"
+        );
+        let names: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "Kestrel Dunmoor" => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(!names.is_empty());
+        assert!(
+            names.iter().all(|text| text.galley.rows.len() == 1),
+            "iter7-B-FD1: party names fit one line"
+        );
+    }
+
     #[test]
     fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers() {
         for number in 1..=5 {

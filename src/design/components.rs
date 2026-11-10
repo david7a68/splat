@@ -2298,19 +2298,28 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
         }
         count
     };
-    let mut count = fit(width("More"));
+    let mut count = fit(menu_button_width(ui, "More"));
     let mut menu_label = "More";
     if let Some((_, label)) = choices[count..]
         .iter()
         .find(|(value, _)| *value == *selected)
     {
         menu_label = label;
-        count = fit(width(label).max(width("More")));
+        count = fit(menu_button_width(ui, label).max(menu_button_width(ui, "More")));
     }
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         segmented(ui, selected, &choices[..count]);
-        let menu = ui.menu_button(format!("{menu_label} {}", icons::DOWN), |ui| {
+        let menu = Action::quiet(&format!("{menu_label}    "))
+            .density(Density::Read)
+            .name("More sheet pages")
+            .show(ui);
+        let caret = Rect::from_min_max(
+            pos2(menu.rect.right() - L - XS, menu.rect.top()),
+            menu.rect.right_bottom(),
+        );
+        super::combo_icon(ui, caret, ui.style().interact(&menu), false);
+        egui::Popup::menu(&menu).show(|ui| {
             for (value, label) in &choices[count..] {
                 if ui.selectable_label(*selected == *value, *label).clicked() {
                     *selected = *value;
@@ -2318,14 +2327,14 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
                 }
             }
         });
-        named(ui, &menu.response, "More sheet pages");
+        named(ui, &menu, "More sheet pages");
         if choices[count..]
             .iter()
             .any(|(value, _)| *value == *selected)
         {
             ui.painter().hline(
-                menu.response.rect.x_range(),
-                menu.response.rect.bottom(),
+                menu.rect.x_range(),
+                menu.rect.bottom(),
                 Stroke::new(HAIRLINE_WIDTH, colors().accent),
             );
         }
