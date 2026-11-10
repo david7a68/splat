@@ -899,7 +899,7 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(
         entry.flags[0].message,
-        "the change \"HP lots\" was not read. Use a number, such as HP +5."
+        "the change “HP lots” was not read. Use a number, such as HP +5."
     );
     assert_eq!(
         entry.fields["splat_encounter_group"]["members"]
