@@ -145,7 +145,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
-The Write frame is no wider than the reader measure plus its padding and stays at the left edge.
+The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
 Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
@@ -521,8 +521,11 @@ dies, and the file stays if it does.
 
 Nothing leaves the computer until you select **Process** on a recording. Choose the services in **Settings**.
 The first recording that needs processing owns the primary **Process** or **Continue processing** action
-when no run is open and no recovery action in the bottom banner owns primary.
-Open runs keep these actions secondary.
+when no run is open and no enabled recording recovery owns primary. A stopped recording first offers primary
+**Choose an input** when its input is missing, otherwise **Record again**. Processing stays secondary during
+recovery. The destination text shows below the first available Process action; later actions keep it on hover.
+Open runs keep these actions secondary. Session rows with equal titles and dates show their file names.
+Recording state replaces the date, and **Playing** stays beside it when it fits.
 
 1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
    with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts

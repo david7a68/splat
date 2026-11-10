@@ -3791,6 +3791,13 @@ pub mod column_resize {
                     "The Write frame stays at reader measure plus padding, at the left: {frame:?}"
                 ),
             );
+            assert!(d.in_view("Read"));
+            let toggle = d.place_of("Read").unwrap();
+            d.observe(
+                "iter-9-C-FT5",
+                (toggle.right() - frame.right()).abs() <= 1.0 && toggle.bottom() <= frame.top(),
+                format!("Read sits at the frame's top right edge: {toggle:?}, {frame:?}"),
+            );
             d.observe(
                 "iter-6-C-FT5",
                 longest > 0
@@ -6023,7 +6030,7 @@ pub mod session_notes {
         d.observe(
             "T11.3",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add goes here.",
+                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
             ),
             "Adding an event to an older session says so before it happens",
         );
@@ -6050,7 +6057,7 @@ pub mod session_notes {
         d.observe(
             "T11.8",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add goes here.",
+                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
             ),
             "Writing in an older note says so",
         );
@@ -6657,7 +6664,7 @@ pub mod session_recording {
             .into_iter()
             .filter(|node| node.in_view() && node.role == egui::accesskit::Role::Button)
             .filter(|node| {
-                d.control_frame(&node.name).is_some_and(|frame| {
+                d.control_frame_at(node.rect).is_some_and(|frame| {
                     frame.fill == colors.accent_fill || frame.fill == colors.accent_hover
                 })
             })
@@ -6711,6 +6718,34 @@ pub mod session_recording {
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
         });
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let folder = crate::sessions::folder(&campaign).unwrap();
+        let failed = crate::sessions::list_recordings(&folder, first)
+            .remove(0)
+            .path;
+        let audio = std::fs::read(&failed).unwrap();
+        std::fs::remove_file(&failed).unwrap();
+        d.settle();
+        d.state_prepared("blocked-banner-retry", Sizes::All, |d| {
+            d.observe(
+                "iter-9-C-ST1-blocked-availability",
+                d.is_disabled("Continue processing"),
+                "A banner retry with removed audio is blocked",
+            );
+            let process = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.in_view()
+                        && node.role == egui::accesskit::Role::Button
+                        && node.name.starts_with("Process:")
+                })
+                .unwrap()
+                .name;
+            check_one_primary(d, &process, "iter-9-C-ST1-blocked-banner");
+        });
+        std::fs::write(&failed, audio).unwrap();
+        d.settle();
         assert!(d.in_view("Continue processing"));
         d.click("Continue processing");
         d.expect("Processed");
@@ -6743,6 +6778,26 @@ pub mod session_recording {
             !d.visible_text("is not saving audio"),
             "Record again clears the stalled recorder's warning",
         );
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("microphone stopped".to_owned()));
+        d.settle();
+        d.click_starting("Recordings");
+        d.state_prepared("recording-retry-with-input", Sizes::All, |d| {
+            check_one_primary(d, "Record again", "iter-9-C-ST1-retry");
+            check_processing_action(d, "Process:", false);
+            assert!(d.visible_text("microphone stopped"));
+        });
+        assert!(d.in_view("Record again"));
+        d.click("Record again");
+        d.expect("Stop recording");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("no such device".to_owned()));
+        d.settle();
+        assert!(d.in_view("Choose an input"));
+        d.click("Choose an input");
+        d.expect("Recording input");
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -6793,6 +6848,83 @@ pub mod session_recording {
                 && (crate::design::L - 1.0..=crate::design::L + 2.0).contains(&gap)
                 && add.left() - title.left() <= crate::design::READER_MEASURE + crate::design::L,
             format!("Marker actions align left with an L gap after the content: gap {gap}, Add {add:?}, added {added:?}"),
+        );
+    }
+
+    fn check_duplicate_sessions(d: &mut Driver<'_>) {
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.in_view() && node.name.starts_with("Session 1: The Bridge ·"))
+            .collect();
+        assert_eq!(rows.len(), 2, "Both equal session rows are visible");
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let folder = crate::sessions::folder(&campaign).unwrap();
+        let notes = crate::sessions::list_notes(&folder);
+        for note in notes.iter().filter(|note| note.number == 1) {
+            let file = note.path.file_name().unwrap().to_string_lossy();
+            d.observe(
+                "iter-9-C-ST3-FT11",
+                rows.iter().any(|row| row.name.contains(file.as_ref()))
+                    && d.visible_text(&file.replace(' ', "\u{a0}")),
+                format!("Equal session row shows {file} and names it accessibly"),
+            );
+        }
+    }
+
+    fn check_destinations(d: &mut Driver<'_>) {
+        let actions: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view()
+                    && node.role == egui::accesskit::Role::Button
+                    && node.name.starts_with("Process:")
+            })
+            .collect();
+        assert_eq!(actions.len(), 2, "Two recording rows have Process");
+        let destinations: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view()
+                    && node.role == egui::accesskit::Role::Label
+                    && node.name.starts_with("Process sends the audio")
+            })
+            .collect();
+        d.observe(
+            "iter-9-C-FT2",
+            destinations.len() == 1,
+            format!(
+                "Two recordings share one visible destination: {}",
+                destinations.len()
+            ),
+        );
+        if let Some(destination) = destinations.first() {
+            assert!(
+                destination.rect.top() >= actions[0].rect.bottom()
+                    && destination.rect.bottom() <= actions[1].rect.top()
+            );
+        }
+    }
+
+    fn check_result_row(d: &mut Driver<'_>) {
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.in_view()
+                    && node.name.starts_with("Session 1: The Bridge ·")
+                    && node.name.contains("Processed")
+            })
+            .collect();
+        assert_eq!(rows.len(), 1, "The processed session row is visible");
+        d.observe(
+            "iter-9-C-FT4",
+            !rows[0].name.contains("2026-01-01")
+                && rows[0].name.contains("Playing")
+                && !rows[0].name.contains("\n·"),
+            "Processed state replaces the date; Playing has no leading separator on a new line",
         );
     }
 
@@ -6904,7 +7036,17 @@ pub mod session_recording {
         d.click_containing("Recording silence ·");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
-        d.state("recording-silent", Sizes::All);
+        d.state_prepared("recording-silent", Sizes::All, |d| {
+            let detail = "Silent for over a minute · 0:00 recorded";
+            assert!(d.visible_text(detail) && d.in_view("Stop recording"));
+            d.observe(
+                "iter-9-C-FT13",
+                d.painted_color(detail) == Some(crate::design::colors().muted)
+                    && d.painted_size(d.place_of(detail).unwrap(), detail)
+                        == Some(crate::design::Type::Small.size()),
+                "Silence detail is Small and muted; its status and Stop stay visible",
+            );
+        });
         d.observe_both(
             "iter-12-R2",
             "The silent row owns its detail and stop action",
@@ -7106,7 +7248,17 @@ pub mod session_recording {
         d.settle();
         d.expect("Cancelled");
         d.expect("Continue processing sends the rest of the audio (parts 3 to 24)");
-        d.state("processing-cancelled", Sizes::Default);
+        d.state_prepared("processing-cancelled", Sizes::All, |d| {
+            d.observe(
+                "iter-9-C-FT10",
+                d.rail_words().contains("Processing cancelled"),
+                "The rail names what was cancelled",
+            );
+            assert!(
+                d.has_containing("Session 1: The Bridge ·")
+                    && d.visible_text("Continue processing")
+            );
+        });
         d.app_mut().sessions.simulate_job(Progress::Asking {
             pass: crate::processing::Pass::Review,
             seconds: 42,
@@ -7163,7 +7315,19 @@ pub mod session_recording {
 
         // T11.7: a marker is a suggestion until the DM adds it.
         d.expect("EVENTS MARKED IN THIS RECORDING 2");
-        d.state("recording-processed", Sizes::AllAndHiDpi);
+        d.state_prepared("recording-processed", Sizes::AllAndHiDpi, check_result_row);
+        let marker_positions: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                let x = d.at_size(size, |d| {
+                    assert!(d.in_view("Add to timeline: Wolves at the bridge (0)"));
+                    d.place_of("Add to timeline: Wolves at the bridge (0)")
+                        .unwrap()
+                        .left()
+                });
+                (size, x)
+            })
+            .collect();
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.7",
@@ -7190,7 +7354,24 @@ pub mod session_recording {
             "Opening a processed session acknowledges the notice and keeps Processed in the rail",
         );
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
-        d.state_prepared("marker-added", Sizes::All, check_marker_columns);
+        d.state_prepared("marker-added", Sizes::All, |d| {
+            check_marker_columns(d);
+            let size = d.window_size();
+            let before = marker_positions
+                .iter()
+                .find(|(at, _)| *at == size)
+                .unwrap()
+                .1;
+            let after = d
+                .place_of("Add to timeline: Wolves at the bridge (0)")
+                .unwrap()
+                .left();
+            d.observe(
+                "iter-9-C-FT3",
+                (after - before).abs() <= 1.0,
+                format!("Adding a marker keeps the next Add at {before}, now {after}"),
+            );
+        });
         d.observe(
             "T11.7",
             d.has("Add to timeline: Wolves at the bridge (0)"),
@@ -7299,7 +7480,7 @@ pub mod session_recording {
             d.rail_words().contains("Processed") && rail_warned,
             "Opening a warned session keeps the processed warning in the rail",
         );
-        d.state("recording-warned", Sizes::All);
+        d.state_prepared("recording-warned", Sizes::All, check_result_row);
 
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
@@ -7341,12 +7522,16 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.expect("no such device");
         d.expect("Choose an input");
-        d.state("recording-stopped", Sizes::Default);
+        d.state_prepared("recording-stopped", Sizes::All, |d| {
+            check_one_primary(d, "Choose an input", "iter-9-C-ST1-missing");
+            check_processing_action(d, "Process:", false);
+        });
         d.observe(
             "R3",
             d.has("Record again"),
             "The stopped row owns its state and offers Record again",
         );
+        assert!(d.in_view("Record again"));
         d.click("Record again");
         d.expect("Stop recording");
         d.observe(
@@ -7452,6 +7637,14 @@ pub mod session_recording {
         );
         d.state_prepared("recording-summary-narrow", Sizes::All, |d| {
             d.observe(
+                "iter-9-C-FT9",
+                d.visible_text(&format!(
+                    "What you write and add on this page goes into {}.",
+                    recovered.path.file_name().unwrap().to_string_lossy()
+                )),
+                "The warning names the note where writing goes",
+            );
+            d.observe(
                 "iter-8-C-ST2-files",
                 d.visible_text(&expected),
                 "Duplicate session numbers name both note files",
@@ -7524,6 +7717,7 @@ pub mod session_recording {
             assert!(d.in_view("Start recording"));
             check_processing_action(d, "Process:", false);
             check_one_primary(d, "Start recording", "iter-8-C-consent-primary");
+            check_duplicate_sessions(d);
         });
         d.click("Start recording");
         d.click("Stop recording");
@@ -7537,7 +7731,9 @@ pub mod session_recording {
             2
         );
         d.state_prepared("processing-with-no-run", Sizes::All, |d| {
-            check_processing_action(d, "Process:", true)
+            check_processing_action(d, "Process:", true);
+            check_duplicate_sessions(d);
+            check_destinations(d);
         });
         go_encounters(d);
         run_saved_encounter(d, "Shrine of Cinders");
@@ -7561,7 +7757,9 @@ pub mod session_recording {
         d.expect(NEXT_TURN);
         d.click(NAV_SESSIONS);
         d.state_prepared("processing-with-running-run", Sizes::All, |d| {
-            check_processing_action(d, "Process:", false)
+            check_processing_action(d, "Process:", false);
+            check_destinations(d);
+            check_one_primary(d, NEXT_TURN, "iter-9-C-ST1-running");
         });
         d.click(BACK_TO_RUN);
         d.click("End encounter…");
@@ -8838,7 +9036,7 @@ pub mod session_plan {
         d.click(&format!("Plan {FIRST}"));
         d.click("Add a fight");
         d.click(&format!("Plan {SECOND}"));
-        d.expect(&format!("Start fight: {FIRST}"));
+        d.expect(&format!("Resume: {FIRST}"));
         d.click(&format!("More actions for {SECOND}"));
         d.click("Remove from tonight");
         d.expect(&format!("Removed “{SECOND}” from tonight."));
@@ -8846,8 +9044,51 @@ pub mod session_plan {
         d.click("Undo remove");
         d.expect(&format!("Start fight: {SECOND}"));
 
-        d.state("plan-with-fights", Sizes::AllAndHiDpi);
+        d.state_prepared("plan-with-fights", Sizes::AllAndHiDpi, |d| {
+            assert!(
+                d.in_view(&format!("Resume: {FIRST}")),
+                "iter-9-C-FT1: the paused plan row has Resume"
+            );
+            let frame = d.control_frame(&format!("Resume: {FIRST}"));
+            let status = d.visible_text("Round 2 · Paused");
+            d.observe(
+                "iter-9-C-FT1",
+                status
+                    && frame.as_ref().is_some_and(|frame| {
+                            frame.fill == crate::design::colors().accent_fill
+                                || frame.fill == crate::design::colors().accent_hover
+                        }),
+                format!("A legacy paused run owns Resume and shows Round 2 · Paused on its plan row: status {status}, frame {frame:?}"),
+            );
+        });
         d.check_tab_order("session plan");
+        let paused = d
+            .app_mut()
+            .encounters
+            .saved_runs()
+            .into_iter()
+            .find(|run| run.encounter == FIRST && run.source.is_none())
+            .unwrap();
+        let paused_bytes = std::fs::read(&paused.path).unwrap();
+        d.click(&format!("More actions for {FIRST}"));
+        assert!(d.in_view("Start a new run") && d.in_view("Delete the saved run"));
+        d.press(Key::Escape);
+        assert!(d.in_view(&format!("Resume: {FIRST}")));
+        d.click(&format!("Resume: {FIRST}"));
+        d.expect(NEXT_TURN);
+        assert!(d.app_mut().encounters.run().is_some());
+        close_run(d);
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        d.click(&format!("More actions for {FIRST}"));
+        assert!(d.in_view("Remove this event"));
+        d.click("Remove this event");
+        d.expect(&format!("Resume: {FIRST}"));
+        d.click(&format!("More actions for {FIRST}"));
+        assert!(d.in_view("Delete the saved run"));
+        d.click("Delete the saved run");
+        d.expect(&format!("Start fight: {FIRST}"));
+        assert!(!d.has(&format!("Resume: {FIRST}")));
         write_note(d);
         d.observe(
             "T12.1",
@@ -9301,6 +9542,11 @@ pub mod session_plan {
             d.has_containing("Per 14") && d.has_containing("Ins 11"),
             "Passive Perception and Insight compare without opening a sheet",
         );
+
+        // Keep the original independent paused copy for the existing duplicate-run checks.
+        std::fs::write(&paused.path, paused_bytes).unwrap();
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        d.app_mut().encounters.read_runs_again(&campaign);
 
         // What is unfinished can go on or go away. What is over is in the history.
         go_encounters(d);

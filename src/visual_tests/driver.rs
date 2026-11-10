@@ -329,6 +329,10 @@ impl<'a> Driver<'a> {
         self.resize(size, 1.0);
     }
 
+    pub fn window_size(&self) -> (f32, f32) {
+        self.window
+    }
+
     /// The text on screen in full: painted, not cut to an ellipsis, inside the window and
     /// the pane that clips it. The accessible name can be whole when the visible text is not.
     pub fn visible_text(&self, text: &str) -> bool {
@@ -473,6 +477,22 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// Colour of the first text section for this visible label.
+    pub fn painted_color(&self, words: &str) -> Option<egui::Color32> {
+        let mut found = None;
+        self.each_painted_text(|text, clip| {
+            if clip.intersects(text.visual_bounding_rect()) && text.galley.job.text == words {
+                found = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|section| section.format.color);
+            }
+        });
+        found
+    }
+
     /// Each text painted now, with the clip of the pane it is in.
     fn each_painted_text(&self, mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect)) {
         fn walk(
@@ -532,7 +552,13 @@ impl<'a> Driver<'a> {
 
     /// The painted frame of a named control, for fill and border checks.
     pub fn control_frame(&self, name: &str) -> Option<egui::epaint::RectShape> {
-        let bounds = self.place_of(name)?;
+        self.control_frame_at(self.place_of(name)?)
+    }
+
+    /// Inspect this control's frame when several controls have the same name.
+    pub fn control_frame_at(&self, bounds: egui::Rect) -> Option<egui::epaint::RectShape> {
+        // AccessKit reports pixels; painted shapes use logical points.
+        let bounds = bounds * (1.0 / self.harness.ctx.pixels_per_point());
         fn find(shape: &egui::Shape, bounds: egui::Rect) -> Option<egui::epaint::RectShape> {
             match shape {
                 egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, bounds)),

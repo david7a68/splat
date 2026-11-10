@@ -60,6 +60,7 @@ const PLAN_KINDS: [Kind; 5] = [
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
 const MISSING_INPUT_ERROR: &str = "no such device";
+const PROCESSING_CANCELLED: &str = "Processing cancelled";
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -98,6 +99,20 @@ pub struct Plan<'a> {
     pub open_run: Option<Uuid>,
     pub open_state: String,
     pub open_encounter: Option<&'a str>,
+}
+
+/// Legacy runs have no source ID. Encounters matches those by the saved name.
+fn planned_saved_run<'a>(
+    fight: &'a PlanFight,
+    runs: &'a [crate::encounter_run::SavedRunInfo],
+) -> Option<&'a crate::encounter_run::SavedRunInfo> {
+    fight.saved.as_ref().or_else(|| {
+        runs.iter().find(|run| {
+            run.standing == crate::encounter_run::Standing::Unfinished
+                && run.source.is_none()
+                && run.encounter == fight.name
+        })
+    })
 }
 
 /// What the previous session left, for the top of this one.
@@ -1014,7 +1029,11 @@ fn session_detail(
     state: Option<Status<'_>>,
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
-    let detail = plan_summary(detail);
+    let detail = detail
+        .lines()
+        .map(plan_summary)
+        .collect::<Vec<_>>()
+        .join("\n");
     let word = state.map(|state| {
         (
             plan_summary(&format!("{} {}", state.icon, state.word)),
@@ -1208,17 +1227,39 @@ impl Sessions {
         })
     }
 
+    /// One enabled recovery action owns primary across the composed screen.
+    fn banner_primary_owner(&self, settings: &ProcessingSettings, run_open: bool) -> Option<usize> {
+        if run_open || self.confirm_record {
+            return None;
+        }
+        if self.stalled_elsewhere().is_some() {
+            return Some(usize::MAX);
+        }
+        let visible = |alert: &&Alert| !self.recording_row_here(alert.session);
+        self.alerts
+            .iter()
+            .enumerate()
+            .find(|(_, alert)| {
+                visible(alert)
+                    && alert.can_record
+                    && (settings.input_missing()
+                        || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR)
+                        || (self.live.is_none() && self.job.is_none()))
+            })
+            .or_else(|| {
+                self.alerts.iter().enumerate().find(|(_, alert)| {
+                    visible(alert)
+                        && alert.retry.as_ref().is_some_and(|path| path.exists())
+                        && self.live.is_none()
+                        && self.job.is_none()
+                        && settings.problem().is_none()
+                })
+            })
+            .map(|(index, _)| index)
+    }
+
     fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
-        !run_open
-            && (self.stalled_elsewhere().is_some()
-                || self.alerts.iter().any(|alert| {
-                    !self.recording_row_here(alert.session)
-                        && (alert.retry.is_some()
-                            || (alert.can_record
-                                && (self.live.is_none()
-                                    || settings.input_missing()
-                                    || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR))))
-                }))
+        self.banner_primary_owner(settings, run_open).is_some()
     }
 
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
@@ -1231,7 +1272,7 @@ impl Sessions {
         book: &Book,
         run_open: bool,
     ) {
-        let banner_primary = self.banner_has_primary(settings, run_open);
+        let primary_owner = self.banner_primary_owner(settings, run_open);
         let stalled = self.stalled_elsewhere().map(|live| {
             format!(
                 "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
@@ -1262,7 +1303,7 @@ impl Sessions {
                     let session = self.live.as_ref().map(|live| live.session);
                     design::message(ui, Tone::Error, words);
                     ui.horizontal(|ui| {
-                        if (if banner_primary {
+                        if (if primary_owner == Some(usize::MAX) {
                             Action::primary("Record again")
                         } else {
                             Action::secondary("Record again")
@@ -1288,6 +1329,7 @@ impl Sessions {
                     if self.recording_row_here(alert.session) {
                         continue;
                     }
+                    let banner_primary = primary_owner == Some(index);
                     let missing_input = alert.can_record
                         && (settings.input_missing()
                             || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR));
@@ -1315,10 +1357,13 @@ impl Sessions {
                             } else {
                                 Action::secondary("Continue processing")
                             })
-                            .blocked_if(
-                                self.job.is_some() || self.live.is_some(),
-                                "Stop recording or wait for processing to finish.",
-                            )
+                            .blocked(if !path.exists() {
+                                Some("Audio removed. Restore the WAV file to process it.")
+                            } else if self.job.is_some() || self.live.is_some() {
+                                Some("Stop recording or wait for processing to finish.")
+                            } else {
+                                None
+                            })
                             .show(ui)
                             .clicked()
                         {
@@ -1470,7 +1515,7 @@ impl Sessions {
                     session,
                     can_record: false,
                     retry: failed_recording,
-                    word: "Cancelled",
+                    word: PROCESSING_CANCELLED,
                     words: "Processing cancelled. Continue processing goes on from there."
                         .to_owned(),
                 });
@@ -1736,15 +1781,16 @@ impl Sessions {
             .notes
             .iter()
             .find(|note| Some(note.id) == self.current());
+        let destination = note.path.file_name().unwrap_or_default().to_string_lossy();
         Some(
             if let Some(played) = played.filter(|played| played.number == note.number) {
                 let (open, played) = session_warning_names(note, played);
                 format!(
-                    "{open} is not the session being played. The session being played is {played}. What you write and add goes here."
+                    "{open} is not the session being played. The session being played is {played}. What you write and add on this page goes into {destination}."
                 )
             } else {
                 format!(
-                    "Session {} is not the session being played. What you write and add goes here.",
+                    "Session {} is not the session being played. What you write and add on this page goes into {destination}.",
                     note.number
                 )
             },
@@ -1980,13 +2026,13 @@ impl Sessions {
         }
         if let Some(word) = self.alert_words().last() {
             return Some(Status {
-                icon: if word == "Cancelled" {
+                icon: if word == PROCESSING_CANCELLED {
                     icons::WARN
                 } else {
                     icons::ERROR
                 },
                 word,
-                color: if word == "Cancelled" {
+                color: if word == PROCESSING_CANCELLED {
                     c.result.warning
                 } else {
                     c.result.error
@@ -2429,7 +2475,7 @@ impl Sessions {
                 health => {
                     let (word, color) = match health {
                         Health::Starting => ("Waiting for sound", c.muted),
-                        Health::Silent => ("Silent for over a minute", c.result.warning),
+                        Health::Silent => ("Silent for over a minute", c.muted),
                         // Only what is true now. A table goes quiet, and that is no warning.
                         _ if live.recorder.heard_just_now() => ("Hearing sound", c.muted),
                         _ => ("Quiet", c.muted),
@@ -2971,7 +3017,7 @@ impl Sessions {
                                 .rev()
                                 .find(|alert| alert.session == note.id)
                                 .map(|alert| {
-                                    let cancelled = alert.word == "Cancelled";
+                                    let cancelled = alert.word == PROCESSING_CANCELLED;
                                     Status {
                                         icon: if cancelled { icons::WARN } else { icons::ERROR },
                                         word: if cancelled {
@@ -2997,12 +3043,41 @@ impl Sessions {
                             } else {
                                 "Processed"
                             };
-                            format!("{} · {word}", note.date)
+                            word.to_owned()
                         } else {
                             note.date.clone()
                         };
                         let detail = if self.current() == Some(note.id) {
-                            format!("{detail} · {} Playing", icons::RUN)
+                            let together = format!("{detail} · {} Playing", icons::RUN);
+                            let width = ui.available_width() - 2.0 * design::S;
+                            if ui
+                                .painter()
+                                .layout_no_wrap(
+                                    together.clone(),
+                                    Type::Small.font(ui),
+                                    colors().muted,
+                                )
+                                .size()
+                                .x
+                                <= width
+                            {
+                                together
+                            } else {
+                                format!("{detail}\n{} Playing", icons::RUN)
+                            }
+                        } else {
+                            detail
+                        };
+                        let duplicate = self.notes.iter().any(|other| {
+                            other.id != note.id
+                                && other.label() == note.label()
+                                && other.date == note.date
+                        });
+                        let detail = if duplicate {
+                            format!(
+                                "{}\n{detail}",
+                                note.path.file_name().unwrap_or_default().to_string_lossy()
+                            )
                         } else {
                             detail
                         };
@@ -4053,6 +4128,7 @@ impl Sessions {
                     self.removed_fight_message(ui, session, position);
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
+                    let saved = planned_saved_run(fight, plan.saved_runs);
                     ui.push_id((&fight.path, position), |ui| {
                         let row_widths = if running {
                             [width - Density::Read.control() - design::S, Density::Read.control()]
@@ -4066,7 +4142,7 @@ impl Sessions {
                                 if plan_run_link(ui, &plan.open_state).clicked() {
                                     self.wants_back_to_run = true;
                                 }
-                            } else if let Some(saved) = &fight.saved {
+                            } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
                             } else { wrapped_words(ui, Type::Small, plan_summary(&fight.summary), c.muted); }
                         }, |ui| {
@@ -4074,18 +4150,18 @@ impl Sessions {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
                                     remove_fight = Some((position, fight.name.clone())); ui.close();
                                 }
-                                if fight.saved.is_some() {
+                                if saved.is_some() {
                                     if Action::quiet("Start a new run").blocked(plan.blocked).show(ui).clicked() {
                                         self.wants_fight = Some(fight.path.clone()); ui.close();
                                     }
                                     if Action::quiet("Delete the saved run").blocked(plan.blocked).show(ui).clicked() {
-                                        delete_run = fight.saved.clone(); ui.close();
+                                        delete_run = saved.cloned(); ui.close();
                                     }
                                 }
                             });
                             if running {
                                 // The run strip owns Back to run.
-                            } else if let Some(saved) = &fight.saved {
+                            } else if let Some(saved) = saved {
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
                                 if action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
@@ -4218,7 +4294,8 @@ impl Sessions {
                             planned
                                 .iter()
                                 .position(|fight| {
-                                    fight.saved.as_ref().is_some_and(|run| run.id == saved.id)
+                                    planned_saved_run(fight, plan.saved_runs)
+                                        .is_some_and(|run| run.id == saved.id)
                                 })
                                 .map(|at| event_count + at)
                         })
@@ -4556,6 +4633,7 @@ impl Sessions {
         settings: &ProcessingSettings,
         book: &Book,
         primary: bool,
+        destination_here: bool,
     ) {
         let c = colors();
         let live = self
@@ -4703,7 +4781,7 @@ impl Sessions {
                             clock(live.recorder.seconds())
                         ),
                     )
-                    .color(c.result.warning),
+                    .color(c.muted),
             );
         }
         if live
@@ -4792,21 +4870,34 @@ impl Sessions {
                     .is_some_and(|words| words.starts_with("Stopped by itself:"))
             {
                 if missing_input
-                    && Action::secondary("Choose an input")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                    && (if primary && !self.run_open {
+                        Action::primary("Choose an input")
+                    } else {
+                        Action::secondary("Choose an input")
+                    })
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                 {
                     self.wants_recording_input = true;
                 }
-                record_again = Action::secondary("Record again")
-                    .density(Density::Read)
-                    .blocked_if(
-                        self.live.is_some() || self.job.is_some(),
-                        "Stop recording or wait for processing to finish.",
-                    )
-                    .show(ui)
-                    .clicked();
+                record_again = (if primary
+                    && !self.run_open
+                    && !missing_input
+                    && self.live.is_none()
+                    && self.job.is_none()
+                {
+                    Action::primary("Record again")
+                } else {
+                    Action::secondary("Record again")
+                })
+                .density(Density::Read)
+                .blocked_if(
+                    self.live.is_some() || self.job.is_some(),
+                    "Stop recording or wait for processing to finish.",
+                )
+                .show(ui)
+                .clicked();
             }
             if live {
                 stop = Action::secondary("Stop recording")
@@ -4875,7 +4966,14 @@ impl Sessions {
                     "Process"
                 };
                 let destination = recording_destination(settings, recording);
-                let response = (if self.run_open || !primary || stalled {
+                let response = (if self.run_open
+                    || !primary
+                    || stalled
+                    || stored
+                        .as_ref()
+                        .is_some_and(|words| words.starts_with("Stopped by itself:"))
+                    || reason.is_some()
+                {
                     Action::secondary(label)
                 } else {
                     Action::primary(label)
@@ -4915,12 +5013,7 @@ impl Sessions {
                 ui.add_space(design::L);
             }
         });
-        if !live
-            && !job_here
-            && !recording.summary
-            && self.job.is_none()
-            && settings.problem().is_none()
-        {
+        if destination_here {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
                 ui.add(
@@ -5060,16 +5153,17 @@ impl Sessions {
                         facts.push(fact);
                     }
                 }
-                let mut facts = facts.join(" · ");
+                let facts = facts.join(" · ");
+                let mut placement = String::new();
                 if let Some(id) = &added {
                     let at = book.events.iter().position(|event| event.id == *id);
                     let before = at.and_then(|at| at.checked_sub(1));
-                    facts.push_str(&before.map_or_else(
-                        || " · First on the timeline".to_owned(),
-                        |before| format!(" · After {}", book.events[before].label(days[before])),
-                    ));
+                    placement = before.map_or_else(
+                        || "First on the timeline".to_owned(),
+                        |before| format!("After {}", book.events[before].label(days[before])),
+                    );
                 }
-                (marker, title, key, added, facts)
+                (marker, title, key, added, facts, placement)
             })
             .collect();
         let measure = |text: &str, role: Type| {
@@ -5082,7 +5176,7 @@ impl Sessions {
             .max(Action::secondary("Add").natural_width(ui));
         let text = rows
             .iter()
-            .map(|(marker, title, _, _, facts)| {
+            .map(|(marker, title, _, _, facts, _)| {
                 let time = if recording.marked && !marker.at.is_empty() {
                     measure(&marker.at, Type::Body) + design::S
                 } else {
@@ -5098,7 +5192,7 @@ impl Sessions {
         let widths = [text, action];
         ui.scope(|ui| {
             ui.set_width(text + design::L + action);
-            for (index, (marker, title, key, added, facts)) in rows.iter().enumerate() {
+            for (index, (marker, title, key, added, facts, placement)) in rows.iter().enumerate() {
                 design::table_row(ui, &widths, design::L, |ui, cell| {
                     ui.spacing_mut().item_spacing.x = design::S;
                     if cell == 0 {
@@ -5129,6 +5223,14 @@ impl Sessions {
                                         .wrap(),
                                     );
                                 });
+                                if !placement.is_empty() {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, placement).color(c.muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
                             });
                         });
                     } else {
@@ -5491,7 +5593,33 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                let primary = recordings.iter().position(|recording| !recording.summary);
+                let recovery = recordings.iter().position(|recording| {
+                    let stalled = self.live.as_ref().is_some_and(|live| {
+                        live.recorder.path() == recording.path
+                            && matches!(
+                                live.recorder.health(),
+                                Health::Stalled | Health::Stopped(_)
+                            )
+                    });
+                    stalled
+                        || (self.live.is_none()
+                            && self.job.is_none()
+                            && recording
+                                .status
+                                .as_deref()
+                                .is_some_and(|words| words.starts_with("Stopped by itself:")))
+                });
+                let destination = recordings.iter().position(|recording| {
+                    !recording.summary
+                        && recording.path.exists()
+                        && self.job.is_none()
+                        && settings.problem().is_none()
+                        && self
+                            .live
+                            .as_ref()
+                            .is_none_or(|live| live.recorder.path() != recording.path)
+                });
+                let primary = recovery.or(destination);
                 for (index, recording) in recordings.iter().enumerate() {
                     ui.add_space(design::S);
                     ui.scope_builder(
@@ -5503,6 +5631,7 @@ impl Sessions {
                                 settings,
                                 book,
                                 primary == Some(index) && !self.confirm_record && !banner_primary,
+                                destination == Some(index),
                             );
                         },
                     );
@@ -5802,7 +5931,19 @@ impl Sessions {
         } else {
             &[(Tab::Plan, "Plan"), (Tab::Note, "Note")]
         };
+        let plan_width = if editing_group_here {
+            design::LIST_MEASURE
+        } else {
+            (ui.available_width() * 0.4).clamp(PLAN_WIDTH, PLAN_MAX_WIDTH)
+        };
+        let note_start = if beside { plan_width + design::L } else { 0.0 };
+        let toolbar_width = ui
+            .available_width()
+            .min(note_start + design::READER_MEASURE + 2.0 * (design::S + design::HAIRLINE_WIDTH));
         ui.horizontal(|ui| {
+            if shown != Tab::Recordings {
+                ui.set_max_width(toolbar_width);
+            }
             let changed = ui
                 .horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -5818,9 +5959,6 @@ impl Sessions {
                 self.clear_success();
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if title_on_own_line {
-                    self.session_details_action(ui, &note);
-                }
                 if (shown == Tab::Note || (shown == Tab::Plan && beside))
                     && (!self.reading_note
                         || has_written_text(&compact_plan_for_reading(
@@ -5843,6 +5981,9 @@ impl Sessions {
                     {
                         self.reading_note = !self.reading_note;
                     }
+                }
+                if title_on_own_line {
+                    self.session_details_action(ui, &note);
                 }
             });
         });
@@ -6746,14 +6887,16 @@ mod tests {
         assert_eq!(
             sessions.not_being_played().as_deref(),
             Some(
-                "Session 1 - The Bridge 2.md is not the session being played. The session being played is Session 1 - The Bridge.md. What you write and add goes here."
+                "Session 1 - The Bridge 2.md is not the session being played. The session being played is Session 1 - The Bridge.md. What you write and add on this page goes into Session 1 - The Bridge 2.md."
             ),
             "iter-8-C-ST2-files"
         );
         sessions.notes[1].number = 2;
         assert_eq!(
             sessions.not_being_played().as_deref(),
-            Some("Session 2 is not the session being played. What you write and add goes here.")
+            Some(
+                "Session 2 is not the session being played. What you write and add on this page goes into Session 1 - The Bridge 2.md."
+            )
         );
         sessions.selected = Some(played.id);
         assert!(sessions.not_being_played().is_none());
