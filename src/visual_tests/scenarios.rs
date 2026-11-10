@@ -7327,6 +7327,15 @@ pub mod session_notes {
                 })
             },
         );
+        // The open fight's state is a link whose run icon is its own glyph: only `Round 2` is
+        // underlined, and the link's name is the words.
+        d.expect("Round 2");
+        let parts = icon_link_parts(d, crate::design::icons::RUN, "Round 2");
+        d.observe(
+            "iter-17-D-plan-run-link",
+            parts.is_some_and(|(icon, words, _)| !icon && words),
+            format!("(icon underlined, words underlined, icon colour) is {parts:?}"),
+        );
         d.state("plan-open-fight-aligned", Sizes::Default);
         write_note(d);
         d.click(NAV_TIMELINE);
@@ -11245,6 +11254,19 @@ pub mod session_plan {
             d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
             "Lookup finds last session's note, and the run stays in view",
         );
+        // Reading a result closes the list. `N results`, which opens it again, starts a line at
+        // the search field's edge.
+        let first = lookup_results(d).first().map(|row| row.name.clone());
+        if let Some(first) = &first {
+            d.click(first);
+        }
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-results",
+            "Show the results",
+            &[SMALL, DEFAULT, LARGE],
+            |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
+        );
         d.press(Key::Escape);
 
         // T14.2: a number typed wrong can be put right, and the turn stays.
@@ -12222,9 +12244,7 @@ fn show_all_count(d: &Driver<'_>) -> Option<usize> {
     })
 }
 
-/// FT2: a quiet Lookup action that starts a line uses `line_start`: its icon or word (`S` inside
-/// its target) starts at `edge`, the text edge of what is above it, and its press area stays right
-/// of the Lookup column's splitter. It runs at each size given, the sizes its state is captured at.
+/// FT2: a quiet Lookup action that starts a line uses `line_start`. See `action_at_text_edge`.
 fn lookup_action_at_text_edge(
     d: &mut Driver<'_>,
     id: &str,
@@ -12232,11 +12252,25 @@ fn lookup_action_at_text_edge(
     sizes: &[(f32, f32)],
     edge: impl Fn(&Driver<'_>) -> Option<f32>,
 ) {
+    action_at_text_edge(d, id, action, LOOKUP_SPLITTER, sizes, edge);
+}
+
+/// A quiet action that starts a line uses `line_start`: its icon or word (`S` inside its target)
+/// starts at `edge`, the text edge of what is above it, and its press area stays right of the
+/// nearest column splitter. It runs at each size given, the sizes its state is captured at.
+fn action_at_text_edge(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    splitter: &str,
+    sizes: &[(f32, f32)],
+    edge: impl Fn(&Driver<'_>) -> Option<f32>,
+) {
     for &size in sizes {
         let (target, edge, splitter) = d.at_size(size, |d| {
             d.expect(action);
-            d.expect(LOOKUP_SPLITTER);
-            (d.place_of(action), edge(d), d.place_of(LOOKUP_SPLITTER))
+            d.expect(splitter);
+            (d.place_of(action), edge(d), d.place_of(splitter))
         });
         let start = target.map(|target| target.left() + crate::design::S);
         d.observe(
@@ -12263,6 +12297,32 @@ fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
 }
 
 const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
+/// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
+/// words are, and the icon's colour.
+fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, bool, egui::Color32)> {
+    let whole = format!("{icon} {words}");
+    let mut found = None;
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if job.text != whole || !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        let section = |part: &str| {
+            job.sections
+                .iter()
+                .find(|section| job.text[section.byte_range.clone()].contains(part))
+        };
+        if let Some((icon, name)) = section(icon).zip(section(words)) {
+            found = Some((
+                icon.format.underline.width > 0.0,
+                name.format.underline.width > 0.0,
+                icon.format.color,
+            ));
+        }
+    });
+    found
+}
 
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.

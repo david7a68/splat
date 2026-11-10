@@ -488,6 +488,10 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
+                        // The repair is the newer result. A change result kept from before the
+                        // note broke has nothing left to undo, and would hide `Note repaired.`.
+                        self.reader.clear_notice();
+                        self.reader.name_undo = None;
                         self.repair = None;
                         self.reload = true;
                     }
@@ -776,13 +780,20 @@ impl WorldPage {
             Some(Err(error)) => self.error = Some(error),
             None => {}
         }
-        if let Some(error) = &self.error {
-            design::message(ui, design::Tone::Error, error);
-            if self.new_kind.is_none()
-                && !self.card_shown()
-                && design::Action::quiet("Cancel").show(ui).clicked()
-            {
-                self.error = None;
+        if let Some(error) = self.error.clone() {
+            if self.new_kind.is_none() && !self.card_shown() {
+                // Cancel starts at the message text, as every message's choices do.
+                let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
+                    design::Action::quiet("Cancel")
+                        .line_start()
+                        .show(ui)
+                        .clicked()
+                });
+                if cancel {
+                    self.error = None;
+                }
+            } else {
+                design::message(ui, design::Tone::Error, &error);
             }
         }
     }

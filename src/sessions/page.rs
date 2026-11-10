@@ -696,10 +696,49 @@ fn plan_link(ui: &mut egui::Ui, label: &str, open: bool) -> egui::Response {
     response
 }
 
+/// The open fight's state on its plan row. The run icon is its own glyph before the link words,
+/// so the underline covers only the words, as in `status_link`. The press target covers both, at
+/// least 24 px, and the accessible name is the words.
 fn plan_run_link(ui: &mut egui::Ui, word: &str) -> egui::Response {
-    let response = design::small_link(ui, &format!("{} {word}", icons::RUN));
-    design::named(ui, &response, word);
+    let c = colors();
+    let plain = egui::TextFormat {
+        font_id: Type::Small.font(ui),
+        color: c.accent,
+        ..Default::default()
+    };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(icons::RUN, 0.0, plain.clone());
+    job.append(" ", 0.0, plain.clone());
+    job.append(
+        word,
+        0.0,
+        egui::TextFormat {
+            underline: egui::Stroke::new(1.0, c.accent.gamma_multiply(0.6)),
+            ..plain
+        },
+    );
+    job.wrap.max_width = ui.available_width().max(1.0);
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(
+            galley.size().x.max(design::XL),
+            galley.size().y.max(design::XL),
+        ),
+        egui::Sense::click(),
+    );
     response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), word));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter()
+            .galley(egui::pos2(rect.left(), top), galley, c.accent);
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {

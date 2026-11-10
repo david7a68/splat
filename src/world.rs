@@ -522,6 +522,17 @@ fn missing_link(ui: &mut egui::Ui, name: &str) {
     }
 }
 
+/// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
+/// wraps to a line of its own. A later one on the same line keeps its normal target, so the two
+/// targets never overlap.
+pub(crate) fn starts_line<'a>(ui: &egui::Ui, action: Action<'a>, first: bool) -> Action<'a> {
+    if first || action.natural_width(ui) > ui.available_size_before_wrap().x {
+        action.line_start()
+    } else {
+        action
+    }
+}
+
 /// The words of a place link that matches more than one note.
 fn place_choices_words(name: &str, count: usize) -> String {
     format!("{name} · {count} matches")
@@ -2077,12 +2088,12 @@ impl Reader {
                     .color(colors().muted),
             );
             ui.horizontal_wrapped(|ui| {
-                for (label, kind) in [("NPC", "npc"), ("Location", "location")] {
-                    if Action::quiet(label)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
+                for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let action = Action::quiet(label).density(Density::Read);
+                    if starts_line(ui, action, at == 0).show(ui).clicked() {
                         chosen = Some(kind.to_owned());
                     }
                 }
@@ -2098,6 +2109,7 @@ impl Reader {
             if !other.is_empty()
                 && Action::quiet(&format!("Make {other}"))
                     .density(Density::Read)
+                    .line_start()
                     .show(ui)
                     .clicked()
             {
@@ -2819,7 +2831,7 @@ impl Reader {
         if key == "part_of" {
             for (at, group) in groups.iter().enumerate() {
                 let name = format!("Remove {}", link_name(group, "group"));
-                if Action::quiet(&name).show(ui).clicked() {
+                if Action::quiet(&name).line_start().show(ui).clicked() {
                     let mut groups = groups.clone();
                     groups.remove(at);
                     chosen = Some(Value::Sequence(groups));
@@ -2854,10 +2866,12 @@ impl Reader {
             });
         }
         ui.horizontal_wrapped(|ui| {
-            if key != "part_of" && Action::quiet("Clear value").show(ui).clicked() {
+            if key != "part_of" && Action::quiet("Clear value").line_start().show(ui).clicked() {
                 chosen = Some(Value::Null);
             }
-            cancel = Action::quiet("Cancel").show(ui).clicked();
+            cancel = starts_line(ui, Action::quiet("Cancel"), key == "part_of")
+                .show(ui)
+                .clicked();
         });
         if chosen.is_some()
             || cancel

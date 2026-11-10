@@ -1927,6 +1927,7 @@ impl Lookup {
                 .icon(icons::DOWN)
                 .density(Density::Read)
                 .name("Show the results")
+                .line_start()
                 .show(ui)
                 .clicked()
         {
@@ -2117,15 +2118,11 @@ impl Lookup {
                         .enumerate()
                     {
                         let label = format!("{word} “{name}”");
-                        let mut action = Action::quiet(&label)
+                        let action = Action::quiet(&label)
                             .icon(icons::ADD)
                             .density(Density::Read);
-                        // An action that starts a line aligns its icon with the text above. The
-                        // second one starts a line only when it does not fit after the first.
-                        if at == 0 || action.natural_width(ui) > ui.available_size_before_wrap().x {
-                            action = action.line_start();
-                        }
-                        if action.show(ui).clicked() {
+                        // The second action starts a line only when it wraps.
+                        if world::starts_line(ui, action, at == 0).show(ui).clicked() {
                             made = Some(world::create_entry(&campaign, &name, kind));
                         }
                     }

@@ -202,10 +202,12 @@ reason after Unsaved and Discard in the save row. Reserve its height so the firs
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
-its target into the gutter. In a wrapping row, the first action uses it, and a later one uses it only when it wraps
-to a line of its own. Lookup's `Show all N`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, and
-Arrivals' `Show all`, start at their rows' text. UI text that names a thing uses curly quotation marks
-(`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes. This also applies to an icon-bearing quiet message action below its message.
+its target into the gutter. This also applies to an icon-bearing quiet message action below its message. In a
+wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
+`Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
+World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
+(`Copy text`, `Cancel`) start at the text edge above them. UI text that names a thing uses curly quotation marks
+(`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
