@@ -2830,6 +2830,46 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
+    // iter-17-B: Undo replacement starts its line above the slot rows. Their words start at the
+    // row edge, so the action uses `line_start`: its icon starts at the rows' words, and its
+    // press area reaches into the page's `L` gutter, never into the navigation splitter.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (undo, slot, clear) = d.at_size(size, |d| {
+            let slot = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("1. ") && node.in_view())
+                .map(|node| node.rect);
+            let mut words = None::<f32>;
+            d.each_painted_text(|text, _| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if slot.is_some_and(|slot| slot.contains(rect.center())) {
+                    words = Some(words.map_or(rect.left(), |left| left.min(rect.left())));
+                }
+            });
+            (
+                super::words_left(d, "Undo replacement"),
+                words,
+                d.place_of("Undo replacement").map_or_else(
+                    || Err("Undo replacement is not in view".to_owned()),
+                    |target| super::press_area_clear(d, target, "Undo replacement", None),
+                ),
+            )
+        });
+        d.observe(
+            "iter-17-B-undo-replacement",
+            undo.zip(slot)
+                .is_some_and(|(undo, slot)| (undo - slot).abs() <= 1.0),
+            format!(
+                "At {size:?}, Undo replacement starts at {undo:?}, the slot rows' words at {slot:?}"
+            ),
+        );
+        d.observe(
+            "iter-17-B-undo-replacement-clear",
+            clear.is_ok(),
+            format!("At {size:?}, Undo replacement's press area: {clear:?}"),
+        );
+    }
     d.observe_both("W8", "Changed keeps the same roster row pitch", |d| {
         let top = |name: &str| {
             d.nodes()
@@ -4309,7 +4349,7 @@ fn unread_reason(groups: &str) -> String {
         .find_map(|line| line.strip_prefix("- {id:"))
         .expect("fixture: an object group");
     format!(
-        "Part of \"{{id:{value}\" not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+        "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
     )
 }
 

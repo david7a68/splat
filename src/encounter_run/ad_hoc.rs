@@ -348,6 +348,8 @@ impl Run {
             }
             if !all && matches.len() > MATCHES_SHOWN {
                 let label = format!("Show all {}", matches.len());
+                // The rows put their words `S` in, as a quiet action's padding does. So the plain
+                // action already starts its words at the rows' words, and its target at their edge.
                 if Action::quiet(&label)
                     .density(Density::Read)
                     .hint("List every creature that matches, without more typing")
