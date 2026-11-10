@@ -3510,7 +3510,7 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
-    /// Write and Read use the whole column beside the plan, and break lines alike.
+    /// Write follows the column; Read keeps a comfortable prose measure.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
         let page = right_of(d, "New session");
@@ -3527,10 +3527,16 @@ pub mod column_resize {
         let read = d.longest_visible_line();
         d.observe(
             CHECK,
-            read > 75 && read.abs_diff(write) <= 2,
+            read <= 75 && write > read,
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
-        d.state("session-read-fills-its-column", Sizes::All);
+        d.state_prepared("session-read-keeps-prose-measure", Sizes::All, |d| {
+            let read = d.longest_visible_line();
+            assert!(
+                read > 0 && read <= 75,
+                "Read keeps its measure at the captured size: {read}"
+            );
+        });
         d.click_add_event("Add Major event");
         d.wait_for_text("Major event added to Session");
         d.wait_for_text("Add to notes");
@@ -3558,6 +3564,45 @@ pub mod column_resize {
                 "The plan add has one named Undo at each window size",
             );
         });
+    }
+
+    fn draft_crosses_note_breakpoint(d: &mut Driver<'_>) {
+        d.set_base(SMALL);
+        write_note(d);
+        assert!(d.has("Note"), "The note starts in the narrow tab layout");
+        d.replace_editor_text(&"Unsent account of the evening.\n".repeat(60));
+        d.press_ctrl(Key::End);
+        d.type_text("Draft stays across the breakpoint.");
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Note text" && node.in_view())
+            .expect("The note is visible");
+        d.scroll_up_at(editor.shown.center(), 8);
+        let before = d.editor_text().expect("The draft is open");
+        let (focused, scroll) = d.note_editor_view();
+        assert!(
+            focused && scroll > 0.0,
+            "The typed draft has focus and is scrolled: {scroll}"
+        );
+        for size in [LARGE, SMALL] {
+            d.set_base(size);
+            assert_eq!(d.has("Plan and notes"), size == LARGE);
+            let (focused, after) = d.note_editor_view();
+            assert_eq!(d.editor_text().as_deref(), Some(before.as_str()));
+            assert!(focused, "The note keeps focus at {size:?}");
+            assert!(
+                (after - scroll).abs() < 1.0,
+                "The note keeps scroll at {size:?}: {scroll} -> {after}"
+            );
+        }
+        d.type_text(" Still typing.");
+        assert!(
+            d.editor_text()
+                .unwrap()
+                .contains("Draft stays across the breakpoint. Still typing.")
+        );
+        d.state("draft-survives-note-breakpoint", Sizes::Default);
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -3654,6 +3699,7 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
         the_session_tabs_fill_their_column(d);
+        draft_crosses_note_breakpoint(d);
 
         // Keyboard proof follows the existing task-cost checks.
         d.click(NAV_LIBRARY);
@@ -6015,7 +6061,7 @@ pub mod session_recording {
 
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
-    const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+    const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
 
     fn choose_view(d: &mut Driver<'_>, name: &str) {
         if d.has("Recording view") {
@@ -6580,13 +6626,15 @@ pub mod session_recording {
         d.click("Stop recording");
 
         // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
+        let plan_session = d.app_mut().sessions.current();
         write_note(d);
         d.type_into_editor("Words typed after the rename.\n");
         d.app_mut().sessions.simulate_file_renamed();
         d.press_ctrl(Key::S);
         d.expect("Notes not saved");
-        d.state("note-file-gone", Sizes::Default);
-        d.click("Save my words as a new file");
+        d.expect("Your draft is still here.");
+        d.state("note-file-gone", Sizes::All);
+        d.click("Save my draft as a new file");
         d.expect("Notes saved");
         d.observe(
             "T11.4",
@@ -6624,6 +6672,33 @@ pub mod session_recording {
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
+
+        // FT2: return to the original session. Saving the missing note made a new identity.
+        d.click(NAV_SESSIONS);
+        d.app_mut().sessions.select(plan_session);
+        d.settle();
+        show_plan(d);
+        let resume = "Resume: Bridge Ambush";
+        d.state_prepared("timeline-fight-resume", Sizes::All, |d| {
+            assert!(
+                d.in_view(resume),
+                "A paused timeline fight has a visible Resume"
+            );
+        });
+        d.begin_task();
+        assert!(
+            d.in_view(resume),
+            "Resume is visible before its direct click"
+        );
+        d.click(resume);
+        d.goal_within(
+            "iter-5-C-FT2",
+            "resume a timeline fight from its plan row",
+            1,
+        );
+        d.expect(NEXT_TURN);
+        close_run(d);
+        d.click(NAV_SESSIONS);
     }
 }
 

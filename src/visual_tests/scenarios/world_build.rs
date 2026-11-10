@@ -702,7 +702,22 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md was deleted");
     assert!(!d.has("Find the folder…"));
-    d.state("manifest-deleted-campaign", Sizes::All);
+    d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
+        let search = d
+            .place_of("Find a needed entry")
+            .expect("The entry search is present");
+        let save = d
+            .place_of("Save selections")
+            .expect("The save action is present");
+        assert!(
+            search.width() <= crate::design::LIST_MEASURE,
+            "Search: {search:?}"
+        );
+        assert!(
+            save.right() <= search.left() + crate::design::LIST_MEASURE,
+            "Save: {save:?}; search: {search:?}"
+        );
+    });
     d.click("Write Package.md again");
     d.settle();
     assert!(!d.has_containing("Package.md was deleted"));
@@ -1077,7 +1092,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&copy).unwrap(), copy_text);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.expect("Cinder Wolf copy.md and Cinder Wolf.md share an identity. Choose one in Library.");
+    d.expect("These two files claim to be the same entry: Cinder Wolf copy.md and Cinder Wolf.md.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
     d.expect("Make Cinder Wolf copy.md a separate entry");

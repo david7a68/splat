@@ -344,7 +344,8 @@ pub fn cleaned_path(recording: &Path) -> PathBuf {
 }
 
 /// The warning used when the first pass stands without a second-pass transcript.
-pub const NO_CHECK_WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+pub const NO_CHECK_WARNING: &str =
+    "The check returned nothing, so the clean transcript was not checked.";
 
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {

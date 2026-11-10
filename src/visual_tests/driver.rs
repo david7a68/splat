@@ -1496,6 +1496,18 @@ impl<'a> Driver<'a> {
         self.harness.state_mut()
     }
 
+    /// The actual source editor's focus and scroll, for a layout transition check.
+    pub fn note_editor_view(&self) -> (bool, f32) {
+        let (id, offset) = self.harness.ctx.data(|data| {
+            data.get_temp::<(egui::Id, egui::Vec2)>(egui::Id::new("session_editor_proof"))
+                .expect("The note editor was painted")
+        });
+        (
+            self.harness.ctx.memory(|memory| memory.has_focus(id)),
+            offset.y,
+        )
+    }
+
     /// The longest line of visible text, to check reading width.
     pub fn longest_visible_line(&self) -> usize {
         self.nodes()
