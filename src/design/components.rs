@@ -2003,30 +2003,35 @@ pub enum DiskConflictChoice {
 }
 
 pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
-    message(
+    // The choices start at the message text, like every other message with choices.
+    message_with_actions(
         ui,
         Tone::Warning,
         &format!("This {noun} changed on disk. Your draft is safe until you choose."),
-    );
-    let mut choice = None;
-    ui.horizontal_wrapped(|ui| {
-        if Action::secondary("Overwrite with my draft")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            choice = Some(DiskConflictChoice::Overwrite);
-        }
-        ui.add_space(L);
-        if Action::destructive("Reload and lose my draft")
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            choice = Some(DiskConflictChoice::Reload);
-        }
-    });
-    choice
+        |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let mut choice = None;
+                if Action::secondary("Overwrite with my draft")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    choice = Some(DiskConflictChoice::Overwrite);
+                }
+                // The layout adds its own item gap after each control; together they make `L`.
+                ui.add_space(L - ui.spacing().item_spacing.x);
+                if Action::destructive("Reload and lose my draft")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    choice = Some(DiskConflictChoice::Reload);
+                }
+                choice
+            })
+            .inner
+        },
+    )
 }
 
 /// After Reload and lose my draft: the old draft can still come back. True when it should.
