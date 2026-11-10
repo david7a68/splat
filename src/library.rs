@@ -28,6 +28,86 @@ use uuid::Uuid;
 
 const BUILTIN_NAME: &str = "D&D 2024 · SRD 5.2.1";
 
+/// Keep the error with its repair and consequence in both reader and source views.
+fn repair_notice(
+    ui: &mut egui::Ui,
+    problem: &str,
+    note: &Note,
+    recovery: Option<&(Module, String, bool)>,
+    blocked: Option<&str>,
+    source: bool,
+) -> bool {
+    let inset = design::S
+        + design::HAIRLINE_WIDTH
+        + design::number_width(ui, icons::ERROR, &Type::Body.font(ui))
+        + ui.spacing().item_spacing.x * 2.0
+        - design::XS;
+    if let Some((_, path, exists)) = recovery {
+        let label = if *exists {
+            format!("Replace with a basic {path}")
+        } else {
+            "Write the manifest again".into()
+        };
+        let tone = if *exists { Tone::Error } else { Tone::Warning };
+        ui.scope(|ui| {
+            // Keep the action below the error at the text edge, even in a wide pane.
+            let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
+                Action::secondary(&label)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + inset,
+            );
+            ui.set_max_width(ui.available_width().min(width).min(EDITOR_MAX_WIDTH));
+            let pressed = design::locked(ui, blocked, |ui| {
+                design::message_with_action(ui, tone, problem, &label)
+            });
+            if *exists {
+                ui.horizontal(|ui| {
+                    ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
+                });
+            }
+            pressed
+        })
+        .inner
+    } else if crate::formats_ui::is_old(problem) {
+        // Conversion remains the safe repair for an old-layout note.
+        crate::formats_ui::old_notice(
+            ui,
+            &crate::formats_ui::old_message(&note.path),
+            note.owner
+                .root()
+                .map(|root| root.join(&note.path))
+                .into_iter()
+                .collect(),
+        );
+        false
+    } else if source {
+        design::message(ui, Tone::Error, problem);
+        false
+    } else {
+        ui.scope(|ui| {
+            let label = "Fix in Edit Markdown";
+            let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
+                Action::secondary(label)
+                    .density(Density::Read)
+                    .natural_width(ui)
+                    + inset,
+            );
+            ui.set_max_width(ui.available_width().min(width));
+            design::message_with_action(ui, Tone::Error, problem, label)
+        })
+        .inner
+    }
+}
+
 fn copy_destination_reason(campaigns: &Campaigns) -> Option<&'static str> {
     (campaigns.modules().is_empty() && campaigns.all().is_empty())
         .then_some("Add a campaign or a package to create entries.")
@@ -332,6 +412,11 @@ impl Note {
             .unwrap_or(Section::Unreadable)
     }
     fn name(&self) -> &str {
+        if self.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST)
+            && let Owner::Package(module) = &self.owner
+        {
+            return &module.name;
+        }
         self.entry.as_ref().map_or(&self.path, |e| &e.name)
     }
     fn section(&self) -> Section {
@@ -1207,7 +1292,8 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         let (entries, mut errors) = (folder.entries.clone(), folder.errors.clone());
         let manifest_path = crate::content_workspace::manifest_path_in(&folder, module);
         let has_manifest = entries.iter().any(|entry| entry.kind == "package");
-        let missing_manifest = !has_manifest && !path.join(&manifest_path).exists();
+        let missing_manifest = !has_manifest
+            && !crate::content_workspace::manifest_file_exists(module, &manifest_path);
         // The folder was just read; its texts are the ones these entries came from.
         let text_of = |path: &str| -> Result<String, String> {
             let full = note_path(&module.path, path)?;
@@ -1243,7 +1329,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         }
         if missing_manifest {
             notes.push(Note {
-                path: "Package.md".into(),
+                path: manifest_path.clone(),
                 text: String::new(),
                 entry: None,
                 error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
@@ -1744,6 +1830,19 @@ impl Library {
     }
 
     #[cfg(test)]
+    pub(crate) fn repairing_package_about(&self) -> bool {
+        self.selected
+            .and_then(|at| self.loaded.as_ref()?.notes.get(at))
+            .is_some_and(|note| {
+                note.is_manifest()
+                    && note.error.is_some()
+                    && self.source
+                    && self.scope == Scope::Package(note.owner.id().unwrap())
+                    && self.section == Section::All
+            })
+    }
+
+    #[cfg(test)]
     pub(crate) fn selected_name(&self) -> Option<&str> {
         self.selected
             .and_then(|i| self.loaded.as_ref()?.notes.get(i))
@@ -1828,7 +1927,7 @@ impl Library {
                 search: self.search.clone(),
             });
         }
-        if !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
+        if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
             self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
         }
@@ -1836,7 +1935,11 @@ impl Library {
         self.selected = Some(index);
         self.draft = note.text.clone();
         self.disk_change = None;
-        self.section = note.section();
+        self.section = if note.is_manifest() {
+            Section::All
+        } else {
+            note.section()
+        };
         self.search.clear();
         self.matches = None;
         self.source = false;
@@ -2088,11 +2191,17 @@ impl Library {
                 })
             })
         {
-            self.scope = Scope::All;
+            let note = &self.loaded.as_ref().unwrap().notes[index];
             self.search.clear();
-            self.section = Section::Unreadable;
-            self.unreadable_kind =
-                Some(self.loaded.as_ref().unwrap().notes[index].unreadable_kind());
+            if note.is_manifest() {
+                self.scope = Scope::Package(note.owner.id().unwrap());
+                self.section = Section::All;
+                self.unreadable_kind = None;
+            } else {
+                self.scope = Scope::All;
+                self.section = Section::Unreadable;
+                self.unreadable_kind = Some(note.unreadable_kind());
+            }
             self.open_entry(index);
             self.source = true;
             self.focus_repair = true;
@@ -2444,30 +2553,6 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
-        if self.selection_undo.as_ref().is_some_and(|undo| {
-            campaigns
-                .active_campaign()
-                .is_some_and(|c| c.id == undo.campaign.id)
-        }) && design::undo_message(
-            ui,
-            Tone::Success,
-            "Every entry in this package is now used here.",
-            "Undo package use",
-        ) {
-            let undo = self.selection_undo.take().unwrap();
-            let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
-                if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
-                document.selections = undo.before;
-                document.save()
-            });
-            match result {
-                Ok(()) => {
-                    self.stale = true;
-                    self.content_changed = Some(undo.campaign.path);
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
         if self.pending.is_some() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -2598,6 +2683,8 @@ impl Library {
                     {
                         self.selected = Some(index);
                         self.draft = note.text.clone();
+                        self.section = Section::All;
+                        self.unreadable_kind = None;
                         self.source = false;
                     }
                     egui::ScrollArea::vertical()
@@ -2850,7 +2937,7 @@ impl Library {
                     && let Scope::Package(package) = scope
                     && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
                     && about_row(ui, &note.about_label(), about_open).clicked() && !dirty
-                { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
+                { self.selected = Some(index); self.draft = note.text.clone(); self.section = Section::All; self.unreadable_kind = None; self.source = false; }
                 if self.section == Section::Creatures || searching {
                     let notes = &loaded.notes;
                     let facets = loaded.facets();
@@ -4025,6 +4112,30 @@ impl Library {
     }
 
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
+        if self.selection_undo.as_ref().is_some_and(|undo| {
+            campaigns
+                .active_campaign()
+                .is_some_and(|c| c.id == undo.campaign.id)
+        }) && design::undo_message(
+            ui,
+            Tone::Success,
+            "Every entry in this package is now used here.",
+            "Undo package use",
+        ) {
+            let undo = self.selection_undo.take().unwrap();
+            let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
+                if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
+                document.selections = undo.before;
+                document.save()
+            });
+            match result {
+                Ok(()) => {
+                    self.stale = true;
+                    self.content_changed = Some(undo.campaign.path);
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
         if let Some(write) = &self.manifest_write
             && design::locked(ui, self.draft_reason(), |ui| {
                 design::undo_message(
@@ -4050,8 +4161,10 @@ impl Library {
             .filter(|note| note.is_manifest() && note.error.is_some())
             .and_then(|note| match &note.owner {
                 Owner::Package(module) => {
-                    let path = crate::content_workspace::package_manifest_path(module);
-                    let exists = module.path.join(&path).exists();
+                    let path = note.path.clone();
+                    let exists = note.error.as_deref()
+                        != Some(crate::content_workspace::DELETED_MANIFEST)
+                        && module.path.join(&path).exists();
                     Some((module.clone(), path, exists))
                 }
                 _ => None,
@@ -4218,6 +4331,11 @@ impl Library {
                 } else {
                     format!("Used here · {used} of {} entries", entries.len())
                 }
+            }
+            Owner::Package(module)
+                if note.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST) =>
+            {
+                format!("{} · Manifest deleted", module.name)
             }
             Owner::Package(module) if note.error.is_some() => {
                 format!("{} · Cannot be read", module.name)
@@ -4433,7 +4551,23 @@ impl Library {
                 )
             });
             let file_line = |ui: &mut egui::Ui| {
-                if let Some(from) = &moved_from {
+                if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
+                    if design::link(ui, "Show folder").clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                            "file://{}",
+                            root.to_string_lossy()
+                                .bytes()
+                                .map(|byte| {
+                                    if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+                                        (byte as char).to_string()
+                                    } else {
+                                        format!("%{byte:02X}")
+                                    }
+                                })
+                                .collect::<String>()
+                        )));
+                    }
+                } else if let Some(from) = &moved_from {
                     let width = (ui.available_width()
                         - design::number_width(ui, from, &Type::Small.font(ui))
                         - design::S)
@@ -4692,6 +4826,16 @@ impl Library {
                 );
             });
         }
+        let (repair_problem, repair_line) =
+            crate::campaign_content::repair_problem(&note.path, &self.draft);
+        let repair_problem = note.error.as_ref().map(|error| {
+            if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
+                error.clone()
+            } else {
+                repair_problem.unwrap_or_else(|| error.clone())
+            }
+        });
+        let mut repair_pressed = false;
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
             ui.horizontal(|ui| {
@@ -4724,43 +4868,57 @@ impl Library {
                     });
                 });
             });
-            // Measure the same words in both states, so the first edit keeps the caret in place.
-            let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
-            let height = egui::WidgetText::from(Type::Small.rich(ui, words))
-                .into_galley(
-                    ui,
-                    Some(egui::TextWrapMode::Wrap),
-                    editor_width,
-                    Type::Small.font(ui),
-                )
-                .size()
-                .y
-                .max(Density::Read.control() + design::XS);
-            let (slot, _) =
-                ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-            if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
-                let mut slot_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(slot)
-                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                );
-                let ui = &mut slot_ui;
-                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
-                    ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
-                    if Action::quiet("Undo discard")
-                        .name(&format!("Undo discard of {}", note.name()))
-                        .icon(icons::UNDO)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                        && let Some((_, _, text)) = self.discarded.take()
-                    {
-                        self.draft = text;
-                    }
-                } else if let Some(reason) = draft_reason {
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+            if let Some(problem) = &repair_problem {
+                repair_pressed =
+                    repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, true);
+                if discard_is_for(self.discarded.as_ref(), note)
+                    && self.draft == note.text
+                    && design::draft_discarded(ui, note.name())
+                    && let Some((_, _, text)) = self.discarded.take()
+                {
+                    self.draft = text;
+                }
+                ui.add_space(design::S);
+            } else {
+                // Measure the same words in both states, so the first edit keeps the caret in place.
+                let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
+                let height = egui::WidgetText::from(Type::Small.rich(ui, words))
+                    .into_galley(
+                        ui,
+                        Some(egui::TextWrapMode::Wrap),
+                        editor_width,
+                        Type::Small.font(ui),
+                    )
+                    .size()
+                    .y
+                    .max(Density::Read.control() + design::XS);
+                let (slot, _) =
+                    ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
+                if draft_reason.is_some() || discard_is_for(self.discarded.as_ref(), note) {
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
+                    let ui = &mut slot_ui;
+                    if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                        ui.label(Type::Small.rich(ui, format!("{} draft discarded.", note.name())));
+                        if Action::quiet("Undo discard")
+                            .name(&format!("Undo discard of {}", note.name()))
+                            .icon(icons::UNDO)
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                            && let Some((_, _, text)) = self.discarded.take()
+                        {
+                            self.draft = text;
+                        }
+                    } else if let Some(reason) = draft_reason {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                                .wrap(),
+                        );
+                    }
                 }
             }
         }
@@ -4826,64 +4984,6 @@ impl Library {
                 .show(ui)
                 .clicked();
             });
-        }
-        let (repair_problem, repair_line) =
-            crate::campaign_content::repair_problem(&note.path, &self.draft);
-        if note.error.is_some()
-            && recovery.as_ref().is_none_or(|(_, _, exists)| *exists)
-            && let Some(problem) = &repair_problem
-        {
-            if crate::formats_ui::is_old(problem) {
-                crate::formats_ui::old_notice(
-                    ui,
-                    &crate::formats_ui::old_message(&note.path),
-                    note.owner
-                        .root()
-                        .map(|root| root.join(&note.path))
-                        .into_iter()
-                        .collect(),
-                );
-            } else {
-                design::message(ui, Tone::Error, problem);
-            }
-        }
-        if let Some((module, path, exists)) = recovery {
-            let label = if exists {
-                format!("Replace with a basic {path}")
-            } else {
-                "Write the manifest again".into()
-            };
-            let pressed = if exists {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
-                        .color(colors().muted),
-                );
-                Action::quiet(&label)
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
-            } else {
-                design::locked(ui, draft_reason, |ui| {
-                    design::message_with_action(
-                        ui,
-                        Tone::Warning,
-                        crate::content_workspace::DELETED_MANIFEST,
-                        &label,
-                    )
-                })
-            };
-            if pressed {
-                match crate::content_workspace::ManifestWrite::write(&module) {
-                    Ok(write) => {
-                        self.manifest_write = Some(write);
-                        self.stale = true;
-                        self.content_changed = Some(module.path);
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-                return;
-            }
         }
         if editable
             && !conflict
@@ -5073,6 +5173,9 @@ impl Library {
                                 }
                             } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
+                            if let Some(problem) = &repair_problem {
+                                repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false);
+                            }
                         });
                         open_link = view::show_with_related(
                             ui,
@@ -5104,6 +5207,22 @@ impl Library {
                         );
                     });
             });
+        }
+        if repair_pressed {
+            if let Some((module, path, exists)) = recovery {
+                match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
+                    Ok(write) => {
+                        self.manifest_write = Some(write);
+                        self.stale = true;
+                        self.content_changed = Some(module.path);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            } else {
+                self.source = true;
+                self.focus_repair = true;
+            }
+            return;
         }
         let reconnect = (|| -> Result<(), String> {
             if undo_dependency
@@ -7382,6 +7501,11 @@ mod tests {
             );
             assert!(rendered.contains("Write the manifest again"), "{rendered}");
             assert!(!rendered.contains("Missing YAML frontmatter"), "{rendered}");
+            assert!(rendered.contains("Test · Manifest deleted"), "{rendered}");
+            assert!(rendered.contains("Show folder"), "{rendered}");
+            assert!(!rendered.contains("Show file"), "{rendered}");
+            assert!(!rendered.contains("Package.md"), "{rendered}");
+            assert!(!rendered.contains("Module.md"), "{rendered}");
             for guess in [
                 "Package.md was deleted",
                 "Module.md was deleted",
@@ -7394,7 +7518,7 @@ mod tests {
     }
 
     #[test]
-    fn iter8_e_existing_manifest_without_fields_still_opens_for_repair() {
+    fn iter9_e_empty_or_malformed_manifest_still_opens_for_repair() {
         for filename in ["Package.md", "Module.md"] {
             let temp = tempfile::tempdir().unwrap();
             let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
@@ -7402,11 +7526,7 @@ mod tests {
                 fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
             }
             let path = module.path.join(filename);
-            for bad in [
-                "",
-                "A package description without front matter.",
-                "---\nsplat_id: [\n---\n",
-            ] {
+            for bad in ["", "---\nsplat_id: [\n---\n"] {
                 fs::write(&path, bad).unwrap();
                 let loaded = load(Some(&module)).unwrap();
                 let note = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
@@ -7462,6 +7582,88 @@ mod tests {
                     .notes
                     .iter()
                     .all(|note| note.error.is_none())
+            );
+        }
+    }
+
+    #[test]
+    fn iter9_e_manifest_write_rechecks_the_offered_action() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let path = module.path.join("Package.md");
+        fs::remove_file(&path).unwrap();
+        // A missing-file Write must not become a replacement after an outside edit.
+        let bad = "---\nsplat_id: [\n---\n";
+        fs::write(&path, bad).unwrap();
+        assert!(
+            crate::content_workspace::ManifestWrite::write_as(&module, "Package.md", false)
+                .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), bad.as_bytes());
+        // Nor may a Replace become a creation after the file moves.
+        let moved = module.path.join("Moved.md");
+        fs::rename(&path, &moved).unwrap();
+        assert!(
+            crate::content_workspace::ManifestWrite::write_as(&module, "Package.md", true).is_err()
+        );
+        assert!(!path.exists());
+        assert_eq!(fs::read(&moved).unwrap(), bad.as_bytes());
+        // A README and a stale Write together still preserve the README.
+        fs::write(&path, "My README.\n").unwrap();
+        assert!(
+            crate::content_workspace::ManifestWrite::write_as(&module, "Package.md", false)
+                .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), b"My README.\n");
+    }
+
+    #[test]
+    fn iter9_e_plain_manifest_named_readme_is_never_replaced() {
+        // A divider and a heading underline are prose, not front matter.
+        for (filename, readme) in [
+            (
+                "Package.md",
+                "A package description without front matter.\n",
+            ),
+            ("Module.md", "A package description without front matter.\n"),
+            ("Package.md", "Overview\n---\n\nNotes.\n\n---\n\nMore.\n"),
+            ("Module.md", "Notes.\r\n\r\n---\r\n\r\nMore.\r\n"),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+            fs::remove_file(module.path.join("Package.md")).unwrap();
+            let path = module.path.join(filename);
+            fs::write(&path, readme).unwrap();
+            let loaded = load(Some(&module)).unwrap();
+            let note = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
+            assert_eq!(
+                note.error.as_deref(),
+                Some(crate::content_workspace::DELETED_MANIFEST)
+            );
+            assert_eq!(note.name(), "Test");
+            assert_ne!(note.path, filename);
+            let write = crate::content_workspace::ManifestWrite::write(&module).unwrap();
+            assert!(!write.replaced());
+            assert_ne!(write.path(), filename);
+            assert_eq!(
+                write.message(),
+                format!("{} was written again.", write.path())
+            );
+            assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+            write.undo().unwrap();
+            assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+            // Two README names leave no safe manifest destination.
+            let other = if filename == "Package.md" {
+                "Module.md"
+            } else {
+                "Package.md"
+            };
+            fs::write(module.path.join(other), readme).unwrap();
+            assert!(crate::content_workspace::ManifestWrite::write(&module).is_err());
+            assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+            assert_eq!(
+                fs::read(module.path.join(other)).unwrap(),
+                readme.as_bytes()
             );
         }
     }
