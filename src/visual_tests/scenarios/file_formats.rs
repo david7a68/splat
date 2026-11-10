@@ -182,7 +182,19 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Convert files…");
     assert!(!d.has("Engine support"));
     assert!(!d.has("Source and identifiers"));
-    d.state("converted-with-skipped-file-and-one-undo", Sizes::All);
+    d.state_prepared("converted-with-skipped-file-and-one-undo", Sizes::All, |d| {
+        let converts = d
+            .nodes()
+            .iter()
+            .filter(|node| node.in_view() && node.name == "Convert files…")
+            .count();
+        d.observe(
+            "iter-13-E-FD5",
+            converts == 1
+                && d.visible_text("NPCs/Rook.md uses the old layout. Splat no longer reads it."),
+            format!("One Convert files… for the one skipped file, and the reader keeps its sentence: {converts} buttons"),
+        );
+    });
     d.click_beside_exact(
         "NPCs/Rook.md changed on disk after the preview. Open Convert files again to convert it.",
         "Convert files…",

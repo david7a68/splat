@@ -237,12 +237,7 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
     let events: Vec<_> = rows.iter().map(|row| row.event.clone()).collect();
     for (row, expected) in rows.iter().zip(day_numbers(&events)) {
         if row.event.kind == Kind::Day {
-            let typed = row
-                .head
-                .text
-                .strip_prefix("## Day ")
-                .and_then(|day| day.split(':').next())
-                .and_then(|n| n.trim().parse::<u32>().ok());
+            let typed = written_day(&row.head.text);
             if let Some(typed) = typed.filter(|typed| *typed != expected) {
                 flags.push(Flag {
                     line: row.head.number,
@@ -264,13 +259,22 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
     });
     (rows, flags)
 }
-pub fn flagged_days(text: &str) -> Vec<String> {
+/// The day number a `## Day N: …` heading was written with.
+fn written_day(head: &str) -> Option<u32> {
+    head.strip_prefix("## Day ")
+        .and_then(|day| day.split(':').next())
+        .and_then(|n| n.trim().parse::<u32>().ok())
+}
+
+/// Each day whose heading has a flag, with the day number its heading was written with, so the
+/// row can say `Written as Day 5`. A day heading is flagged only when that number is out of order.
+pub fn flagged_days(text: &str) -> Vec<(String, u32)> {
     let (rows, flags) = rows(text);
     rows.into_iter()
         .filter(|row| {
             row.event.kind == Kind::Day && flags.iter().any(|flag| flag.line == row.head.number)
         })
-        .map(|row| row.event.id)
+        .filter_map(|row| Some((row.event.id, written_day(&row.head.text)?)))
         .collect()
 }
 pub fn parse(text: &str) -> (Vec<Event>, Vec<Flag>) {
@@ -902,6 +906,9 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert!(flags.iter().any(|flag| flag.line == 8
             && flag.message == "\"Day 5\" is day 2 in order. Splat renumbers it when it saves."));
+        // Round 13 FD6: the row names the number the heading was written with.
+        assert_eq!(flagged_days(text), vec![("t-two".to_owned(), 5)]);
+        assert!(flagged_days(&text.replace("Day 5", "Day 2")).is_empty());
     }
 
     #[test]

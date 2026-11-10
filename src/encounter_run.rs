@@ -1390,6 +1390,10 @@ impl Run {
             self.error = Some(error);
         }
     }
+    /// This run's own id, the same in every frame and every save.
+    pub(crate) fn id(&self) -> Uuid {
+        self.id
+    }
     pub(crate) fn ended(&self) -> bool {
         matches!(self.state.phase, Phase::Ended { .. })
     }

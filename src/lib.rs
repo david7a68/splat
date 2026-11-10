@@ -1425,6 +1425,12 @@ impl Splat {
             .unwrap_or_default();
         let glances = self.party.glances(&run);
         let source = self.party.glance_source(!run.is_empty());
+        // While a fight is open, the bar holds its level until the fight ends.
+        let fight = self
+            .encounters
+            .run()
+            .filter(|run| !run.ended())
+            .map(encounter_run::Run::id);
         let mut choice = None;
         // A band of the page, not a raised layer: the panel's own hairline closes it.
         egui::TopBottomPanel::top("party_bar")
@@ -1439,7 +1445,7 @@ impl Splat {
                 if self.copy_dialog.is_some() || self.confirm_close {
                     ui.disable();
                 }
-                choice = party_bar::show(ui, &glances, &source);
+                choice = party_bar::show(ui, &glances, &source, fight);
             });
         match choice {
             Some(party_bar::Choice::Open(id)) => {

@@ -1728,15 +1728,17 @@ impl Tone {
     }
 }
 
-/// An inline message: a bar, an icon and words. It never blocks anything.
+/// An inline message: a bar, an icon and words. It never blocks anything. The gaps are its
+/// own, so the words start the same distance after the icon in every caller.
 pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     let (icon, color) = tone.parts();
     let c = colors();
     let inner = ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
         let start = ui.cursor().min;
         ui.add_space(S + 1.0);
         ui.label(Type::Body.rich(ui, icon).color(color));
-        ui.add_space(-XS);
+        ui.add_space(XS);
         let response = ui.add(egui::Label::new(Type::Body.rich(ui, text).color(c.text)).wrap());
         let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
         ui.painter().rect_filled(bar, 0.0, color);
@@ -1858,7 +1860,8 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
     let button = Action::secondary(action).density(Density::Read);
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
-    let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
+    // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
+    let inset = S + 1.0 + icon_width + XS + ui.spacing().item_spacing.x;
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
@@ -2058,7 +2061,8 @@ pub fn undo_message_named(
     };
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
-    let inset = S + 1.0 + icon_width + ui.spacing().item_spacing.x * 2.0 - XS;
+    // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
+    let inset = S + 1.0 + icon_width + XS + ui.spacing().item_spacing.x;
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;

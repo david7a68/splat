@@ -824,7 +824,7 @@ Saving a template does not execute rules or start a combat run.
 ### Encounter groups
 
 A session's plan can assemble a group in place: choose **Group**, then **New group**. The editor uses
-the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
+the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **+ Add to fight…**, the run's words, which goes to the Arrivals
 panel in the run. Its **⋯ → Remove from tonight** deletes an isolated plan link and keeps words inside a sentence. **Undo remove** restores the link.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
@@ -1105,6 +1105,7 @@ outside tags and prose.
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.
 
-Skipped conversions offer **Convert files…** beside the skipped file. Reopening the preview
+Skipped conversions offer **Convert files…** beside the skipped file. The open file's reader
+then keeps its old-layout sentence without a second button. Reopening the preview
 keeps **Undo convert** until you apply the next conversion. Duplicate-file repair names
 the file that becomes a separate entry and offers **Undo separate entry** beside its result.

@@ -168,7 +168,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high |
@@ -229,11 +229,15 @@ A changed file stops saving. World uses `disk_conflict_choices` with the noun `n
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library gives the
 choices one row at full reader width. World Overwrite saves valid text; invalid text returns to the repair
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
-the next edit or disk change. A run offers `Replace the file with this run` and `Save as a new run`.
+the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
+the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Replace the file with this run` and `Save as a new run`.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
-body, with choices above the comparison. Library uses its editor's monospace face and line height. Text wraps
+body, with choices above the comparison. Library uses its editor's monospace face and line height. Only a
+side-by-side draft and disk comparison takes the full pane width; when the file is deleted, the lone draft
+keeps the 720 px source editor width. Text wraps
 at word boundaries. Selected fill and a line mark show differences. Open at the first difference with two
 whole context lines above it. Show `N lines differ` and the nearest heading beside that count, such as `Under
 the heading “Recovery”`; let the sentence wrap. Missing rows stay blank with a muted hatch and the accessible name `No
@@ -320,7 +324,8 @@ or without its warning icon: the package name shortens by whole words, so a faul
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
-count. New packages write `Package.md`. Existing `Module.md` files keep their name. Messages and repair
+count: About shows the warning icon for any problem the header counts in the manifest, such as a first
+heading that differs from the name, not only when the manifest cannot be read. New packages write `Package.md`. Existing `Module.md` files keep their name. Messages and repair
 actions for existing files name the real file. A deleted manifest uses the registered package name
 as its reader title and `<package name> · Manifest deleted` on its owner line. Offer `Show folder`;
 show no file name or `Show file`. Keep the neutral missing-file warning and shared message action.
@@ -333,8 +338,11 @@ text edge below the action. The consequence wraps at the pane's notice measure, 
 and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
-says how many files need fixing: a validation message, a broken link or both count a file once. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. Unreadable notes use CANNOT BE READ. Rows name
+says how many files need fixing: a validation message, a broken link or both count a file once. A file is
+its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it.
+When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
+Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
@@ -401,7 +409,8 @@ Sessions use “session” for their repair and Undo actions. World rows say `Sa
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
-`XS` gap below its own action.
+`XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
+`message_with_actions`, so they start at the message text edge, not at the warning bar.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -425,7 +434,9 @@ draft comparisons. Encounter and group conflict comparisons use disk layout and 
 properties and prose that Overwrite keeps.
 
 Writes check their baseline. Keep skipped files and next steps visible; count changed and skipped files, with
-warning tone for any skip. Each skipped file offers Convert files… beside it. Keep `Undo convert` when
+warning tone for any skip. Each skipped file offers Convert files… beside it. While FILES SKIPPED names
+the open file, its reader keeps the `uses the old layout` sentence without its own Convert files…, so one
+button serves one file. Keep `Undo convert` when
 reopening preview, until another conversion is applied. Headless `splat convert` uses the same checks; `splat
 check` reports schema-2 flags and unreadable files by path and line.
 
@@ -519,7 +530,9 @@ is drawn, including a missing group's icon and ` · Not found`. Empty or whitesp
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
-count and its menu include the note until `Always use this one` picks one. Table faults use the
+count and its menu include the note until `Always use this one` picks one. A row with more than one link
+problem says `2 broken links` only when every target is missing; when one of them waits for a choice, it
+says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
@@ -546,7 +559,9 @@ The rail shows World draft while an edit is unsaved. If a repair is also unsaved
 One save writes every change with one Undo. If the note on disk already reads as the save would write it
 (for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
 form with the Info message `Your changes are already in the note.` A group change refused because Part of
-could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices. Below the
+could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices.
+The save that finds the disk change reads the note again for its list row and header count, as a refused Part of
+write does; the draft stays as it is until the DM chooses. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example
@@ -955,8 +970,8 @@ planned fight with that name. Delete the saved run stays in the menu. Start a ne
 planned encounters with a saved run, including legacy runs without a source ID. Open fights use a status link
 while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
-A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap to two lines, then shorten
-with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
+A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap between members, never inside a
+name, to at most three lines, then shorten with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells, quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
@@ -997,6 +1012,14 @@ muted `N more` names the rest, with HP, in hover and its accessible name. `N mor
 focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
+Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
+in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
+item narrows, so nothing moves back when a player is healed. The held widths are measured again at the
+held level each frame, and dropped when they would hide a player who shows without the hold; the
+held level stays, so the hold never hides a player. A change of bar width (the window or the rail) or of the party
+measures again. The bar keeps this in its own state, keyed to the run, never in
+the party data.
+
 ### Timeline
 
 Timeline is a story-order ledger: one column, hairline spine, icon and word per kind, no kind colours or
@@ -1026,7 +1049,7 @@ displayed clock. File items use Fight and Major event; accept Encounter and Even
 a colon. Preserve outside prose, unknown properties and event fields. Separate app and outside event edits
 save together with a quiet notice; same-event edits need a choice. Compare at the first difference, with
 Overwrite before destructive Reload and lose my timeline. Flags name file and line and offer shared file
-actions; flagged days have a warning icon. Rail conflicts use warning Timeline changed on disk; write failures
+actions; a flagged day keeps its Day icon and adds a muted `Small` word after the heading with a warning icon (`⚠ Written as Day 5`). Rail conflicts use warning Timeline changed on disk; write failures
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
