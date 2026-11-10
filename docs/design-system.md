@@ -370,8 +370,9 @@ duplicate notes and offers file-specific identity repair with Undo.
 Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same
 entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
-entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file or folder choice
-states which file or folder an encounter will keep or use, in `Small` muted text an `XS` gap below its own action.
+entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
+or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
+`XS` gap below its own action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.

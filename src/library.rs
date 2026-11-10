@@ -144,7 +144,11 @@ pub(crate) fn duplicate_repair_consequence(
     keeps: bool,
 ) {
     if !users.is_empty() {
-        let verb = if keeps { "keeps" } else { "will then use" };
+        let verb = match (keeps, users.len()) {
+            (true, 1) => "keeps",
+            (true, _) => "keep",
+            (false, _) => "will then use",
+        };
         ui.label(
             Type::Small
                 .rich(ui, format!("{} {verb} {remaining}.", name_list(users)))

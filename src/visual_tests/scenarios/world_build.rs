@@ -86,7 +86,9 @@ pub fn broken(d: &mut Driver<'_>) {
                     .iter()
                     .all(|node| node.name == combined && node.in_view())
                 && !d.has("Not saved: fix the problem above, then save.");
-            let state = d.place_of("Unsaved").unwrap();
+            let state = d
+                .place_of(&format!("{} Unsaved", design::icons::DRAFT))
+                .unwrap();
             let discard = d.place_of("Discard").unwrap();
             let reason = d
                 .place_of(crate::encounters::draft_switch_reason())
@@ -1720,11 +1722,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             [
                 (
                     "ashen-marches-copy",
-                    "Bridge Ambush keeps the files in ashen-marches/.",
+                    "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
                 ),
                 (
                     "ashen-marches",
-                    "Bridge Ambush will then use the files in ashen-marches-copy/.",
+                    "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
                 ),
             ]
             .iter()
