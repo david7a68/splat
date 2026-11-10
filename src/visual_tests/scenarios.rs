@@ -2255,7 +2255,8 @@ pub mod run_long_names {
         d.observe(
             "Long names",
             turn.as_deref() == Some(LONG_NAME)
-                && words.contains(&format!("{FIRST_NAME}…’s turn"))
+                && words.contains(&format!("{FIRST_NAME}…"))
+                && !words.contains("’s turn")
                 && size > row_size
                 && row_size.is_some(),
             format!(
@@ -2387,7 +2388,7 @@ pub mod run_absent_player {
             "A long initiative Undo does not move the roster down",
         );
         d.state("initiative-set-in-combat", Sizes::Default);
-        d.expect("Brannoch Vale joins at\u{a0}20\u{a0}· acts next round.");
+        d.expect("Brannoch Vale joins at\u{a0}20 ·\u{a0}acts next round.");
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
             "Absent player",
@@ -2455,7 +2456,7 @@ pub mod prep_to_table {
         );
         d.observe(
             "T4.3",
-            !before.is_empty() && before == after && d.visible_text("Absent\u{a0}·"),
+            !before.is_empty() && before == after && d.visible_text("Absent ·\u{a0}"),
             format!("Marking a player absent moves no field, and the row says so: {before:?} then {after:?}"),
         );
         d.click(&format!("Absent: {player}"));
@@ -4610,6 +4611,11 @@ pub mod signed_in {
             "Signed in: the sheet says it is connected, and how old it is",
         );
         for page in PAGES {
+            if !d.in_view(page) {
+                assert!(d.in_view("More sheet pages"));
+                d.click("More sheet pages");
+            }
+            assert!(d.in_view(page));
             d.click(page);
             d.observe(
                 "T7.2",
