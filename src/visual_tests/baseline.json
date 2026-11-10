@@ -60,9 +60,11 @@
       "stat-formats": 33,
       "world": 1,
       "world-edit-round-trip": 1,
+      "world-empty-links": 3,
       "world-facts": 9,
       "world-note-deleted": 2,
       "world-note-duplicated": 4,
+      "world-part-of-safety": 1,
       "world-places": 1
     },
     "no-overlap/egui-chrome": {
@@ -150,11 +152,13 @@
       "world": 60,
       "world-broken-note": 59,
       "world-edit-round-trip": 43,
+      "world-empty-links": 21,
       "world-facts": 63,
       "world-note-deleted": 50,
       "world-note-duplicated": 49,
       "world-note-moved": 42,
       "world-note-renamed": 30,
+      "world-part-of-safety": 32,
       "world-places": 43
     }
   },

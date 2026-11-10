@@ -112,7 +112,7 @@ fn from_other_pages(
     }
     let mut go = None;
     ui.add_space(design::S);
-    style::section_heading(ui, "From other pages");
+    style::section_heading(ui, "From other notes");
     for ((_, title), pages) in &groups {
         let count: usize = pages.iter().map(|(_, facts)| facts.len()).sum();
         egui::CollapsingHeader::new(design::group_heading_text(ui, title, count))

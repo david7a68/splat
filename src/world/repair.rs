@@ -106,7 +106,7 @@ impl Repair {
             return false;
         }
         if let Some(disk) = self.disk.clone() {
-            let choice = design::disk_conflict_choices(ui);
+            let choice = design::disk_conflict_choices(ui, "note");
             design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
             if let Some(choice) = choice {
                 self.baseline = disk;

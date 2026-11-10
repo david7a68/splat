@@ -17,7 +17,6 @@ use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
-const UNREAD_GROUPS: &str = "Part of could not be read. Repair it first.";
 
 /// Only the DM's own world entries change here. A shared identity must be fixed first.
 pub(super) fn editable(item: &Item, index: &ContentIndex) -> bool {
@@ -48,7 +47,7 @@ pub(super) fn value_name(index: &ContentIndex, value: &Value, label: &str) -> St
         .and_then(|reference| index.position_of(&reference))
         .map(|at| index.items[at].entry.name.clone())
         .unwrap_or_else(|| {
-            if value.is_null() {
+            if super::empty_optional(value) {
                 "not set".into()
             } else {
                 link_name(value, label)
@@ -73,7 +72,7 @@ struct Fields {
     creature: Option<Value>,
     place: Option<Value>,
     groups: Vec<Value>,
-    groups_unread: bool,
+    groups_unread: Option<usize>,
     text: String,
 }
 
@@ -98,17 +97,7 @@ impl Fields {
             creature: set("creature"),
             place: set("in"),
             groups: super::part_of(entry).into_iter().cloned().collect(),
-            // A rejected list is absent from the model. Match its flag by the source key,
-            // so the form cannot mistake unread values for an empty list.
-            groups_unread: entry.flags.iter().any(|flag| {
-                file.lines()
-                    .nth(flag.line.saturating_sub(1))
-                    .and_then(|line| line.split_once(':'))
-                    .is_some_and(|(key, _)| {
-                        serde_yaml_ng::from_str::<String>(key)
-                            .is_ok_and(|key| key == "splat_part_of")
-                    })
-            }),
+            groups_unread: super::fields::unread_groups(entry, file),
             text: split_text(file, &entry.name)
                 .map_or(file, |(_, text)| text)
                 .to_owned(),
@@ -218,8 +207,10 @@ impl EditDraft {
             return Ok(None);
         }
         let changed = self.now.changed(&self.start);
-        if changed.groups && self.start.groups_unread {
-            return Err(UNREAD_GROUPS.into());
+        if changed.groups
+            && let Some(line) = self.start.groups_unread
+        {
+            return Err(super::fields::unread_groups_reason(line));
         }
         let mut after = disk.clone();
         if changed.status {
@@ -304,7 +295,7 @@ impl EditDraft {
         let Some((disk, theirs)) = self.disk.take() else {
             return Conflict::None;
         };
-        let choice = design::disk_conflict_choices(ui);
+        let choice = design::disk_conflict_choices(ui, "note");
         let their_text = theirs.as_ref().map_or("", |theirs| theirs.text.as_str());
         if their_text != self.now.text {
             design::grouped_draft_comparison(ui, &self.now.text, their_text, &self.path, false);
@@ -331,9 +322,10 @@ impl EditDraft {
                     if !changed.place {
                         now.place.clone_from(&theirs.place);
                     }
-                    if !changed.groups {
+                    if !changed.groups || theirs.groups_unread.is_some() {
                         now.groups.clone_from(&theirs.groups);
                     }
+                    now.groups_unread = theirs.groups_unread;
                     if !changed.text {
                         now.text.clone_from(&theirs.text);
                     }
@@ -511,6 +503,10 @@ impl Reader {
             design::field(ui, label, None, None, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(match &*slot {
+                        // Empty and null are both unset, so both read `not set` in muted text.
+                        Some(value) if super::empty_optional(value) => {
+                            Type::Body.rich(ui, "not set").color(colors().muted)
+                        }
                         Some(value) => Type::Body.rich(ui, value_name(index, value, label)),
                         None => Type::Body.rich(ui, "not set").color(colors().muted),
                     });
@@ -534,7 +530,10 @@ impl Reader {
                 *slot = Some(chosen).filter(|value| !value.is_null());
             }
         }
-        let groups_error = draft.start.groups_unread.then_some(UNREAD_GROUPS);
+        let groups_error = draft
+            .start
+            .groups_unread
+            .map(super::fields::unread_groups_reason);
         if groups_error.is_some()
             && self
                 .picker
@@ -543,7 +542,7 @@ impl Reader {
         {
             self.picker = None;
         }
-        design::field(ui, "Part of", None, groups_error, |ui| {
+        design::field(ui, "Part of", None, None, |ui| {
             ui.horizontal_wrapped(|ui| {
                 let names: Vec<_> = draft
                     .now
@@ -568,7 +567,7 @@ impl Reader {
                 if Action::quiet("Change")
                     .density(Density::Read)
                     .name("Change Part of")
-                    .blocked(groups_error)
+                    .blocked(groups_error.as_deref())
                     .show(ui)
                     .clicked()
                 {
@@ -580,6 +579,9 @@ impl Reader {
                 }
             });
         });
+        if let Some(reason) = &groups_error {
+            super::unread_groups_message(ui, campaign, &draft.path, reason);
+        }
         if self
             .picker
             .as_ref()
@@ -831,6 +833,205 @@ mod tests {
     }
 
     #[test]
+    fn iter9_d_read_and_live_changes_keep_reported_unread_disk_bytes() {
+        for log_as in [None, Some("[[Session 1]]".to_owned())] {
+            let (dir, campaign, _, id, file) = unread_group_note();
+            // The picker opened on a readable file. The index is deliberately stale.
+            let path = dir.path().join("NPCs/Rook.md");
+            let start = file.find("- {id:").unwrap();
+            let end = file[start..].find('\n').unwrap() + start;
+            fs::write(&path, format!("{}{}", &file[..start], &file[end + 1..])).unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let stale = &index.items[index.position(id).unwrap()];
+            fs::write(&path, &file).unwrap();
+            let mut reader = Reader {
+                log_as,
+                picker: Some(Picker {
+                    key: "part_of",
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let result = reader.change(
+                &campaign,
+                stale,
+                &index,
+                "part_of",
+                Value::Sequence(vec!["[[Arena Guild]]".into()]),
+            );
+            assert_eq!(
+                fs::read(dir.path().join("NPCs/Rook.md")).unwrap(),
+                file.as_bytes(),
+                "SD1/AD1/AT1: unread disk groups must keep every raw byte"
+            );
+            assert!(result.is_none());
+            assert!(reader.picker.is_none());
+            assert_eq!(
+                reader.error.as_deref(),
+                Some("Part of could not be read (line 7). Repair it first.")
+            );
+        }
+    }
+
+    #[test]
+    fn iter9_d_readable_group_add_keeps_raw_group_text() {
+        let (dir, campaign, _, id, file) = unread_group_note();
+        let start = file.find("- {id:").unwrap();
+        let end = file[start..].find('\n').unwrap() + start;
+        let file = format!("{}{}", &file[..start], &file[end + 1..]);
+        let file = file.replace(
+            "- '[[Zarel|the Archdevil]]'",
+            "- \"[[Zarel|the Archdevil]]\" # Keep the alias and comment.",
+        );
+        fs::write(dir.path().join("NPCs/Rook.md"), &file).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut groups: Vec<_> = super::super::part_of(&item.entry)
+            .into_iter()
+            .cloned()
+            .collect();
+        groups.push("[[Arena Guild]]".into());
+        let mut reader = Reader::default();
+        assert!(
+            reader
+                .change(&campaign, item, &index, "part_of", Value::Sequence(groups))
+                .is_some()
+        );
+        let saved = fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap();
+        assert!(
+            saved.contains("- \"[[Zarel|the Archdevil]]\" # Keep the alias and comment.\n"),
+            "SD1-raw-readable: adding a group keeps the other group's raw text"
+        );
+        reader.undo.as_ref().unwrap().undo(&campaign).unwrap();
+        assert_eq!(
+            fs::read(dir.path().join("NPCs/Rook.md")).unwrap(),
+            file.as_bytes()
+        );
+    }
+
+    #[test]
+    fn iter9_d_readable_list_layouts_keep_raw_groups() {
+        for field in [
+            "splat_part_of: [\"[[Zarel|the Archdevil]]\"] # Keep the flow list.\n",
+            "splat_part_of: # Keep the header.\n  [\"[[Zarel|the Archdevil]]\"] # Keep the flow list.\n",
+            "splat_part_of:\n  - '[[Zarel|the Archdevil]]' # Keep the indent.\n",
+            "splat_part_of:\n- Zarel # Keep the plain name.\n",
+            "splat_part_of:\n- >-\n  [[Zarel|the Archdevil]]\n",
+        ] {
+            let (dir, campaign, _, id, file) = unread_group_note();
+            let start = file.find("splat_part_of:").unwrap();
+            let end = file.find("splat_status:").unwrap();
+            let before = format!("{}{field}{}", &file[..start], &file[end..]);
+            let path = dir.path().join("NPCs/Rook.md");
+            fs::write(&path, &before).unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(id).unwrap()];
+            let mut groups: Vec<_> = super::super::part_of(&item.entry)
+                .into_iter()
+                .cloned()
+                .collect();
+            assert_eq!(groups.len(), 1, "fixture: {field}");
+            groups.push("[[Arena Guild]]".into());
+            let mut reader = Reader::default();
+            assert!(
+                reader
+                    .change(&campaign, item, &index, "part_of", Value::Sequence(groups))
+                    .is_some(),
+                "{field}: {:?}",
+                reader.error
+            );
+            let saved = fs::read_to_string(&path).unwrap();
+            let original = if field.contains("[\"") {
+                "\"[[Zarel|the Archdevil]]\""
+            } else {
+                field.lines().find(|line| line.contains("Zarel")).unwrap()
+            };
+            assert!(saved.contains(original), "SD1-raw-layout: {field}");
+            if field.contains("Keep the flow list") {
+                assert!(saved.contains("] # Keep the flow list."));
+            }
+            reader.undo.as_ref().unwrap().undo(&campaign).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), before.as_bytes());
+        }
+    }
+
+    #[test]
+    fn iter9_d_source_preparation_stays_behind_the_generation_cache() {
+        let (_dir, _campaign, index, id, file) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut reader = Reader::default();
+        let mut reads = 0;
+        reader.refresh_group_fault(item, 1, || {
+            reads += 1;
+            Some(file.clone())
+        });
+        assert_eq!(reads, 1);
+        reader.refresh_group_fault(item, 1, || {
+            panic!("unchanged render must not prepare or read the source")
+        });
+        assert_eq!(reads, 1);
+        reader.refresh_group_fault(item, 2, || {
+            reads += 1;
+            Some(file.clone())
+        });
+        assert_eq!(
+            reads, 2,
+            "a new index generation invalidates the source lookup"
+        );
+        assert_eq!(
+            reader
+                .group_fault
+                .as_ref()
+                .unwrap()
+                .source
+                .as_ref()
+                .unwrap()
+                .0,
+            7
+        );
+    }
+
+    #[test]
+    fn iter9_d_failed_reads_and_two_faults_keep_disk_bytes() {
+        for fault in ["missing", "invalid yaml", "two fields"] {
+            let (dir, campaign, index, id, file) = unread_group_note();
+            let item = &index.items[index.position(id).unwrap()];
+            let path = dir.path().join("NPCs/Rook.md");
+            match fault {
+                "missing" => fs::remove_file(&path).unwrap(),
+                "invalid yaml" => fs::write(&path, "---\nsplat_part_of: [\n---\n").unwrap(),
+                _ => fs::write(
+                    &path,
+                    file.replace("splat_part_of:", "aliases: [Rook, 17]\nsplat_part_of:"),
+                )
+                .unwrap(),
+            }
+            let before = fs::read(&path).ok();
+            let mut reader = Reader {
+                picker: Some(Picker {
+                    key: "part_of",
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert!(
+                reader
+                    .change(
+                        &campaign,
+                        item,
+                        &index,
+                        "part_of",
+                        Value::Sequence(vec!["[[Arena Guild]]".into()])
+                    )
+                    .is_none()
+            );
+            assert!(reader.picker.is_none());
+            assert!(reader.error.is_some());
+            assert_eq!(fs::read(&path).ok(), before, "SD1-read-fault: {fault}");
+        }
+    }
+
+    #[test]
     fn iter8_d2_unread_object_groups_cannot_be_replaced_by_edit() {
         let (dir, campaign, index, id, file) = unread_group_note();
         let item = &index.items[index.position(id).unwrap()];
@@ -847,7 +1048,7 @@ mod tests {
         );
         assert_eq!(
             result.err().as_deref(),
-            Some("Part of could not be read. Repair it first.")
+            Some("Part of could not be read (line 7). Repair it first.")
         );
     }
 

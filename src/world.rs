@@ -420,9 +420,36 @@ fn world_field<'a>(entry: &'a Entry, name: &str) -> Option<&'a Value> {
 
 /// Empty optional values have no row in Read mode. The editor keeps the source value.
 fn reader_field<'a>(entry: &'a Entry, key: &str) -> Option<&'a Value> {
-    world_field(entry, key).filter(|value| {
-        !value.is_null() && value.as_str().is_none_or(|text| !text.trim().is_empty())
-    })
+    world_field(entry, key).filter(|value| !empty_optional(value))
+}
+
+/// The line under a duplicate's repair action. A duplicate of another kind can leave a World
+/// note with only its own path, so the first action may have no other file to name.
+fn duplicate_consequence(paths: &[String], at: usize) -> Option<String> {
+    if at == 0 {
+        paths
+            .get(1)
+            .map(|other| format!("Existing links keep {other}."))
+    } else {
+        paths
+            .first()
+            .map(|first| format!("Existing links will then use {first}."))
+    }
+}
+
+fn empty_optional(value: &Value) -> bool {
+    value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
+}
+
+fn unread_groups_message(ui: &mut egui::Ui, campaign: &Campaign, path: &str, reason: &str) {
+    ui.horizontal_wrapped(|ui| {
+        design::message(ui, Tone::Warning, reason);
+        if design::link(ui, "Edit in Obsidian").clicked() {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
+                &campaign.path.join(path),
+            )));
+        }
+    });
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -552,7 +579,7 @@ pub fn type_group(kind: &str) -> String {
 pub fn type_label(kind: &str) -> String {
     match kind {
         "npc" => "NPC".to_owned(),
-        "" => "World entry".to_owned(),
+        "" => "World note".to_owned(),
         other => style::human_label(other),
     }
 }
@@ -968,7 +995,7 @@ pub(crate) enum ChangeKind {
     StatBlock,
     Status,
     Name,
-    Identity,
+    Identity(IdentityNoun),
     /// Everything the edit form saved at once.
     Edit,
 }
@@ -991,7 +1018,7 @@ impl ChangeKind {
             Self::Status => "Undo status change",
             Self::StatBlock => "Undo stat block change",
             Self::Name => "Undo name change",
-            Self::Identity => "Undo new identity",
+            Self::Identity(noun) => noun.undo_label(),
             Self::Edit => "Undo changes",
         }
     }
@@ -1006,6 +1033,10 @@ impl ChangeKind {
 }
 
 impl Change {
+    pub(crate) fn identity_undo_label(&self) -> &'static str {
+        self.kind.undo_label()
+    }
+
     pub(crate) fn message(&self) -> &str {
         &self.word
     }
@@ -1015,16 +1046,62 @@ impl Change {
     }
 }
 
+/// World notes and Library entries share identity repair, but keep their own nouns.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum IdentityNoun {
+    Note,
+    Entry,
+}
+
+impl IdentityNoun {
+    pub(crate) fn of(entry: &Entry) -> Self {
+        if entry.kind == "world" {
+            Self::Note
+        } else {
+            Self::Entry
+        }
+    }
+
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Self::Note => "note",
+            Self::Entry => "entry",
+        }
+    }
+
+    pub(crate) fn duplicate_warning(self) -> &'static str {
+        match self {
+            Self::Note => "These two files claim to be the same note.",
+            Self::Entry => DUPLICATE_ENTRY,
+        }
+    }
+
+    pub(crate) fn action(self, filename: &str) -> String {
+        format!("Make {filename} a separate {}", self.word())
+    }
+
+    fn result(self, filename: &str) -> String {
+        format!("{filename} is now a separate {}.", self.word())
+    }
+
+    fn undo_label(self) -> &'static str {
+        match self {
+            Self::Note => "Undo separate note",
+            Self::Entry => SEPARATE_ENTRY_UNDO,
+        }
+    }
+}
+
 pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
 pub(crate) const SEPARATE_ENTRY_UNDO: &str = "Undo separate entry";
 
 pub(crate) fn separate_entry_action(filename: &str) -> String {
-    format!("Make {filename} a separate entry")
+    IdentityNoun::Entry.action(filename)
 }
 
 /// Long filenames keep the complete repair action inside its secondary border.
 pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
-    let label = separate_entry_action(filename);
+    let label = IdentityNoun::Note.action(filename);
     if Action::secondary(&label).natural_width(ui) <= ui.available_width() {
         return Action::secondary(&label).show(ui).clicked();
     }
@@ -1043,12 +1120,13 @@ pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
 }
 
 pub(crate) fn separate_entry_result(filename: &str) -> String {
-    format!("{filename} is now a separate entry.")
+    IdentityNoun::Entry.result(filename)
 }
 
 pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
     let path = note_path(&campaign.path, relative)?;
     let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let noun = IdentityNoun::of(&Entry::parse(relative, &before)?);
     let id = crate::hermetic::new_uuid();
     let after = crate::content_workspace::new_note_identity(&before, relative, id)?;
     write_note(&campaign.path, relative, Some(&before), &after)?;
@@ -1057,14 +1135,14 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
             path: relative.into(),
             before,
             after,
-            word: separate_entry_result(
+            word: noun.result(
                 Path::new(relative)
                     .file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
                     .as_ref(),
             ),
-            kind: ChangeKind::Identity,
+            kind: ChangeKind::Identity(noun),
         },
         id,
     ))
@@ -1121,6 +1199,13 @@ enum FormEnd {
     Add,
 }
 
+/// One index generation's source-line lookup and the entry with that flag drawn separately.
+struct GroupFault {
+    id: Uuid,
+    generation: u64,
+    source: Option<(usize, Entry)>,
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 #[derive(Default)]
 pub struct Reader {
@@ -1142,6 +1227,9 @@ pub struct Reader {
     identity_undo: Option<(Uuid, Change)>,
     name_undo: Option<Change>,
     error: Option<String>,
+    /// Source lookup is cached by note and index generation, including repairs and moves.
+    group_fault: Option<GroupFault>,
+    group_error: bool,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
     many_heading: Option<String>,
@@ -1239,6 +1327,8 @@ impl Reader {
                 self.status_drafts.insert(previous, self.status.clone());
             }
             self.showing = Some(item.entry.id);
+            self.group_fault = None;
+            self.group_error = false;
             self.status = self
                 .status_drafts
                 .remove(&item.entry.id)
@@ -1333,13 +1423,44 @@ impl Reader {
         self.form_focused = false;
         self.lost_edits(ui, index);
         if let Some(error) = &self.error {
-            design::message(ui, Tone::Error, error);
+            ui.horizontal_wrapped(|ui| {
+                design::message(ui, Tone::Error, error);
+                if self.group_error
+                    && let Some(campaign) = campaign
+                    && design::link(ui, "Edit in Obsidian").clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
+                        &campaign.path.join(&item.entry.path),
+                    )));
+                }
+            });
         }
         if let Some(campaign) = campaign
             && self.editing(id)
         {
             return self.edit_form(ui, item, index, campaign);
         }
+        if let Some(campaign) = campaign {
+            self.refresh_group_fault(item, index.generation(), || {
+                note_path(&campaign.path, &item.entry.path)
+                    .ok()
+                    .and_then(|path| fs::read_to_string(path).ok())
+            });
+            if self.error.is_none()
+                && let Some((line, _)) = self
+                    .group_fault
+                    .as_ref()
+                    .and_then(|fault| fault.source.as_ref())
+            {
+                unread_groups_message(
+                    ui,
+                    campaign,
+                    &item.entry.path,
+                    &fields::unread_groups_reason(*line),
+                );
+            }
+        }
+
         self.discarded_notice(ui, id);
         if !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
@@ -1417,7 +1538,12 @@ impl Reader {
                 self.identity_undo = None;
             }
             if let Some((_, undo)) = &self.identity_undo
-                && design::undo_message(ui, Tone::Success, undo.message(), SEPARATE_ENTRY_UNDO)
+                && design::undo_message(
+                    ui,
+                    Tone::Success,
+                    undo.message(),
+                    undo.identity_undo_label(),
+                )
             {
                 match undo.undo(campaign) {
                     Ok(()) => {
@@ -1429,7 +1555,7 @@ impl Reader {
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
-                design::message(ui, Tone::Warning, DUPLICATE_ENTRY);
+                design::message(ui, Tone::Warning, IdentityNoun::Note.duplicate_warning());
                 let mut paths = paths.clone();
                 let first = crate::content_workspace::duplicate_repair_path(
                     paths.iter().map(|path| campaign.path.join(path)),
@@ -1450,12 +1576,8 @@ impl Reader {
                             Err(error) => self.error = Some(error),
                         }
                     }
-                    if at > 0 {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("Existing links will then use {}.", paths[0]))
-                                .color(colors().result.warning),
-                        );
+                    if let Some(consequence) = duplicate_consequence(&paths, at) {
+                        ui.label(Type::Small.rich(ui, consequence).color(colors().muted));
                     }
                 }
             }
@@ -1519,7 +1641,12 @@ impl Reader {
             let followed = view::show_with_related(
                 ui,
                 &item.entry.name,
-                Some(&item.entry),
+                Some(
+                    self.group_fault
+                        .as_ref()
+                        .and_then(|fault| fault.source.as_ref())
+                        .map_or(&item.entry, |(_, entry)| entry),
+                ),
                 &item.entry.body,
                 &view::Origin {
                     path: &item.entry.path,
@@ -1605,6 +1732,51 @@ impl Reader {
         }
     }
 
+    /// No file read, source scan or entry copy occurs before the cache lookup.
+    fn refresh_group_fault(
+        &mut self,
+        item: &Item,
+        generation: u64,
+        read: impl FnOnce() -> Option<String>,
+    ) {
+        if self
+            .group_fault
+            .as_ref()
+            .is_some_and(|fault| fault.id == item.entry.id && fault.generation == generation)
+        {
+            return;
+        }
+        let source = if item.entry.flags.is_empty() && !self.group_error {
+            None
+        } else {
+            read()
+        };
+        let line = source
+            .as_ref()
+            .and_then(|file| fields::unread_groups(&item.entry, file));
+        if self.group_error
+            && line.is_none()
+            && source.as_ref().is_some_and(|file| {
+                Entry::parse(&item.entry.path, file)
+                    .is_ok_and(|entry| fields::unread_groups(&entry, file).is_none())
+            })
+        {
+            self.error = None;
+            self.group_error = false;
+        }
+        // Draw the actionable Part of reason once. Other flags stay in the shared reader.
+        let source = line.map(|line| {
+            let mut entry = item.entry.clone();
+            entry.flags.retain(|flag| flag.line != line);
+            (line, entry)
+        });
+        self.group_fault = Some(GroupFault {
+            id: item.entry.id,
+            generation,
+            source,
+        });
+    }
+
     fn change(
         &mut self,
         campaign: &Campaign,
@@ -1613,6 +1785,48 @@ impl Reader {
         key: &str,
         value: Value,
     ) -> Option<Go> {
+        // A picker can outlive an outside edit. Re-read before deriving a replacement or Log.
+        let fresh = if key == "part_of" {
+            let result = (|| {
+                let file = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
+                    .map_err(|error| error.to_string())?;
+                let entry = Entry::parse(&item.entry.path, &file)?;
+                if let Some(line) = fields::unread_groups(&entry, &file) {
+                    return Err(fields::unread_groups_reason(line));
+                }
+                Ok((file, entry))
+            })();
+            match result {
+                Ok(fresh) => Some(fresh),
+                Err(error) => {
+                    self.picker = None;
+                    self.error = Some(error);
+                    self.group_error = true;
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+        let current_entry = fresh.as_ref().map_or(&item.entry, |(_, entry)| entry);
+        let value = if key == "part_of" {
+            // Apply only the picker's add/remove to the fresh disk list.
+            let previous = part_of(&item.entry);
+            let proposed = value.as_sequence()?;
+            let mut groups: Vec<_> = part_of(current_entry)
+                .into_iter()
+                .filter(|group| !previous.contains(group) || proposed.contains(group))
+                .cloned()
+                .collect();
+            for group in proposed.iter().filter(|group| !previous.contains(group)) {
+                if !groups.contains(group) {
+                    groups.push(group.clone());
+                }
+            }
+            Value::Sequence(groups)
+        } else {
+            value
+        };
         let label = match key {
             "in" => "In",
             "part_of" => "Part of",
@@ -1629,10 +1843,10 @@ impl Reader {
             None => edit::value_name(index, value, label),
         };
         // Choosing what is already there changes nothing, and writes no Log line.
-        let current = world_field(&item.entry, key).filter(|value| !value.is_null());
+        let current = world_field(current_entry, key).filter(|value| !value.is_null());
         let same = match (key, current) {
             ("part_of", _) => false,
-            ("status", _) => value.as_str().map(str::trim) == Some(status(&item.entry)),
+            ("status", _) => value.as_str().map(str::trim) == Some(status(current_entry)),
             (_, None) => value.is_null(),
             (_, Some(now)) => {
                 let target = index.world_value_target(now);
@@ -1644,7 +1858,7 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
-        let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
+        let before_name = world_field(current_entry, key).map_or_else(|| "not set".into(), name);
         let after_name = name(&value);
         // What play changes goes in the entry's Log, in the same write, so one Undo takes
         // both back.
@@ -1653,13 +1867,16 @@ impl Reader {
             .as_ref()
             .filter(|_| matches!(key, "in" | "part_of" | "status"))
             .map(|stamp| {
-                let words = log_words(index, key, world_field(&item.entry, key), &value);
+                let words = log_words(index, key, world_field(current_entry, key), &value);
                 format!("{stamp}: {words}")
             });
         let value = edit::stored_value(index, value);
         let result = (|| {
-            let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
-                .map_err(|e| e.to_string())?;
+            let before = match &fresh {
+                Some((file, _)) => file.clone(),
+                None => fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
+                    .map_err(|e| e.to_string())?,
+            };
             let patched = fields::patch(&before, key, value)?;
             let after = match &log {
                 Some(line) => lines::add_log(&patched, line),
@@ -1676,6 +1893,8 @@ impl Reader {
         })();
         match result {
             Ok(change) => {
+                self.error = None;
+                self.group_error = false;
                 self.undo = Some(change);
                 self.picker = None;
                 self.place_choices_open = false;
@@ -2615,6 +2834,23 @@ fn add_form(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn iter9_lead_duplicate_with_one_path_names_no_other_file() {
+        // Rook.md (world), Rook item.md (same id, an item) and Rook copy.md (world) leave
+        // Rook copy.md with one duplicate path; its first action must not read a second one.
+        let one = vec!["Rook copy.md".to_string()];
+        assert_eq!(duplicate_consequence(&one, 0), None);
+        let two = vec!["Rook.md".to_string(), "Rook copy.md".to_string()];
+        assert_eq!(
+            duplicate_consequence(&two, 0).as_deref(),
+            Some("Existing links keep Rook copy.md.")
+        );
+        assert_eq!(
+            duplicate_consequence(&two, 1).as_deref(),
+            Some("Existing links will then use Rook.md.")
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -2788,6 +3024,8 @@ mod tests {
             fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
             before
         );
+        assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
+        assert_eq!(undo.identity_undo_label(), "Undo separate note");
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");

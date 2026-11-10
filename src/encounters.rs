@@ -1201,7 +1201,7 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
             ui,
             Tone::Success,
             undo.message(),
-            crate::world::SEPARATE_ENTRY_UNDO,
+            undo.identity_undo_label(),
         )
     {
         match undo.undo(campaign) {
@@ -1241,10 +1241,11 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
             })
             .map(|other| other.entry.name.clone())
             .collect();
-        design::message_with_actions(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY, |ui| {
+        let noun = crate::world::IdentityNoun::of(&item.entry);
+        design::message_with_actions(ui, Tone::Warning, noun.duplicate_warning(), |ui| {
             for (position, path) in paths.iter().enumerate() {
                 let filename = path.rsplit('/').next().unwrap_or(path);
-                let action = crate::world::separate_entry_action(filename);
+                let action = noun.action(filename);
                 if Action::secondary(&action).hint(&action).show(ui).clicked() {
                     match crate::world::new_identity(campaign, path) {
                         Ok((undo, _)) => ui.data_mut(|data| {
@@ -4815,6 +4816,7 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
+        harness.get_by_label("These two files claim to be the same entry.");
         harness
             .get_by_label("Make Rook copy.md a separate entry")
             .click();
@@ -4828,6 +4830,7 @@ mod tests {
                 .count(),
             2
         );
+        harness.get_by_label("Rook copy.md is now a separate entry.");
         harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
         assert_eq!(
@@ -4869,28 +4872,28 @@ mod tests {
         harness.run_steps(2);
         assert_eq!(
             harness
-                .query_all_by_label("Make Rook copy.md a separate entry")
+                .query_all_by_label("Make Rook copy.md a separate note")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("Make Rook.md a separate entry")
+                .query_all_by_label("Make Rook.md a separate note")
                 .count(),
             1
         );
         assert_eq!(
             harness
-                .query_all_by_label("These two files claim to be the same entry.")
+                .query_all_by_label("These two files claim to be the same note.")
                 .count(),
             1
         );
         let warning = harness
-            .get_by_label("These two files claim to be the same entry.")
+            .get_by_label("These two files claim to be the same note.")
             .rect();
         for label in [
-            "Make Rook copy.md a separate entry",
-            "Make Rook.md a separate entry",
+            "Make Rook copy.md a separate note",
+            "Make Rook.md a separate note",
         ] {
             let action = harness.get_by_label(label).rect();
             assert!(

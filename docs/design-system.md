@@ -218,8 +218,7 @@ discarded` and `Undo discard` until the next edit. A later disk change also clea
 its reserved reason line, aligned with the editor's left edge. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
-A changed file stops saving. World uses `disk_conflict_choices`; Library uses the same choices: “This entry
-changed on disk. Your draft is safe until you choose.” Show secondary `Overwrite with my draft` first, then
+A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Show secondary `Overwrite with my draft` first, then
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library gives the
 choices one row at full reader width. World Overwrite saves valid text; invalid text returns to the repair
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
@@ -386,8 +385,9 @@ write only the open file. A renamed copy comes first, otherwise the newest file 
 ambiguous creatures; Open in Library opens the first repair action's file. Encounter search names hidden
 duplicate notes and offers file-specific identity repair with Undo.
 
-Library, World and Encounters say “These two files claim to be the same entry,” with the file names.
-Sessions use “session” for their repair and Undo actions. Rows say `Same entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
+Library and creature repairs say “These two files claim to be the same entry,” with the file names.
+World note repairs use “note”, including in Encounter search, their actions and Undo.
+Sessions use “session” for their repair and Undo actions. World rows say `Same note in two files`, including in Lookup. Other rows say `Same entry in two files`. World repairs say `Make <file> a separate note` and offer `Undo separate note`. Other bordered secondary repairs say `Make <file> a separate entry`. Their result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
@@ -524,8 +524,15 @@ keeps the state and quiet Discard at the left, and Save changes at that right ed
 unless a live run owns Next turn; then it is secondary. Discard closes the form and offers Undo discard.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
 One save writes every change with one Undo. A disk change uses the shared conflict choices.
-If Part of could not be read, block its Change action with `Part of could not be read. Repair it first.`
-Other fields stay editable. Saving them keeps the stored Part of bytes unchanged.
+If Part of could not be read, block its Change action with `Part of could not be read (line N). Repair it first.`
+Put a quiet `Edit in Obsidian` link after the reason in Edit and Read. Other fields stay editable.
+Every Part of write checks the current disk parse flag before it changes anything. A refused write closes
+its picker and keeps every disk byte. Adding or removing a readable group keeps the raw text of the
+other groups. Overwrite keeps unread disk groups, saves other draft fields and shows the reason.
+Edit shows `not set` for null, empty and whitespace-only optional links. Saving other fields keeps their
+source text. World calls each file a note in related-note headings, Problems and conflict messages.
+Each duplicate-note repair has a muted Small consequence below it, including the first repair's retained
+link target.
 
 Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
 

@@ -408,9 +408,10 @@ impl ContentIndex {
                     lower: e.entry.name.to_lowercase(),
                     subtitle: if duplicate_identity {
                         format!(
-                            "{} · {} Same entry in two files",
+                            "{} · {} Same {} in two files",
                             presentation::subtitle(&e.entry),
-                            icons::WARN
+                            icons::WARN,
+                            crate::world::IdentityNoun::of(&e.entry).word()
                         )
                     } else {
                         presentation::subtitle(&e.entry)
@@ -2439,13 +2440,28 @@ mod tests {
     fn copied_world_notes_stay_visible_in_world_and_lookup() {
         let id = Uuid::new_v4();
         let before = entry_note(id, "Rook", "  type: npc");
-        let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
+        let creature = crate::library::note_text("Guard", "creature", None);
+        let (dir, campaign) = campaign_with(&[
+            ("Rook.md", &before),
+            ("Rook copy.md", &before),
+            ("Guard.md", &creature),
+        ]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let guard = index
+            .items
+            .iter()
+            .find(|item| item.entry.path == "Guard.md")
+            .unwrap();
+        assert_eq!(guard.subtitle, "Creature · CR 1");
+        assert!(
+            !guard.result_detail().contains("note"),
+            "FD6-neighbour: creature result wording stays unchanged"
+        );
         assert_eq!(index.duplicate_world.len(), 2);
         for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
             assert_eq!(
                 item.subtitle,
-                format!("NPC · {} Same entry in two files", icons::WARN)
+                format!("NPC · {} Same note in two files", icons::WARN)
             );
             assert!(!item.subtitle.contains(&item.entry.path));
             assert!(
@@ -2472,6 +2488,21 @@ mod tests {
         assert!(
             matches!(index.follow("Rook", &index.items[index.world[0]]), Go::Many(positions) if positions.len() == 2)
         );
+        std::fs::write(dir.path().join("Guard copy.md"), &creature).unwrap();
+        let copied = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let guards: Vec<_> = copied
+            .items
+            .iter()
+            .filter(|item| ["Guard.md", "Guard copy.md"].contains(&item.entry.path.as_str()))
+            .collect();
+        assert_eq!(guards.len(), 2);
+        for guard in guards {
+            assert_eq!(
+                guard.subtitle,
+                format!("Creature · CR 1 · {} Same entry in two files", icons::WARN)
+            );
+        }
+        std::fs::remove_file(dir.path().join("Guard copy.md")).unwrap();
         std::fs::write(dir.path().join("Rook third.md"), &before).unwrap();
         assert_eq!(
             ContentIndex::load(&[], Some(&campaign))
