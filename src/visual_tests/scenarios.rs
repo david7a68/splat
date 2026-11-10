@@ -2547,7 +2547,7 @@ pub mod prep_to_table {
         d.click(&format!("Absent: {player}"));
         let marked = d.has(&format!("Absent: {player}"));
         let after = inits(d);
-        d.state("absent-at-start", Sizes::Standard);
+        d.state("absent-at-start", Sizes::All);
         d.observe(
             "Absent player",
             d.visible_text("6 need initiative"),
@@ -3090,7 +3090,7 @@ pub mod run_sync_conflict {
         let amount_before = d.place_of(AMOUNT_FIELD);
         d.app_mut().encounters.simulate_read(SYNCED, 3);
         d.settle();
-        d.state("undo-boundary-for-one-character", Sizes::Default);
+        d.state("undo-boundary-for-one-character", Sizes::All);
         let changed = format!("{SYNCED} HP {hp_before} → {}", hp_before - 3);
         // A notice goes under the list, and no row moves from where it was.
         let rows_after = roster_places(d);
@@ -4615,7 +4615,7 @@ pub mod run_roster_conflict {
             "Ember Cultist's stat block could not be read. Its row still works. Repair it in",
         );
         d.settle();
-        d.state("loaded-roster-of-12", Sizes::Default);
+        d.state("loaded-roster-of-12", Sizes::All);
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
