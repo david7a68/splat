@@ -58,7 +58,7 @@
       "signed-in": 14,
       "stat-formats": 33,
       "world": 1,
-      "world-facts": 8,
+      "world-facts": 9,
       "world-note-deleted": 2,
       "world-note-duplicated": 4,
       "world-places": 1
@@ -147,7 +147,7 @@
       "world": 60,
       "world-broken-note": 59,
       "world-edit-round-trip": 30,
-      "world-facts": 56,
+      "world-facts": 63,
       "world-note-deleted": 50,
       "world-note-duplicated": 49,
       "world-note-moved": 42,

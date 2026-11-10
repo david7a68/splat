@@ -17,7 +17,8 @@ const CHECK_ROWS: usize = 40;
 /// A repair cause must stay whole even when Lookup narrows the list.
 fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
     let width = (ui.available_width() - design::S * 2.0).max(design::XXL);
-    let title = design::one_line(ui, path, Type::Body.font(ui), colors().text, width);
+    let font = if selected { Type::Strong } else { Type::Body };
+    let title = design::one_line(ui, path, font.font(ui), colors().text, width);
     let detail = ui.painter().layout(
         cause.to_owned(),
         Type::Small.font(ui),

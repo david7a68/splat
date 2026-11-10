@@ -407,6 +407,21 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click("Change Part of");
     d.type_into("Find a group", "Arena Guild");
     d.click("Arena Guild");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    let group_actions: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == Role::Button && node.name == "Change Part of")
+        .collect();
+    d.observe(
+        "iter-7-D-FD6-groups",
+        !group_actions.is_empty()
+            && group_actions.len() == 1
+            && d.visible_text("Arena Guild, The Arena"),
+        "Two draft groups share one Change action",
+    );
     assert_eq!(
         fs::read_to_string(&lore_path).unwrap(),
         unchanged,
@@ -428,7 +443,8 @@ pub fn facts(d: &mut Driver<'_>) {
     d.expect("Undo discard of Horn Rings");
     d.click("Undo discard of Horn Rings");
     assert_eq!(d.editor_text().as_ref(), Some(&draft_text));
-    d.expect("Arena Guild");
+    d.expect("Arena Guild, The Arena");
+    d.state("group-draft-restored", Sizes::All);
     d.click("Status");
     d.press_ctrl(Key::S);
     d.wait_for_text("Changes saved.");
