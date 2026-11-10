@@ -4449,6 +4449,7 @@ impl Library {
             let obsidian = obsidian_for(root, &note.owner);
             let owner_word = match &note.owner {
                 Owner::Package(_) => package_word.as_str(),
+                Owner::Campaign(_) if note.error.is_some() => "Campaign · Cannot be read",
                 _ => "Campaign · Editable",
             };
             let file_below = ui.available_width()
@@ -4465,11 +4466,7 @@ impl Library {
                     ui,
                     Status {
                         icon: icons::EDIT,
-                        word: match &note.owner {
-                            Owner::Package(_) => &package_word,
-                            Owner::Campaign(_) => "Campaign · Editable",
-                            Owner::Builtin => "Built-in · Read only",
-                        },
+                        word: owner_word,
                         color: d.clean,
                     },
                 );
