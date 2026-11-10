@@ -2,3 +2,4 @@
 pub mod character;
 pub mod content;
 pub mod execution;
+pub mod memo;

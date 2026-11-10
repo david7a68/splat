@@ -130,6 +130,11 @@ pub struct Driver<'a> {
     expect_same: Option<&'static str>,
     /// A probe can expire the real settle loop without waiting three minutes.
     pub(super) settle_timeout: Duration,
+    /// The last rendered frame, keyed by the harness and the app pass it shows. Video holds,
+    /// aims and captures often show a pass that is already rendered.
+    last_render: Option<((usize, u64), std::rc::Rc<image::RgbaImage>)>,
+    /// Counts restarts: a new harness counts its passes from zero again.
+    harness_generation: usize,
 }
 
 #[derive(Default)]
@@ -137,6 +142,10 @@ struct CaptureTiming {
     render: Duration,
     png: Duration,
     settle: Duration,
+    renders: usize,
+    saves: usize,
+    settle_frames: usize,
+    settles: usize,
 }
 
 impl Outcome {
@@ -277,6 +286,8 @@ impl<'a> Driver<'a> {
             repeated_captures: Default::default(),
             expect_same: None,
             settle_timeout: ASYNC_TIMEOUT,
+            last_render: None,
+            harness_generation: 0,
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -301,7 +312,7 @@ impl<'a> Driver<'a> {
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
-            builder.renderer(software_renderer())
+            builder.renderer(super::render::SoftwareRenderer::new())
         } else {
             builder
         };
@@ -316,6 +327,7 @@ impl<'a> Driver<'a> {
     pub fn restart(&mut self) {
         // The old app writes its state as it runs. A new one reads that.
         self.harness = Self::build_harness(&self.world, self.capturing);
+        self.harness_generation += 1;
         self.window = self.base;
         self.resize(self.base, 1.0);
         self.settle();
@@ -628,6 +640,7 @@ impl<'a> Driver<'a> {
         let mut repainting = 0;
         loop {
             self.harness.step();
+            self.timing.settle_frames += 1;
             let busy = self.harness.state().busy();
             let repaint = self
                 .harness
@@ -647,6 +660,7 @@ impl<'a> Driver<'a> {
                     self.page_trail.push((self.interactions, page));
                 }
                 self.timing.settle += started.elapsed();
+                self.timing.settles += 1;
                 return;
             }
             check_settle_deadline(self.scenario, started, self.settle_timeout);
@@ -1732,10 +1746,7 @@ impl<'a> Driver<'a> {
             pointer: overlay.pointer.or(self.pointer),
             ..overlay
         };
-        let image = self
-            .harness
-            .render()
-            .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
+        let image = self.render();
         if let Some(video) = &mut self.video {
             video.frames(&image, &overlay, frames);
         }
@@ -1747,16 +1758,36 @@ impl<'a> Driver<'a> {
             self.pointer = Some(target.center());
             return;
         }
-        let image = self
-            .harness
-            .render()
-            .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
+        let image = self.render();
         let end = target.center();
         let start = self.pointer.unwrap_or(end);
         if let Some(video) = &mut self.video {
             video.aim(&image, start, target, caption);
         }
         self.pointer = Some(end);
+    }
+
+    /// The app's last pass as an image. A pass that is already rendered is not rendered again.
+    fn render(&mut self) -> std::rc::Rc<image::RgbaImage> {
+        let key = (
+            self.harness_generation,
+            self.harness.ctx.cumulative_pass_nr(),
+        );
+        if let Some((rendered, image)) = &self.last_render
+            && *rendered == key
+        {
+            return image.clone();
+        }
+        let started = Instant::now();
+        let image = std::rc::Rc::new(
+            self.harness
+                .render()
+                .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario)),
+        );
+        self.timing.render += started.elapsed();
+        self.timing.renders += 1;
+        self.last_render = Some((key, image.clone()));
+        image
     }
 
     fn film_caption(&mut self, caption: &str) {
@@ -1998,12 +2029,7 @@ impl<'a> Driver<'a> {
             if density == 1.0 { "" } else { "@2x" }
         );
         let path = directory.join(&file);
-        let started = Instant::now();
-        let image = self
-            .harness
-            .render()
-            .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
-        self.timing.render += started.elapsed();
+        let image = self.render();
         let window = format!("{}x{}@{density}", size.0, size.1);
         let earlier = match capture {
             Capture::Compare { earlier, changed } if !changed.contains(&(size, density)) => {
@@ -2051,10 +2077,10 @@ impl<'a> Driver<'a> {
             return;
         }
         let started = Instant::now();
-        image
-            .save(&path)
+        save_png(&image, &path)
             .unwrap_or_else(|error| panic!("Could not write {}: {error}", path.display()));
         self.timing.png += started.elapsed();
+        self.timing.saves += 1;
         self.outcome.screenshots.push(file);
     }
 
@@ -2215,45 +2241,20 @@ impl<'a> Driver<'a> {
         self.outcome.failed_expectations = self.failed_expectations.into_inner();
         if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
             println!(
-                "Timing {}: settle = {:?}, PNG render = {:?}, PNG encode/write = {:?}",
+                "Timing {}: settle = {:?}, render = {:?}, PNG encode/write = {:?}",
                 self.scenario, self.timing.settle, self.timing.render, self.timing.png
+            );
+            println!(
+                "Counts {}: settles = {}, settle frames = {}, renders = {}, PNGs = {}",
+                self.scenario,
+                self.timing.settles,
+                self.timing.settle_frames,
+                self.timing.renders,
+                self.timing.saves
             );
         }
         self.outcome
     }
-}
-
-/// Each worker thread keeps one software device for all its scenarios and restarts.
-/// Every app still gets its own egui renderer, so no textures are shared.
-fn software_renderer() -> egui_kittest::wgpu::WgpuTestRenderer {
-    use eframe::{egui_wgpu, wgpu};
-    use egui_kittest::wgpu::{WgpuTestRenderer, create_render_state, default_wgpu_setup};
-    thread_local! {
-        static DEVICE: egui_wgpu::RenderState = {
-            let mut setup = default_wgpu_setup();
-            // Only Vulkan has the software rasterizer. Other backends load drivers for nothing.
-            if let egui_wgpu::WgpuSetup::CreateNew(new) = &mut setup {
-                new.instance_descriptor.backends = wgpu::Backends::VULKAN;
-            }
-            let state = create_render_state(setup);
-            let adapter = state.adapter.get_info();
-            assert_eq!(
-                adapter.device_type,
-                wgpu::DeviceType::Cpu,
-                "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
-                adapter.name,
-                adapter.backend,
-            );
-            state
-        };
-    }
-    let mut state = DEVICE.with(Clone::clone);
-    state.renderer = std::sync::Arc::new(egui::mutex::RwLock::new(egui_wgpu::Renderer::new(
-        &state.device,
-        state.target_format,
-        egui_wgpu::RendererOptions::PREDICTABLE,
-    )));
-    WgpuTestRenderer::from_render_state(state)
 }
 
 #[test]
@@ -2312,3 +2313,17 @@ fn diagnostic_painted_text_wait_still_fails_for_absent_text() {
     assert!(message.contains("this phrase is deliberately absent"));
     assert!(started.elapsed() < Duration::from_secs(15));
 }
+
+/// Write a capture with one filter for every row. The default tries five on each row: it
+/// took four times as long, for files 4% smaller. Sub and Up made files 40% larger.
+fn save_png(image: &image::RgbaImage, path: &Path) -> image::ImageResult<()> {
+    use image::codecs::png::{CompressionType, PngEncoder};
+    let file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    image.write_with_encoder(PngEncoder::new_with_quality(
+        file,
+        CompressionType::Fast,
+        FILTER,
+    ))
+}
+
+const FILTER: image::codecs::png::FilterType = image::codecs::png::FilterType::Paeth;

@@ -53,3 +53,12 @@ incremental = false
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# Tests only: `cargo build` and `cargo run` keep the app's own code unoptimized for
+# debugging. The visual suite runs the app's frames and content work thousands of
+# times, and optimized code cut its CPU time by more than half.
+[profile.test.package.splat]
+opt-level = 2
+
+[profile.test.package.splat-core]
+opt-level = 2
