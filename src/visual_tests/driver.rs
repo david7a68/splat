@@ -312,7 +312,7 @@ impl<'a> Driver<'a> {
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
-            builder.renderer(super::render::SoftwareRenderer::new())
+            builder.renderer(super::render::CaptureRenderer::new())
         } else {
             builder
         };

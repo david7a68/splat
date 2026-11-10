@@ -92,8 +92,11 @@ devenv shell -- audit-gate final
 This also writes to `artifacts/screenshots/iter-0/`: PNGs at 960x640 and 1200x800,
 with 1920x1080 for width-sensitive layouts and recorded wide proof states. Selected
 states also have a 2x-density capture. The folder holds `ergonomics.json`, `ergonomics.md`,
-`manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
-software Vulkan driver, so captures repeat between runs. Video needs the host's
+`manifest.txt`, `renderer.txt` and one `video/<scenario>.mp4` per scenario. Rendering uses
+Mesa's Vulkan driver for an Intel or AMD GPU, or its software rasterizer when there is no
+such GPU. `SPLAT_VISUAL_RENDERER=software` always uses the software rasterizer. Two runs
+on the same renderer give the same pixels. A GPU and the software rasterizer differ on a
+few edge pixels, so compare runs from the same computer. Video needs the host's
 `ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
 Use `devenv shell -- visual-contact-sheet iter-0` to make one from existing captures,
 or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
