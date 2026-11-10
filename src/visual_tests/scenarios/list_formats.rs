@@ -206,10 +206,29 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     open_saved_encounter(d, "Shrine of Cinders");
     d.expect("Changes: HP lots not read");
-    d.state("encounter-roster-cell-flagged-in-obsidian", Sizes::All);
-    d.click("Start fight");
+    assert!(d.is_disabled("Start fight"));
+    assert!(!d.app_mut().encounters.has_run());
+    d.expect("Edit in Obsidian");
+    d.expect("Show file");
     d.state("flagged-roster-at-start-fight", Sizes::All);
+    assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     fs::write(&roster_path, &roster_text).unwrap();
+    d.click("Back to encounters");
+    d.click("Reload from disk");
+    run_saved_encounter(d, "Shrine of Cinders");
+    fs::write(&roster_path, &flagged_roster).unwrap();
+    d.app_mut()
+        .encounters
+        .run_mut()
+        .unwrap()
+        .guard_campaign(&campaign.path);
+    d.settle();
+    assert!(d.is_disabled("Begin combat"));
+    d.expect("Changes: HP lots not read");
+    d.state("unread-roster-kept-in-setup", Sizes::All);
+    assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
+    fs::write(&roster_path, &roster_text).unwrap();
+    close_run(d);
 
     let text = fs::read_to_string(&path).unwrap();
     fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();

@@ -135,6 +135,8 @@ values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
 `immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
 under every habitat.
 
+Unread roster rows show their participant, file line and repair links. They block Start fight, including plan starts. A resumed setup keeps the warning and blocks Begin combat until the row is fixed or removed. Removing a group member offers **Undo remove member**, which restores its count and custom changes without replacing other draft edits. Group names, members and notes keep their form measures in wide panes. When sync is off for every linked participant, the run header says **Sync off for the party** once.
+
 A live initiative change says `acts next round` when its place has passed, and
 `acts again this round` when a row that already acted moves below the current turn. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes

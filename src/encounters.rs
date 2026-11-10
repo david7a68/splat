@@ -125,6 +125,66 @@ impl Default for Setup {
         serde_yaml_ng::from_value(yaml("roster: []\nsides:\n  party: {hostile_to: [enemies]}\n  enemies: {hostile_to: [party]}\nassumptions: []\ncompletion: {mode: manual}\nlimits: {rounds: 20, resolution_events: 10000}\n")).expect("default setup")
     }
 }
+/// A table row that the parser excluded. Keep its identity beside the repair.
+#[derive(Clone, Debug)]
+pub(crate) struct RosterFault {
+    pub name: String,
+    pub line: usize,
+    pub problem: String,
+}
+
+/// Read rejected rows from a fresh parse, before catalogue reference resolution.
+pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> Vec<RosterFault> {
+    let Some(table) = splat::content::layout::Document::new(&entry.body)
+        .table(splat::content::list_formats::ROSTER)
+    else {
+        return Vec::new();
+    };
+    table
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let line = row.first()?.line + entry.body_line.saturating_sub(1);
+            let flag = entry.flags.iter().find(|flag| flag.line == line)?;
+            let label = &row[1].value;
+            let target = label
+                .split("%%")
+                .next()
+                .unwrap_or(label)
+                .trim()
+                .trim_start_matches("[[")
+                .trim_end_matches("]]");
+            let name = if row[2].value.is_empty() {
+                known
+                    .get(target)
+                    .cloned()
+                    .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
+            } else {
+                row[2].value.clone()
+            };
+            Some(RosterFault {
+                name,
+                line,
+                problem: flag.message.clone(),
+            })
+        })
+        .collect()
+}
+
+fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
+    (!faults.is_empty()).then(|| {
+        format!(
+            "{}: {}. Fix these roster rows or remove them in Obsidian before starting the fight.",
+            path,
+            faults
+                .iter()
+                .map(|fault| format!("{} (line {}): {}", fault.name, fault.line, fault.problem))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    })
+}
+
 struct Draft {
     recovery: disk::Recovery,
     id: Uuid,
@@ -435,6 +495,13 @@ impl Draft {
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), String> {
+        let entry = Entry::parse(&self.path, &self.source)?;
+        if let Some(reason) = roster_fault_reason(
+            &self.path,
+            &roster_faults(&entry, &snapshot.known_creature_names),
+        ) {
+            return Err(reason);
+        }
         if self.name.trim().is_empty() {
             return Err("Enter an encounter name.".into());
         }
@@ -1101,7 +1168,16 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
             continue;
         }
         design::message(ui, Tone::Warning, crate::world::DUPLICATE_ENTRY);
-        for path in paths {
+        let users: Vec<_> = index
+            .items
+            .iter()
+            .filter(|other| {
+                other.entry.kind == "encounter"
+                    && crate::library::encounter_uses_entry(&other.entry, &item.entry)
+            })
+            .map(|other| other.entry.name.clone())
+            .collect();
+        for (position, path) in paths.iter().enumerate() {
             let filename = path.rsplit('/').next().unwrap_or(path);
             let action = crate::world::separate_entry_action(filename);
             if Action::secondary(&action).hint(&action).show(ui).clicked() {
@@ -1115,6 +1191,15 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                     }
                 }
             }
+            if let Some(remaining) = paths.iter().find(|other| *other != path) {
+                crate::library::duplicate_repair_consequence(
+                    ui,
+                    &users,
+                    remaining.rsplit('/').next().unwrap_or(remaining),
+                    position == 0,
+                );
+            }
+            ui.add_space(design::XS);
         }
     }
     !seen.is_empty()
@@ -1210,6 +1295,7 @@ struct SearchRoster<'a> {
 }
 
 struct Snapshot {
+    revision: Uuid,
     campaign_root: std::path::PathBuf,
     catalogue: Catalogue,
     known_creature_names: BTreeMap<String, String>,
@@ -1472,6 +1558,7 @@ impl Snapshot {
             }
         }
         Ok(Self {
+            revision: Uuid::new_v4(),
             campaign_root: campaign.path.clone(),
             groups,
             known_creature_names,
@@ -2609,6 +2696,7 @@ impl Encounters {
             return false;
         };
         if let Some(snapshot) = &self.snapshot {
+            run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
             run.groups = Some(snapshot.groups.clone());
             run.creatures = Some(snapshot.run_creatures.clone());
         }
@@ -3142,13 +3230,31 @@ impl Encounters {
         if self.encounter_disk_view(ui, active, campaigns.modules()) {
             return;
         }
+        let no_names = BTreeMap::new();
+        let names = self
+            .snapshot
+            .as_ref()
+            .map(|snapshot| &snapshot.known_creature_names)
+            .unwrap_or(&no_names);
         if let Some(draft) = &self.draft {
+            let faults = Entry::parse(&draft.path, &draft.source)
+                .map(|entry| roster_faults(&entry, names))
+                .unwrap_or_default();
             for flag in &draft.flags {
+                let name = faults
+                    .iter()
+                    .find(|fault| fault.line == flag.line)
+                    .map(|fault| format!("{} · ", fault.name))
+                    .unwrap_or_default();
                 design::message(
                     ui,
                     Tone::Warning,
-                    &format!("Line {}: {}", flag.line, flag.message),
+                    &format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message),
                 );
+            }
+            if !faults.is_empty() {
+                crate::world::entry_file_actions(ui, &active.path, &draft.path, true);
+                ui.label(Type::Small.rich(ui, "Fix these roster rows or remove them in Obsidian before starting the fight.").color(colors().muted));
             }
         }
         let dirty = self.encounter_dirty();
@@ -3176,6 +3282,11 @@ impl Encounters {
             })
             .cloned();
         let mut start_another = false;
+        let roster_reason = self.draft.as_ref().and_then(|draft| {
+            Entry::parse(&draft.path, &draft.source)
+                .ok()
+                .and_then(|entry| roster_fault_reason(&draft.path, &roster_faults(&entry, names)))
+        });
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
@@ -3235,7 +3346,7 @@ impl Encounters {
                 egui::vec2(action_width, Density::Scan.control()),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    let start_blocked = has_run
+                    let start_blocked = roster_reason.as_deref().or(has_run
                         .then_some(BLOCKED_BY_RUN)
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                         .or(loading.then_some("Still reading this campaign."))
@@ -3243,7 +3354,7 @@ impl Encounters {
                             .setup
                             .roster
                             .is_empty()
-                            .then_some("Add participants first"));
+                            .then_some("Add participants first")));
                     if unfinished.is_some() {
                         row_menu(ui, &draft_ref.name, |ui| {
                             start_another = menu_action(ui, "Start another fight", start_blocked);
@@ -3749,14 +3860,32 @@ impl Encounters {
                     });
                 }
             }
-            design::empty_state(
+            design::empty_state_with_body(
                 ui,
                 icons::SEARCH,
                 "No creatures match",
-                if filter.is_empty() {
-                    "Check the spelling, or the packages this campaign uses."
-                } else {
-                    "Remove a filter, or check the packages this campaign uses."
+                |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x =
+                            design::number_width(ui, " ", &Type::Body.font(ui));
+                        ui.label(
+                            Type::Body
+                                .rich(
+                                    ui,
+                                    if filter.is_empty() {
+                                        "Check the spelling, or check"
+                                    } else {
+                                        "Remove a filter, or check"
+                                    },
+                                )
+                                .color(colors().muted),
+                        );
+                        if groups::packages_link(ui) {
+                            ui.data_mut(|data| {
+                                data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                            });
+                        }
+                    });
                 },
                 |_| {},
             );
@@ -3966,7 +4095,7 @@ impl Encounters {
                     || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
                 let detail = if missing {
-                    format!("{side} · {} {}", icons::WARN, unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
+                    format!("{side_icon} {side} · {} {}", icons::WARN, unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -4022,7 +4151,12 @@ impl Encounters {
                                 .truncate(),
                             );
                             if missing {
-                                ui.add(egui::Label::new(Type::Small.rich(ui, &detail).color(colors().result.warning)).wrap());
+                                let split = detail.find(icons::WARN).unwrap_or(0);
+                                let mut job = egui::text::LayoutJob::default();
+                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..], colors().result.warning)] {
+                                    job.append(text, 0.0, egui::TextFormat { font_id: Type::Small.font(ui), color, ..Default::default() });
+                                }
+                                ui.add(egui::Label::new(job).wrap());
                             } else if !detail.is_empty() {
                                 if changed && !is_open {
                                     ui.spacing_mut().interact_size.y = 0.0;
@@ -5374,6 +5508,57 @@ mod tests {
         fs::write(&path, format!("{original}External edit\n")).unwrap();
         assert!(editor.start_run(&campaign, &[]).is_err());
     }
+    #[test]
+    fn iter4_b_unread_roster_blocks_direct_and_plan_starts_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = stat_creature(dir.path(), "Wolf", 20);
+        let mut draft = Draft::new();
+        draft.add(wolf, false);
+        draft.add(wolf, false);
+        draft.save(&active, &[]).unwrap();
+        let path = draft.path.clone();
+        let saved = fs::read_to_string(dir.path().join(&path)).unwrap();
+        let table = splat::content::layout::Document::new(&saved)
+            .table(splat::content::list_formats::ROSTER)
+            .unwrap();
+        let mut flagged = saved.clone();
+        flagged.replace_range(table.rows[1][3].range.clone(), "HP lots");
+        // Legacy fixtures can expose a UUID in the link. The warning still names the creature.
+        flagged.replace_range(table.rows[1][1].range.clone(), &format!("[[{wolf}]]"));
+        fs::write(dir.path().join(&path), &flagged).unwrap();
+        let permissions = fs::metadata(dir.path().join(&path)).unwrap().permissions();
+        let mut read_only = permissions.clone();
+        read_only.set_readonly(true);
+        fs::set_permissions(dir.path().join(&path), read_only).unwrap();
+        let draft = Draft::open(dir.path(), &path).unwrap();
+        let mut editor = Encounters {
+            draft: Some(draft),
+            ..Default::default()
+        };
+        let error = editor
+            .start_run(&active, &[])
+            .err()
+            .expect("An unread row must block Start fight");
+        assert!(error.contains("Wolf") && error.contains("line"), "{error}");
+        editor.run_path(&path, &active, &[]);
+        assert!(editor.run.is_none());
+        assert!(
+            editor
+                .error
+                .as_ref()
+                .is_some_and(|error| error.contains("Wolf"))
+        );
+        assert_eq!(fs::read_to_string(dir.path().join(&path)).unwrap(), flagged);
+        fs::set_permissions(dir.path().join(&path), permissions).unwrap();
+        fs::write(dir.path().join(&path), &saved).unwrap();
+        editor.draft = Some(Draft::open(dir.path(), &path).unwrap());
+        let run = editor.start_run(&active, &[]).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(run.path().unwrap()).unwrap()).unwrap();
+        assert_eq!(saved["state"]["participants"].as_array().unwrap().len(), 2);
+    }
+
     #[test]
     fn history_never_takes_the_live_slot_or_writes_the_saved_run() {
         let dir = tempfile::tempdir().unwrap();

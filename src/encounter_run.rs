@@ -507,6 +507,12 @@ pub(crate) struct Run {
     id: Uuid,
     /// The encounter this run came from. Saves from before this was kept have none.
     source: Option<Uuid>,
+    /// Recheck only this encounter when its file metadata changes. Never rebuild the catalogue per frame.
+    roster_source: Option<PathBuf>,
+    roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
+    roster_faults: Vec<crate::encounters::RosterFault>,
+    roster_names: BTreeMap<String, String>,
+    roster_names_revision: Option<Uuid>,
     initiative: Initiative,
     storage: Option<Storage>,
     recovery: Recovery,
@@ -797,6 +803,11 @@ impl Run {
             name,
             id: Uuid::new_v4(),
             source: None,
+            roster_source: None,
+            roster_stamp: None,
+            roster_faults: Vec::new(),
+            roster_names: BTreeMap::new(),
+            roster_names_revision: None,
             initiative: Initiative::default(),
             storage: None,
             recovery: Recovery::default(),
@@ -1356,6 +1367,13 @@ impl Run {
         }
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
+        if matches!(command, Command::Begin) {
+            self.roster_stamp = None;
+            self.refresh_roster_faults();
+            if let Some(reason) = self.roster_blocked() {
+                return Err(reason.into());
+            }
+        }
         if matches!(self.state.phase, Phase::Ended { .. }) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
@@ -3055,6 +3073,56 @@ impl Run {
         if let Some(storage) = &mut self.storage {
             storage.root = root.to_owned();
         }
+        if self.state.phase == Phase::Setup
+            && let Some(source) = self.source
+            && let Ok((entries, _)) = splat::content::read_directory(root)
+            && let Some(entry) = entries.iter().find(|entry| entry.id == source)
+        {
+            self.roster_source = Some(root.join(&entry.path));
+            for participant in &self.state.participants {
+                self.roster_names.insert(
+                    participant.definition.id.to_string(),
+                    participant.definition.name.clone(),
+                );
+            }
+            for entry in &entries {
+                self.roster_names
+                    .insert(entry.id.to_string(), entry.name.clone());
+                if let Some(key) = &entry.key {
+                    self.roster_names.insert(key.clone(), entry.name.clone());
+                }
+            }
+            self.refresh_roster_faults();
+        }
+    }
+    pub(crate) fn set_roster_names(&mut self, revision: Uuid, names: &BTreeMap<String, String>) {
+        if self.roster_names_revision != Some(revision) {
+            self.roster_names.extend(names.clone());
+            self.roster_names_revision = Some(revision);
+            self.roster_stamp = None;
+        }
+    }
+    fn refresh_roster_faults(&mut self) {
+        let Some(path) = &self.roster_source else {
+            return;
+        };
+        let Ok(metadata) = fs::metadata(path) else {
+            return;
+        };
+        let stamp = (metadata.modified().ok(), metadata.len());
+        if self.roster_stamp == Some(stamp) {
+            return;
+        }
+        if let Ok(text) = fs::read_to_string(path)
+            && let Ok(entry) = Entry::parse(&path.to_string_lossy(), &text)
+        {
+            self.roster_faults = crate::encounters::roster_faults(&entry, &self.roster_names);
+            self.roster_stamp = Some(stamp);
+        }
+    }
+    fn roster_blocked(&self) -> Option<&'static str> {
+        (!self.roster_faults.is_empty())
+            .then_some("Fix the unread roster rows or remove them in Obsidian first.")
     }
     pub fn save(&mut self) -> Result<(), String> {
         let stopped_players = self.stopped_players();
@@ -3273,6 +3341,11 @@ impl Run {
             id: saved.id,
             name: saved.name,
             source: saved.source,
+            roster_source: None,
+            roster_stamp: None,
+            roster_faults: Vec::new(),
+            roster_names: BTreeMap::new(),
+            roster_names_revision: None,
             recovery: saved.recovery,
             initiative: saved.initiative,
             selected: match saved.state.phase {
@@ -4041,6 +4114,56 @@ mod tests {
         )
         .unwrap()
     }
+    #[test]
+    fn iter4_b_resumed_setup_blocks_unread_rows_and_rereads_only_the_changed_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = Uuid::new_v4();
+        let text = format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: Ambush\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| Enemies | [[Guard]] | Scout | HP lots | Keep this row |\n| Enemies | [[Guard]] | Captain | AC lots | Second fault |\n"
+        );
+        fs::write(dir.path().join("Ambush.md"), &text).unwrap();
+        let mut run = run();
+        run.came_from(id);
+        let campaign = Uuid::new_v4();
+        run.configure_storage(campaign, &dir.path().join("Runs"), Initiative::default())
+            .unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        let mut restored = Run::open(&path, campaign).unwrap();
+        restored.guard_campaign(dir.path());
+        assert_eq!(restored.roster_faults.len(), 2);
+        assert_eq!(restored.roster_faults[0].name, "Scout");
+        assert_eq!(restored.roster_faults[1].name, "Captain");
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            restored
+                .apply(Command::Initiative(index, Some(total)))
+                .unwrap();
+        }
+        let state = serde_json::to_value(&restored.state).unwrap();
+        assert!(restored.apply(Command::Begin).is_err());
+        assert_eq!(serde_json::to_value(&restored.state).unwrap(), state);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Ambush.md")).unwrap(),
+            text
+        );
+        // Repair one fault: the other still blocks. No state or outside prose is overwritten.
+        let partial = text.replace("HP lots", "HP +5");
+        fs::write(dir.path().join("Ambush.md"), &partial).unwrap();
+        assert!(restored.apply(Command::Begin).is_err());
+        assert_eq!(restored.roster_faults.len(), 1);
+        let repaired = format!(
+            "{}\nOutside note stays.\n",
+            partial.replace("AC lots", "AC +2")
+        );
+        fs::write(dir.path().join("Ambush.md"), &repaired).unwrap();
+        restored.apply(Command::Begin).unwrap();
+        assert_eq!(restored.state.phase, Phase::Running);
+        assert_eq!(restored.state.participants.len(), 3);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Ambush.md")).unwrap(),
+            repaired
+        );
+    }
+
     fn begin(run: &mut Run) {
         for (index, total) in [20, 15, 10].into_iter().enumerate() {
             run.apply(Command::Initiative(index, Some(total))).unwrap();

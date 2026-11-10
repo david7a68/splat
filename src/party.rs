@@ -427,7 +427,7 @@ impl Party {
             let next = if connected {
                 "Replacing keeps your version as a copy."
             } else {
-                "Connect to replace it with the D&D Beyond sheet."
+                "Connect, then replace it. Replacing keeps your version as a copy."
             };
             let words = format!(
                 "{name}'s sheet file has your own edits, so Splat stopped updating it.\n{next}"
@@ -443,12 +443,9 @@ impl Party {
             let actions = if connected {
                 vec![action, "Show file"]
             } else {
-                vec!["Connect to refresh", "Show file"]
+                vec!["Show file"]
             };
             storage_notice(ui, Tone::Warning, &words, &actions, |ui| {
-                if !connected && design::link(ui, "Connect to refresh").clicked() {
-                    self.wants_settings = true;
-                }
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
                 } else if connected
@@ -664,12 +661,24 @@ fn storage_notice(
             })
             .sum::<f32>()
             + design::L * actions.len().saturating_sub(1) as f32;
+        let icon = match tone {
+            Tone::Warning => icons::WARN,
+            Tone::Success => icons::SUCCESS,
+            Tone::Error => icons::ERROR,
+            Tone::Info => icons::INFO,
+        };
+        // The message uses this row's L spacing between its bar, icon and text.
+        let inset = design::S
+            + design::HAIRLINE_WIDTH
+            + design::number_width(ui, icon, &Type::Body.font(ui))
+            + design::L * 2.0
+            - design::XS;
         let text_width = words
             .lines()
             .map(|line| design::number_width(ui, line, &Type::Body.font(ui)))
             .fold(0.0_f32, f32::max)
-            + design::L
-            + Type::Body.size();
+            + inset
+            + design::HAIRLINE_WIDTH;
         if text_width + design::L + actions_width <= ui.available_width() {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = design::L;

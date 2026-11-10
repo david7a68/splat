@@ -1027,13 +1027,13 @@ pub mod party {
             d.has_containing("Local edits"),
             "The affected party row marks its local edits",
         );
-        d.state("copy-has-local-edits-signed-out", Sizes::Default);
-        d.click_beside("sheet file has your own edits", CONNECT_FIRST);
+        d.state("copy-has-local-edits-signed-out", Sizes::All);
+        d.click(CONNECT_FIRST);
         d.observe(
             "iter-18-B-P3",
             d.page_title().as_deref() == Some("Settings")
                 && d.focused_name().as_deref() == Some("Paste session cookie"),
-            "The local-edits message opens Settings with the cookie field focused",
+            "The Party header connects with the cookie field focused while local edits remain safe",
         );
         d.click(NAV_PARTY);
 
@@ -1226,7 +1226,8 @@ pub mod encounter_build {
 
         // A search with no match says so, and what to try.
         d.replace_text_in(FIND_CREATURE, NO_SUCH_CREATURE);
-        d.state("no-search-results", Sizes::Default);
+        d.expect("Campaign → Packages");
+        d.state("no-search-results", Sizes::All);
         d.observe(
             "T5.1",
             d.visible_text("No creatures match"),
@@ -2591,6 +2592,21 @@ pub mod run_large_roster {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN_12);
+        d.expect("Sync off for the party");
+        d.observe_both(
+            "FT3",
+            "All linked rows have sync off; the header says it once",
+            |d| {
+                let linked = &ROSTER_12[..5];
+                let rows: Vec<_> = linked.iter().filter_map(|name| d.row_node(name)).collect();
+                rows.len() == linked.len()
+                    && rows.iter().all(|row| !row.name.contains("Sync off"))
+                    && linked
+                        .iter()
+                        .all(|name| !d.row_words(name).contains("Sync off"))
+                    && d.in_view_containing("Sync off for the party")
+            },
+        );
         d.state("roster-of-12", Sizes::All);
         d.goal("open a run with 12 participants");
 
@@ -6643,6 +6659,25 @@ pub mod encounter_groups {
         d.goal("make an encounter group");
         d.click("Back to encounters");
         d.expect("GROUPS");
+
+        // Member recovery is separate from the unchanged build task.
+        d.begin_task();
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.click(&format!("More actions for {RIVAL_NAME}"));
+        d.click("Remove");
+        d.expect("Removed Rival Captain.");
+        d.expect("Undo remove member");
+        d.state("group-member-removed-with-undo", Sizes::All);
+        d.click("Undo remove member");
+        d.expect(CHANGES);
+        d.observe_both(
+            "iter4-B-AT1",
+            "Undo restores the changed member and clears the removal notice",
+            |d| d.has(CHANGES) && !d.has("Removed Rival Captain."),
+        );
+        d.expect_same("Undo restores the complete group editor with the changed member.");
+        d.state("group-member-restored", Sizes::All);
+        d.click("Back to encounters");
 
         // Repair is a separate workflow; it does not change the build goal's cost.
         d.click(&format!("Edit group {GROUP_LOST}"));
