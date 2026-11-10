@@ -1064,7 +1064,12 @@ fn draw_with_links(
                 design::focus_ring(ui, part.rect.expand2(egui::vec2(design::XS / 2.0, 0.0)));
             }
         }
-        let Some(pressed) = parts.iter().find(|part| part.hovered() || part.clicked()) else {
+        // A click by key or pointer wins over the pointer resting on another row of the link.
+        let Some(pressed) = parts
+            .iter()
+            .find(|part| part.clicked())
+            .or_else(|| parts.iter().find(|part| part.hovered()))
+        else {
             continue;
         };
         match press(ui, pressed, destination) {
