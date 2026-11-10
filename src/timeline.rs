@@ -1109,6 +1109,11 @@ impl Book {
             .map(|(at, _, label)| (*at, label.clone()))
     }
 
+    /// The event that Undo would put back.
+    pub fn removed_event(&self) -> Option<&Event> {
+        self.removed.as_ref().map(|(_, event, _)| event)
+    }
+
     pub fn removed(&self) -> Option<&str> {
         self.removed.as_ref().map(|(.., label)| label.as_str())
     }

@@ -103,6 +103,8 @@ pub enum Choice {
 
 /// One item's parts, measured once with every stat. The fit keeps the first few stats.
 struct Item {
+    /// The first name, so that the DM need not know each portrait. It goes after every stat.
+    name: Option<Arc<egui::Galley>>,
     hp_width: f32,
     temp: Option<Arc<egui::Galley>>,
     word: Option<Arc<egui::Galley>>,
@@ -129,6 +131,9 @@ impl Item {
         let word = design::hp_word(glance.hp, glance.max_hp).map(|(icon, word, color)| {
             painter.layout_no_wrap(format!("{icon} {word}"), small.clone(), color)
         });
+        let first = glance.name.split_whitespace().next().unwrap_or_default();
+        let name = (!first.is_empty())
+            .then(|| painter.layout_no_wrap(first.to_owned(), small.clone(), c.text));
         let stats = glance
             .stats()
             .into_iter()
@@ -144,6 +149,7 @@ impl Item {
             })
             .collect();
         Self {
+            name,
             hp_width,
             temp,
             word,
@@ -156,6 +162,7 @@ impl Item {
         design::XS
             + PORTRAIT
             + design::XS
+            + self.name.as_ref().map_or(0.0, |g| g.size().x + design::S)
             + self.hp_width
             + self.temp.as_ref().map_or(0.0, |g| design::XS + g.size().x)
             + self.word.as_ref().map_or(0.0, |g| design::S + g.size().x)
@@ -202,8 +209,13 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
         .unwrap_or(0);
     let show_source = needed(shown) <= with_source;
     let room = if show_source { with_source } else { room };
+    // Names give way last, all together, and only when no stat is left. Hover keeps them.
+    let names = needed(shown) <= room;
     for item in &mut items {
         item.stats.truncate(shown);
+        if !names {
+            item.name = None;
+        }
     }
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = design::L;
@@ -275,6 +287,11 @@ fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::
         egui::Rect::from_min_size(pos2(x, y - PORTRAIT / 2.0), egui::Vec2::splat(PORTRAIT));
     crate::art::portrait(ui, picture, glance.portrait.as_deref(), &glance.name, None);
     x = picture.right() + design::XS;
+    if let Some(name) = item.name {
+        let width = name.size().x;
+        painter.galley(pos2(x, y - 1.0 - name.size().y / 2.0), name, c.text);
+        x += width + design::S;
+    }
     // The readout shares the label's line. Its bar takes the item's bottom edge, as on a Party row.
     let line = y - 1.0;
     let right = x + item.hp_width;

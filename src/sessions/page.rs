@@ -22,7 +22,7 @@ use crate::{
         self, Book, Kind,
         page::{
             SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
-            rest_ruling, undo_removed,
+            rest_ruling,
         },
     },
 };
@@ -206,6 +206,19 @@ struct Alert {
     /// The recording stopped, so one press can start it again.
     can_record: bool,
     retry: Option<PathBuf>,
+    /// The recorder's own words, for hover, when `words` puts them plainly.
+    said: Option<String>,
+}
+
+impl Alert {
+    /// The input is gone, so the DM must choose another before recording again.
+    fn missing_input(&self) -> bool {
+        self.said
+            .as_deref()
+            .unwrap_or(&self.words)
+            .to_lowercase()
+            .contains(MISSING_INPUT_ERROR)
+    }
 }
 
 struct Live {
@@ -1015,6 +1028,8 @@ fn session_row(
     selected: bool,
     title: &str,
     detail: &str,
+    // The detail in full words, when the drawn one is short.
+    spoken: Option<&str>,
     state: Option<Status<'_>>,
 ) -> egui::Response {
     let c = colors();
@@ -1030,7 +1045,7 @@ fn session_row(
         ui,
         height,
         selected,
-        &format!("{title} · {detail}"),
+        &format!("{title} · {}", spoken.unwrap_or(detail)),
         |ui, rect| {
             let top = rect.center().y - lines / 2.0;
             let x = rect.left() + design::S;
@@ -1067,12 +1082,90 @@ fn session_detail(
     )
 }
 
+/// The plan's removal notice. It names which event went, by its result or state, and says when
+/// another event with the same name stays in this session.
+fn removed_event_words(
+    book: &Book,
+    session: Option<Uuid>,
+    days: &[u32],
+    label: &str,
+    planned: &[(String, bool)],
+) -> String {
+    let detail = book
+        .removed_event()
+        .map(|event| {
+            if event.run.is_some() {
+                timeline::played_fight_summary(event, false)
+            } else {
+                event.summary(None)
+            }
+        })
+        .filter(|detail| !detail.trim().is_empty());
+    let mut words = match detail {
+        Some(detail) => format!("Removed “{label}” ({detail})."),
+        None => format!("Removed “{label}”."),
+    };
+    let same: Vec<_> = book
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(at, event)| {
+            event.is_in(session) && event.label(days.get(*at).copied().unwrap_or(0)) == label
+        })
+        .map(|(_, event)| !event.result.trim().is_empty())
+        .chain(
+            planned
+                .iter()
+                .filter(|(name, _)| name == label)
+                .map(|(_, ended)| *ended),
+        )
+        .collect();
+    match same.as_slice() {
+        [] => {}
+        [true] => words.push_str(&format!(" The other “{label}” and its result stay.")),
+        [false] => words.push_str(&format!(" The other “{label}” stays.")),
+        more if more.iter().any(|&result| result) => words.push_str(&format!(
+            " {} other “{label}” events stay, with their results.",
+            more.len()
+        )),
+        more => words.push_str(&format!(" {} other “{label}” events stay.", more.len())),
+    }
+    words
+}
+
 fn recording_recovery(missing_input: bool) -> &'static str {
     if missing_input {
         "Choose an input, then record again."
     } else {
         "Check the microphone, then record again."
     }
+}
+
+/// Plain words for an error the recorder is known to give. Its own words stay in hover.
+fn plain_recorder_words(said: &str) -> Option<&'static str> {
+    let said = said.to_lowercase();
+    [
+        (MISSING_INPUT_ERROR, "the microphone is no longer connected"),
+        (
+            "device or resource busy",
+            "another program is using the microphone",
+        ),
+        (
+            "permission denied",
+            "the system did not let Splat use the microphone",
+        ),
+    ]
+    .into_iter()
+    .find(|(known, _)| said.contains(known))
+    .map(|(_, plain)| plain)
+}
+
+/// The hover for a plain recorder error: what the recorder itself said.
+fn recorder_said(said: &str) -> String {
+    format!(
+        "The recorder said: {}.",
+        said.trim().trim_end_matches(['.', '!', '?'])
+    )
 }
 
 fn recording_detail(words: &str, missing_input: bool) -> String {
@@ -1084,10 +1177,11 @@ fn recording_detail(words: &str, missing_input: bool) -> String {
         let step = cancelled.split(". Cancelled.").next().unwrap_or(cancelled);
         return format!("Cancelled during {step}. Continue processing goes on from there.");
     }
-    if words.starts_with("Stopped by itself:") {
+    if let Some(said) = words.strip_prefix("Stopped by itself:") {
+        let said = said.trim().trim_end_matches('.');
         return format!(
-            "{}. {}",
-            words.trim_end_matches('.'),
+            "Stopped by itself: {}. {}",
+            plain_recorder_words(said).unwrap_or(said),
             recording_recovery(missing_input)
         );
     }
@@ -1160,10 +1254,16 @@ impl Sessions {
                     can_record: true,
                     retry: None,
                     word: "Recording stopped",
-                    words: format!(
-                        "The recording of {label} stopped by itself. {kept} The recorder said: {}.",
-                        words.trim_end_matches(['.', '!', '?'])
-                    ),
+                    words: match plain_recorder_words(&words) {
+                        Some(plain) => {
+                            format!("The recording of {label} stopped by itself: {plain}. {kept}")
+                        }
+                        None => format!(
+                            "The recording of {label} stopped by itself. {kept} The recorder said: {}.",
+                            words.trim_end_matches(['.', '!', '?'])
+                        ),
+                    },
+                    said: plain_recorder_words(&words).map(|_| recorder_said(&words)),
                 });
             } else {
                 ctx.request_repaint_after(Duration::from_secs(1));
@@ -1278,7 +1378,7 @@ impl Sessions {
                 visible(alert)
                     && alert.can_record
                     && (settings.input_missing()
-                        || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR)
+                        || alert.missing_input()
                         || (self.live.is_none() && self.job.is_none()))
             })
             .or_else(|| {
@@ -1372,15 +1472,17 @@ impl Sessions {
                         continue;
                     }
                     let banner_primary = primary_owner == Some(index);
-                    let missing_input = alert.can_record
-                        && (settings.input_missing()
-                            || alert.words.to_lowercase().contains(MISSING_INPUT_ERROR));
+                    let missing_input =
+                        alert.can_record && (settings.input_missing() || alert.missing_input());
                     let words = if alert.word == "Recording stopped" {
                         format!("{} {}", alert.words, recording_recovery(missing_input))
                     } else {
                         alert.words.clone()
                     };
-                    design::message(ui, Tone::Error, &words);
+                    let shown = design::message(ui, Tone::Error, &words);
+                    if let Some(said) = &alert.said {
+                        shown.on_hover_text(said);
+                    }
                     ui.horizontal_wrapped(|ui| {
                         if missing_input
                             && (if banner_primary {
@@ -1460,6 +1562,7 @@ impl Sessions {
                     session,
                     can_record: true,
                     retry: None,
+                    said: None,
                 });
             }
         }
@@ -1557,6 +1660,7 @@ impl Sessions {
                     session,
                     can_record: false,
                     retry: failed_recording,
+                    said: None,
                     word: PROCESSING_CANCELLED,
                     words: "Processing cancelled. Continue processing goes on from there."
                         .to_owned(),
@@ -1568,6 +1672,7 @@ impl Sessions {
                     session,
                     can_record: false,
                     retry: failed_recording,
+                    said: None,
                     word: "Processing failed",
                     words: format!("Processing {label} failed. What is done is kept. {error}"),
                 });
@@ -3092,15 +3197,21 @@ impl Sessions {
                                     }
                                 })
                         };
+                        // A warned result is a status like its siblings: icon, word and colour.
+                        // The full words stay in hover and in the row's name.
+                        let warned = state.is_none() && result == Some(note.id) && self.job_warned;
+                        let state = if warned {
+                            Some(Status {
+                                word: "Processed",
+                                ..processed_warning()
+                            })
+                        } else {
+                            state
+                        };
                         let detail = if let Some(state) = state {
                             format!("{} {}", state.icon, state.word)
                         } else if result == Some(note.id) {
-                            let word = if self.job_warned {
-                                "Processed, with a warning"
-                            } else {
-                                "Processed"
-                            };
-                            word.to_owned()
+                            "Processed".to_owned()
                         } else {
                             note.date.clone()
                         };
@@ -3138,15 +3249,24 @@ impl Sessions {
                         } else {
                             detail
                         };
-                        if session_row(
+                        let full = warned.then(|| {
+                            let short = format!("{} Processed", icons::WARN);
+                            detail.replacen(&short, processed_warning().word, 1)
+                        });
+                        let row = session_row(
                             ui,
                             self.selected == Some(note.id),
                             &note.label(),
                             &detail,
+                            full.as_deref(),
                             state,
-                        )
-                        .clicked()
-                        {
+                        );
+                        let row = if warned {
+                            row.on_hover_text(processed_warning().word)
+                        } else {
+                            row
+                        };
+                        if row.clicked() {
                             choose = Some(note.id);
                         }
                     }
@@ -4032,7 +4152,20 @@ impl Sessions {
         if let Some(problem) = &self.rename_problem {
             design::message(ui, Tone::Warning, problem);
         }
-        self.plan_messages(ui, book, session, plan);
+        // Planned fights not yet played, and whether each has an ended run: a removal notice
+        // says when one with the same name stays.
+        let planned_results: Vec<(String, bool)> = planned
+            .iter()
+            .map(|fight| {
+                (
+                    fight.name.clone(),
+                    planned_saved_run(fight, plan.fights, plan.saved_runs).is_some_and(|saved| {
+                        saved.standing == crate::encounter_run::Standing::Ended
+                    }),
+                )
+            })
+            .collect();
+        self.plan_messages(ui, book, session, plan, &planned_results);
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
@@ -4056,7 +4189,13 @@ impl Sessions {
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
-        let removed_row = book.removed_row().filter(|_| self.removed_event_in_plan);
+        let removed_row = book
+            .removed_row()
+            .filter(|_| self.removed_event_in_plan)
+            .map(|(at, label)| {
+                let words = removed_event_words(book, session, &days, &label, &planned_results);
+                (at, words)
+            });
         let mut undo_row_remove = false;
         let event_count = book.events.len();
         let open_event = self.open_event.clone();
@@ -4073,9 +4212,9 @@ impl Sessions {
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 for (at, event) in book.events.iter_mut().enumerate() {
-                    if let Some((removed_at, label)) = &removed_row && *removed_at == at {
+                    if let Some((removed_at, words)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
-                        undo_row_remove |= design::undo_message(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
+                        undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
                     }
                     if !event.is_in(session) { continue; }
                     any = true;
@@ -4177,9 +4316,9 @@ impl Sessions {
                     // The opened row and the next row stay in reach.
                     if is_open && std::mem::take(&mut self.reveal_event) { row.response.scroll_to_me(Some(egui::Align::TOP)); }
                 }
-                if let Some((at, label)) = &removed_row && *at >= event_count {
+                if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
-                    undo_row_remove |= design::undo_message(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
+                    undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
@@ -4262,6 +4401,13 @@ impl Sessions {
                             if group.warnings.is_empty() { plan_group_summary(ui, &summary); }
                             else { wrapped_words(ui, Type::Small, &summary, c.muted); }
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
+                            // Name each member left out, its base and its line, beside Edit group.
+                            else {
+                                for warning in &group.warnings {
+                                    ui.add_space(design::XS);
+                                    design::small_message(ui, Tone::Warning, warning);
+                                }
+                            }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
                                 if Action::quiet("Remove from tonight").name(&format!("Remove group {} from the plan", group.name))
@@ -4457,6 +4603,7 @@ impl Sessions {
         book: &mut Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
+        planned: &[(String, bool)],
     ) {
         if self.row_notice.is_none() {
             self.deleted_run_message(ui);
@@ -4502,8 +4649,13 @@ impl Sessions {
                 book.undo_add(&id);
                 self.added = None;
             }
-        } else if !self.removed_event_in_plan {
-            undo_removed(ui, book);
+        } else if !self.removed_event_in_plan
+            && let Some(label) = book.removed().map(str::to_owned)
+        {
+            let words = removed_event_words(book, session, &days, &label, planned);
+            if design::undo_message(ui, Tone::Info, &words, "Undo remove") {
+                book.undo_remove();
+            }
         }
     }
 
@@ -4866,7 +5018,7 @@ impl Sessions {
             ui.add(egui::Label::new(Type::Small.rich(ui, format!("Stopped saving after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
         }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
-            ui.add(
+            let shown = ui.add(
                 egui::Label::new(
                     Type::Small
                         .rich(ui, recording_detail(words, missing_input))
@@ -4874,6 +5026,12 @@ impl Sessions {
                 )
                 .wrap(),
             );
+            if let Some(said) = words
+                .strip_prefix("Stopped by itself:")
+                .filter(|said| plain_recorder_words(said).is_some())
+            {
+                shown.on_hover_text(recorder_said(said));
+            }
         }
         if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
             ui.add(egui::Label::new(Type::Small.rich(ui, warning).color(c.muted)).wrap());
@@ -6914,6 +7072,105 @@ fn fixed_scope<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter10_c_known_recorder_errors_use_plain_words() {
+        assert_eq!(
+            recording_detail("Stopped by itself: no such device.", true),
+            "Stopped by itself: the microphone is no longer connected. Choose an input, then record again."
+        );
+        assert_eq!(
+            recording_detail("Stopped by itself: Device or resource busy", false),
+            "Stopped by itself: another program is using the microphone. Check the microphone, then record again."
+        );
+        // An error Splat does not know keeps the recorder's own words.
+        assert_eq!(
+            recording_detail("Stopped by itself: stream error 42.", false),
+            "Stopped by itself: stream error 42. Check the microphone, then record again."
+        );
+        assert_eq!(
+            recorder_said("no such device."),
+            "The recorder said: no such device."
+        );
+        // The plain words still lead to Choose an input.
+        let alert = Alert {
+            word: "Recording stopped",
+            words: "The recording of Session 1 stopped by itself: the microphone is no longer connected."
+                .to_owned(),
+            session: Uuid::nil(),
+            can_record: true,
+            retry: None,
+            said: Some(recorder_said("no such device")),
+        };
+        assert!(alert.missing_input());
+        let unknown = Alert {
+            said: None,
+            words: "The recording stopped by itself. The recorder said: stream error 42."
+                .to_owned(),
+            ..alert
+        };
+        assert!(!unknown.missing_input());
+    }
+
+    #[test]
+    fn iter10_c_removal_notice_names_the_removed_fight() {
+        let session = Some(Uuid::new_v4());
+        let fight = |id: &str, result: &str| timeline::Event {
+            id: id.to_owned(),
+            kind: Kind::Encounter,
+            title: "Bridge Ambush".to_owned(),
+            duration: String::new(),
+            place: String::new(),
+            notes: String::new(),
+            result: result.to_owned(),
+            session,
+            run: Some(Uuid::new_v4()),
+            marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
+            extra: Default::default(),
+        };
+        let mut book = Book::default();
+        book.events = vec![
+            fight("a", "Round 2"),
+            fight("b", "Held the bridge, round 1"),
+        ];
+        book.remove("a");
+        let days = timeline::day_numbers(&book.events);
+        assert_eq!(
+            removed_event_words(&book, session, &days, "Bridge Ambush", &[]),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result stay."
+        );
+        // A same-name fight in another session is not in this plan.
+        assert_eq!(
+            removed_event_words(&book, Some(Uuid::new_v4()), &days, "Bridge Ambush", &[]),
+            "Removed “Bridge Ambush” (Round 2 · Paused)."
+        );
+        // A remaining fight with no result yet stays, with no result to name.
+        book.undo_remove();
+        book.events[1].result.clear();
+        book.remove("a");
+        assert_eq!(
+            removed_event_words(&book, session, &days, "Bridge Ambush", &[]),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” stays."
+        );
+        // A planned fight of the same name counts too, with its ended run as its result.
+        book.events.remove(0);
+        assert_eq!(
+            removed_event_words(
+                &book,
+                session,
+                &days,
+                "Bridge Ambush",
+                &[
+                    ("Bridge Ambush".to_owned(), true),
+                    ("Shrine".to_owned(), true)
+                ]
+            ),
+            "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result stay."
+        );
+    }
 
     #[test]
     fn iter8_c_st2_warning_names_duplicate_number_files_and_keeps_ordinary_numbers() {

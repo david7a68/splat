@@ -294,22 +294,6 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     false
 }
 
-/// The one step of undo after a removal. Returns whether it is showing.
-pub fn undo_removed(ui: &mut egui::Ui, book: &mut Book) -> bool {
-    let Some(removed) = book.removed().map(str::to_owned) else {
-        return false;
-    };
-    if design::undo_message(
-        ui,
-        Tone::Info,
-        &format!("Removed “{removed}”."),
-        "Undo remove",
-    ) {
-        book.undo_remove();
-    }
-    true
-}
-
 impl TimelinePage {
     /// Show one event, whatever the filters were hiding.
     pub fn reveal(&mut self, id: &str, book: &Book) {
