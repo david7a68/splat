@@ -1922,7 +1922,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         }
         2 => {
             section_heading(ui, "Spellcasting");
-            ui.weak("Spell descriptions use their printed values. Upcasting and character-specific formulas are not evaluated.");
+            ui.weak("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
             for (label, key) in [
                 ("Spell save DC", "saveDcs"),
                 ("Spell attack", "spellAttacks"),

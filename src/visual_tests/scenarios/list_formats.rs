@@ -268,6 +268,23 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     assert!(d.is_disabled("Begin combat"));
     d.expect("Changes: HP lots not read");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let fits = d.at_size(size, |d| {
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Changes: HP lots not read"));
+            let header = d.place_of("Begin combat").unwrap();
+            warning.is_some_and(|node| node.rect.top() > header.bottom())
+                && d.visible_text("Fix the unread row first.")
+                && !d.visible_text("below, 1 needs initiative")
+        });
+        d.observe(
+            "iter-5-B-FD8",
+            fits,
+            format!("Setup warning follows the header and keeps roster room at {size:?}"),
+        );
+    }
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     fs::write(&roster_path, &roster_text).unwrap();

@@ -2327,7 +2327,15 @@ impl Run {
                 + self.copy_label.as_ref().map_or(0.0, |copy| {
                     design::number_width(ui, copy, &Type::Small.font(ui)) + design::L
                 });
-            let menu_needed = ui.available_width() < close_width;
+            let end_word = if ui.available_width() < close_width {
+                "End…"
+            } else {
+                "End encounter…"
+            };
+            let short_width = close_width
+                - design::number_width(ui, "End encounter…", &Type::Strong.font(ui))
+                + design::number_width(ui, "End…", &Type::Strong.font(ui));
+            let menu_needed = ui.available_width() < short_width;
             let end_menu = menu_needed && self.copy_label.is_some();
             let mut controls = |ui: &mut egui::Ui| {
                 let blocked = self.close_block();
@@ -2342,9 +2350,10 @@ impl Run {
                 .show(ui)
                 .clicked();
                 if !end_menu {
-                    ending = Action::quiet("End encounter…")
+                    ending = Action::quiet(end_word)
+                        .name("End encounter…")
                         .density(Density::Read)
-                        .hint("Set an outcome. You can undo this.")
+                        .hint("End encounter… Set an outcome. You can undo this.")
                         .show(ui)
                         .clicked();
                 }
@@ -2969,7 +2978,10 @@ impl Run {
                                 })
                                 .map(|before| (first, Self::roll_block_first(&self.state, before)))
                         });
-                    let line = self.state.log.last().cloned().unwrap_or_default();
+                    let group_line = self.group_arrival_notice(start);
+                    let line = group_line
+                        .as_deref()
+                        .unwrap_or_else(|| self.state.log.last().map_or("", String::as_str));
                     if let Some((first, before)) = tied {
                         let name =
                             Self::roll_block_name(&self.state, &self.state.participants[before]);
@@ -2980,8 +2992,14 @@ impl Run {
                                 .iter()
                                 .position(|i| *i == before)
                                 .is_some_and(|at| at <= self.state.cursor);
+                        let total = self.state.participants[first].initiative.unwrap();
+                        let tie = if group_line.is_some() {
+                            format!(" Tied with {name} at\u{a0}{total}\u{a0}· placed after")
+                        } else {
+                            String::new()
+                        };
                         let line = format!(
-                            "{line}{}",
+                            "{line}{tie}{}",
                             if waits {
                                 "\u{a0}· acts next round if moved before"
                             } else {
@@ -3033,6 +3051,24 @@ impl Run {
         if let Some(id) = add {
             self.add_group_from_panel(id);
         }
+    }
+
+    /// The roster shows members; this notice keeps just the group and its totals.
+    /// Roll details and member names remain in the unmodified Log.
+    fn group_arrival_notice(&self, start: usize) -> Option<String> {
+        let added = self.state.participants.get(start..)?;
+        let origin = added.first()?.added_from.as_ref()?;
+        if origin.group.is_empty() {
+            return None;
+        }
+        let totals: std::collections::BTreeSet<_> =
+            added.iter().filter_map(|p| p.initiative).collect();
+        let totals = totals
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(format!("{} joined at\u{a0}{totals}.", origin.group))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
@@ -3960,29 +3996,6 @@ impl Run {
 
     fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
         self.refresh_roster_faults();
-        if let Some(path) = &self.roster_source {
-            for fault in &self.roster_faults {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!(
-                        "{} · {}, line {}: {}",
-                        fault.name,
-                        path.file_name().unwrap_or_default().to_string_lossy(),
-                        fault.line,
-                        fault.problem
-                    ),
-                );
-            }
-            if !self.roster_faults.is_empty() {
-                crate::world::entry_file_actions(
-                    ui,
-                    path.parent().unwrap_or(path),
-                    &path.file_name().unwrap_or_default().to_string_lossy(),
-                    true,
-                );
-            }
-        }
         let mut closed = false;
         let missing_initiative = self
             .state
@@ -4159,6 +4172,26 @@ impl Run {
             },
         );
         design::rule(ui);
+        if let Some(path) = &self.roster_source {
+            for fault in &self.roster_faults {
+                let words = format!(
+                    "{} · {}, line {}: {}",
+                    fault.name,
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    fault.line,
+                    fault.problem
+                );
+                ui.horizontal_wrapped(|ui| {
+                    design::message(ui, Tone::Warning, &words);
+                    crate::world::entry_file_parts(
+                        ui,
+                        path.parent().unwrap_or(path),
+                        &path.file_name().unwrap_or_default().to_string_lossy(),
+                        true,
+                    );
+                });
+            }
+        }
         self.error_line(ui);
         if let Some(words) = self.carry_missing() {
             design::message(ui, Tone::Warning, &words);
@@ -5244,27 +5277,34 @@ pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
         },
         color: colors().accent,
     };
-    let words = format!("{} {fault}", icons::WARN);
-    let text_width = design::number_width(ui, &words, &Type::Small.font(ui));
+    let gap = ui.spacing().item_spacing.x;
+    let inset = design::S
+        + design::HAIRLINE_WIDTH
+        + design::number_width(ui, icons::WARN, &Type::Body.font(ui))
+        + gap * 2.0
+        - design::XS;
+    let text_width = design::number_width(ui, fault, &Type::Body.font(ui)) + inset;
     let link_width = design::number_width(
         ui,
         &format!("{} {}", status.icon, status.word),
         &Type::Small.font(ui),
     );
-    let label = |ui: &mut egui::Ui| {
-        ui.add(
-            egui::Label::new(Type::Small.rich(ui, &words).color(colors().result.warning)).wrap(),
-        );
-    };
-    if text_width + design::S + link_width <= ui.available_width() {
-        ui.horizontal(|ui| {
-            label(ui);
+    if text_width + design::L + link_width <= ui.available_width() {
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(vec2(text_width, 0.0), Layout::top_down(Align::Min), |ui| {
+                design::message(ui, Tone::Warning, fault);
+            });
+            ui.add_space(design::L - gap);
             design::status_link(ui, status).clicked()
         })
         .inner
     } else {
-        label(ui);
-        design::status_link(ui, status).clicked()
+        design::message(ui, Tone::Warning, fault);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            design::status_link(ui, status).clicked()
+        })
+        .inner
     }
 }
 
@@ -6901,6 +6941,45 @@ mod tests {
                 }
             });
         });
+    }
+
+    #[test]
+    fn iter5_b_arrival_fault_uses_text_colour_and_warning_mark() {
+        let fault = "Member 2, Cinder Wolf: Changes: HP lots not read";
+        let mut harness = egui_kittest::Harness::new(|ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                group_fault(ui, fault);
+            });
+        });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts: Vec<_> = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text().contains(fault) => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(!texts.is_empty());
+        for text in texts {
+            assert!(
+                text.galley
+                    .job
+                    .sections
+                    .iter()
+                    .all(|section| section.format.color == colors().text)
+            );
+        }
+        assert!(
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| matches!(&shape.shape,
+            egui::Shape::Rect(rect) if rect.fill == colors().result.warning))
+        );
     }
 
     #[test]
