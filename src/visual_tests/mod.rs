@@ -26,6 +26,7 @@
 //! - `visual-baseline-chrome <label>` applies eligible saved chrome measurements.
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
+//! - `SPLAT_VISUAL_ENCODER=vaapi|nvenc|x264` uses only that kind of video encoder.
 mod compare;
 mod dm_audit;
 mod driver;
@@ -697,6 +698,11 @@ fn visual_suite() {
     let record = capture && std::env::var("SPLAT_VISUAL_VIDEO").is_ok_and(|value| value == "1");
     if record {
         fs::create_dir_all(directory.join("video")).expect("create video folder");
+        // Choose the encoder before the workers start, so no scenario waits for the probe.
+        let encoder = video::encoder();
+        if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+            println!("Video encoder = {encoder}");
+        }
     }
     let (_lock, root) = world_root(slot.as_mut().and_then(slots::Permit::take_world_lock));
     let cache = root.join("character-cache");
@@ -787,8 +793,11 @@ fn visual_suite() {
         }
         fs::write(directory.join("manifest.txt"), manifest).expect("write manifest");
         if let Some(adapter) = render::adapter() {
-            fs::write(directory.join("renderer.txt"), format!("{adapter}\n"))
-                .expect("write renderer.txt");
+            let mut text = format!("{adapter}\n");
+            if record {
+                text.push_str(&format!("video: {}\n", video::encoder()));
+            }
+            fs::write(directory.join("renderer.txt"), text).expect("write renderer.txt");
         }
     }
     let _ = fs::remove_dir_all(&root);

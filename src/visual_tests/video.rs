@@ -8,10 +8,18 @@ use ab_glyph::{Font, FontRef, PxScale, ScaleFont, point};
 use eframe::egui;
 use image::{Rgba, RgbaImage};
 use std::{
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
 };
+
+mod encoder;
+
+/// The encoder this run's videos use, once one has started.
+pub fn encoder() -> String {
+    encoder::chosen().describe()
+}
 
 const FPS: usize = 12;
 /// About one second, so a viewer can read each settled state.
@@ -50,6 +58,8 @@ impl Overlay {
 
 pub struct Recorder {
     child: Child,
+    /// A hardware encode session this video holds until ffmpeg exits.
+    _session: Option<File>,
     stdin: Option<ChildStdin>,
     path: PathBuf,
     font: FontRef<'static>,
@@ -67,26 +77,17 @@ struct Last {
 
 impl Recorder {
     pub fn start(path: &Path) -> Result<Self, String> {
+        let (encoder, session) = encoder::for_video();
         // ffmpeg is a host program. The shell's library path holds Nix libraries.
         let child = Command::new(ffmpeg_path())
             .env_remove("LD_LIBRARY_PATH")
             .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .args(encoder.input_args())
             .args(["-f", "matroska", "-i", "-", "-an"])
             // Keep each picture's own time: a held picture is one encoded frame.
             .args(["-fps_mode", "vfr"])
-            // ultrafast took half the CPU of veryfast at the same quality, for files about
-            // twice the size. The animation tune keeps flat UI colours smaller.
-            .args([
-                "-c:v",
-                "libx264",
-                "-preset",
-                "ultrafast",
-                "-tune",
-                "animation",
-            ])
-            .args(["-crf", "22"])
-            .args(["-pix_fmt", "yuv420p", "-movflags", "+faststart"])
-            .args(["-threads", "2"])
+            .args(encoder.output_args())
+            .args(["-movflags", "+faststart"])
             .arg(path)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -100,6 +101,7 @@ impl Recorder {
         }
         Ok(Self {
             child,
+            _session: session,
             stdin,
             path: path.to_path_buf(),
             font: FontRef::try_from_slice(epaint_default_fonts::UBUNTU_LIGHT)
