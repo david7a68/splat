@@ -48,7 +48,7 @@
       "run-loot": 12,
       "run-overrides": 12,
       "run-restart": 6,
-      "run-rolls": 26,
+      "run-rolls": 24,
       "run-roster-conflict": 4,
       "run-sync-conflict": 9,
       "run-sync-states": 6,
@@ -82,7 +82,7 @@
       "list-formats": 3,
       "npc-in-encounter": 1,
       "prep-to-table": 2,
-      "run-rolls": 84,
+      "run-rolls": 75,
       "session-notes": 15,
       "session-plan": 19,
       "session-recording": 13,
@@ -142,7 +142,7 @@
       "run-overrides": 32,
       "run-restart": 26,
       "run-resume": 7,
-      "run-rolls": 57,
+      "run-rolls": 54,
       "run-roster-conflict": 24,
       "run-sync-conflict": 41,
       "run-sync-states": 32,
@@ -323,8 +323,7 @@
       "T16.4: make a second attack against the same target": 3,
       "T16.5: call a save from two creatures and apply the damage": 7,
       "T16.7: roll with disadvantage by pointer only": 2,
-      "T16.8: roll and apply damage by keyboard": 2,
-      "T16.9: roll an attack with a Bless bonus by pointer": 4
+      "T16.8: roll and apply damage by keyboard": 2
     },
     "run-roster-conflict": {
       "show a conflict with 12 rows": 1,
