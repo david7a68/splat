@@ -490,8 +490,16 @@ impl WorldPage {
                         self.repaired = self.selected;
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
+                        // Another note's rename keeps its Undo.
                         self.reader.clear_notice();
-                        self.reader.name_undo = None;
+                        if self
+                            .reader
+                            .name_undo
+                            .as_ref()
+                            .is_some_and(|change| change.path == repair.path)
+                        {
+                            self.reader.name_undo = None;
+                        }
                         self.repair = None;
                         self.reload = true;
                     }

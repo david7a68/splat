@@ -340,6 +340,37 @@ pub fn broken(d: &mut Driver<'_>) {
             && !d.has("Undo changes"),
         "A repair after an edit shows Note repaired., and the old edit's Undo is gone",
     );
+    // Another note's rename Undo survives this repair.
+    let warden = root(d).join("NPCs/Gate Warden.md");
+    entry(d, "NPCs/Gate Warden.md", "Old Warden", "npc", "");
+    reload(d);
+    d.click_containing("Old Warden · ");
+    d.click("Rename the note to Gate Warden");
+    d.wait_for_text("Undo name change");
+    let renamed = fs::read_to_string(&warden).unwrap();
+    d.click_containing("Problems · ");
+    fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
+    reload(d);
+    d.click("1 note cannot be read");
+    d.click_containing("Notes/Broken.md");
+    d.expect("Save repaired note");
+    d.replace_text_in("Note text", &fixed);
+    d.click("Save repaired note");
+    d.settle();
+    d.expect("Note repaired.");
+    d.click_containing("Gate Warden · ");
+    d.observe(
+        "iter-17-D-rename-undo-kept",
+        fs::read_to_string(&warden).unwrap() == renamed && d.has("Undo name change"),
+        "Repairing another note keeps this note's Undo name change",
+    );
+    // The note goes after this check, so its Undo is only pressed when it is there.
+    if d.has("Undo name change") {
+        d.click("Undo name change");
+    }
+    fs::remove_file(&warden).unwrap();
+    reload(d);
+    d.click_starting("Repaired watchkeeper · ");
     // A draft whose note is gone: its choices start at the message text.
     d.click("Edit Repaired watchkeeper");
     d.type_into("Status", "lost words");
@@ -356,6 +387,23 @@ pub fn broken(d: &mut Driver<'_>) {
         &[SMALL, DEFAULT, LARGE],
         |d| d.painted_left(lost),
     );
+    // Discard draft has no Undo: an `L` gap separates its target from Copy text's.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (copy, discard) = d.at_size(size, |d| {
+            (
+                d.place_of("Copy the text of Repaired watchkeeper"),
+                d.place_of("Discard the draft of Repaired watchkeeper"),
+            )
+        });
+        d.observe(
+            "iter-17-D-discard-gap",
+            copy.zip(discard).is_some_and(|(copy, discard)| {
+                (copy.top() - discard.top()).abs() < 0.5
+                    && (discard.left() - copy.right() - design::L).abs() <= 0.5
+            }),
+            format!("At {size:?}, Copy text {copy:?} and Discard draft {discard:?} share a line, {} px apart", copy.zip(discard).map_or(f32::NAN, |(copy, discard)| discard.left() - copy.right())),
+        );
+    }
     d.state("lost-draft-choices", Sizes::Default);
     d.click("Discard the draft of Repaired watchkeeper");
     d.observe(

@@ -608,12 +608,17 @@ impl Reader {
                                 .icon(design::icons::COPY)
                                 .density(Density::Read)
                                 .name(&copy_name);
-                            if super::starts_line(ui, copy, true).show(ui).clicked()
+                            let copied = super::starts_line(ui, copy, true).show(ui);
+                            if copied.clicked()
                                 && let Some(draft) = self.edits.get(&id)
                             {
                                 ui.ctx().copy_text(draft.now.text.clone());
                             }
                             let discard_name = format!("Discard the draft of {name}");
+                            // Discard draft has no Undo, so an `L` gap keeps it apart. The gap
+                            // starts at Copy text's target, which `line_start` draws `S` left of
+                            // its place in the row.
+                            ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
                             let discard = Action::quiet("Discard draft")
                                 .density(Density::Read)
                                 .name(&discard_name);
