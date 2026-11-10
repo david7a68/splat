@@ -777,7 +777,7 @@ member's bonus (identical NPCs, or the encounter's initiative groups), a roll fo
 combat, and the same group can be added again. Each member is a new participant at full HP, with its
 own key and numbered name. In combat the group takes its place on that total and the current turn stays
 current. It joins the saved run and the log, and **Undo** takes back the whole group until later
-steps stand in the way.
+steps stand in the way. The arrival notice gives the group and its initiative totals. The Log keeps member names and roll details.
 
 The row and card of a creature with changes say `Changed`, and the card lists each base and changed
 value. AC, maximum HP and initiative changes appear once, in the stat block's value trio with the printed value below. An NPC's row says which stat block it uses, such as `as Bandit Captain`; its name alone does not count as a stat change. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
@@ -786,7 +786,7 @@ change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
-**End encounter** records a manual ending and your outcome. Runs save automatically
+**End encounter…** records a manual ending and your outcome. It shortens to **End…** before it moves into a menu, and stays visible while it fits. Runs save automatically
 after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
 with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Saved times use relative time for today and yesterday, then a short date. Deletion has one step of undo.
