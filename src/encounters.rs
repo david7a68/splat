@@ -3813,7 +3813,7 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
-                design::group_heading(ui, "Read-aloud and notes", 0);
+                design::field(ui, "Read-aloud and notes", None, None, |ui| {
                 let output = egui::TextEdit::multiline(&mut draft.body)
                     .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
                     .desired_width(ui.available_width() - 2.0 * design::S - design::M)
@@ -3824,6 +3824,7 @@ impl Encounters {
                     crate::markdown_view::send_note_link(ui.ctx(), note, None);
                 }
                 design::named(ui, &output.response, "Read-aloud and notes");
+                });
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner

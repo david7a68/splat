@@ -625,7 +625,7 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Connect D&D Beyond** action instead. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. Cantrips use one-line rows, and coins appear below the Equipment heading. **Bloodied** uses the same heart icon and colour as the run. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the page header opens Settings with the cookie field focused. An empty Party uses one **Connect D&D Beyond** action instead. Saves and skills use two or three columns. Skills show **Proficient**, **Expertise** or **Half** in words. A sheet list gets a filter only when it has more than eight entries. Cantrips use one-line rows, and coins appear below the Equipment heading. **Bloodied** uses the same heart icon and colour as the run. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
@@ -683,7 +683,7 @@ creature is refused with a message.
 
 **Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
 it. With one encounter, only runs of that encounter offer it, and the Encounters page keeps it in a
-closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal. A partial group names only the members that will join beside **Add 1**, such as **Will add: 1 × Goblin Warrior**. Excluded members stay under **Cannot join**, with their reason and repair link. The list, editor and Arrivals use the same XP total, marked **for 1 that can join**. **+ unknown** applies only to a joining member with no XP.
+closed **Groups** section. Open it to see one heading for each encounter, with groups for any encounter first and groups whose encounter was deleted last. Saved group rows have **Edit** and **⋯ → Remove…**, with **Undo remove group** after removal. A partial group names only the members that will join beside **Add 1**, such as **Will add: 1 × Goblin Warrior**. Excluded members stay under **Cannot join**, with their reason and repair link. The list, editor and Arrivals use the same XP total for joining members. A partial summary says **1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior**. **+ unknown** applies only to a joining member with no XP.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
 The frame’s **⋯ → Make available to any encounter** makes a saved group available for any encounter on the next save. **Undo move** restores its owner before that save. **Move to…** lists named encounters only.

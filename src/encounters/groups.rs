@@ -613,11 +613,16 @@ fn resolve_group(
                 .and_then(Value::as_str);
             let name = missing_member_name(member.overrides.name.as_deref(), link);
             let fault_name = &name;
-            warnings.push(if let Some(note) = catalogue.old_layout_ref(&member.creature).and_then(|id| catalogue.unreadable.get(&id)) {
-                        note.word.clone()
-                    } else { format!(
-                        "{what}, {fault_name}: not in this campaign's packages. Campaign → Packages."
-                    ) });
+            warnings.push(
+                if let Some(note) = catalogue
+                    .old_layout_ref(&member.creature)
+                    .and_then(|id| catalogue.unreadable.get(&id))
+                {
+                    note.word.clone()
+                } else {
+                    format!("{what}, {fault_name}: not in this campaign's packages.")
+                },
+            );
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
             continue;
@@ -789,22 +794,13 @@ fn list_row(
         ui.label(Type::Small.rich(ui, "Cannot join").color(colors().muted));
     }
     for warning in &group.warnings {
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, format!("{} {warning}", icons::WARN))
-                    .color(colors().result.warning),
-            )
-            .wrap(),
-        );
-    }
-    if group
-        .warnings
-        .iter()
-        .any(|warning| warning.contains("Campaign → Packages"))
-        && packages_link(ui)
-    {
-        ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+        if crate::encounter_run::view::group_fault(ui, warning) {
+            if warning.contains("not in this campaign's packages") {
+                ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+            } else {
+                *action = Some(super::ListAction::OpenGroup(group.path.clone()));
+            }
+        }
     }
     // A group with no member that can join says so after its member faults.
     if let Some(none) = group
@@ -2158,14 +2154,15 @@ fn group_fields(
     }
     members(ui, draft, snapshot, expanded);
     ui.add_space(if open.is_some() { design::S } else { design::M });
-    design::group_label(ui, NOTES_FIELD);
-    let response = ui.add(
-        egui::TextEdit::multiline(&mut draft.notes)
-            .desired_rows(if open.is_some() { 2 } else { 4 })
-            .desired_width(ui.available_width() - design::M)
-            .hint_text("When they arrive, what they want. Markdown is fine."),
-    );
-    design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
+    design::field(ui, NOTES_FIELD, None, None, |ui| {
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut draft.notes)
+                .desired_rows(if open.is_some() { 2 } else { 4 })
+                .desired_width(ui.available_width() - design::M)
+                .hint_text("When they arrive, what they want. Markdown is fine."),
+        );
+        design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
+    });
 }
 
 /// `members_heading` resolves the group against the whole catalogue; do it once per draft text.
@@ -2407,9 +2404,14 @@ fn unread_member(
         .map_or_else(|| "Count not read".into(), |count| format!("Count {count}"));
     let mut detail = entry
         .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id))
-        .map_or(count.clone(), |creature| {
-            format!("{count} · {}", creature.detail)
-        });
+        .map_or_else(String::new, |creature| creature.detail.clone());
+    if member.count.is_none() {
+        detail = if detail.is_empty() {
+            count.clone()
+        } else {
+            format!("{count} · {detail}")
+        };
+    }
     if name != base_name {
         detail.push_str(&format!(" · as {base_name}"));
     }
@@ -3004,14 +3006,14 @@ mod tests {
             9,
             "all named members remain visible"
         );
-        assert!(group.summary().contains("2 of 9 members can join"));
+        assert!(group.summary().contains("2 of 9 can join"));
         assert!(
             group
                 .warnings
                 .iter()
                 .any(|warning| warning.contains("Lookout (as Scout) needs fixing (line 13)"))
         );
-        assert_eq!(group.xp_label(), "XP 100 for 2 that can join");
+        assert_eq!(group.xp_label(), "XP 100");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
@@ -3036,7 +3038,7 @@ mod tests {
             .iter()
             .find(|group| group.name == "Broken row")
             .expect("a group with only unread members stays visible");
-        assert!(group.summary().contains("0 of 7 members can join"));
+        assert!(group.summary().contains("0 of 7 can join"));
         assert!(group.problem.is_some());
     }
 
@@ -3153,7 +3155,7 @@ mod tests {
         assert!(group.problem.is_none(), "{:?}", group.problem);
         assert_eq!(group.members.len(), 1);
         assert_eq!(group.members[0].entry.id, scout);
-        assert_eq!(group.count_label(), "1 of 3 members can join");
+        assert_eq!(group.count_label(), "1 of 3 can join");
         assert_eq!(group.unavailable, 2);
         assert_eq!(group.warnings.len(), 2);
         assert!(
@@ -3183,7 +3185,7 @@ mod tests {
         let snapshot = Snapshot::load(&active, &[]).unwrap();
         let group = &snapshot.groups[0];
         assert_eq!(group.member_summary(), "Will add: 1 × Scout");
-        assert_eq!(group.xp_label(), "XP 50 for 1 that can join");
+        assert_eq!(group.xp_label(), "XP 50");
         let draft = GroupDraft::open(dir.path(), "Patrol.md").unwrap();
         assert_eq!(members_heading(&draft, &snapshot), group.xp_label());
     }

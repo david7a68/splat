@@ -238,7 +238,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Group heading | `group_heading` | `Type::Label` in capitals and a muted, nonzero count after it. No rule. Serif headings belong to readers and stat blocks |
 | Row menu | `row_menu` | Quiet `⋯` at the right edge, named `More actions for <name>`. Put Remove and Delete here |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; quiet icon-and-word buttons wrap at the first button's left edge. Fight, Group (plan only), Day, Long rest, Short rest, Travel, Major event |
-| Message | `message`, `message_with_action`, `Tone` | Inline. An action without an icon uses the secondary border, including when it wraps below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
+| Message | `message`, `message_with_action`, `Tone` | Inline. A notice never exceeds `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below it, aligned with the text. An action without an icon uses the secondary border, including when it wraps below the message. Measure the full action, including padding. Move it below the text, aligned with the text, when both cannot fit on one line |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. The run separates participant tabs from fight tabs |
 | Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
@@ -363,7 +363,7 @@ An encounter with an unfinished run offers Resume and moves Start another fight 
 Its save row includes the run state.
 `Discard` is quiet beside the save-state word. A blocked Start shows its reason.
 The side picker offers `Party`, `Enemies`, and `Other…` in every editor. Only choosing Other opens a name field; it replaces the value.
-All editor section headings use `group_heading`. In the tabbed layout, Add participants has no repeated heading.
+Editor headings over groups of controls use `group_heading`. A heading over a single input is a sentence-case field label, including `Group notes` and `Read-aloud and notes`. In the tabbed layout, Add participants has no repeated heading.
 
 A plan group editor takes the full notes column; the note stays behind its tab.
 Plan summaries sit below the name and action with no extra item gap, up to the menu slot.
@@ -375,7 +375,7 @@ Member changes stay on one line, such as `Changed · 2 to add by hand`, until op
 An empty group frame has one muted line and no zero count or duplicate search summary.
 The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
 Its rows keep Edit and a menu with Remove, which has Undo. A planned group has Remove from tonight and Undo remove. An isolated plan link is deleted; links inside sentences keep their words.
-A summary of members stays below the search when it has members. The list, editor and Arrivals resolve the same joining members and use one XP total. A partial group says `XP 50 for 1 that can join`; `+ unknown` means a joining member has no XP. Flagged list rows keep their member summary and the same `Edit` action as other rows. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
+A summary of members stays below the search when it has members. The list, editor and Arrivals resolve the same joining members and use one XP total. A partial group says `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; its XP covers joining members only and `+ unknown` means a joining member has no XP. Flagged list rows keep their member summary and the same `Edit` action as other rows. Moving an encounter’s group to any encounter says `<name> moves to any encounter when you save.`, with `Undo move` until that save. `Move to…` lists named encounters only. `Make available to any encounter` is the one direct action for removing that restriction.
 
 A saved Setup resumed after a restoring long rest starts party HP at full. Its
 notice says `Party HP is full after the long rest.` and offers `Use the saved HP`
@@ -393,10 +393,10 @@ temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and th
 word. A lone sync state sits beside the HP number; line two holds a second state only. Sheet loading says `Reading sheet…`. A linked row with sync disabled keeps `Sync off` and its icon. An unlinked creature has no sync word. Conflict words on the header and row are underlined links to review. The sheet colours only the connection icon and `Connected`; sheet and HP facts use muted `Small` text. Conditions take one second line before the HP column. Measure them without change bonuses;
 shorten bonuses first, remeasure, then drop the bonus before `more` if needed.
 Measure the sync word before folding conditions into a count. Keep the first condition,
-and keep multiword sync states together. Beside `Reading sheet…` in a narrow row, the condition count can use `+1`; it keeps the same link to Conditions.
+and keep multiword sync states together. Beside a sync state in a narrow row, the condition count can use `+1`; it keeps the same link to Conditions.
 At the narrowest width, mandatory state words can use the empty left part of the
-HP bar's slot. The bar stays under HP and keeps at least XL of length.
-Long local effects show four words and `more`. Undo keeps those four words when they fit. In a narrow header it keeps `Undo add` or `Undo remove`, two effect words and the target. Hover and accessibility keep the full text. Concentration Undo names `start concentration` or `stop concentration` before the target.
+HP bar's slot. The bar stays under HP and keeps at least XL of length. If required states still do not fit after condition folding and bar borrowing, the second line uses the run mark type size.
+Long local effects show four words and `more`. Undo keeps those four words when they fit. In a narrow header it keeps `Undo add` or `Undo remove`, two effect words and the target. Hover and accessibility keep the full text. Concentration Undo names `start concentration` or `stop concentration` before the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`, including when shortened. Exhaustion steps use bordered Scan icon buttons.
 `No initiative` has the same underline as other row links.
 The count opens their full text in `Conditions`. When a window has no room for the state column, as at 960x640 beside
 the panel, those words open the second line instead, so that a name is never cut.
@@ -449,7 +449,7 @@ the panel, those words open the second line instead, so that a name is never cut
   lists the encounter's own groups, then those in tonight's plan, then the
   others for any encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group has two lines: name handle, side, count and XP; then
-  members, a `Total` field (blank rolls initiative), and `Add`. Member summaries wrap at the
+  members, an `Initiative` field (blank rolls initiative), and `Add`. Member summaries wrap at the
   minimum width. Each excluded member stays under `Cannot join`, with its reason and an `Edit group` repair link. Added groups
   keep `Add` and say which round they joined. No step asks for confirmation, because Undo
   names the addition.
@@ -458,9 +458,9 @@ Setup keeps fixed initiative, Roll, Absent and menu columns. All controls share 
 
 Death-save counts and actions occupy one line below the panel tabs at zero HP. Clicking a count edits it; Correct has no duplicate fields. Correct initiative and DM notes show a short reason beside a blocked commit action.
 
-Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 members can join`, `Will add: 1 × Goblin Warrior` and `Add 1`, using only joining members in the action summary. Each excluded member stays below under `Cannot join`, with its reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Total keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
+Arrivals uses group headings and one muted line for an empty group section. New group opens Encounters. A group excludes missing, unread and invalid members from its addable set. It shows `1 of 3 can join`, `Will add: 1 × Goblin Warrior` and `Add 1`, using only joining members in the action summary. Each excluded member stays below under `Cannot join`, with its reason and repair link. Only a group with no valid members blocks its initiative field and Add action. An invalid Initiative value keeps the text, says `Enter a whole number, or clear the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair. A setup arrival says Added before combat. Add names include the count when more than one creature will join.
 
-Recovery copies use a UTC save-time suffix and preserve the other file. The run closed last owns primary Resume. Saved rows use relative time for today and yesterday, then a short UTC date. They show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
+Recovery copies keep the encounter name and preserve the other file. Their second line starts with `Copy 2`, before `Closed last`, round and state. The UTC save-time suffix stays in the file name only. The run closed last owns primary Resume. Saved rows use relative time for today and yesterday, then a short UTC date. They show the last change, mark the preserved file Changed elsewhere, and keep an empty Edit slot when no encounter exists. Run state words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2.
 
 A disconnected run keeps Connect to sync on its header only. The footer's blocked Sync party uses the same cause as hover text. End encounter… shortens to End…; Keys keeps its word beside Lookup, Notes and a wide run panel.
 An ended run puts its short conflict and pending-change count directly below the blocked Close after sync button at the panel's right edge. Saved and Undo end at the roster's right edge. Footer and strip Close run close at once when the run is saved and nothing is unsent. Otherwise they ask for a choice.
@@ -501,7 +501,7 @@ a word for each kind. A day uses the shared group-heading style, without a rule,
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
 rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event, opening Timeline or changing its filters resets the fields to the top. The scrolling fields clip below the fixed header. Title and its label stay above the scrolling fields, directly below the header. A Day shows Starts without an Ends time. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Added and removed notices sit in the list column. Selecting or adding an event resets its form to the top. Its context line shows the visible count out of the total while a search or filter is active. The filter says Major events. Removing an event says how many notes still link to it. Its save word tracks its own edits: Saving… in muted during the delay, Saved when unchanged, and Unsaved with a reason when saving is blocked. A rest shows its default duration as a faint placeholder, and Starts and Ends beside the duration help. Field labels have an M gap before them.
 
-Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions on the first line at the right edge and say that replacement keeps a copy.
+Party uses one group-heading style throughout Overview. Skills use muted Small words `Proficient`, `Expertise` and `Half` after the skill name. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions after the text with an `L` gap, or below it aligned with the text, within `LIST_MEASURE` and say that replacement keeps a copy.
 The affected list row says `Local edits`. A replacement names the character, with Show file for the kept version and Dismiss.
 An empty Party has one Connect D&D Beyond action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below the Equipment & coins heading. Bloodied uses the run’s heart icon, word and colour on Party and encounter roster rows.
 Technical details stays closed and uses plain words for rules not read yet or not supported.
@@ -620,7 +620,7 @@ Undo action. The live header keeps the next participant visible when Undo is emp
 Sheet pages use one tab line, with later pages in More when space is short. At the
 table, the rail uses its natural width; a wider desk width stays saved.
 
-Recovery copies have unique names, including seconds and a suffix when needed.
+Recovery copies have numbered second lines and keep the encounter name. Only file names include the UTC save time.
 The run closed last and a file changed elsewhere lead their row's second line.
 History puts the outcome before the ended state and shows the outcome, end reason
 and final round above the final roster.
@@ -847,8 +847,7 @@ will change source. Encounters
 block ambiguous creatures; Open in Library opens the first repair action's file.
 Validation messages update after encounter or group edits.
 Changed stays at the end of a roster row's second line; shorten muted detail first.
-Arrivals joins status and members with no-break spaces when they fit. Otherwise,
-the status has its own line with no trailing separator. Groups count members.
+Arrivals keeps status parts together with dot separators beside the group name when they fit, else on the first member line. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Groups count members.
 Roster, Members and Recordings share
 an underlined tab with a muted, nonzero count.
 
@@ -856,8 +855,7 @@ an underlined tab with a muted, nonzero count.
 
 Setup counts tied rows only across independent rolls, in both the header and the
 overflow band. The band says `2 tied`. Ordering arrows still work inside a shared
-roll. Run notices keep a result icon beside their text. Arrivals separates status
-from members when the summary wraps and never ends a line with a separator.
+roll. Run notices keep a result icon beside their text. Arrivals keeps status parts together when the summary wraps and never ends a line with a separator.
 Plan additions offer `Undo add`. Templates uses the shared quiet back action.
 
 ## Library and preparation audit, iteration 13
@@ -876,8 +874,7 @@ Discard messages name the draft. Their Undo control names the same draft for acc
 
 ## Run and session audit, iteration 13
 
-When an arrival summary wraps, each status part keeps its words together on its
-own line above the members. Arrival messages keep `at` with its total and keep a
+When an arrival summary wraps, its status parts stay on one line with dot separators. Place that line beside the name when it fits, else before the first member; use a separate line only when neither has room. `Changed` keeps its muted pencil. Arrival messages keep `at` with its total and keep a
 separator with the word before it. Stat-block errors use the run notice icon and
 one fitted line, with the full error on hover.
 

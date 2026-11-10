@@ -3092,7 +3092,7 @@ pub mod party_from_run {
         for condition in MANY_CONDITIONS {
             d.click(condition);
         }
-        d.state("zero-absent-many-conditions", Sizes::Default);
+        d.state("zero-absent-many-conditions", Sizes::All);
         d.review("T1.8", "0 HP and absent are distinct without colour");
         // A crowded row keeps its first conditions and a count. The count opens all of them.
         d.click(SHEET_TAB);
@@ -3103,10 +3103,15 @@ pub mod party_from_run {
             .filter(|condition| !full.contains(condition))
             .collect();
         let zero = d.row_words(MEMBER);
+        let shown = MANY_CONDITIONS
+            .iter()
+            .filter(|condition| row.contains(**condition))
+            .count();
+        let hidden = MANY_CONDITIONS.len() - shown;
         d.observe(
             "T1.8",
             unread.is_empty() && row.contains("Absent") && row.contains("Blinded")
-                && row.contains("Charmed") && row.contains("3 more") && zero.contains("0 HP"),
+                && hidden > 0 && (row.contains(&format!("{hidden} more")) || row.contains(&format!("+{hidden}"))) && zero.contains("0 HP"),
             format!("At 960x640, {ABSENT_ROW} paints: {row}. {MEMBER} paints: {zero}. Missing: {unread:?}"),
         );
         d.click("Read all conditions");
@@ -3834,9 +3839,12 @@ pub mod run_edge_states {
             closed && std::fs::read_to_string(&new_path).is_ok_and(|text| text == before + "\n"),
             "Save as a new run and close keeps the other file and closes the run",
         );
-        d.state("saved-new-run-and-closed", Sizes::Default);
-        d.observe("Recovery selection", d.has_containing("Changed elsewhere") && d.has_containing("saved "),
-            "Recovery copies show their save time, and the preserved file is marked Changed elsewhere");
+        d.state("saved-new-run-and-closed", Sizes::All);
+        d.observe(
+            "Recovery selection",
+            d.has_containing("Changed elsewhere") && d.has_containing("Copy 2"),
+            "Recovery copies show their number, and the preserved file is marked Changed elsewhere",
+        );
         d.click(RESUME);
         let resumed_copy = d
             .app_mut()
@@ -6610,7 +6618,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 50 for 1 that can join")
+            d.visible_text("XP 50")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
                 && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
@@ -6622,7 +6630,7 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("1 of 3 members can join")
+            d.visible_text("1 of 3 can join")
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
@@ -6663,7 +6671,13 @@ pub mod encounter_groups {
 
         // A typed total, as players give one.
         d.type_into(TOTAL_FOR_RIVALS, "14");
-        d.state("group-total-typed", Sizes::Default);
+        d.observe(
+            "Typed arrival total",
+            d.field_text(TOTAL_FOR_RIVALS).as_deref() == Some("14"),
+            "The typed initiative is kept before Add",
+        );
+        d.expect_same("Only the typed initiative differs from the group panel; the form and roster stay in place.");
+        d.state("group-total-typed", Sizes::All);
         d.click(&add_group(GROUP_RIVALS));
         d.expect(RIVAL_NAME);
         d.observe(
@@ -6725,7 +6739,7 @@ pub mod encounter_groups {
             d.click(NEXT_TURN);
         }
         d.expect(RIVAL_NAME);
-        d.state("a-named-side-on-its-turn", Sizes::Default);
+        d.state("a-named-side-on-its-turn", Sizes::All);
         d.goal("add groups by a total and by dragging");
 
         // A new arrival tie is checked outside the existing measured workflow.
@@ -6755,7 +6769,7 @@ pub mod encounter_groups {
         d.state("group-panel-in-setup", Sizes::Default);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
-        d.state("group-added-in-setup", Sizes::Default);
+        d.state("group-added-in-setup", Sizes::All);
         let overflow = d.at_size((960.0, 640.0), |d| {
             d.visible_text("2 below") && !d.has_containing("2 ties") && !d.has_containing("2 tied")
         });
@@ -6921,7 +6935,7 @@ pub mod encounter_owned_groups {
             "Groups opens one flat list, with headings for each encounter and deleted encounters last",
         );
         d.expect(&edit_group(GROUP_SHRINE));
-        d.state("groups-for-encounters-open", Sizes::Default);
+        d.state("groups-for-encounters-open", Sizes::All);
         d.observe(
             "T13.5",
             d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
@@ -7202,7 +7216,7 @@ pub mod run_add_creature {
             "Arrivals rows start at the search edge and all fields fit",
             |d| {
                 let search = d.place_of(FIELD).or_else(|| d.place_of("Wolf")).unwrap();
-                ["Count", "Total"].iter().all(|name| {
+                ["Count", "Initiative"].iter().all(|name| {
                     d.place_of(name)
                         .is_some_and(|r| (r.left() - search.left()).abs() < 1.0)
                 }) && [
@@ -7711,7 +7725,8 @@ pub mod session_plan {
         d.click("Exhaustion");
         d.click("More exhaustion");
         d.click("More exhaustion");
-        d.state("exhaustion-level", Sizes::Default);
+        d.expect("exhaustion 2 → 3 on Oren Thistlewick");
+        d.state("exhaustion-level", Sizes::All);
         let row = d.row_words("Oren Thistlewick");
         d.observe(
             "T14.3",

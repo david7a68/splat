@@ -808,7 +808,7 @@ impl Run {
                                 let detail = self.notice.as_deref().unwrap_or(shown);
                                 design::named(ui, &response, detail);
                                 response.on_hover_text(detail);
-                                let log = design::link(ui, " Log ");
+                                let log = design::small_link(ui, " Log ");
                                 design::named(ui, &log, "Log");
                                 if log.clicked() {
                                     self.panel = Panel::Log;
@@ -1225,7 +1225,7 @@ impl Run {
                         let detail = self.notice.as_deref().unwrap_or(summary);
                         design::named(ui, &response, detail);
                         response.on_hover_text(detail);
-                        let log = design::link(ui, " Log ");
+                        let log = design::small_link(ui, " Log ");
                         design::named(ui, &log, "Log");
                         if log.clicked() {
                             self.panel = Panel::Log;
@@ -1259,6 +1259,13 @@ impl Run {
         self.syncs
             .get(&index)
             .map(crate::combat_sync::CombatSync::state)
+            .or_else(|| {
+                self.state
+                    .participants
+                    .get(index)
+                    .filter(|p| super::remote_identity(p).is_some())
+                    .map(|_| SyncState::Off)
+            })
     }
 
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
@@ -2055,9 +2062,10 @@ impl Run {
                                 .rich(ui, format!("Exhaustion level {level}"))
                                 .color(colors().text),
                         );
-                        if Action::quiet("−")
+                        if Action::secondary("")
+                            .icon(egui_phosphor::regular::MINUS)
                             .name("Less exhaustion")
-                            .density(Density::Read)
+                            .density(Density::Scan)
                             .show(ui)
                             .clicked()
                         {
@@ -2067,9 +2075,10 @@ impl Run {
                                 Command::RemoveCondition(index, at)
                             });
                         }
-                        if Action::quiet("+")
+                        if Action::secondary("")
+                            .icon(icons::ADD)
                             .name("More exhaustion")
-                            .density(Density::Read)
+                            .density(Density::Scan)
                             .blocked_if(level >= 6, "Level 6 is the highest.")
                             .show(ui)
                             .clicked()
@@ -3012,6 +3021,37 @@ impl Run {
             .iter()
             .any(|member| !member.overrides.is_empty());
         let change_hint = if changed { " Changed." } else { "" };
+        let added = self
+            .state
+            .participants
+            .iter()
+            .filter_map(|p| p.added_from.as_ref())
+            .filter(|from| from.group_id == Some(group.id))
+            .map(|from| from.round)
+            .max();
+        let mut status = if let Some(round) = added {
+            if round == 0 {
+                "Added before combat".to_owned()
+            } else {
+                format!("Added in round {round}")
+            }
+        } else if let Some(name) = group
+            .encounter_name
+            .as_ref()
+            .filter(|_| group.encounter != self.source)
+        {
+            format!("For {name}")
+        } else if group.encounter.is_some() && group.encounter != self.source {
+            "For a deleted encounter".to_owned()
+        } else {
+            String::new()
+        };
+        if changed {
+            if !status.is_empty() {
+                status.push_str(" · ");
+            }
+            status.push_str(&format!("{} Changed", icons::CHANGED));
+        }
         let grip = ui.allocate_response(
             vec2(ui.available_width(), Density::Read.control()),
             egui::Sense::DRAG,
@@ -3037,6 +3077,20 @@ impl Run {
         } else {
             group.xp_label()
         };
+        let heading_width = design::number_width(
+            ui,
+            &format!("{} {name}", icons::DRAG),
+            &Type::Strong.font(ui),
+        );
+        let status_in_heading = !status.is_empty()
+            && heading_width
+                + design::L
+                + design::number_width(
+                    ui,
+                    &format!("{status} · {totals_text}"),
+                    &Type::Small.font(ui),
+                )
+                <= grip.rect.width();
         let totals = ui.painter().text(
             grip.rect.right_center(),
             Align2::RIGHT_CENTER,
@@ -3044,6 +3098,18 @@ impl Run {
             Type::Small.font(ui),
             c.muted,
         );
+        if status_in_heading {
+            ui.painter().text(
+                pos2(
+                    grip.rect.left() + heading_width + design::L,
+                    grip.rect.center().y,
+                ),
+                Align2::LEFT_CENTER,
+                &status,
+                Type::Small.font(ui),
+                c.muted,
+            );
+        }
         // A long name stops short of the totals, and its row shows it whole on hover.
         let title = egui::WidgetText::from(
             Type::Strong
@@ -3119,37 +3185,6 @@ impl Run {
             );
         }
         let members = group.member_summary_wrapped();
-        let added = self
-            .state
-            .participants
-            .iter()
-            .filter_map(|p| p.added_from.as_ref())
-            .filter(|from| from.group_id == Some(group.id))
-            .map(|from| from.round)
-            .max();
-        let mut status = if let Some(round) = added {
-            if round == 0 {
-                "Added before combat".to_owned()
-            } else {
-                format!("Added in round {round}")
-            }
-        } else if let Some(name) = group
-            .encounter_name
-            .as_ref()
-            .filter(|_| group.encounter != self.source)
-        {
-            format!("For {name}")
-        } else if group.encounter.is_some() && group.encounter != self.source {
-            "For a deleted encounter".to_owned()
-        } else {
-            String::new()
-        };
-        if changed {
-            if !status.is_empty() {
-                status.push_str(" · ");
-            }
-            status.push_str("Changed");
-        }
         let mut add = false;
         let add_word = if group.warnings.is_empty() {
             "Add".to_owned()
@@ -3157,7 +3192,7 @@ impl Run {
             format!("Add {}", group.joinable_count())
         };
         ui.horizontal(|ui| {
-            let controls = design::number_width(ui, "Total", &Type::Small.font(ui))
+            let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
                 + 72.0
                 + design::XS
                 + Action::secondary(&add_word)
@@ -3168,7 +3203,12 @@ impl Run {
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
-                let summary = arrival_summary(ui, &status, &members, width);
+                let summary = arrival_summary(
+                    ui,
+                    if status_in_heading { "" } else { &status },
+                    &members,
+                    width,
+                );
                 let response =
                     ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
                 let name = if status.is_empty() {
@@ -3179,7 +3219,7 @@ impl Run {
                 design::named(ui, &response, &name);
             });
             let field = format!("Initiative total for {name}");
-            ui.label(Type::Small.rich(ui, "Total").color(c.muted));
+            ui.label(Type::Small.rich(ui, "Initiative").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
             // By id, because two groups can have one name.
             let response = design::locked(ui, group.problem.as_deref(), |ui| {
@@ -3242,52 +3282,16 @@ impl Run {
             .or((!warnings.is_empty()).then_some(warnings.as_str()))
         {
             for fault in problem.lines() {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                format!(
-                                    "{} {}",
-                                    icons::WARN,
-                                    fault.trim_end_matches(" Campaign → Packages.")
-                                ),
-                            )
-                            .color(c.result.warning),
-                    )
-                    .wrap(),
-                );
-            }
-            ui.horizontal(|ui| {
-                if design::status_link(
-                    ui,
-                    Status {
-                        icon: icons::EDIT,
-                        word: "Edit group",
-                        color: c.accent,
-                    },
-                )
-                .clicked()
-                {
-                    self.wants_group_editor = Some(group.path.clone());
-                }
-                if problem.contains("Campaign → Packages") {
-                    ui.label(Type::Small.rich(ui, "·").color(c.muted));
-                    if design::status_link(
-                        ui,
-                        Status {
-                            icon: icons::CAMPAIGN,
-                            word: "Campaign → Packages",
-                            color: c.accent,
-                        },
-                    )
-                    .clicked()
-                    {
+                if group_fault(ui, fault) {
+                    if fault.contains("not in this campaign's packages") {
                         self.wants_packages = true;
+                    } else {
+                        self.wants_group_editor = Some(group.path.clone());
                     }
                 }
-            });
+            }
         }
+
         add
     }
 
@@ -4818,7 +4822,7 @@ impl Run {
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
-fn exhaustion_level(condition: &str) -> u8 {
+pub(super) fn exhaustion_level(condition: &str) -> u8 {
     condition
         .trim()
         .strip_prefix("Exhaustion (")
@@ -5062,20 +5066,62 @@ pub(crate) fn change_preview(row: &Row) -> String {
     )
 }
 
+/// Keep a member's repair at the end of that member's fault, with no overlapping targets.
+pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &str) -> bool {
+    let packages = fault.contains("not in this campaign's packages");
+    let status = Status {
+        icon: if packages {
+            icons::CAMPAIGN
+        } else {
+            icons::EDIT
+        },
+        word: if packages {
+            "Campaign → Packages"
+        } else {
+            "Edit group"
+        },
+        color: colors().accent,
+    };
+    let words = format!("{} {fault}", icons::WARN);
+    let text_width = design::number_width(ui, &words, &Type::Small.font(ui));
+    let link_width = design::number_width(
+        ui,
+        &format!("{} {}", status.icon, status.word),
+        &Type::Small.font(ui),
+    );
+    let label = |ui: &mut egui::Ui| {
+        ui.add(
+            egui::Label::new(Type::Small.rich(ui, &words).color(colors().result.warning)).wrap(),
+        );
+    };
+    if text_width + design::S + link_width <= ui.available_width() {
+        ui.horizontal(|ui| {
+            label(ui);
+            design::status_link(ui, status).clicked()
+        })
+        .inner
+    } else {
+        label(ui);
+        design::status_link(ui, status).clicked()
+    }
+}
+
 fn arrival_summary(ui: &egui::Ui, status: &str, members: &str, width: f32) -> String {
     if status.is_empty() {
         return members.to_owned();
     }
-    let summary = format!("{status}\u{a0}·\u{a0}{members}");
-    if design::number_width(ui, &summary, &Type::Small.font(ui)) <= width {
-        summary
+    let status = status.replace(' ', "\u{a0}");
+    let first = members.split(", ").next().unwrap_or(members);
+    let joined = format!("{status}\u{a0}·\u{a0}{first}");
+    if design::number_width(ui, &joined, &Type::Small.font(ui)) <= width {
+        format!("{status}\u{a0}·\u{a0}{members}")
+    } else if design::number_width(ui, &status, &Type::Small.font(ui)) <= width {
+        format!("{status}\n{members}")
     } else {
-        let parts = status
-            .split(" · ")
-            .map(|part| part.replace(' ', "\u{a0}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!("{parts}\n{members}")
+        format!(
+            "{}\n{members}",
+            status.split("\u{a0}·\u{a0}").collect::<Vec<_>>().join("\n")
+        )
     }
 }
 
@@ -5571,7 +5617,7 @@ impl RowLayout {
             condition_spans.push((
                 "Run conditions".into(),
                 add(
-                    &if inline_state && sync == Some(SyncState::FirstRead) {
+                    &if inline_state && sync.is_some() {
                         format!("+{}", p.conditions.len() - condition_count)
                     } else {
                         design::count(p.conditions.len() - condition_count, "more", "more")
@@ -5623,9 +5669,9 @@ impl RowLayout {
             );
             job.append(
                 &format!("{} {}", status.icon, status.word).replace(' ', "\u{a0}"),
-                design::S,
+                design::XS,
                 egui::TextFormat {
-                    font_id: font.clone(),
+                    font_id: Type::Small.sized(ui, scale.mark),
                     color: status.color,
                     underline: if sync == SyncState::Conflict {
                         Stroke::new(design::HAIRLINE_WIDTH, status.color)
@@ -5721,7 +5767,13 @@ impl RowLayout {
                 .min((hp_right - temp_right - bar_inset - design::XL - design::XS).max(0.0));
             bar_inset += extra;
             job.wrap.max_width += extra;
-            second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+            second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
+            if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+                for section in &mut job.sections {
+                    section.format.font_id = Type::Small.sized(ui, scale.mark);
+                }
+                second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+            }
         }
         let name = ui.fonts_mut(|fonts| {
             fonts.layout(
@@ -6201,6 +6253,46 @@ mod tests {
     use splat::content::{Entry, overrides::Overrides};
 
     #[test]
+    fn iter_3_b_crowded_linked_row_keeps_its_states_on_one_line() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut p = super::super::tests::run().state.participants[0].clone();
+                p.hp = Some(5);
+                p.present = false;
+                p.conditions = vec![
+                    "Poisoned".into(),
+                    "Wreathed in the cinders of the old shrine".into(),
+                ];
+                for concentration in [false, true] {
+                    p.concentration = concentration;
+                    let layout = RowLayout::new(
+                        ui,
+                        442.40625,
+                        &p,
+                        Some(SyncState::Off),
+                        design::RUN_COMPACT,
+                        RowFit::Summary,
+                        0.0,
+                    );
+                    let line = layout.second_line.unwrap();
+                    assert_eq!(line.rows.len(), 1, "{}", line.text());
+                    for word in ["Bloodied", "Absent", "Poisoned", "Sync", "off"] {
+                        assert!(line.text().contains(word));
+                    }
+                    assert!(
+                        layout
+                            .condition_spans
+                            .iter()
+                            .any(|(name, _)| name == "Run conditions")
+                    );
+                }
+            });
+        });
+    }
+
+    #[test]
     fn run_snapshot_notice_ignores_metadata_but_keeps_model_and_prose_changes() {
         let source =
             splat::content::definitions::source_file("definitions/creatures/wolf.md").unwrap();
@@ -6406,7 +6498,7 @@ mod tests {
                             );
                             assert!(row.size.x <= width + 1.0);
                         }
-                        if width == 150.0 && status.contains("round") {
+                        if width == 400.0 && status.contains("round") {
                             assert!(galley.rows.iter().any(|row| {
                                 row.glyphs
                                     .iter()
@@ -6414,7 +6506,7 @@ mod tests {
                                     .collect::<String>()
                                     .replace('\u{a0}', " ")
                                     .trim()
-                                    == "Added in round 2"
+                                    .contains("Added in round 2 · Changed")
                             }));
                         }
                         if width == 400.0 {
@@ -6507,6 +6599,8 @@ mod tests {
                     ("initiative for ", ""),
                     ("start concentration for ", ""),
                     ("stop concentration for ", ""),
+                    ("exhaustion 2 → 3 on ", ""),
+                    ("exhaustion 3 → 1 on ", ""),
                 ] {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
@@ -6684,12 +6778,33 @@ mod tests {
     }
 
     #[test]
-    fn iter_2_b_linked_sync_off_stays_visible() {
+    fn iter_3_b_all_five_linked_rows_show_sync_off_without_workers() {
         let mut run = super::super::tests::run();
-        run.syncs
-            .insert(0, crate::combat_sync::CombatSync::default());
-        assert_eq!(run.row_sync_word(0), Some(SyncState::Off));
-        assert_eq!(run.row_sync_word(1), None);
+        while run.state.participants.len() < 6 {
+            run.state
+                .participants
+                .push(run.state.participants[0].clone());
+        }
+        for index in 0..5 {
+            super::super::tests::linked(&mut run, index, &index.to_string());
+        }
+        for worker in [None, Some(0), Some(3)] {
+            run.syncs.clear();
+            if let Some(index) = worker {
+                run.syncs
+                    .insert(index, crate::combat_sync::CombatSync::default());
+            }
+            for index in 0..5 {
+                assert_eq!(run.row_sync_word(index), Some(SyncState::Off));
+            }
+            assert_eq!(run.row_sync_word(5), None);
+        }
+        run.syncs.insert(
+            0,
+            crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
+        );
+        assert_eq!(run.row_sync_word(0), Some(SyncState::Conflict));
+        assert_eq!(run.row_sync_word(1), Some(SyncState::Off));
     }
 
     #[test]

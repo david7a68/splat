@@ -367,7 +367,7 @@ impl Run {
             ui.spacing_mut().item_spacing.x = design::XS;
             enter |= short_field(
                 ui,
-                "Total",
+                "Initiative",
                 "New creature initiative total",
                 &mut self.ad_hoc.total,
                 "Roll",
