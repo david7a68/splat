@@ -1145,7 +1145,7 @@ impl Run {
                     .position(|i| *i == index)
                     .is_some_and(|at| at >= after.cursor);
             return format!(
-                "{name} moves to\u{a0}{total} when this turn ends\u{a0}· acts {}.",
+                "{name} moves to\u{a0}{total} when this turn ends ·\u{a0}acts {}.",
                 if later {
                     "later this round"
                 } else {
@@ -1158,9 +1158,9 @@ impl Run {
         let when = if !state.participants[index].present {
             ""
         } else if passed {
-            "\u{a0}· acts next round"
+            " ·\u{a0}acts next round"
         } else if acted {
-            "\u{a0}· acts again this round"
+            " ·\u{a0}acts again this round"
         } else {
             ""
         };
@@ -1319,7 +1319,7 @@ impl Run {
                 .map(|p| (p, total))
         }) {
             initiative.push_str(&format!(
-                ". Tied with {} at\u{a0}{total}\u{a0}· placed after",
+                ". Tied with {} at\u{a0}{total}, placed after",
                 Self::roll_block_name(state, p)
             ));
         }
@@ -1593,7 +1593,7 @@ impl Run {
                     next.participants[first].name,
                     display(next.participants[before].initiative),
                     if waits {
-                        "\u{a0}· acts next round"
+                        " ·\u{a0}acts next round"
                     } else {
                         ""
                     }
@@ -6157,7 +6157,7 @@ mod tests {
                     );
                     for row in &galley.rows {
                         let text: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
-                        assert!(!text.trim_start().starts_with('·'), "{text}");
+                        assert!(!text.trim_end().ends_with('·'), "{text}");
                         assert!(!text.trim_end().ends_with(" at"), "{text}");
                     }
                 }
@@ -6854,6 +6854,14 @@ mod tests {
         run.apply(Command::AddGroup(guard_group("Tied", 2), Some(15)))
             .unwrap();
         assert!(run.state.log.last().unwrap().contains("Tied with"));
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains("at\u{a0}15, placed after."),
+            "iter6-B-FT4: the tie uses a comma"
+        );
         assert!(!run.undo_label().contains("placed after"));
         let after = run.state.order.clone();
         let current = run.current();
@@ -6916,7 +6924,7 @@ mod tests {
         run.apply(Command::AddGroup(guard_group("Second wave", 2), Some(15)))
             .unwrap();
         assert_arrival_wraps(&format!(
-            "{}\u{a0}· acts next round if moved before",
+            "{} ·\u{a0}acts next round if moved before",
             run.state.log.last().unwrap()
         ));
         assert!(
@@ -6941,7 +6949,7 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .contains("moved before First wave at\u{a0}15\u{a0}· acts next round")
+                .contains("moved before First wave at\u{a0}15 ·\u{a0}acts next round")
         );
         run.undo();
         assert_eq!(run.state.order, order);

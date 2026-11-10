@@ -1331,7 +1331,10 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Resp
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
             let word = response.rect;
-            (response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))), word)
+            (
+                response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))),
+                word,
+            )
         })
         .inner
     })
@@ -1644,6 +1647,29 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
         response
     });
     inner.inner
+}
+
+/// A compact run notice. Tone marks the icon and bar; words keep the text colour.
+pub fn small_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    let (icon, color) = tone.parts();
+    ui.horizontal_top(|ui| {
+        let start = ui.cursor().min;
+        ui.add_space(S + HAIRLINE_WIDTH);
+        ui.label(Type::Small.rich(ui, icon).color(color));
+        ui.add_space(-XS);
+        let response =
+            ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().text)).wrap());
+        ui.painter().rect_filled(
+            Rect::from_min_max(
+                start,
+                pos2(start.x + HAIRLINE_WIDTH * 3.0, response.rect.bottom()),
+            ),
+            0.0,
+            color,
+        );
+        response
+    })
+    .inner
 }
 
 /// A message whose marked fragments use the code font.
@@ -2258,19 +2284,33 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
         segmented(ui, selected, choices);
         return;
     }
-    let mut used = width("More") + L;
-    let mut count = 0;
-    for (_, label) in choices {
-        if used + width(label) > ui.available_width() {
-            break;
+    // When the selected page is in the menu, the menu button names it, so the selected page
+    // always shows in the row.
+    let fit = |reserve: f32| {
+        let mut used = reserve + L;
+        let mut count = 0;
+        for (_, label) in choices {
+            if used + width(label) > ui.available_width() {
+                break;
+            }
+            used += width(label);
+            count += 1;
         }
-        used += width(label);
-        count += 1;
+        count
+    };
+    let mut count = fit(width("More"));
+    let mut menu_label = "More";
+    if let Some((_, label)) = choices[count..]
+        .iter()
+        .find(|(value, _)| *value == *selected)
+    {
+        menu_label = label;
+        count = fit(width(label).max(width("More")));
     }
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         segmented(ui, selected, &choices[..count]);
-        let menu = ui.menu_button(format!("More {}", icons::DOWN), |ui| {
+        let menu = ui.menu_button(format!("{menu_label} {}", icons::DOWN), |ui| {
             for (value, label) in &choices[count..] {
                 if ui.selectable_label(*selected == *value, *label).clicked() {
                     *selected = *value;

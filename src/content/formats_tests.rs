@@ -897,7 +897,10 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
     let bad = format!("{new}| 1 | [Goblin](splat:{key}) | | HP lots | Keep this |\n");
     let entry = super::legacy::parse("Group.md", &bad).unwrap();
     assert_eq!(entry.flags.len(), 1);
-    assert!(entry.flags[0].message.contains("Changes"));
+    assert_eq!(
+        entry.flags[0].message,
+        "the change \"HP lots\" was not read. Use a number, such as HP +5."
+    );
     assert_eq!(
         entry.fields["splat_encounter_group"]["members"]
             .as_sequence()

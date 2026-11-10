@@ -902,7 +902,9 @@ impl Splat {
                 ),
                 (
                     self.timeline.not_saved(),
-                    self.timeline.attention_status().map_or("Timeline not saved", |state| state.word),
+                    self.timeline
+                        .attention_status()
+                        .map_or("Timeline not saved", |state| state.word),
                     Page::Timeline,
                 ),
             ] {
@@ -914,14 +916,22 @@ impl Splat {
                                 .sessions
                                 .attention_status()
                                 .filter(|_| target == Page::Sessions)
-                                .or_else(|| self.timeline.attention_status().filter(|_| target == Page::Timeline))
+                                .or_else(|| {
+                                    self.timeline
+                                        .attention_status()
+                                        .filter(|_| target == Page::Timeline)
+                                })
                                 .map_or(icons::ERROR, |state| state.icon),
                             word,
                             color: self
                                 .sessions
                                 .attention_status()
                                 .filter(|_| target == Page::Sessions)
-                                .or_else(|| self.timeline.attention_status().filter(|_| target == Page::Timeline))
+                                .or_else(|| {
+                                    self.timeline
+                                        .attention_status()
+                                        .filter(|_| target == Page::Timeline)
+                                })
                                 .map_or(colors().document.invalid, |state| state.color),
                         },
                     );
@@ -984,7 +994,9 @@ impl Splat {
     fn rail_status(&mut self, ui: &mut egui::Ui, state: Status<'static>, account: bool) {
         let full = match state.word {
             "Signed out" => "Signed out of D&D Beyond",
-            "Sync stopped" => "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
+            "Sync stopped" => {
+                "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party."
+            }
             _ => state.word,
         };
         let detail = state.word == "Connected · not remembered";
@@ -994,27 +1006,53 @@ impl Splat {
                 self.party.wants_combat_sync = true;
                 self.page = Page::Party;
             }
-            { let rect = response.rect; (response, rect) }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
         } else if state.word == "Session folder not found" {
             let response = design::status_link(ui, state);
-            if response.clicked() { self.page = Page::Sessions; }
-            { let rect = response.rect; (response, rect) }
+            if response.clicked() {
+                self.page = Page::Sessions;
+            }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
         } else if detail {
-            design::rail_status_detail(ui, Status { word: "Connected", ..state }, "Not remembered")
+            design::rail_status_detail(
+                ui,
+                Status {
+                    word: "Connected",
+                    ..state
+                },
+                "Not remembered",
+            )
         } else {
             let response = design::wrapped_status(ui, state);
-            { let rect = response.rect; (response, rect) }
+            {
+                let rect = response.rect;
+                (response, rect)
+            }
         };
         // A read can also come from the cache on disk, so the words say updating, not refreshing.
         let updating = account && self.party.connected() && self.party.busy();
         const UPDATING: &str = " · Updating the party";
-        let full = if updating { format!("{full}{UPDATING}") } else { full.to_owned() };
+        let full = if updating {
+            format!("{full}{UPDATING}")
+        } else {
+            full.to_owned()
+        };
         if updating {
             design::busy_after(ui, word, colors().connection.busy);
         }
         let response = response.on_hover_text(&full);
         // The second line of a detail status is its own node, so the name leaves it out.
-        let name = if detail && updating { format!("Connected{UPDATING}") } else { full.clone() };
+        let name = if detail && updating {
+            format!("Connected{UPDATING}")
+        } else {
+            full.clone()
+        };
         if name != state.word {
             design::named(ui, &response, &name);
         }

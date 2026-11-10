@@ -12,6 +12,10 @@ state, and the app reopens on the last page or the open run. Drag the edge of th
 change its width. Tab also focuses the edge: Left and Right move it by 16 px, and
 Home restores its natural width. The app keeps a chosen width after a restart. Simulation is later work.
 
+The run's **Add to fight** button keeps its plus icon and the word **Add** at narrow widths.
+Turn headings drop “’s turn” before shortening a name and keep each creature's copy number.
+Party sheet tabs stay on one line; later pages appear in **More**. Stopped-sync notices sit below the Party header.
+
 ## Development
 
 Install Nix and devenv, then run:
@@ -333,8 +337,8 @@ Close the open run before saving run settings.
 
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
 values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
-`Arrivals` adds a creature or a prepared group; a blank initiative total rolls it.
-`Ctrl+G` opens Arrivals in one step when it is in the `Fight` menu.
+`Add to fight` opens the Arrivals panel for a creature or a prepared group; a blank initiative total rolls it.
+`Ctrl+G` opens the same panel in one step.
 Unsaved runs offer **Save as a new run and close** in the close dialog.
 Automatic combat resolution and simulation integration remain later work.
 
@@ -794,7 +798,7 @@ Participants at zero HP stay in turn order until you mark them absent.
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and the mark on each of those rows
 gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
-each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Conditions**, **Correct** (HP and initiative corrections, notes, sync), **Log**, **Prep**, and **Arrivals**. At zero HP, editable death-save counts and **+ Success** and **+ Failure** sit below the tabs. The tabs keep their place. A spell named in a stat block opens
+each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Conditions**, **Correct** (HP and initiative corrections, notes, sync), **Log**, and **Prep**. **Add to fight** opens Arrivals beside the run. At zero HP, editable death-save counts and **+ Success** and **+ Failure** sit below the tabs. The tabs keep their place. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
@@ -812,7 +816,7 @@ such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 
-**Arrivals** adds what joins a fight after it starts. To add one creature, find it in the campaign,
+**Add to fight** opens the panel for creatures and groups that join this fight. To add one creature, find it in the campaign,
 or type a new name and its HP to make one up. A value you type replaces the creature's own for this
 fight, and the card shows the change. A creature you make up stays in this run, and has no note. Its card shows current and maximum HP and the initiative total you typed, with no printed values. A tied arrival offers **Move before** with the tied creature or shared group's name. Shared rolls stay together; a move before the current turn says **acts next round**.
 Below that, the panel lists this encounter's own groups, then the groups tonight's plan links, then
