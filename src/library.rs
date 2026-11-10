@@ -1121,7 +1121,7 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
     }
     fs::create_dir(path).map_err(|e| format!("Could not create a new package folder: {e}"))?;
     let text = note_text(name.trim(), "package", Some(namespace));
-    if let Err(error) = write_note(path, "Module.md", None, &text) {
+    if let Err(error) = write_note(path, "Package.md", None, &text) {
         let _ = fs::remove_dir(path);
         return Err(error);
     }
@@ -1204,10 +1204,10 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let folder = content::read_folder(&path)?;
-        let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+        let (entries, mut errors) = (folder.entries.clone(), folder.errors.clone());
         let manifest_path = crate::content_workspace::manifest_path_in(&folder, module);
-        let missing_manifest = !entries.iter().any(|entry| entry.kind == "package")
-            && !path.join(&manifest_path).exists();
+        let has_manifest = entries.iter().any(|entry| entry.kind == "package");
+        let missing_manifest = !has_manifest && !path.join(&manifest_path).exists();
         // The folder was just read; its texts are the ones these entries came from.
         let text_of = |path: &str| -> Result<String, String> {
             let full = note_path(&module.path, path)?;
@@ -1216,6 +1216,20 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 None => fs::read_to_string(full).map_err(|e| e.to_string()),
             }
         };
+        if !has_manifest
+            && !missing_manifest
+            && !errors.iter().any(|error| error.path == manifest_path)
+        {
+            let message = text_of(&manifest_path)
+                .and_then(|text| Entry::parse(&manifest_path, &text))
+                .err();
+            if let Some(message) = message {
+                errors.push(content::Diagnostic {
+                    path: manifest_path.clone(),
+                    message,
+                });
+            }
+        }
         for entry in entries {
             let text = text_of(&entry.path)?;
             let mismatched = entry.kind == "package" && entry.id != module.id;
@@ -2434,7 +2448,7 @@ impl Library {
             campaigns
                 .active_campaign()
                 .is_some_and(|c| c.id == undo.campaign.id)
-        }) && design::message_with_action(
+        }) && design::undo_message(
             ui,
             Tone::Success,
             "Every entry in this package is now used here.",
@@ -4013,15 +4027,11 @@ impl Library {
     fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
         if let Some(write) = &self.manifest_write
             && design::locked(ui, self.draft_reason(), |ui| {
-                design::message_with_action(
+                design::undo_message(
                     ui,
                     Tone::Success,
-                    if write.replaced() {
-                        "Package.md was replaced."
-                    } else {
-                        "Package.md was written again."
-                    },
-                    "Undo write Package.md",
+                    &write.message(),
+                    &format!("Undo write {}", write.path()),
                 )
             })
         {
@@ -4039,7 +4049,11 @@ impl Library {
             .and_then(|at| self.loaded.as_ref()?.notes.get(at))
             .filter(|note| note.is_manifest() && note.error.is_some())
             .and_then(|note| match &note.owner {
-                Owner::Package(module) => Some(module.clone()),
+                Owner::Package(module) => {
+                    let path = crate::content_workspace::package_manifest_path(module);
+                    let exists = module.path.join(&path).exists();
+                    Some((module.clone(), path, exists))
+                }
                 _ => None,
             });
         let gone_notice = self.discarded_note.as_ref().map(|note| {
@@ -4325,6 +4339,7 @@ impl Library {
             design::segmented(ui, &mut self.source, &[(false, "Read"), (true, edit_label)]);
             if self.source != was_source {
                 self.scope_notice = None;
+                self.focus_repair = self.source && note.error.is_some();
             }
             if !overflow {
                 if can_copy {
@@ -4448,6 +4463,7 @@ impl Library {
             let obsidian = obsidian_for(root, &note.owner);
             let owner_word = match &note.owner {
                 Owner::Package(_) => package_word.as_str(),
+                Owner::Campaign(_) if note.error.is_some() => "Campaign · Cannot be read",
                 _ => "Campaign · Editable",
             };
             let file_below = ui.available_width()
@@ -4464,11 +4480,7 @@ impl Library {
                     ui,
                     Status {
                         icon: icons::EDIT,
-                        word: match &note.owner {
-                            Owner::Package(_) => &package_word,
-                            Owner::Campaign(_) => "Campaign · Editable",
-                            Owner::Builtin => "Built-in · Read only",
-                        },
+                        word: owner_word,
                         color: d.clean,
                     },
                 );
@@ -4818,6 +4830,7 @@ impl Library {
         let (repair_problem, repair_line) =
             crate::campaign_content::repair_problem(&note.path, &self.draft);
         if note.error.is_some()
+            && recovery.as_ref().is_none_or(|(_, _, exists)| *exists)
             && let Some(problem) = &repair_problem
         {
             if crate::formats_ui::is_old(problem) {
@@ -4834,33 +4847,33 @@ impl Library {
                 design::message(ui, Tone::Error, problem);
             }
         }
-        if let Some(module) = recovery {
-            let path = crate::content_workspace::package_manifest_path(&module);
-            let exists = module.path.join(&path).exists();
-            if !exists {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    crate::content_workspace::DELETED_MANIFEST,
-                );
-            }
+        if let Some((module, path, exists)) = recovery {
             let label = if exists {
                 format!("Replace with a basic {path}")
             } else {
-                format!("Write {path} again")
+                "Write the manifest again".into()
             };
-            if exists {
+            let pressed = if exists {
                 ui.label(
                     Type::Small
                         .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
                         .color(colors().muted),
                 );
-            }
-            if Action::quiet(&label)
-                .blocked(draft_reason)
-                .show(ui)
-                .clicked()
-            {
+                Action::quiet(&label)
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+            } else {
+                design::locked(ui, draft_reason, |ui| {
+                    design::message_with_action(
+                        ui,
+                        Tone::Warning,
+                        crate::content_workspace::DELETED_MANIFEST,
+                        &label,
+                    )
+                })
+            };
+            if pressed {
                 match crate::content_workspace::ManifestWrite::write(&module) {
                     Ok(write) => {
                         self.manifest_write = Some(write);
@@ -4958,7 +4971,11 @@ impl Library {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             let output = egui::TextEdit::multiline(&mut self.draft)
-                                .id_salt(("library_markdown", note.owner.id(), &note.path))
+                                .id(egui::Id::new((
+                                    "library_markdown",
+                                    note.owner.id(),
+                                    &note.path,
+                                )))
                                 .font(egui::TextStyle::Monospace)
                                 .frame(false)
                                 .margin(egui::Vec2::ZERO)
@@ -4986,6 +5003,12 @@ impl Library {
                                     .map(|line| line.chars().count() + 1)
                                     .sum();
                                 response.request_focus();
+                                let row =
+                                    output.galley.pos_from_cursor(egui::text::CCursor::new(at));
+                                ui.scroll_to_rect(
+                                    row.translate(output.galley_pos.to_vec2()),
+                                    Some(egui::Align::Center),
+                                );
                                 let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
                                     .unwrap_or_default();
                                 state
@@ -5042,7 +5065,13 @@ impl Library {
                             };
                             let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if note.error.is_some() { "Cannot be read" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
+                            let subtitle = if note.error.is_some() {
+                                match note.unreadable_kind() {
+                                    Section::Unreadable | Section::Other => "",
+                                    Section::PackageDetails => "Package",
+                                    kind => kind.label().trim_end_matches('s'),
+                                }
+                            } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(
@@ -5454,7 +5483,6 @@ mod tests {
         )
         .unwrap();
         let manifest = module.path.join("Package.md");
-        fs::rename(module.path.join("Module.md"), &manifest).unwrap();
         let text = fs::read_to_string(&manifest).unwrap();
         fs::write(
             &manifest,
@@ -5944,13 +5972,13 @@ mod tests {
         let original =
             create_module(&temp.path().join("original"), "Original", "original").unwrap();
         let copy = create_module(&temp.path().join("copy"), "Copy", "copy").unwrap();
-        let manifest = fs::read_to_string(original.path.join("Module.md")).unwrap();
+        let manifest = fs::read_to_string(original.path.join("Package.md")).unwrap();
         let hand_edit = crate::content_workspace::patch_fields(
             &manifest,
             &[("splat_id", Some(copy.id.to_string().into()))],
         )
         .unwrap();
-        fs::write(copy.path.join("Module.md"), hand_edit).unwrap();
+        fs::write(copy.path.join("Package.md"), hand_edit).unwrap();
         let text = note_text("Wolf", "creature", None);
         fs::write(original.path.join("Wolf.md"), &text).unwrap();
         fs::write(copy.path.join("Wolf.md"), &text).unwrap();
@@ -7262,6 +7290,211 @@ mod tests {
     }
 
     #[test]
+    fn iter8_e_package_plain_readme_is_not_a_second_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::rename(
+            module.path.join("Package.md"),
+            module.path.join("Module.md"),
+        )
+        .unwrap();
+        fs::write(module.path.join("Package.md"), "Notes on this adventure.").unwrap();
+        let folder = content::read_folder(&module.path).unwrap();
+        assert!(folder.errors.is_empty(), "{:?}", folder.errors);
+        let loaded = load(Some(&module)).unwrap();
+        assert!(loaded.notes.iter().all(|note| note.error.is_none()));
+        assert_eq!(
+            loaded
+                .notes
+                .iter()
+                .filter(|note| note.is_manifest())
+                .count(),
+            1
+        );
+        assert!(loaded.notes.iter().all(|note| note.path != "Package.md"));
+        assert_eq!(
+            crate::content_workspace::package_manifest_path(&module),
+            "Module.md"
+        );
+        assert!(
+            Catalogue::load(std::slice::from_ref(&module), None)
+                .unwrap()
+                .manifest_problems
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn iter8_e_deleted_manifest_notice_and_action_do_not_guess_a_filename() {
+        for filename in ["Package.md", "Module.md"] {
+            let temp = tempfile::tempdir().unwrap();
+            let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+            if filename == "Module.md" {
+                fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
+            }
+            fs::remove_file(module.path.join(filename)).unwrap();
+            let loaded = load(Some(&module)).unwrap();
+            assert_eq!(loaded.notes.len(), 1);
+            assert_eq!(
+                loaded.notes[0].error.as_deref(),
+                Some(crate::content_workspace::DELETED_MANIFEST)
+            );
+            let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+            assert_eq!(
+                catalogue.manifest_problems[&module.id],
+                "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup."
+            );
+            let mut library = Library {
+                loaded: Some(loaded),
+                selected: Some(0),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            let mut rendered = String::new();
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1200.0, 2400.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            library.editor_pane(ui, "Cannot be read", &Campaigns::default());
+                        });
+                    },
+                );
+                rendered = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            assert!(
+                rendered.contains("The package manifest was deleted."),
+                "{rendered}"
+            );
+            assert!(rendered.contains("Write the manifest again"), "{rendered}");
+            assert!(!rendered.contains("Missing YAML frontmatter"), "{rendered}");
+            for guess in [
+                "Package.md was deleted",
+                "Module.md was deleted",
+                "Write Package.md again",
+                "Write Module.md again",
+            ] {
+                assert!(!rendered.contains(guess), "{rendered}");
+            }
+        }
+    }
+
+    #[test]
+    fn iter8_e_existing_manifest_without_fields_still_opens_for_repair() {
+        for filename in ["Package.md", "Module.md"] {
+            let temp = tempfile::tempdir().unwrap();
+            let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+            if filename == "Module.md" {
+                fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
+            }
+            let path = module.path.join(filename);
+            for bad in [
+                "",
+                "A package description without front matter.",
+                "---\nsplat_id: [\n---\n",
+            ] {
+                fs::write(&path, bad).unwrap();
+                let loaded = load(Some(&module)).unwrap();
+                let note = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
+                assert_eq!(note.path, filename);
+                assert_eq!(note.text, bad);
+                assert!(note.error.is_some());
+                assert!(
+                    crate::campaign_content::repair_problem(filename, bad)
+                        .0
+                        .is_some()
+                );
+                let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+                assert!(catalogue.manifest_problems[&module.id].starts_with(filename));
+                assert!(catalogue.manifest_problems[&module.id].contains("cannot be read"));
+            }
+            fs::write(&path, [0xff]).unwrap();
+            let loaded = load(Some(&module)).unwrap();
+            assert!(
+                loaded
+                    .notes
+                    .iter()
+                    .any(|note| note.path == filename && note.error.is_some())
+            );
+            // Moving a broken file out and back must not leave a stale parse fault.
+            let moved = module.path.join("Moved.md");
+            fs::rename(&path, &moved).unwrap();
+            assert!(
+                load(Some(&module))
+                    .unwrap()
+                    .notes
+                    .iter()
+                    .any(|note| note.is_manifest() && note.error.is_some())
+            );
+            fs::remove_file(&moved).unwrap();
+            fs::write(
+                &path,
+                content::patch_fields(
+                    &note_text("Test", "package", Some("test")),
+                    &[("splat_id", Some(module.id.to_string().into()))],
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert!(
+                Catalogue::load(std::slice::from_ref(&module), None)
+                    .unwrap()
+                    .manifest_problems
+                    .is_empty()
+            );
+            assert!(
+                load(Some(&module))
+                    .unwrap()
+                    .notes
+                    .iter()
+                    .all(|note| note.error.is_none())
+            );
+        }
+    }
+
+    #[test]
+    fn iter8_e_manifest_repair_message_names_actual_file() {
+        for filename in ["Package.md", "Module.md"] {
+            let temp = tempfile::tempdir().unwrap();
+            let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+            if filename == "Module.md" {
+                fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
+            }
+            fs::write(module.path.join(filename), "---\nsplat_kind: [\n---\n").unwrap();
+            let write = crate::content_workspace::ManifestWrite::write(&module).unwrap();
+            assert_eq!(write.path(), filename);
+            assert_eq!(write.message(), format!("{filename} was replaced."));
+            write.undo().unwrap();
+        }
+    }
+
+    #[test]
+    fn iter8_e_new_package_manifest_is_package_md() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("new"), "New", "new").unwrap();
+        assert!(module.path.join("Package.md").is_file());
+        assert!(!module.path.join("Module.md").exists());
+        let loaded = load(Some(&module)).unwrap();
+        let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
+        assert_eq!(manifest.path, "Package.md");
+        assert_eq!(manifest.entry.as_ref().unwrap().id, module.id);
+    }
+
+    #[test]
     fn create_register_and_edit_preserves_identity_and_external_changes() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("module");
@@ -7326,7 +7559,7 @@ mod tests {
         assert!(campaigns.active_campaign().is_none());
         assert_eq!(library.draft, expected);
         campaigns.unregister_module(m.id).unwrap();
-        assert!(m.path.join("Module.md").exists());
+        assert!(m.path.join("Package.md").exists());
     }
 
     #[test]
@@ -7354,11 +7587,6 @@ mod tests {
     fn package_manifest_failure_keeps_library_entries_and_a_named_warning() {
         let temp = tempfile::tempdir().unwrap();
         let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
-        fs::rename(
-            module.path.join("Module.md"),
-            module.path.join("Package.md"),
-        )
-        .unwrap();
         fs::write(
             module.path.join("Wolf.md"),
             note_text("Wolf", "creature", None),
@@ -7384,6 +7612,11 @@ mod tests {
     fn iter3_d_a_readable_entry_named_like_a_manifest_stays_an_entry() {
         let temp = tempfile::tempdir().unwrap();
         let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::rename(
+            module.path.join("Package.md"),
+            module.path.join("Module.md"),
+        )
+        .unwrap();
         fs::write(
             module.path.join("Package.md"),
             note_text("Package Wolf", "creature", None),
@@ -7414,7 +7647,7 @@ mod tests {
             "---\nsplat_id: [\n---\n",
             "---\nsplat_kind: package\nsplat_id: [\n---\n",
         ] {
-            fs::write(module.path.join("Module.md"), text).unwrap();
+            fs::write(module.path.join("Package.md"), text).unwrap();
             let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
             let manifest = loaded.notes.iter().find(|note| note.is_manifest()).unwrap();
             assert!(manifest.error.is_some());
@@ -7423,7 +7656,7 @@ mod tests {
                 loaded
                     .diagnostics
                     .iter()
-                    .any(|line| line.contains("Module.md"))
+                    .any(|line| line.contains("Package.md"))
             );
             for scope in [Scope::All, Scope::Uses, Scope::Package(module.id)] {
                 assert!(
