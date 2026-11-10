@@ -223,9 +223,9 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, put `blocked_reason` directly beside it in visible `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
-| Field | `field` | Label, control, help, error; names the control for accessibility |
+| Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
-| Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
+| Dialog | `dialog`, `dialog_actions` | An `egui::Modal`, for the brief's modal tasks only. One action line: red action at the left; keep and commit actions at the right |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
 | Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
@@ -244,6 +244,10 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero returns no text. Empty unit words return only the formatted number |
+
+Every form field label uses sentence-case, muted `Small` text. `Label` capitals are for group and column headings only. `field` and `text_field` use the same label style as `small_field` and `small_text_field`.
+
+Dialog actions stay on one line. A red action sits at the left. Keep and commit actions sit at the right, with the commit action last. Keep remains the default keyboard focus when closing could lose work.
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
 The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, scope and category share one line at equal widths above search. Hide the All entries heading when there is no search.
@@ -278,7 +282,9 @@ draft` and the separate red `Reload and lose my draft`. Library uses the same si
 Library's toolbar stays on one line. Drop the Back key hint first; then move Copy and
 Make NPC note into a quiet More menu. Lookup keeps the Back key hint. Both readers use
 Alt+Left, with Lookup taking the key when focus is there. The owner line supplies the
-package name in Library. The kind line does not repeat it.
+package name in Library. The kind line does not repeat it. Library omits the repeated `Library / <kind>` breadcrumb above the title. An unreadable entry keeps one `Cannot be read` status below its title.
+
+Readers omit the reserved Splat data section for every entry kind. A section with no visible body after filtering has no heading or rule. Storage details stay in the existing closed end sections.
 
 New creatures store identity, CR, speed and ability scores in the Stat block tables.
 Each value has one source. Printed source text stays separate from those tables. An absent saving throw leaves its cell empty.
@@ -376,6 +382,8 @@ as one Undo step. Combat keeps its saved HP, and the rest message names those fi
 New templates say `Starts with the title line only.` below the name field.
 
 ## The live run
+
+An invalid changed stat names only the limit it crossed: `Maximum HP would become -28. It must be 1 or more.` Show the upper limit only when the value is above it.
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
@@ -614,7 +622,7 @@ An unavailable package keeps its last known display name in the campaign selecti
 
 Package and campaign readers keep their owner status in both Read and Edit Markdown.
 Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
-An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Replace… opens a creature replacement search; Edit and Remove stay in the row menu. The NPC Add to run form labels its side picker SIDE and uses the roster's side words.
+An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Replace… opens a creature replacement search; Edit and Remove stay in the row menu. The NPC Add to run form labels its side picker Side and uses the roster's side words.
 Folder is one editable field with a suggestion menu, followed by its help line.
 New packages default to the parent of the last registered package.
 A completed copy says where it went and keeps its path in hover text.
@@ -919,8 +927,7 @@ Duplicate World readers keep their path on the file line only. Search results ke
 
 ## Design score, iteration 1: campaign and session
 
-Form field labels use sentence-case, muted `Small` text on Campaign and Settings.
-`Label` stays for column and compact group headings. Campaign Packages keeps its
+Campaign Packages keeps its
 save row directly below the tabs, before every notice. Campaign flags appear once
 in the content issue count. Their warning line includes the file and repair actions.
 With no campaigns, Settings hides Reload from disk unless settings need repair.

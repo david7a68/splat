@@ -1466,6 +1466,11 @@ pub mod encounter_run {
             !d.visible_text("%% splat") && !d.visible_text("Field"),
             "Lookup hides machine lines and empty field rows",
         );
+        d.observe_both(
+            "AT3/FT-6",
+            "Lookup omits the reserved Splat data section",
+            |d| !d.visible_text("Splat data"),
+        );
         d.state("lookup-by-keyboard", Sizes::All);
         d.press(Key::Escape);
         let back = !d.has(SEARCH_LOOKUP);
@@ -1654,7 +1659,7 @@ pub mod settings {
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
-        d.state("confirm-remove-campaign", Sizes::Default);
+        d.state("confirm-remove-campaign", Sizes::All);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
         d.click(EDIT_DETAILS);
@@ -1810,6 +1815,31 @@ pub mod dialogs {
                 && d.has_containing(MODULE)
                 && d.has_containing(CLOSE_PROMPT),
             "The prompt names the entry, and the package it is in",
+        );
+        d.observe_both(
+            "FD-12",
+            "The destructive close action stays left of the safe actions on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (lose, keep, save) = (
+                    rect("Discard and close"),
+                    rect("Keep editing"),
+                    rect("Save and close"),
+                );
+                lose.right() < keep.left()
+                    && keep.right() < save.left()
+                    && (lose.center().y - keep.center().y).abs() < 1.0
+                    && (save.center().y - keep.center().y).abs() < 1.0
+            },
         );
         d.state("unsaved-changes-on-close", Sizes::All);
         d.goal("ask to close with unsaved changes");
@@ -2883,6 +2913,11 @@ pub mod nav_state {
         d.begin_task();
         search_library(d, QUERY);
         d.click_containing(CREATURE);
+        d.observe_both(
+            "FD-9",
+            "The reader starts with its title, without a repeated Library breadcrumb",
+            |d| !d.visible_text("Library / Creatures"),
+        );
         d.state("library-set-up", Sizes::DefaultAndHiDpi);
 
         go_party(d);
@@ -4963,7 +4998,7 @@ pub mod session_notes {
         d.expect("Copy link");
         d.click("Copy link");
         d.expect("Copied");
-        d.expect("MENTIONED IN");
+        d.expect("Mentioned in");
         d.state("timeline-event", Sizes::AllAndHiDpi);
         d.observe(
             "T11.4",
@@ -5586,7 +5621,13 @@ pub mod session_notes {
             "iter-10-S3",
             "Timeline header actions end at the form edge",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6186,7 +6227,13 @@ pub mod session_recording {
             "iter-10-S3-wide",
             "Wide Timeline keeps its header and form edges aligned",
             |d| {
-                let field = d.place_of("Title");
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Title" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
                 let menu = d
                     .nodes()
                     .into_iter()
@@ -6266,7 +6313,7 @@ pub mod session_recording {
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
-        d.state("recording-delete", Sizes::Default);
+        d.state("recording-delete", Sizes::All);
         d.click("Delete recording");
         d.expect("Recording deleted.");
 
@@ -6957,7 +7004,8 @@ pub mod encounter_owned_groups {
             roster_places(d).len() == rows_before + 2,
             "Dragging an encounter's own group in combat adds each member",
         );
-        d.state("own-group-dragged-in-combat", Sizes::Default);
+        d.expect("Maximum HP would become −28. It must be 1 or more.");
+        d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
@@ -8125,6 +8173,24 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.expect("Unregister Ashen Marches?");
+        d.observe_both(
+            "FD-12",
+            "Unregister stays left of Keep the package on one line",
+            |d| {
+                let nodes = d.nodes();
+                let rect = |name: &str| {
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            node.name == name && node.role == egui::accesskit::Role::Button
+                        })
+                        .unwrap()
+                        .rect
+                };
+                let (remove, keep) = (rect("Unregister"), rect("Keep the package"));
+                remove.right() < keep.left() && (remove.center().y - keep.center().y).abs() < 1.0
+            },
+        );
         d.state("package-in-use-warning", Sizes::All);
         d.click("Unregister");
         d.observe(
