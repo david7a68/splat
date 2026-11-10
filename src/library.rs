@@ -2620,13 +2620,9 @@ impl Library {
         // The whole catalogue has no first entry worth opening for the DM.
         let whole_catalogue = self.section == Section::All && query.is_empty();
         if !dirty
-            && self.selected.is_none_or(|i| {
-                !matches.contains(&i)
-                    && loaded.notes[i]
-                        .entry
-                        .as_ref()
-                        .is_none_or(|e| e.kind != "package")
-            })
+            && self
+                .selected
+                .is_none_or(|i| !matches.contains(&i) && !loaded.notes[i].is_manifest())
         {
             select = matches.first().copied().filter(|_| !whole_catalogue);
             if select.is_none() {

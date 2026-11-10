@@ -186,12 +186,13 @@ never repeats the sentence. Its campaign switcher keeps its height and a lock; t
 reason and disables campaign choices. Package, encounter and repair drafts keep their campaign-switch reason
 after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content.
 
-A quiet action at the start of a line uses `line_start`: align its text with the line above and extend its
-target into the gutter. This also applies to an icon-bearing quiet message action below its message. Other
-message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo icon on the message line, or
-below when needed. Discard recovery uses `Small` text, names the draft, and gives Undo the same name for
-accessibility. Inline creation uses a Label title, fields, a named Create action, its `Small` blocked reason,
-an `L` gap and quiet Cancel. Creation and copy fields share one right edge.
+A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
+its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
+Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
+icon on the message line, or below when needed. Discard recovery uses `Small` text, names the draft, and
+gives Undo the same name for accessibility. Inline creation uses a Label title, fields, a named Create
+action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
+right edge.
 
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
 entries, then character sheet copies. Creature results keep names close to stats with an `S` gap between
@@ -280,18 +281,22 @@ built-in note. Sheet tabs use `Small` as a second level; later pages move into M
 
 ## The catalogue
 
-Library is one catalogue of built-in, package and campaign entries. It opens on what this campaign can use.
-Scope can show everything, one package or Campaign entries, without changing the active campaign. Keep search
-and selection when scope changes. Editing, save state and `Copy to…` stay in this page; package actions are
-inline. Do not use `module` in the interface. Manage packages uses `Heading` for its pane title and `Label` for its sections. A filtered creature list shows `MATCHES` and its count, even when search is empty.
+Library is one catalogue of built-in, package and campaign entries. It opens on what this campaign can
+use. Scope can show everything, one package or Campaign entries, without changing the active campaign.
+Keep search and selection when scope changes. Editing, save state and `Copy to…` stay in this page;
+package actions are inline. Do not use `module` in the interface. Manage packages uses `Heading` for its
+pane title and `Label` for its sections. A filtered creature list shows `MATCHES` and its count, even
+when search is empty.
 
-The scope control says `Can use` in both layouts, at the top of the category column. Keep those words whole at
-minimum width. At narrow widths, scope and category share an equal-width line above search. Hide All entries
-without a search. Empty categories and their headings stay hidden. Fixed scope names wrap; package names can
-shorten with full hover text and accessible names. Both the scope menu and selected button say `Campaign
-entries`. An open package About row uses selected fill with no selected category; choosing a category restores
-it. About is followed by the manifest name. A manifest is never counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue count. Show used and total entries and `Use every
-entry` with Undo; omit the entry breadcrumb and Engine support. Empty package counts have no separator.
+The scope control says `Can use` in both layouts, at the top of the category column. Keep those words
+whole at minimum width. At narrow widths, scope and category share an equal-width line above search.
+Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
+wrap; package names can shorten with full hover text and accessible names. Both the scope menu and
+selected button say `Campaign entries`. An open package About row uses selected fill with no selected
+category; choosing a category restores it. About is followed by the manifest name. A manifest is never
+counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
+count. Show used and total entries and `Use every entry` with Undo; omit the entry breadcrumb and Engine
+support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
 says how many entries need fixing; its menu opens the messages. Unreadable notes use CANNOT BE READ. Rows name
@@ -354,12 +359,14 @@ write only the open file. A renamed copy comes first, otherwise the newest file 
 ambiguous creatures; Open in Library opens the first repair action's file. Encounter search names hidden
 duplicate notes and offers file-specific identity repair with Undo.
 
-Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same entry
-in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result names the file
-and keeps `Undo separate entry` on the message line. Folder repairs use `separate entries` and `Undo separate
-entries`, with one guarded Undo for the batch. In Library, each choice states which file an encounter will keep or use, in `Small` muted text an `XS` gap below its own action. An `L` gap separates choices. Name the folder when filenames match. Making an entry separate
-also sets its name and matching first heading to its file stem. Other actions name encounters whose source
-will change; results explaining which entry an encounter will use are Small muted text below the action.
+Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same
+entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
+names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
+entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each choice
+states which file an encounter will keep or use, in `Small` muted text an `XS` gap below its own action.
+An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
+its name and matching first heading to its file stem. Other actions name encounters whose source will
+change; results explaining which entry an encounter will use are Small muted text below the action.
 
 ### Convert files
 
@@ -368,12 +375,13 @@ Library keeps its old-layout count in the header, including generated packages. 
 Save selections; name a required old file beside conversion. An open run blocks conversion and disables
 old-layout links with the reason on hover.
 
-Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated packages
-start unchecked but can be selected; warn that their converter overwrites these files on its next run. Counts
-include checked owners only. The modal shows before and after text, counts by kind in words and skipped files. Omit the kinds line when it has no text.
-Short previews fit content; long previews use about 60% of window height. Source lines do not wrap. Mark
-changes, scroll both panes together and open at the first difference. Encounter and group conflict comparisons
-use disk layout and include outside properties and prose that Overwrite keeps.
+Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated
+packages start unchecked but can be selected; warn that their converter overwrites these files on its
+next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
+words and skipped files. Omit the kinds line when it has no text. Short previews fit content; long
+previews use about 60% of window height. Source lines do not wrap. Mark changes, scroll both panes
+together and open at the first difference. Encounter and group conflict comparisons use disk layout and
+include outside properties and prose that Overwrite keeps.
 
 Writes check their baseline. Keep skipped files and next steps visible; count changed and skipped files, with
 warning tone for any skip. Each skipped file offers Convert files… beside it. Keep `Undo convert` when
@@ -441,23 +449,28 @@ until the next note or plan edit.
 
 ## World
 
-Readers show the relative path, Edit in Obsidian and Show file for every note. Duplicate readers keep the path
-on this file line only; search results keep paths to distinguish names. Plain notes use one-line rows. Typed
-names that match show each filename on the second line. Copied typed notes remain visible with duplicate
-warnings. A duplicate NPC still has its existing name-only roster override; its warning does not imply changed
-stats. Encounter repair opens World for World notes. A note with no readable body says `Nothing written yet.` with `Edit in Obsidian`.
+Readers show the relative path, Edit in Obsidian and Show file for every note. Duplicate readers keep
+the path on this file line only; search results keep paths to distinguish names. Plain notes use
+one-line rows. Typed names that match show each filename on the second line. Copied typed notes remain
+visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
+warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
+readable body says `Nothing written yet.` with `Edit in Obsidian`.
 
-NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned values
-and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L` gap, capped at the value measure. Values wrap within their column, with Change on the first line. Empty values say `not set`. Missing links retain names and keep `Not found` on one line. Broken links
-have a warning icon, list warning and count in the header. Table faults use the same list warning and header
-repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case paths
-after type groups.
+NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned
+values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Empty
+values say `not set`. Missing links retain names and keep `Not found` on one line. Broken links have a
+warning icon, list warning and count in the header. Table faults use the same list warning and header
+repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case
+paths after type groups.
 
-Change pickers focus search. Place choices start at the value column beside In, with one file link and a bordered `Always use this one` action on each row. A saved choice changes only its key and has Undo,
-which checks the file before writing. Always use this one saves a path with Undo. Change messages name both
-values and follow Change when they fit, otherwise sit below the whole row block. Different file and stored
-names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their future path below the name. A compact NPC
-reader puts Fights as and In on one read-only line; both open Lookup.
+Change pickers focus search. Place choices start at the value column beside In, with one file link and a
+bordered `Always use this one` action on each row. A saved choice changes only its key and has Undo,
+which checks the file before writing. Always use this one saves a path with Undo. Change messages name
+both values and follow Change when they fit, otherwise sit below the whole row block. Different file and
+stored names offer `Rename the note to <file name>`, with a guarded update and Undo. New NPCs show their
+future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
+Lookup.
 
 Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. A rolled table selects the matching row, marks it with dice and
