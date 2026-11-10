@@ -16,13 +16,29 @@ pub struct Flag {
 }
 
 pub fn label(value: &str) -> String {
+    bare_label(value).to_lowercase()
+}
+
+fn bare_label(value: &str) -> &str {
     value
         .trim()
         .trim_start_matches("- ")
         .trim()
         .trim_matches('*')
         .trim()
-        .to_lowercase()
+}
+
+/// `label(a) == label(b)` without allocating for the usual ASCII labels.
+pub fn same_label(a: &str, b: &str) -> bool {
+    same_bare(bare_label(a), bare_label(b))
+}
+
+fn same_bare(a: &str, b: &str) -> bool {
+    if a.is_ascii() && b.is_ascii() {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a.to_lowercase() == b.to_lowercase()
+    }
 }
 
 pub struct Document<'a> {
@@ -89,7 +105,7 @@ impl<'a> Document<'a> {
                 }
                 Event::Text(word) | Event::Code(word) if heading.is_some() => words.push_str(&word),
                 Event::End(TagEnd::Heading(_)) => {
-                    if label(&words) == label(name)
+                    if same_label(&words, name)
                         && found.is_none()
                         && required
                             .is_none_or(|level| heading.is_some_and(|(actual, _)| actual == level))
@@ -125,22 +141,25 @@ impl Section<'_> {
             let mut offset = start;
             let mut lines = self.text[start..self.range.start + range.end].split_inclusive('\n');
             let first = lines.next()?;
-            let header = cells(self.text, offset, first);
+            let mut line = self.text[..offset].bytes().filter(|b| *b == b'\n').count() + 1;
+            let header = cells(offset, line, first);
             if header.len() != headers.len()
                 || !header
                     .iter()
                     .zip(headers)
-                    .all(|(a, b)| label(&a.value) == label(b))
+                    .all(|(a, b)| same_label(&a.value, b))
             {
                 continue;
             }
             offset += first.len();
             let separator = lines.next()?;
             offset += separator.len();
+            line += 2;
             let rows = lines
-                .map(|line| {
-                    let row = cells(self.text, offset, line);
-                    offset += line.len();
+                .map(|text| {
+                    let row = cells(offset, line, text);
+                    offset += text.len();
+                    line += 1;
                     row
                 })
                 .collect();
@@ -150,7 +169,8 @@ impl Section<'_> {
     }
 }
 
-fn cells(text: &str, offset: usize, line: &str) -> Vec<Cell> {
+/// `offset` and `number` place `line` in the document: its byte offset and line number.
+fn cells(offset: usize, number: usize, line: &str) -> Vec<Cell> {
     let line = line.trim_end_matches(['\r', '\n']);
     let mut boundaries = Vec::new();
     let mut escaped = false;
@@ -192,7 +212,7 @@ fn cells(text: &str, offset: usize, line: &str) -> Vec<Cell> {
             let end = begin + raw.trim().len();
             Cell {
                 range: offset + begin..offset + end,
-                line: text[..offset].bytes().filter(|b| *b == b'\n').count() + 1,
+                line: number,
                 value: raw.trim().replace("\\|", "|"),
             }
         })
@@ -205,7 +225,7 @@ impl Table {
             .iter()
             .find(|row| {
                 row.first()
-                    .is_some_and(|cell| label(&cell.value) == label(name))
+                    .is_some_and(|cell| same_label(&cell.value, name))
             })
             .map(Vec::as_slice)
     }
@@ -218,13 +238,26 @@ impl Table {
         flags: &mut Vec<Flag>,
         parse: impl Fn(&str) -> Result<T, String>,
     ) -> Option<T> {
+        self.read_any(&[name], column, flags, parse)
+    }
+
+    /// `read` for a row with other names: any of `names` matches, and messages use the first.
+    pub fn read_any<T>(
+        &self,
+        names: &[&str],
+        column: usize,
+        flags: &mut Vec<Flag>,
+        parse: impl Fn(&str) -> Result<T, String>,
+    ) -> Option<T> {
+        let name = names[0];
+        let bare: Vec<_> = names.iter().map(|name| bare_label(name)).collect();
         let mut result = None;
         let mut seen = false;
         for row in &self.rows {
-            if row
-                .first()
-                .is_none_or(|cell| label(&cell.value) != label(name))
-            {
+            if row.first().is_none_or(|cell| {
+                let cell = bare_label(&cell.value);
+                !bare.iter().any(|name| same_bare(cell, name))
+            }) {
                 continue;
             }
             let first = &row[0];
@@ -282,7 +315,7 @@ pub fn replace_cell_at_level(
     let row = table
         .rows
         .iter()
-        .position(|row| row.first().is_some_and(|c| label(&c.value) == label(name)))
+        .position(|row| row.first().is_some_and(|c| same_label(&c.value, name)))
         .ok_or("Row not found")?;
     let cell = table.rows[row].get(column).ok_or("Cell not found")?;
     let model = |table: &Table| {

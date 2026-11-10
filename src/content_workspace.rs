@@ -12,6 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex, PoisonError},
 };
 use uuid::Uuid;
 
@@ -58,19 +59,29 @@ pub(crate) fn generated_manifest(text: &str) -> bool {
 }
 
 pub(crate) fn package_manifest_path(module: &Module) -> String {
-    if let Ok((entries, errors)) = content::read_directory(&module.path) {
-        if let Some(entry) = entries.iter().find(|entry| entry.kind == "package") {
-            return entry.path.clone();
-        }
-        for error in errors {
-            if matches!(error.path.as_str(), "Package.md" | "Module.md")
-                || fs::read_to_string(module.path.join(&error.path)).is_ok_and(|text| {
+    match content::read_folder(&module.path) {
+        Ok(folder) => manifest_path_in(&folder, module),
+        Err(_) => "Package.md".into(),
+    }
+}
+
+/// [`package_manifest_path`] in a folder already read.
+pub(crate) fn manifest_path_in(folder: &content::Folder, module: &Module) -> String {
+    if let Some(entry) = folder.entries.iter().find(|entry| entry.kind == "package") {
+        return entry.path.clone();
+    }
+    for error in &folder.errors {
+        if matches!(error.path.as_str(), "Package.md" | "Module.md")
+            || folder
+                .text(&error.path)
+                .map(str::to_owned)
+                .or_else(|| fs::read_to_string(module.path.join(&error.path)).ok())
+                .is_some_and(|text| {
                     text.lines()
                         .any(|line| line.trim() == "splat_kind: package")
                 })
-            {
-                return error.path;
-            }
+        {
+            return error.path.clone();
         }
     }
     "Package.md".into()
@@ -627,6 +638,7 @@ impl PackageSelection {
     }
 }
 
+#[derive(Clone)]
 pub struct ModuleIndex {
     pub id: Uuid,
     pub name: String,
@@ -634,12 +646,13 @@ pub struct ModuleIndex {
     /// The campaign package. It serves one campaign, so nothing can select it.
     pub private: bool,
 }
+#[derive(Clone)]
 pub struct IndexedEntry {
     pub entry: Entry,
     pub owner: Uuid,
     pub private: bool,
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Catalogue {
     pub modules: Vec<ModuleIndex>,
     pub entries: BTreeMap<Uuid, IndexedEntry>,
@@ -800,12 +813,14 @@ impl Catalogue {
         entry
     }
 
+    /// `text` is the file's text as its folder was read, when known.
     fn insert_file(
         &mut self,
         entry: Entry,
         owner: Uuid,
         private: bool,
         root: &Path,
+        text: Option<&str>,
     ) -> Result<(), String> {
         let path = note_path(root, &entry.path)?;
         if self.entries.contains_key(&entry.id) || self.duplicate_ids.contains(&entry.id) {
@@ -865,22 +880,29 @@ impl Catalogue {
             );
             return Ok(());
         }
-        self.files.insert(
-            entry.id,
-            (
-                path.clone(),
-                fs::read_to_string(&path).map_err(|e| e.to_string())?,
-            ),
-        );
+        let text = match text {
+            Some(text) => text.to_owned(),
+            None => fs::read_to_string(&path).map_err(|e| e.to_string())?,
+        };
+        self.files.insert(entry.id, (path.clone(), text));
         self.insert(entry, owner, private)
     }
 
-    fn remember_unreadable(&mut self, root: &Path, errors: &[content::Diagnostic]) {
+    fn remember_unreadable(
+        &mut self,
+        root: &Path,
+        errors: &[content::Diagnostic],
+        folder: &content::Folder,
+    ) {
         for error in errors {
             let Ok(path) = note_path(root, &error.path) else {
                 continue;
             };
-            let Ok(text) = fs::read_to_string(&path) else {
+            let Some(text) = folder
+                .text(&error.path)
+                .map(str::to_owned)
+                .or_else(|| fs::read_to_string(&path).ok())
+            else {
                 continue;
             };
             let Some(id) = note_id(&text) else {
@@ -1023,10 +1045,69 @@ impl Catalogue {
                 .unwrap_or_else(|| namespace.to_owned())
         })
     }
+    /// Every page builds this catalogue from the same folders, often at the same time.
+    /// The last one built is reused while its inputs are unchanged.
     pub fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
+        type Folders = Vec<Result<Arc<content::Folder>, String>>;
+        type Key = (
+            Vec<Module>,
+            Option<Campaign>,
+            BTreeMap<String, String>,
+            Folders,
+        );
+        /// Two: pages ask with the active campaign, and imports ask with none.
+        static BUILT: Mutex<Vec<(Key, Arc<Catalogue>)>> = Mutex::new(Vec::new());
+        static BUILDING: Mutex<()> = Mutex::new(());
+        fn same(a: &Folders, b: &Folders) -> bool {
+            a.len() == b.len()
+                && a.iter().zip(b).all(|(a, b)| match (a, b) {
+                    (Ok(a), Ok(b)) => Arc::ptr_eq(a, b),
+                    (Err(a), Err(b)) => a == b,
+                    _ => false,
+                })
+        }
+        // A later caller waits, then finds what the first one built.
+        let _building = BUILDING.lock().unwrap_or_else(PoisonError::into_inner);
+        let neighbours = neighbouring_packages(modules);
+        let folders: Folders = modules
+            .iter()
+            .map(|module| &module.path)
+            .chain(campaign.map(|campaign| &campaign.path))
+            .map(|root| content::read_folder(root))
+            .collect();
+        let built = BUILT.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, catalogue)) = built.iter().find(|((m, c, n, f), _)| {
+            m.as_slice() == modules
+                && c.as_ref() == campaign
+                && *n == neighbours
+                && same(f, &folders)
+        }) {
+            return Ok((**catalogue).clone());
+        }
+        drop(built);
+        let catalogue = Self::build(modules, campaign, neighbours.clone(), &folders)?;
+        let mut built = BUILT.lock().unwrap_or_else(PoisonError::into_inner);
+        built.retain(|((m, c, _, _), _)| !(m.as_slice() == modules && c.as_ref() == campaign));
+        if built.len() >= 2 {
+            built.remove(0);
+        }
+        built.push((
+            (modules.to_vec(), campaign.cloned(), neighbours, folders),
+            Arc::new(catalogue.clone()),
+        ));
+        Ok(catalogue)
+    }
+
+    /// `folders` are the modules' folders as read, then the campaign's.
+    fn build(
+        modules: &[Module],
+        campaign: Option<&Campaign>,
+        neighbours: BTreeMap<String, String>,
+        folders: &[Result<Arc<content::Folder>, String>],
+    ) -> Result<Self, String> {
         let mut result = Self {
             namespaces: BTreeSet::from(["dnd2024".to_owned()]),
-            neighbours: neighbouring_packages(modules),
+            neighbours,
             ..Self::default()
         };
         let builtin = builtin_manifest();
@@ -1043,22 +1124,24 @@ impl Catalogue {
             entries: ids,
             private: false,
         });
-        for module in modules {
-            let read = content::read_directory(&module.path);
-            let (mut entries, errors) = match read {
-                Ok(v) => v,
+        for (module, read) in modules.iter().zip(folders) {
+            let (mut entries, errors, folder) = match read {
+                Ok(folder) => (folder.entries.clone(), folder.errors.clone(), folder),
                 Err(e) => {
                     result.errors.push(format!("{}: {e}", module.name));
                     continue;
                 }
             };
-            let manifest_path = package_manifest_path(module);
+            let manifest_path = manifest_path_in(folder, module);
             if !entries
                 .iter()
                 .any(|entry| entry.kind == "package" && entry.id == module.id)
                 && module.path.is_dir()
             {
-                let problem = if let Ok(text) = fs::read_to_string(module.path.join(&manifest_path))
+                let problem = if let Some(text) = folder
+                    .text(&manifest_path)
+                    .map(str::to_owned)
+                    .or_else(|| fs::read_to_string(module.path.join(&manifest_path)).ok())
                 {
                     let (_, line) = crate::campaign_content::repair_problem(&manifest_path, &text);
                     format!(
@@ -1105,7 +1188,7 @@ impl Catalogue {
                 manifest.body.clear();
                 entries.push(manifest);
             }
-            result.remember_unreadable(&module.path, &errors);
+            result.remember_unreadable(&module.path, &errors, folder);
             result.errors.extend(
                 errors
                     .into_iter()
@@ -1148,7 +1231,8 @@ impl Catalogue {
                 if entry.kind == "package" && result.manifest_problems.contains_key(&module.id) {
                     result.insert(entry, module.id, false)?;
                 } else {
-                    result.insert_file(entry, module.id, false, &module.path)?;
+                    let text = folder.text(&entry.path).map(str::to_owned);
+                    result.insert_file(entry, module.id, false, &module.path, text.as_deref())?;
                 }
             }
             result.modules.push(ModuleIndex {
@@ -1159,8 +1243,9 @@ impl Catalogue {
             });
         }
         if let Some(campaign) = campaign {
-            let (entries, errors) = content::read_directory(&campaign.path)?;
-            result.remember_unreadable(&campaign.path, &errors);
+            let folder = folders[modules.len()].clone()?;
+            let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+            result.remember_unreadable(&campaign.path, &errors, &folder);
             result.errors.extend(
                 errors
                     .into_iter()
@@ -1194,7 +1279,14 @@ impl Catalogue {
                     .filter(|_| campaign_package::in_folder(&entry.path))
                     .map(|(id, _)| *id);
                 package_entries.extend(package.map(|_| entry.id));
-                result.insert_file(entry, package.unwrap_or(campaign.id), true, &campaign.path)?;
+                let text = folder.text(&entry.path).map(str::to_owned);
+                result.insert_file(
+                    entry,
+                    package.unwrap_or(campaign.id),
+                    true,
+                    &campaign.path,
+                    text.as_deref(),
+                )?;
             }
             if let Some((id, name)) = manifest {
                 result.modules.push(ModuleIndex {
@@ -1514,7 +1606,8 @@ pub struct Closure {
 }
 
 fn campaign_manifest(root: &Path, expected: Option<Uuid>) -> Result<Option<Entry>, String> {
-    let (entries, errors) = content::read_directory(root)?;
+    let folder = content::read_folder(root)?;
+    let (entries, errors) = (&folder.entries, &folder.errors);
     if !errors.is_empty() && !entries.iter().any(|e| e.kind == "campaign") {
         return Err(errors
             .iter()
@@ -1529,8 +1622,9 @@ fn campaign_manifest(root: &Path, expected: Option<Uuid>) -> Result<Option<Entry
         return Err("A campaign folder cannot contain a package manifest.".into());
     }
     let mut manifests: Vec<_> = entries
-        .into_iter()
+        .iter()
         .filter(|e| e.kind == "campaign")
+        .cloned()
         .collect();
     if manifests.len() > 1 {
         let matching: Vec<_> = manifests
@@ -1775,11 +1869,12 @@ impl CampaignDocument {
     fn resolve_packages(&mut self, modules: &[Module]) {
         let manifests: Vec<_> = std::iter::once(builtin_manifest())
             .chain(modules.iter().filter_map(|module| {
-                content::read_directory(&module.path)
+                content::read_folder(&module.path)
                     .ok()?
-                    .0
-                    .into_iter()
+                    .entries
+                    .iter()
                     .find(|e| e.kind == "package")
+                    .cloned()
             }))
             .collect();
         for selection in &mut self.selections {

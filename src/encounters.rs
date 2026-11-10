@@ -1360,6 +1360,12 @@ struct Snapshot {
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
+/// Load what the Encounters page shows, for the load benchmark.
+#[cfg(test)]
+pub(crate) fn load_for_bench(campaign: &Campaign, modules: &[Module]) -> Result<(), String> {
+    Snapshot::load(campaign, modules).map(drop)
+}
+
 impl Snapshot {
     /// A refresh keeps settings the DM is editing. Otherwise the file decides, or the next
     /// save would write an old value over a change made outside Splat.

@@ -160,7 +160,7 @@ impl std::fmt::Display for Reference {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Diagnostic {
     pub path: String,
     pub message: String,
@@ -649,28 +649,25 @@ pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
     {
         return Err(format!("Requirement {raw} needs a catalogue match"));
     }
-    let fields: Mapping = entry
-        .fields
-        .iter()
-        .filter(|(key, _)| {
-            key.as_str().is_some_and(|key| {
-                key.starts_with("splat_")
-                    && ![
-                        "splat_optional",
-                        "splat_origin",
-                        "splat_sources",
-                        "splat_reading",
-                        "splat_conversion",
-                        "splat_contracts",
-                        "splat_packages",
-                    ]
-                    .contains(&key)
-            })
-        })
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
     let mut result = Vec::new();
-    references(&Value::Mapping(fields), &mut result)?;
+    for (_, value) in entry.fields.iter().filter(|(key, _)| {
+        key.as_str().is_some_and(|key| {
+            key.starts_with("splat_")
+                && ![
+                    "splat_optional",
+                    "splat_origin",
+                    "splat_sources",
+                    "splat_reading",
+                    "splat_conversion",
+                    "splat_contracts",
+                    "splat_packages",
+                ]
+                .contains(&key)
+        })
+    }) {
+        // The fields are named splat_*, so the top level is never a reference itself.
+        references(value, &mut result)?;
+    }
     result.extend(entry.inventory.iter().map(|r| r.item.clone()));
     Ok(result)
 }
@@ -721,16 +718,21 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
     };
     for &e in entries {
         let mut refs = Vec::new();
-        let mut required_fields: Mapping = e
+        let mut required_fields: Vec<_> = e
             .fields
             .iter()
             .filter(|(key, _)| key.as_str().is_some_and(|key| key.starts_with("splat_")))
-            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
-        required_fields.remove(Value::String("splat_optional".into()));
-        required_fields.remove(Value::String("splat_reading".into()));
         // Provenance is optional: deleting the original must not invalidate a copy.
-        required_fields.remove(Value::String("splat_origin".into()));
+        // These removals keep Mapping::remove's order: the last field takes the gap.
+        for name in ["splat_optional", "splat_reading", "splat_origin"] {
+            if let Some(at) = required_fields
+                .iter()
+                .position(|(key, _)| key.as_str() == Some(name))
+            {
+                required_fields.swap_remove(at);
+            }
+        }
         if let Some(origin) = field(&e.fields, "splat_origin")
             && let Err(msg) = references(origin, &mut Vec::new())
         {
@@ -741,7 +743,11 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
         {
             error(&e.path, msg);
         }
-        if let Err(msg) = references(&Value::Mapping(required_fields), &mut refs) {
+        // The fields are named splat_*, so the top level is never a reference itself.
+        if let Err(msg) = required_fields
+            .into_iter()
+            .try_for_each(|(_, value)| references(value, &mut refs))
+        {
             error(&e.path, msg)
         }
         refs.extend(e.inventory.iter().map(|r| r.item.clone()));
@@ -1197,10 +1203,62 @@ fn read_directory_using(
     root: &Path,
     parse: fn(&str, &str) -> Result<Entry, String>,
 ) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
+    read_folder_using(root, parse).map(|folder| (folder.entries.clone(), folder.errors.clone()))
+}
+
+/// `text` up to the first line that starts with `start`, without that line's newline.
+/// The same as `text.split("\n{start}").next()`, but fast in unoptimized builds.
+fn before_line<'a>(text: &'a str, start: &str) -> &'a str {
+    let mut at = 0;
+    while let Some(newline) = text[at..].find('\n') {
+        let line = at + newline + 1;
+        if text[line..].starts_with(start) {
+            return &text[..line - 1];
+        }
+        at = line;
+    }
+    text
+}
+
+/// Whether a line of `text` starts with `start`, as `text.lines().any(..)` would say.
+fn has_line(text: &str, start: &str) -> bool {
+    text.starts_with(start) || before_line(text, start).len() != text.len()
+}
+
+/// One reading of a folder: its notes, and the text of every Markdown file in it.
+/// The same folder read again with the same texts gives the same shared `Folder`.
+#[derive(Debug)]
+pub struct Folder {
+    /// Each Markdown file read, by path in the folder, with its text and whether it has
+    /// Splat fields. A file that is not a note can still explain a problem with one.
+    texts: Vec<(String, String, bool)>,
+    /// Problems found while walking, before any note was parsed.
+    walked: Vec<Diagnostic>,
+    by_path: std::collections::HashMap<String, usize>,
+    pub entries: Vec<Entry>,
+    pub errors: Vec<Diagnostic>,
+}
+
+impl Folder {
+    /// The text of a Markdown file as this reading saw it.
+    pub fn text(&self, path: &str) -> Option<&str> {
+        self.by_path.get(path).map(|at| self.texts[*at].1.as_str())
+    }
+}
+
+/// [`read_directory`], shared: later reads of unchanged notes return the same `Folder`.
+pub fn read_folder(root: &Path) -> Result<Arc<Folder>, String> {
+    read_folder_using(root, Entry::parse)
+}
+
+fn read_folder_using(
+    root: &Path,
+    parse: fn(&str, &str) -> Result<Entry, String>,
+) -> Result<Arc<Folder>, String> {
     fn walk(
         root: &Path,
         current: &Path,
-        files: &mut Vec<(String, String)>,
+        files: &mut Vec<(String, String, bool)>,
         errors: &mut Vec<Diagnostic>,
     ) -> Result<(), String> {
         let mut report = |path: &Path, message: String| {
@@ -1272,48 +1330,64 @@ fn read_directory_using(
                         continue;
                     }
                 };
-                let normalized = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
                 let name = path
                     .strip_prefix(root)
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .into_owned();
-                let Some(frontmatter) = normalized.strip_prefix("---\n") else {
-                    if normalized.trim_start().starts_with("splat_") {
-                        errors.push(Diagnostic {
-                            path: name,
-                            message: "Line 1: Splat fields need an opening --- line.".into(),
-                        });
+                let note = {
+                    let normalized = text.trim_start_matches('\u{feff}');
+                    // Most notes have no CR. Replacing still copies and scans every byte.
+                    let normalized = if normalized.as_bytes().contains(&b'\r') {
+                        std::borrow::Cow::Owned(normalized.replace("\r\n", "\n"))
+                    } else {
+                        std::borrow::Cow::Borrowed(normalized)
+                    };
+                    if let Some(frontmatter) = normalized.strip_prefix("---\n") {
+                        let frontmatter = before_line(frontmatter, "---");
+                        if has_line(frontmatter, "splat_") {
+                            true
+                        } else {
+                            if ["schema:", "id:", "kind:"]
+                                .iter()
+                                .all(|key| has_line(frontmatter, key))
+                            {
+                                errors.push(Diagnostic { path: name.clone(), message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
+                            }
+                            false
+                        }
+                    } else {
+                        if normalized.trim_start().starts_with("splat_") {
+                            errors.push(Diagnostic {
+                                path: name.clone(),
+                                message: "Line 1: Splat fields need an opening --- line.".into(),
+                            });
+                        }
+                        false
                     }
-                    continue;
                 };
-                let frontmatter = frontmatter.split("\n---").next().unwrap_or(frontmatter);
-                if !frontmatter.lines().any(|line| line.starts_with("splat_")) {
-                    if ["schema:", "id:", "kind:"]
-                        .iter()
-                        .all(|key| frontmatter.lines().any(|line| line.starts_with(key)))
-                    {
-                        errors.push(Diagnostic { path: name, message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
-                    }
-                    continue;
-                }
-                let name = path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .into_owned();
-                files.push((name, text));
+                files.push((name, text, note));
             }
         }
         Ok(())
     }
-    let mut files = Vec::new();
-    let mut errors = Vec::new();
-    walk(root, root, &mut files, &mut errors)?;
+    let key = (root.to_path_buf(), parse as usize);
+    // Pages often read the same folder at the same time. The later ones wait and reuse it.
+    let reading = read_cache::reading(&key);
+    let _reading = reading
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut texts = Vec::new();
+    let mut walked = Vec::new();
+    walk(root, root, &mut texts, &mut walked)?;
+    if let Some(found) = read_cache::find(&key, &texts, &walked) {
+        return Ok(found);
+    }
+    let files: Vec<_> = texts.iter().filter(|(_, _, note)| *note).collect();
     // Parallel parsing preserves traversal order for entries and diagnostics.
     let parsed: Vec<_> = files
         .par_iter()
-        .map(|(path, text)| {
+        .map(|(path, text, _)| {
             parse(path, text).map_err(|message| Diagnostic {
                 path: path.clone(),
                 message,
@@ -1321,17 +1395,79 @@ fn read_directory_using(
         })
         .collect();
     let mut entries = Vec::new();
+    let mut errors = walked.clone();
     for result in parsed {
         match result {
             Ok(entry) => entries.push(entry),
             Err(error) => errors.push(error),
         }
     }
+    let by_path: std::collections::HashMap<_, _> = texts
+        .iter()
+        .enumerate()
+        .map(|(at, (path, _, _))| (path.clone(), at))
+        .collect();
     let catalogue = entries.clone();
-    let sources: std::collections::BTreeMap<_, _> = files.into_iter().collect();
     for entry in &mut entries {
-        let source = &sources[&entry.path];
+        let source = &texts[by_path[&entry.path]].1;
         list_formats::resolve(entry, &catalogue, source);
     }
-    Ok((entries, errors))
+    let folder = Arc::new(Folder {
+        texts,
+        walked,
+        by_path,
+        entries,
+        errors,
+    });
+    read_cache::keep(key, folder.clone());
+    Ok(folder)
+}
+
+/// Several pages read the same folders. Parsing is most of the work, so the last result
+/// for each folder is kept. It is reused only when every Markdown file's text is the same.
+mod read_cache {
+    use super::{Diagnostic, Folder};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    pub(super) type Key = (PathBuf, usize);
+
+    /// Enough for every package and campaign in use; tests make many temporary folders.
+    const LIMIT: usize = 64;
+
+    static CACHE: Mutex<Option<HashMap<Key, Arc<Folder>>>> = Mutex::new(None);
+    static READING: Mutex<Option<HashMap<Key, Arc<Mutex<()>>>>> = Mutex::new(None);
+
+    /// The lock held while one folder is read. Parsing never reads another folder.
+    pub(super) fn reading(key: &Key) -> Arc<Mutex<()>> {
+        let mut locks = READING
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let locks = locks.get_or_insert_with(HashMap::new);
+        if locks.len() >= LIMIT && !locks.contains_key(key) {
+            // A lock still held elsewhere stays shared through its Arc.
+            locks.retain(|_, lock| Arc::strong_count(lock) > 1);
+        }
+        locks.entry(key.clone()).or_default().clone()
+    }
+
+    pub(super) fn find(
+        key: &Key,
+        texts: &[(String, String, bool)],
+        walked: &[Diagnostic],
+    ) -> Option<Arc<Folder>> {
+        let found = CACHE.lock().ok()?.as_ref()?.get(key)?.clone();
+        (found.texts.as_slice() == texts && found.walked.as_slice() == walked).then_some(found)
+    }
+
+    pub(super) fn keep(key: Key, folder: Arc<Folder>) {
+        if let Ok(mut cache) = CACHE.lock() {
+            let cache = cache.get_or_insert_with(HashMap::new);
+            if cache.len() >= LIMIT && !cache.contains_key(&key) {
+                cache.clear();
+            }
+            cache.insert(key, folder);
+        }
+    }
 }
