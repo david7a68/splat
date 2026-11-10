@@ -104,11 +104,13 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
-Session Read view omits plan links already shown beside the note, including group links.
+Session Read view keeps a left-aligned prose width of at most 75 characters per line. Write follows
+the column. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
+A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. An empty note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
 
@@ -124,7 +126,7 @@ provides `Edit in Obsidian` and `Show file`.
 Conversion and draft comparisons align unchanged lines. Their highlights and counts
 show actual changes. **Next difference** moves between separate change groups and
 stays hidden when there is only one group.
-Long conversion previews give the source panes about 60% of the window height and show whole rows.
+Long conversion previews give the source panes about 60% of the window height and show whole aligned rows, with space reserved for the horizontal scroll bar.
 
 Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
 writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
@@ -415,9 +417,10 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+title, length, place and notes. A paused fight on the plan offers Resume even when it came from a timeline event.
+The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
@@ -523,6 +526,34 @@ must cover what the dice can roll. A bad table says so, and the rest of the note
 
 **Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
 run's log, and Undo takes it back. Otherwise it only shows.
+
+### Loot
+
+An encounter's **Loot** list, under its roster, holds what the party finds when the fight is over. Type in **Add loot**
+and press Enter to add the words as a line, such as `30 gp`. While you type, the field offers the campaign's roll
+tables and Library items; the arrow keys and Enter, or a click, choose one. **Roll on a table** lists every table.
+A roll line has a count and its table, and a key that no table has says **Cannot roll** before play. Each line's
+**⋯** menu has **Remove**, with Undo. The note keeps the list as `## Loot`, which Obsidian shows too:
+
+```markdown
+## Loot
+
+- 30 gp
+- [[Potion of Healing]]
+- Roll 2× gems
+```
+
+One creature can carry loot of its own. Open **Changes** on its roster row or group member, and use the same list
+under **Loot**. The table's Changes cell keeps it last, so its words can hold commas:
+`HP +5, Loot Iron key; Roll goblin-pockets`. A line there cannot hold `;`. The row's Changes link says **Loot**, and
+names any table key that cannot roll. Each creature that an encounter group adds carries its member's loot.
+
+In a run, a creature's card shows its loot in one line. When the creature drops to 0 HP, its row says **Loot** and its
+card lists the loot with a **Roll** button for each roll. When the fight ends, the ended view lists the encounter's loot
+and the loot of each creature at 0 HP, with how many rolls are left. **Roll all** makes every roll as one step.
+A result takes the place of its button, the saved run keeps it, and Undo takes it back. Rolls still work after the
+end, because that is when the party searches. **Copy loot** copies the list, with the results, as Markdown for the
+session note. Loot on creatures still standing is under **more creatures carry loot**.
 
 **New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
 entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a

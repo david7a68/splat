@@ -7,7 +7,7 @@ use serde_yaml_ng::{Mapping, Value};
 use std::collections::BTreeSet;
 use uuid::Uuid;
 
-const FIELDS: [&str; 10] = [
+const FIELDS: [&str; 11] = [
     "name",
     "max_hp",
     "armor_class",
@@ -18,6 +18,7 @@ const FIELDS: [&str; 10] = [
     "side",
     "conditions",
     "note",
+    "loot",
 ];
 /// The run's own limit for a maximum.
 const MAX_HP: i64 = 1_000_000;
@@ -190,6 +191,10 @@ pub struct Overrides {
     pub conditions: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// What this one creature carries, as one line: `Iron key; Roll goblin-pockets`. It does
+    /// not change the creature, so it is not a change on its row or card.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loot: Option<String>,
 }
 
 fn text(map: &Mapping, field: &str) -> Result<Option<String>, String> {
@@ -307,6 +312,13 @@ impl Overrides {
                 conditions.push(condition.to_owned());
             }
         }
+        let loot = text(map, "loot")?;
+        if loot
+            .as_ref()
+            .is_some_and(|loot| loot.contains(['\n', '\r']))
+        {
+            return Err("loot must be one line. Separate its parts with ;.".into());
+        }
         Ok(Self {
             name,
             max_hp: change(map, "max_hp", Some((1, MAX_HP)), MAX_HP)?,
@@ -323,6 +335,7 @@ impl Overrides {
             side: text(map, "side")?,
             conditions,
             note: text(map, "note")?,
+            loot,
         })
     }
 
@@ -356,11 +369,31 @@ impl Overrides {
         if let Some(note) = &self.note {
             map.insert("note".into(), note.clone().into());
         }
+        if let Some(loot) = &self.loot {
+            map.insert("loot".into(), loot.clone().into());
+        }
         map
     }
 
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
+    }
+
+    /// Whether anything here changes the creature or its label. Loot alone does not.
+    pub fn changes_creature(&self) -> bool {
+        !Self {
+            loot: None,
+            ..self.clone()
+        }
+        .is_empty()
+    }
+
+    /// Each part of this creature's loot.
+    pub fn loot(&self) -> Vec<super::loot::Loot> {
+        self.loot
+            .as_deref()
+            .map(super::loot::split)
+            .unwrap_or_default()
     }
 
     /// Apply the changes to this creature's values. Nothing here is written anywhere.
@@ -551,6 +584,7 @@ impl Overrides {
             note: None,
             side: None,
             conditions: Vec::new(),
+            loot: None,
             ..self.clone()
         };
         if mechanics.is_empty() {
@@ -659,6 +693,8 @@ mod tests {
             ("{conditions: [3]}", "list of names"),
             ("{conditions: [Prone, prone]}", "twice"),
             ("{note: 3}", "note must be"),
+            ("{loot: \"a\\nb\"}", "one line"),
+            ("{loot: ''}", "loot must be"),
         ] {
             let error = Overrides::parse(&map(text)).unwrap_err();
             assert!(error.contains(words), "{text}: {error}");

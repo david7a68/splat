@@ -9,7 +9,7 @@ use super::{
     fixture::{
         CAMPAIGN, GROUP_ARENA, GROUP_GOBLINS, GROUP_LOST, GROUP_ORPHAN, GROUP_RIVALS, GROUP_SHRINE,
         GROUP_WATCH, MODULE, PAST_SESSION, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD,
-        RUN_PAST, UNLINKED_CAMPAIGN,
+        RUN_PAST, RUN_VAULT, UNLINKED_CAMPAIGN,
     },
     steps::*,
 };
@@ -3404,7 +3404,43 @@ pub mod gallery {
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "Major event", 30);
-        d.state("save-rows-and-add-strip", Sizes::All);
+        d.state_prepared("save-rows-and-add-strip", Sizes::All, |d| {
+            for _ in 0..3 {
+                if d.nodes()
+                    .iter()
+                    .any(|node| node.name == "Major event" && node.fully_in_view())
+                {
+                    break;
+                }
+                d.scroll_at(pos2(600.0, 300.0), 1);
+            }
+            let nodes = d.nodes();
+            let controls: Vec<_> = [
+                "Fight",
+                "Group",
+                "Day",
+                "Long rest",
+                "Short rest",
+                "Travel",
+                "Major event",
+            ]
+            .iter()
+            .map(|name| {
+                nodes
+                    .iter()
+                    .find(|node| node.name == *name && node.fully_in_view())
+                    .unwrap_or_else(|| panic!("Visible full-width Add action: {name}"))
+            })
+            .collect();
+            d.observe(
+                "iter-5-A-seven-actions",
+                !d.has("More Add actions")
+                    && controls
+                        .iter()
+                        .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
+                "All seven Add actions keep one line when their column holds them",
+            );
+        });
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
             if d.visible_text(&temp) {
@@ -3512,7 +3548,7 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
-    /// Write and Read use the whole column beside the plan, and break lines alike.
+    /// Write follows the column; Read keeps a comfortable prose measure.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
         let page = right_of(d, "New session");
@@ -3529,10 +3565,16 @@ pub mod column_resize {
         let read = d.longest_visible_line();
         d.observe(
             CHECK,
-            read > 75 && read.abs_diff(write) <= 2,
+            read <= 75 && write > read,
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
-        d.state("session-read-fills-its-column", Sizes::All);
+        d.state_prepared("session-read-keeps-prose-measure", Sizes::All, |d| {
+            let read = d.longest_visible_line();
+            assert!(
+                read > 0 && read <= 75,
+                "Read keeps its measure at the captured size: {read}"
+            );
+        });
         d.click_add_event("Add Major event");
         d.wait_for_text("Major event added to Session");
         d.wait_for_text("Add to notes");
@@ -3560,6 +3602,61 @@ pub mod column_resize {
                 "The plan add has one named Undo at each window size",
             );
         });
+    }
+
+    fn draft_crosses_note_breakpoint(d: &mut Driver<'_>) {
+        d.set_base(SMALL);
+        write_note(d);
+        assert!(d.has("Note"), "The note starts in the narrow tab layout");
+        d.replace_editor_text(&"Unsent account of the evening.\n".repeat(60));
+        d.press_ctrl(Key::End);
+        d.type_text("Draft stays across the breakpoint.");
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Note text" && node.in_view())
+            .expect("The note is visible");
+        d.scroll_up_at(editor.shown.center(), 8);
+        let before = d.editor_text().expect("The draft is open");
+        let (focused, scroll) = d.note_editor_view();
+        assert!(
+            focused && scroll > 0.0,
+            "The typed draft has focus and is scrolled: {scroll}"
+        );
+        for size in [LARGE, SMALL] {
+            d.set_base(size);
+            assert_eq!(d.has("Plan and notes"), size == LARGE);
+            let (focused, after) = d.note_editor_view();
+            assert_eq!(d.editor_text().as_deref(), Some(before.as_str()));
+            assert!(focused, "The note keeps focus at {size:?}");
+            assert!(
+                (after - scroll).abs() < 1.0,
+                "The note keeps scroll at {size:?}: {scroll} -> {after}"
+            );
+        }
+        d.type_text(" Still typing.");
+        assert!(
+            d.editor_text()
+                .unwrap()
+                .contains("Draft stays across the breakpoint. Still typing.")
+        );
+        d.state("draft-survives-note-breakpoint", Sizes::Default);
+        // Once focus moves from the note to a plan control, narrowing shows the plan.
+        d.set_base(LARGE);
+        assert!(
+            d.tab_to("Add a fight"),
+            "A plan control takes focus beside the note"
+        );
+        d.set_base(SMALL);
+        let shown = d.in_view("Add a fight");
+        let focused = d.focused_name();
+        d.observe(
+            "iter-5-C-focus-follows-plan",
+            shown,
+            format!(
+                "After focus moves to the plan, the narrow page shows the plan (focus: {focused:?})"
+            ),
+        );
     }
 
     pub fn run(d: &mut Driver<'_>) {
@@ -3656,6 +3753,7 @@ pub mod column_resize {
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
         the_session_tabs_fill_their_column(d);
+        draft_crosses_note_breakpoint(d);
 
         // Keyboard proof follows the existing task-cost checks.
         d.click(NAV_LIBRARY);
@@ -5074,6 +5172,50 @@ pub mod session_notes {
         });
         write_note(d);
         d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
+        let draft = d.editor_text().unwrap();
+        let long_draft = (0..60)
+            .map(|at| format!("Unsent line {at}.\n"))
+            .collect::<String>();
+        d.type_into_editor(&long_draft);
+        let unsent = d.editor_text().unwrap();
+        let focus = d.focused_name();
+        assert!(focus.is_some());
+        assert!(d.visible_passage("Unsent line 59."));
+        assert!(!d.visible_passage("Unsent line 0."));
+        let (wide_text, wide_state) = d.at_size(LARGE, |d| {
+            eprintln!(
+                "draft breakpoint large: words {}, focus {:?} -> {:?}, end {}, start {}",
+                d.editor_text().as_ref() == Some(&unsent),
+                focus,
+                d.focused_name(),
+                d.visible_passage("Unsent line 59."),
+                d.visible_passage("Unsent line 0.")
+            );
+            (
+                d.editor_text().as_ref() == Some(&unsent),
+                d.focused_name() == focus
+                    && d.visible_passage("Unsent line 59.")
+                    && !d.visible_passage("Unsent line 0."),
+            )
+        });
+        eprintln!(
+            "draft breakpoint small: words {}, focus {:?} -> {:?}, end {}, start {}",
+            d.editor_text().as_ref() == Some(&unsent),
+            focus,
+            d.focused_name(),
+            d.visible_passage("Unsent line 59."),
+            d.visible_passage("Unsent line 0.")
+        );
+        d.observe("iter-5-A-draft-breakpoint", wide_text && d.editor_text().as_ref() == Some(&unsent),
+            "The unsent note keeps its words through SMALL to LARGE to SMALL without reopening Write");
+        if !wide_state
+            || d.focused_name() != focus
+            || !d.visible_passage("Unsent line 59.")
+            || d.visible_passage("Unsent line 0.")
+        {
+            d.outcome.look_review.push("Known Sessions fault, assigned to package C by the lead: crossing the note/plan breakpoint keeps the draft but loses focus and the wide view's scroll. Package A does not change the editor parent or IDs; see focused-2.log.".into());
+        }
+        d.replace_editor_text(&draft);
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
         d.state("session-written", Sizes::Default);
@@ -5089,7 +5231,36 @@ pub mod session_notes {
         d.expect_same(
             "The narrow view opens Plan; the wide view keeps the empty plan beside the note.",
         );
-        d.state("empty-plan-add-at-top", Sizes::All);
+        d.state_prepared("empty-plan-add-at-top", Sizes::All, |d| {
+            let names = [
+                "Add a fight",
+                "Add a group",
+                ADD_LONG_REST,
+                "More Add actions",
+            ];
+            let nodes = d.nodes();
+            let controls: Vec<_> = names
+                .iter()
+                .map(|name| {
+                    nodes
+                        .iter()
+                        .find(|node| node.name == *name && node.fully_in_view())
+                        .unwrap_or_else(|| panic!("Visible plan action: {name}"))
+                })
+                .collect();
+            d.observe(
+                "iter-5-A-FT5",
+                controls
+                    .iter()
+                    .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0)
+                    && d.visible_text(&format!(
+                        "{}{}",
+                        crate::design::icons::EXPAND,
+                        crate::design::icons::DOWN
+                    )),
+                "Fight, Group, Long rest and More keep one line in the plan at every capture size",
+            );
+        });
         d.state_prepared("session-plan-fight-picker", Sizes::Default, |d| {
             if !d.has("Plan Bridge Ambush") {
                 d.click("Add a fight");
@@ -5101,12 +5272,22 @@ pub mod session_notes {
             d.press(Key::Escape);
             // Long rest is a visible button, one click away, before More opens.
             d.expect(ADD_LONG_REST);
+            assert!(
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == "More Add actions" && node.fully_in_view())
+            );
             d.click("More Add actions");
             d.expect(ADD_SHORT_REST);
             d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
         d.begin_task();
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|node| node.name == ADD_LONG_REST && node.fully_in_view())
+        );
         d.click(ADD_LONG_REST);
         d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
@@ -5200,7 +5381,53 @@ pub mod session_notes {
         d.expect("Everyone at full");
         d.expect("Adds to");
         assert!(!d.has("Adds to:"));
-        d.state("timeline-session-events", Sizes::All);
+        d.state_prepared("timeline-session-events", Sizes::All, |d| {
+            let names = [
+                "Add Fight",
+                ADD_LONG_REST,
+                ADD_SHORT_REST,
+                ADD_TRAVEL,
+                ADD_EVENT,
+                ADD_DAY,
+            ];
+            let nodes = d.nodes();
+            let controls: Vec<_> = names
+                .iter()
+                .filter_map(|name| {
+                    nodes
+                        .iter()
+                        .find(|node| node.name == *name && node.fully_in_view())
+                })
+                .collect();
+            assert!(!controls.is_empty());
+            // Fight and Long rest are always one click away; More shows whenever the rest fold.
+            let required = ["Add Fight", ADD_LONG_REST];
+            let required_shown = required.iter().all(|name| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == *name && node.fully_in_view())
+            });
+            let more_ok = controls.len() == names.len()
+                || nodes
+                    .iter()
+                    .any(|node| node.name == "More Add actions" && node.fully_in_view());
+            d.observe(
+                "iter-5-A-Timeline-strip",
+                required_shown
+                    && more_ok
+                    && controls
+                        .iter()
+                        .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
+                "The Timeline's visible Add actions keep one line",
+            );
+            if !d.has("More Add actions") {
+                assert_eq!(
+                    controls.len(),
+                    names.len(),
+                    "A wide Timeline exposes every action without More"
+                );
+            }
+        });
         d.check_tab_order("timeline");
         d.click_add_event(ADD_DAY);
         d.type_text("Harvest Eve");
@@ -6066,7 +6293,7 @@ pub mod session_recording {
 
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
-    const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+    const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
 
     fn choose_view(d: &mut Driver<'_>, name: &str) {
         if d.has("Recording view") {
@@ -6631,13 +6858,15 @@ pub mod session_recording {
         d.click("Stop recording");
 
         // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
+        let plan_session = d.app_mut().sessions.current();
         write_note(d);
         d.type_into_editor("Words typed after the rename.\n");
         d.app_mut().sessions.simulate_file_renamed();
         d.press_ctrl(Key::S);
         d.expect("Notes not saved");
-        d.state("note-file-gone", Sizes::Default);
-        d.click("Save my words as a new file");
+        d.expect("Your draft is still here.");
+        d.state("note-file-gone", Sizes::All);
+        d.click("Save my draft as a new file");
         d.expect("Notes saved");
         d.observe(
             "T11.4",
@@ -6675,6 +6904,33 @@ pub mod session_recording {
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
+
+        // FT2: return to the original session. Saving the missing note made a new identity.
+        d.click(NAV_SESSIONS);
+        d.app_mut().sessions.select(plan_session);
+        d.settle();
+        show_plan(d);
+        let resume = "Resume: Bridge Ambush";
+        d.state_prepared("timeline-fight-resume", Sizes::All, |d| {
+            assert!(
+                d.in_view(resume),
+                "A paused timeline fight has a visible Resume"
+            );
+        });
+        d.begin_task();
+        assert!(
+            d.in_view(resume),
+            "Resume is visible before its direct click"
+        );
+        d.click(resume);
+        d.audit_goal_within(
+            "iter-5-C-FT2",
+            "resume a timeline fight from its plan row",
+            1,
+        );
+        d.expect(NEXT_TURN);
+        close_run(d);
+        d.click(NAV_SESSIONS);
     }
 }
 
@@ -7406,6 +7662,86 @@ pub mod run_overrides {
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");
+    }
+}
+
+/// Loot: the editor builds a list from typed words and the campaign's tables, a creature that
+/// is down says so on its row, its card lists what it carries, and the ended view lists all of
+/// it with a button for each roll.
+pub mod run_loot {
+    use super::*;
+    const ADD: &str = "Add loot to the encounter";
+    const GUARD: &str = "Vault Guard";
+    const ROLL_ENCOUNTER: &str = "Roll 2× gems for Sunken Vault";
+    const UNDO_ROLLS: &str = "Undo: 2 loot rolls on gems";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN_VAULT);
+        let row = d.row_words(GUARD).replace('\u{a0}', " ");
+        d.observe(
+            "T14.8",
+            row.contains("0 HP") && row.contains("Loot"),
+            format!("A creature at 0 HP with loot says so on its row: {row}"),
+        );
+        d.click_row(GUARD);
+        d.expect("Vault key");
+        d.state("loot-on-the-card", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has("Roll gems for Vault Guard"),
+            "The card lists the creature's loot, with a button for its roll",
+        );
+        d.goal("see what a fallen creature carries");
+
+        d.begin_task();
+        d.click("End encounter…");
+        d.click("End encounter");
+        d.expect("Outcome: ");
+        d.expect("120 gp in a locked coffer");
+        d.state("ended-with-loot", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has(ROLL_ENCOUNTER) && d.has("Roll gems for Vault Guard"),
+            "The ended view lists the encounter's loot and the loot of each creature that is down",
+        );
+        d.click(ROLL_ENCOUNTER);
+        d.expect(" on 1d4");
+        d.state("loot-rolled", Sizes::Default);
+        d.observe(
+            "T14.8",
+            d.has_containing(UNDO_ROLLS),
+            "Each loot roll is one step that Undo takes back, after the fight has ended",
+        );
+        d.goal("roll the loot after a fight");
+
+        // The editor: typed words are a line, and a table comes from the campaign's list.
+        d.begin_task();
+        close_run(d);
+        open_saved_encounter(d, RUN);
+        d.type_into(ADD, "120 gp in a locked coffer");
+        d.press(Key::Enter);
+        d.type_into(ADD, "roll");
+        d.expect("gems · 1d4 · Treasure.md");
+        d.state("loot-table-suggestion", Sizes::Default);
+        d.observe(
+            "T14.8",
+            d.has_containing("the encounter loot line 1"),
+            "Enter adds the typed words as a line, and the field offers the campaign's tables",
+        );
+        d.click_containing("gems · 1d4 · Treasure.md");
+        d.type_into(ADD, "Roll coins");
+        d.press(Key::Enter);
+        d.type_into(ADD, "veil");
+        d.click_containing("Veilglass Lantern ·");
+        d.state("loot-in-the-editor", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has("Rolls on gems, the encounter loot line 2")
+                && d.has_containing("No roll table has the key coins.")
+                && d.has("Library item"),
+            "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
+        );
+        d.goal("add loot and a roll on a campaign table");
     }
 }
 

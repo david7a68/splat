@@ -61,16 +61,16 @@ pub fn run(d: &mut Driver<'_>) {
         note.path.file_name().unwrap().to_string_lossy()
     ));
     d.state("session-copy", Sizes::All);
-    d.click("Make Session 0.md a separate entry");
-    d.expect("Undo separate entry");
-    d.expect("Session 0.md is now a separate entry.");
+    d.click("Make Session 0.md a separate session");
+    d.expect("Undo separate session");
+    d.expect("Session 0.md is now a separate session.");
     d.state("session-copy-repaired", Sizes::All);
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder).len() == 2,
         "Both copies have a session after making a separate entry",
     );
-    d.click("Undo separate entry");
+    d.click("Undo separate session");
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder)[0].path == note.path,

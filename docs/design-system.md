@@ -161,7 +161,7 @@ eye during long sessions.
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
-| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one `More` menu. Let this row wrap only when those visible controls cannot fit |
+| Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
 | Message | `message`, `message_with_action`, `Tone` | Inline icon and bar; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
@@ -368,8 +368,8 @@ write only the open file. A renamed copy comes first, otherwise the newest file 
 ambiguous creatures; Open in Library opens the first repair action's file. Encounter search names hidden
 duplicate notes and offers file-specific identity repair with Undo.
 
-Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same
-entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
+Library, World and Encounters say “These two files claim to be the same entry,” with the file names.
+Sessions use “session” for their repair and Undo actions. Rows say `Same entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
@@ -388,8 +388,8 @@ old-layout links with the reason on hover.
 Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated
 packages start unchecked but can be selected; warn that their converter overwrites these files on its
 next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
-words and skipped files. Omit the kinds line when it has no text. Short previews fit content; long
-previews give the source panes about 60% of window height, ending on whole rows. Headings sit above
+words and skipped files. Omit the kinds line when it has no text. Short previews fit aligned rows, including missing-line hatching; long
+previews give the source panes about 60% of window height, ending on whole rows above the reserved horizontal scroll bar. Headings sit above
 that space. Leave room for the action line at small window sizes. Source lines do not wrap. Mark changes from aligned rows,
 scroll both panes together and open at the first difference. Use the same change-group navigation as
 draft comparisons. Encounter and group conflict comparisons use disk layout and include outside
@@ -404,6 +404,8 @@ check` reports schema-2 flags and unreadable files by path and line.
 
 Campaign's header counts chosen entries only. Flags appear once in the content issue count, with file and
 repair actions on their warning line. Packages keeps its save row directly below the tabs, before notices.
+The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
+An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
 from the package save row. Invalid YAML uses plain words and marks the line to fix.
 
@@ -594,6 +596,19 @@ It must be 1 or more.` Give an upper limit only when exceeded. Done closes the f
 Change forms use the run's condition grid. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
+### Loot lists
+
+One editor holds an encounter's loot and a creature's loot in its Changes, from `loot_editor::show`. Each line is
+a row with a `row_menu` Remove and `Removed <line>.` with `Undo remove loot`. A text line edits in place. A Library
+item shows its name, the book icon and muted `Library item`. A roll shows the dice icon, `Roll`, a `number_field`
+count, `×` and the table as a `menu_button`, then muted dice and note, or a `Cannot roll` warning status with its
+reason. The add field adds the typed words on Enter. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
+only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
+refuses `;`, with the reason beside the field. Its Changes link stays one word, `Loot`, and names any key with no
+table. In a run, a standing creature's card has one muted `Loot · …` line, and the list opens at 0 HP. A result
+replaces its Roll button: the found thing first, then muted `<key> · <values> on <dice>`. The ended view puts
+`LOOT`, a muted `N to roll`, secondary `Roll all N` and quiet `Copy loot` on one line above Final state.
+
 Run settings put Roll NPC initiative help directly below its dropdown, before the tie checkbox: `Run setup
 starts with this choice. You can change it there for one roll. Groups that arrive later use it too.`
 
@@ -749,8 +764,10 @@ characters.
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic
 emphasis, and visible markup in the plain face and faint colour. Store exactly what was typed so Obsidian
-reads the same text. Read uses the one Reader. Both views fill the column and keep line breaks. Notes, events
-and recordings follow column width; book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
+reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
+(at most 75 characters per line).
+Write follows the column and keeps stored line breaks. Events and recordings follow column width;
+book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
 delay. Disk changes stop saving and open the comparison in Keeping a draft. Missing notes show Notes not saved
 with error status in header and rail. Rail conflicts say Notes changed, with Notes changed on disk on hover
@@ -788,15 +805,17 @@ align with the name and use Timeline form parts. A caret and accessible expanded
 hairline follows details after `S`. New events stay closed with kind as title. Open rows show Title and Notes;
 duration and place stay on Timeline. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
-More holds Day, Short rest, Travel and Major event. If the visible controls and More cannot fit, that one row
-may wrap at the first action's left edge. Long rest stays one click away (T11.2). Timeline uses the same width rule.
+a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.
 It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
-fight here and in Encounters. Saved unfinished fights offer Resume, with Start a new run and Delete the saved
-run in the menu. Open fights use a status link while the strip owns primary. Planned, played and running
+fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
+is not a planned note link.
+Find the saved run by its run ID among all unfinished runs. Delete the saved run stays in the menu;
+Start a new run is available when a planned encounter supplies its source. Open fights use a status link
+while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole; join
 separators to the next part and wrap without trailing dots. Group summaries wrap to two lines, then shorten
 with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
@@ -852,7 +871,7 @@ actions; flagged days have a warning icon. Rail conflicts use warning Timeline c
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate entry with Undo separate entry. Moved drafts
+Make <file> a separate session with Undo separate session. Moved drafts
 offer the new path and Let it go. Missing session and run folders offer Choose folder.
 
 ### Notes panel

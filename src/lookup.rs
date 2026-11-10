@@ -135,6 +135,8 @@ pub struct ContentIndex {
     /// What the campaign's files looked like just before this was read.
     files_seen: u64,
     pub errors: Vec<String>,
+    /// The loot editor's tables and items, read the first time a page asks.
+    loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
 }
@@ -490,6 +492,51 @@ impl ContentIndex {
             .collect();
         notes.sort_unstable();
         crate::npc_generator::Tables::read(notes)
+    }
+
+    /// The campaign's roll table with this key, ready to roll, or why there can be none.
+    pub fn roll_table(&self, key: &str) -> Result<crate::roll_table::TableRoll, String> {
+        self.loot_sources().roll(key)
+    }
+
+    /// What a loot list can name: each roll table in the campaign's own notes by its key, the
+    /// first by path, and the items this campaign can use. Read once for this index.
+    pub fn loot_sources(&self) -> Arc<crate::loot_editor::Sources> {
+        self.loot
+            .get_or_init(|| {
+                let mut notes: Vec<(&str, &str)> = self
+                    .items
+                    .iter()
+                    .filter(|item| item.is_world_note() || item.private)
+                    .map(|item| (item.entry.path.as_str(), item.entry.body.as_str()))
+                    .collect();
+                notes.sort_unstable();
+                let items = (0..self.items.len())
+                    .filter(|&at| {
+                        let item = &self.items[at];
+                        item.entry.kind == "item"
+                            && (item.private
+                                || self
+                                    .usable
+                                    .as_ref()
+                                    .is_none_or(|usable| usable.contains(&item.entry.id)))
+                    })
+                    .map(|at| {
+                        let item = &self.items[at];
+                        crate::loot_editor::Item {
+                            name: item.entry.name.clone(),
+                            lower: item.lower.clone(),
+                            link: self.link_to(at),
+                            detail: item.result_detail(),
+                        }
+                    })
+                    .collect();
+                Arc::new(crate::loot_editor::Sources {
+                    tables: crate::loot_editor::Sources::tables_from(notes),
+                    items,
+                })
+            })
+            .clone()
     }
 
     /// Who links to each note or entry, and who names each world entry in whole words.
@@ -2163,12 +2210,9 @@ mod tests {
                 .count(),
             2
         );
-        assert!(
-            index
-                .errors
-                .iter()
-                .any(|error| error.contains("Choose one in World"))
-        );
+        assert!(index.errors.iter().any(|error| {
+            error.contains("These two files claim to be the same entry: Rook copy.md and Rook.md.")
+        }));
         assert!(index.position(id).is_none());
         assert!(
             matches!(index.follow("Rook", &index.items[index.world[0]]), Go::Many(positions) if positions.len() == 2)
