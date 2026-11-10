@@ -5447,6 +5447,7 @@ struct RowLayout {
     tight: bool,
     fit: RowFit,
     bar_inset: f32,
+    bar_below_detail: bool,
     /// The compressed list's shared row height, once any spare room is shared out.
     even: f32,
     initiative_right: f32,
@@ -5756,6 +5757,7 @@ impl RowLayout {
                 longest_name,
             );
         }
+        let mut bar_below_detail = false;
         // At the narrowest width, mandatory state words can need the unused left
         // part of the HP bar. Keep the bar under HP, with at least an XL of length.
         if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
@@ -5772,7 +5774,12 @@ impl RowLayout {
                 for section in &mut job.sections {
                     section.format.font_id = Type::Small.sized(ui, scale.mark);
                 }
-                second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+                second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job.clone())));
+                if second_line.as_ref().is_some_and(|line| line.rows.len() > 1) {
+                    bar_below_detail = true;
+                    job.wrap.max_width = (width - second_left - design::XS).max(1.0);
+                    second_line = Some(ui.fonts_mut(|fonts| fonts.layout_job(job)));
+                }
             }
         }
         let name = ui.fonts_mut(|fonts| {
@@ -5794,6 +5801,7 @@ impl RowLayout {
             name,
             even: 0.0,
             bar_inset,
+            bar_below_detail,
             second_line,
             condition_spans,
             initiative_span,
@@ -5838,12 +5846,22 @@ impl RowLayout {
         let name_line = self.name_line(scale);
         if self.fit != RowFit::Natural {
             return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
-                .max(self.even);
+                .max(self.even)
+                + if self.bar_below_detail {
+                    design::S
+                } else {
+                    0.0
+                };
         }
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale
             .row
             .max(top + name_line + self.name_extra() + second + 3.0)
+            + if self.bar_below_detail {
+                design::S
+            } else {
+                0.0
+            }
     }
 
     /// The height a wrapped name adds under its first line.
@@ -6115,7 +6133,11 @@ fn paint_row(
         (scale.row / 14.0).clamp(3.0, 5.0)
     };
     // Close under the digits, and clear of the hairline.
-    let bar_top = (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0);
+    let bar_top = if layout.bar_below_detail {
+        rect.bottom() - bar_height - design::HAIRLINE_WIDTH
+    } else {
+        (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0)
+    };
     let bar = Rect::from_min_max(
         pos2(x + layout.temp_right + layout.bar_inset + 4.0, bar_top),
         pos2(hp_right, bar_top + bar_height),
@@ -6277,7 +6299,14 @@ mod tests {
                         0.0,
                     );
                     let line = layout.second_line.unwrap();
-                    assert_eq!(line.rows.len(), 1, "{}", line.text());
+                    assert_eq!(
+                        line.rows.len(),
+                        1,
+                        "{} width={} rows={:?}",
+                        line.text(),
+                        line.job.wrap.max_width,
+                        line.rows.iter().map(|row| row.size).collect::<Vec<_>>()
+                    );
                     for word in ["Bloodied", "Absent", "Poisoned", "Sync", "off"] {
                         assert!(line.text().contains(word));
                     }
