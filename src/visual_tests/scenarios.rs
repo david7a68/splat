@@ -1311,7 +1311,50 @@ pub mod party {
             d.has_containing("Local edits"),
             "The affected party row marks its local edits",
         );
+        // The warning asks the DM to connect, so its own line has the way to connect, first.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let words = d.painted_rect_in("Connect, then replace it.", egui::Rect::EVERYTHING);
+                let connect = d.place_of("Connect D&D Beyond");
+                let file = d.place_of("Show file");
+                let placed = match (words, connect, file) {
+                    (Some(words), Some(connect), Some(file)) => {
+                        // One line: the bordered button is taller than the link beside it.
+                        (connect.top()..=connect.bottom()).contains(&file.center().y)
+                            && file.left() - connect.right() >= crate::design::L - 0.5
+                            && connect.left() >= words.left() - 0.5
+                    }
+                    _ => false,
+                };
+                (
+                    placed,
+                    format!("words {words:?}, connect {connect:?}, file {file:?}"),
+                )
+            });
+            d.observe(
+                "iter-14-B-FD1",
+                placed,
+                format!(
+                    "Connect D&D Beyond comes before Show file on the warning at {size:?}: {detail}"
+                ),
+            );
+        }
         d.state("copy-has-local-edits-signed-out", Sizes::All);
+        d.click("Connect D&D Beyond");
+        d.observe(
+            "iter-14-B-FD1-opens",
+            d.page_title().as_deref() == Some("Settings")
+                && d.focused_name().as_deref() == Some("Paste session cookie"),
+            "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
+        );
+        d.click(NAV_PARTY);
+        d.expect(CONNECT_FIRST);
+        // Must stay true: the edited note is still on disk, untouched, after the detour.
+        d.observe(
+            "iter-14-B-FD1-safe",
+            std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
+            "Opening Settings from the warning leaves the edited note as it was",
+        );
         d.click(CONNECT_FIRST);
         d.observe(
             "iter-18-B-P3",
@@ -4417,6 +4460,20 @@ pub mod run_edge_states {
                         (safe.center().y - red.center().y).abs() < 1.0
                             && red.left() - safe.right() >= crate::design::L
                     })
+            },
+        );
+        // Both choices start at the message text, not at the warning bar.
+        d.observe_both(
+            "iter-14-B-AT2",
+            "Save as a new run starts at the message text edge, and the red choice follows it",
+            |d| {
+                let text = d.painted_rect_in("This run changed on disk", egui::Rect::EVERYTHING);
+                match (text, d.place_of(SAVE_AS_NEW), d.place_of(KEEP_RUN)) {
+                    (Some(text), Some(safe), Some(red)) => {
+                        (safe.left() - text.left()).abs() < 1.0 && red.left() > safe.right()
+                    }
+                    _ => false,
+                }
             },
         );
         d.state("changed-on-disk", Sizes::Default);
@@ -8481,6 +8538,46 @@ pub mod encounter_groups {
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
         d.expect("Replace Unknown creature");
+        // The repair link is a notice action: its words start at the warning text, and its icon
+        // hangs in the gutter before them.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (aligned, detail) = d.at_size(size, |d| {
+                let text = d.painted_rect_in(
+                    "This campaign cannot find this creature",
+                    egui::Rect::EVERYTHING,
+                );
+                let mut words = None;
+                d.each_painted_text(|shape, _| {
+                    let job = &shape.galley.job.text;
+                    if let Some(at) = job.find("Campaign → Packages")
+                        && let Some(row) = shape.galley.rows.first()
+                        && let Some(glyph) = row.glyphs.get(job[..at].chars().count())
+                    {
+                        words = Some(shape.pos.x + row.pos.x + glyph.pos.x);
+                    }
+                });
+                let link = d.place_of("Campaign → Packages");
+                let aligned = match (text, words, link) {
+                    (Some(text), Some(words), Some(link)) => {
+                        (words - text.left()).abs() < 1.0
+                            && link.left() < text.left() - 1.0
+                            && link.top() >= text.bottom() - 0.5
+                    }
+                    _ => false,
+                };
+                (
+                    aligned,
+                    format!("text {text:?}, words {words:?}, link {link:?}"),
+                )
+            });
+            d.observe(
+                "iter-14-B-AT3",
+                aligned,
+                format!(
+                    "Campaign → Packages starts its words at the warning text at {size:?}: {detail}"
+                ),
+            );
+        }
         d.state("group-unavailable-creature", Sizes::All);
         d.click("Changes for Cinder Wolf");
         let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become −28"));
@@ -9539,6 +9636,59 @@ pub mod run_add_creature {
         assert!(!d.has_containing("Added by hand: Wolf"));
         d.clear_text_in(FIELD);
         d.expect("Added by hand: Wolf");
+        d.begin_task();
+        d.type_into(FIELD, "wolf");
+        d.expect("Choose Wolf");
+        // Show all lists every match in place: the words, the chosen match and the list stay.
+        let choices = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Choose ") && node.in_view())
+                .count()
+        };
+        let show_all = d
+            .nodes()
+            .into_iter()
+            .find_map(|node| {
+                node.name
+                    .strip_prefix("Show all ")
+                    .and_then(|count| count.parse::<usize>().ok())
+            })
+            .expect("Show all names how many creatures match");
+        let before = choices(d);
+        d.click(&format!("Show all {show_all}"));
+        d.observe(
+            "iter-14-B-AT1",
+            before == 5
+                && show_all > before
+                && choices(d) == show_all
+                && !d.has_containing("Show all")
+                && !d.has_containing("Keep typing")
+                && d.in_view(FIELD)
+                && d.in_view("Choose Wolf")
+                && d.row_node("Wolf 2").is_some_and(|row| row.in_view()),
+            format!(
+                "Show all {show_all} lists every match ({before} before, {} after), with the \
+                 words, the chosen match and the roster in view",
+                choices(d)
+            ),
+        );
+        // Must stay true: the button still adds the whole name typed.
+        d.observe(
+            "iter-14-B-AT1-add",
+            d.has("Add Wolf to the initiative list"),
+            "With every match listed, the button still adds the whole name typed",
+        );
+        d.state("arrivals-found-all", Sizes::All);
+        // New words start a short list again, and the same words do not bring the long one back.
+        d.replace_text_in(FIELD, "wol");
+        d.replace_text_in(FIELD, "wolf");
+        d.observe(
+            "iter-14-B-AT1-reset",
+            choices(d) == 5 && d.has(&format!("Show all {show_all}")),
+            "Changed words close Show all",
+        );
+        d.clear_text_in(FIELD);
         d.begin_task();
     }
 }

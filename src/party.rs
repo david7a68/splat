@@ -568,26 +568,30 @@ impl Party {
                 "{name}'s sheet file has your own edits, so Splat stopped updating it.\n{next}"
             );
             let waiting = self.reader.force_waiting();
-            let action = if waiting {
+            let action = if !connected {
+                CONNECT
+            } else if waiting {
                 "Waiting for D&D Beyond."
-            } else if connected {
+            } else {
                 "Replace with D&D Beyond sheet"
-            } else {
-                "Connect D&D Beyond"
             };
-            let actions = if connected {
-                vec![action, "Show file"]
-            } else {
-                vec!["Show file"]
-            };
-            storage_notice(ui, Tone::Warning, &words, &actions, |ui| {
-                if waiting && connected {
-                    ui.label(Type::Small.rich(ui, action).color(colors().muted));
-                } else if connected
-                    && Action::secondary(action)
+            storage_notice(ui, Tone::Warning, &words, &[action, "Show file"], |ui| {
+                if !connected {
+                    // The message asks the DM to connect, so the way to connect is on its line.
+                    if Action::secondary(action)
                         .density(Density::Read)
+                        .hint("Opens Settings, the same place as Connect to refresh")
                         .show(ui)
                         .clicked()
+                    {
+                        self.wants_settings = true;
+                    }
+                } else if waiting {
+                    ui.label(Type::Small.rich(ui, action).color(colors().muted));
+                } else if Action::secondary(action)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                 {
                     if conflicts.len() == 1 {
                         self.reader.force_read();
@@ -870,6 +874,8 @@ pub struct LiveValues {
 
 /// One entry on a sheet page: its name and its facts.
 const ENTRY_ROW: f32 = 40.0;
+/// The way to connect, wherever the party asks the DM to.
+const CONNECT: &str = "Connect D&D Beyond";
 /// Sync stops only when the connection ends, and starts again when it comes back.
 const SYNC_STOPPED: &str = "Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.";
 

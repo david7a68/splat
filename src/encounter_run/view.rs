@@ -580,29 +580,32 @@ impl Run {
 
     /// The run cannot save until the DM chooses, so this cannot be dismissed.
     fn disk_conflict_line(&mut self, ui: &mut egui::Ui) {
-        design::message(ui, Tone::Error, super::DISK_CONFLICT);
-        ui.add_space(design::XS);
-        let mut outcome = None;
-        ui.horizontal(|ui| {
-            // Neither action is filled: the safe one comes first, and the red one keeps an `L` gap.
-            if Action::secondary("Save as a new run")
-                .density(Density::Read)
-                .hint("Keep the changed file as it is, and save this run beside it")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.save_as_new_run());
-            }
-            ui.add_space(design::L);
-            if Action::destructive("Replace the file with this run")
-                .density(Density::Read)
-                .hint("The changes in the file on disk are lost")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.keep_this_run());
-            }
+        // The choices start at the message text, like every other message with choices.
+        let choice = design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
+            ui.add_space(design::XS);
+            ui.horizontal(|ui| {
+                // Neither action is filled: the safe one comes first, and the red one keeps an
+                // `L` gap.
+                let save_new = Action::secondary("Save as a new run")
+                    .density(Density::Read)
+                    .hint("Keep the changed file as it is, and save this run beside it")
+                    .show(ui)
+                    .clicked();
+                ui.add_space(design::L);
+                let replace = Action::destructive("Replace the file with this run")
+                    .density(Density::Read)
+                    .hint("The changes in the file on disk are lost")
+                    .show(ui)
+                    .clicked();
+                (save_new, replace)
+            })
+            .inner
         });
+        let outcome = match choice {
+            (true, _) => Some(self.save_as_new_run()),
+            (_, true) => Some(self.keep_this_run()),
+            _ => None,
+        };
         if let Some(Err(error)) = outcome {
             self.error = Some(error);
         }
