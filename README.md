@@ -799,7 +799,7 @@ creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, the warning has **Connect D&D Beyond**, and the header has **Connect to refresh**. Both take you to the connection. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, the warning has **Connect D&D Beyond**, which takes you to the connection. While that warning shows, the header shows only **Not connected** and when the sheets were fetched; it offers **Connect to refresh** again when no warning has its own Connect. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 

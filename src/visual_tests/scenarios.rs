@@ -24,6 +24,88 @@ pub mod world_build;
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 
+/// Message choices start at the message text, never at its bar. `choices` are in order and must
+/// all show. `gap` names the choice that keeps exactly an `L` gap from the one before it (the red
+/// choice, or a quiet dismissal): on a shared line the gap is `L`; on a line of its own it starts at
+/// the text edge, as every wrapped choice does.
+fn check_choices_at_text(
+    d: &mut Driver<'_>,
+    id: &str,
+    words: &str,
+    choices: &[&str],
+    gap: Option<&str>,
+    sizes: &[(f32, f32)],
+) {
+    for &size in sizes {
+        let (passed, detail) = d.at_size(size, |d| {
+            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+            let places: Vec<_> = choices.iter().map(|name| d.place_of(name)).collect();
+            let detail = format!(
+                "Choices {choices:?} start at the text of \"{words}\" at {size:?}: text {text:?}, choices {places:?}"
+            );
+            let (Some(text), Some(places)) = (text, places.into_iter().collect::<Option<Vec<_>>>())
+            else {
+                return (false, detail);
+            };
+            let first = (places[0].left() - text.left()).abs() < 1.0;
+            let below = places
+                .iter()
+                .all(|place| place.left() >= text.left() - 0.5 && place.top() >= text.bottom());
+            let spaced = gap.is_none_or(|gap| {
+                choices
+                    .iter()
+                    .position(|name| *name == gap)
+                    .filter(|at| *at > 0)
+                    .is_some_and(|at| {
+                        let (before, after) = (places[at - 1], places[at]);
+                        if (before.center().y - after.center().y).abs() < 1.0 {
+                            (after.left() - before.right() - crate::design::L).abs() < 1.0
+                        } else {
+                            (after.left() - text.left()).abs() < 1.0
+                        }
+                    })
+            });
+            (first && below && spaced, detail)
+        });
+        d.observe(id, passed, detail);
+    }
+}
+
+/// Where each painted copy of these words starts on screen, after stepping back `back`
+/// characters (to the icon before them). Only copies inside their pane's clip count.
+fn painted_starts(d: &Driver<'_>, words: &str, back: usize) -> Vec<Pos2> {
+    let mut starts = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job.text;
+        if let Some(at) = job.find(words) {
+            let index = job[..at].chars().count().saturating_sub(back);
+            let rect = text
+                .galley
+                .pos_from_cursor(egui::text::CCursor::new(index))
+                .translate(text.pos.to_vec2());
+            if clip.contains(rect.center()) {
+                starts.push(rect.left_top());
+            }
+        }
+    });
+    starts
+}
+
+/// Every disk-conflict choice row uses the Read density, so its buttons are one height on every
+/// page. Runs at the size being captured.
+fn conflict_choices_read_height(d: &mut Driver<'_>, id: &str, safe: &str, red: &str) {
+    let height = crate::design::Density::Read.control();
+    let (safe_rect, red_rect) = (d.place_of(safe), d.place_of(red));
+    let size = d.window_size();
+    d.observe(
+        id,
+        safe_rect.zip(red_rect).is_some_and(|(safe, red)| {
+            (safe.height() - height).abs() < 0.5 && (red.height() - height).abs() < 0.5
+        }),
+        format!("At {size:?}: {safe} {safe_rect:?} and {red} {red_rect:?} are {height} px tall"),
+    );
+}
+
 /// iter-15-E: a file-conflict message's choices start at its text edge, not at its bar. The safe
 /// choice comes first; the red one follows exactly `L` after it on the same line (every captured
 /// size has room for both). `below`, when given, is text that must stay under both choices. The
@@ -531,6 +613,7 @@ pub mod library_author {
                 RELOAD_DISK,
                 Some("YOUR DRAFT"),
             );
+            conflict_choices_read_height(d, "iter-15-B2-density-library", OVERWRITE, RELOAD_DISK);
             // Each column is (width - gap) / 2 wide, so the second starts (width + gap) / 2 after
             // the first; the theme's gap is S. At 1920x1080 the side-by-side comparison takes the
             // full pane, wider than the source editor (a 720 px cap measures exactly 720).
@@ -1385,7 +1468,7 @@ pub mod party {
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
-        d.expect(CONNECT_FIRST);
+        d.expect(CONNECT);
         d.observe(
             "Force read needs a session",
             !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
@@ -1424,8 +1507,19 @@ pub mod party {
                 ),
             );
         }
+        // One action, one name: the warning's Connect D&D Beyond is the only way to connect on
+        // the page. The header keeps the state.
+        d.observe_both(
+            "iter-15-B-FD8",
+            "With the warning's Connect D&D Beyond, the header shows only Not connected and when it fetched",
+            |d| {
+                !d.has(CONNECT_FIRST)
+                    && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1
+                    && d.visible_text("Not connected · Fetched")
+            },
+        );
         d.state("copy-has-local-edits-signed-out", Sizes::All);
-        d.click("Connect D&D Beyond");
+        d.click(CONNECT);
         d.observe(
             "iter-14-B-FD1-opens",
             d.page_title().as_deref() == Some("Settings")
@@ -1433,21 +1527,19 @@ pub mod party {
             "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
         );
         d.click(NAV_PARTY);
-        d.expect(CONNECT_FIRST);
+        d.expect(CONNECT);
         // Must stay true: the edited note is still on disk, untouched, after the detour.
         d.observe(
             "iter-14-B-FD1-safe",
             std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
             "Opening Settings from the warning leaves the edited note as it was",
         );
-        d.click(CONNECT_FIRST);
         d.observe(
-            "iter-18-B-P3",
-            d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
-            "The Party header connects with the cookie field focused while local edits remain safe",
+            "iter-15-B-FD8-back",
+            !d.has(CONNECT_FIRST)
+                && d.nodes().iter().filter(|node| node.name == CONNECT).count() == 1,
+            "Back from Settings, the warning still owns the one Connect D&D Beyond",
         );
-        d.click(NAV_PARTY);
 
         d.app_mut()
             .settings
@@ -1504,6 +1596,7 @@ pub mod party {
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Connect to refresh";
+    const CONNECT: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
@@ -1523,6 +1616,11 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
+    const CHANGED_ON_DISK: &str = "changed on disk. Your draft is safe until you choose.";
+    const OVERWRITE: &str = "Overwrite with my draft";
+    const RELOAD: &str = "Reload and lose my draft";
+    const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
+    const DRAFT_WORDS: &str = " Ash on the water.";
     const RESULT_NAME: &str = "Wolf";
     const OWN_CREATURE: &str = "Cinder Wolf";
     const EDITOR_NAME: &str = "Encounter name";
@@ -1714,6 +1812,58 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+
+        // Another program changes the encounter while the DM edits it. The choices start at the
+        // message text: the safe one first, then exactly `L` before the red one.
+        let file = d
+            .root
+            .join("campaigns/emberfall/Encounters/Bridge Ambush.md");
+        let outside = std::fs::read_to_string(&file).expect("read the encounter") + OUTSIDE_WORDS;
+        std::fs::write(&file, &outside).expect("change the encounter on disk");
+        d.type_into("Read-aloud and notes", DRAFT_WORDS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect(CHANGED_ON_DISK);
+        d.observe(
+            "iter-15-B-EC-safe",
+            std::fs::read_to_string(&file).is_ok_and(|text| text == outside)
+                && d.has_containing(OUTSIDE_WORDS.trim()),
+            "The changed file stays as it is, and the comparison shows its words, until the DM chooses",
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let text = d.painted_rect_in(CHANGED_ON_DISK, egui::Rect::EVERYTHING);
+                let safe = d.place_of(OVERWRITE);
+                let red = d.place_of(RELOAD);
+                let placed = match (text, safe, red) {
+                    (Some(text), Some(safe), Some(red)) => {
+                        (safe.left() - text.left()).abs() < 1.0
+                            && safe.top() >= text.bottom() - 0.5
+                            && (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    }
+                    _ => false,
+                };
+                (placed, format!("text {text:?}, safe {safe:?}, red {red:?}"))
+            });
+            d.observe(
+                "iter-15-B-EC",
+                placed,
+                format!(
+                    "Overwrite with my draft starts at the message text, and the red choice is L after it at {size:?}: {detail}"
+                ),
+            );
+        }
+        d.state_prepared("encounter-changed-on-disk", Sizes::All, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density", OVERWRITE, RELOAD);
+        });
+        d.click(OVERWRITE);
+        d.expect(SAVED_NOTE);
+        d.observe(
+            "iter-15-B-EC-overwrite",
+            !d.has(OVERWRITE)
+                && std::fs::read_to_string(&file).is_ok_and(|text| text.contains(DRAFT_WORDS)),
+            "Overwrite with my draft still saves the draft over the changed file",
+        );
         d.click(RESUME);
         d.expect(&format!("{RUN_HEADING}Bridge Ambush"));
         d.observe(
@@ -4561,7 +4711,22 @@ pub mod run_edge_states {
                 }
             },
         );
-        d.state("changed-on-disk", Sizes::Default);
+        // Exactly `L`: egui's own item spacing once made this gap 24 px.
+        d.observe_both(
+            "iter-15-B-ST4",
+            "Replace the file with this run starts exactly L after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && (red.left() - safe.right() - crate::design::L).abs() < 0.5
+                    })
+            },
+        );
+        d.state_prepared("changed-on-disk", Sizes::Default, |d| {
+            conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
+        });
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(
@@ -4910,6 +5075,23 @@ pub mod run_roster_conflict {
             .simulate_sync_state(SYNCED, SyncState::Conflict);
         d.settle();
         d.state("roster-of-12-with-conflict", Sizes::All);
+        // On the compact row, the conflict's icon starts where Bloodied's icon starts on the
+        // rows below: the second lines share one left edge.
+        let (aligned, detail) = d.at_size(SMALL, |d| {
+            let conflict = painted_starts(d, "Conflict", 2);
+            let bloodied = painted_starts(d, "Bloodied", 2);
+            let aligned = matches!(conflict.as_slice(), [conflict] if !bloodied.is_empty()
+                && bloodied.iter().all(|b| (b.x - conflict.x).abs() < 0.5));
+            (
+                aligned,
+                format!("conflict {conflict:?}, bloodied {bloodied:?}"),
+            )
+        });
+        d.observe(
+            "iter-15-B-FT3",
+            aligned,
+            format!("The compact row's Conflict starts at the second line's edge: {detail}"),
+        );
         let nodes = d.nodes();
         let rows = run_large_roster::ROSTER_12
             .iter()
@@ -6319,9 +6501,32 @@ pub mod session_notes {
             d.has_containing("Written in Obsidian."),
             "A conflict shows the file's words, so the DM chooses knowing both",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-conflict",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-conflict", Sizes::All);
         d.click("Record this session");
         d.expect("Start recording");
+        // Two stacked messages share one left edge for their choices: each message's text.
+        for (words, choices, gap) in [
+            (
+                "This note changed on disk.",
+                &["Overwrite with my draft", "Reload and lose my draft"][..],
+                Some("Reload and lose my draft"),
+            ),
+            (
+                "Tell everyone at the table first.",
+                &["Start recording", "Not now"][..],
+                None,
+            ),
+        ] {
+            check_choices_at_text(d, "iter-15-C-FT1-stacked", words, choices, gap, &[DEFAULT]);
+        }
         d.observe(
             "iter-5-S2",
             d.has("Overwrite with my draft"),
@@ -6335,6 +6540,14 @@ pub mod session_notes {
             "iter-5-S2",
             recording_in_conflict,
             "Audio recording starts while the note conflict stays unresolved",
+        );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST1",
+            "This note changed on disk.",
+            &["Overwrite with my draft", "Reload and lose my draft"],
+            Some("Reload and lose my draft"),
+            &[DEFAULT],
         );
         d.state("note-conflict-recording", Sizes::Default);
         d.click("Stop recording");
@@ -6358,6 +6571,31 @@ pub mod session_notes {
             d.has_containing("My words during the conflict."),
             "Opening the session again keeps the words that could not be saved",
         );
+        // Reload names itself as World does, and Undo reload brings the draft back. A new outside
+        // change then brings the same choices back, so the step below starts where it did.
+        d.aside(|d| {
+            d.click("Reload and lose my draft");
+            d.expect("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-reload",
+                d.visible_text("Reloaded from disk.")
+                    && !d.visible_text("Draft dropped.")
+                    && d.editor_text()
+                        .is_some_and(|text| !text.contains("My words during the conflict.")),
+                "Reload says Reloaded from disk. with Undo reload, and the editor shows the file",
+            );
+            d.click("Undo reload");
+            d.observe(
+                "iter-15-C-FT4-undo-reload",
+                !d.has("Undo reload")
+                    && d.editor_text()
+                        .is_some_and(|text| text.contains("My words during the conflict.")),
+                "Undo reload puts the draft's words back in the editor",
+            );
+            d.app_mut().sessions.simulate_disk_change();
+            d.press_ctrl(Key::S);
+            d.expect("Overwrite with my draft");
+        });
         d.click("Overwrite with my draft");
         d.expect("Notes saved");
 
@@ -6789,6 +7027,14 @@ pub mod session_notes {
             d.has_containing("This session is dated 2025-12-25."),
             "The panel warns when the session being played looks like an old one",
         );
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST3",
+            "This session is dated 2025-12-25.",
+            &["Play it tonight", "New session"],
+            None,
+            &[DEFAULT],
+        );
         d.state("run-with-old-note", Sizes::Default);
         d.observe(
             "T11.8",
@@ -7073,6 +7319,22 @@ pub mod session_recording {
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The check returned nothing, so the clean transcript was not checked.";
+    const DISCARD: &str = "Discard";
+
+    /// FT2: one `L` gap between the recording's result links and its marked events heading.
+    fn check_events_gap(d: &mut Driver<'_>, id: &str) {
+        let heading = d.painted_rect_in("EVENTS MARKED IN THIS RECORDING", egui::Rect::EVERYTHING);
+        let links = d.place_of("Raw transcript");
+        let gap = heading
+            .zip(links)
+            .map(|(heading, links)| heading.top() - links.bottom());
+        d.observe(
+            id,
+            // The heading's capitals sit 1 px inside their `L`-spaced line.
+            gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
+            format!("The marked events heading sits L below Raw transcript: gap {gap:?}"),
+        );
+    }
 
     fn check_processing_action(d: &mut Driver<'_>, prefix: &str, primary: bool) {
         let actions: Vec<_> = d
@@ -7165,6 +7427,19 @@ pub mod session_recording {
                     .any(|node| node.in_view() && node.name.starts_with("Process:"))
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+            let size = d.window_size();
+            check_choices_at_text(
+                d,
+                "iter-15-C-FD5",
+                "Processing Session 1: Failed processing failed",
+                &[
+                    "Continue processing",
+                    "Open the session",
+                    "Dismiss this error",
+                ],
+                Some("Dismiss this error"),
+                &[size],
+            );
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
@@ -7282,6 +7557,38 @@ pub mod session_recording {
         assert!(d.in_view("Choose an input"));
         d.click("Choose an input");
         d.expect("Recording input");
+
+        // Dismiss alone: Session 1's recording stopped, another recording runs (so no Record
+        // again), and Session 1's own Recordings tab is open behind its details form (so no Open
+        // the session). Dismiss is then the first choice, at the message text.
+        // A stopped recorder ends its recording. Record again starts Session 1 anew and clears
+        // its old alert; the next stop has an error with no plain words, so no Choose an input.
+        go_library(d);
+        d.click("Record again");
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("stream error 42".to_owned()));
+        d.settle();
+        d.app_mut().sessions.open(second);
+        d.click(NAV_SESSIONS);
+        d.click("Record this session");
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.app_mut().sessions.open(first);
+        d.settle();
+        d.click_starting("Recordings");
+        d.click("Edit session details");
+        d.expect("Dismiss this error");
+        assert!(!d.has("Open the session") && !d.has("Record again"));
+        let size = d.window_size();
+        check_choices_at_text(
+            d,
+            "iter-15-C-FD5-dismiss-alone",
+            "stream error 42",
+            &["Dismiss this error"],
+            None,
+            &[size],
+        );
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -7683,6 +7990,14 @@ pub mod session_recording {
         // T11.5: nothing records without a stated step.
         d.click("Record this session");
         d.expect("Start recording");
+        check_choices_at_text(
+            d,
+            "iter-15-C-ST2",
+            "Tell everyone at the table first.",
+            &["Start recording", "Not now"],
+            None,
+            &[DEFAULT],
+        );
         d.state("record-consent", Sizes::Default);
         d.observe(
             "T11.5",
@@ -8104,6 +8419,7 @@ pub mod session_recording {
         );
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
+            check_events_gap(d, "iter-15-C-FT2");
             check_marker_columns(d);
             check_clean_row(d, "iter-11-C-FT3-marker");
             let size = d.window_size();
@@ -8247,6 +8563,20 @@ pub mod session_recording {
                 }
             });
             let buttons = d.place_of("Not now").zip(d.place_of("Replace the results"));
+            check_choices_at_text(
+                d,
+                "iter-15-C-AT4",
+                "The audio is not sent again",
+                &["Not now", "Replace the results"],
+                Some("Replace the results"),
+                &[DEFAULT],
+            );
+            // AT1: a check that ran and gave nothing back is not a check that never ran.
+            d.observe(
+                "iter-15-C-AT1",
+                d.visible_text("Check returned no result") && !d.visible_text("No check ran"),
+                "The warned recording says Check returned no result beside Raw transcript",
+            );
             d.observe(
                 "iter-11-C-ST1",
                 message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
@@ -8266,6 +8596,7 @@ pub mod session_recording {
 
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
+        check_events_gap(d, "iter-15-C-FT2-menu");
         d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
@@ -8300,6 +8631,15 @@ pub mod session_recording {
             d.has_containing("stopped by itself: the microphone is no longer connected")
                 && !d.visible_text("no such device"),
             "The banner puts the recorder's error in plain words",
+        );
+        let hover = d.painted_tooltip_shows(
+            "stopped by itself: the microphone",
+            "The recorder said: no such device.",
+        );
+        d.observe(
+            "iter-15-C-FD5-hover",
+            hover,
+            "The banner's words keep the recorder's own words on hover",
         );
         d.click(NAV_SESSIONS);
         d.expect("Stopped by itself: the microphone is no longer connected.");
@@ -8368,12 +8708,12 @@ pub mod session_recording {
                     .place_of("Save my draft as a new file")
                     .expect("New-file recovery is present");
                 let drop = d
-                    .place_of("Let it go")
+                    .place_of(DISCARD)
                     .expect("Destructive recovery is present");
                 assert!(
                     d.in_view("Save my draft to Renamed in Obsidian.md")
                         && d.in_view("Save my draft as a new file")
-                        && d.in_view("Let it go")
+                        && d.in_view(DISCARD)
                 );
                 if size == SMALL {
                     (drop.top() - new.top()).abs() <= 1.0
@@ -8386,9 +8726,47 @@ pub mod session_recording {
                         && drop.left() - new.right() >= crate::design::L
                 }
             });
-            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Let it go has an L or M gap at {size:?}"));
+            d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Discard has an L or M gap at {size:?}"));
         }
+        check_choices_at_text(
+            d,
+            "iter-15-C-FT1-gone",
+            "This file is gone from the folder.",
+            &[
+                "Save my draft to Renamed in Obsidian.md",
+                "Save my draft as a new file",
+                DISCARD,
+            ],
+            Some(DISCARD),
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.state("note-file-gone", Sizes::All);
+        // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
+        // steps prove the words and come back to the same choices, so they are not task cost.
+        d.aside(|d| {
+        d.click(DISCARD);
+        d.expect("Undo discard");
+        d.observe(
+            "iter-15-C-FT4",
+            d.visible_text("Draft discarded.")
+                && !d.has("Undo reload")
+                && !d.has_containing("dropped")
+                && d.editor_text()
+                    .is_some_and(|text| !text.contains("Words typed after the rename.")),
+            "Discard says Draft discarded. with Undo discard, and the draft's words leave the editor",
+        );
+        d.state("note-discarded", Sizes::Default);
+        d.click("Undo discard");
+        d.observe(
+            "iter-15-C-FT4-undo",
+            !d.has("Undo discard")
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("Words typed after the rename.")),
+            "Undo discard brings the draft's words back",
+        );
+        d.press_ctrl(Key::S);
+        d.expect("Your draft is still here.");
+        });
         assert!(d.in_view("Save my draft as a new file"));
         d.click("Save my draft as a new file");
         d.expect("Notes saved");
@@ -9346,6 +9724,52 @@ pub mod encounter_owned_groups {
             "Dragging an encounter's own group in combat adds each member",
         );
         d.expect("Maximum HP would become −28. It must be 1 or more.");
+        // A repair link under its member fault starts its words at the warning text, and its
+        // icon hangs in the gutter. In a wide panel, it stays beside the fault on its line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let mut placed = true;
+                let mut detail = String::new();
+                for (fault, link) in [
+                    ("Member 1, Unknown creature", "Campaign → Packages"),
+                    ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
+                ] {
+                    let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
+                    let near = |at: &Pos2| {
+                        text.is_some_and(|text| {
+                            at.y >= text.top() - 1.0 && at.y < text.bottom() + crate::design::XL
+                        })
+                    };
+                    let words: Vec<_> = painted_starts(d, link, 0)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    let icons: Vec<_> = painted_starts(d, link, 2)
+                        .into_iter()
+                        .filter(near)
+                        .collect();
+                    placed &= match (text, words.as_slice(), icons.as_slice()) {
+                        (Some(text), [words], [icon]) if size == LARGE => {
+                            words.y < text.bottom()
+                                && icon.x >= text.right() + crate::design::L - 0.5
+                        }
+                        (Some(text), [words], [icon]) => {
+                            words.y >= text.bottom() - 0.5
+                                && (words.x - text.left()).abs() < 1.0
+                                && icon.x < text.left() - 1.0
+                        }
+                        _ => false,
+                    };
+                    detail += &format!("{link}: text {text:?}, words {words:?}, icon {icons:?}. ");
+                }
+                (placed, detail)
+            });
+            d.observe(
+                "iter-15-B-FD4",
+                placed,
+                format!("Arrivals repair links hang their icon at {size:?}: {detail}"),
+            );
+        }
         d.state("own-group-dragged-in-combat", Sizes::All);
         close_run(d);
 

@@ -172,7 +172,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
@@ -239,7 +239,7 @@ column, above the choices. World Overwrite saves valid text; invalid text return
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
-holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap and red `Replace the file with this run`, in `message_with_actions`: both start at the message text.
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap (16 px in all, egui's item spacing included) and red `Replace the file with this run`, in `message_with_actions`: both start at the message text. An encounter, group or encounter creature draft (`src/encounters/disk.rs`) draws `Overwrite with my draft`, an `L` gap and red `Reload and lose my draft` (or `Let it go` when the file is gone) the same way, under the last of its messages: a note that another file uses the same identity comes before the choices.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
@@ -755,7 +755,8 @@ condition and whole multiword sync states. Hidden-condition counts always keep t
 including beside sync state. Move sync state first if the row needs more room. If the required words still
 cannot share one line, sync state continues on its own line; the row includes its full height.
 At minimum width, mandatory state words may use the empty left part of the HP bar slot; the bar stays below HP
-and at least `XL` long. Compact rows put sync last after an `XS` gap, apart from conditions. If required state words still do not fit, use the run mark type size on the second line. If that still needs the whole row width, move the HP bar below the detail with an `S` allowance; keep every state word and the first condition. No initiative uses
+and at least `XL` long. Compact rows put sync last after an `XS` gap, apart from conditions. Alone on the second line, sync starts at
+the line's edge with no gap, like Bloodied on the rows below. If required state words still do not fit, use the run mark type size on the second line. If that still needs the whole row width, move the HP bar below the detail with an `S` allowance; keep every state word and the first condition. No initiative uses
 the same underline as other row links. When the state column cannot fit, such as 960×640 beside a panel, move
 its words to line two so the name stays whole.
 
@@ -874,6 +875,8 @@ Only zero valid members blocks Initiative and Add. Invalid Initiative retains te
 the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
+Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) the same way
+when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
@@ -1063,8 +1066,9 @@ actions; a flagged day keeps its Day icon and adds a muted `Small` word after th
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with Undo separate session. Moved drafts
-offer the new path and Let it go. Missing session and run folders offer Choose folder.
+Make <file> a separate session with Undo separate session. Moved or deleted note drafts
+offer the new path, a new file and red `Discard`; Discard says `Draft discarded.` with `Undo discard`. After
+`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
 ### Notes panel
 
@@ -1090,7 +1094,7 @@ Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spel
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
 Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
 
-Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy, and put a secondary `Connect D&D Beyond` before Show file; it opens the same place as the header link. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
+Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh, except while a signed-out local-edit notice shows: then the notice's secondary `Connect D&D Beyond`, before Show file, is the one way to connect, and the header shows only the state (`Not connected · Fetched 3 h ago`). One action has one control and one name on a screen. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
 to sync; first-sheet-read help keeps Settings inside its Small sentence. Spell levels have counts without an
 extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below Equipment & coins. Party
@@ -1160,7 +1164,7 @@ sits an L gap after it. Add and On the timeline align left in that column. Row r
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice: This draft was written automatically. Check it against your memory. If no check ran, put No check ran beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. If the check returned nothing, put `Check returned no result` beside Raw transcript. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings

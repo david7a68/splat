@@ -2630,13 +2630,7 @@ fn unread_member(
 /// The repair link under a member's warning. Its words start at the warning text, and its icon
 /// hangs in the gutter before them.
 fn packages_repair(ui: &mut egui::Ui) -> bool {
-    let hang = design::number_width(ui, &format!("{} ", icons::CAMPAIGN), &Type::Small.font(ui));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(-hang);
-        packages_link(ui)
-    })
-    .inner
+    crate::encounter_run::view::hanging_link(ui, icons::CAMPAIGN, packages_link)
 }
 
 pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {

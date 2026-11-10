@@ -339,8 +339,11 @@ impl Party {
                     .blocked(can_refresh)
                     .show(ui)
                     .clicked();
+                // A signed-out local-edit notice has its own Connect D&D Beyond, so the
+                // header then shows only the state: one action, one name.
                 if session.is_none()
                     && !self.reader.members.is_empty()
+                    && self.reader.conflicts.is_empty()
                     && design::link(ui, "Connect to refresh").clicked()
                 {
                     self.wants_settings = true;
@@ -588,7 +591,7 @@ impl Party {
                     // The message asks the DM to connect, so the way to connect is on its line.
                     if Action::secondary(action)
                         .density(Density::Read)
-                        .hint("Opens Settings, the same place as Connect to refresh")
+                        .hint("Opens Settings to connect your D&D Beyond account")
                         .show(ui)
                         .clicked()
                     {
