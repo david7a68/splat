@@ -151,24 +151,20 @@ impl RunGroup {
             crate::design::count(self.creature_count() as usize, "member", "members")
         } else {
             format!(
-                "{} of {} members can join",
+                "{} of {} can join",
                 self.joinable_count(),
                 self.creature_count()
             )
         }
     }
     pub(crate) fn xp_label(&self) -> String {
-        let mut label = if self.xp_unknown.is_empty() {
+        if self.xp_unknown.is_empty() {
             format!("XP {}", grouped_number(self.xp))
         } else if self.xp == 0 && self.members.len() == self.xp_unknown.len() {
             "XP not known".to_owned()
         } else {
             format!("XP {} + unknown", grouped_number(self.xp))
-        };
-        if self.unavailable > 0 {
-            label.push_str(&format!(" for {} that can join", self.joinable_count()));
         }
-        label
     }
     pub(crate) fn member_summary(&self) -> String {
         let members: Vec<_> = self
@@ -1213,7 +1209,11 @@ impl Run {
                     p.initiative = Some(total);
                     p.shared_roll = Some(key.clone());
                 });
-                words.push(format!("Shared roll {die} {bonus:+} = {total}"));
+                words.push(format!(
+                    "Shared roll {die} {} {} = {total}",
+                    if bonus < 0 { "−" } else { "+" },
+                    bonus.unsigned_abs()
+                ));
             }
             Grouping::Individual => {
                 for p in added.iter_mut() {
@@ -1966,6 +1966,17 @@ impl Run {
                 if *present { "present" } else { "absent" }
             ),
             Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
+            Command::RemoveCondition(i, at)
+                if self
+                    .state
+                    .participants
+                    .get(*i)
+                    .and_then(|p| p.conditions.get(*at))
+                    .is_some_and(|condition| condition.starts_with("Exhaustion")) =>
+            {
+                let old = view::exhaustion_level(&self.state.participants[*i].conditions[*at]);
+                format!("exhaustion {old} → 0 on {}", name(i))
+            }
             Command::RemoveCondition(i, at) => format!(
                 "{} off {}",
                 self.state
@@ -1989,8 +2000,28 @@ impl Run {
             Command::Several(commands) => {
                 let word = match commands.first() {
                     Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
-                    Some(Command::RemoveCondition(i, _)) => {
-                        return format!("Exhaustion on {}", name(i));
+                    Some(Command::RemoveCondition(i, at)) => {
+                        let old = self
+                            .state
+                            .participants
+                            .get(*i)
+                            .and_then(|p| p.conditions.get(*at));
+                        if let Some(old) = old.filter(|old| old.starts_with("Exhaustion")) {
+                            let old = view::exhaustion_level(old);
+                            let new = commands
+                                .iter()
+                                .find_map(|command| match command {
+                                    Command::Condition(target, condition)
+                                        if target == i && condition.starts_with("Exhaustion") =>
+                                    {
+                                        Some(view::exhaustion_level(condition))
+                                    }
+                                    _ => None,
+                                })
+                                .unwrap_or(0);
+                            return format!("exhaustion {old} → {new} on {}", name(i));
+                        }
+                        "a change to".to_owned()
                     }
                     Some(Command::Heal(_, amount)) => format!("{amount} healing to"),
                     Some(Command::TempHp(_, amount)) => format!("{amount} temporary HP on"),
@@ -2858,6 +2889,24 @@ struct Recovery {
     closed_order: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     copied_from: Option<Uuid>,
+    #[serde(default)]
+    copy_number: u64,
+}
+
+impl Recovery {
+    fn number(&self, name: &str) -> u64 {
+        let legacy = name
+            .split_once(" · saved ")
+            .map(|(_, suffix)| {
+                suffix
+                    .strip_suffix(')')
+                    .and_then(|suffix| suffix.rsplit_once(" ("))
+                    .and_then(|(_, number)| number.parse().ok())
+                    .unwrap_or(1)
+            })
+            .unwrap_or(0);
+        self.copy_number.max(legacy)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -3090,36 +3139,33 @@ impl Run {
             .as_mut()
             .ok_or("This run has no save location.")?;
         let id = crate::hermetic::new_uuid();
-        let path = storage
-            .path
-            .parent()
-            .ok_or("Invalid run location")?
-            .join(format!("{id}.json"));
-        let time = calendar_time(crate::hermetic::now());
-        let base_name = self.name.split(" · saved ").next().unwrap_or(&self.name);
-        let stem = format!(
-            "{base_name} · saved {}:{:02}",
-            &time[11..],
-            crate::hermetic::now() % 60
-        );
-        let names: BTreeSet<_> = fs::read_dir(storage.path.parent().ok_or("Invalid run location")?)
+        let directory = storage.path.parent().ok_or("Invalid run location")?;
+        let now = crate::hermetic::now();
+        let time = calendar_time(now);
+        let time = time.replace([' ', ':'], "-");
+        let path = directory.join(format!("{time}-{:02}-UTC-{id}.json", now % 60));
+        let base_name = self
+            .name
+            .split(" · saved ")
+            .next()
+            .unwrap_or(&self.name)
+            .to_owned();
+        let copy_number = fs::read_dir(directory)
             .map_err(|e| e.to_string())?
             .filter_map(Result::ok)
             .filter_map(|file| read_saved(&file.path(), storage.campaign).ok())
-            .map(|saved| saved.name)
-            .collect();
-        let mut new_name = stem.clone();
-        let mut suffix = 2;
-        while names.contains(&new_name) {
-            new_name = format!("{stem} ({suffix})");
-            suffix += 1;
-        }
+            .filter(|saved| saved.name.split(" · saved ").next() == Some(base_name.as_str()))
+            .map(|saved| saved.recovery.number(&saved.name))
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
         let old_path = std::mem::replace(&mut storage.path, path);
         let old_baseline = storage.baseline.take();
         let old_id = std::mem::replace(&mut self.id, id);
         let old_recovery = self.recovery.clone();
         self.recovery.copied_from = Some(old_id);
-        let old_name = std::mem::replace(&mut self.name, new_name);
+        self.recovery.copy_number = copy_number;
+        let old_name = std::mem::replace(&mut self.name, base_name);
         self.dirty = true;
         match self.save() {
             Ok(()) => {
@@ -3388,7 +3434,15 @@ impl Run {
             .find(|run| run.standing == Standing::Unfinished)
             && close_order.get(&run.path).is_some_and(|order| *order > 0)
         {
-            run.label.insert_str(0, "Closed last · ");
+            if let Some((copy, rest)) = run
+                .label
+                .split_once(" · ")
+                .filter(|(word, _)| word.starts_with("Copy "))
+            {
+                run.label = format!("{copy} · Closed last · {rest}");
+            } else {
+                run.label.insert_str(0, "Closed last · ");
+            }
         }
         let all_recent = runs
             .iter()
@@ -3447,11 +3501,18 @@ impl Run {
             label.push_str(&format!(" · Last: {last}"));
         }
         label.push_str(&saved);
+        let legacy = self.name.split_once(" · saved ");
+        let copy_number = self.recovery.number(&self.name);
+        if copy_number > 0 {
+            label.insert_str(0, &format!("Copy {copy_number} · "));
+        }
         SavedRunInfo {
             path,
             id: Some(self.id),
             source: self.source,
-            encounter: self.name.clone(),
+            encounter: legacy
+                .map_or(self.name.as_str(), |(name, _)| name)
+                .to_owned(),
             label,
             standing,
             saved_at,
@@ -4330,7 +4391,8 @@ mod tests {
         let copy = Run::open(&new_path, campaign).unwrap();
         assert_eq!(copy.state.participants[0].hp, hp);
         assert_ne!(copy.id, Run::open(&path, campaign).unwrap().id);
-        assert!(copy.name.starts_with("Ambush · saved "));
+        assert_eq!(copy.name, "Ambush");
+        assert!(copy.live_info().unwrap().label.starts_with("Copy 1 · "));
     }
     #[test]
     fn recovery_copies_resume_the_last_closed_run_and_preserve_external_bytes() {
@@ -4348,8 +4410,8 @@ mod tests {
         let latest = run.id;
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
-        assert!(copies[0].encounter.contains(" · saved "));
-        assert!(copies[0].label.starts_with("Closed last · "));
+        assert_eq!(copies[0].encounter, "Ambush");
+        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -4408,7 +4470,7 @@ mod tests {
             assert!(run.close_run(), "{phase:?}");
         }
     }
-    fn linked(run: &mut Run, index: usize, character: &str) {
+    pub(super) fn linked(run: &mut Run, index: usize, character: &str) {
         let mut definition = (*run.state.participants[index].definition).clone();
         definition.fields.insert(
             "splat_external".into(),
@@ -5540,12 +5602,74 @@ mod tests {
     }
 
     #[test]
-    fn recovery_copies_have_different_names_even_in_the_same_second() {
-        let (_dir, mut run, _, _, _) = run_with_changed_file();
+    fn iter_3_b_legacy_recovery_copy_keeps_its_number_and_file() {
+        let (dir, mut run, _, _, campaign) = run_with_changed_file();
+        run.keep_this_run().unwrap();
+        run.name = "Ambush · saved 03:00:00 (2)".into();
+        run.dirty = true;
+        run.save().unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        let bytes = fs::read(&path).unwrap();
+        let rows = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(rows[0].encounter, "Ambush");
+        assert!(rows[0].label.starts_with("Copy 2 · "));
+        assert_eq!(fs::read(&path).unwrap(), bytes);
         run.save_as_new_run().unwrap();
-        let first = run.name.clone();
+        assert!(run.live_info().unwrap().label.starts_with("Copy 3 · "));
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn recovery_copies_keep_the_name_and_number_each_copy() {
+        let (_dir, mut run, _, _, campaign) = run_with_changed_file();
+        let name = run.name.clone();
         run.save_as_new_run().unwrap();
-        assert_ne!(first, run.name);
+        let first_path = run.path().unwrap().to_path_buf();
+        let first_bytes = fs::read(&first_path).unwrap();
+        assert_eq!(run.name, name);
+        assert!(run.live_info().unwrap().label.starts_with("Copy 1 · "));
+        run.save_as_new_run().unwrap();
+        assert_eq!(run.name, name);
+        assert_ne!(run.path().unwrap(), first_path);
+        assert_eq!(fs::read(first_path).unwrap(), first_bytes);
+        let reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(reopened.name, name);
+        assert!(reopened.live_info().unwrap().label.starts_with("Copy 2 · "));
+    }
+
+    #[test]
+    fn iter_3_b_exhaustion_undo_names_both_levels_and_restores_them() {
+        let mut run = run();
+        run.apply(Command::Condition(0, "Exhaustion (2)".into()))
+            .unwrap();
+        for (old, new) in [(2, 3), (3, 1), (1, 0)] {
+            let command = if new == 0 {
+                Command::RemoveCondition(0, 1)
+            } else {
+                Command::Several(vec![
+                    Command::RemoveCondition(0, 1),
+                    Command::Condition(0, format!("Exhaustion ({new})")),
+                ])
+            };
+            let expected = format!(
+                "exhaustion {old} → {new} on {}",
+                run.state.participants[0].name
+            );
+            assert_eq!(run.describe(&command), expected);
+            run.apply(command).unwrap();
+            run.undo();
+            assert_eq!(
+                run.state.participants[0].conditions,
+                vec!["Poisoned".to_owned(), format!("Exhaustion ({old})")]
+            );
+            if new > 0 {
+                run.apply(Command::Several(vec![
+                    Command::RemoveCondition(0, 1),
+                    Command::Condition(0, format!("Exhaustion ({new})")),
+                ]))
+                .unwrap();
+            }
+        }
     }
 
     #[test]
@@ -6409,7 +6533,7 @@ mod tests {
         assert_eq!(run.state.order[..2], [3, 4]);
         let log = run.state.log.last().unwrap();
         assert!(
-            log.contains("Wave") && log.contains("Guard 4") && log.contains("10 +2 = 12"),
+            log.contains("Wave") && log.contains("Guard 4") && log.contains("10 + 2 = 12"),
             "{log}"
         );
         // Combat can begin with them in it.
