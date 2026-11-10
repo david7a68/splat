@@ -259,7 +259,8 @@ and saves the other changed fields. Empty optional links say **not set** in Edit
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
 open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
-with **Always use this one**. An empty World note says **Nothing written yet.**
+with **Always use this one**. Until you choose, the note's World row says **Place has 2 matches**
+and the header's **notes need fixing** link counts it. An empty World note says **Nothing written yet.**
 Its file line keeps the one **Edit in Obsidian** link.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
@@ -650,7 +651,8 @@ The form keeps its state and quiet **Discard** at the left, with **Save changes*
 or **World repair draft** once if a repair is also unsaved. If the note changed on disk, Splat writes
 nothing until you choose. **Overwrite with my draft** saves only the values you changed over the disk version.
 For **Part of**, it adds and removes only the groups you changed. A group that Obsidian spelled another way,
-such as `[[Factions/Arena Guild|Guild]]` for `[[Arena Guild]]`, is still the same group.
+such as `[[Factions/Arena Guild|Guild]]` for `[[Arena Guild]]`, is still the same group. If the note already
+holds every change, Splat writes nothing, offers no Undo, and says **Your changes are already in the note.**
 **Reload and lose my draft** loads the disk version and offers **Undo reload**. A form with changes stays while you
 read other entries, and Splat asks before it closes or changes campaign.
 A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
