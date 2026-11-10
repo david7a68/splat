@@ -119,13 +119,14 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   its suite slot without waiting for scenario cleanup or thread joins. Captures from
   that failed run are incomplete. Outside the isolated child, the check still panics.
 - `SPLAT_VISUAL_TIMINGS=1` prints world-lock wait, fixture setup, app/font/renderer
-  setup, settling, PNG rendering and PNG encoding/writing times. Per-scenario times
-  overlap because the scenarios run in parallel; do not add them as wall time.
+  setup, settling, rendering (captures and video frames) and PNG encoding/writing
+  times, then counts of settles, settle frames, renders and PNGs. Per-scenario times overlap
+  because the scenarios run in parallel; do not add them as wall time.
 - `SPLAT_VISUAL_JOBS=4` (the default) runs four scenarios at a time. A full capture run
-  then needs about 1.1 GiB and keeps about six cores busy. More jobs are faster when
+  then needs about 1.1 GiB and keeps about four cores busy (about 4.6 with video). More jobs are faster when
   cores are free, and use more memory: about 1.6 GiB at eight.
 - `SPLAT_VISUAL_SLOTS` sets how many suites may run at once on this computer, across
-  worktrees. The default is one per six cores, and at most one per 4 GiB of RAM.
+  worktrees. The default is one per five cores, and at most one per 4 GiB of RAM.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.

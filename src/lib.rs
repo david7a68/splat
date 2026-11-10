@@ -1,5 +1,5 @@
 //! Desktop application and shared content APIs.
-pub use splat_core::{character, content, execution};
+pub use splat_core::{character, content, execution, memo};
 extern crate self as splat;
 
 // The visual suite runs many app instances at once. With glibc's malloc it used
