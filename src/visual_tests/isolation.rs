@@ -85,6 +85,12 @@ pub(super) fn run() -> bool {
 }
 
 pub(super) fn run_child(mut command: Command) {
+    // Lavapipe starts a render thread per core in each process. The suite's workers already
+    // keep the cores busy, and those threads spent more CPU on handoffs than on drawing:
+    // rendering on the worker cut a capture run's CPU by about a third.
+    if env::var_os("LP_NUM_THREADS").is_none() {
+        command.env("LP_NUM_THREADS", "0");
+    }
     let status = command
         .env(CHILD, "1")
         .status()

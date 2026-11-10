@@ -102,7 +102,19 @@ fn import(gaps: Vec<Gap>) -> Value {
 impl EntitySnapshot {
     /// The final note is the creature; preceding notes are its campaign-owned dependencies.
     /// Used by both fresh reads and version-1 caches, so migration requires no network request.
+    ///
+    /// The notes depend only on the snapshot and the built-in rules. One load and save asks
+    /// for them several times (validate, route, save), so the last few are remembered.
     pub fn content_notes(&self) -> Result<Vec<ContentNote>, String> {
+        static NOTES: crate::memo::Memo<Result<Vec<ContentNote>, String>> =
+            crate::memo::Memo::new(16);
+        match serde_json::to_vec(self) {
+            Ok(snapshot) => NOTES.get_or(&[&snapshot], || self.build_content_notes()),
+            Err(_) => self.build_content_notes(),
+        }
+    }
+
+    fn build_content_notes(&self) -> Result<Vec<ContentNote>, String> {
         let mut notes = Vec::new();
         let mut gaps = Vec::new();
         let mut fields = serde_json::to_value(&self.definition).map_err(|e| e.to_string())?;

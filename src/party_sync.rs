@@ -8,7 +8,7 @@ use reqwest::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use splat::character::{CampaignCopyError, EntitySnapshot, now};
+use splat::character::{CampaignCopyError, EntitySnapshot, campaign_package::Destinations, now};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -305,17 +305,28 @@ fn save_campaign_copy(
     path: &std::path::Path,
     force: bool,
 ) -> Result<Vec<PathBuf>, CampaignCopyError> {
-    // Settings that cannot be read list no packages, so new definitions go to the campaign package.
+    save_campaign_copy_to(record, path, &destinations(path), force)
+}
+/// Where a campaign's new definitions go. Settings that cannot be read list no packages, so
+/// new definitions go to the campaign package.
+fn destinations(path: &std::path::Path) -> Destinations {
     let modules = crate::persistence::Store::user()
         .and_then(|mut store| store.load())
         .map(|data| data.modules)
         .unwrap_or_default();
-    let destinations = crate::content_workspace::destinations(path, &modules);
+    crate::content_workspace::destinations(path, &modules)
+}
+fn save_campaign_copy_to(
+    record: &EntitySnapshot,
+    path: &std::path::Path,
+    destinations: &Destinations,
+    force: bool,
+) -> Result<Vec<PathBuf>, CampaignCopyError> {
     if force {
-        record.overwrite_campaign_copy_to(path, &destinations)
+        record.overwrite_campaign_copy_to(path, destinations)
     } else {
         record
-            .save_campaign_copy_to(path, &destinations)
+            .save_campaign_copy_to(path, destinations)
             .map(|_| Vec::new())
     }
 }
@@ -348,6 +359,8 @@ fn save_cached(
     gate: &Arc<Mutex<bool>>,
     tx: &mpsc::Sender<Event>,
 ) {
+    // One reading of the packages serves the whole party; it took about a quarter of each save.
+    let mut destinations = None;
     for record in records {
         // Hold the gate through the save, so a campaign switch cannot meet a save halfway.
         let Ok(active) = gate.lock() else {
@@ -364,7 +377,8 @@ fn save_cached(
             }
             _ => break,
         }
-        let saved = save_campaign_copy(record, path, false);
+        let destinations = destinations.get_or_insert_with(|| self::destinations(path));
+        let saved = save_campaign_copy_to(record, path, destinations, false);
         release_after(path, &saved);
         let _ = tx.send(Event::CampaignCopy(
             record.source.character_id.clone(),
