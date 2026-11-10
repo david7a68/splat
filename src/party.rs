@@ -427,7 +427,7 @@ impl Party {
             let next = if connected {
                 "Replacing keeps your version as a copy."
             } else {
-                "Connect to replace it with the D&D Beyond sheet."
+                "Connect, then replace it. Replacing keeps your version as a copy."
             };
             let words = format!(
                 "{name}'s sheet file has your own edits, so Splat stopped updating it.\n{next}"
@@ -443,12 +443,9 @@ impl Party {
             let actions = if connected {
                 vec![action, "Show file"]
             } else {
-                vec!["Connect to refresh", "Show file"]
+                vec!["Show file"]
             };
             storage_notice(ui, Tone::Warning, &words, &actions, |ui| {
-                if !connected && design::link(ui, "Connect to refresh").clicked() {
-                    self.wants_settings = true;
-                }
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
                 } else if connected
@@ -558,18 +555,7 @@ impl Party {
             return;
         };
         let before = self.page;
-        let tabs = ["Overview", "Actions", "Spells", "Equipment", "Features"];
-        design::segmented(
-            ui,
-            &mut self.page,
-            &[
-                (0, tabs[0]),
-                (1, tabs[1]),
-                (2, tabs[2]),
-                (3, tabs[3]),
-                (4, tabs[4]),
-            ],
-        );
+        design::segmented(ui, &mut self.page, &SHEET_PAGES);
         if before != self.page {
             self.search.clear();
         }
@@ -580,7 +566,7 @@ impl Party {
                     ui,
                     "Filter this page",
                     &mut self.search,
-                    &format!("Filter {}…", tabs[self.page].to_lowercase()),
+                    &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
                     240.0_f32.min(ui.available_width() - 70.0),
                 );
                 if !self.search.is_empty()
@@ -664,12 +650,23 @@ fn storage_notice(
             })
             .sum::<f32>()
             + design::L * actions.len().saturating_sub(1) as f32;
+        let icon = match tone {
+            Tone::Warning => icons::WARN,
+            Tone::Success => icons::SUCCESS,
+            Tone::Error => icons::ERROR,
+            Tone::Info => icons::INFO,
+        };
+        // `design::message` draws S and the bar, the icon, one L gap, then the text, less XS.
+        let inset = design::S
+            + design::HAIRLINE_WIDTH
+            + design::number_width(ui, icon, &Type::Body.font(ui))
+            + design::L
+            - design::XS;
         let text_width = words
             .lines()
             .map(|line| design::number_width(ui, line, &Type::Body.font(ui)))
             .fold(0.0_f32, f32::max)
-            + design::L
-            + Type::Body.size();
+            + inset;
         if text_width + design::L + actions_width <= ui.available_width() {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = design::L;
@@ -1283,10 +1280,120 @@ pub fn sheet_page(
     search: &str,
     live: Option<&LiveValues>,
 ) {
-    if page == 0 {
-        overview(ui, record, live);
-    } else {
-        details(ui, record, page, search);
+    match page {
+        0 => overview(ui, record, live),
+        BACKGROUND_PAGE => background(ui, record),
+        _ => details(ui, record, page, search),
+    }
+}
+
+/// The sheet page with background, details, characteristics, notes and companions.
+pub const BACKGROUND_PAGE: usize = 5;
+/// The sheet's pages, for Party and the run's side panel. Each index is its place in this list.
+pub const SHEET_PAGES: [(usize, &str); 6] = [
+    (0, "Overview"),
+    (1, "Actions"),
+    (2, "Spells"),
+    (3, "Equipment"),
+    (4, "Features"),
+    (BACKGROUND_PAGE, "Background"),
+];
+
+/// Labelled prose, one paragraph at a time, at a reading width.
+fn prose(ui: &mut egui::Ui, label: Option<&str>, text: &str) {
+    design::reader::measure(ui, |ui| {
+        if let Some(label) = label {
+            ui.add_space(design::S);
+            ui.label(Type::Small.rich(ui, label).color(colors().muted));
+        }
+        for paragraph in text.split("\n\n") {
+            ui.add(
+                egui::Label::new(Type::ProseCompact.rich(ui, paragraph).color(colors().text))
+                    .wrap(),
+            );
+            ui.add_space(design::XS);
+        }
+    });
+}
+
+/// Who the character is, as the player wrote it on D&D Beyond.
+fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
+    use splat::character::profile::{characteristic_rows, companion_line, detail_rows, story_rows};
+    let profile = record.profile();
+    let details = detail_rows(&profile.details);
+    let characteristics = characteristic_rows(&profile.characteristics);
+    let story = story_rows(&profile.story);
+    if profile.background.is_none()
+        && details.is_empty()
+        && characteristics.is_empty()
+        && story.is_empty()
+        && profile.companions.is_empty()
+    {
+        section_heading(ui, "Background");
+        ui.weak("This sheet has no background, details or notes.");
+        return;
+    }
+    if let Some(background) = &profile.background {
+        section_heading(ui, "Background");
+        ui.label(Type::Strong.rich(
+            ui,
+            if background.custom {
+                format!("{} (custom)", background.name)
+            } else {
+                background.name.clone()
+            },
+        ));
+        if let Some((_, feature)) = &profile.background_feature {
+            ui.label(format!("Feature: {}", feature.name));
+        }
+        if !background.feats.is_empty() {
+            ui.add(egui::Label::new(format!("Feats: {}", background.feats.join(", "))).wrap());
+        }
+        if !background.description.is_empty() || profile.background_feature.is_some() {
+            design::quiet_section(ui, "Background text", |ui| {
+                if !background.description.is_empty() {
+                    prose(ui, None, &background.description);
+                }
+                if let Some((_, feature)) = &profile.background_feature {
+                    prose(ui, Some(&feature.name), &feature.description);
+                }
+            });
+        }
+    }
+    if !details.is_empty() {
+        section_heading(ui, "Details");
+        sheet_columns(ui, details.len(), |ui, at| {
+            let (label, value) = &details[at];
+            ui.add(egui::Label::new(format!("{label}: {value}")).wrap());
+        });
+    }
+    for (title, rows) in [("Characteristics", characteristics), ("Notes", story)] {
+        if rows.is_empty() {
+            continue;
+        }
+        section_heading(ui, title);
+        for (label, text) in rows {
+            prose(ui, Some(label), text);
+        }
+    }
+    if !profile.companions.is_empty() {
+        sheet_heading(ui, "Companions", profile.companions.len());
+        ui.weak("Stat blocks are not imported. HP is the printed value.");
+        for companion in profile.companions.values() {
+            ui.add_space(design::S);
+            ui.label(Type::Strong.rich(ui, &companion.name));
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, companion_line(companion))
+                        .color(colors().muted),
+                )
+                .wrap(),
+            );
+            if !companion.description.is_empty() {
+                prose(ui, None, &companion.description);
+            }
+        }
     }
 }
 
@@ -1809,6 +1916,7 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
         ));
     };
     match page {
+        BACKGROUND_PAGE => {}
         1 => {
             for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
                 for v in array(values) {
@@ -1856,6 +1964,11 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
                 add(v, "Feat");
             }
         }
+    }
+    if page == 4
+        && let (_, Some((_, feature))) = splat::character::profile::background(d)
+    {
+        entries.push((feature.name, "Background".into(), feature.description, None));
     }
     entries.sort_by(|a, b| {
         if page == 2 {
@@ -1985,14 +2098,11 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         );
     }
     if page == 3 {
-        let d = &record.source.raw;
+        use splat::character::profile;
         ui.label(format!(
-            "Coins · {} cp · {} sp · {} ep · {} gp · {} pp",
-            d["currencies"]["cp"],
-            d["currencies"]["sp"],
-            d["currencies"]["ep"],
-            d["currencies"]["gp"],
-            d["currencies"]["pp"]
+            "Coins · {}",
+            profile::coins(&record.source.raw)
+                .map_or_else(|| "None".into(), |c| profile::coin_line(&c))
         ));
     }
     let mut level_counts = std::collections::BTreeMap::new();
@@ -2071,15 +2181,8 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             state.toggle(ui);
         }
         state.show_body_unindented(ui, |ui| {
-            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
             ui.add_space(design::XS);
-            for paragraph in description.split("\n\n") {
-                ui.add(
-                    egui::Label::new(Type::ProseCompact.rich(ui, paragraph).color(colors().text))
-                        .wrap(),
-                );
-                ui.add_space(design::XS);
-            }
+            prose(ui, None, description);
         });
     }
 }

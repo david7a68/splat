@@ -646,3 +646,27 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Sheet text as Markdown paragraphs. Each line reads as written and cannot change the note's
+/// structure: see `literal_line`.
+pub fn body_text(text: &str) -> String {
+    text.lines()
+        .map(literal_line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+/// Sheet text on one line, inside a generated heading, list item or sentence.
+pub fn inline_text(text: &str) -> String {
+    literal_line(&text.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+/// A line that cannot start a block. Every block that could hide or end the generated part, or
+/// add a section, starts with an ASCII punctuation mark or with indentation: a heading, fence,
+/// HTML block, quote, list, table or heading underline. An escaped first mark is shown as written.
+/// An HTML comment cannot open inside the line.
+fn literal_line(line: &str) -> String {
+    let line = line.trim_start().replace("<!--", "&lt;!--");
+    match line.chars().next() {
+        Some(first) if first.is_ascii_punctuation() => format!("\\{line}"),
+        _ => line,
+    }
+}

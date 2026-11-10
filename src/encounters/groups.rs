@@ -73,7 +73,8 @@ pub(super) struct GroupDraft {
     saved_notes: String,
     flags: Vec<splat::content::layout::Flag>,
     repair: Option<(usize, Mapping)>,
-    removed_unread: Option<(usize, String)>,
+    removed_unread: Option<(usize, String, String)>,
+    removed_member: Option<(usize, MemberDraft, String)>,
     repair_error: Option<String>,
 }
 
@@ -103,6 +104,7 @@ impl GroupDraft {
             flags: Vec::new(),
             repair: None,
             removed_unread: None,
+            removed_member: None,
             repair_error: None,
         }
     }
@@ -133,6 +135,7 @@ impl GroupDraft {
             flags: entry.flags.clone(),
             repair: None,
             removed_unread: None,
+            removed_member: None,
             repair_error: None,
             saved_name: entry.name.clone(),
             name: entry.name,
@@ -259,7 +262,16 @@ impl GroupDraft {
             let end = source[row[0].range.start..]
                 .find('\n')
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
-            self.removed_unread = Some((line, source[start..end].to_owned()));
+            self.removed_member = None;
+            self.removed_unread = Some((
+                line,
+                source[start..end].to_owned(),
+                if member.name.is_empty() {
+                    member.label.clone()
+                } else {
+                    member.name.clone()
+                },
+            ));
             source.replace_range(start..end, "");
         }
         let mut entry = Entry::parse(&self.path, &source)?;
@@ -1047,7 +1059,7 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
-                                ui.menu_button("Move to…", |ui| {
+                                design::menu_submenu(ui, "Move to…", |ui| {
                                     for (id, name) in
                                         snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
@@ -1081,7 +1093,10 @@ pub(super) fn of_encounter(
                             }
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut group.name)
-                                    .desired_width(ui.available_width() - 2.0 * design::S)
+                                    .desired_width(
+                                        (ui.available_width() - 2.0 * design::S)
+                                            .min(design::FORM_WIDTH),
+                                    )
                                     .margin(egui::vec2(design::S, 4.0))
                                     .font(Type::Heading.font(ui)),
                             );
@@ -1850,7 +1865,7 @@ impl Encounters {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
                     .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width)
+                    .desired_width(width.min(design::FORM_WIDTH))
                     .min_size(egui::vec2(0.0, Density::Scan.control()))
                     .margin(egui::vec2(design::S, design::XS))
                     .font(Type::Heading.font(ui)),
@@ -2095,7 +2110,10 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            group_fields(ui, draft, snapshot, expanded, None, tabbed);
+            ui.scope(|ui| {
+                ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                group_fields(ui, draft, snapshot, expanded, None, tabbed);
+            });
         });
 }
 
@@ -2109,6 +2127,7 @@ fn group_fields(
     open: Option<(Uuid, &str)>,
     _tabbed: bool,
 ) {
+    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, SIDE_FIELD).color(colors().muted));
         let name = format!("{SIDE_FIELD} for {}", draft.name);
@@ -2322,9 +2341,25 @@ fn members(
             design::rule(ui);
         });
     }
-    if draft.removed_unread.is_some()
-        && Action::quiet("Undo remove member").show(ui).clicked()
-        && let Some((line, row)) = draft.removed_unread.take()
+    if let Some((_, _, name)) = &draft.removed_member {
+        let words = format!("Removed {name}.");
+        if design::undo_message(ui, Tone::Info, &words, "Undo remove member")
+            && let Some((index, member, _)) = draft.removed_member.take()
+        {
+            draft
+                .setup
+                .members
+                .insert(index.min(draft.setup.members.len()), member);
+            *expanded = None;
+        }
+    }
+    let removed_unread_words = draft
+        .removed_unread
+        .as_ref()
+        .map(|(_, _, name)| format!("Removed {name}."));
+    if let Some(words) = removed_unread_words
+        && design::undo_message(ui, Tone::Info, &words, "Undo remove member")
+        && let Some((line, row, _)) = draft.removed_unread.take()
     {
         let at = draft
             .source
@@ -2342,7 +2377,17 @@ fn members(
         *expanded = None;
     }
     if let Some(index) = remove {
-        draft.setup.members.remove(index);
+        let member = draft.setup.members.remove(index);
+        let base = snapshot
+            .catalogue
+            .resolve_ref(&member.creature)
+            .ok()
+            .and_then(|id| snapshot.catalogue.entries.get(&id))
+            .map(|entry| entry.entry.name.clone())
+            .unwrap_or_else(|| missing_member_name(None, member.creature.link.as_deref()));
+        let name = shown_name(&member.overrides, base);
+        draft.removed_unread = None;
+        draft.removed_member = Some((index, member, name));
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
@@ -2546,7 +2591,7 @@ fn unread_member(
     design::rule(ui);
 }
 
-fn packages_link(ui: &mut egui::Ui) -> bool {
+pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {
     design::status_link(
         ui,
         Status {
@@ -2590,6 +2635,52 @@ mod tests {
         )
         .unwrap();
         id
+    }
+
+    #[test]
+    fn iter4_b_remove_member_undo_keeps_full_member_and_other_draft_edits() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let goblin = creature(dir.path(), "Goblin");
+        let wolf = creature(dir.path(), "Wolf");
+        let mut draft = GroupDraft::new();
+        draft.add(goblin);
+        draft.add(wolf);
+        draft.setup.members[0].count = 3;
+        draft.setup.members[0].overrides =
+            super::super::yaml("{name: Scout, max_hp: {add: 5}, note: Keep this}")
+                .as_mapping()
+                .unwrap()
+                .clone();
+        draft.setup.members[0]
+            .extra
+            .insert("arrival_cue".into(), "North door".into());
+        let member = draft.setup.members[0].clone();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(880.0, 1000.0))
+            .build_state(
+                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| members(ui, &mut state.0, &snapshot, &mut state.1));
+                },
+                (draft, None),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("More actions for Scout").click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().0.setup.members.len(), 1);
+        harness.state_mut().0.notes = "A new note after removal".into();
+        harness.state_mut().0.setup.members[0].count = 7;
+        harness.get_by_label("Undo remove member").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().0.setup.members[0], member);
+        assert_eq!(harness.state().0.setup.members[1].count, 7);
+        assert_eq!(harness.state().0.notes, "A new note after removal");
     }
 
     #[test]

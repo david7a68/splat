@@ -925,11 +925,12 @@ pub mod party {
     const SECOND_MEMBER: &str = "Iselle Marrowind";
     const OFFLINE: &str = "Not connected";
     const FRESHNESS: &str = "Fetched";
-    const PAGES: [(&str, &str); 4] = [
+    const PAGES: [(&str, &str); 5] = [
         ("Actions", "page-actions"),
         ("Spells", "page-spells"),
         ("Equipment", "page-equipment"),
         ("Features", "page-features"),
+        ("Background", "page-background"),
     ];
     const OVERVIEW: &str = "Overview";
     const SOURCE: &str = "Technical details";
@@ -1027,13 +1028,13 @@ pub mod party {
             d.has_containing("Local edits"),
             "The affected party row marks its local edits",
         );
-        d.state("copy-has-local-edits-signed-out", Sizes::Default);
-        d.click_beside("sheet file has your own edits", CONNECT_FIRST);
+        d.state("copy-has-local-edits-signed-out", Sizes::All);
+        d.click(CONNECT_FIRST);
         d.observe(
             "iter-18-B-P3",
             d.page_title().as_deref() == Some("Settings")
                 && d.focused_name().as_deref() == Some("Paste session cookie"),
-            "The local-edits message opens Settings with the cookie field focused",
+            "The Party header connects with the cookie field focused while local edits remain safe",
         );
         d.click(NAV_PARTY);
 
@@ -1226,7 +1227,8 @@ pub mod encounter_build {
 
         // A search with no match says so, and what to try.
         d.replace_text_in(FIND_CREATURE, NO_SUCH_CREATURE);
-        d.state("no-search-results", Sizes::Default);
+        d.expect("Campaign → Packages");
+        d.state("no-search-results", Sizes::All);
         d.observe(
             "T5.1",
             d.visible_text("No creatures match"),
@@ -2591,6 +2593,21 @@ pub mod run_large_roster {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN_12);
+        d.expect("Sync off for the party");
+        d.observe_both(
+            "FT3",
+            "All linked rows have sync off; the header says it once",
+            |d| {
+                let linked = &ROSTER_12[..5];
+                let rows: Vec<_> = linked.iter().filter_map(|name| d.row_node(name)).collect();
+                rows.len() == linked.len()
+                    && rows.iter().all(|row| !row.name.contains("Sync off"))
+                    && linked
+                        .iter()
+                        .all(|name| !d.row_words(name).contains("Sync off"))
+                    && d.in_view_containing("Sync off for the party")
+            },
+        );
         d.state("roster-of-12", Sizes::All);
         d.goal("open a run with 12 participants");
 
@@ -4316,7 +4333,7 @@ pub mod signed_in {
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
     const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
-    const PAGES: [&str; 4] = ["Actions", "Spells", "Equipment", "Features"];
+    const PAGES: [&str; 5] = ["Actions", "Spells", "Equipment", "Features", "Background"];
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
     const SYNC_SECTION: &str = "Combat sync";
@@ -6097,12 +6114,12 @@ pub mod session_recording {
         );
         d.state("run-silent", Sizes::All);
         let silence = d.at_size(SMALL, |d| {
-            d.visible_text("Recording silence") && d.visible_text("Not connected")
+            d.visible_text("Recording silence") && d.visible_text("Sync off for the party")
         });
         d.observe(
             "R1",
             silence,
-            "Silence and the short connection word fit the run notice at 960x640",
+            "Silence and the full party sync state fit the run notice at 960x640",
         );
         d.click_containing("Undo: 7 damage");
         close_run(d);
@@ -6697,6 +6714,25 @@ pub mod encounter_groups {
         d.goal("make an encounter group");
         d.click("Back to encounters");
         d.expect("GROUPS");
+
+        // Member recovery is separate from the unchanged build task.
+        d.begin_task();
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.click(&format!("More actions for {RIVAL_NAME}"));
+        d.click("Remove");
+        d.expect("Removed Rival Captain.");
+        d.expect("Undo remove member");
+        d.state("group-member-removed-with-undo", Sizes::All);
+        d.click("Undo remove member");
+        d.expect(CHANGES);
+        d.observe_both(
+            "iter4-B-AT1",
+            "Undo restores the changed member and clears the removal notice",
+            |d| d.has(CHANGES) && !d.has("Removed Rival Captain."),
+        );
+        d.expect_same("Undo restores the complete group editor with the changed member.");
+        d.state("group-member-restored", Sizes::All);
+        d.click("Back to encounters");
 
         // Repair is a separate workflow; it does not change the build goal's cost.
         d.click(&format!("Edit group {GROUP_LOST}"));
