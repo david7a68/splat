@@ -1115,7 +1115,13 @@ impl Splat {
             self.page = Page::World;
         }
         if let Some(card) = self.lookup.open_world_names.take() {
-            self.world_page.show_generated(card);
+            // An unsaved NPC on the World page is never replaced. Lookup keeps its own, and the
+            // World page's card shows the same help.
+            if self.world_page.has_generated() {
+                self.lookup.keep_generated(card);
+            } else {
+                self.world_page.show_generated(card);
+            }
             self.lookup.close();
             self.page = Page::World;
         }

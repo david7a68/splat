@@ -1571,6 +1571,13 @@ impl Lookup {
         self.open = false;
     }
 
+    /// Take back a generated NPC that the World page did not take.
+    pub fn keep_generated(&mut self, card: GeneratedCard) {
+        self.generated = Some(card.npc);
+        self.generator_problems = card.problems;
+        self.generator_sources = card.sources;
+    }
+
     /// Open one entry from a link somewhere else in the app.
     pub fn open_note_link(&mut self, target: &str, from: Option<Uuid>, ctx: &egui::Context) {
         let Some(index) = &self.index else {

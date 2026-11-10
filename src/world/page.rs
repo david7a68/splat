@@ -139,6 +139,11 @@ impl WorldPage {
         self.error = None;
     }
 
+    /// An unsaved generated NPC, which nothing may replace without the DM's choice.
+    pub fn has_generated(&self) -> bool {
+        self.generated.is_some()
+    }
+
     /// Lookup's generated NPC, with the full help for using the campaign's own names.
     pub fn show_generated(&mut self, card: crate::lookup::GeneratedCard) {
         self.set_campaign(card.campaign);

@@ -48,7 +48,8 @@ fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
 }
 
 /// History rows put each date in one column, as wide as the widest date plus an `S` gap, so
-/// names and summaries share their left edges. A row without a date keeps the column empty.
+/// names and summaries share their left edges. The column takes at most a third of the width,
+/// and a longer date wraps in it. A row without a date keeps the column empty.
 fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> Option<Go> {
     let dates: Vec<Option<String>> = history
         .iter()
@@ -64,7 +65,8 @@ fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> O
                 .size()
                 .x
         })
-        .fold(0.0_f32, f32::max);
+        .fold(0.0_f32, f32::max)
+        .min(ui.available_width() / 3.0);
     let mut go = None;
     for (&position, date) in history.iter().zip(&dates) {
         let clicked = ui
@@ -72,16 +74,18 @@ fn history_rows(ui: &mut egui::Ui, index: &ContentIndex, history: &[usize]) -> O
                 let gap = ui.spacing().item_spacing.x;
                 ui.spacing_mut().item_spacing.x = design::S;
                 let size = egui::vec2(column, ui.spacing().interact_size.y);
-                ui.allocate_ui_with_layout(
-                    size,
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        ui.set_min_size(size);
-                        if let Some(date) = date {
-                            ui.label(Type::Small.rich(ui, date).color(colors().muted));
-                        }
-                    },
-                );
+                ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.set_min_size(size);
+                    ui.set_max_width(column);
+                    // The first line sits on the name's line; a wrapped date grows down.
+                    ui.add_space(((size.y - Type::Small.line()) / 2.0).max(0.0));
+                    if let Some(date) = date {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, date).color(colors().muted))
+                                .wrap(),
+                        );
+                    }
+                });
                 ui.spacing_mut().item_spacing.x = gap;
                 page_row(ui, index, position)
             })

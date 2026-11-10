@@ -523,8 +523,10 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 A History list gives its dates one column, as wide as the widest date in the list plus an `S` gap, so event
-names share one left edge and a wrapped summary stays right of the dates. A row without a date keeps the
-column empty.
+names share one left edge and a wrapped summary stays right of the dates. The column takes at most a third of
+the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
+column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page: World opens on
+its own card, and Lookup keeps its NPC.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
