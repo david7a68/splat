@@ -417,6 +417,8 @@ impl CampaignContent {
     }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(&campaign);
+        crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.manifest_write);
+        crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.campaign_write);
         self.refresh_pending = false;
         self.reconcile.checked_at = None;
         self.disabled_selections.clear();

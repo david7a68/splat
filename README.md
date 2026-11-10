@@ -1052,7 +1052,8 @@ Package repair keeps entries available when the manifest breaks or is deleted.
 **Write the manifest again** restores a missing manifest. **Replace with a basic Package.md** or
 **Replace with a basic Module.md** names the existing file and says which fields it drops.
 For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
-Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written. Copied World notes stay
+Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written.
+If the file changes after the write, the result and its Undo go away at the next reload. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under

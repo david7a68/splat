@@ -467,6 +467,20 @@ impl ManifestWrite {
     pub fn replaced(&self) -> bool {
         self.before.is_some()
     }
+    /// True while the written file still holds the exact text this write left.
+    pub fn on_disk(&self) -> bool {
+        note_path(&self.root, &self.path)
+            .ok()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .is_some_and(|text| text == self.after)
+    }
+    /// On reload, a result whose file changed since the write is stale, and its Undo would only
+    /// refuse. Forget both. Call this once per reload, not every frame: it reads the file.
+    pub fn forget_if_changed(write: &mut Option<Self>) {
+        if write.as_ref().is_some_and(|write| !write.on_disk()) {
+            *write = None;
+        }
+    }
     pub fn undo(&self) -> Result<PathBuf, String> {
         // A broken manifest cannot pass write_note's parse check.
         let path = note_path(&self.root, &self.path)?;
