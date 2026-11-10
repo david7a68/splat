@@ -19,8 +19,16 @@
   ]);
 
   env.__EGL_VENDOR_LIBRARY_FILENAMES = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
-  # Visual tests render with Mesa's software Vulkan driver. The app itself uses OpenGL.
-  env.VK_DRIVER_FILES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.x86_64.json";
+  # Visual test captures use Mesa's Vulkan drivers: an Intel or AMD GPU when there is one,
+  # otherwise the software rasterizer. The app itself uses OpenGL. NVIDIA's own driver is not
+  # listed: Nix's Vulkan loader does not find its library.
+  env.VK_DRIVER_FILES = builtins.concatStringsSep ":" (
+    map (name: "${pkgs.mesa}/share/vulkan/icd.d/${name}_icd.x86_64.json") [
+      "intel"
+      "radeon"
+      "lvp"
+    ]
+  );
 
   scripts.dev-run.exec = "cargo run --locked";
   scripts.check.exec = "cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings";

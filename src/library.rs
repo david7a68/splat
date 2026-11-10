@@ -9,6 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
+    history::{self, Step, Trail},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
@@ -1840,7 +1841,7 @@ pub struct Library {
     pub copy_to_package: Option<Uuid>,
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
-    history: Vec<BackStep>,
+    trail: Trail<Place>,
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
@@ -1918,13 +1919,20 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
     }
     Ok(found)
 }
-/// Where Back returns to after following a link.
-struct BackStep {
+/// An entry Back or Forward returns to, with the list as it was there.
+struct Place {
     owner: Option<Uuid>,
     path: String,
     scope: Scope,
     section: Section,
     search: String,
+}
+impl Place {
+    fn find(&self, notes: &[Note]) -> Option<usize> {
+        notes
+            .iter()
+            .position(|n| n.owner.id() == self.owner && n.path == self.path)
+    }
 }
 impl Library {
     pub fn refocus_draft(&mut self) {
@@ -2156,18 +2164,8 @@ impl Library {
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
-        if let Some(current) = self
-            .selected
-            .and_then(|i| self.loaded.as_ref().and_then(|l| l.notes.get(i)))
-            .filter(|_| self.selected != Some(index))
-        {
-            self.history.push(BackStep {
-                owner: current.owner.id(),
-                path: current.path.clone(),
-                scope: self.scope,
-                section: self.section,
-                search: self.search.clone(),
-            });
+        if self.selected != Some(index) {
+            self.trail.leave(self.here());
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
@@ -4200,17 +4198,25 @@ impl Library {
         self.new_place = (place != default_place).then_some(place);
     }
 
-    fn go_back(&mut self) {
+    /// The open entry, as Back or Forward returns to it.
+    fn here(&self) -> Option<Place> {
+        let current = self.loaded.as_ref()?.notes.get(self.selected?)?;
+        Some(Place {
+            owner: current.owner.id(),
+            path: current.path.clone(),
+            scope: self.scope,
+            section: self.section,
+            search: self.search.clone(),
+        })
+    }
+
+    fn go(&mut self, step: Step) {
         if self.dirty() {
             return;
         }
-        let Some(step) = self.history.pop() else {
-            return;
-        };
-        let Some(index) = self.loaded.as_ref().and_then(|l| {
-            l.notes
-                .iter()
-                .position(|n| n.owner.id() == step.owner && n.path == step.path)
+        let here = self.here();
+        let Some((target, index)) = self.trail.go(step, here, |target| {
+            target.find(&self.loaded.as_ref()?.notes)
         }) else {
             return;
         };
@@ -4219,9 +4225,9 @@ impl Library {
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         self.disk_change = None;
         self.scope_notice = None;
-        self.scope = step.scope;
-        self.section = step.section;
-        self.search = step.search;
+        self.scope = target.scope;
+        self.section = target.section;
+        self.search = target.search;
         self.matches = None;
         self.source = false;
         self.error = None;
@@ -4702,8 +4708,7 @@ impl Library {
             }
         };
         let save_row = editable && (self.source || dirty);
-        let mut go_back =
-            ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
+        let mut step = history::take_if(ui.ctx(), |_| true);
         let can_copy = note
             .entry
             .as_ref()
@@ -4723,7 +4728,7 @@ impl Library {
         };
         let base_width = Action::quiet("Read").natural_width(ui)
             + Action::quiet(edit_label).natural_width(ui)
-            + if self.history.is_empty() {
+            + if self.trail.peek(Step::Back).is_none() {
                 0.0
             } else {
                 back.natural_width(ui) + design::S
@@ -4775,7 +4780,7 @@ impl Library {
                         .clicked();
                 }
             }
-            if !self.history.is_empty()
+            if self.trail.peek(Step::Back).is_some()
                 && (if show_key { back.key("Alt+Left") } else { back })
                     .hint(
                         "Return to the entry before this link. During a draft, read it in Lookup.",
@@ -4783,7 +4788,7 @@ impl Library {
                     .show(ui)
                     .clicked()
             {
-                go_back = true;
+                step = Some(Step::Back);
             }
             if overflow {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5756,20 +5761,14 @@ impl Library {
                 self.reveal_row = true;
             }
         }
-        if go_back {
+        if let Some(step) = step {
             if dirty {
-                self.peek = self.history.last().and_then(|step| {
-                    self.loaded
-                        .as_ref()?
-                        .notes
-                        .iter()
-                        .find(|note| note.owner.id() == step.owner && note.path == step.path)?
-                        .entry
-                        .as_ref()
-                        .map(|e| e.id)
+                self.peek = self.trail.peek(step).and_then(|target| {
+                    let notes = &self.loaded.as_ref()?.notes;
+                    notes[target.find(notes)?].entry.as_ref().map(|e| e.id)
                 });
             } else {
-                self.go_back();
+                self.go(step);
             }
         }
     }
@@ -7047,10 +7046,27 @@ mod tests {
         library.open_entry(1);
         library.draft.push_str("Unsaved ruling.");
         let draft = library.draft.clone();
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.draft, draft);
-        assert_eq!(library.history.len(), 1);
+        assert!(library.trail.peek(Step::Back).is_some());
+    }
+
+    #[test]
+    fn forward_returns_to_what_back_left_until_another_link() {
+        let mut library = navigation_library();
+        library.open_entry(0);
+        library.open_entry(1);
+        library.go(Step::Back);
+        assert_eq!(library.selected, Some(0));
+        library.go(Step::Forward);
+        assert_eq!(library.selected, Some(1));
+        library.go(Step::Back);
+        library.open_entry(2);
+        assert!(
+            library.trail.peek(Step::Forward).is_none(),
+            "a new link starts a new trail"
+        );
     }
 
     #[test]
@@ -7065,7 +7081,7 @@ mod tests {
         library.search = "Second".into();
         library.open_entry(2);
         library.scope = Scope::All;
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.scope, Scope::Package(owner));
         assert_eq!(library.search, "Second");
@@ -7083,7 +7099,7 @@ mod tests {
         library.open_entry(2);
         let loaded = library.loaded.as_ref().unwrap();
         assert!(loaded.in_scope(&loaded.notes[2], library.scope));
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.scope, Scope::Package(owner));
     }
     /// Run alone so the first load starts without a warmed process cache.

@@ -312,7 +312,7 @@ impl<'a> Driver<'a> {
             .with_pixels_per_point(1.0)
             .with_max_steps(64);
         let builder = if capturing {
-            builder.renderer(super::render::SoftwareRenderer::new())
+            builder.renderer(super::render::CaptureRenderer::new())
         } else {
             builder
         };
@@ -1416,6 +1416,32 @@ impl<'a> Driver<'a> {
         let caption = format!("Press: Alt+{}", key.name());
         self.film_caption(&caption);
         self.harness.key_press_modifiers(egui::Modifiers::ALT, key);
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&caption);
+    }
+
+    /// Press a mouse side button over a visible node: Extra1 is Back and Extra2 is Forward.
+    pub fn press_side_button(&mut self, button: egui::PointerButton, over: &str) {
+        let rect = self.aim(&format!("{button:?} over {over:?}"), |node| {
+            node.name == over
+        });
+        let caption = format!("Press: mouse {button:?} over {over}");
+        self.film_aim(rect, &caption);
+        let mut raw = egui::RawInput {
+            events: vec![egui::Event::PointerButton {
+                pos: rect.center(),
+                button,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        // Kittest does not call eframe's raw input hook, which sets the side buttons aside.
+        let ctx = self.harness.ctx.clone();
+        eframe::App::raw_input_hook(self.harness.state_mut(), &ctx, &mut raw);
+        self.harness.step();
+        self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
         self.film_result(&caption);
