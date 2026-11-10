@@ -384,6 +384,7 @@ Close the open run before saving run settings.
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
 values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
 `Add to fight` opens the Arrivals panel for a creature or a prepared group; a blank initiative total rolls it.
+Search shows five creatures; **Show all** lists every match without more typing.
 Group Add buttons share a fixed slot, so all Initiative fields align.
 `Ctrl+G` opens the same panel in one step.
 Unsaved runs offer **Save as a new run and close** in the close dialog.
@@ -794,7 +795,7 @@ creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, **Connect to refresh** takes you to the connection. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, the warning has **Connect D&D Beyond**, and the header has **Connect to refresh**. Both take you to the connection. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 
@@ -1071,14 +1072,16 @@ Package repair keeps entries available when the manifest breaks or is deleted.
 **Replace with a basic Module.md** names the existing file and says which fields it drops.
 For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
 Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written.
-If the file changes after the write, the result and its Undo go away at the next reload. Copied World notes stay
+If the file changes after the write, the result and its Undo go away at the next reload. The same applies to
+every Library and Campaign result with Undo that wrote files, such as **Undo separate entries**. The copy
+registration message stays, because it has another action; its Undo is turned off and says why. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
 
-Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
+Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
 
 After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
 folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.

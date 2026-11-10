@@ -2570,6 +2570,25 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
     d.click(EDIT_MARKDOWN);
+    // Must stay true with iter-14-E-FD4: Edit Markdown keeps the choices above the editor.
+    d.observe_both(
+        "iter-14-E-FD4-source",
+        "Edit Markdown keeps both repair choices above the Markdown editor",
+        |d| {
+            let Some(editor) = d.place_of("Markdown editor") else {
+                return false;
+            };
+            [
+                "Make Cinder Wolf copy.md a separate entry",
+                "Make Cinder Wolf.md a separate entry",
+            ]
+            .iter()
+            .all(|name| {
+                d.place_of(name)
+                    .is_some_and(|choice| d.in_view(name) && choice.bottom() < editor.top())
+            })
+        },
+    );
     d.state("duplicate-original-editor", Sizes::All);
     d.type_into_editor("Saved only to the original.\n");
     d.click("Save");
@@ -3488,6 +3507,54 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             format!("The copied-package action is bordered below the message at {size:?}"),
         );
     }
+    // AD1, a result with another action: an outside change to a copied file blocks Undo package
+    // registration with its reason, and Use the copy's entries stays. Restoring the bytes and
+    // reloading brings Undo back, so the later steps see the usual state.
+    {
+        let reload_library = |d: &mut Driver<'_>| {
+            d.click("Packages");
+            d.click("Reload from disk");
+            d.wait_for_text("Undo package registration");
+        };
+        let (entries, _) = splat::content::read_directory(&copied).unwrap();
+        let file = copied.join(
+            &entries
+                .iter()
+                .find(|entry| entry.kind != "package")
+                .expect("fixture: a copied entry")
+                .path,
+        );
+        let written = fs::read(&file).unwrap();
+        assert!(
+            !d.is_disabled("Undo package registration"),
+            "fixture: Undo starts available"
+        );
+        let mut outside = written.clone();
+        outside.extend_from_slice(b"\nAn outside note.\n");
+        fs::write(&file, &outside).unwrap();
+        reload_library(d);
+        let blocked = d.is_disabled("Undo package registration");
+        let use_kept =
+            d.in_view("Use the copy's entries") && !d.is_disabled("Use the copy's entries");
+        let reason = d.tooltip_contains(
+            "Undo package registration",
+            crate::content_workspace::UNDO_ENDED,
+        );
+        d.observe(
+            "iter-14-E-AD1-registration",
+            blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
+            format!(
+                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy's entries stays ({use_kept}); the file keeps the outside bytes"
+            ),
+        );
+        fs::write(&file, &written).unwrap();
+        reload_library(d);
+        d.observe(
+            "iter-14-E-AD1-registration-back",
+            !d.is_disabled("Undo package registration"),
+            "With the written bytes back, a reload makes Undo package registration available again",
+        );
+    }
     go_campaign(d);
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);
@@ -3561,6 +3628,59 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
+    // FD4: the four choices sit in the reader's scroll area after the title, so a scroll over the
+    // reader moves them with the title and brings the body into view. Checked at 960x640.
+    {
+        let single = "Make Cinder Wolf.md in ashen-marches-copy/ a separate entry";
+        let last_choice = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Make all ") && node.in_view())
+                .map(|node| node.rect)
+                .max_by(|a, b| a.top().total_cmp(&b.top()))
+        };
+        d.expect(single);
+        let title = d
+            .scroll_position_of_reader("Cinder Wolf")
+            .expect("the reader title is on the page");
+        let choice = d.place_of(single).unwrap();
+        let last = last_choice(d).expect("a folder choice is in view");
+        let warning = d
+            .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
+            .expect("the duplicate warning is painted");
+        let at = egui::pos2(choice.center().x, title + 4.0);
+        d.scroll_at(at, 2);
+        let title_after = d
+            .scroll_position_of_reader("Cinder Wolf")
+            .unwrap_or(f32::MIN);
+        let moved = title - title_after;
+        let choice_moved = choice.top() - d.place_of(single).map_or(f32::MAX, |rect| rect.top());
+        let last_moved = last_choice(d).map_or(0.0, |rect| last.top() - rect.top());
+        d.scroll_up_at(at, 4);
+        let restored = d.scroll_position_of_reader("Cinder Wolf") == Some(title);
+        d.observe(
+            "iter-14-E-FD4",
+            title >= 0.0
+                && title < choice.top()
+                && moved > 0.0
+                && (choice_moved - moved).abs() < 1.0
+                && (last_moved - moved).abs() < 1.0
+                && restored,
+            format!(
+                "The copied-folder choices scroll with the reader title: title {title:.0} moved {moved:.0}, single choice moved {choice_moved:.0}, last folder choice moved {last_moved:.0}, restored {restored}"
+            ),
+        );
+        // Must stay true: the choices still start at the message text edge.
+        d.observe(
+            "iter-14-E-FD4-edge",
+            (choice.left() - warning.left()).abs() < 1.0,
+            format!(
+                "The first choice starts at the warning text: text {:.0}, choice {:.0}",
+                warning.left(),
+                choice.left()
+            ),
+        );
+    }
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
@@ -3594,6 +3714,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
+    let batch_words = format!("{count} files in ashen-marches-copy/ are now separate entries.");
+    d.wait_for_text("Undo separate entries");
+    d.expect(&batch_words);
     let wolf = copied_entries
         .iter()
         .find(|entry| entry.name == "Cinder Wolf")
@@ -3603,11 +3726,33 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         copied.join(&wolf.path),
     )
     .unwrap();
+    // The reported fixture: the original's bytes over one repaired file, and the batch's other files.
+    let on_disk = |copied: &std::path::Path| {
+        copied_entries
+            .iter()
+            .map(|entry| fs::read(copied.join(&entry.path)).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let outside = on_disk(&copied);
+    assert_eq!(
+        fs::read(copied.join(&wolf.path)).unwrap(),
+        fs::read(d.root.join("modules/ashen-marches").join(&wolf.path)).unwrap()
+    );
     d.click("Packages");
     d.click("Reload from disk");
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
+    // AD1: the outside copy ended the batch result, so the message and its Undo go. The reload
+    // writes nothing, and the duplicate repair choices stay.
+    d.observe(
+        "iter-14-E-AD1",
+        !d.has("Undo separate entries")
+            && !d.visible_text(&batch_words)
+            && d.has("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry")
+            && on_disk(&copied) == outside,
+        "After an outside copy over a repaired file, the batch result and Undo separate entries are gone, the choices stay and no file changed",
+    );
     d.state("one-entry-copied-between-registered-packages", Sizes::All);
     go_encounters(d);
     if d.has("Back to encounters") {

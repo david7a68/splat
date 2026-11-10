@@ -137,6 +137,10 @@ status that wraps never moves Lookup, Notes or Settings. Rail statuses (recordin
 sync) fill one slot that grows upward above Lookup, so a status that comes, goes or wraps never moves these
 targets. Tab order still follows reading order.
 
+No rail target moves when a state comes or goes. The Run slot is always the first item: the open run, the
+paused run, or, with no run, a quiet `Run` with `No fight open` on line two that opens Encounters. All three
+are one height, so Encounters, Session and the rest keep their places when a run opens or closes.
+
 ## Widgets
 
 `theme::install` sets one global `egui::Style` for hover, active and disabled states, focus rings, selection,
@@ -171,7 +175,7 @@ eye during long sessions.
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
-| Link | `link` | Real `Link` role, at least 24 px high |
+| Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
@@ -200,7 +204,9 @@ settings keep their full save actions on a second line at the right edge, so nei
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. Discard recovery is an Undo message too: info icon, bar,
+icon on the message line, or below when needed. On reload, a result whose Undo would rewrite files checks
+those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
+offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
 action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
 right edge.
@@ -231,7 +237,7 @@ choices one row at full reader width. World Overwrite saves valid text; invalid 
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
-holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Replace the file with this run` and `Save as a new run`.
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap and red `Replace the file with this run`, in `message_with_actions`: both start at the message text.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
@@ -410,7 +416,9 @@ names the file and keeps `Undo separate entry` on the message line. Folder repai
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
-`message_with_actions`, so they start at the message text edge, not at the warning bar.
+`message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
+draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
+Edit Markdown keeps them above the editor.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -447,7 +455,8 @@ repair actions on their warning line. Packages keeps its save row directly below
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
-from the package save row. Invalid YAML uses plain words and marks the line to fix.
+from the package save row. Below the repair's own save row, an `L` gap and the package list's one hairline
+separate it from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. An off package with required entries shows None chosen, the
@@ -838,7 +847,9 @@ Paused snapshots state when they differ from the current file.
 
 ### Arrivals
 
-Only search shows until a name is typed; then the made-up creature form has two fixed field rows. Its side
+Only search shows until a name is typed; then the made-up creature form has two fixed field rows. Search
+shows five matches. When more match, a quiet `Show all 6` (the number of matches) lists every match in place, in a scroll list at most
+eight rows tall, so the words, the chosen match and the roster stay in view. New words return to five. Its side
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
@@ -850,6 +861,8 @@ Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
 Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, says `Enter a whole number, or clear
 the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
+In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
+(`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
@@ -982,7 +995,7 @@ player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `S
 the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
-the source status gives way first, then the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
+the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
 `AC`. Then the portraits go together, and then `AC`: AC answers "does a 17 hit?", and a portrait repeats the
 name beside it. HP and temporary HP always stay. The exception, when first names and HP still do not fit: the
 names shorten to an initial (`B.`), with the full name in hover and the accessible name. If that does not fit,
@@ -991,6 +1004,12 @@ accessible name). No item is ever cut off: when even that does not fit, the item
 muted `N more` names the rest, with HP, in hover and its accessible name. `N more` takes keyboard focus, and
 focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
+
+The source status (where the numbers come from) is measured by itself, after the items are fitted. It
+stands before Hide the party, `L` after the last item, whenever the room the items leave holds it, at any
+level. When its full words (`After Bridge Ambush`, `Sheets fetched 2 h ago`) do not fit, it shows a short
+form (`This fight`, `Last fight`, `Long rest`, `Sheets`, `No sheets`); hover and the accessible name keep the
+full words. It never takes room from an item, so it never moves one.
 
 Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
 in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
@@ -1060,7 +1079,7 @@ Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spel
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
 Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
 
-Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
+Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy, and put a secondary `Connect D&D Beyond` before Show file; it opens the same place as the header link. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
 to sync; first-sheet-read help keeps Settings inside its Small sentence. Spell levels have counts without an
 extra Spells heading; cantrips omit Prepared and use one-line rows. Coins sit below Equipment & coins. Party

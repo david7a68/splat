@@ -1079,6 +1079,35 @@ impl<'a> Driver<'a> {
         visible
     }
 
+    /// The heights of painted horizontal rules (hairlines and separators) that cross `x` between
+    /// `top` and `bottom`. All values are AccessKit pixels, like `place_of`.
+    pub fn horizontal_rules(&self, x: f32, top: f32, bottom: f32) -> Vec<f32> {
+        let scale = self.harness.ctx.pixels_per_point();
+        fn walk(shape: &egui::Shape, clip: egui::Rect, out: &mut Vec<(egui::Pos2, egui::Pos2)>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, clip, out)),
+                egui::Shape::LineSegment { points, .. }
+                    if (points[0].y - points[1].y).abs() < 0.01 && clip.contains(points[0]) =>
+                {
+                    out.push((points[0], points[1]));
+                }
+                _ => {}
+            }
+        }
+        let mut lines = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, clipped.clip_rect, &mut lines);
+        }
+        let mut rules: Vec<f32> = lines
+            .into_iter()
+            .map(|(a, b)| (a.x.min(b.x) * scale, a.x.max(b.x) * scale, a.y * scale))
+            .filter(|&(left, right, y)| left <= x && x <= right && top <= y && y <= bottom)
+            .map(|(_, _, y)| y)
+            .collect();
+        rules.sort_by(f32::total_cmp);
+        rules
+    }
+
     pub fn painted_rect_in(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
         let mut found = None;
         self.each_painted_text(|text, clip| {
