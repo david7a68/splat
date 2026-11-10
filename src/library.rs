@@ -475,6 +475,12 @@ struct DuplicateIndex {
     keys: std::collections::HashMap<String, Vec<usize>>,
 }
 
+/// The link index a scan used, and each listed entry's position and broken link count.
+type BrokenLinks = (
+    std::sync::Arc<crate::lookup::ContentIndex>,
+    Vec<(usize, usize)>,
+);
+
 #[derive(Default)]
 pub(crate) struct Loaded {
     pub(crate) notes: Vec<Note>,
@@ -492,12 +498,7 @@ pub(crate) struct Loaded {
     facets: std::sync::OnceLock<Vec<Option<Facets>>>,
     /// Listed entries with a broken link, found against this link index. A new index, an edited
     /// note (`invalidate`) or a reload (a new `Loaded`) finds them again.
-    broken_links: std::sync::Mutex<
-        Option<(
-            std::sync::Arc<crate::lookup::ContentIndex>,
-            Vec<(usize, usize)>,
-        )>,
-    >,
+    broken_links: std::sync::Mutex<Option<BrokenLinks>>,
 }
 impl Loaded {
     fn facets(&self) -> &[Option<Facets>] {
