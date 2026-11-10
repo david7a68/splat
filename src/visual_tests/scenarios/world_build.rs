@@ -4795,6 +4795,33 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && d.has_containing("Added Guild")
         },
     );
+    // FD1: `Your changes are already in the note.` is a page result too, below the file line
+    // and above the value rows, at every captured size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            d.expect("Change Part of");
+            let (below, detail) = result_below_file_line(
+                d,
+                ALREADY_SAVED,
+                "Safe Rook.md",
+                design::colors().result.info,
+            );
+            let message = d.painted_rect_in(ALREADY_SAVED, reader_pane(d));
+            let row = d.place_of("Change Part of");
+            (
+                below
+                    && message
+                        .zip(row)
+                        .is_some_and(|(message, row)| message.bottom() <= row.top()),
+                format!("{detail}; first row at {row:?}"),
+            )
+        });
+        d.observe(
+            "iter-17-D-FD1-kept",
+            placed,
+            format!("At {size:?}, the kept-changes message sits above the value rows: {detail}"),
+        );
+    }
     d.state("overwrite-already-in-note", Sizes::All);
     fs::write(&path, &readable).unwrap();
     reload(d);
