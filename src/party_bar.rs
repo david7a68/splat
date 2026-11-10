@@ -379,9 +379,10 @@ pub fn show(
             .collect::<Vec<f32>>()
     };
     let fresh = fit(&measure(&mut items, fitted, None));
-    // In a fight the level never rises, and at the same level no item narrows. The hold never
-    // hides a player who would show without it: when the held widths no longer fit, the level
-    // drops to the first lower one that fits.
+    // In a fight the level never rises, and at the same level no item narrows. The held widths
+    // are measured again at the held level each frame. When they would hide a player who shows
+    // without the hold, they are dropped, and the held level stays: its items are no wider than
+    // a fuller level's, so the same players fit.
     let (index, widths, kept) = match held.as_ref() {
         Some(hold) if fitted <= hold.step => {
             let widths = measure(&mut items, hold.step, Some(hold));
@@ -389,13 +390,9 @@ pub fn show(
             if kept >= fresh {
                 (hold.step, widths, kept.min(hold.kept).max(fresh))
             } else {
-                // When no lower step fits, the hold ends: the fresh fit shows the most players.
-                let index = (hold.step + 1..steps.len())
-                    .find(|&index| needed(&mut items, steps[index], gap) <= room)
-                    .unwrap_or(fitted);
-                let widths = measure(&mut items, index, None);
+                let widths = measure(&mut items, hold.step, None);
                 let kept = fit(&widths);
-                (index, widths, kept)
+                (hold.step, widths, kept)
             }
         }
         _ => {
@@ -928,6 +925,8 @@ mod tests {
             let fight = Some(Uuid::from_u128(7));
             let before = draw_in(&ctx, width, &calm, fight);
             let bloodied = draw_in(&ctx, width, &hurt, fight);
+            never_fewer(&before, width, &calm);
+            never_fewer(&bloodied, width, &hurt);
             assert_ne!(
                 level(&before),
                 level(&bloodied),
@@ -935,6 +934,7 @@ mod tests {
             );
             assert!(bloodied.whole(width), "{width}: {bloodied:?}");
             let healed = draw_in(&ctx, width, &calm, fight);
+            never_fewer(&healed, width, &calm);
             assert_eq!(
                 level(&healed),
                 level(&bloodied),
@@ -988,6 +988,8 @@ mod tests {
                 turn[player].hp = Some(11);
                 let bloodied = draw_in(&ctx, width, &turn, fight);
                 let healed = draw_in(&ctx, width, &calm, fight);
+                never_fewer(&bloodied, width, &turn);
+                never_fewer(&healed, width, &calm);
                 assert!(
                     bloodied.whole(width),
                     "{width}, player {player}: {bloodied:?}"
@@ -1007,6 +1009,69 @@ mod tests {
             }
         }
         assert!(whole_party > 100, "most widths show a whole Bloodied party");
+
+        // Re-review of PR 185: where five Bloodied players need `N more`, healing them all in the
+        // same fight keeps the level that five Bloodied needed. It never rises mid-fight.
+        // Which parts show, not how many items show them: a healed bar may show more players.
+        let parts = |at: &Drawn| {
+            [at.firsts, at.initials, at.portraits, at.ac, at.per].map(|count| count > 0)
+        };
+        let all = party(5, 5, 0);
+        let (mut crowded, mut icon_only) = (0, 0);
+        for width in (30..=200).map(|step| step as f32 * 10.0).chain([1040.0]) {
+            if draw(width, &all).spoken == 5 {
+                continue;
+            }
+            crowded += 1;
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            ctx.enable_accesskit();
+            let fight = Some(Uuid::from_u128(10));
+            let before = draw_in(&ctx, width, &calm, fight);
+            let bloodied = draw_in(&ctx, width, &all, fight);
+            let healed = draw_in(&ctx, width, &calm, fight);
+            for (at, glances) in [(&before, &calm), (&bloodied, &all), (&healed, &calm)] {
+                never_fewer(at, width, glances);
+                assert!(at.whole(width), "{width}: {at:?}");
+            }
+            assert_eq!(
+                parts(&healed),
+                parts(&bloodied),
+                "the level rose mid-fight at {width}"
+            );
+            // The steps either side of the held one can look the same with everyone healed, so
+            // one player stays Bloodied: a held icon-only level keeps the icon without its word.
+            let one = party(5, 1, 0);
+            draw_in(&ctx, width, &all, fight);
+            let one_left = draw_in(&ctx, width, &one, fight);
+            never_fewer(&one_left, width, &one);
+            assert!(one_left.whole(width), "{width}: {one_left:?}");
+            if bloodied.bloodied == 0 {
+                icon_only += usize::from(draw(width, &one).bloodied > 0);
+                assert!(
+                    one_left.states == 1 && one_left.bloodied == 0,
+                    "the state word came back mid-fight at {width}: {one_left:?}"
+                );
+            }
+        }
+        assert!(
+            icon_only > 0,
+            "some widths would show the word again without the hold"
+        );
+        assert!(
+            crowded > 3,
+            "some widths need N more for five Bloodied players"
+        );
+    }
+
+    /// The hold never shows fewer players than a fresh bar with the same party.
+    fn never_fewer(at: &Drawn, width: f32, glances: &[Glance]) {
+        let fresh = draw(width, glances).spoken;
+        assert!(
+            at.spoken >= fresh,
+            "{width}: {} players shown, {fresh} without the hold: {at:?}",
+            at.spoken
+        );
     }
 
     /// FT3 and its repair: the optional stats drop first, then the portraits go together, then

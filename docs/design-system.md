@@ -978,9 +978,9 @@ source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens t
 
 Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
 in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
-item narrows, so nothing moves back when a player is healed. The hold never hides a player who would
-show without it: when the held widths no longer fit, the level drops to the first lower one that fits,
-and when none does, the hold ends. A change of bar width (the window or the rail) or of the party
+item narrows, so nothing moves back when a player is healed. The held widths are measured again at the
+held level each frame, and dropped when they would hide a player who shows without the hold; the
+held level stays, so the hold never hides a player. A change of bar width (the window or the rail) or of the party
 measures again. The bar keeps this in its own state, keyed to the run, never in
 the party data.
 
