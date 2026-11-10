@@ -395,6 +395,50 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click("Watch House");
     d.wait_for_text("Rook Ambry");
     d.state("npc-place-link", Sizes::All);
+
+    // Rook moves and makes a promise. The DM writes both down without leaving the fight.
+    entry(d, "Locations/North Gate.md", "North Gate", "location", "");
+    reload(d);
+    d.click("Back");
+    d.wait_for_text("Watch House");
+    let path = root(d).join("NPCs/Rook Ambry.md");
+    let before = fs::read_to_string(&path).unwrap();
+    let turn = |d: &mut Driver<'_>| {
+        let strip = d.app_mut().encounters.run().unwrap().strip();
+        (strip.round, strip.current)
+    };
+    let at_start = turn(d);
+    d.begin_task();
+    d.click("Edit Rook Ambry");
+    d.wait_for_text("TEXT");
+    d.click("Change In");
+    d.type_into("Find a location", "North");
+    d.click("North Gate");
+    d.type_into_editor("\nNever names the captain. Owes Nell a favour.\n");
+    let same_turn = turn(d) == at_start;
+    d.observe(
+        "W2",
+        d.in_view(NEXT_TURN) && d.visible_text("Unsaved") && same_turn,
+        "Editing an NPC in Lookup leaves the run's turn as it was",
+    );
+    d.state("npc-edit-form-in-lookup", Sizes::All);
+    d.click("Save changes");
+    d.wait_for_text("Changes saved.");
+    d.audit_goal_within("W2", "change an NPC's place and text beside the run", 9);
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("North Gate"), "{saved}");
+    assert!(saved.ends_with("Owes Nell a favour.\n"), "{saved}");
+    d.observe(
+        "W2",
+        d.has("North Gate")
+            && d.visible_text("Never names the captain. Owes Nell a favour.")
+            && !d.has("Change In"),
+        "After Save, Lookup reads the NPC again with the new place and text",
+    );
+    d.state("npc-edit-saved-in-lookup", Sizes::All);
+    d.click("Undo changes");
+    d.wait_for_text("Watch House");
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
 }
 
 /// A rename on disk keeps an identity-based package link working.

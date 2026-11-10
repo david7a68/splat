@@ -1,6 +1,8 @@
 //! The campaign's world: plain notes Splat reads and does not own, and the NPCs and locations
-//! made from them. Obsidian stays the editor. A plain note becomes a Lookup item, not an entry,
-//! so nothing depends on it. See `docs/design/world-and-house-rules.md`.
+//! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
+//! note becomes a Lookup item, not an entry, so nothing depends on it.
+//! See `docs/design/world-and-house-rules.md`.
+mod edit;
 mod fields;
 pub mod page;
 pub(crate) mod repair;
@@ -847,6 +849,12 @@ pub struct Reader {
     status: String,
     status_editing: bool,
     status_drafts: HashMap<Uuid, String>,
+    /// Edit forms by entry. A form with changes stays while the DM reads other entries.
+    edits: HashMap<Uuid, edit::EditDraft>,
+    /// What Cancel dropped, until the DM undoes it or edits again.
+    discarded: Option<(Uuid, edit::EditDraft)>,
+    /// A field of the form had the keyboard when it last drew.
+    form_focused: bool,
     pub compact: bool,
     other_type: String,
     adding: Option<Adding>,
@@ -952,6 +960,8 @@ impl Reader {
                 .remove(&item.entry.id)
                 .unwrap_or_else(|| status(&item.entry).to_owned());
             self.status_editing = self.status != status(&item.entry);
+            // Only a form with changes is worth keeping. It opens again where it was left.
+            self.edits.retain(|_, draft| draft.dirty());
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
@@ -1000,15 +1010,44 @@ impl Reader {
             .ok()
             .flatten()
             .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
-        view::title_with_art(
-            ui,
-            &title,
-            &format!("{} · {}", item.subtitle, item.owner),
-            Some(&item.entry),
-        );
+        let id = item.entry.id;
+        let edit = campaign.filter(|_| edit::editable(item, index) && !self.editing(id));
+        ui.horizontal_top(|ui| {
+            let room = edit.map_or(0.0, |_| design::Density::Read.control() + design::S);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width() - room, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    view::title_with_art(
+                        ui,
+                        &title,
+                        &format!("{} · {}", item.subtitle, item.owner),
+                        Some(&item.entry),
+                    );
+                },
+            );
+            if let Some(campaign) = edit
+                && design::icon_button(
+                    ui,
+                    design::icons::EDIT,
+                    &format!("Edit {}", item.entry.name),
+                )
+                .clicked()
+            {
+                self.begin_edit(campaign, item);
+            }
+        });
+        self.form_focused = false;
+        self.lost_edits(ui, index);
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
+        if let Some(campaign) = campaign
+            && self.editing(id)
+        {
+            return self.edit_form(ui, item, index, campaign);
+        }
+        self.discarded_notice(ui, id);
         if !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private()
@@ -1288,41 +1327,12 @@ impl Reader {
             "status" => "Status",
             _ => "Stat block",
         };
-        let name = |value: &Value| {
-            serde_yaml_ng::from_value::<EntryRef>(value.clone())
-                .ok()
-                .and_then(|reference| reference.reference().ok())
-                .and_then(|reference| index.position_of(&reference))
-                .map(|at| index.items[at].entry.name.clone())
-                .unwrap_or_else(|| {
-                    if value.is_null() {
-                        "not set".into()
-                    } else {
-                        link_name(value, label)
-                    }
-                })
-        };
-        let before_name = world_field(&item.entry, key).map_or_else(|| "not set".into(), name);
-        let after_name = name(&value);
-        let mut value = value;
-        if let Value::Mapping(fields) = &mut value {
-            fields.remove("link");
-        }
-        let value = reference(&value)
-            .and_then(|r| index.position_of(&r))
-            .map(|at| {
-                let target = &index.items[at].entry;
-                if let Some(key) = &target.key {
-                    Value::String(key.clone())
-                } else {
-                    Value::String(format!(
-                        "[[{}|{}]]",
-                        target.path.trim_end_matches(".md"),
-                        target.name
-                    ))
-                }
-            })
-            .unwrap_or(value);
+        let before_name = world_field(&item.entry, key).map_or_else(
+            || "not set".into(),
+            |value| edit::value_name(index, value, label),
+        );
+        let after_name = edit::value_name(index, &value, label);
+        let value = edit::stored_value(index, value);
         let result = (|| {
             let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
                 .map_err(|e| e.to_string())?;
@@ -1447,6 +1457,8 @@ impl Reader {
             "Undo place change"
         } else if word.starts_with("Status:") {
             "Undo status change"
+        } else if word == edit::SAVED {
+            "Undo changes"
         } else {
             "Undo stat block change"
         }
@@ -1610,9 +1622,22 @@ impl Reader {
                 }
             }
         }
-        let Some(picker) = &mut self.picker else {
-            return go;
-        };
+        if let Some(key) = self.picker.as_ref().map(|picker| picker.key)
+            && let Some(value) = self.pick(ui, index, campaign)
+        {
+            return self.change(campaign, item, index, key, value);
+        }
+        go
+    }
+
+    /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
+    fn pick(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) -> Option<Value> {
+        let picker = self.picker.as_mut()?;
         let key = picker.key;
         let label = if key == "in" {
             "Find a location"
@@ -1685,13 +1710,13 @@ impl Reader {
             }
             cancel = Action::quiet("Cancel").show(ui).clicked();
         });
-        if let Some(value) = chosen {
-            return self.change(campaign, item, index, key, value);
-        }
-        if cancel || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if chosen.is_some()
+            || cancel
+            || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
             self.picker = None;
         }
-        go
+        chosen
     }
 
     fn entry_controls(
@@ -1823,7 +1848,16 @@ impl Reader {
                     .flags
                     .iter()
                     .any(|flag| flag.message.starts_with("Status "));
-                if Self::relationship_row(
+                let notice = self
+                    .undo
+                    .as_ref()
+                    .filter(|change| {
+                        change.path == item.entry.path
+                            && change.word.starts_with("Status:")
+                            && Self::notice_fits(ui, value_width, &change.word)
+                    })
+                    .map(|change| change.word.clone());
+                let (changed, undo) = Self::relationship_row(
                     ui,
                     "Status",
                     value_width,
@@ -1847,10 +1881,12 @@ impl Reader {
                                 }),
                         );
                     },
-                    None,
-                )
-                .0
-                {
+                    notice.as_deref(),
+                );
+                if undo {
+                    return self.undo_change(campaign, item.entry.id);
+                }
+                if changed {
                     self.status_editing = true;
                 }
             }
@@ -1888,7 +1924,11 @@ impl Reader {
         if !self.compact
             && let Some(change) = &self.undo
             && change.path == item.entry.path
-            && !Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
+            // A row shows its own change when it fits. Any other change shows here.
+            && (!Self::notice_fits(ui, Self::relationship_width(ui), &change.word)
+                || !(change.word.starts_with("In:")
+                    || change.word.starts_with("Stat block:")
+                    || (change.word.starts_with("Status:") && !self.status_editing)))
             && ui
                 .horizontal_wrapped(|ui| Self::change_notice(ui, &change.word))
                 .inner

@@ -620,6 +620,9 @@ A completed copy says where it went and keeps its path in hover text.
 Copy both copies a campaign dependency with its entry and reconnects the new references.
 The warning action copies and reconnects one dependency. Undo restores the reference and removes the unchanged copy.
 A compact NPC reader shows Fights as and In on one read-only line; both names open in Lookup.
+A campaign world entry has a quiet Edit icon after its title, in Lookup and World. Edit replaces the rows and the text
+with one form: Status, Stat block and In as labelled fields, then Text in the reader's prose type, without the title line.
+Save changes is primary, Unsaved follows it, then an L gap and quiet Cancel. One save writes every change with one Undo.
 Lookup keeps Back and its close icon on the title line. Clear appears beside search only when search has text. Result rows use Scan height, Body text for names, and Small muted text for metadata.
 
 Library puts owner status on the file line so Back does not move the title. During a draft, Back opens the earlier entry in Lookup. Related entries follow the reader body. A standalone bold caption above a table is plain text; other reader links have an underline.

@@ -1441,7 +1441,7 @@ impl Lookup {
                 if show_clear && Action::quiet("Clear").show(ui).clicked() {
                     self.query.clear();
                     self.current = None;
-                    self.reader = Reader::default();
+                    self.reader.clear();
                     self.reading_written = None;
                     self.generated = None;
                 }
