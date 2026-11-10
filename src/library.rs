@@ -198,6 +198,18 @@ enum Scope {
     Campaign,
 }
 
+/// How many entries leave Splat's lists when a package is unregistered. The manifest is not one.
+fn unregister_count(notes: &[Note], package: Uuid) -> usize {
+    notes
+        .iter()
+        .filter(|n| {
+            n.owner.id() == Some(package)
+                && !n.is_manifest()
+                && n.entry.as_ref().is_none_or(|e| e.kind != "reference")
+        })
+        .count()
+}
+
 struct Note {
     path: String,
     text: String,
@@ -207,13 +219,16 @@ struct Note {
 }
 impl Note {
     fn is_manifest(&self) -> bool {
+        // A readable note is a manifest only by its kind; the file name and the kind line are
+        // guesses for a note that cannot be read.
         matches!(self.owner, Owner::Package(_))
-            && (self
-                .entry
-                .as_ref()
-                .is_some_and(|entry| entry.kind == "package")
-                || matches!(self.path.as_str(), "Package.md" | "Module.md")
-                || self.text.lines().any(|line| line == "splat_kind: package"))
+            && match &self.entry {
+                Some(entry) => entry.kind == "package",
+                None => {
+                    matches!(self.path.as_str(), "Package.md" | "Module.md")
+                        || self.text.lines().any(|line| line == "splat_kind: package")
+                }
+            }
     }
 
     fn about_label(&self) -> String {
@@ -2942,17 +2957,10 @@ impl Library {
         let Some(module) = self.confirm_unregister.clone() else {
             return;
         };
-        let count = self.loaded.as_ref().map_or(0, |l| {
-            l.notes
-                .iter()
-                .filter(|n| {
-                    n.owner.id() == Some(module.id)
-                        && n.entry
-                            .as_ref()
-                            .is_none_or(|e| !matches!(e.kind.as_str(), "package" | "reference"))
-                })
-                .count()
-        });
+        let count = self
+            .loaded
+            .as_ref()
+            .map_or(0, |l| unregister_count(&l.notes, module.id));
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut remove = false;
         let title = format!("Unregister {}?", module.name);
@@ -7183,6 +7191,27 @@ mod tests {
     }
 
     #[test]
+    fn iter3_d_a_readable_entry_named_like_a_manifest_stays_an_entry() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            note_text("Package Wolf", "creature", None),
+        )
+        .unwrap();
+        fs::write(module.path.join("Module.md"), "---\nsplat_id: [\n---\n").unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+        let wolf = loaded
+            .notes
+            .iter()
+            .find(|note| note.path == "Package.md")
+            .unwrap();
+        assert!(!wolf.is_manifest());
+        assert!(loaded.in_scope(wolf, Scope::Package(module.id)));
+        assert_eq!(unregister_count(&loaded.notes, module.id), 1);
+    }
+
+    #[test]
     fn iter3_d_manifests_never_enter_content_counts_or_results() {
         let temp = tempfile::tempdir().unwrap();
         let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
@@ -7220,6 +7249,7 @@ mod tests {
                     .count(),
                 1
             );
+            assert_eq!(unregister_count(&loaded.notes, module.id), 1);
             assert_eq!(
                 loaded
                     .notes

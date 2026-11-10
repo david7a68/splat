@@ -2538,7 +2538,12 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            let width = Reader::relationship_width(ui);
+                            // The value column is the widest value, as in the reader.
+                            let width = ["Goblin Warrior", "North Gate", "not read"]
+                                .iter()
+                                .map(|value| design::number_width(ui, value, &Type::Small.font(ui)))
+                                .fold(0.0_f32, f32::max)
+                                .min(Reader::relationship_width(ui));
                             for (label, value) in [
                                 ("Stat block", "Goblin Warrior"),
                                 ("In", "North Gate"),
@@ -2558,8 +2563,21 @@ mod tests {
                     },
                 ));
             }
+            let output = output.unwrap();
+            let widest_value = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if ["Goblin Warrior", "North Gate", "not read"]
+                            .contains(&text.galley.job.text.as_str()) =>
+                    {
+                        Some(text.pos.x + text.galley.size().x)
+                    }
+                    _ => None,
+                })
+                .fold(0.0_f32, f32::max);
             let changes: Vec<_> = output
-                .unwrap()
                 .shapes
                 .iter()
                 .filter_map(|shape| match &shape.shape {
@@ -2571,6 +2589,12 @@ mod tests {
             assert!(
                 changes.iter().all(|x| (x - changes[0]).abs() < 1.0),
                 "{width}: {changes:?}"
+            );
+            // Change follows the widest value after an L gap (plus item spacing), not the cap.
+            assert!(
+                changes[0] <= widest_value + design::L + design::S + 1.0,
+                "{width}: Change at {} after a widest value ending at {widest_value}",
+                changes[0]
             );
         }
     }
