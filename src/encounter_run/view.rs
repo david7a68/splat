@@ -744,7 +744,11 @@ impl Run {
                         // All the height the list gave up, so the dock stays where it was.
                         ui.allocate_ui_with_layout(
                             vec2(ui.available_width(), notice_height),
-                            Layout::left_to_right(Align::TOP),
+                            Layout::left_to_right(if compact || self.notice_summary.is_some() {
+                                Align::Center
+                            } else {
+                                Align::TOP
+                            }),
                             |ui| {
                                 ui.set_min_height(notice_height);
                                 let words = self
@@ -769,6 +773,8 @@ impl Run {
                                 } else {
                                     notice.as_str()
                                 };
+                                // Centre a compact message with Log and Dismiss. A wrapped
+                                // notice keeps its top alignment and its reserved height.
                                 // small_message draws its bar and icon before the words.
                                 let lead = design::S
                                     + design::HAIRLINE_WIDTH
@@ -789,7 +795,14 @@ impl Run {
                                 };
                                 let response = ui
                                     .allocate_ui_with_layout(
-                                        vec2(text_room, notice_height),
+                                        vec2(
+                                            text_room,
+                                            if compact || self.notice_summary.is_some() {
+                                                Type::Small.line()
+                                            } else {
+                                                notice_height
+                                            },
+                                        ),
                                         Layout::left_to_right(Align::TOP),
                                         |ui| {
                                             if self.notice_summary.is_some() {
@@ -801,10 +814,13 @@ impl Run {
                                                             .rich(ui, icons::SUCCESS)
                                                             .color(colors().result.success),
                                                     );
-                                                    ui.label(
-                                                        Type::Small
-                                                            .rich(ui, shown)
-                                                            .color(colors().result.success),
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            Type::Small
+                                                                .rich(ui, shown)
+                                                                .color(colors().result.success),
+                                                        )
+                                                        .wrap(),
                                                     )
                                                 })
                                                 .inner
@@ -1257,7 +1273,10 @@ impl Run {
                             .allocate_ui_with_layout(
                                 vec2(width, Type::Small.line()),
                                 Layout::left_to_right(Align::Center),
-                                |ui| design::small_message(ui, Tone::Warning, summary),
+                                |ui| {
+                                    ui.spacing_mut().item_spacing.x = design::S;
+                                    design::small_message(ui, Tone::Warning, summary)
+                                },
                             )
                             .inner;
                         let detail = self.notice.as_deref().unwrap_or(summary);
@@ -1297,16 +1316,6 @@ impl Run {
         self.syncs
             .get(&index)
             .map(crate::combat_sync::CombatSync::state)
-            .or_else(|| {
-                // A linked row with no sync says Sync off, unless sync starts again by itself:
-                // the party stays synced, or this row's sync waits for the connection.
-                self.state
-                    .participants
-                    .get(index)
-                    .filter(|p| super::remote_identity(p).is_some())
-                    .filter(|p| !self.keep_party_synced && !self.sync_to_restore.contains(&p.key))
-                    .map(|_| SyncState::Off)
-            })
     }
 
     fn party_sync_off(&self) -> bool {
@@ -1318,7 +1327,12 @@ impl Run {
             .filter(|(_, p)| super::remote_identity(p).is_some())
             .peekable();
         linked.peek().is_some()
-            && linked.all(|(index, _)| self.sync_word(index) == Some(SyncState::Off))
+            && linked.all(|(index, participant)| {
+                self.sync_word(index) == Some(SyncState::Off)
+                    || (!self.syncs.contains_key(&index)
+                        && !self.keep_party_synced
+                        && !self.sync_to_restore.contains(&participant.key))
+            })
     }
 
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
@@ -2170,35 +2184,15 @@ impl Run {
                 // One level, not a pile of lines. Each step replaces the last.
                 let exhausted = p.conditions.iter().position(|c| c.starts_with("Exhaustion"));
                 if let Some(at) = exhausted {
-                    let level = exhaustion_level(&p.conditions[at]);
+                    let mut level = i64::from(exhaustion_level(&p.conditions[at]));
                     ui.horizontal(|ui| {
-                        ui.label(
-                            Type::Body
-                                .rich(ui, format!("Exhaustion level {level}"))
-                                .color(colors().text),
-                        );
-                        if Action::secondary("")
-                            .icon(egui_phosphor::regular::MINUS)
-                            .name("Less exhaustion")
-                            .density(Density::Scan)
-                            .show(ui)
-                            .clicked()
-                        {
-                            command = Some(if level > 1 {
-                                set_exhaustion(index, at, level - 1)
-                            } else {
+                        ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
+                        if design::stepper_with_density(ui, "Exhaustion level", &mut level, 0..=6, Density::Scan) {
+                            command = Some(if level == 0 {
                                 Command::RemoveCondition(index, at)
+                            } else {
+                                set_exhaustion(index, at, level as u8)
                             });
-                        }
-                        if Action::secondary("")
-                            .icon(icons::ADD)
-                            .name("More exhaustion")
-                            .density(Density::Scan)
-                            .blocked_if(level >= 6, "Level 6 is the highest.")
-                            .show(ui)
-                            .clicked()
-                        {
-                            command = Some(set_exhaustion(index, at, level + 1));
                         }
                     });
                 }
@@ -3447,6 +3441,7 @@ impl Run {
                     |ui| {
                         ui.set_width(add_width);
                         Action::secondary(&add_word)
+                            .min_width(add_width)
                             .density(Density::Read)
                             .name(&format!("Add {name} to the initiative list"))
                             .blocked(blocked)
@@ -3998,7 +3993,10 @@ impl Run {
                 if p.definition.fields.contains_key("splat_external") {
                     ui.add_space(design::L);
                     design::group_heading(ui, "D&D Beyond combat sync", 0);
-                    let sync = self.syncs.entry(index).or_default();
+                    // Viewing Correct is not a request to stop this character's sync.
+                    // Keep a new worker only when the DM enables it.
+                    let mut unstarted = crate::combat_sync::CombatSync::default();
+                    let sync = self.syncs.get_mut(&index).unwrap_or(&mut unstarted);
                     let was = sync.enabled;
                     ui.push_id(index, |ui| {
                         if self.connected || self.simulate_connection { sync.show(ui); } else {
@@ -4009,6 +4007,9 @@ impl Run {
                         }
                     });
                     self.dirty |= was != sync.enabled;
+                    if unstarted.enabled {
+                        self.syncs.insert(index, unstarted);
+                    }
                 }
             });
         if let Some(command) = command {
@@ -6835,9 +6836,19 @@ mod tests {
                         .rect()
                 })
                 .to_vec();
-            for name in ["Scouts", "Lost Patrol"] {
-                harness.get_by_label(&format!("Add {name} to the initiative list"));
-            }
+            let buttons = ["Scouts", "Lost Patrol"].map(|name| {
+                harness
+                    .get_by_label(&format!("Add {name} to the initiative list"))
+                    .rect()
+            });
+            assert!(
+                (buttons[0].right() - buttons[1].right()).abs() <= 1.0,
+                "iter9-B-FT6-edge: {buttons:?}"
+            );
+            assert!(
+                (buttons[0].width() - buttons[1].width()).abs() <= 1.0,
+                "iter9-B-FT6-width: {buttons:?}"
+            );
             assert!(
                 (fields[0].left() - fields[1].left()).abs() <= 1.0,
                 "iter8-B-FT3: shared field column at {width}: {fields:?}"
@@ -6923,6 +6934,12 @@ mod tests {
             let notice = text("Guard 1: HP");
             let next_rect = Rect::from_min_size(next.pos, next.galley.size());
             let notice_rect = Rect::from_min_size(notice.pos, notice.galley.size());
+            let icon = text(icons::WARN);
+            let icon_rect = Rect::from_min_size(icon.pos, icon.galley.size());
+            assert!(
+                (notice_rect.left() - icon_rect.right() - design::XS).abs() <= 1.0,
+                "iter9-B-FT7-icon-gap: {icon_rect:?}, {notice_rect:?}"
+            );
             let bar = harness
                 .output()
                 .shapes
@@ -7862,19 +7879,35 @@ mod tests {
         for index in 0..5 {
             super::super::tests::linked(&mut run, index, &index.to_string());
         }
-        for worker in [None, Some(0), Some(3)] {
-            run.syncs.clear();
-            if let Some(index) = worker {
-                run.syncs
-                    .insert(index, crate::combat_sync::CombatSync::default());
-            }
-            assert!(run.party_sync_off());
-            for index in 0..5 {
-                assert_eq!(run.sync_word(index), Some(SyncState::Off));
-                assert_eq!(run.row_sync_word(index), None);
-            }
-            assert_eq!(run.row_sync_word(5), None);
+        assert!(
+            run.party_sync_off(),
+            "An encounter with sync disabled keeps its shared header notice"
+        );
+        run.keep_party_synced = true;
+        assert!(
+            !run.party_sync_off(),
+            "Waiting for the connection is not a disabled party"
+        );
+        run.keep_party_synced = false;
+        for index in 0..5 {
+            assert_eq!(
+                run.sync_word(index),
+                None,
+                "Untouched linked rows have no sync word"
+            );
         }
+        // Only workers the DM stopped supply Off. When all are stopped, the header
+        // carries their shared state once, as before.
+        for index in 0..5 {
+            run.syncs
+                .insert(index, crate::combat_sync::CombatSync::default());
+        }
+        assert!(run.party_sync_off());
+        for index in 0..5 {
+            assert_eq!(run.sync_word(index), Some(SyncState::Off));
+            assert_eq!(run.row_sync_word(index), None);
+        }
+        assert_eq!(run.row_sync_word(5), None);
         run.syncs.insert(
             0,
             crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
@@ -7891,9 +7924,176 @@ mod tests {
         run.syncs.clear();
         run.sync_to_restore = vec![run.state.participants[2].key.clone()];
         assert_eq!(run.row_sync_word(2), None);
-        assert_eq!(run.row_sync_word(3), Some(SyncState::Off));
+        assert_eq!(run.row_sync_word(3), None);
         run.keep_party_synced = true;
         assert_eq!(run.row_sync_word(3), None);
+    }
+
+    #[test]
+    fn iter9_b_correct_does_not_change_sync_and_explicit_stop_stays() {
+        use std::{cell::RefCell, rc::Rc};
+        for connected in [false, true] {
+            for explicitly_stopped in [false, true] {
+                let mut run = super::super::tests::run();
+                for index in 0..2 {
+                    super::super::tests::linked(&mut run, index, &index.to_string());
+                }
+                run.keep_party_synced();
+                run.connected = connected;
+                if explicitly_stopped {
+                    run.syncs
+                        .insert(0, crate::combat_sync::CombatSync::default());
+                }
+                let expected = explicitly_stopped.then_some(SyncState::Off);
+                assert_eq!(run.row_sync_word(0), expected);
+                let stopped_before = run.stopped_players();
+                let run = Rc::new(RefCell::new(run));
+                let shown = run.clone();
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(960.0, 1080.0))
+                    .build(move |ctx| {
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| shown.borrow_mut().record_tab(ui, 0));
+                    });
+                design::theme::install(&harness.ctx);
+                harness.run_steps(3);
+                let run = run.borrow();
+                assert_eq!(
+                    run.row_sync_word(0),
+                    expected,
+                    "iter9-B-FT8-no-side-effect connected={connected}"
+                );
+                assert_eq!(
+                    run.stopped_players(),
+                    stopped_before,
+                    "Viewing Correct must not persist a stop"
+                );
+                assert_eq!(
+                    run.row_sync_word(1),
+                    None,
+                    "An untouched second player stays unchanged"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn iter9_b_exhaustion_stepper_uses_scan_and_keeps_undo() {
+        use egui_kittest::kittest::Queryable;
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        run.state.participants[0].conditions = vec!["Exhaustion (2)".into()];
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(560.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| shown.borrow_mut().conditions_tab(ui, 0));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        for name in ["Decrease Exhaustion level", "Increase Exhaustion level"] {
+            let rect = harness.get_by_label(name).rect();
+            assert_eq!(
+                rect.height(),
+                Density::Scan.control(),
+                "iter9-B-FT12-scan: {name}"
+            );
+        }
+        harness.get_by_label("Increase Exhaustion level").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (3)"]
+        );
+        assert!(
+            run.borrow()
+                .undo_label()
+                .contains("exhaustion 2 → 3 on Guard 1")
+        );
+        run.borrow_mut().undo();
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (2)"]
+        );
+        harness.run_steps(2);
+        for _ in 0..2 {
+            harness.get_by_label("Decrease Exhaustion level").click();
+            harness.run_steps(2);
+        }
+        assert!(
+            run.borrow().state.participants[0].conditions.is_empty(),
+            "Level zero removes exhaustion"
+        );
+    }
+
+    #[test]
+    fn iter9_b_below_roster_notice_centres_compact_and_top_aligns_wrapped() {
+        use egui_kittest::kittest::Queryable;
+        for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+            for wrapped in [false, true] {
+                let mut run = super::super::tests::run();
+                for (index, total) in [20, 15, 10].into_iter().enumerate() {
+                    run.apply(Command::Initiative(index, Some(total))).unwrap();
+                }
+                run.apply(Command::Begin).unwrap();
+                run.recording_notice = Some("Recording stopped");
+                let summary = "Guard 1: HP 17 → 15";
+                run.notice = Some(if wrapped {
+                    "Guard 1 and Guard 2 have changed. ".repeat(8)
+                } else {
+                    summary.into()
+                });
+                run.notice_summary = (!wrapped).then(|| summary.into());
+                let mut harness = egui_kittest::Harness::builder()
+                    .with_size(vec2(width, height))
+                    .build(move |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            run.live_view(ui);
+                        });
+                    });
+                design::theme::install(&harness.ctx);
+                harness.run_steps(3);
+                let log = harness
+                    .query_all_by_label("Log")
+                    .map(|n| n.rect())
+                    .max_by(|a, b| a.bottom().total_cmp(&b.bottom()))
+                    .expect("Required notice Log link");
+                let dismiss = harness.get_by_label("Dismiss this message").rect();
+                let text = harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text)
+                            if text.galley.text().starts_with(if wrapped {
+                                "Guard 1 and"
+                            } else {
+                                "Guard 1: HP"
+                            }) =>
+                        {
+                            Some(text)
+                        }
+                        _ => None,
+                    })
+                    .expect("Required below-roster message text");
+                let rect = Rect::from_min_size(text.pos, text.galley.size());
+                if wrapped {
+                    assert!(rect.height() > Type::Small.line(), "Required wrapped text");
+                    assert!(
+                        (rect.top() - dismiss.top()).abs() <= 1.0,
+                        "iter9-B-AT2-wrap: {rect:?}, {dismiss:?}"
+                    );
+                } else {
+                    assert!(
+                        (rect.center().y - log.center().y).abs() <= 1.0
+                            && (rect.center().y - dismiss.center().y).abs() <= 1.0,
+                        "iter9-B-AT2-centre: {rect:?}, {log:?}, {dismiss:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

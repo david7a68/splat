@@ -13,6 +13,7 @@ change its width. Tab also focuses the edge: Left and Right move it by 16 px, an
 Home restores its natural width. The app keeps a chosen width after a restart. Simulation is later work.
 
 The run's **Add to fight** button keeps its plus icon and the word **Add** at narrow widths.
+Exhaustion level uses the shared number stepper at Scan height. Opening Correct does not change sync state.
 Turn headings drop “’s turn” before shortening a name and keep each creature's copy number.
 Party sheet tabs stay on one line; later pages appear in a quiet **More** menu. The menu names and underlines a selected page inside it. Stopped-sync notices sit below the Party header.
 
