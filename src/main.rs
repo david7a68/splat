@@ -18,6 +18,8 @@ mod file_batch;
 mod formats_ui;
 mod hermetic;
 mod library;
+#[cfg(test)]
+mod load_bench;
 mod lookup;
 mod loot_editor;
 mod markdown_source;

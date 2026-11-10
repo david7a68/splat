@@ -273,7 +273,7 @@ fn unregister_count(notes: &[Note], package: Uuid) -> usize {
         .count()
 }
 
-struct Note {
+pub(crate) struct Note {
     path: String,
     text: String,
     entry: Option<Entry>,
@@ -373,8 +373,8 @@ struct DuplicateIndex {
 }
 
 #[derive(Default)]
-struct Loaded {
-    notes: Vec<Note>,
+pub(crate) struct Loaded {
+    pub(crate) notes: Vec<Note>,
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     load_errors: Vec<String>,
@@ -1203,13 +1203,21 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
-        let (entries, errors) = content::read_directory(&path)?;
-        let manifest_path = crate::content_workspace::package_manifest_path(module);
+        let folder = content::read_folder(&path)?;
+        let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+        let manifest_path = crate::content_workspace::manifest_path_in(&folder, module);
         let missing_manifest = !entries.iter().any(|entry| entry.kind == "package")
             && !path.join(&manifest_path).exists();
+        // The folder was just read; its texts are the ones these entries came from.
+        let text_of = |path: &str| -> Result<String, String> {
+            let full = note_path(&module.path, path)?;
+            match folder.text(path) {
+                Some(text) => Ok(text.to_owned()),
+                None => fs::read_to_string(full).map_err(|e| e.to_string()),
+            }
+        };
         for entry in entries {
-            let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
-                .map_err(|e| e.to_string())?;
+            let text = text_of(&entry.path)?;
             let mismatched = entry.kind == "package" && entry.id != module.id;
             notes.push(Note {
                 path: entry.path.clone(),
@@ -1229,8 +1237,8 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             });
         }
         for error in errors {
-            let text =
-                fs::read_to_string(note_path(&module.path, &error.path)?).unwrap_or_default();
+            note_path(&module.path, &error.path)?;
+            let text = text_of(&error.path).unwrap_or_default();
             notes.push(Note {
                 path: error.path,
                 text,
@@ -1261,7 +1269,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 }
 
 /// The whole catalogue: built-in, every package, and the active campaign's own entries.
-fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
+pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
     all.owners = modules
         .iter()
@@ -1282,13 +1290,20 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
     }
     if let Some(campaign) = campaign {
         let owner = Owner::Campaign(campaign.clone());
-        match content::read_directory(&campaign.path) {
-            Ok((entries, errors)) => {
+        match content::read_folder(&campaign.path) {
+            Ok(folder) => {
+                let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+                let text_of = |path: &str| -> Result<String, String> {
+                    let full = note_path(&campaign.path, path)?;
+                    match folder.text(path) {
+                        Some(text) => Ok(text.to_owned()),
+                        None => fs::read_to_string(full).map_err(|e| e.to_string()),
+                    }
+                };
                 for entry in entries.into_iter().filter(|e| {
                     e.kind != "campaign" && !splat::character::campaign_package::is_manifest(e)
                 }) {
-                    let text = fs::read_to_string(note_path(&campaign.path, &entry.path)?)
-                        .map_err(|e| e.to_string())?;
+                    let text = text_of(&entry.path)?;
                     all.notes.push(Note {
                         path: entry.path.clone(),
                         text,
@@ -1298,8 +1313,8 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                     });
                 }
                 for error in errors {
-                    let text = fs::read_to_string(note_path(&campaign.path, &error.path)?)
-                        .unwrap_or_default();
+                    note_path(&campaign.path, &error.path)?;
+                    let text = text_of(&error.path).unwrap_or_default();
                     all.notes.push(Note {
                         path: error.path,
                         text,

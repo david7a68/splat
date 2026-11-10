@@ -1,6 +1,7 @@
 //! Embedded, read-only SRD source package and completeness checks.
 use super::{Diagnostic, Entry, Report, validate};
 use include_dir::{Dir, include_dir};
+use rayon::prelude::*;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -144,7 +145,24 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
     .collect();
     let mut actual_counts = BTreeMap::<String, usize>::new();
     let mut page_numbers = BTreeSet::new();
+    // Hashing and parsing each note is independent; the checks below keep inventory order.
+    let mut checked = inventory
+        .files
+        .par_iter()
+        .map(|record| {
+            files.get(&record.path).map(|bytes| {
+                (
+                    hash(bytes),
+                    std::str::from_utf8(bytes)
+                        .map_err(|e| e.to_string())
+                        .and_then(|text| Entry::parse(&record.path, text)),
+                )
+            })
+        })
+        .collect::<Vec<_>>()
+        .into_iter();
     for record in &inventory.files {
+        let checked = checked.next().flatten();
         if !expected_files.insert(record.path.clone()) {
             error(&record.path, "Duplicate inventory path");
         }
@@ -161,16 +179,13 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
             }
             page_numbers.extend(record.pages.iter().copied());
         }
-        let Some(bytes) = files.get(&record.path) else {
+        let Some((digest, parsed)) = checked else {
             error(&record.path, "Missing indexed note");
             continue;
         };
-        if hash(bytes) != record.sha256 {
+        if digest != record.sha256 {
             error(&record.path, "Note hash mismatch");
         }
-        let parsed = std::str::from_utf8(bytes)
-            .map_err(|e| e.to_string())
-            .and_then(|text| Entry::parse(&record.path, text));
         match parsed {
             Ok(entry) => {
                 if entry.category() != record.category {
