@@ -1780,6 +1780,17 @@ pub mod settings {
         d.expect(NOT_CONNECTED);
 
         d.row_of(CAMPAIGNS_SECTION);
+        // FT-6: the rail's status slot gained Sync stopped above Lookup. Its targets stay still,
+        // so the rest of the page is the cookie step's.
+        let sync_stopped = d.rail_words().contains("Sync stopped");
+        d.observe(
+            "iter-10-C-FT6-settings",
+            sync_stopped,
+            "The rail shows Sync stopped in its status slot",
+        );
+        d.expect_same(
+            "The rail's status slot gains Sync stopped; Lookup, Notes, Settings and the account line stay where they were.",
+        );
         d.state("campaign-list", Sizes::All);
         d.goal("find campaign management");
 
