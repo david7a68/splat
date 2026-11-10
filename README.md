@@ -110,6 +110,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   `state_changed_at` saves the sizes that change and compares the others; for example,
   `Sizes::Small` keeps a narrow tab change when a wide layout already shows both panes.
   `check_state` retains all checks when another scenario supplies the same image.
+  `state_captured_at` keeps distinct sizes when only some views are shared.
   Use `d.expect_same("reason")` only for an intended small visual change, after its
   behaviour assertion. The repeated-capture check still runs on later captures.
   Captures and frame comparisons finish pending note and Timeline saves first.

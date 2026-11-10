@@ -62,6 +62,7 @@ impl Sizes {
 #[derive(Clone, Copy)]
 enum Capture<'s> {
     Save,
+    SaveAt(&'s [((f32, f32), f32)]),
     Compare {
         earlier: &'s str,
         changed: &'s [((f32, f32), f32)],
@@ -1667,6 +1668,17 @@ impl<'a> Driver<'a> {
         self.state_prepared_inner(name, sizes, Capture::ChecksOnly, |_| {});
     }
 
+    /// Check every size, saving only views not already supplied by another scenario.
+    pub fn state_captured_at(&mut self, name: &str, sizes: Sizes, captures: Sizes) {
+        assert!(
+            captures
+                .plan()
+                .iter()
+                .all(|size| sizes.plan().contains(size))
+        );
+        self.state_prepared_inner(name, sizes, Capture::SaveAt(captures.plan()), |_| {});
+    }
+
     /// The next capture intentionally changes very little. Assert its effect first.
     pub fn expect_same(&mut self, reason: &'static str) {
         assert!(!reason.trim().is_empty(), "expect_same needs a reason");
@@ -1787,7 +1799,9 @@ impl<'a> Driver<'a> {
         expect_same: Option<&str>,
         capture: Capture<'_>,
     ) {
-        if matches!(capture, Capture::ChecksOnly) {
+        if matches!(capture, Capture::ChecksOnly)
+            || matches!(capture, Capture::SaveAt(plan) if !plan.contains(&(size, density)))
+        {
             return;
         }
         let Some(directory) = &self.output else {

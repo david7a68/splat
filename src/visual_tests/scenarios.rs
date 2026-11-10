@@ -1612,7 +1612,8 @@ pub mod settings {
             // Not connected and failed already have their captures, from real attempts.
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
-                Account::Connected => d.state("account-connected", Sizes::Default),
+                // Also supplies signed-in's shared Settings image at the wide size.
+                Account::Connected => d.state("account-connected", Sizes::All),
                 Account::KeyringWarning => {
                     d.state("account-keyring-warning", Sizes::Default);
                     d.observe_both(
@@ -4382,8 +4383,8 @@ pub mod signed_in {
             d.visible_text(RAIL_CONNECTED) && d.rail_words().contains(RAIL_CONNECTED),
             "With a session, the page and the rail both say Connected",
         );
-        // Image already covered by settings / account-connected. Keep every size check.
-        d.check_state("settings-connected", Sizes::All);
+        // Settings / account-connected supplies the larger views. Keep this compact view.
+        d.state_captured_at("settings-connected", Sizes::All, Sizes::Small);
         d.click(REMOTE);
         d.expect(REMOTE_NAME);
         d.state_prepared("remote-campaign-list", Sizes::Default, |d| {
