@@ -1217,8 +1217,9 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
-/// Two rail lines share the word's left edge, leaving the icon in its own column.
-pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Response {
+/// Two rail lines share the word's left edge, leaving the icon in its own column. Returns the
+/// whole status, and the rect of its first line's word.
+pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = S;
         ui.add_sized(
@@ -1228,7 +1229,8 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Respo
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
-            response.union(ui.label(Type::Small.rich(ui, detail).color(state.color)))
+            let word = response.rect;
+            (response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))), word)
         })
         .inner
     })
