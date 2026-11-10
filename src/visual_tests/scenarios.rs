@@ -4309,6 +4309,19 @@ pub mod run_edge_states {
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
+        // The red choice keeps an `L` gap from the safe one, which stays first on the same line.
+        d.observe_both(
+            "iter-12-FT2",
+            "Replace the file with this run keeps an L gap after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && red.left() - safe.right() >= crate::design::L
+                    })
+            },
+        );
         d.state("changed-on-disk", Sizes::Default);
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
@@ -5740,6 +5753,38 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
+            // every size. Portraits give way before AC.
+            let (items, painted) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            session_recording::check_party_names(
+                d,
+                &format!("iter-12-C-FT3-names-{width}"),
+                &items,
+                &painted,
+            );
+            let has = |words: &str, label: &str| words.split_whitespace().any(|word| word == label);
+            let hurt = items
+                .iter()
+                .filter(|item| item.name.contains("Temp HP"))
+                .count();
+            let bloodied = items
+                .iter()
+                .filter(|item| item.name.contains("Bloodied"))
+                .count();
+            if width >= crate::visual_tests::driver::DEFAULT.0 {
+                d.observe(
+                    "iter-12-C-FT3",
+                    items.len() >= 4
+                        && hurt >= 2
+                        && bloodied >= 1
+                        && painted.iter().all(|(_, words)| has(words, "AC")),
+                    format!(
+                        "At {width}, with {hurt} temporary HP and {bloodied} Bloodied, every item \
+                         shows AC: {painted:?}"
+                    ),
+                );
+            }
         });
         d.press(Key::Escape);
         d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
@@ -9987,7 +10032,22 @@ pub mod session_plan {
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
-        d.state("timeline-after-fight", Sizes::All);
+        d.state_prepared("timeline-after-fight", Sizes::All, |d| {
+            // FT4: Timeline names the removed fight as the plan does, so the row below reads true.
+            let notice = format!(
+                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
+            );
+            d.observe(
+                "iter-12-C-FT4",
+                d.visible_text(&notice),
+                format!("Timeline's removal notice names the removed fight: {notice}"),
+            );
+            d.observe(
+                "iter-12-C-FT4-row",
+                d.in_view("Undo remove") && d.has_containing("Held the bridge · Ended · Round 1"),
+                "Undo remove stays with the notice, and the played fight's row stays",
+            );
+        });
         d.click(NAV_SESSIONS);
         show_plan(d);
 

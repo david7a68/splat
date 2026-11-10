@@ -379,6 +379,16 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("Splat renumbers it when it saves.")
         },
     );
+    // AD1: the clock shows minutes, so a ten-minute event ends at a different time.
+    d.observe_both(
+        "iter-12-C-AD1",
+        "Starts, Ends and the header's Now show hours and minutes",
+        |d| {
+            d.visible_text("Starts: Day 1, 00:00")
+                && d.visible_text("Ends: Day 1, 00:10")
+                && d.visible_text("Now: Day 1, 00:10")
+        },
+    );
     d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
     d.app_mut().timeline.touch();
     d.app_mut().timeline.save();

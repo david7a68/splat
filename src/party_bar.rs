@@ -103,9 +103,9 @@ pub enum Choice {
 
 /// One item's parts, measured once with every stat. The fit keeps the first few stats.
 struct Item {
-    /// The portrait goes after every stat, before the name, so that words name each item.
+    /// The portrait goes after the optional stats and before AC, so that words name each item.
     portrait: bool,
-    /// The first name, so that the DM need not know each portrait. It goes after the portrait.
+    /// The first name, so that the DM need not know each portrait. It always stays.
     name: Option<Arc<egui::Galley>>,
     hp_width: f32,
     temp: Option<Arc<egui::Galley>>,
@@ -199,38 +199,35 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
         .size()
         .x;
     let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
-    let needed = |items: &[Item], shown: usize| {
+    // With `shown` stats and with or without portraits, the width of every item and the gaps.
+    let needed = |items: &mut [Item], (shown, portrait): (usize, bool)| {
+        for item in items.iter_mut() {
+            item.portrait = portrait;
+        }
         items.iter().map(|item| item.width(shown)).sum::<f32>()
             + gap * items.len().saturating_sub(1) as f32
     };
-    // Stats come first. The source gives way before any of them, and stays on hover. Every item
-    // shows the same number of stats, and they drop from the end.
     let room =
         ui.available_width() - label.size().x - design::L - Density::Read.control() - design::S;
     let with_source = room - source_width - design::L;
+    // From the fullest bar down. The source gives way first, and stays on hover. Then the
+    // optional stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go
+    // together, then AC. The first name and HP, with temporary HP and the state word, always
+    // stay. Every item shows the same number of stats, and hover keeps everything.
     let most = items.iter().map(|item| item.stats.len()).max().unwrap_or(0);
-    let shown = (0..=most)
-        .rev()
-        .find(|&shown| needed(&items, shown) <= room)
-        .unwrap_or(0);
-    let show_source = needed(&items, shown) <= with_source;
+    let mut steps: Vec<(usize, bool)> = (most.min(1)..=most).rev().map(|s| (s, true)).collect();
+    steps.extend([(most.min(1), false), (0, false)]);
+    let fullest = steps[0];
+    let show_source = needed(&mut items, fullest) <= with_source;
     let room = if show_source { with_source } else { room };
-    // Then portraits give way, all together, so that the words still name each item. Names go
-    // last, and only when they do not fit even without portraits; then the portraits come back.
-    // Hover keeps both.
+    let (shown, portrait) = steps
+        .iter()
+        .copied()
+        .find(|&step| needed(&mut items, step) <= room)
+        .unwrap_or((0, false));
     for item in &mut items {
         item.stats.truncate(shown);
-    }
-    if needed(&items, shown) > room {
-        for item in &mut items {
-            item.portrait = false;
-        }
-        if needed(&items, shown) > room {
-            for item in &mut items {
-                item.portrait = true;
-                item.name = None;
-            }
-        }
+        item.portrait = portrait;
     }
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = design::L;
@@ -362,8 +359,9 @@ mod tests {
         "Sable Quill",
     ];
 
-    /// At one bar width: how many first names, portraits and full accessible names are drawn.
-    fn draw(width: f32) -> (usize, usize, usize) {
+    /// At one bar width: how many first names, portraits, full accessible names, AC values and
+    /// Per values are drawn.
+    fn draw(width: f32) -> (usize, usize, usize, usize, usize) {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         ctx.enable_accesskit();
@@ -435,36 +433,61 @@ mod tests {
                 })
             })
             .count();
-        (firsts, circles, spoken)
+        let stat = |label: &str| texts.iter().filter(|text| text.starts_with(label)).count();
+        (firsts, circles, spoken, stat("AC "), stat("Per "))
     }
 
-    /// AT1: stats drop first, then portraits, then names. When first names do not fit even
-    /// without portraits, the names go and every portrait comes back. Each item keeps its full
-    /// accessible name at every width.
+    /// FT3: the optional stats drop first, then the portraits go together, then AC. First
+    /// names and HP always stay, and each item keeps its full accessible name at every width.
     #[test]
-    fn portraits_give_way_before_names() {
+    fn ac_stays_until_the_portraits_have_gone() {
         let drawn: Vec<_> = (2..=20)
             .map(|step| (step * 100, draw(step as f32 * 100.0)))
             .collect();
         assert_eq!(
-            drawn[0].1,
-            (0, 5, 5),
-            "the narrowest bar: portraits, no names: {drawn:?}"
+            drawn.last().unwrap().1,
+            (5, 5, 5, 5, 5),
+            "a wide bar shows everything: {drawn:?}"
         );
         assert_eq!(
-            drawn.last().unwrap().1,
-            (5, 5, 5),
-            "a wide bar shows both: {drawn:?}"
+            drawn[0].1,
+            (5, 0, 5, 0, 0),
+            "the narrowest bar keeps names and HP only: {drawn:?}"
         );
+        for (width, (names, portraits, spoken, ac, per)) in &drawn {
+            assert_eq!(
+                (*names, *spoken),
+                (5, 5),
+                "names always stay at {width}: {drawn:?}"
+            );
+            assert!(
+                [0, 5].contains(portraits) && [0, 5].contains(ac) && [0, 5].contains(per),
+                "the parts go all together, never item by item, at {width}: {drawn:?}"
+            );
+            // A portrait never stays when AC has gone, and Per never stays without portraits.
+            assert!(
+                *portraits == 0 || *ac == 5,
+                "AC before portraits at {width}: {drawn:?}"
+            );
+            assert!(
+                *per == 0 || *portraits == 5,
+                "portraits before Per at {width}: {drawn:?}"
+            );
+        }
+        // Every step of the order is reached, in order of width.
+        let order = [
+            (5, 0, 5, 0, 0),
+            (5, 0, 5, 5, 0),
+            (5, 5, 5, 5, 0),
+            (5, 5, 5, 5, 5),
+        ];
+        let reached: Vec<_> = order
+            .iter()
+            .map(|step| drawn.iter().position(|(_, at)| at == step))
+            .collect();
         assert!(
-            drawn.iter().any(|(_, at)| *at == (5, 0, 5)),
-            "some width shows every name without portraits: {drawn:?}"
-        );
-        assert!(
-            drawn
-                .iter()
-                .all(|(_, at)| matches!(at, (0, 5, 5) | (5, 0, 5) | (5, 5, 5))),
-            "the parts go all together, never item by item: {drawn:?}"
+            reached.iter().all(Option::is_some) && reached.is_sorted(),
+            "each step shows at some width, narrow to wide: {reached:?} {drawn:?}"
         );
     }
 }

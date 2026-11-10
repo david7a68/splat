@@ -406,7 +406,7 @@ must not change this clock.
 
 | Event | What it does to the clock |
 |---|---|
-| First `Day` | Starts the clock at Day 1, hour 0. Durations before it do not count |
+| First `Day` | Starts the clock at Day 1, 00:00. Durations before it do not count |
 | Later `Day` | Moves to the next day boundary, always. So forgotten durations cannot make the day count drift |
 | Long rest, short rest | Adds its `duration`, or 8 hours or 1 hour if that is empty |
 | Any other event | Adds its `duration`, if it has one |

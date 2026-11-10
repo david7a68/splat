@@ -584,7 +584,7 @@ impl Run {
         ui.add_space(design::XS);
         let mut outcome = None;
         ui.horizontal(|ui| {
-            // The action that loses nothing is the filled one.
+            // Neither action is filled: the safe one comes first, and the red one keeps an `L` gap.
             if Action::secondary("Save as a new run")
                 .density(Density::Read)
                 .hint("Keep the changed file as it is, and save this run beside it")
@@ -593,6 +593,7 @@ impl Run {
             {
                 outcome = Some(self.save_as_new_run());
             }
+            ui.add_space(design::L);
             if Action::destructive("Replace the file with this run")
                 .density(Density::Read)
                 .hint("The changes in the file on disk are lost")

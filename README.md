@@ -492,7 +492,7 @@ not carry over.
 
 **Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
 by default; change it under **Campaign → Link and folder**). A folder change counts what stays behind and offers **Move files and save** or **Save without moving**. Moving keeps note text, templates, events, audio and processing files, and refuses to replace an existing file. **Timeline** holds every encounter, rest, travel interval, day and other
-major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours, counted
+major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours and minutes, counted
 from the first **Day**. A **Day** moves to the start of the next day. A rest adds 8 hours or 1 hour unless you say otherwise,
 and any event adds its length when it reads as a number and a unit, such as `3 days` or `an hour`. A length it cannot read
 moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat

@@ -39,6 +39,66 @@ pub fn fights_that_keep_hp(
         .collect()
 }
 
+/// The removal notice on the plan and on Timeline. It names which event went, by its result or
+/// state, and says when another event with the same name stays in this session. The plan passes
+/// its own fights in `planned`; Timeline passes the removed event's own session and none.
+pub fn removed_event_words(
+    book: &Book,
+    session: Option<Uuid>,
+    days: &[u32],
+    label: &str,
+    planned: &[(String, bool)],
+) -> String {
+    let detail = book
+        .removed_event()
+        .map(|event| {
+            if event.run.is_some() {
+                played_fight_summary(event, false)
+            } else {
+                event.summary(None)
+            }
+        })
+        .filter(|detail| !detail.trim().is_empty());
+    let mut words = match detail {
+        Some(detail) => format!("Removed “{label}” ({detail})."),
+        None => format!("Removed “{label}”."),
+    };
+    // "The other" only makes sense when the removed fight was in this session; a removal made on
+    // the Timeline page from another session names no other fight here.
+    if !book
+        .removed_event()
+        .is_some_and(|event| event.is_in(session))
+    {
+        return words;
+    }
+    let same: Vec<_> = book
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(at, event)| {
+            event.is_in(session) && event.label(days.get(*at).copied().unwrap_or(0)) == label
+        })
+        .map(|(_, event)| !event.result.trim().is_empty())
+        .chain(
+            planned
+                .iter()
+                .filter(|(name, _)| name == label)
+                .map(|(_, ended)| *ended),
+        )
+        .collect();
+    match same.as_slice() {
+        [] => {}
+        [true] => words.push_str(&format!(" The other “{label}” and its result stay.")),
+        [false] => words.push_str(&format!(" The other “{label}” stays.")),
+        more if more.iter().any(|&result| result) => words.push_str(&format!(
+            " {} other “{label}” events stay, with their results.",
+            more.len()
+        )),
+        more => words.push_str(&format!(" {} other “{label}” events stay.", more.len())),
+    }
+    words
+}
+
 /// A played fight names its result and last round once, on the row's second line.
 pub fn played_fight_summary(event: &Event, open: bool) -> String {
     let state = |round: &str, paused, ended| {
@@ -351,9 +411,16 @@ pub fn day_now(events: &[Event]) -> Option<u64> {
     clock_now(events).map(|minute| minute / DAY + 1)
 }
 
-/// A moment on the clock in the words a DM reads.
+/// A moment on the clock in the words a DM reads: the day, then hours and minutes, so that two
+/// events within one hour read apart. Whole hours read the same way (`Day 2, 01:00`).
 pub fn clock_words(minute: u64) -> String {
-    format!("Day {}, hour {}", minute / DAY + 1, minute % DAY / HOUR)
+    let within = minute % DAY;
+    format!(
+        "Day {}, {:02}:{:02}",
+        minute / DAY + 1,
+        within / HOUR,
+        within % HOUR
+    )
 }
 
 /// The day each event falls on, in list order. Zero means before the first day.
@@ -1760,7 +1827,12 @@ mod tests {
         ]);
         assert_eq!(split.1, Some(60));
         assert_eq!(days(&[(Day, ""), (Encounter, "")]).1, Some(0));
-        assert_eq!(clock_words(1500), "Day 2, hour 1");
+        assert_eq!(clock_words(1500), "Day 2, 01:00");
+        // AD1: minutes show, so a ten-minute event ends at a different time from its start.
+        assert_eq!(clock_words(0), "Day 1, 00:00");
+        assert_eq!(clock_words(10), "Day 1, 00:10");
+        assert_eq!(clock_words(DAY - 1), "Day 1, 23:59");
+        assert_eq!(clock_words(DAY), "Day 2, 00:00");
     }
 
     #[test]
