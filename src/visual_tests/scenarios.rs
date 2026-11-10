@@ -9688,6 +9688,117 @@ pub mod run_add_creature {
             choices(d) == 5 && d.has(&format!("Show all {show_all}")),
             "Changed words close Show all",
         );
+        // A match that only Show all lists can be chosen and added, with its own values.
+        d.click(&format!("Show all {show_all}"));
+        let listed = d.in_view("Choose Winter Wolf");
+        if listed {
+            d.click("Choose Winter Wolf");
+        }
+        let picked = listed
+            && d.has("Choose another creature")
+            && d.has_label("Winter Wolf")
+            && d.nodes().iter().any(|node| {
+                node.role == egui::accesskit::Role::Label
+                    && node.name.contains("HP 75")
+                    && node.name.contains("AC 13")
+            })
+            && d.has("Add Winter Wolf to the initiative list");
+        d.observe(
+            "iter-14-B-AT1-pick",
+            picked,
+            "Winter Wolf, listed only by Show all, can be chosen, and the form shows its HP 75 and AC 13",
+        );
+        if picked {
+            d.click("Add Winter Wolf to the initiative list");
+        }
+        let row = d.nodes().into_iter().find(|node| {
+            node.role == egui::accesskit::Role::Button
+                && node.name.starts_with("Winter Wolf")
+                && node.name.contains("HP 75/75")
+                && node.name.contains("AC 13")
+        });
+        d.observe(
+            "iter-14-B-AT1-added",
+            picked && row.is_some(),
+            format!(
+                "Winter Wolf joins the roster with HP 75 and AC 13: {:?}",
+                row.map(|row| row.name)
+            ),
+        );
+
+        // A broad search: rows below the list's edge are reached by Tab, and the list follows.
+        d.replace_text_in(FIELD, "dragon");
+        let broad = d
+            .nodes()
+            .into_iter()
+            .find_map(|node| {
+                node.name
+                    .strip_prefix("Show all ")
+                    .and_then(|count| count.parse::<usize>().ok())
+            })
+            .expect("a broad search offers Show all");
+        d.click(&format!("Show all {broad}"));
+        let rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Choose "))
+            .collect();
+        let first = rows
+            .first()
+            .map(|row| row.name["Choose ".len()..].to_owned());
+        let last = rows
+            .last()
+            .map(|row| row.name["Choose ".len()..].to_owned());
+        let ninth = rows.get(8).map(|row| (row.name.clone(), row.rect));
+        // The list's own visible area: the clip its first row's words are painted in.
+        let mut list_clip = None;
+        d.each_painted_text(|text, clip| {
+            if first.as_deref() == Some(text.galley.job.text.as_str()) {
+                list_clip = Some(clip);
+            }
+        });
+        let inside =
+            |rect: egui::Rect| list_clip.is_some_and(|clip| clip.expand(0.5).contains_rect(rect));
+        // Rows out of view keep their control and name, but skip their words until shown.
+        d.observe(
+            "iter-14-B-AT1-visible-only",
+            broad > 9
+                && rows.len() == broad
+                && rows.last().is_some_and(|row| !inside(row.rect))
+                && first.as_deref().is_some_and(|name| d.has_label(name))
+                && last.as_deref().is_some_and(|name| !d.has_label(name)),
+            format!(
+                "Show all {broad}: {} rows named; the first row's words are drawn ({first:?}), the last \
+                 row's words are not drawn while it is out of view ({last:?})",
+                rows.len()
+            ),
+        );
+        if let Some((ninth, before)) = ninth {
+            // Focus starts in the search field, above the list.
+            d.type_into(FIELD, "");
+            let mut tabs = 0;
+            while d.focused_name().as_deref() != Some(ninth.as_str()) && tabs < 40 {
+                d.press(Key::Tab);
+                tabs += 1;
+            }
+            let after = d.place_of(&ninth);
+            d.observe(
+                "iter-14-B-AT1-tab",
+                !inside(before)
+                    && d.focused_name().as_deref() == Some(ninth.as_str())
+                    && after.is_some_and(|after| after.top() < before.top() - 1.0 && inside(after)),
+                format!(
+                    "Tab reaches {ninth} after {tabs} presses, and the list scrolls it inside its clip \
+                     {list_clip:?}: before {before:?}, after {after:?}"
+                ),
+            );
+        } else {
+            d.observe(
+                "iter-14-B-AT1-tab",
+                false,
+                format!("Show all {broad} lists no ninth row to reach with Tab"),
+            );
+        }
         d.clear_text_in(FIELD);
         d.begin_task();
     }

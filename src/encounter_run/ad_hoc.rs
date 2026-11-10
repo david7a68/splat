@@ -302,22 +302,33 @@ impl Run {
                         &creature.entry.name,
                         |_, _| {},
                     );
-                    ui.scope_builder(
-                        egui::UiBuilder::new()
-                            .accessibility_parent(row.id)
-                            .max_rect(row.rect.shrink2(egui::vec2(design::S, design::XS))),
-                        |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.label(Type::Body.rich(ui, &creature.entry.name).color(c.text));
-                            let parts: Vec<_> = creature.detail.split(" · ").collect();
-                            let source = parts.last().copied().filter(|part| {
-                                !["CR ", "HP ", "AC "]
-                                    .iter()
-                                    .any(|prefix| part.starts_with(prefix))
-                            });
-                            crate::encounters::detail_columns(ui, &creature.detail, source);
-                        },
-                    );
+                    // egui does not scroll to a widget that Tab focuses. The list does, so every
+                    // match can be reached from the keyboard.
+                    if row.gained_focus() {
+                        row.scroll_to_me(None);
+                    }
+                    // A long list lays out only the rows in view. Every row keeps its control and
+                    // name, so focus and the accessible list stay whole. The words go in a child
+                    // that does not move the cursor, and a hidden row skips the one id that child
+                    // takes, so every row has the same pitch and later rows keep their ids.
+                    if ui.is_rect_visible(row.rect) {
+                        let mut words = ui.new_child(
+                            egui::UiBuilder::new()
+                                .accessibility_parent(row.id)
+                                .max_rect(row.rect.shrink2(egui::vec2(design::S, design::XS))),
+                        );
+                        words.spacing_mut().item_spacing.y = 0.0;
+                        words.label(Type::Body.rich(&words, &creature.entry.name).color(c.text));
+                        let parts: Vec<_> = creature.detail.split(" · ").collect();
+                        let source = parts.last().copied().filter(|part| {
+                            !["CR ", "HP ", "AC "]
+                                .iter()
+                                .any(|prefix| part.starts_with(prefix))
+                        });
+                        crate::encounters::detail_columns(&mut words, &creature.detail, source);
+                    } else {
+                        ui.skip_ahead_auto_ids(1);
+                    }
                     design::named(ui, &row, &format!("Choose {}", creature.entry.name));
                     if row.clicked() {
                         chosen = Some(Arc::clone(creature));
