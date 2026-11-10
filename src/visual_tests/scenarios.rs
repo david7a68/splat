@@ -3404,7 +3404,43 @@ pub mod gallery {
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "Major event", 30);
-        d.state("save-rows-and-add-strip", Sizes::All);
+        d.state_prepared("save-rows-and-add-strip", Sizes::All, |d| {
+            for _ in 0..3 {
+                if d.nodes()
+                    .iter()
+                    .any(|node| node.name == "Major event" && node.fully_in_view())
+                {
+                    break;
+                }
+                d.scroll_at(pos2(600.0, 300.0), 1);
+            }
+            let nodes = d.nodes();
+            let controls: Vec<_> = [
+                "Fight",
+                "Group",
+                "Day",
+                "Long rest",
+                "Short rest",
+                "Travel",
+                "Major event",
+            ]
+            .iter()
+            .map(|name| {
+                nodes
+                    .iter()
+                    .find(|node| node.name == *name && node.fully_in_view())
+                    .unwrap_or_else(|| panic!("Visible full-width Add action: {name}"))
+            })
+            .collect();
+            d.observe(
+                "iter-5-A-seven-actions",
+                !d.has("More Add actions")
+                    && controls
+                        .iter()
+                        .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
+                "All seven Add actions keep one line when their column holds them",
+            );
+        });
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
             if d.visible_text(&temp) {
@@ -5042,6 +5078,50 @@ pub mod session_notes {
         });
         write_note(d);
         d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
+        let draft = d.editor_text().unwrap();
+        let long_draft = (0..60)
+            .map(|at| format!("Unsent line {at}.\n"))
+            .collect::<String>();
+        d.type_into_editor(&long_draft);
+        let unsent = d.editor_text().unwrap();
+        let focus = d.focused_name();
+        assert!(focus.is_some());
+        assert!(d.visible_passage("Unsent line 59."));
+        assert!(!d.visible_passage("Unsent line 0."));
+        let (wide_text, wide_state) = d.at_size(LARGE, |d| {
+            eprintln!(
+                "draft breakpoint large: words {}, focus {:?} -> {:?}, end {}, start {}",
+                d.editor_text().as_ref() == Some(&unsent),
+                focus,
+                d.focused_name(),
+                d.visible_passage("Unsent line 59."),
+                d.visible_passage("Unsent line 0.")
+            );
+            (
+                d.editor_text().as_ref() == Some(&unsent),
+                d.focused_name() == focus
+                    && d.visible_passage("Unsent line 59.")
+                    && !d.visible_passage("Unsent line 0."),
+            )
+        });
+        eprintln!(
+            "draft breakpoint small: words {}, focus {:?} -> {:?}, end {}, start {}",
+            d.editor_text().as_ref() == Some(&unsent),
+            focus,
+            d.focused_name(),
+            d.visible_passage("Unsent line 59."),
+            d.visible_passage("Unsent line 0.")
+        );
+        d.observe("iter-5-A-draft-breakpoint", wide_text && d.editor_text().as_ref() == Some(&unsent),
+            "The unsent note keeps its words through SMALL to LARGE to SMALL without reopening Write");
+        if !wide_state
+            || d.focused_name() != focus
+            || !d.visible_passage("Unsent line 59.")
+            || d.visible_passage("Unsent line 0.")
+        {
+            d.outcome.look_review.push("Known Sessions fault, assigned to package C by the lead: crossing the note/plan breakpoint keeps the draft but loses focus and the wide view's scroll. Package A does not change the editor parent or IDs; see focused-2.log.".into());
+        }
+        d.replace_editor_text(&draft);
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
         d.state("session-written", Sizes::Default);
@@ -5057,7 +5137,36 @@ pub mod session_notes {
         d.expect_same(
             "The narrow view opens Plan; the wide view keeps the empty plan beside the note.",
         );
-        d.state("empty-plan-add-at-top", Sizes::All);
+        d.state_prepared("empty-plan-add-at-top", Sizes::All, |d| {
+            let names = [
+                "Add a fight",
+                "Add a group",
+                ADD_LONG_REST,
+                "More Add actions",
+            ];
+            let nodes = d.nodes();
+            let controls: Vec<_> = names
+                .iter()
+                .map(|name| {
+                    nodes
+                        .iter()
+                        .find(|node| node.name == *name && node.fully_in_view())
+                        .unwrap_or_else(|| panic!("Visible plan action: {name}"))
+                })
+                .collect();
+            d.observe(
+                "iter-5-A-FT5",
+                controls
+                    .iter()
+                    .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0)
+                    && d.visible_text(&format!(
+                        "{}{}",
+                        crate::design::icons::EXPAND,
+                        crate::design::icons::DOWN
+                    )),
+                "Fight, Group, Long rest and More keep one line in the plan at every capture size",
+            );
+        });
         d.state_prepared("session-plan-fight-picker", Sizes::Default, |d| {
             if !d.has("Plan Bridge Ambush") {
                 d.click("Add a fight");
@@ -5069,12 +5178,22 @@ pub mod session_notes {
             d.press(Key::Escape);
             // Long rest is a visible button, one click away, before More opens.
             d.expect(ADD_LONG_REST);
+            assert!(
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == "More Add actions" && node.fully_in_view())
+            );
             d.click("More Add actions");
             d.expect(ADD_SHORT_REST);
             d.expect(ADD_LONG_REST);
         });
         d.press(Key::Escape);
         d.begin_task();
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|node| node.name == ADD_LONG_REST && node.fully_in_view())
+        );
         d.click(ADD_LONG_REST);
         d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
@@ -5168,7 +5287,53 @@ pub mod session_notes {
         d.expect("Everyone at full");
         d.expect("Adds to");
         assert!(!d.has("Adds to:"));
-        d.state("timeline-session-events", Sizes::All);
+        d.state_prepared("timeline-session-events", Sizes::All, |d| {
+            let names = [
+                "Add Fight",
+                ADD_LONG_REST,
+                ADD_SHORT_REST,
+                ADD_TRAVEL,
+                ADD_EVENT,
+                ADD_DAY,
+            ];
+            let nodes = d.nodes();
+            let controls: Vec<_> = names
+                .iter()
+                .filter_map(|name| {
+                    nodes
+                        .iter()
+                        .find(|node| node.name == *name && node.fully_in_view())
+                })
+                .collect();
+            assert!(!controls.is_empty());
+            // Fight and Long rest are always one click away; More shows whenever the rest fold.
+            let required = ["Add Fight", ADD_LONG_REST];
+            let required_shown = required.iter().all(|name| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == *name && node.fully_in_view())
+            });
+            let more_ok = controls.len() == names.len()
+                || nodes
+                    .iter()
+                    .any(|node| node.name == "More Add actions" && node.fully_in_view());
+            d.observe(
+                "iter-5-A-Timeline-strip",
+                required_shown
+                    && more_ok
+                    && controls
+                        .iter()
+                        .all(|node| (node.rect.top() - controls[0].rect.top()).abs() < 1.0),
+                "The Timeline's visible Add actions keep one line",
+            );
+            if !d.has("More Add actions") {
+                assert_eq!(
+                    controls.len(),
+                    names.len(),
+                    "A wide Timeline exposes every action without More"
+                );
+            }
+        });
         d.check_tab_order("timeline");
         d.click_add_event(ADD_DAY);
         d.type_text("Harvest Eve");
