@@ -770,7 +770,11 @@ Bloodied, 0 HP and sync state. A lone sync state sits beside HP; a second state 
 says Reading sheet…. When every linked row has sync off by the DM, header line two says Sync off for the party and the rows omit it. When linked rows differ, disabled rows retain Sync off and its icon. Sync that restarts by itself never says Sync off. Unlinked creatures have no sync word. Header and row conflict words are underlined review links. The sheet colours only its connection
 icon and Connected; sheet and HP facts use muted Small.
 
-Names that need more than two lines use `RUN_COMPACT.name`. On that row, the numeric columns can move into unused state space to keep the name whole and compact. The other rows keep their shared columns. Pictures align with the first name line.
+Names that need more than two lines use `RUN_COMPACT.name` and wrap in the shared name column. The numeric
+columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
+that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
+the whole name. Pictures align with the first name line. The fight panel keeps an `L` left gutter, so a quiet
+action at its text edge never reaches the panel's splitter.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
 drop the bonus before more if needed. Measure sync before folding conditions into a count. Keep the first

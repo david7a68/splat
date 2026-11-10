@@ -348,12 +348,20 @@ impl Run {
             }
             if !all && matches.len() > MATCHES_SHOWN {
                 let label = format!("Show all {}", matches.len());
-                if Action::quiet(&label)
-                    .density(Density::Read)
-                    .hint("List every creature that matches, without more typing")
-                    .show(ui)
-                    .clicked()
-                {
+                // It starts a line: its words start at the rows' words, `S` in, and its target
+                // reaches back to the rows' edge.
+                let pressed = ui
+                    .horizontal(|ui| {
+                        ui.add_space(design::S);
+                        Action::quiet(&label)
+                            .density(Density::Read)
+                            .line_start()
+                            .hint("List every creature that matches, without more typing")
+                            .show(ui)
+                            .clicked()
+                    })
+                    .inner;
+                if pressed {
                     self.ad_hoc.show_all = Some(typed.clone());
                 }
             }

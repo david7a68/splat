@@ -2583,7 +2583,7 @@ fn unread_member(
                     .rich(
                         ui,
                         format!(
-                            "Changes \"{raw}\" not read. Set the changes below, then save the group."
+                            "Changes “{raw}” not read. Set the changes below, then save the group."
                         ),
                     )
                     .color(colors().result.warning),

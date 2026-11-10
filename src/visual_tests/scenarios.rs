@@ -224,6 +224,18 @@ fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     );
 }
 
+/// A message action's shape: its border, fill, height and whether it bears the Undo icon.
+fn undo_shape(d: &Driver<'_>, action: &str) -> Option<(egui::Stroke, egui::Color32, i32, bool)> {
+    let target = d.place_of(action)?;
+    let frame = d.control_frame(action)?;
+    Some((
+        frame.stroke,
+        frame.fill,
+        target.height().round() as i32,
+        d.painted_in(target).contains(crate::design::icons::UNDO),
+    ))
+}
+
 /// Each affected encounter remains a separate link with a word space on both sides of `and`.
 fn check_link_spaces(d: &mut Driver<'_>) {
     let first = d
@@ -2802,8 +2814,60 @@ pub mod run_long_names {
     const RENAMED: &str = "Iselle Marrowind";
     const BACK_TO_RUN: &str = "Back to run";
     const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+    /// Past three lines of the name column at 960x640.
+    const LONGEST_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell, Warden of the Cinder Road and the Ashen Gate";
     const FIRST_NAME: &str = "Seraphina";
     const ENEMY: &str = "Cinder Wolf 1";
+
+    /// A row's AC right edge and HP slash, from what it paints. The AC number ends at the AC
+    /// column; the HP readout's `/max` starts at its slash.
+    fn numeric_columns(d: &Driver<'_>, name: &str) -> Option<(f32, f32)> {
+        let row = d.row_node(name)?.shown;
+        let mut texts = Vec::new();
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if row.contains(rect.center()) {
+                texts.push((text.galley.job.text.clone(), rect));
+            }
+        });
+        let label = texts.iter().find(|(text, _)| text == "AC")?.1;
+        let ac = texts
+            .iter()
+            .filter(|(_, rect)| {
+                rect.left() >= label.right() && (rect.center().y - label.center().y).abs() < 4.0
+            })
+            .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))?
+            .1
+            .right();
+        let hp = texts
+            .iter()
+            .find(|(text, _)| text.starts_with('/'))?
+            .1
+            .left();
+        Some((ac, hp))
+    }
+
+    /// FT3: the numeric columns never move for a long name, at every captured size.
+    fn check_columns_stay(d: &mut Driver<'_>, when: &str) {
+        check_columns_stay_for(d, LONG_NAME, when);
+    }
+
+    fn check_columns_stay_for(d: &mut Driver<'_>, name: &str, when: &str) {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (long, short) = d.at_size(size, |d| {
+                (numeric_columns(d, name), numeric_columns(d, ENEMY))
+            });
+            d.observe(
+                "iter-17-B-FT3",
+                long.zip(short).is_some_and(|(long, short)| {
+                    (long.0 - short.0).abs() <= 1.0 && (long.1 - short.1).abs() <= 1.0
+                }),
+                format!(
+                    "{when} at {size:?}: AC and HP x on the long-name row {long:?} match a short row {short:?}"
+                ),
+            );
+        }
+    }
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
@@ -2815,6 +2879,7 @@ pub mod run_long_names {
         d.settle();
         d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
+        check_columns_stay(d, "Selected");
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
@@ -2829,6 +2894,7 @@ pub mod run_long_names {
         // The header names the current participant first. Two turns on, that is this name.
         d.click(NEXT_TURN);
         d.state("long-name-has-the-turn", Sizes::All);
+        check_columns_stay(d, "With the turn");
         let turn = current_participant(d);
         let header = d.header_rect();
         let words = d.painted_in(header);
@@ -2849,6 +2915,48 @@ pub mod run_long_names {
         );
         go_library(d);
         d.state("long-name-has-the-turn-on-the-strip", Sizes::Default);
+        // FT3, edge content: a name past three lines ends its third line in `…` and keeps the
+        // columns. Hover and the row's accessible name give it whole.
+        d.click(BACK_TO_RUN);
+        d.app_mut()
+            .encounters
+            .simulate_rename(LONG_NAME, LONGEST_NAME);
+        d.settle();
+        // The row paints the name's first whole words in three lines, then `…`.
+        let row = d.row_node(LONGEST_NAME).map(|row| row.shown);
+        let mut shown = None;
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.starts_with(FIRST_NAME)
+                && row.is_some_and(|row| row.contains(text.visual_bounding_rect().center()))
+            {
+                shown = Some((words.clone(), text.galley.rows.len(), text.galley.elided));
+            }
+        });
+        d.observe(
+            "iter-17-B-FT3-cut",
+            shown.as_ref().is_some_and(|(words, lines, elided)| {
+                *lines == 3
+                    && !elided
+                    && words.ends_with('…')
+                    && LONGEST_NAME.starts_with(words.trim_end_matches('…'))
+                    && words.len() < LONGEST_NAME.len()
+            }),
+            format!("At 960x640 the row paints (words, lines, cut by egui) = {shown:?}"),
+        );
+        d.expect_same(
+            "Only the long name's third line differs: it ends in `…` after the longest name's \
+             first whole words",
+        );
+        d.state("longest-name", Sizes::All);
+        check_columns_stay_for(d, LONGEST_NAME, "Longest name");
+        let cut = shown.map(|(words, _, _)| words).unwrap_or_default();
+        let whole = !cut.is_empty() && d.painted_tooltip_shows(&cut, LONGEST_NAME);
+        d.observe(
+            "iter-17-B-FT3-hover",
+            whole,
+            "Hover over the cut name paints the whole name",
+        );
         d.not_measured(
             "Long names",
             "outside a run: only the run's rows, header, dock, panel and strip have long-name data",
@@ -10302,6 +10410,45 @@ pub mod run_add_creature {
             })
             .expect("Show all names how many creatures match");
         let before = choices(d);
+        // FT2: Show all starts a line, so its words start at the result rows' words, and its
+        // press area reaches into the gutter, never into the fight panel's splitter.
+        let label = format!("Show all {show_all}");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (words, rows, target, splitter) = d.at_size(size, |d| {
+                let row = d.place_of("Choose Wolf");
+                let mut rows = None::<f32>;
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if row.is_some_and(|row| row.contains(rect.center())) {
+                        rows = Some(rows.map_or(rect.left(), |left| left.min(rect.left())));
+                    }
+                });
+                (
+                    d.painted_left(&label),
+                    rows,
+                    d.place_of(&label),
+                    d.place_of("Resize fight panel column"),
+                )
+            });
+            d.observe(
+                "iter-17-B-FT2",
+                words
+                    .zip(rows)
+                    .is_some_and(|(words, rows)| (words - rows).abs() <= 1.0),
+                format!(
+                    "At {size:?}, {label} starts at {words:?}, the result rows' words at {rows:?}"
+                ),
+            );
+            d.observe(
+                "iter-17-B-FT2-splitter",
+                target
+                    .zip(splitter)
+                    .is_some_and(|(target, splitter)| target.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, {label}'s press area {target:?} starts right of the splitter {splitter:?}"
+                ),
+            );
+        }
         d.click(&format!("Show all {show_all}"));
         d.observe(
             "iter-14-B-AT1",
@@ -11464,6 +11611,13 @@ pub mod session_plan {
             "The header names the new step, not an empty history",
         );
         d.state("saved-hp-restored", Sizes::All);
+        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
+        let saved_hp_undo = undo_shape(d, "Undo");
+        d.observe(
+            "iter-17-B-AT1",
+            saved_hp_undo.is_some_and(|(stroke, _, _, icon)| stroke == egui::Stroke::NONE && icon),
+            format!("The saved-HP result's Undo is quiet with the Undo icon: {saved_hp_undo:?}"),
+        );
         d.click("Undo");
         d.observe(
             "iter-16-B-FT2-undo",
@@ -11487,6 +11641,14 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
+        let undo_add = undo_shape(d, "Undo add");
+        d.observe(
+            "iter-17-B-AT1-pair",
+            saved_hp_undo.is_some() && undo_add == saved_hp_undo,
+            format!(
+                "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
+            ),
+        );
         d.click("Undo add");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
@@ -11790,6 +11952,24 @@ pub mod npc_in_encounter {
                 "iter6-B-FD12",
                 aligned,
                 format!("Prep action text aligns with its title at {size:?}"),
+            );
+        }
+        // The action's press area reaches into the panel's gutter, never into its splitter.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (action, splitter) = d.at_size(size, |d| {
+                (
+                    d.place_of("Edit encounter"),
+                    d.place_of("Resize fight panel column"),
+                )
+            });
+            d.observe(
+                "iter-17-B-splitter",
+                action
+                    .zip(splitter)
+                    .is_some_and(|(action, splitter)| action.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, Edit encounter's press area {action:?} starts right of the splitter {splitter:?}"
+                ),
             );
         }
         assert!(d.in_view("Edit encounter"));
