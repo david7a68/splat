@@ -967,6 +967,12 @@ muted `N more` names the rest, with HP, in hover and its accessible name. `N mor
 focus shows the same list as hover. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
+Outside a fight the level fits the words in view. While a run is open, the level may drop when the words
+in view need it (a `Bloodied` word, temporary HP), but it never rises again until the run ends, and no
+item narrows, so nothing moves back when a player is healed. A change of bar width (the window or the
+rail) or of the party measures again. The bar keeps this in its own state, keyed to the run, never in
+the party data.
+
 ### Timeline
 
 Timeline is a story-order ledger: one column, hairline spine, icon and word per kind, no kind colours or
