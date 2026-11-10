@@ -131,34 +131,34 @@ impl RestRulingAction {
     }
 }
 
-/// Both pages show and edit the same ruling, with one step of undo.
+/// Both pages use the same ruling words, icon and colour.
+pub fn long_rest_status(restores: bool) -> Status<'static> {
+    Status {
+        icon: if restores {
+            icons::OK
+        } else {
+            icons::LONG_REST
+        },
+        word: if restores {
+            "Everyone at full"
+        } else {
+            "Not at full"
+        },
+        color: if restores {
+            colors().document.saved
+        } else {
+            colors().muted
+        },
+    }
+}
+
 pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestRulingAction> {
     if event.kind != Kind::LongRest {
         return None;
     }
-    let c = colors();
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
-        design::status(
-            ui,
-            Status {
-                icon: if event.restores {
-                    icons::OK
-                } else {
-                    icons::LONG_REST
-                },
-                word: if event.restores {
-                    "Everyone at full"
-                } else {
-                    "Not at full"
-                },
-                color: if event.restores {
-                    c.document.saved
-                } else {
-                    c.muted
-                },
-            },
-        );
+        design::status(ui, long_rest_status(event.restores));
         if design::link(
             ui,
             if event.restores {
@@ -445,11 +445,12 @@ impl TimelinePage {
                 format!("Day {day} · {detail}")
             };
         }
-        if event.kind == Kind::LongRest && event.restores {
+        if event.kind == Kind::LongRest {
             if !detail.is_empty() {
                 detail.push_str(" · ");
             }
-            detail.push_str(&format!("{} Everyone at full", icons::OK));
+            let status = long_rest_status(event.restores);
+            detail.push_str(&format!("{} {}", status.icon, status.word));
         }
         let name = if detail.is_empty() {
             title.clone()
@@ -915,6 +916,8 @@ impl TimelinePage {
                 title.request_focus();
             }
         });
+        ui.add_space(design::S);
+        design::rule(ui);
         let can_undo_ruling = book.rest_undo_id() == Some(id.as_str());
         let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
@@ -1365,6 +1368,36 @@ fn header_kind(event: &Event) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter3_c_closed_long_rest_rows_show_both_rulings() {
+        use egui_kittest::kittest::Queryable;
+        for restores in [false, true] {
+            let mut book = Book::default();
+            book.add(Kind::LongRest, None);
+            let mut event = book.events.remove(0);
+            event.restores = restores;
+            let word = if restores {
+                "Everyone at full"
+            } else {
+                "Not at full"
+            };
+            let icon = if restores {
+                icons::OK
+            } else {
+                icons::LONG_REST
+            };
+            let expected = format!("{} · {icon} {word}", event.label(0));
+            let mut harness = egui_kittest::Harness::builder().build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    TimelinePage::default().row(ui, &event, 0, None, false);
+                });
+            });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness.get_by_label(&expected);
+        }
+    }
 
     #[test]
     fn iter1_c_day_appears_only_when_filters_hide_day_headings() {

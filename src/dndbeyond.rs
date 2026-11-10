@@ -335,7 +335,7 @@ impl DndBeyond {
                 crate::design::spinner(ui);
                 ui.weak("Refreshing…");
             } else if session.is_none() {
-                ui.weak("Not connected · saved name");
+                ui.weak("Not connected · showing the name saved on this computer");
             } else {
                 crate::design::status(
                     ui,

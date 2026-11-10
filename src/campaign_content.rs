@@ -1201,17 +1201,22 @@ impl CampaignContent {
                 .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
             for flag in campaign_flags {
-                ui.horizontal_wrapped(|ui| {
-                    design::message(
-                        ui,
-                        Tone::Warning,
-                        &format!("Line {}: {}", flag.line, flag.message),
-                    );
-                    crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                    let words = format!("Line {}: {}", flag.line, flag.message);
                     if flag.message.contains(" choice \"") {
-                        *open_run_settings |=
-                            Action::quiet("Choose in Rules and runs").show(ui).clicked();
+                        *open_run_settings |= design::message_with_action(
+                            ui,
+                            Tone::Warning,
+                            &words,
+                            "Choose in Rules and runs",
+                        );
+                    } else {
+                        design::message(ui, Tone::Warning, &words);
                     }
+                    ui.horizontal_wrapped(|ui| {
+                        crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                    });
                 });
             }
         };
