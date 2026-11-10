@@ -425,7 +425,9 @@ or folder choice states which file or folder an encounter will keep or use, in `
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
 `message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
 draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
-Edit Markdown keeps them above the editor.
+Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
+warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
+title. `Undo heading change` takes the same place as a `line_start` quiet action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -522,8 +524,10 @@ and permits a folder in an Obsidian vault. Disconnected campaign-link help opens
 Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
-or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
-change counts saved files left behind. Move runs and save stages all files without replacement, saves
+or Save without moving. Move files and save is primary when no other primary is in view; it is secondary while a
+run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
+change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
+shows only while no run is open. It stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
 result gives counts and destination without another Saved label. A moved run has confirmation and Undo move
@@ -1002,8 +1006,9 @@ long-rest row shows an icon and either Everyone at full or Not at full. Open row
 ruling stays in place. Actions say Mark everyone at full
 or Mark not at full; states say Everyone at full or Not at full. Keep one Undo ruling until the next edit.
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
-rest.` and offers Use the saved HP as one Undo step. Combat retains saved HP; the rest message names those
-fights.
+rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
+`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with Undo, which gives
+back the full HP. Combat retains saved HP; the rest message names those fights.
 
 ### Party bar
 
@@ -1169,7 +1174,9 @@ sits an L gap after it. Add and On the timeline align left in that column. Row r
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice: This draft was written automatically. Check it against your memory. If the check returned nothing, put `Check returned no result` beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
+states an empty check once: in the warning line, or, while processing again hides that line, as `The check
+returned nothing` beside Raw transcript. Never both. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings

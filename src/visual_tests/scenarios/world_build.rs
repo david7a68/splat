@@ -1730,9 +1730,60 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.wait_for_text("Read the watch spell");
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
+    d.observe_both(
+        "iter-16-E-FD7-alone",
+        "Without a duplicate warning, the heading warning still follows the reader title",
+        |d| {
+            reader_title(d, "Watch Ashfall")
+                .zip(d.place_of("Use Watch Ashfall"))
+                .is_some_and(|(title, fix)| fix.top() > title.bottom())
+        },
+    );
     d.state("linked-entry-renamed-on-disk", Sizes::All);
+    let renamed_path = package.join("Spells/Watch Ashfall.md");
+    assert!(
+        !fs::read_to_string(&renamed_path)
+            .unwrap()
+            .contains("# Watch Ashfall")
+    );
     d.click("Use Watch Ashfall");
     d.wait_for_text("Undo heading change");
+    // An unsaved fix changes every later step, so this check stops the scenario on failure.
+    let saved = fs::read_to_string(&renamed_path)
+        .unwrap()
+        .contains("# Watch Ashfall");
+    assert!(
+        saved,
+        "iter-16-E-FD7-saved: Use Watch Ashfall in the reader did not save the fixed heading"
+    );
+    d.observe(
+        "iter-16-E-FD7-saved",
+        saved,
+        "Use Watch Ashfall in the reader saves the fixed heading to the file",
+    );
+    d.observe_both(
+        "iter-16-E-FD7-undo-place",
+        "Undo heading change takes the warning's place after the reader title",
+        |d| {
+            reader_title(d, "Watch Ashfall")
+                .zip(d.place_of("Undo heading change"))
+                .is_some_and(|(title, undo)| undo.top() > title.bottom())
+        },
+    );
+    d.observe_both(
+        "iter-16-E-FD7-undo-edge",
+        "Undo heading change is a line-start action: its target extends into the gutter left of the reader text edge, and its word follows its icon",
+        |d| {
+            let Some(title) = reader_title(d, "Watch Ashfall") else {
+                return false;
+            };
+            let Some(undo) = d.place_of("Undo heading change") else {
+                return false;
+            };
+            d.painted_word_rect("Undo heading change", egui::Rect::EVERYTHING)
+                .is_some_and(|word| undo.left() < title.left() - 1.0 && word.left() > title.left())
+        },
+    );
     d.state("renamed-entry-heading-fixed", Sizes::All);
     d.click("Undo heading change");
     d.wait_for_text("Use Watch Ashfall");
@@ -2710,6 +2761,37 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.assert_state_matches("deleted-draft-after-focus", "deleted-draft-let-go");
 }
 
+/// The copied wolf's heading warning in `package_duplicate_id`.
+const COPY_HEADING_WARNING: &str =
+    "The first heading says Cinder Wolf, but the name is Cinder Wolf copy.";
+
+/// The Library reader's title: the topmost painted text that is exactly `title`, below the
+/// `Read` tab and right of its edge, so the list row and the body heading do not count.
+fn reader_title(d: &Driver<'_>, title: &str) -> Option<egui::Rect> {
+    let read = d.place_of("Read")?;
+    let mut found: Option<egui::Rect> = None;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text == title
+            && rect.left() >= read.left() - 1.0
+            && rect.top() > read.bottom()
+            && clip.intersects(rect)
+            && found.is_none_or(|top| rect.top() < top.top())
+        {
+            found = Some(rect);
+        }
+    });
+    found
+}
+
+/// The reader title's top at each captured size.
+fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
+    [SMALL, DEFAULT, (1920.0, 1080.0)]
+        .into_iter()
+        .map(|size| d.at_size(size, |d| reader_title(d, title).map(|rect| rect.top())))
+        .collect()
+}
+
 /// A copied file keeps its own save target until the DM repairs its identity.
 pub fn package_duplicate_id(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
@@ -2748,6 +2830,14 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.state("duplicate-package-library-list", Sizes::All);
     d.click_starting("Cinder Wolf · ");
     d.expect("Make Cinder Wolf copy.md a separate entry");
+    // The original has the duplicate warning and no heading warning: its title height is the
+    // bar for the copy, whose file has both (iter-16-E-FD7-title).
+    assert!(!d.has_containing("The first heading says"));
+    let plain_tops = reader_title_tops(d, "Cinder Wolf");
+    assert!(
+        plain_tops.iter().all(Option::is_some),
+        "The original's reader title is found at each size: {plain_tops:?}"
+    );
     d.click(EDIT_MARKDOWN);
     // Must stay true with iter-14-E-FD4: Edit Markdown keeps the choices above the editor.
     d.observe_both(
@@ -2819,7 +2909,69 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
             choices[1].top() - choices[0].bottom() >= design::L,
             "The two repair choices keep their gap",
         );
+        // One place for a file's warnings: the heading warning and its action follow the
+        // title, directly above the duplicate warning.
+        let title =
+            reader_title(d, "Cinder Wolf copy").expect("The copy's reader title is visible");
+        let heading = d
+            .painted_rect_in(COPY_HEADING_WARNING, egui::Rect::EVERYTHING)
+            .expect("The heading warning is visible");
+        let fix = d
+            .place_of("Use Cinder Wolf copy")
+            .expect("The heading fix is visible");
+        d.observe(
+            "iter-16-E-FD7-order",
+            title.bottom() < heading.top()
+                && heading.bottom() <= fix.bottom()
+                && fix.bottom() < text.top()
+                && text.top() - fix.bottom() <= design::L,
+            format!(
+                "The heading warning follows the title and sits directly above the duplicate warning: title bottom {:.0}, heading {:.0} to {:.0}, its action bottom {:.0}, duplicate warning top {:.0}",
+                title.bottom(),
+                heading.top(),
+                heading.bottom(),
+                fix.bottom(),
+                text.top()
+            ),
+        );
+        d.observe(
+            "iter-16-E-FD7-fit",
+            d.nodes()
+                .iter()
+                .any(|node| node.name == "Use Cinder Wolf copy" && node.fully_in_view()),
+            "The heading fix is fully in view in the reader",
+        );
     });
+    // The copy's title sits where the original's does, though only the copy has the heading
+    // warning: the warning no longer pushes the title down.
+    let copy_tops = reader_title_tops(d, "Cinder Wolf copy");
+    d.observe(
+        "iter-16-E-FD7-title",
+        copy_tops.iter().zip(&plain_tops).all(|(copy, plain)| {
+            copy.zip(*plain)
+                .is_some_and(|(copy, plain)| (copy - plain).abs() < 1.0)
+        }),
+        format!(
+            "The title top with the heading warning ({copy_tops:?}) matches the title top without it ({plain_tops:?}) at 960, 1200 and 1920"
+        ),
+    );
+    // Must stay true: Edit Markdown still draws the heading warning above the editor.
+    d.click(EDIT_MARKDOWN);
+    d.observe_both(
+        "iter-16-E-FD7-source",
+        "Edit Markdown keeps the heading warning above the Markdown editor",
+        |d| {
+            let Some(editor) = d.place_of("Markdown editor") else {
+                return false;
+            };
+            d.painted_rect_in(COPY_HEADING_WARNING, egui::Rect::EVERYTHING)
+                .is_some_and(|heading| heading.bottom() < editor.top())
+                && d.place_of("Use Cinder Wolf copy").is_some_and(|fix| {
+                    d.in_view("Use Cinder Wolf copy") && fix.bottom() < editor.top()
+                })
+        },
+    );
+    d.click("Read");
     d.expect("Creature · CR 1");
     d.click("Make Cinder Wolf copy.md a separate entry");
     d.wait_for_text("Undo separate entry");

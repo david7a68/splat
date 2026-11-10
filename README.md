@@ -239,6 +239,8 @@ keep their warning icon and full words on hover. Note conflicts say **Notes chan
 and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
 Both pages let you turn the ruling off or on, with Undo.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
+A saved Setup resumed after the rest starts at full. **Use the saved HP** puts back its saved HP and
+says **Party HP set to the saved values.**, with **Undo** to go back to full.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 

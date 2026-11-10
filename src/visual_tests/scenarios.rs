@@ -3989,6 +3989,22 @@ pub mod run_folder_defect {
                     })
             },
         );
+        // FT4: with no open run, the move is the one primary action on the whole screen.
+        d.observe_both(
+            "iter-16-B-FT4-primary",
+            "Move runs and save is the only accent-filled control in view",
+            |d| super::session_recording::accent_filled(d) == ["Move runs and save"],
+        );
+        // Must stay true: the other choice on the row stays quiet.
+        d.observe_both(
+            "iter-16-B-FT4-quiet",
+            "Save without moving stays a quiet action",
+            |d| {
+                d.in_view("Save without moving")
+                    && d.control_frame("Save without moving")
+                        .is_some_and(|frame| frame.stroke.width == 0.0)
+            },
+        );
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
@@ -6671,7 +6687,45 @@ pub mod session_notes {
         );
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        d.state("session-folder-move-offered", Sizes::All);
+        // FT4 (round 16): with no run and no other form, moving the files is the one primary,
+        // as Move runs and save is on Rules and runs.
+        d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
+            super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+        });
+        // Must stay true: the open details form owns its own save, so the move is not primary.
+        d.click("Edit details");
+        d.expect("Save details");
+        // The details form's own save is the one primary once its details change.
+        let name = d
+            .field_text("Campaign name")
+            .expect("the campaign name field");
+        d.type_into("Campaign name", " (edited)");
+        super::session_recording::check_one_primary(
+            d,
+            "Save details",
+            "iter-16-C-FT4-details-primary",
+        );
+        d.replace_text_in("Campaign name", &name);
+        d.expect("Cancel");
+        d.scroll_until(pos2(600.0, 400.0), "Move files and save", 20);
+        let frame = d.control_frame("Move files and save");
+        assert!(
+            frame.is_some(),
+            "Move files and save is painted below the details form"
+        );
+        d.observe(
+            "iter-16-C-FT4-details",
+            frame.as_ref().is_some_and(|frame| {
+                let colors = crate::design::colors();
+                frame.fill != colors.accent_fill && frame.fill != colors.accent_hover
+            }),
+            format!(
+                "With the details form open, Move files and save has no accent fill: {frame:?}"
+            ),
+        );
+        d.click("Cancel");
+        d.scroll_up_at(pos2(600.0, 400.0), 20);
+        d.expect("Move files and save");
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
         d.observe_both(
@@ -7364,14 +7418,10 @@ pub mod session_recording {
         }
     }
 
-    fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
-        assert!(
-            d.in_view(expected),
-            "The expected primary action is visible"
-        );
+    /// Every accent-filled button in view, across the whole window.
+    pub(super) fn accent_filled(d: &Driver<'_>) -> Vec<String> {
         let colors = crate::design::colors();
-        let primary: Vec<_> = d
-            .nodes()
+        d.nodes()
             .into_iter()
             .filter(|node| node.in_view() && node.role == egui::accesskit::Role::Button)
             .filter(|node| {
@@ -7380,7 +7430,15 @@ pub mod session_recording {
                 })
             })
             .map(|node| node.name)
-            .collect();
+            .collect()
+    }
+
+    pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
+        assert!(
+            d.in_view(expected),
+            "The expected primary action is visible"
+        );
+        let primary = accent_filled(d);
         d.observe(
             id,
             primary == [expected],
@@ -7851,6 +7909,27 @@ pub mod session_recording {
     }
 
     /// FT-3: a warned result is a status like its siblings, on the row's second line.
+    /// FT3 (round 16): the recording row states an empty check once, in its warning line.
+    fn check_empty_check_once(d: &mut Driver<'_>, id: &str) {
+        let mut said = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.contains("returned nothing") || words.contains("returned no result") {
+                said.push(words.clone());
+            }
+        });
+        d.observe(
+            &format!("{id}-warning"),
+            d.visible_text(WARNING),
+            "The warning line still says the check returned nothing",
+        );
+        d.observe(
+            id,
+            said.len() == 1,
+            format!("The empty check is said once on screen: {said:?}"),
+        );
+    }
+
     fn check_warned_row(d: &mut Driver<'_>) {
         let row = d.nodes().into_iter().find(|node| {
             node.in_view()
@@ -8550,6 +8629,7 @@ pub mod session_recording {
         d.state_prepared("recording-warned", Sizes::All, |d| {
             check_result_row(d);
             check_warned_row(d);
+            check_empty_check_once(d, "iter-16-C-FT3");
         });
 
         d.click_containing("More actions for 2026-01-01");
@@ -8575,9 +8655,10 @@ pub mod session_recording {
             // AT1: a check that ran and gave nothing back is not a check that never ran.
             d.observe(
                 "iter-15-C-AT1",
-                d.visible_text("Check returned no result") && !d.visible_text("No check ran"),
-                "The warned recording says Check returned no result beside Raw transcript",
+                d.visible_text(WARNING) && !d.visible_text("No check ran"),
+                "The warned recording says the check returned nothing, not No check ran",
             );
+            check_empty_check_once(d, "iter-16-C-FT3-confirm");
             d.observe(
                 "iter-11-C-ST1",
                 message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
@@ -8595,10 +8676,40 @@ pub mod session_recording {
         });
         d.click("Not now");
 
+        // FT3 (round 16): processing again hides the warning line, so the label says it once.
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 4,
+        });
+        d.settle();
+        assert!(
+            d.has_containing("Processing") && !d.visible_text(WARNING),
+            "Processing again hides the warning line"
+        );
+        d.state_prepared("recording-processing-again", Sizes::All, |d| {
+            let mut said = Vec::new();
+            d.each_painted_text(|text, _| {
+                let words = &text.galley.job.text;
+                if words.contains("returned nothing") || words.contains("returned no result") {
+                    said.push(words.clone());
+                }
+            });
+            d.observe(
+                "iter-16-C-FT3-processing",
+                said == [crate::processing::NO_CHECK_LABEL],
+                format!("While processing again, the label alone says the check returned nothing: {said:?}"),
+            );
+        });
+        d.app_mut().sessions.simulate_job_end_warned(WARNING);
+        d.settle();
+        d.expect(WARNING);
+
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
         check_events_gap(d, "iter-15-C-FT2-menu");
-        d.state("recording-row-menu", Sizes::All);
+        d.state_prepared("recording-row-menu", Sizes::All, |d| {
+            check_empty_check_once(d, "iter-16-C-FT3-menu");
+        });
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
@@ -11312,13 +11423,59 @@ pub mod session_plan {
             "Resume restores a saved Setup after the long rest",
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
+        const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
+        let notice_top = d
+            .place_of("Party HP is full after the long rest.")
+            .map(|rect| rect.top());
         d.click("Use the saved HP");
         d.observe(
             "iter-7-S1",
             kestrel(d).contains("HP 11/41"),
-            "One Undo restores the saved HP",
+            "Use the saved HP puts back the saved HP",
         );
-        d.state("saved-hp-restored", Sizes::Default);
+        // FT2: the press is its own step, so the full HP stays one Undo away.
+        let result_top = d.place_of(SAVED_HP_SET).map(|rect| rect.top());
+        d.observe(
+            "iter-16-B-FT2-message",
+            notice_top
+                .zip(result_top)
+                .is_some_and(|(notice, result)| (notice - result).abs() < 1.0),
+            format!(
+                "The result replaces the notice in its place: {notice_top:?} then {result_top:?}"
+            ),
+        );
+        d.observe(
+            "iter-16-B-FT2-message-undo",
+            d.in_view("Undo")
+                && d.place_of("Undo")
+                    .zip(d.place_of(SAVED_HP_SET))
+                    .is_some_and(|(undo, words)| {
+                        (undo.center().y - words.center().y).abs() < crate::design::S
+                    }),
+            "The result offers Undo on its own line",
+        );
+        d.observe(
+            "iter-16-B-FT2-header",
+            d.has("Undo: use the saved HP") && !d.has_containing("Nothing to undo"),
+            "The header names the new step, not an empty history",
+        );
+        d.state("saved-hp-restored", Sizes::All);
+        d.click("Undo");
+        d.observe(
+            "iter-16-B-FT2-undo",
+            kestrel(d).contains("HP 41/41"),
+            format!("Undo gives back the full HP: {}", kestrel(d)),
+        );
+        // Must stay true: the rest's own notice and its header step come back with it.
+        d.observe(
+            "iter-16-B-FT2-notice-back",
+            d.has("Use the saved HP")
+                && d.has("Undo: full HP after long rest")
+                && !d.visible_text(SAVED_HP_SET),
+            "After Undo the rest notice and its Undo step are back, and the result is gone",
+        );
+        d.click("Use the saved HP");
+        d.expect(SAVED_HP_SET);
         close_run(d);
         show_plan(d);
         d.click("Long rest");
