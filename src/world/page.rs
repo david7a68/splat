@@ -72,6 +72,13 @@ pub struct WorldPage {
     generator_sources: Vec<String>,
     error: Option<String>,
     repaired: Option<Uuid>,
+    /// The note a reveal asked for while an unsaved NPC held the page. It opens after the NPC
+    /// is saved or let go.
+    waiting_note: Option<Uuid>,
+    /// Lookup's link found this page holding an unsaved NPC, so Lookup kept its own.
+    lookup_kept: bool,
+    /// The NPC Lookup holds now, refreshed by the app each frame while `lookup_kept`.
+    pub lookup_npc: Option<String>,
     view: View,
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
@@ -135,13 +142,32 @@ impl WorldPage {
         self.view = View::Reader;
         self.keep_repair();
         self.new_kind = None;
-        self.generated = None;
         self.error = None;
+        // An unsaved NPC is never dropped. Its card stays first and says what waits behind it.
+        if self.generated.is_some() {
+            self.waiting_note = Some(id);
+        }
     }
 
     /// An unsaved generated NPC, which nothing may replace without the DM's choice.
     pub fn has_generated(&self) -> bool {
         self.generated.is_some()
+    }
+
+    /// Lookup's link kept Lookup's NPC because this page holds its own.
+    pub fn lookup_kept(&mut self) {
+        self.lookup_kept = true;
+    }
+
+    /// Whether the app should tell this page which NPC Lookup holds.
+    pub fn wants_lookup_npc(&self) -> bool {
+        self.lookup_kept
+    }
+
+    /// The NPC Lookup holds now. When Lookup lets it go, the reason line goes too.
+    pub fn set_lookup_npc(&mut self, name: Option<String>) {
+        self.lookup_kept &= name.is_some();
+        self.lookup_npc = name;
     }
 
     /// Lookup's generated NPC, with the full help for using the campaign's own names.
@@ -151,6 +177,7 @@ impl WorldPage {
         self.keep_repair();
         self.new_kind = None;
         self.error = None;
+        self.lookup_kept = false;
         self.generated = Some(card.npc);
         self.generator_problems = card.problems;
         self.generator_sources = card.sources;
@@ -165,11 +192,11 @@ impl WorldPage {
             super::repair::Repair::open(campaign, path)
         };
         match loaded {
+            // An unsaved NPC waits behind the repair, and its card returns after it.
             Ok(repair) => {
                 self.repair = Some(repair);
                 self.error = None;
                 self.new_kind = None;
-                self.generated = None;
             }
             Err(error) => self.error = Some(error),
         }
@@ -182,6 +209,12 @@ impl WorldPage {
         campaign: &Campaign,
     ) {
         self.set_campaign(campaign.id);
+        // What waited behind an NPC ends with it.
+        if self.generated.is_none() {
+            self.waiting_note = None;
+            self.lookup_kept = false;
+            self.lookup_npc = None;
+        }
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
         });
@@ -571,6 +604,21 @@ impl WorldPage {
             });
         }
         if let Some(npc) = &self.generated {
+            let waiting = match (&self.lookup_npc, self.waiting_note) {
+                (Some(name), _) if self.lookup_kept => Some(format!(
+                    "Lookup keeps {name}. Save or discard this NPC to move it here."
+                )),
+                (_, Some(id)) => index.position(id).map(|at| {
+                    format!(
+                        "Save or discard this NPC to open {}.",
+                        index.items[at].entry.name
+                    )
+                }),
+                _ => None,
+            };
+            if let Some(waiting) = waiting {
+                ui.label(Type::Small.rich(ui, waiting).color(colors().muted));
+            }
             let choice = crate::lookup::generator_card(
                 ui,
                 npc,
@@ -591,7 +639,8 @@ impl WorldPage {
         }
         match made {
             Some(Ok(id)) => {
-                self.selected = Some(id);
+                // A note that waited behind the NPC opens now, as the card said.
+                self.selected = Some(self.waiting_note.unwrap_or(id));
                 self.new_kind = None;
                 self.generated = None;
                 self.new_name.clear();

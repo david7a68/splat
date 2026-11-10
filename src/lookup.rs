@@ -1576,6 +1576,11 @@ impl Lookup {
         self.open = false;
     }
 
+    /// The name of the NPC this panel rolled and has not saved.
+    pub fn generated_name(&self) -> Option<&str> {
+        self.generated.as_ref().map(|npc| npc.name.as_str())
+    }
+
     /// Take back a generated NPC that the World page did not take.
     pub fn keep_generated(&mut self, card: GeneratedCard) {
         self.generated = Some(card.npc);

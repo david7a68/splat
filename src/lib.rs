@@ -1120,11 +1120,16 @@ impl Splat {
             // World page's card shows the same help.
             if self.world_page.has_generated() {
                 self.lookup.keep_generated(card);
+                self.world_page.lookup_kept();
             } else {
                 self.world_page.show_generated(card);
             }
             self.lookup.close();
             self.page = Page::World;
+        }
+        if self.world_page.wants_lookup_npc() {
+            self.world_page
+                .set_lookup_npc(self.lookup.generated_name().map(str::to_owned));
         }
         if let Some(id) = ctx
             .data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("reveal_encounter_npc")))
