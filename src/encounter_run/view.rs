@@ -1068,7 +1068,7 @@ impl Run {
                     &action_font,
                     f32::INFINITY,
                 );
-                let mut minimum = fitted.strip_prefix("Undo: ").unwrap_or(&fitted).to_owned();
+                let mut minimum = fitted.clone();
                 if let Some(target) = self
                     .state
                     .participants
@@ -1089,8 +1089,14 @@ impl Run {
                     } else {
                         0.0
                     };
-                // Keep both facts whole. Undo keeps its full accessible name and hover text.
-                let minimum = if party_sync_off && self.recording_notice.is_some() {
+                // A state notice stays whole; Undo then shortens its target, down to the word
+                // Undo alone. Only the Next notice gives way to Undo's shortened target.
+                // Undo keeps its full accessible name and hover text.
+                let state_notice =
+                    sync_alert.is_some() || self.recording_notice.is_some() || nobody_present;
+                let minimum = if (party_sync_off && self.recording_notice.is_some())
+                    || (state_notice && !self.history.is_empty())
+                {
                     self.undo_action("Undo").natural_width(ui) + design::XS
                 } else {
                     minimum
@@ -1132,13 +1138,18 @@ impl Run {
                 {
                     "Undo".to_owned()
                 } else {
-                    undo_words(
+                    let words = undo_words(
                         ui,
                         &undo_label,
                         &self.state.participants,
                         &Type::Strong.font(ui),
                         slot - overhead - design::XS,
-                    )
+                    );
+                    if self.undo_action(&words).natural_width(ui) > slot || !keeps_names(&words) {
+                        "Undo".to_owned()
+                    } else {
+                        words
+                    }
                 };
                 ui.allocate_ui_with_layout(
                     vec2(slot, Density::Read.control()),
@@ -1253,7 +1264,15 @@ impl Run {
                                 .as_ref()
                                 .map_or(String::new(), |next| format!("Next: {next}"))
                         };
-                        let shown = design::words_that_fit(ui, &text, &font, ui.available_width());
+                        // Undo is shortened first. Then the next name goes whole, because
+                        // the roster marks NEXT on its row.
+                        let shown = if nobody_present {
+                            design::words_that_fit(ui, &text, &font, ui.available_width())
+                        } else if design::number_width(ui, &text, &font) <= ui.available_width() {
+                            text
+                        } else {
+                            String::new()
+                        };
                         ui.label(Type::Small.rich(ui, shown).color(if nobody_present {
                             c.result.warning
                         } else {
@@ -2184,17 +2203,49 @@ impl Run {
                 // One level, not a pile of lines. Each step replaces the last.
                 let exhausted = p.conditions.iter().position(|c| c.starts_with("Exhaustion"));
                 if let Some(at) = exhausted {
-                    let mut level = i64::from(exhaustion_level(&p.conditions[at]));
-                    ui.horizontal(|ui| {
-                        ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
-                        if design::stepper_with_density(ui, "Exhaustion level", &mut level, 0..=6, Density::Scan) {
-                            command = Some(if level == 0 {
-                                Command::RemoveCondition(index, at)
-                            } else {
-                                set_exhaustion(index, at, level as u8)
-                            });
-                        }
+                    let start = exhaustion_level(&p.conditions[at]);
+                    // A drag shows its level here and commits one step when it ends, from the
+                    // level it started at. A drag that the run no longer matches is dropped.
+                    let frame = ui.ctx().cumulative_frame_nr();
+                    let drag = self.exhaustion_drag.take().filter(|drag| {
+                        (drag.index, drag.at, drag.start) == (index, at, start)
+                            && drag.frame + 1 >= frame
                     });
+                    let mut level = drag.map_or(i64::from(start), |drag| drag.level);
+                    let stepper = ui.horizontal(|ui| {
+                        ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
+                        design::stepper_with_density(
+                            ui,
+                            "Exhaustion level",
+                            &mut level,
+                            0..=EXHAUSTION_MAX,
+                            Density::Scan,
+                            Some(EXHAUSTION_AT_LOW),
+                            Some(EXHAUSTION_AT_HIGH),
+                        )
+                    });
+                    let dragging = ui.ctx().dragged_id().is_some()
+                        && ui
+                            .input(|i| i.pointer.press_origin())
+                            .is_some_and(|origin| stepper.response.rect.contains(origin));
+                    // A level above the usual top (from a file or a sync) stays until the DM
+                    // changes it.
+                    let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
+                    if dragging {
+                        self.exhaustion_drag = Some(ExhaustionDrag {
+                            index,
+                            at,
+                            start,
+                            level,
+                            frame,
+                        });
+                    } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
+                        command = Some(if level == 0 {
+                            Command::RemoveCondition(index, at)
+                        } else {
+                            set_exhaustion(index, at, level as u8)
+                        });
+                    }
                 }
                 ui.add_space(design::S);
                 let official = |c: &String| super::recognized_condition(c).is_some();
@@ -3375,13 +3426,20 @@ impl Run {
         let members = group.member_summary_wrapped();
         let mut add = false;
         let add_word = arrival_add_word(group);
+        // Initiative and Add end at the panel's inner right edge in every group, so they share
+        // one column. The summary takes what is left.
+        let right = ui.max_rect().right();
         ui.horizontal(|ui| {
+            let gap = ui.spacing().item_spacing.x;
+            // The field's margins draw it a little wider than it asks for; XS covers that, and
+            // the space before Add takes up whatever is left, so Add ends at the edge.
             let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
-                + 72.0
+                + gap
+                + ARRIVAL_FIELD_WIDTH
                 + design::XS
-                + add_width
-                + 3.0 * ui.spacing().item_spacing.x;
-            let width = (ui.available_width() - controls).max(design::XXL);
+                + gap
+                + add_width;
+            let width = (right - ui.cursor().left() - controls - gap).max(design::XXL);
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
@@ -3400,6 +3458,7 @@ impl Run {
                 };
                 design::named(ui, &response, &name);
             });
+            ui.add_space((right - controls - ui.cursor().left()).max(0.0));
             let field = format!("Initiative total for {name}");
             ui.label(Type::Small.rich(ui, "Initiative").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
@@ -3411,7 +3470,7 @@ impl Run {
                     &field,
                     text,
                     "Roll",
-                    72.0,
+                    ARRIVAL_FIELD_WIDTH,
                     Density::Read.control(),
                 )
             });
@@ -3434,6 +3493,7 @@ impl Run {
                     && may_roll
                     && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
                 .then_some("The first member has no initiative bonus. Type a total."));
+            ui.add_space((right - add_width - ui.cursor().left()).max(0.0));
             add = ui
                 .allocate_ui_with_layout(
                     vec2(add_width, Density::Read.control()),
@@ -3455,14 +3515,8 @@ impl Run {
         if let Err(reason) =
             arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str))
         {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} {reason}", icons::WARN))
-                        .color(c.result.warning),
-                )
-                .wrap(),
-            );
+            // The same warning form as the group's faults below: a mark, and words in text colour.
+            design::small_message(ui, Tone::Warning, reason);
         }
         let warnings = group.warnings.join("\n");
         if !warnings.is_empty() {
@@ -3700,7 +3754,9 @@ impl Run {
                 .get(&index)
                 .is_some_and(|sync| sync.state() == SyncState::Conflict)
             {
-                ui.horizontal_wrapped(|ui| {
+                // The portrait has a column of its own: a wrapped status line starts below
+                // the status, not below the portrait.
+                ui.horizontal(|ui| {
                     if let Some(path) = self.storage.as_ref().and_then(|storage| {
                         crate::party_sync::portrait_path(storage.campaign, &record)
                     }) {
@@ -3716,15 +3772,19 @@ impl Run {
                             None,
                         );
                     }
-                    design::status(
-                        ui,
-                        Status {
-                            icon: freshness.icon,
-                            word,
-                            color: freshness.color,
-                        },
-                    );
-                    ui.label(Type::Small.rich(ui, facts).color(colors().muted));
+                    ui.vertical(|ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: freshness.icon,
+                                    word,
+                                    color: freshness.color,
+                                },
+                            );
+                            ui.label(Type::Small.rich(ui, facts).color(colors().muted));
+                        });
+                    });
                 });
             }
             if p.shows_death_saves() {
@@ -5177,6 +5237,26 @@ pub(super) fn exhaustion_level(condition: &str) -> u8 {
         .unwrap_or(1)
 }
 
+/// The width of a group's Initiative total field in the Arrivals panel.
+const ARRIVAL_FIELD_WIDTH: f32 = 72.0;
+
+/// The highest exhaustion level. The run's stepper stops here and says why.
+const EXHAUSTION_MAX: i64 = 6;
+const EXHAUSTION_AT_LOW: &str = "Exhaustion is already 0.";
+const EXHAUSTION_AT_HIGH: &str = "Exhaustion stops at 6.";
+
+/// An exhaustion drag in progress: the level it started at, and the level shown now.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ExhaustionDrag {
+    index: usize,
+    at: usize,
+    start: u8,
+    level: i64,
+    /// The frame that last drew this drag. A drag the panel stopped drawing is dropped, so it
+    /// cannot commit later without the DM.
+    frame: u64,
+}
+
 /// One step of undo: the old level goes, and the new one comes.
 fn set_exhaustion(index: usize, at: usize, level: u8) -> Command {
     Command::Several(vec![
@@ -5549,9 +5629,36 @@ fn undo_words(
             effect.trim_end_matches('…')
         ))
     });
-    let action = compact_effect
-        .as_deref()
-        .unwrap_or_else(|| label.strip_prefix("Undo: ").unwrap_or(label));
+    // The button always says Undo: the target is shortened, never the verb.
+    let (prefix, action) = match &compact_effect {
+        Some(compact) => ("", compact.as_str()),
+        None => label
+            .strip_prefix("Undo: ")
+            .map_or(("", label), |action| ("Undo: ", action)),
+    };
+    let width = width - design::number_width(ui, prefix, font);
+    format!(
+        "{prefix}{}",
+        shortened_action(ui, action, participants, font, width)
+    )
+}
+
+/// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
+/// then the target cannot fit, and Undo shows its word alone.
+fn keeps_names(words: &str) -> bool {
+    let mut parts = words.split("… ");
+    let first = parts.next().unwrap_or_default();
+    words == first || !(first.is_empty() || first.ends_with(' '))
+}
+
+/// An action's words shortened to `width`, its target name first.
+fn shortened_action(
+    ui: &egui::Ui,
+    action: &str,
+    participants: &[Participant],
+    font: &egui::FontId,
+    width: f32,
+) -> String {
     if design::number_width(ui, action, font) <= width {
         return action.to_owned();
     }
@@ -6851,6 +6958,114 @@ mod tests {
     }
 
     #[test]
+    fn iter10_b_arrival_controls_end_at_the_panel_edge_and_bad_totals_warn_once() {
+        use egui_kittest::kittest::Queryable;
+        let names = ["Ash Hounds", "Shrine Reserve", "Lost Patrol"];
+        for width in [440.0, 600.0, 760.0] {
+            let mut run = super::super::tests::run();
+            let groups: Vec<_> = [
+                ("Ash Hounds", 1, false),
+                ("Shrine Reserve", 2, false),
+                ("Lost Patrol", 10, true),
+            ]
+            .into_iter()
+            .map(|(name, count, partial)| {
+                Arc::new(super::super::RunGroup {
+                    id: Uuid::new_v4(),
+                    path: format!("{name}.md"),
+                    name: name.into(),
+                    side: "enemies".into(),
+                    encounter: None,
+                    encounter_name: None,
+                    members: vec![super::super::GroupMember {
+                        entry: run.state.participants[0].definition.clone(),
+                        count,
+                        overrides: Default::default(),
+                    }],
+                    notes: String::new(),
+                    xp: 0,
+                    xp_unknown: vec![],
+                    unavailable: 0,
+                    unavailable_members: vec![],
+                    problem: None,
+                    warnings: if partial {
+                        vec!["One unread member".into()]
+                    } else {
+                        vec![]
+                    },
+                })
+            })
+            .collect();
+            let bad = groups[1].id;
+            run.groups = Some(Arc::new(groups));
+            run.group_totals.insert(bad, "1-2".into());
+            let edge = std::rc::Rc::new(std::cell::Cell::new(0.0));
+            let seen = edge.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 800.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        seen.set(ui.max_rect().right());
+                        run.group_list(ui);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let edge = edge.get();
+            let fields = names.map(|name| {
+                harness
+                    .get_by_label(&format!("Initiative total for {name}"))
+                    .rect()
+            });
+            let buttons = names.map(|name| {
+                harness
+                    .get_by_label(&format!("Add {name} to the initiative list"))
+                    .rect()
+            });
+            for (button, field) in buttons.iter().zip(&fields) {
+                assert!(
+                    (button.right() - edge).abs() <= 0.5,
+                    "iter10-B-SD5-edge at {width}: {buttons:?} vs {edge}"
+                );
+                assert!(
+                    (field.left() - fields[0].left()).abs() <= 0.5,
+                    "iter10-B-SD5-column at {width}: {fields:?}"
+                );
+                // Must stay true (FT-6): one Add width, so one straight Add edge.
+                assert!((button.width() - buttons[0].width()).abs() <= 0.5);
+            }
+            // FT-4: the bad total is one warning in the group fault form: text-colour words.
+            let texts: Vec<_> = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.text().contains("Enter a whole number") =>
+                    {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(texts.len(), 1, "iter10-B-FT4-once at {width}");
+            assert!(
+                texts[0]
+                    .galley
+                    .job
+                    .sections
+                    .iter()
+                    .all(|section| section.format.color == colors().text),
+                "iter10-B-FT4-text-colour at {width}"
+            );
+            assert!(
+                !texts[0].galley.text().contains(icons::WARN),
+                "iter10-B-FT4-mark-apart at {width}"
+            );
+        }
+    }
+
+    #[test]
     fn iter8_b_condition_counts_keep_more_with_sync() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
@@ -7584,10 +7799,11 @@ mod tests {
                 ] {
                     let full = format!("Undo: {before}{}{after}", p.name);
                     let width =
-                        design::number_width(ui, &format!("{before}Cinder… 3{after}"), &font);
+                        design::number_width(ui, &format!("Undo: {before}Cinder… 3{after}"), &font);
                     let shown = undo_words(ui, &full, std::slice::from_ref(&p), &font, width);
+                    // iter10-B-FT2: the word Undo stays; the target is shortened.
                     assert!(
-                        shown.starts_with(before) && shown.ends_with(after),
+                        shown.starts_with(&format!("Undo: {before}")) && shown.ends_with(after),
                         "{shown}"
                     );
                     assert!(shown.contains("… 3"), "{shown}");
@@ -8020,6 +8236,274 @@ mod tests {
             run.borrow().state.participants[0].conditions.is_empty(),
             "Level zero removes exhaustion"
         );
+    }
+
+    /// The conditions tab for one creature at one exhaustion level, shared with its harness.
+    fn exhaustion_harness(
+        level: &str,
+    ) -> (
+        std::rc::Rc<std::cell::RefCell<Run>>,
+        egui_kittest::Harness<'static>,
+    ) {
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        run.state.participants[0].conditions = vec![level.into()];
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(560.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| shown.borrow_mut().conditions_tab(ui, 0));
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        (run, harness)
+    }
+
+    /// The exhaustion value field (its label has the same words).
+    fn exhaustion_field<'h>(harness: &'h egui_kittest::Harness<'static>) -> egui_kittest::Node<'h> {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut fields = harness
+            .query_all_by_label("Exhaustion level")
+            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton);
+        let field = fields.next().expect("an exhaustion value field");
+        assert!(fields.next().is_none(), "one exhaustion value field");
+        field
+    }
+
+    /// Press the exhaustion value and move the pointer along `path` (x offsets in px; the
+    /// stepper's speed is 0.1, so 10 px is one level). The pointer stays down.
+    fn drag_exhaustion(harness: &mut egui_kittest::Harness<'static>, path: &[f32]) -> egui::Pos2 {
+        let start = exhaustion_field(harness).rect().center();
+        harness.hover_at(start);
+        harness.run_steps(1);
+        harness.drag_at(start);
+        harness.run_steps(1);
+        let mut at = start;
+        for x in path {
+            at = start + vec2(*x, 0.0);
+            harness.hover_at(at);
+            harness.run_steps(1);
+        }
+        // One more frame, so the accessibility tree shows the level the field shows.
+        harness.run_steps(1);
+        at
+    }
+
+    #[test]
+    fn iter10_b_undo_falls_back_to_its_word_when_a_name_is_lost() {
+        for (words, keeps) in [
+            ("Undo: move Rival… 2 before Rival Team", true),
+            ("Undo: D&D Beyond HP for Brannoch…", true),
+            ("Undo: 7 damage to Cinder… 3", true),
+            ("Undo: next turn", true),
+            ("Undo: move … 2 before Rival Team", false),
+            ("Undo: … 3", false),
+            ("… 2", false),
+        ] {
+            assert_eq!(keeps_names(words), keeps, "iter10-B-FT2-lost-name: {words}");
+        }
+    }
+
+    #[test]
+    fn iter10_b_one_exhaustion_drag_is_one_undo_step() {
+        use egui_kittest::kittest::Queryable;
+        let (run, mut harness) = exhaustion_harness("Exhaustion (2)");
+        let steps = run.borrow().history.len();
+        let end = drag_exhaustion(&mut harness, &[4.0, 10.0, 20.0, 30.0, 40.0]);
+        // Mid-drag, the field shows the level, but the run has no step yet.
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (2)"],
+            "iter10-B-ST1-mid-drag"
+        );
+        assert_eq!(
+            run.borrow().history.len(),
+            steps,
+            "iter10-B-ST1-no-step-yet"
+        );
+        // The drag passed through at least two levels on its way.
+        let shown: u8 = exhaustion_field(&harness).value().unwrap().parse().unwrap();
+        assert!(shown >= 4, "iter10-B-ST1-shown: {shown}");
+        harness.drop_at(end);
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            [format!("Exhaustion ({shown})")],
+            "iter10-B-ST1-committed"
+        );
+        assert_eq!(
+            run.borrow().history.len(),
+            steps + 1,
+            "iter10-B-ST1-one-step"
+        );
+        assert!(
+            run.borrow()
+                .undo_label()
+                .contains(&format!("exhaustion 2 → {shown} on Guard 1")),
+            "iter10-B-ST1-label: {}",
+            run.borrow().undo_label()
+        );
+        run.borrow_mut().undo();
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (2)"],
+            "iter10-B-ST1-one-undo"
+        );
+
+        // A drag through 0 keeps the condition until it ends, then sets the end level once.
+        harness.run_steps(2);
+        let low = drag_exhaustion(&mut harness, &[-4.0, -10.0, -20.0, -30.0, -40.0]);
+        assert_eq!(exhaustion_field(&harness).value().as_deref(), Some("0"));
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (2)"],
+            "iter10-B-ST1-through-zero: level 0 mid-drag does not remove exhaustion"
+        );
+        // Back up past the start level, in the same drag.
+        let mut end = low;
+        let mut shown = 0;
+        for step in 1..=12 {
+            end = low + vec2(10.0 * step as f32, 0.0);
+            harness.hover_at(end);
+            harness.run_steps(2);
+            shown = exhaustion_field(&harness).value().unwrap().parse().unwrap();
+            if shown >= 3 {
+                break;
+            }
+        }
+        assert!(shown >= 3, "iter10-B-ST1-back-up: {shown}");
+        harness.drop_at(end);
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            [format!("Exhaustion ({shown})")],
+            "iter10-B-ST1-through-zero-end"
+        );
+        assert_eq!(run.borrow().history.len(), steps + 1);
+
+        // Must stay true: each − or + press is its own step.
+        let before = run.borrow().history.len();
+        for _ in 0..2 {
+            harness.get_by_label("Increase Exhaustion level").click();
+            harness.run_steps(2);
+        }
+        assert_eq!(
+            run.borrow().history.len(),
+            before + 2,
+            "iter10-B-ST1-presses"
+        );
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            [format!("Exhaustion ({})", (shown + 2).min(6))]
+        );
+        // A drag that goes out and comes back to where it began adds nothing.
+        let level = exhaustion_field(&harness).value();
+        // The level is at the top here, so the drag goes down and back.
+        let end = drag_exhaustion(&mut harness, &[-4.0, -30.0]);
+        assert_ne!(
+            exhaustion_field(&harness).value(),
+            level,
+            "iter10-B-ST1-no-change: the drag must change the shown level partway"
+        );
+        let end = {
+            let back = end + vec2(30.0, 0.0);
+            harness.hover_at(back);
+            harness.run_steps(2);
+            assert_eq!(
+                exhaustion_field(&harness).value(),
+                level,
+                "iter10-B-ST1-back"
+            );
+            back
+        };
+        harness.drop_at(end);
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().history.len(),
+            before + 2,
+            "iter10-B-ST1-no-change"
+        );
+    }
+
+    #[test]
+    fn iter10_lead_exhaustion_above_six_and_stale_drag() {
+        use egui_kittest::kittest::Queryable;
+        // A level above 6 (a hand-edited run or a sync) steps down by one, not to 6.
+        let (run, mut harness) = exhaustion_harness("Exhaustion (8)");
+        harness.get_by_label("Decrease Exhaustion level").click();
+        harness.run_steps(2);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (7)".to_string()],
+            "iter10-lead-above-six"
+        );
+        // A drag that the panel stopped drawing is dropped, not committed later.
+        let steps = run.borrow().history.len();
+        run.borrow_mut().exhaustion_drag = Some(ExhaustionDrag {
+            index: 0,
+            at: 0,
+            start: 7,
+            level: 3,
+            frame: 0,
+        });
+        harness.run_steps(3);
+        assert_eq!(run.borrow().history.len(), steps, "iter10-lead-stale-drag");
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (7)".to_string()]
+        );
+    }
+
+    #[test]
+    fn iter10_b_exhaustion_limit_says_why() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let (run, mut harness) = exhaustion_harness("Exhaustion (6)");
+        let up = harness.get_by_label("Increase Exhaustion level");
+        assert!(up.accesskit_node().is_disabled(), "iter10-B-ST2-disabled");
+        assert_eq!(
+            up.accesskit_node().description().as_deref(),
+            Some("Exhaustion stops at 6."),
+            "iter10-B-ST2-high"
+        );
+        let down = harness.get_by_label("Decrease Exhaustion level");
+        assert!(!down.accesskit_node().is_disabled());
+        assert_eq!(down.accesskit_node().description(), None);
+        // The reason shows on hover.
+        harness.get_by_label("Increase Exhaustion level").hover();
+        harness.run_steps(60);
+        let tooltips = harness
+            .query_all_by_label_contains("Exhaustion stops at 6.")
+            .count();
+        assert_eq!(tooltips, 1, "iter10-B-ST2-hover: one tooltip");
+        // Must stay true: a press at the limit changes nothing.
+        let steps = run.borrow().history.len();
+        harness.get_by_label("Increase Exhaustion level").click();
+        harness.run_steps(2);
+        assert_eq!(run.borrow().history.len(), steps);
+        assert_eq!(
+            run.borrow().state.participants[0].conditions,
+            ["Exhaustion (6)"]
+        );
+        // Mid-drag at 0, the decrease says why.
+        let end = drag_exhaustion(&mut harness, &[-4.0, -20.0, -40.0, -60.0, -70.0]);
+        assert_eq!(
+            harness
+                .get_by_label("Decrease Exhaustion level")
+                .accesskit_node()
+                .description()
+                .as_deref(),
+            Some("Exhaustion is already 0."),
+            "iter10-B-ST2-low"
+        );
+        harness.drop_at(end);
+        harness.run_steps(2);
+        assert!(
+            run.borrow().state.participants[0].conditions.is_empty(),
+            "A drag to 0 removes exhaustion in one step"
+        );
+        assert_eq!(run.borrow().history.len(), steps + 1);
     }
 
     #[test]

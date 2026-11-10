@@ -971,7 +971,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         !d.is_disabled("Change Part of"),
         "iter-8-D2-repaired: a repaired list is editable"
     );
-    d.click("Discard");
+    d.click("Cancel");
 }
 
 pub fn tables(d: &mut Driver<'_>) {
@@ -2604,9 +2604,73 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("Each duplicate repair has a muted consequence at {size:?}"),
         );
     }
+    for size in [SMALL, DEFAULT, LARGE] {
+        let gaps = d.at_size(size, |d| {
+            let names = [
+                "Make Rook Ambry copy.md a separate note",
+                "Existing links keep NPCs/Rook Ambry.md.",
+                "Make Rook Ambry.md a separate note",
+                "Existing links will then use NPCs/Rook Ambry copy.md.",
+                "Stat block: Guard",
+            ];
+            for name in names {
+                d.expect(name);
+            }
+            let [action, first, second_action, second, field] =
+                names.map(|name| d.place_of(name).unwrap());
+            // Neighbour: each consequence stays close below its own action.
+            first.top() - action.bottom() < design::S
+                && second_action.top() - first.bottom() >= design::L - 0.5
+                && field.top() - second.bottom() >= design::M - 0.5
+        });
+        d.observe(
+            "iter-10-D-FD5",
+            gaps,
+            format!("An L gap separates the two choices and an M gap ends them at {size:?}"),
+        );
+    }
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
     d.expect("Make Rook Ambry copy.md a separate note");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let rows = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Rook Ambry · NPCs/Rook Ambry"))
+                .collect();
+            let painted: Vec<_> = rows
+                .iter()
+                .map(|row| d.painted_lines_in(row.rect).concat())
+                .collect();
+            (
+                rows.len() == 2
+                    && rows.iter().all(|row| {
+                        let file = row
+                            .name
+                            .split(" · ")
+                            .nth(1)
+                            .and_then(|path| path.rsplit('/').next())
+                            .unwrap_or_default()
+                            .to_owned();
+                        // The file comes right after the name, before the cut.
+                        row.in_view()
+                            && d.painted_lines_in(row.rect)
+                                .concat()
+                                .starts_with(&format!("Rook Ambry · NPCs/{file} · "))
+                    }),
+                format!("{painted:?}"),
+            )
+        });
+        d.observe(
+            "iter-10-D-FD7",
+            rows.0,
+            format!(
+                "Each duplicate Lookup row shows its file right after the name at {size:?}: {}",
+                rows.1
+            ),
+        );
+    }
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
@@ -2930,6 +2994,13 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "splat_type: faction",
         "A new group.\n",
     );
+    flat_entry(
+        d,
+        "Factions/Outside Guild.md",
+        "Outside Guild",
+        "splat_type: faction",
+        "A group added in Obsidian.\n",
+    );
     let path = root(d).join("NPCs/Safe Rook.md");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let id = Uuid::new_v4();
@@ -2946,6 +3017,51 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
     d.click_containing("Safe Rook · ");
     d.expect("Change Part of");
+    let missing = format!("{} the Archdevil · Not found", design::icons::WARN);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let whole = d.at_size(size, |d| {
+            for name in [
+                "Part of",
+                "Change Part of",
+                "Change Stat block",
+                "Change Status",
+            ] {
+                d.expect(name);
+            }
+            // A split value names only the group, so find it by its start.
+            let Some(value) = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name
+                        .starts_with(&missing[..missing.find(" · ").unwrap()])
+                })
+                .map(|node| node.rect)
+            else {
+                return (false, "no missing group value".to_owned());
+            };
+            let label = d.place_of("Part of").unwrap();
+            let change = d.place_of("Change Part of").unwrap();
+            // Neighbour: every Change keeps one column at the widest value plus an L gap.
+            let column = ["Change Stat block", "Change Status"]
+                .iter()
+                .all(|name| (d.place_of(name).unwrap().left() - change.left()).abs() < 0.5);
+            let lines = d.painted_lines_in(value);
+            (
+                lines == [missing.clone()]
+                    && label.height() > 0.0
+                    && change.left() - value.right() >= design::L - 0.5
+                    && column,
+                format!("lines {lines:?}, value {value:?}, change {change:?}, column {column}"),
+            )
+        });
+        d.observe(
+            "iter-10-D-AD3",
+            whole.0,
+            format!("A missing group and Not found stay on one line, with one Change column, at {size:?}: {}", whole.1),
+        );
+    }
+    d.state("missing-group-on-one-line", Sizes::All);
     d.click("Change Part of");
     d.type_into("Find a group", "Added Guild");
     fs::write(&path, &unread).unwrap();
@@ -2967,6 +3083,43 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             !d.has("Find a group")
         },
     );
+    // The click settles until the index has read the note again.
+    d.settle();
+    d.observe_both(
+        "iter-10-D-SD2-FD1",
+        "After a refused write, Part of says not read with Change blocked, and the list and header count the fault",
+        |d| {
+            d.expect("Change Part of");
+            let row = d.place_of("Change Part of").unwrap();
+            let label = d.place_of("Part of").unwrap();
+            d.is_disabled("Change Part of")
+                && d
+                    .painted_in(egui::Rect::from_min_max(
+                        egui::pos2(label.left(), row.top()),
+                        row.max,
+                    ))
+                    .contains("not read")
+                && !d.has_containing("the Archdevil · Not found")
+                && d.in_view_containing("1 value not read")
+                && d.in_view_containing("1 note needs fixing")
+        },
+    );
+    d.observe_both(
+        "iter-10-D-FD3-FD4",
+        "The refusal is a warning below the file line, which keeps the one Edit in Obsidian link",
+        |d| {
+            d.expect(reason);
+            let links: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
+                .collect();
+            let file = d.place_of("Show file").unwrap();
+            let message = d.place_of(reason).unwrap();
+            // Warning tone, as in Edit: no error icon anywhere on the reader.
+            links.len() == 1 && message.top() >= file.bottom() && !d.in_view(design::icons::ERROR)
+        },
+    );
     d.state("read-picker-unread-disk-kept", Sizes::All);
 
     fs::write(&path, &readable).unwrap();
@@ -2976,6 +3129,77 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         !d.has(reason),
         "Repair clears the old refused-write reason",
     );
+
+    // A readable list: the draft adds a group while Obsidian adds another.
+    let conflict = "This note changed on disk. Your draft is safe until you choose.";
+    let zarel = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
+    let outside_line = "- '[[Outside Guild]]' # Added in Obsidian.\n";
+    let outside = readable.replace(zarel, &format!("{zarel}{outside_line}"));
+    assert_ne!(outside, readable, "fixture: Obsidian adds one group line");
+    d.click("Edit Safe Rook");
+    d.observe_both(
+        "iter-10-D-SD6",
+        "A clean World form offers quiet Cancel, not Discard",
+        |d| d.has("Cancel") && !d.has("Discard") && d.visible_text("No changes"),
+    );
+    d.click("Change Part of");
+    d.type_into("Find a group", "Added Guild");
+    d.click("Added Guild");
+    d.observe(
+        "iter-10-D-SD6-dirty",
+        d.has("Discard") && !d.has("Cancel"),
+        "A dirty World form says Discard",
+    );
+    fs::write(&path, &outside).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    let added = "Overwrite adds Added Guild and keeps Outside Guild from the note.";
+    d.observe_both(
+        "iter-10-D-SD1-preview",
+        "Before the choice, the comparison names the group Overwrite adds and the outside group it keeps",
+        |d| d.in_view(added) && d.in_view("Overwrite with my draft"),
+    );
+    d.state("readable-group-conflict-names-each-change", Sizes::All);
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        outside
+            .replace(
+                outside_line,
+                &format!("{outside_line}- '[[Added Guild]]'\n")
+            )
+            .as_bytes(),
+        "iter-10-D-SD1-add-raw: Overwrite saves A, B and C; A and C keep their raw text"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
+    // The draft removes A while Obsidian adds C.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.click("Change Part of");
+    d.click("Remove the Archdevil");
+    fs::write(&path, &outside).unwrap();
+    d.click("Save changes");
+    d.expect(conflict);
+    let removed = "Overwrite removes the Archdevil and keeps Outside Guild from the note.";
+    d.observe(
+        "iter-10-D-SD1-preview-remove",
+        d.in_view(removed),
+        "Before the choice, the comparison names the group Overwrite removes",
+    );
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        outside.replace(zarel, "").as_bytes(),
+        "iter-10-D-SD1-remove-raw: Overwrite saves C alone, as raw text"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
+    fs::write(&path, &readable).unwrap();
+    reload(d);
     d.click("Edit Safe Rook");
     d.replace_text_in("Status", "ready");
     d.click("Change Part of");
@@ -3035,7 +3259,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         },
     );
     d.state("unread-groups-edit-repair-link", Sizes::All);
-    d.click("Discard");
+    d.click("Cancel");
 
     // Compact Read has no group Change. Use its real Edit → Change → Save route.
     fs::write(&path, &readable).unwrap();
