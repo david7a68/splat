@@ -370,8 +370,9 @@ duplicate notes and offers file-specific identity repair with Undo.
 Library, World, Encounters and Sessions say “These two files claim to be the same entry.” Rows say `Same
 entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
-entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each choice
-states which file an encounter will keep or use, in `Small` muted text an `XS` gap below its own action.
+entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
+or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
+`XS` gap below its own action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -472,7 +473,7 @@ the path on this file line only; search results keep paths to distinguish names.
 one-line rows. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
-readable body says `Nothing written yet.` with `Edit in Obsidian`.
+readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
 NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
