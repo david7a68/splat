@@ -344,7 +344,8 @@ pub fn cleaned_path(recording: &Path) -> PathBuf {
 }
 
 /// The warning used when the first pass stands without a second-pass transcript.
-pub const NO_CHECK_WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+pub const NO_CHECK_WARNING: &str =
+    "The check returned nothing, so the clean transcript was not checked.";
 
 /// What a person must know about the result, beside it, for as long as it stands.
 pub fn warning_path(recording: &Path) -> PathBuf {
@@ -1684,7 +1685,7 @@ mod tests {
         let mut request = request(dir.path(), &url, "", Provider::CodexCli, 1);
         request.codex_program = fake_codex(dir.path(), &["First.", "Just a recap."], 0);
         let warning = go(&request).unwrap().unwrap();
-        assert!(warning.contains("without a check"), "{warning}");
+        assert!(warning.contains(NO_CHECK_WARNING), "{warning}");
         // It lasts as long as the result, past any message on screen.
         assert_eq!(
             fs::read_to_string(warning_path(&request.recording)).unwrap(),

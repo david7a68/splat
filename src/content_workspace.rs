@@ -816,7 +816,7 @@ impl Catalogue {
                 && let Some((first, _)) = self.files.get(&entry.id)
             {
                 self.errors.push(format!(
-                    "{} and {} share an identity. Choose one in Library.",
+                    "These two files claim to be the same entry: {} and {}.",
                     first.display(),
                     path.display()
                 ));
@@ -850,13 +850,8 @@ impl Catalogue {
             self.files.remove(&entry.id);
             self.keys.retain(|_, id| *id != entry.id);
             let word = format!(
-                "{} share an identity. Choose one in {}.",
-                names.join(" and "),
-                if private && entry.kind == "world" {
-                    "World"
-                } else {
-                    "Library"
-                }
+                "These two files claim to be the same entry: {}.",
+                names.join(" and ")
             );
             self.errors.push(word.clone());
             self.unreadable.insert(

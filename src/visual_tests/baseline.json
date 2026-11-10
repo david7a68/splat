@@ -3,7 +3,7 @@
     "accessible-name/egui-chrome": {
       "book-to-package": 18,
       "campaign-content": 19,
-      "column-resize": 25,
+      "column-resize": 27,
       "creature-filter": 5,
       "data-integrity": 3,
       "dialogs": 7,
@@ -82,7 +82,7 @@
     "target-size/egui-chrome": {
       "book-to-package": 50,
       "campaign-content": 88,
-      "column-resize": 116,
+      "column-resize": 120,
       "creature-filter": 15,
       "data-integrity": 33,
       "dialogs": 47,
@@ -135,7 +135,7 @@
       "session-notes": 200,
       "session-plan": 187,
       "session-plan-groups": 80,
-      "session-recording": 150,
+      "session-recording": 160,
       "settings": 39,
       "share-to-package": 35,
       "signed-in": 47,

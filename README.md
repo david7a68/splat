@@ -119,8 +119,10 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
-Session Read view omits plan links already shown beside the note, including group links.
+Session Read view keeps a left-aligned prose width of at most 75 characters per line. Write follows
+the column. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
+A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
@@ -430,7 +432,8 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+title, length, place and notes. A paused fight on the plan offers Resume even when it came from a timeline event.
+The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
 Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
