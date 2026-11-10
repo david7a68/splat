@@ -275,6 +275,28 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.expect("Ember Cultist: the change \"HP lots\" was not read (line 20). Use a number, such as HP +5.");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let fits = d.at_size(size, |d| {
+            ["Kestrel Dunmoor", "Sable Harrowgate", "Ember Cultist 2"]
+                .iter()
+                .all(|name| {
+                    let rows: Vec<_> = d
+                        .nodes()
+                        .into_iter()
+                        .filter(|node| {
+                            node.role == egui::accesskit::Role::Button
+                                && node.name.starts_with(&format!("{name} ·"))
+                        })
+                        .collect();
+                    !rows.is_empty() && rows.iter().all(|row| row.fully_in_view())
+                })
+        });
+        d.observe(
+            "iter7-B-AD1-FD1",
+            fits,
+            format!("The whole final setup row and the long party names fit at {size:?}"),
+        );
+    }
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     // Two unread rows name one file: its name and actions show once.
