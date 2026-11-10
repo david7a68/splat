@@ -1331,7 +1331,10 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Resp
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
             let word = response.rect;
-            (response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))), word)
+            (
+                response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))),
+                word,
+            )
         })
         .inner
     })
