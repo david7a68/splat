@@ -26,6 +26,21 @@ const ASYNC_TIMEOUT: Duration = Duration::from_secs(180);
 const DIAGNOSTIC_TEXT_TIMEOUT: Duration = Duration::from_secs(5);
 const TAB_LIMIT: usize = 80;
 
+pub(super) fn check_settle_deadline(scenario: &str, started: Instant, timeout: Duration) {
+    if started.elapsed() < timeout {
+        return;
+    }
+    let message = format!("{scenario}: the app did not settle within {timeout:?}");
+    #[cfg(target_os = "linux")]
+    if super::isolation::is_child() {
+        // Unwinding can block in driver cleanup or a scoped sibling's join.
+        // The parent owns admission and reports this unsuccessful child status.
+        eprintln!("{message}");
+        std::process::exit(101);
+    }
+    panic!("{message}");
+}
+
 /// The window sizes a state is captured and checked at.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Sizes {
@@ -602,11 +617,7 @@ impl<'a> Driver<'a> {
                 self.timing.settle += started.elapsed();
                 return;
             }
-            assert!(
-                started.elapsed() < ASYNC_TIMEOUT,
-                "{}: the app did not settle within {ASYNC_TIMEOUT:?}",
-                self.scenario,
-            );
+            check_settle_deadline(self.scenario, started, ASYNC_TIMEOUT);
             if busy {
                 std::thread::sleep(Duration::from_millis(5));
             }
