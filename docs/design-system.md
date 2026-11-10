@@ -220,8 +220,9 @@ and deletions. Highlights and line counts use these aligned rows. Adjacent chang
 `Next difference` moves to the start of the next group, wraps to the first, and stays hidden for one group.
 
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
-discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library uses
-its reserved reason line, aligned with the editor's left edge. Keeping a draft in the close dialog restores
+discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library shows the
+same Undo message in its reserved reason slot, aligned with the editor's left edge. The slot reserves the
+message's height, so neither the reason nor the message moves the editor. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
 A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Show secondary `Overwrite with my draft` first, then
@@ -263,7 +264,8 @@ Reader links use accent text and an underline. Library links open in place; othe
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
 found in this campaign` on hover. Broken campaign and package links also have a warning icon before the dotted
-text and a list-row warning. Reference keys still work. Markdown readers call `reader_markdown` through
+text and a list-row warning. The page header counts each file with a broken link once in its `N files need
+fixing` (Library) or `N notes need fixing` (World) link, and its menu opens that file. Reference keys still work. Markdown readers call `reader_markdown` through
 `ContentIndex::resolve_link`. Hidden SRD provenance does not count as broken links; SRD page targets count as
 found.
 
@@ -313,7 +315,8 @@ when search is empty.
 The scope control says `Can use` in both layouts, at the top of the category column. Keep those words
 whole at minimum width. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
 Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
-wrap; package names can shorten with full hover text and accessible names. Both the scope menu and
+wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
+or without its warning icon: the package name shortens by whole words, so a fault moves no row below it. Both the scope menu and
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
@@ -330,7 +333,8 @@ text edge below the action. The consequence wraps at the pane's notice measure, 
 and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
-says how many entries need fixing; its menu opens the messages. Unreadable notes use CANNOT BE READ. Rows name
+says how many files need fixing: a validation message, a broken link or both count a file once. Its menu
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
@@ -515,7 +519,8 @@ is drawn, including a missing group's icon and ` · Not found`. Empty or whitesp
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
-the form `<Field> "<text on that line>" not read (line N). <How to write it>.` Every unread-value warning
+the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
+obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
 sits in one place: below the file line, above the value rows. Folder groups use normal-case paths after
 type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
