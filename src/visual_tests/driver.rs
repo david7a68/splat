@@ -609,6 +609,26 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// Each painted focus ring, with the clip of the pane it is in.
+    pub fn focus_rings(&self) -> Vec<(egui::Rect, egui::Rect)> {
+        fn walk(shape: &egui::Shape, clip: egui::Rect, found: &mut Vec<(egui::Rect, egui::Rect)>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| walk(shape, clip, found));
+                }
+                egui::Shape::Rect(rect) if rect.stroke.color == crate::design::colors().focus => {
+                    found.push((rect.rect, clip));
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, clipped.clip_rect, &mut found);
+        }
+        found
+    }
+
     /// The painted field frame around the visible part of a text input.
     pub fn input_frame(&self, name: &str) -> Option<(egui::Rect, egui::Rect)> {
         let shown = self
