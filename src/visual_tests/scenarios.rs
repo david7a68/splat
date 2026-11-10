@@ -467,7 +467,23 @@ pub mod library_author {
                 && d.visible_text("YOUR DRAFT"),
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
-        d.state("save-conflict", Sizes::All);
+        d.state_prepared("save-conflict", Sizes::All, |d| {
+            // Each column is (width - gap) / 2 wide, so the second starts (width + gap) / 2 after
+            // the first; the theme's gap is S. At 1920x1080 the side-by-side comparison takes the
+            // full pane, wider than the source editor (a 720 px cap measures exactly 720).
+            if d.window_size() == (1920.0, 1080.0) {
+                let draft = d.painted_rect_in("YOUR DRAFT", egui::Rect::EVERYTHING);
+                let disk = d.painted_rect_in("IN THE FILE NOW", egui::Rect::EVERYTHING);
+                let width = draft.zip(disk).map_or(0.0, |(draft, disk)| {
+                    (disk.left() - draft.left()) * 2.0 - crate::design::S
+                });
+                d.observe(
+                    "iter-13-E2-AD3-comparison",
+                    width > crate::library::EDITOR_MAX_WIDTH + 1.0,
+                    format!("The draft and disk comparison is {width:.0} px wide"),
+                );
+            }
+        });
         d.goal("handle a failed save");
         d.expect("IN THE FILE NOW");
         d.observe(

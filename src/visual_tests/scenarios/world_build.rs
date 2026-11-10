@@ -1555,7 +1555,16 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Save");
     d.click("Read");
     d.wait_for_text("A package for the watch at Emberfall.");
-    d.state("package-about-edited", Sizes::All);
+    d.state_prepared("package-about-edited", Sizes::All, |d| {
+        // The manifest's first heading still says the old name, and the header counts it.
+        d.observe(
+            "iter-13-E-FD1",
+            d.visible_text("1 file needs fixing")
+                && d.has(&format!("{} About Emberfall Watch", crate::icons::WARN))
+                && !d.has("About Emberfall Watch"),
+            "The About row warns for the manifest problem the header counts",
+        );
+    });
     go_campaign(d);
     d.wait_for_text("Emberfall Watch");
     d.state("renamed-package-in-campaign", Sizes::All);
@@ -2175,7 +2184,18 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "This entry's file has gone from disk. Your draft is safe here until you choose.",
     );
     d.expect("Ember Cultist needs this entry.");
-    d.state("draft-file-deleted-on-disk", Sizes::All);
+    d.state_prepared("draft-file-deleted-on-disk", Sizes::All, |d| {
+        let draft = d.place_of("Your draft").expect("The lone draft is visible");
+        d.observe(
+            "iter-13-E-AD3",
+            draft.width() <= crate::library::EDITOR_MAX_WIDTH + 1.0
+                && draft.width() >= design::XXL * 4.0,
+            format!(
+                "A deleted file's lone draft keeps the source editor width: {:.0} px",
+                draft.width()
+            ),
+        );
+    });
     d.expect("YOUR DRAFT");
     d.click("Save my draft again");
     d.wait_for_text("Saved");
@@ -2275,7 +2295,36 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         Some("Cinder Wolf copy")
     );
     d.click("Read");
-    d.state("duplicate-copy-reader", Sizes::All);
+    d.state_prepared("duplicate-copy-reader", Sizes::All, |d| {
+        let text = d
+            .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
+            .expect("The duplicate warning is visible");
+        let choices: Vec<_> = [
+            "Make Cinder Wolf copy.md a separate entry",
+            "Make Cinder Wolf.md a separate entry",
+        ]
+        .into_iter()
+        .map(|name| d.place_of(name).expect("Both repair choices are visible"))
+        .collect();
+        d.observe(
+            "iter-13-E-FD4",
+            choices
+                .iter()
+                .all(|choice| (choice.left() - text.left()).abs() < 1.0),
+            format!(
+                "The repair choices start at the message text edge: text {:.0}, choices {:.0} and {:.0}",
+                text.left(),
+                choices[0].left(),
+                choices[1].left()
+            ),
+        );
+        // Must stay true: the second choice still sits a large gap below the first.
+        d.observe(
+            "iter-13-E-FD4-gap",
+            choices[1].top() - choices[0].bottom() >= design::L,
+            "The two repair choices keep their gap",
+        );
+    });
     d.expect("Creature · CR 1");
     d.click("Make Cinder Wolf copy.md a separate entry");
     d.wait_for_text("Undo separate entry");
