@@ -2330,25 +2330,37 @@ impl Run {
                 );
             }
             ui.add_space(design::S);
-            ui.horizontal(|ui| {
-                if self.sync_needs_sign_in()
-                    && !stranded.is_empty()
-                    && Action::quiet("Connect to sync").show(ui).clicked()
-                {
-                    self.wants_sign_in = true;
-                    keep = true;
-                }
-                if conflict.is_some() {
-                    review = Action::quiet("Review conflict").show(ui).clicked();
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if (self.sync_needs_sign_in() && !stranded.is_empty()) || conflict.is_some() {
+                ui.horizontal(|ui| {
+                    if self.sync_needs_sign_in()
+                        && !stranded.is_empty()
+                        && Action::quiet("Connect to sync").show(ui).clicked()
+                    {
+                        self.wants_sign_in = true;
+                        keep = true;
+                    }
+                    if conflict.is_some() {
+                        review = Action::quiet("Review conflict").show(ui).clicked();
+                    }
+                });
+            }
+            let (lose, ()) = design::dialog_actions(
+                ui,
+                |ui| {
+                    (cannot_save || !lost.is_empty())
+                        && Action::destructive("Close and lose changes")
+                            .blocked(block)
+                            .show(ui)
+                            .clicked()
+                },
+                |ui| {
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
                             .blocked(block)
                             .show(ui)
                             .clicked();
                     } else if lost.is_empty() {
-                        close = Action::secondary("Close now")
+                        close |= Action::secondary("Close now")
                             .blocked(block)
                             .show(ui)
                             .clicked();
@@ -2360,15 +2372,9 @@ impl Run {
                         ui.data_mut(|data| data.insert_temp(id, true));
                     }
                     keep |= response.clicked();
-                });
-            });
-            if cannot_save || !lost.is_empty() {
-                ui.add_space(design::L);
-                close |= Action::destructive("Close and lose changes")
-                    .blocked(block)
-                    .show(ui)
-                    .clicked();
-            }
+                },
+            );
+            close |= lose;
         });
         if review {
             self.review_conflict();

@@ -2985,11 +2985,15 @@ impl Library {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.horizontal(|ui| {
-                keep |= Action::secondary("Keep the package").show(ui).clicked();
-                ui.add_space(design::L);
-                remove = Action::destructive("Unregister").show(ui).clicked();
-            });
+            design::dialog_actions(
+                ui,
+                |ui| {
+                    remove = Action::destructive("Unregister").show(ui).clicked();
+                },
+                |ui| {
+                    keep |= Action::secondary("Keep the package").show(ui).clicked();
+                },
+            );
         });
         if keep {
             self.confirm_unregister = None;
@@ -4781,16 +4785,13 @@ impl Library {
                     ui.push_id(&note.path, |ui| {
                         reader_style::measure(ui, |ui| {
                             ui.add_space(design::XS);
-                            if !about {
-                                ui.label(Type::Small.rich(ui, format!("Library / {}", note.section().label())).color(colors().muted));
-                            }
                             let reading_subtitle = match &note.owner {
                                 Owner::Package(module) => reading_subtitle.strip_suffix(&format!(" · {}", module.name)).unwrap_or(&reading_subtitle),
                                 _ => &reading_subtitle,
                             };
                             let subtitle = reading_subtitle;
                             let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if note.error.is_some() { "" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
+                            let subtitle = if note.error.is_some() { "Cannot be read" } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                         });
                         open_link = view::show_with_related(

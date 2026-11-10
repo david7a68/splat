@@ -5304,12 +5304,12 @@ impl Sessions {
                 .wrap(),
             );
             ui.add_space(design::S);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), Density::Read.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
+            design::dialog_actions(
+                ui,
                 |ui| {
                     delete = Action::destructive("Delete recording").show(ui).clicked();
-                    ui.add_space(design::L);
+                },
+                |ui| {
                     let response = Action::secondary("Keep the recording").show(ui);
                     if !ui.data(|data| data.get_temp::<bool>(focus_id).unwrap_or(false)) {
                         response.request_focus();

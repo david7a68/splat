@@ -414,17 +414,21 @@ impl State {
                 if !self.skipped.is_empty() {
                     skipped_list(ui, &self.skipped);
                 }
-                ui.horizontal(|ui| {
-                    apply = Action::primary("Convert files")
-                        .blocked(
-                            blocked.or(selected_files
-                                .is_empty()
-                                .then_some("Select an owner with files to convert.")),
-                        )
-                        .show(ui)
-                        .clicked();
-                    close = Action::quiet("Cancel").show(ui).clicked();
-                });
+                design::dialog_actions(
+                    ui,
+                    |_| (),
+                    |ui| {
+                        apply = Action::primary("Convert files")
+                            .blocked(
+                                blocked.or(selected_files
+                                    .is_empty()
+                                    .then_some("Select an owner with files to convert.")),
+                            )
+                            .show(ui)
+                            .clicked();
+                        close = Action::quiet("Cancel").show(ui).clicked();
+                    },
+                );
             });
             if apply {
                 self.apply();
