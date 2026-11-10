@@ -4962,6 +4962,12 @@ pub mod session_notes {
         // A rest, on the session's own page, with no step away from it.
         show_plan(d);
         d.wait_for_text("Nothing planned yet.");
+        d.expect("Use Add to plan a fight, a group, or an event.");
+        assert!(d.has("Add a group"));
+        d.expect_same(
+            "The narrow view opens Plan; the wide view keeps the empty plan beside the note.",
+        );
+        d.state("empty-plan-add-at-top", Sizes::All);
         d.state_prepared("session-plan-fight-picker", Sizes::Default, |d| {
             if !d.has("Plan Bridge Ambush") {
                 d.click("Add a fight");

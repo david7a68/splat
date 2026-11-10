@@ -3973,7 +3973,7 @@ impl Sessions {
                 undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
                 if !any && self.removed_group.is_none() {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet.",
-                        "Use Add below to plan a fight, a group, or an event.", |_| {});
+                        "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
             });
         });
