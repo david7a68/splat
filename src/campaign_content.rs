@@ -29,9 +29,6 @@ struct Snapshot {
     /// The closure of these selections. It is too slow to calculate on every frame.
     closure: (Vec<PackageSelection>, Closure),
     subtitles: std::collections::HashMap<Uuid, String>,
-    /// Old timelines and saved runs are not catalogue entries. Scan only when this
-    /// snapshot reloads (campaign, registration or file changes), never per frame.
-    other_old_files: Vec<std::path::PathBuf>,
 }
 /// Keep the standard conversion route for timelines and embedded entries in saved runs.
 /// Only inspect version markers; unreadable files retain their existing repair routes.
@@ -77,7 +74,11 @@ fn other_old_files(roots: impl IntoIterator<Item = std::path::PathBuf>) -> Vec<s
 
 /// An invalid note: its path, its text on disk, and its draft.
 type Repair = (String, String, String);
-type Loaded = (Vec<Repair>, Result<Snapshot, String>);
+type Loaded = (
+    Vec<Repair>,
+    Vec<std::path::PathBuf>,
+    Result<Snapshot, String>,
+);
 struct Checked {
     applied: Option<Result<usize, String>>,
     proposals: Result<Vec<Proposal>, String>,
@@ -123,6 +124,9 @@ pub struct CampaignContent {
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
     campaign_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
+    /// Scanning, parsing and collecting paths happen only in the background reload.
+    /// Keep this even when Campaign.md cannot load, so conversion stays available.
+    old_files: Vec<std::path::PathBuf>,
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
     discarded_repair: Option<(String, String)>,
@@ -417,6 +421,7 @@ impl CampaignContent {
         self.reconcile.checked_at = None;
         self.disabled_selections.clear();
         self.repairs.clear();
+        self.old_files.clear();
         let modules = campaigns.modules().to_vec();
         self.active = Some(campaign.clone());
         self.snapshot = None;
@@ -427,7 +432,7 @@ impl CampaignContent {
         self.pending = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let repairs = splat::content::read_directory(&campaign.path)
+            let repairs: Vec<Repair> = splat::content::read_directory(&campaign.path)
                 .map(|(_, errors)| {
                     errors
                         .into_iter()
@@ -443,19 +448,40 @@ impl CampaignContent {
                 CampaignDocument::load_with_modules(&campaign, &modules).and_then(|document| {
                     let catalogue = Catalogue::load(&modules, Some(&campaign))?;
                     let closure = catalogue.closure(&document.selections, document.campaign.id);
-                    let other_old_files = other_old_files(
-                        std::iter::once(campaign.path.clone())
-                            .chain(modules.iter().map(|module| module.path.clone())),
-                    );
                     Ok(Snapshot {
-                        other_old_files,
                         closure: (document.selections.clone(), closure),
                         document,
                         subtitles: crate::library::catalogue_subtitles(&catalogue),
                         catalogue,
                     })
                 });
-            let _ = tx.send((repairs, result));
+            let mut old_files: BTreeSet<_> = other_old_files(
+                std::iter::once(campaign.path.clone())
+                    .chain(modules.iter().map(|module| module.path.clone())),
+            )
+            .into_iter()
+            .collect();
+            old_files.extend(
+                repairs
+                    .iter()
+                    .filter(|(path, _, draft)| {
+                        Entry::parse(path, draft)
+                            .err()
+                            .is_some_and(|error| crate::formats_ui::is_old(&error))
+                    })
+                    .map(|(path, _, _)| campaign.path.join(path)),
+            );
+            if let Ok(snapshot) = &result {
+                old_files.extend(
+                    snapshot
+                        .catalogue
+                        .unreadable
+                        .values()
+                        .filter(|note| note.old_layout)
+                        .map(|note| note.path.clone()),
+                );
+            }
+            let _ = tx.send((repairs, old_files.into_iter().collect(), result));
             ctx.request_repaint();
         });
     }
@@ -501,9 +527,10 @@ impl CampaignContent {
         }
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
-                Ok((repairs, result)) => {
+                Ok((repairs, old_files, result)) => {
                     self.pending = None;
                     self.repairs = repairs;
+                    self.old_files = old_files;
                     match result {
                         Ok(snapshot) => {
                             campaigns.remember_campaign_document(&snapshot.document);
@@ -728,30 +755,7 @@ impl CampaignContent {
         active: &Campaign,
     ) {
         let mut repaired = false;
-        // Include both campaign repairs and package files, whether selected or not.
-        // Conversion still checks file baselines before writing.
-        let mut old: BTreeSet<_> = self
-            .repairs
-            .iter()
-            .filter(|(path, _, draft)| {
-                Entry::parse(path, draft)
-                    .err()
-                    .is_some_and(|error| crate::formats_ui::is_old(&error))
-            })
-            .map(|(path, _, _)| active.path.join(path))
-            .collect();
-        if let Some(snapshot) = &self.snapshot {
-            old.extend(snapshot.other_old_files.iter().cloned());
-            old.extend(
-                snapshot
-                    .catalogue
-                    .unreadable
-                    .values()
-                    .filter(|note| note.old_layout)
-                    .map(|note| note.path.clone()),
-            );
-        }
-        let old: Vec<_> = old.into_iter().collect();
+        let old = &self.old_files;
         if !old.is_empty() {
             let message = if old.len() == 1 {
                 crate::formats_ui::old_message(
@@ -2213,7 +2217,6 @@ mod tests {
         let mut content = CampaignContent {
             active: Some(active.clone()),
             snapshot: Some(Snapshot {
-                other_old_files: Vec::new(),
                 closure: (document.selections.clone(), closure),
                 document,
                 subtitles: crate::library::catalogue_subtitles(&catalogue),
