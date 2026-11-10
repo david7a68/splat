@@ -4504,7 +4504,7 @@ pub mod nav_table {
         d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
-        let entry_scroll = d.scroll_position_of_reader();
+        let entry_scroll = d.scroll_position_of_reader(ENTRY);
         d.begin_task();
 
         // Open run: selection, amount, scroll, undo, and sync.
@@ -4562,7 +4562,7 @@ pub mod nav_table {
         go_library(d);
         let scope = d.visible_text(EVERYTHING);
         let entry = d.has_label(ENTRY);
-        let scroll = d.scroll_position_of_reader();
+        let scroll = d.scroll_position_of_reader(ENTRY);
         d.observe(
             "G2",
             scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
