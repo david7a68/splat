@@ -424,6 +424,15 @@ impl CampaignContent {
             self.campaign_write = None;
         }
     }
+    /// Undo package removal checks the package choices only. If the file's choices changed since
+    /// the removal, that Undo would refuse: the result and its Undo go.
+    fn forget_changed_removal(&mut self, document: &crate::content_workspace::CampaignDocument) {
+        if self.removed_package.as_ref().is_some_and(|removed| {
+            removed.campaign == document.campaign.id && removed.after != document.selections
+        }) {
+            self.removed_package = None;
+        }
+    }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(&campaign);
         crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.manifest_write);
@@ -497,6 +506,7 @@ impl CampaignContent {
                         Ok(snapshot) => {
                             campaigns.remember_campaign_document(&snapshot.document);
                             self.saved_selections = snapshot.document.selections.clone();
+                            self.forget_changed_removal(&snapshot.document);
                             if self.module.is_none() {
                                 self.dependencies = true;
                             }
@@ -869,8 +879,7 @@ impl CampaignContent {
                     .unwrap_or(false)
             })
         }) {
-            ui.add_space(design::L);
-            ui.separator();
+            // The package list below draws the one rule; a second rule here would separate nothing.
             ui.add_space(design::L);
         }
         if repaired && !self.dirty() {
@@ -2377,6 +2386,56 @@ mod tests {
         assert!(content.discarded_selections.is_none());
         assert!(content.discarded_repair.is_none());
     }
+    /// AD1: `Undo package removal` goes when the file's package choices changed after it.
+    #[test]
+    fn iter14_e_changed_choices_end_undo_package_removal() {
+        use crate::content_workspace::{CampaignDocument, EntryRef, PackageSelection, Selection};
+        let temp = tempfile::tempdir().unwrap();
+        for folder in ["a", "b"] {
+            fs::create_dir(temp.path().join(folder)).unwrap();
+        }
+        let active = campaign(&temp.path().join("a"));
+        let other = campaign(&temp.path().join("b"));
+        let selection = |name: &str| PackageSelection {
+            name: Some(name.into()),
+            package: EntryRef::id(uuid::Uuid::new_v4()),
+            selection: Selection::All,
+        };
+        let mut document = CampaignDocument::load(&active).unwrap();
+        let before = vec![selection("Gone")];
+        document.selections = Vec::new();
+        document.save().unwrap();
+        let removed = |campaign: &Campaign| RemovedPackage {
+            campaign: campaign.id,
+            name: "Gone".into(),
+            before: before.clone(),
+            after: Vec::new(),
+            users: Vec::new(),
+        };
+        let mut content = CampaignContent {
+            removed_package: Some(removed(&active)),
+            ..Default::default()
+        };
+        // A reload of the file as the removal left it keeps Undo, and other edits keep it too.
+        let file = active.path.join(&document.path);
+        let text = format!("{}\nA later note.\n", fs::read_to_string(&file).unwrap());
+        fs::write(&file, &text).unwrap();
+        content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
+        assert!(content.removed_package.is_some());
+        // The file's package choices changed outside Splat: the result and its Undo go.
+        let mut changed = CampaignDocument::load(&active).unwrap();
+        changed.selections.push(selection("Added in Obsidian"));
+        changed.save().unwrap();
+        let bytes = fs::read(&file).unwrap();
+        content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
+        assert!(content.removed_package.is_none());
+        assert_eq!(fs::read(&file).unwrap(), bytes, "the check writes nothing");
+        // A removal from another campaign is not judged by this campaign's file.
+        content.removed_package = Some(removed(&other));
+        content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
+        assert!(content.removed_package.is_some());
+    }
+
     #[test]
     fn finding_a_package_rejects_another_packages_folder() {
         let dir = tempfile::tempdir().unwrap();

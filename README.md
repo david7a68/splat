@@ -1069,14 +1069,16 @@ Package repair keeps entries available when the manifest breaks or is deleted.
 **Replace with a basic Module.md** names the existing file and says which fields it drops.
 For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
 Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written.
-If the file changes after the write, the result and its Undo go away at the next reload. Copied World notes stay
+If the file changes after the write, the result and its Undo go away at the next reload. The same applies to
+every Library and Campaign result with Undo that wrote files, such as **Undo separate entries**. The copy
+registration message stays, because it has another action; its Undo is turned off and says why. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
 
-Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
+Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
 
 After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
 folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.
