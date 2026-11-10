@@ -3815,7 +3815,7 @@ impl Encounters {
                 ui.add_space(design::M);
                 design::group_heading(ui, "Read-aloud and notes", 0);
                 let output = egui::TextEdit::multiline(&mut draft.body)
-                    .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
+                    .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
                     .desired_width(ui.available_width() - 2.0 * design::S - design::M)
                     .desired_rows(5)
                     .margin(egui::vec2(design::S, design::S))

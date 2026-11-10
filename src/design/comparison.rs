@@ -6,35 +6,38 @@ pub(super) struct Comparison<'a> {
     pub groups: Vec<usize>,
 }
 
-impl<'a> Comparison<'a> {
-    pub fn new(text: [&'a str; 2]) -> Self {
-        let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+/// The aligned rows as line indexes, so the layout can be kept between frames.
+#[derive(Clone, Default)]
+struct Layout {
+    rows: Vec<[Option<usize>; 2]>,
+    changed: usize,
+    groups: Vec<usize>,
+}
+
+impl Layout {
+    fn of(lines: &[Vec<&str>; 2]) -> Self {
         let mut anchors = Vec::new();
         matching_lines(&lines[0], &lines[1], [0, 0], &mut anchors);
         anchors.push((lines[0].len(), lines[1].len()));
-        let mut columns = [Vec::new(), Vec::new()];
+        let mut rows = Vec::new();
         let mut start = [0, 0];
         for (left, right) in anchors {
             let end = [left, right];
             for offset in 0..(left - start[0]).max(right - start[1]) {
-                for side in 0..2 {
-                    columns[side].push(
-                        (start[side] + offset < end[side])
-                            .then(|| lines[side][start[side] + offset]),
-                    );
-                }
+                rows.push([0, 1].map(|side| {
+                    (start[side] + offset < end[side]).then_some(start[side] + offset)
+                }));
             }
             if left < lines[0].len() {
-                columns[0].push(Some(lines[0][left]));
-                columns[1].push(Some(lines[1][right]));
+                rows.push([Some(left), Some(right)]);
             }
             start = [left + 1, right + 1];
         }
         let mut changed = 0;
         let mut groups = Vec::new();
         let mut in_change = false;
-        for (row, (left, right)) in columns[0].iter().zip(&columns[1]).enumerate() {
-            let differs = left != right;
+        for (row, [left, right]) in rows.iter().enumerate() {
+            let differs = left.map(|at| lines[0][at]) != right.map(|at| lines[1][at]);
             if differs {
                 changed += 1;
                 if !in_change {
@@ -44,9 +47,48 @@ impl<'a> Comparison<'a> {
             in_change = differs;
         }
         Self {
-            columns,
+            rows,
             changed,
             groups,
+        }
+    }
+}
+
+impl<'a> Comparison<'a> {
+    pub fn new(text: [&'a str; 2]) -> Self {
+        let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+        Self::from_layout(&lines, Layout::of(&lines))
+    }
+
+    /// The same comparison, aligned only when either text changes. Alignment costs about
+    /// n × m line comparisons, too much to repeat every frame for a long note.
+    pub fn cached(ctx: &eframe::egui::Context, slot: eframe::egui::Id, text: [&'a str; 2]) -> Self {
+        let lines = text.map(|text| text.lines().collect::<Vec<_>>());
+        let texts = eframe::egui::Id::new((text[0], text[1])).value();
+        let kept = ctx.data(|data| data.get_temp::<(u64, std::sync::Arc<Layout>)>(slot));
+        let layout = match kept {
+            Some((seen, layout)) if seen == texts => layout,
+            _ => {
+                let layout = std::sync::Arc::new(Layout::of(&lines));
+                ctx.data_mut(|data| data.insert_temp(slot, (texts, layout.clone())));
+                layout
+            }
+        };
+        Self::from_layout(&lines, (*layout).clone())
+    }
+
+    fn from_layout(lines: &[Vec<&'a str>; 2], layout: Layout) -> Self {
+        let columns = [0, 1].map(|side| {
+            layout
+                .rows
+                .iter()
+                .map(|row| row[side].map(|at| lines[side][at]))
+                .collect()
+        });
+        Self {
+            columns,
+            changed: layout.changed,
+            groups: layout.groups,
         }
     }
 }

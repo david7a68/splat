@@ -3626,6 +3626,12 @@ pub mod column_resize {
         let edge = entries_edge(d);
         d.press(Key::ArrowRight);
         assert!(near(entries_edge(d), edge + crate::design::L));
+        // A second press without tabbing back: the handle kept focus and keeps resizing.
+        d.press(Key::ArrowRight);
+        assert!(
+            near(entries_edge(d), edge + 2.0 * crate::design::L),
+            "the column handle lost focus after the first arrow key"
+        );
         d.state_prepared("keyboard-column-width", Sizes::All, |d| {
             assert!(d.tab_to("Resize Library entries column"));
         });

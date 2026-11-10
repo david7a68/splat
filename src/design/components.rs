@@ -954,6 +954,11 @@ fn text_field_label(
     })
 }
 
+/// Placeholder text for any text field: `Body` size in the faint colour.
+pub fn placeholder(ui: &Ui, hint: &str) -> egui::RichText {
+    Type::Body.rich(ui, hint).color(colors().faint)
+}
+
 /// A short text field with a target of at least 26 px, and an accessible name.
 pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width: f32) -> Response {
     // The desired width excludes the margins.
@@ -962,7 +967,7 @@ pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width:
             .desired_width(width - 2.0 * S)
             .min_size(vec2(width, 26.0))
             .margin(vec2(S, 4.0))
-            .hint_text(Type::Body.rich(ui, hint).color(colors().faint)),
+            .hint_text(placeholder(ui, hint)),
     );
     named(ui, &response, name);
     response
@@ -1002,7 +1007,7 @@ pub fn number_field_with_id(
                 (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
             ))
             .font(Type::Numeral.font(ui))
-            .hint_text(Type::Body.rich(ui, hint).color(colors().faint)),
+            .hint_text(placeholder(ui, hint)),
     );
     text.retain(|c| c.is_ascii_digit() || c == '-');
     named(ui, &response, name);
@@ -2356,13 +2361,13 @@ pub fn draft_comparison_styled(
 
 /// Two source panes share their scroll position. Source lines never wrap.
 pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash) {
+    let state = ui.make_persistent_id(("source_comparison", id));
     let Comparison {
         columns: lines,
         changed,
         groups: differences,
-    } = Comparison::new(text);
+    } = Comparison::cached(ui.ctx(), state.with("layout"), text);
     let count = lines[0].len();
-    let state = ui.make_persistent_id(("source_comparison", id));
     let previous = ui.data(|data| data.get_temp::<egui::Vec2>(state));
     let mut offset = previous.unwrap_or_default();
     let mut target = previous
@@ -2501,12 +2506,12 @@ pub fn draft_comparison_labeled(
     face: egui::FontId,
     line_height: f32,
 ) {
+    let state = ui.make_persistent_id(("draft_difference", id));
     let Comparison {
         columns: [left, right],
         changed,
         groups: differences,
-    } = Comparison::new(text);
-    let state = ui.make_persistent_id(("draft_difference", id));
+    } = Comparison::cached(ui.ctx(), state.with("layout"), text);
     let first = differences.first().copied().unwrap_or(0);
     let current = ui.data(|data| data.get_temp::<usize>(state));
     let size = ui.available_size();

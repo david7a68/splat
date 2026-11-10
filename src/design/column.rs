@@ -125,6 +125,17 @@ impl Column {
             .max(self.natural)
             .min((room - self.page_keeps).max(*self.range.start()));
         if ctx.memory(|memory| memory.has_focus(id.with("__resize"))) {
+            // Egui moves focus with the arrow keys at the end of the frame; a focused handle
+            // keeps them, so each press resizes and focus stays on the handle.
+            ctx.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    id.with("__resize"),
+                    egui::EventFilter {
+                        horizontal_arrows: true,
+                        ..Default::default()
+                    },
+                );
+            });
             let (left, right, home) = ctx.input_mut(|input| {
                 (
                     input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft),
