@@ -204,7 +204,9 @@ settings keep their full save actions on a second line at the right edge, so nei
 A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
 its target into the gutter. This also applies to an icon-bearing quiet message action below its message.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. Discard recovery is an Undo message too: info icon, bar,
+icon on the message line, or below when needed. On reload, a result whose Undo would rewrite files checks
+those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
+offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
 action, its `Small` blocked reason, an `L` gap and quiet Cancel. Creation and copy fields share one
 right edge.
@@ -414,7 +416,9 @@ names the file and keeps `Undo separate entry` on the message line. Folder repai
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
-`message_with_actions`, so they start at the message text edge, not at the warning bar.
+`message_with_actions`, so they start at the message text edge, not at the warning bar. The Library reader
+draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
+Edit Markdown keeps them above the editor.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -451,7 +455,8 @@ repair actions on their warning line. Packages keeps its save row directly below
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
-from the package save row. Invalid YAML uses plain words and marks the line to fix.
+from the package save row. Below the repair's own save row, an `L` gap and the package list's one hairline
+separate it from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. An off package with required entries shows None chosen, the
