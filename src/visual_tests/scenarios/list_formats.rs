@@ -155,7 +155,34 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Add a group");
     d.click("Plan Bridge guards");
     d.expect("2 of 3 can join");
-    d.state("flagged-group-in-the-plan", Sizes::All);
+    d.state_prepared("flagged-group-in-the-plan", Sizes::All, |d| {
+        // AD2: the row names the member left out, its base and its line, beside Edit group.
+        let nodes = d.nodes();
+        let warning = nodes
+            .iter()
+            .find(|node| node.name.starts_with("Scout (as Goblin Warrior) needs fixing (line "))
+            .map(|node| node.rect);
+        let link = d.place_of("Bridge guards");
+        let edit = d.place_of("Edit group Bridge guards");
+        d.observe(
+            "iter-10-C-AD2",
+            match (warning, link, edit) {
+                (Some(warning), Some(link), Some(edit)) => {
+                    warning.top() >= link.bottom()
+                        && warning.left() >= link.left() - 0.5
+                        && (edit.center().y - link.center().y).abs() <= crate::design::Density::Read.control()
+                        && d.visible_text("Scout (as Goblin Warrior) needs fixing (line ")
+                }
+                _ => false,
+            },
+            format!("The plan row names Scout, its base and line below the row: {warning:?} {link:?} {edit:?}"),
+        );
+        d.observe(
+            "iter-10-C-AD2-summary",
+            d.visible_text("2 of 3 can join"),
+            "The row keeps its summary above the warning",
+        );
+    });
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
     open_arrivals(d);

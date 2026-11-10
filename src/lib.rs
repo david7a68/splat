@@ -833,171 +833,190 @@ impl Splat {
                     self.page = page;
                 }
             }
-            // Push the rest down in tree order, so Tab still follows reading order.
-            let statuses = self.statuses(connection);
-            let status_height = statuses
-                .iter()
-                .map(|state| {
-                    if state.word == "Connected · not remembered" {
-                        return Type::Small.line() * 2.0 + 2.0;
-                    }
-                    ui.painter()
-                        .layout(
-                            format!("{} {}", state.icon, state.word),
-                            Type::Small.font(ui),
-                            state.color,
-                            ui.available_width(),
-                        )
-                        .size()
-                        .y
-                        .max(Type::Small.line())
-                        + 2.0
-                })
-                .sum::<f32>()
-                + if self.sessions.rail_recording_status().is_some() {
-                    Density::Read.control()
-                } else {
-                    0.0
-                };
-            let lost = usize::from(self.sessions.busy_with_edit())
-                + usize::from(self.timeline.not_saved());
-            let bottom = 3.0 * (Density::Scan.control() + 2.0)
-                + status_height
-                + lost as f32 * (Density::Read.control() + 2.0)
-                + design::XS
-                + design::S;
-            ui.add_space((ui.available_height() - bottom).max(0.0));
-            if let (Some((icon, state, color)), Some(word)) = (
-                self.sessions
-                    .rail_recording_status()
-                    .map(|status| (status.icon, status.word, status.color)),
-                self.sessions.recording_detail(),
-            ) {
-                let response = design::status_link(
-                    ui,
-                    Status {
-                        icon,
-                        word: &word,
-                        color,
-                    },
-                );
-                let full = if state == "Processed" && self.sessions.job_warned() {
-                    sessions::page::processed_warning().word.to_owned()
-                } else {
-                    self.sessions
-                        .recording_hover()
-                        .unwrap_or_else(|| state.to_owned())
-                };
-                if state == "Recording silence" || full != state {
-                    design::named(ui, &response, &full);
-                }
-                if response.on_hover_text(full).clicked() {
-                    self.sessions.open_live_recording();
-                    self.page = Page::Sessions;
-                }
-            }
+            // Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom
+            // edge. The status slot grows upward above Lookup. Both are drawn in reading order,
+            // so Tab still follows it; each is placed by its height from the last pass.
+            let mut statuses = self.statuses(connection).into_iter();
             // The account line sits last, below Settings.
-            let mut statuses = statuses.into_iter();
             let account = statuses.next();
-            for state in statuses {
-                self.rail_status(ui, state, false);
-            }
-            // Words that could not be saved lead to where the DM can choose.
-            for (lost, word, target) in [
-                (
-                    self.sessions.busy_with_edit(),
-                    if self.sessions.notes_changed_on_disk() {
-                        "Notes changed"
-                    } else {
-                        "Notes not saved"
-                    },
-                    Page::Sessions,
-                ),
-                (
-                    self.timeline.not_saved(),
-                    self.timeline
-                        .attention_status()
-                        .map_or("Timeline not saved", |state| state.word),
-                    Page::Timeline,
-                ),
-            ] {
-                if lost {
-                    let response = design::status_link(
-                        ui,
-                        Status {
-                            icon: self
-                                .sessions
-                                .attention_status()
-                                .filter(|_| target == Page::Sessions)
-                                .or_else(|| {
-                                    self.timeline
-                                        .attention_status()
-                                        .filter(|_| target == Page::Timeline)
-                                })
-                                .map_or(icons::ERROR, |state| state.icon),
-                            word,
-                            color: self
-                                .sessions
-                                .attention_status()
-                                .filter(|_| target == Page::Sessions)
-                                .or_else(|| {
-                                    self.timeline
-                                        .attention_status()
-                                        .filter(|_| target == Page::Timeline)
-                                })
-                                .map_or(colors().document.invalid, |state| state.color),
-                        },
-                    );
-                    if target == Page::Sessions && self.sessions.notes_changed_on_disk() {
-                        design::named(ui, &response, "Notes changed on disk");
-                    }
-                    if response
-                        .on_hover_text(
-                            if target == Page::Sessions && self.sessions.notes_changed_on_disk() {
-                                "Notes changed on disk"
-                            } else {
-                                word
+            let rail_rect = ui.max_rect();
+            let slot_id = ui.id().with("rail_status_slot");
+            let lower_id = ui.id().with("rail_lower_group");
+            let (slot_height, lower_height) =
+                ui.data(|d| (d.get_temp::<f32>(slot_id), d.get_temp::<f32>(lower_id)));
+            let slot_height = slot_height.unwrap_or(0.0);
+            let lower_height = lower_height.unwrap_or(
+                design::XS
+                    + 3.0 * (Density::Scan.control() + 2.0)
+                    + design::XS
+                    + Type::Small.line(),
+            );
+            let top = ui.cursor().top();
+            let lower_top = (rail_rect.bottom() - lower_height).max(top + slot_height);
+            let slot_top = (lower_top - slot_height).max(top);
+            let slot = ui.scope_builder(
+                egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
+                    egui::pos2(rail_rect.left(), slot_top),
+                    egui::pos2(rail_rect.right(), lower_top.max(slot_top)),
+                )),
+                |ui| {
+                    if let (Some((icon, state, color)), Some(word)) = (
+                        self.sessions
+                            .rail_recording_status()
+                            .map(|status| (status.icon, status.word, status.color)),
+                        self.sessions.recording_detail(),
+                    ) {
+                        let response = design::status_link(
+                            ui,
+                            Status {
+                                icon,
+                                word: &word,
+                                color,
                             },
-                        )
+                        );
+                        let full = if state == "Processed" && self.sessions.job_warned() {
+                            sessions::page::processed_warning().word.to_owned()
+                        } else {
+                            self.sessions
+                                .recording_hover()
+                                .unwrap_or_else(|| state.to_owned())
+                        };
+                        if state == "Recording silence" || full != state {
+                            design::named(ui, &response, &full);
+                        }
+                        if response.on_hover_text(full).clicked() {
+                            self.sessions.open_live_recording();
+                            self.page = Page::Sessions;
+                        }
+                    }
+                    for state in statuses.by_ref() {
+                        self.rail_status(ui, state, false);
+                    }
+                    // Words that could not be saved lead to where the DM can choose.
+                    for (lost, word, target) in [
+                        (
+                            self.sessions.busy_with_edit(),
+                            if self.sessions.notes_changed_on_disk() {
+                                "Notes changed"
+                            } else {
+                                "Notes not saved"
+                            },
+                            Page::Sessions,
+                        ),
+                        (
+                            self.timeline.not_saved(),
+                            self.timeline
+                                .attention_status()
+                                .map_or("Timeline not saved", |state| state.word),
+                            Page::Timeline,
+                        ),
+                    ] {
+                        if lost {
+                            let response = design::status_link(
+                                ui,
+                                Status {
+                                    icon: self
+                                        .sessions
+                                        .attention_status()
+                                        .filter(|_| target == Page::Sessions)
+                                        .or_else(|| {
+                                            self.timeline
+                                                .attention_status()
+                                                .filter(|_| target == Page::Timeline)
+                                        })
+                                        .map_or(icons::ERROR, |state| state.icon),
+                                    word,
+                                    color: self
+                                        .sessions
+                                        .attention_status()
+                                        .filter(|_| target == Page::Sessions)
+                                        .or_else(|| {
+                                            self.timeline
+                                                .attention_status()
+                                                .filter(|_| target == Page::Timeline)
+                                        })
+                                        .map_or(colors().document.invalid, |state| state.color),
+                                },
+                            );
+                            if target == Page::Sessions && self.sessions.notes_changed_on_disk() {
+                                design::named(ui, &response, "Notes changed on disk");
+                            }
+                            if response
+                                .on_hover_text(
+                                    if target == Page::Sessions
+                                        && self.sessions.notes_changed_on_disk()
+                                    {
+                                        "Notes changed on disk"
+                                    } else {
+                                        word
+                                    },
+                                )
+                                .clicked()
+                            {
+                                self.page = target;
+                            }
+                        }
+                    }
+                },
+            );
+            let lower = ui.scope_builder(
+                egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
+                    egui::pos2(rail_rect.left(), lower_top),
+                    egui::pos2(rail_rect.right(), rail_rect.bottom().max(lower_top)),
+                )),
+                |ui| {
+                    ui.add_space(design::XS);
+                    if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
+                        .on_hover_text("Search everything, beside this page (Ctrl+K)")
                         .clicked()
                     {
-                        self.page = target;
+                        self.toggle_lookup();
                     }
-                }
-            }
-            ui.add_space(design::XS);
-            if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
-                .on_hover_text("Search everything, beside this page (Ctrl+K)")
-                .clicked()
+                    if design::nav_toggle(
+                        ui,
+                        icons::DRAFT,
+                        "Notes",
+                        "Ctrl+J",
+                        self.sessions.notes_open && self.page != Page::Sessions,
+                    )
+                    .on_hover_text("This session's notes, beside this page (Ctrl+J)")
+                    .clicked()
+                    {
+                        self.toggle_notes();
+                    }
+                    if design::nav_item(
+                        ui,
+                        icons::SETTINGS,
+                        Page::Settings.name(),
+                        None,
+                        page == Some(Page::Settings),
+                    )
+                    .clicked()
+                    {
+                        self.page = Page::Settings;
+                    }
+                    if let Some(account) = account {
+                        ui.add_space(design::XS);
+                        self.rail_status(ui, account, true);
+                    }
+                },
+            );
+            // A new height places the group again before anything is painted.
+            let measured = [
+                (slot_id, slot_height, slot.response.rect.height()),
+                (lower_id, lower_height, lower.response.rect.height()),
+            ];
+            if measured
+                .iter()
+                .any(|(_, before, now)| (before - now).abs() > 0.5)
             {
-                self.toggle_lookup();
-            }
-            if design::nav_toggle(
-                ui,
-                icons::DRAFT,
-                "Notes",
-                "Ctrl+J",
-                self.sessions.notes_open && self.page != Page::Sessions,
-            )
-            .on_hover_text("This session's notes, beside this page (Ctrl+J)")
-            .clicked()
-            {
-                self.toggle_notes();
-            }
-            if design::nav_item(
-                ui,
-                icons::SETTINGS,
-                Page::Settings.name(),
-                None,
-                page == Some(Page::Settings),
-            )
-            .clicked()
-            {
-                self.page = Page::Settings;
-            }
-            if let Some(account) = account {
-                ui.add_space(design::XS);
-                self.rail_status(ui, account, true);
+                ui.data_mut(|d| {
+                    for (id, _, now) in measured {
+                        d.insert_temp(id, now);
+                    }
+                });
+                ui.ctx()
+                    .request_discard("The rail's status slot changed height");
             }
         });
     }

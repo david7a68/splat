@@ -1492,6 +1492,33 @@ impl<'a> Driver<'a> {
         shown
     }
 
+    /// Rest the pointer on painted words with no control of their own, until any tooltip shows.
+    /// The tooltip's text must be painted once more than before.
+    pub fn painted_tooltip_shows(&mut self, words: &str, text: &str) -> bool {
+        let mut at = None;
+        self.each_painted_text(|shape, _| {
+            if at.is_none() && shape.galley.job.text.contains(words) {
+                at = Some(shape.visual_bounding_rect().center());
+            }
+        });
+        let Some(at) = at else {
+            return false;
+        };
+        let painted = |d: &Self| {
+            d.painted_in(d.harness.ctx.content_rect())
+                .matches(text)
+                .count()
+        };
+        let before = painted(self);
+        self.harness.hover_at(at);
+        // A tooltip waits half a second, and one frame here is a quarter second.
+        self.harness.run_steps(6);
+        let shown = painted(self);
+        self.harness.remove_cursor();
+        self.settle();
+        shown > before
+    }
+
     /// Wheel-scroll down over this point. One notch is 100 points.
     pub fn scroll_at(&mut self, pos: egui::Pos2, notches: u32) {
         self.scroll_by(pos, notches, egui::vec2(0.0, -100.0));

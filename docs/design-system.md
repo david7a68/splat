@@ -131,6 +131,10 @@ by an accent line. Left and Right move its edge by `L`. Home restores its natura
 window again. The chosen width is saved after a drag or key press. Each handle has an accessible name and
 key help. At the table, the rail uses its natural width; a wider desk width stays saved.
 
+Lookup, Notes, Settings and the account line keep fixed places at the rail's bottom edge. Rail statuses
+(recording, processing, unsaved words, sync) fill one slot that grows upward above Lookup, so a status that
+comes, goes or wraps never moves these targets. Tab order still follows reading order.
+
 ## Widgets
 
 `theme::install` sets one global `egui::Style` for hover, active and disabled states, focus rings, selection,
@@ -644,7 +648,8 @@ right edge; the member summary takes the rest. List, editor and Arrivals resolve
 Flagged members name file and line, with Edit in Obsidian, Show file, Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
-each creature needing repair: shown name, base creature when different, and source line. Readable members can
+each creature needing repair: shown name, base creature when different, and source line. In the plan, each
+such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
 still join. Changed summaries also name the base creature. Wrap between members, never inside names.
 
 Every change field shows printed value and result, including changes added by hand. Editors, run cards and
@@ -906,7 +911,9 @@ Timeline links. Hover keeps full names and conditions; Remove stays in the name-
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with Undo remove below that
 row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
-next note or plan edit. Plan additions offer Undo add. A recording count stays muted inside its tab and
+next note or plan edit. Removing a timeline event names it by its state or result, `Removed “Bridge Ambush”
+(Round 2 · Paused).`, and, when another row of that name stays in the session, says so: `The other “Bridge
+Ambush” and its result stay.` Plan additions offer Undo add. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. Resume has the run icon.
@@ -923,13 +930,13 @@ fights.
 
 While a session is played, a band of the page above the Session page holds the party. It uses the page
 surface and the panel's hairline, never `raised`, and one `Read` row of height, so nothing below it moves.
-`Party` stands in its own Label column, as `Add` does on the plan's strip. Each item is a 24 px portrait, an
-`hp_readout` at `Numeral` over `Small` with its `hp_bar` along the item's bottom edge, temporary HP with its
-shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
+`Party` stands in its own Label column, as `Add` does on the plan's strip. Each item is a 24 px portrait, the
+player's first name in `Small` text colour, an `hp_readout` at `Numeral` over `Small` with its `hp_bar` along
+the item's bottom edge, temporary HP with its shield, the run's `Bloodied` or `0 HP` icon, word and colour, then stats in `Small`: a muted label, a space and
 the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out for a player with no spell
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
-the source status gives way first, then stats drop from the end. HP and its state word stay. Hover shows the
-name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
+the source status gives way first, then stats drop from the end, then the names go together. HP and its
+state word stay. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
 ### Timeline
@@ -1013,7 +1020,9 @@ header status; Plan and notes retains the live header line. Other tabs keep head
 offering Record again owns recording on that tab and omits its repeated session name. Failed, Stopped and
 Cancelled stay in the session list until retry or dismissal. Failures and stops use error icon and colour;
 cancellation uses warning. Keep each stop/failure reason and last job step beside status, even after banner
-dismissal, but hide stored reasons while live or processing. Cancellation names the stopped part and offers
+dismissal, but hide stored reasons while live or processing. Known recorder errors use plain words, such as
+`Stopped by itself: the microphone is no longer connected.`; row and banner hover keep the recorder's own words
+(`The recorder said: no such device.`). Unknown errors keep the recorder's words in the sentence. Cancellation names the stopped part and offers
 Continue processing.
 
 A stopped or stalled row keeps Record again beside Process. Missing inputs put Choose an input first, before
@@ -1049,8 +1058,9 @@ Reserve Process again… for replacing results, in the row menu above Delete… 
 message names transcript and context sent to the LLM and says audio is not sent again. Confirmation uses
 secondary Not now and red Replace the results; Keep the recording is secondary. Processing help keeps
 READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
-Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour; row,
-hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
+Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour. The
+session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
+its sibling states do; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 

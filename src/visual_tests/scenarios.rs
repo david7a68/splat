@@ -1792,6 +1792,17 @@ pub mod settings {
         d.expect(NOT_CONNECTED);
 
         d.row_of(CAMPAIGNS_SECTION);
+        // FT-6: the rail's status slot gained Sync stopped above Lookup. Its targets stay still,
+        // so the rest of the page is the cookie step's.
+        let sync_stopped = d.rail_words().contains("Sync stopped");
+        d.observe(
+            "iter-10-C-FT6-settings",
+            sync_stopped,
+            "The rail shows Sync stopped in its status slot",
+        );
+        d.expect_same(
+            "The rail's status slot gains Sync stopped; Lookup, Notes, Settings and the account line stay where they were.",
+        );
         d.state("campaign-list", Sizes::All);
         d.goal("find campaign management");
 
@@ -6966,6 +6977,88 @@ pub mod session_recording {
         }
     }
 
+    /// FT-6: Lookup, Notes, Settings and the account line keep fixed places at the rail's
+    /// bottom edge. The status slot grows upward above Lookup and never reaches under it.
+    fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
+        let nodes = d.nodes();
+        let (_, height) = d.window_size();
+        let lookup = nodes
+            .iter()
+            .find(|node| node.name == "Lookup")
+            .map(|node| node.rect);
+        let Some(lookup) = lookup else {
+            d.observe(id, false, "Lookup is in the rail");
+            return;
+        };
+        let rail =
+            |rect: &egui::Rect| rect.right() <= lookup.right() + 1.0 && rect.height() < 100.0;
+        let lower: Vec<_> = nodes
+            .iter()
+            .filter(|node| rail(&node.rect) && node.rect.top() >= lookup.top() - 0.5)
+            .collect();
+        let settings = lower.iter().find(|node| node.name == "Settings");
+        let bottom = lower
+            .iter()
+            .map(|node| node.rect.bottom())
+            .fold(f32::MIN, f32::max);
+        let account = lower
+            .iter()
+            .find(|node| (node.rect.bottom() - bottom).abs() < 0.5);
+        let slot_clear = nodes.iter().all(|node| {
+            !rail(&node.rect)
+                || node.rect.top() >= lookup.top() - 0.5
+                || node.rect.bottom() <= lookup.top() + 0.5
+        });
+        let expected = height - crate::design::S;
+        d.observe(
+            id,
+            settings.is_some()
+                && account.is_some_and(|account| account.name != "Settings")
+                && (bottom - expected).abs() <= 0.5
+                && slot_clear,
+            format!(
+                "The account line ends at the rail's bottom edge ({bottom} vs {expected}), below \
+                 Settings, and no status reaches under Lookup (top {})",
+                lookup.top()
+            ),
+        );
+    }
+
+    /// FT-3: a warned result is a status like its siblings, on the row's second line.
+    fn check_warned_row(d: &mut Driver<'_>) {
+        let row = d.nodes().into_iter().find(|node| {
+            node.in_view()
+                && node.name.starts_with("Session 1: The Bridge ·")
+                && node.name.contains("Processed, with a warning")
+        });
+        let Some(row) = row else {
+            d.observe(
+                "iter-10-C-FT3",
+                false,
+                "The warned session row names its warning",
+            );
+            return;
+        };
+        let lines = d.painted_lines_in(row.rect);
+        let second = lines.get(1).map(|line| line.replace('\u{a0}', " "));
+        d.observe(
+            "iter-10-C-FT3",
+            lines.len() == 2
+                && second.as_deref().is_some_and(|line| {
+                    line.starts_with(&format!("{} Processed · ", crate::design::icons::WARN))
+                        && line.contains("Playing")
+                        && !line.contains("with a warning")
+                }),
+            format!("The warned row has two lines: title, then the warning icon, Processed and Playing: {lines:?}"),
+        );
+        let hover = d.painted_tooltip_shows("Processed ·", "Processed, with a warning");
+        d.observe(
+            "iter-10-C-FT3-hover",
+            hover,
+            "Hover keeps the full words Processed, with a warning",
+        );
+    }
+
     fn check_result_row(d: &mut Driver<'_>) {
         let rows: Vec<_> = d
             .nodes()
@@ -7319,6 +7412,20 @@ pub mod session_recording {
                 d.rail_words().contains("Processing cancelled"),
                 "The rail names what was cancelled",
             );
+            check_rail_anchor(d, "iter-10-C-FT6-cancelled");
+            let cancelled = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Session 1: The Bridge ·"))
+                .map(|node| d.painted_lines_in(node.rect))
+                .unwrap_or_default();
+            d.observe(
+                "iter-10-C-FT3-siblings",
+                cancelled.len() == 2
+                    && cancelled[1]
+                        .starts_with(&format!("{}\u{a0}Cancelled", crate::design::icons::WARN)),
+                format!("Other session states keep their icon and two lines: {cancelled:?}"),
+            );
             assert!(
                 d.has_containing("Session 1: The Bridge ·")
                     && d.visible_text("Continue processing")
@@ -7545,7 +7652,10 @@ pub mod session_recording {
             d.rail_words().contains("Processed") && rail_warned,
             "Opening a warned session keeps the processed warning in the rail",
         );
-        d.state_prepared("recording-warned", Sizes::All, check_result_row);
+        d.state_prepared("recording-warned", Sizes::All, |d| {
+            check_result_row(d);
+            check_warned_row(d);
+        });
 
         d.click_containing("More actions for 2026-01-01");
         d.click_containing("Process again:");
@@ -7584,13 +7694,35 @@ pub mod session_recording {
         );
         d.state("recording-stopped-elsewhere", Sizes::Default);
         d.expect("Choose an input");
+        d.observe(
+            "iter-10-C-FT5-banner",
+            d.has_containing("stopped by itself: the microphone is no longer connected")
+                && !d.visible_text("no such device"),
+            "The banner puts the recorder's error in plain words",
+        );
         d.click(NAV_SESSIONS);
-        d.expect("no such device");
+        d.expect("Stopped by itself: the microphone is no longer connected.");
         d.expect("Choose an input");
         d.state_prepared("recording-stopped", Sizes::All, |d| {
             check_one_primary(d, "Choose an input", "iter-9-C-ST1-missing");
             check_processing_action(d, "Process:", false);
+            check_rail_anchor(d, "iter-10-C-FT6-stopped");
         });
+        d.observe(
+            "iter-10-C-FT5",
+            d.visible_text("Stopped by itself: the microphone is no longer connected.")
+                && !d.visible_text("no such device"),
+            "The stopped row puts the recorder's error in plain words",
+        );
+        let hover = d.painted_tooltip_shows(
+            "Stopped by itself: the microphone",
+            "The recorder said: no such device.",
+        );
+        d.observe(
+            "iter-10-C-FT5-hover",
+            hover,
+            "Hover keeps the recorder's own words",
+        );
         d.observe(
             "R3",
             d.has("Record again"),
@@ -7735,7 +7867,7 @@ pub mod session_recording {
         d.observe(
             "iter-8-C-ST2-return",
             d.in_view("Record again")
-                && d.visible_text("Stopped by itself: no such device.")
+                && d.visible_text("Stopped by itself: the microphone is no longer connected.")
                 && !d.has("Return to the session being played") && !d.has_containing(&expected),
             "Return reveals the played session's stopped recording and clears the other-session warning",
         );
@@ -7822,6 +7954,7 @@ pub mod session_recording {
         d.expect(NEXT_TURN);
         d.click(NAV_SESSIONS);
         d.state_prepared("processing-with-running-run", Sizes::All, |d| {
+            check_rail_anchor(d, "iter-10-C-FT6-two-statuses");
             check_processing_action(d, "Process:", false);
             check_destinations(d);
             check_one_primary(d, NEXT_TURN, "iter-9-C-ST1-running");
@@ -9441,7 +9574,25 @@ pub mod session_plan {
 
         // T12.5: how a fight ended, in place.
         show_plan(d);
-        d.state("plan-after-a-fight", Sizes::All);
+        d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
+            // AT2: the notice says which Bridge Ambush went, and that the played one stays.
+            let notice = format!(
+                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
+            );
+            d.observe(
+                "iter-10-C-AT2",
+                d.visible_text(&notice),
+                format!("The removal notice names the removed fight by its state: {notice}"),
+            );
+            d.observe(
+                "iter-10-C-AT2-undo",
+                d.in_view("Undo remove")
+                    && d.place_of("Undo remove")
+                        .zip(d.place_of(FIRST))
+                        .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
+                "Undo remove stays with the notice, above the remaining row",
+            );
+        });
         d.begin_task();
         d.click(FIRST);
         d.observe(
@@ -9719,7 +9870,52 @@ pub mod session_plan {
         if d.has("Show party") {
             d.click("Show party");
         }
-        d.state("session-party-bar", Sizes::All);
+        d.state_prepared("session-party-bar", Sizes::All, |d| {
+            // FT-1: each item names its player before HP. Stats give way first, together.
+            let items: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.contains("Passive Perception"))
+                .collect();
+            let painted: Vec<(String, String)> = items
+                .iter()
+                .map(|item| {
+                    (
+                        item.name
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or_default()
+                            .to_owned(),
+                        d.painted_lines_in(item.rect).join(" "),
+                    )
+                })
+                .collect();
+            d.observe(
+                "iter-10-C-FT1",
+                items.len() >= 4
+                    && painted
+                        .iter()
+                        .all(|(first, words)| words.split_whitespace().any(|word| word == first)),
+                format!("Every party bar item shows its first name: {painted:?}"),
+            );
+            let stats = |words: &str| {
+                ["AC", "Per", "Ins"]
+                    .into_iter()
+                    .filter(|label| words.split_whitespace().any(|word| word == *label))
+                    .count()
+            };
+            d.observe(
+                "iter-10-C-FT1-stats",
+                items.len() >= 4
+                    && painted
+                        .windows(2)
+                        .all(|pair| stats(&pair[0].1) == stats(&pair[1].1))
+                    && items
+                        .iter()
+                        .all(|item| item.name.contains("HP ") && item.name.contains("AC ")),
+                format!("All items show the same stats, and hover keeps every fact: {painted:?}"),
+            );
+        });
         d.observe(
             "T12.0",
             d.nodes()

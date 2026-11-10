@@ -526,7 +526,8 @@ keeps that link's destination.
 
 **Record** on a session uses the host's recorder (`pw-record`, then `parecord`, then `arecord`) to write 16 kHz mono WAV
 under `Sessions/Recordings/<session id>/`. Tell the table first. The recorder is a child process that stops if Splat
-dies, and the file stays if it does.
+dies, and the file stays if it does. When the recorder stops by itself with an error Splat knows, the row says it
+in plain words (for example, the microphone is no longer connected); hover shows what the recorder said.
 
 ### Processing a recording
 
