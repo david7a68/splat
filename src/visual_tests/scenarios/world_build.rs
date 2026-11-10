@@ -580,7 +580,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         );
     }
     d.state("new-faction-note", Sizes::All);
-    let faction_path = root(d).join("Notes/Ashfall Faction.md");
+    let faction_path = root(d).join("Factions/Ashfall Faction.md");
     let faction_before = fs::read_to_string(&faction_path).unwrap();
     d.expect("Edit Ashfall Faction");
     d.click("Edit Ashfall Faction");
