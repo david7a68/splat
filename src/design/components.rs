@@ -1318,8 +1318,9 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
-/// Two rail lines share the word's left edge, leaving the icon in its own column.
-pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Response {
+/// Two rail lines share the word's left edge, leaving the icon in its own column. Returns the
+/// whole status, and the rect of its first line's word.
+pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = S;
         ui.add_sized(
@@ -1329,7 +1330,8 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Respo
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
-            response.union(ui.label(Type::Small.rich(ui, detail).color(state.color)))
+            let word = response.rect;
+            (response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))), word)
         })
         .inner
     })
@@ -1679,6 +1681,36 @@ pub fn spinner(ui: &mut Ui) {
     ui.label(Type::Body.rich(ui, icons::BUSY).color(colors().muted));
     #[cfg(not(test))]
     ui.spinner();
+}
+
+/// A small spinner just after a rail status, so work in progress needs no line of its own and
+/// nothing below it moves. It is as tall as the text's capitals, with a line near the text's weight;
+/// egui's own spinner has a 3-point line, which is heavy beside small text.
+pub fn busy_after(ui: &Ui, status: Rect, color: Color32) {
+    const STROKE: f32 = 1.5;
+    // The outer edge is 9 points across, the height of the small text's capitals.
+    let radius = (9.0 - STROKE) / 2.0;
+    let center = pos2(
+        status.right() + XS + radius + STROKE / 2.0,
+        status.top() + Type::Small.line() / 2.0,
+    );
+    // Tests draw one fixed frame, so captures repeat between runs.
+    #[cfg(test)]
+    let turn = 0.0;
+    #[cfg(not(test))]
+    let turn = {
+        ui.ctx().request_repaint();
+        ui.input(|i| i.time) as f32 * std::f32::consts::TAU
+    };
+    let arc = 1.5 * std::f32::consts::PI;
+    let points = (0..=24)
+        .map(|i| {
+            let angle = turn + arc * i as f32 / 24.0;
+            center + radius * vec2(angle.cos(), angle.sin())
+        })
+        .collect();
+    ui.painter()
+        .add(egui::Shape::line(points, Stroke::new(STROKE, color)));
 }
 
 /// The state comes before Discard on every save row.

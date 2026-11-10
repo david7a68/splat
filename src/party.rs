@@ -37,7 +37,7 @@ pub struct Party {
     pub run_open: bool,
 }
 impl Party {
-    #[cfg(test)]
+    /// A read of the party is running. The rail shows a spinner beside Connected.
     pub fn busy(&self) -> bool {
         self.reader.loading()
     }
@@ -193,8 +193,6 @@ impl Party {
         }) && self.reader.error.is_none();
         let (status_icon, status_word, _status_color) = if session.is_none() {
             (icons::OFFLINE, "Not connected", c.connection.offline)
-        } else if self.reader.loading() {
-            (icons::BUSY, "Refreshing", c.connection.busy)
         } else if self.combat.ready() {
             (
                 icons::ONLINE,
@@ -238,9 +236,6 @@ impl Party {
                 }
             }
         });
-        if linked && session.is_some() {
-            design::blocked_reason(ui, can_refresh);
-        }
         if refresh && let Some(session) = session.clone() {
             self.reader.refresh_by_hand(session, ui.ctx());
         }

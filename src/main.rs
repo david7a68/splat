@@ -851,6 +851,7 @@ impl Splat {
             let bottom = 3.0 * (Density::Scan.control() + 2.0)
                 + status_height
                 + lost as f32 * (Density::Read.control() + 2.0)
+                + design::XS
                 + design::S;
             ui.add_space((ui.available_height() - bottom).max(0.0));
             if let (Some((icon, state, color)), Some(word)) = (
@@ -882,29 +883,11 @@ impl Splat {
                     self.page = Page::Sessions;
                 }
             }
+            // The account line sits last, below Settings.
+            let mut statuses = statuses.into_iter();
+            let account = statuses.next();
             for state in statuses {
-                let full = match state.word {
-                    "Signed out" => "Signed out of D&D Beyond",
-                    "Sync stopped" => "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
-                    _ => state.word,
-                };
-                let response = if state.word == "Sync stopped" {
-                    let response = design::status_link(ui, state);
-                    if response.clicked() {
-                        self.party.wants_combat_sync = true;
-                        self.page = Page::Party;
-                    }
-                    response
-                } else if state.word == "Session folder not found" {
-                    let response = design::status_link(ui, state);
-                    if response.clicked() { self.page = Page::Sessions; }
-                    response
-                } else if state.word == "Connected · not remembered" {
-                    design::rail_status_detail(ui, Status { word: "Connected", ..state }, "Not remembered")
-                } else { design::wrapped_status(ui, state) }.on_hover_text(full);
-                if full != state.word {
-                    design::named(ui, &response, full);
-                }
+                self.rail_status(ui, state, false);
             }
             // Words that could not be saved lead to where the DM can choose.
             for (lost, word, target) in [
@@ -989,7 +972,52 @@ impl Splat {
             {
                 self.page = Page::Settings;
             }
+            if let Some(account) = account {
+                ui.add_space(design::XS);
+                self.rail_status(ui, account, true);
+            }
         });
+    }
+
+    /// One status line in the rail. Some lead to where the DM can act on them.
+    /// The account line also shows a spinner while the party is read.
+    fn rail_status(&mut self, ui: &mut egui::Ui, state: Status<'static>, account: bool) {
+        let full = match state.word {
+            "Signed out" => "Signed out of D&D Beyond",
+            "Sync stopped" => "Party sync stopped when D&D Beyond disconnected. Connect, then turn sync on in Party.",
+            _ => state.word,
+        };
+        let detail = state.word == "Connected · not remembered";
+        let (response, word) = if state.word == "Sync stopped" {
+            let response = design::status_link(ui, state);
+            if response.clicked() {
+                self.party.wants_combat_sync = true;
+                self.page = Page::Party;
+            }
+            { let rect = response.rect; (response, rect) }
+        } else if state.word == "Session folder not found" {
+            let response = design::status_link(ui, state);
+            if response.clicked() { self.page = Page::Sessions; }
+            { let rect = response.rect; (response, rect) }
+        } else if detail {
+            design::rail_status_detail(ui, Status { word: "Connected", ..state }, "Not remembered")
+        } else {
+            let response = design::wrapped_status(ui, state);
+            { let rect = response.rect; (response, rect) }
+        };
+        // A read can also come from the cache on disk, so the words say updating, not refreshing.
+        let updating = account && self.party.connected() && self.party.busy();
+        const UPDATING: &str = " · Updating the party";
+        let full = if updating { format!("{full}{UPDATING}") } else { full.to_owned() };
+        if updating {
+            design::busy_after(ui, word, colors().connection.busy);
+        }
+        let response = response.on_hover_text(&full);
+        // The second line of a detail status is its own node, so the name leaves it out.
+        let name = if detail && updating { format!("Connected{UPDATING}") } else { full.clone() };
+        if name != state.word {
+            design::named(ui, &response, &name);
+        }
     }
 
     /// What the World page, Lookup and the roll tables in them need from the rest of the app.
