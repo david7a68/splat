@@ -7923,7 +7923,32 @@ pub mod encounter_groups {
         resume_run(d, RUN);
         open_arrivals(d);
         d.expect(&add_group(GROUP_GOBLINS));
-        d.state("group-panel", Sizes::AllAndHiDpi);
+        d.state_prepared("group-panel", Sizes::AllAndHiDpi, |d| {
+            let groups = [GROUP_GOBLINS, GROUP_RIVALS, GROUP_LOST];
+            let buttons = groups.map(|name| {
+                d.place_of(&add_group(name))
+                    .expect("Required group Add control")
+            });
+            let fields = groups.map(|name| {
+                d.place_of(&format!("Initiative total for {name}"))
+                    .expect("Required group Initiative field")
+            });
+            d.observe(
+                "iter9-B-FT6-edge",
+                buttons.iter().all(|b| {
+                    (b.right() - buttons[0].right()).abs() <= 1.0
+                        && (b.width() - buttons[0].width()).abs() <= 1.0
+                }),
+                format!("Arrivals Add and Add 1 fill one shared slot: {buttons:?}"),
+            );
+            d.observe(
+                "iter9-B-FT6-neighbour",
+                fields
+                    .iter()
+                    .all(|f| (f.left() - fields[0].left()).abs() <= 1.0),
+                format!("Initiative fields keep one column: {fields:?}"),
+            );
+        });
         d.check_tab_order("run, group panel");
         d.observe(
             "T13.1",
@@ -9235,21 +9260,67 @@ pub mod session_plan {
 
         // T14.3: Exhaustion is one level, however many steps it takes.
         d.click_row("Oren Thistlewick");
+        d.observe(
+            "iter9-B-FT8-before",
+            !d.row_words("Oren Thistlewick").contains("Sync off"),
+            "Oren has no sync word before Correct",
+        );
+        d.click("Correct");
         d.click(CONDITIONS);
+        d.observe(
+            "iter9-B-FT8-no-side-effect",
+            !d.row_words("Oren Thistlewick").contains("Sync off"),
+            "Viewing Correct does not turn sync off",
+        );
         d.click("Exhaustion");
-        d.click("More exhaustion");
-        d.click("More exhaustion");
+        d.click("Increase Exhaustion level");
+        d.click("Increase Exhaustion level");
         d.expect("exhaustion 2 → 3 on Oren Thistlewick");
-        d.state("exhaustion-level", Sizes::All);
+        d.state_prepared("exhaustion-level", Sizes::All, |d| {
+            let down = d
+                .place_of("Decrease Exhaustion level")
+                .expect("Required decrease control");
+            let up = d
+                .place_of("Increase Exhaustion level")
+                .expect("Required increase control");
+            let value = d
+                .nodes()
+                .into_iter()
+                .find(|n| {
+                    n.name == "Exhaustion level"
+                        && n.rect.left() > down.right()
+                        && n.rect.right() < up.left()
+                })
+                .expect("Required exhaustion value between the step buttons")
+                .rect;
+            d.observe(
+                "iter9-B-FT12-scan",
+                [value, down, up]
+                    .iter()
+                    .all(|r| (r.height() - crate::design::Density::Scan.control()).abs() <= 1.0),
+                format!("Exhaustion uses one Scan stepper: {down:?}, {value:?}, {up:?}"),
+            );
+            d.observe(
+                "iter9-B-FT8-stable",
+                !d.row_words("Oren Thistlewick").contains("Sync off"),
+                "Changing exhaustion does not turn sync off",
+            );
+        });
         let row = d.row_words("Oren Thistlewick");
         d.observe(
             "T14.3",
             row.contains("Exhaustion (3)") && !row.contains("Exhaustion (2)"),
             format!("Each step replaces the last level: {row}"),
         );
-        d.click("Less exhaustion");
-        d.click("Less exhaustion");
-        d.click("Less exhaustion");
+        d.click_containing("Undo: exhaustion 2 → 3 on Oren Thistlewick");
+        d.observe(
+            "iter9-B-FT12-undo",
+            d.row_words("Oren Thistlewick").contains("Exhaustion (2)")
+                && !d.row_words("Oren Thistlewick").contains("Exhaustion (3)"),
+            "Undo restores the previous level",
+        );
+        d.click("Decrease Exhaustion level");
+        d.click("Decrease Exhaustion level");
 
         // Kestrel ends this fight hurt, so the next one has something to carry.
         d.click_row("Kestrel Dunmoor");
