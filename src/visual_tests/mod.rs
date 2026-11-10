@@ -3,7 +3,7 @@
 //!
 //! `cargo test` runs every scenario and enforces the ergonomics baseline, without
 //! a GPU or any screenshots. `devenv shell -- visual-test <label>` also renders
-//! PNGs with a software rasterizer. See "Visual tests" in the README.
+//! PNGs, on a GPU when one is available. See "Visual tests" in the README.
 //!
 //! Environment:
 //! - `SPLAT_VISUAL_CAPTURE=1` renders PNGs. Setting `SPLAT_VISUAL_DIR` also does.
@@ -26,6 +26,7 @@
 //! - `visual-baseline-chrome <label>` applies eligible saved chrome measurements.
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
+//! - `SPLAT_VISUAL_ENCODER=vaapi|nvenc|x264` uses only that kind of video encoder.
 mod compare;
 mod dm_audit;
 mod driver;
@@ -457,7 +458,7 @@ fn jobs() -> usize {
     }
 }
 
-/// Rust code in test builds uses jemalloc, but Mesa's software renderer still
+/// Rust code in test builds uses jemalloc, but Mesa's renderers still
 /// uses glibc's malloc. glibc gives busy threads their own heap arenas and keeps
 /// the memory they free. It also raises its mmap threshold after a large free,
 /// so large buffers then stay in those arenas. One arena per worker and a fixed
@@ -598,7 +599,7 @@ fn is_selected(scenario: &str) -> bool {
 
 /// Only files this suite writes. The folder can be one the caller chose.
 fn clear_old_captures(directory: &Path) {
-    let names = ["manifest.txt", "contact-sheet.png"];
+    let names = ["manifest.txt", "renderer.txt", "contact-sheet.png"];
     let is_ours = |path: &Path| {
         let name = path
             .file_name()
@@ -697,6 +698,11 @@ fn visual_suite() {
     let record = capture && std::env::var("SPLAT_VISUAL_VIDEO").is_ok_and(|value| value == "1");
     if record {
         fs::create_dir_all(directory.join("video")).expect("create video folder");
+        // Choose the encoder before the workers start, so no scenario waits for the probe.
+        let encoder = video::encoder();
+        if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
+            println!("Video encoder = {encoder}");
+        }
     }
     let (_lock, root) = world_root(slot.as_mut().and_then(slots::Permit::take_world_lock));
     let cache = root.join("character-cache");
@@ -786,6 +792,13 @@ fn visual_suite() {
             manifest.push_str(&format!("{:x}  {file}\n", Sha256::digest(&bytes)));
         }
         fs::write(directory.join("manifest.txt"), manifest).expect("write manifest");
+        if let Some(adapter) = render::adapter() {
+            let mut text = format!("{adapter}\n");
+            if record {
+                text.push_str(&format!("video: {}\n", video::encoder()));
+            }
+            fs::write(directory.join("renderer.txt"), text).expect("write renderer.txt");
+        }
     }
     let _ = fs::remove_dir_all(&root);
 
