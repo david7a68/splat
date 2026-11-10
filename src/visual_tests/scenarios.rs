@@ -8966,6 +8966,9 @@ pub mod session_recording {
         // steps prove the words and come back to the same choices, so they are not task cost.
         d.aside(|d| {
         d.click(DISCARD);
+        // The folder scan, which follows the renamed file every few seconds, keeps the Undo.
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
         d.expect("Undo discard");
         d.observe(
             "iter-15-C-FT4",

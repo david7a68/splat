@@ -1667,7 +1667,9 @@ impl Sessions {
         if let (Some(id), Some(draft)) = (self.selected, &self.draft) {
             self.mentions
                 .insert(id, timeline::referenced_ids(&draft.body));
-            if !draft.unsaved() {
+            // A discarded or reloaded draft keeps its Undo until the DM uses it or types. The
+            // scan does not follow the note to a new file under it, or the Undo would go.
+            if !draft.unsaved() && draft.dropped.is_none() {
                 match self.notes.iter().find(|note| note.id == id) {
                     Some(note) if note.path != draft.path => {
                         self.draft = None;
@@ -7127,6 +7129,11 @@ impl Sessions {
 impl Sessions {
     pub fn busy(&self) -> bool {
         self.job.as_ref().is_some_and(|(job, _)| !job.is_held())
+    }
+
+    /// The folder scan that otherwise runs every few seconds of wall time.
+    pub fn simulate_folder_scan(&mut self) {
+        self.scan_folder();
     }
 
     /// The open note's file is renamed outside Splat, as Obsidian can do.
