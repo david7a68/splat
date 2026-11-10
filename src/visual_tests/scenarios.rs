@@ -9857,12 +9857,13 @@ pub mod session_plan {
             };
             d.observe(
                 "iter-10-C-FT1-stats",
-                painted
-                    .windows(2)
-                    .all(|pair| stats(&pair[0].1) == stats(&pair[1].1))
+                items.len() >= 4
+                    && painted
+                        .windows(2)
+                        .all(|pair| stats(&pair[0].1) == stats(&pair[1].1))
                     && items
                         .iter()
-                        .all(|item| item.name.contains("Passive Perception")),
+                        .all(|item| item.name.contains("HP ") && item.name.contains("AC ")),
                 format!("All items show the same stats, and hover keeps every fact: {painted:?}"),
             );
         });

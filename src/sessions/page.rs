@@ -1105,6 +1105,14 @@ fn removed_event_words(
         Some(detail) => format!("Removed “{label}” ({detail})."),
         None => format!("Removed “{label}”."),
     };
+    // "The other" only makes sense when the removed fight was in this session; a removal made on
+    // the Timeline page from another session names no other fight here.
+    if !book
+        .removed_event()
+        .is_some_and(|event| event.is_in(session))
+    {
+        return words;
+    }
     let same: Vec<_> = book
         .events
         .iter()
@@ -7147,6 +7155,16 @@ mod tests {
             removed_event_words(&book, Some(Uuid::new_v4()), &days, "Bridge Ambush", &[]),
             "Removed “Bridge Ambush” (Round 2 · Paused)."
         );
+        // A removal from another session (made on the Timeline page) is not "the other" fight of
+        // a same-name fight in the session shown.
+        let other = Some(Uuid::new_v4());
+        book.events[0].session = other;
+        assert_eq!(
+            removed_event_words(&book, other, &days, "Bridge Ambush", &[]),
+            "Removed “Bridge Ambush” (Round 2 · Paused).",
+            "iter10-lead-other-session"
+        );
+        book.events[0].session = session;
         // A remaining fight with no result yet stays, with no result to name.
         book.undo_remove();
         book.events[1].result.clear();
