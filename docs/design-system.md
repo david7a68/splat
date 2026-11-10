@@ -229,7 +229,9 @@ A changed file stops saving. World uses `disk_conflict_choices` with the noun `n
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library gives the
 choices one row at full reader width. World Overwrite saves valid text; invalid text returns to the repair
 editor without a write. World Reload keeps the replaced draft for one `Undo reload` on its message line until
-the next edit or disk change. A run offers `Replace the file with this run` and `Save as a new run`.
+the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
+the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
+holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Replace the file with this run` and `Save as a new run`.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
@@ -528,7 +530,9 @@ is drawn, including a missing group's icon and ` · Not found`. Empty or whitesp
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
-count and its menu include the note until `Always use this one` picks one. Table faults use the
+count and its menu include the note until `Always use this one` picks one. A row with more than one link
+problem says `2 broken links` only when every target is missing; when one of them waits for a choice, it
+says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
 the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
@@ -555,7 +559,9 @@ The rail shows World draft while an edit is unsaved. If a repair is also unsaved
 One save writes every change with one Undo. If the note on disk already reads as the save would write it
 (for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
 form with the Info message `Your changes are already in the note.` A group change refused because Part of
-could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices. Below the
+could not be read closes without that message; the reason shows instead. A disk change uses the shared conflict choices.
+The save that finds the disk change reads the note again for its list row and header count, as a refused Part of
+write does; the draft stays as it is until the DM chooses. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example
