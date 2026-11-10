@@ -273,53 +273,6 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has("1 note cannot be read") && fs::read_to_string(&path).unwrap() == fixed,
         "Save repaired note writes the repair and removes the warning",
     );
-
-    // An unsaved World NPC survives a repair opened from Lookup, and comes back after it.
-    fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
-    reload(d);
-    d.click("New ▾");
-    d.click("Generate NPC");
-    let world = npc_saves(d);
-    look_up(d, "watchkeeper");
-    d.expect("1 note cannot be read");
-    d.click("Show");
-    d.expect("Save repaired note");
-    d.replace_editor_text(&fixed);
-    d.click("Save repaired note");
-    d.settle();
-    d.observe(
-        "iter-14-D3-repair-kept",
-        world.len() == 1 && npc_saves(d) == world,
-        "A repair opened from Lookup keeps the unsaved World NPC",
-    );
-    if d.has("Save NPC") {
-        d.click("Save NPC");
-        d.settle();
-    }
-    // This campaign keeps its NPCs in Notes/, so the file is found wherever it was written.
-    let found = world
-        .first()
-        .map(|file| find_file(&root(d), file))
-        .unwrap_or_default();
-    d.observe(
-        "iter-14-D3-repair-saved",
-        !found.is_empty(),
-        "The kept NPC saves after the repair, in the campaign's NPC folder",
-    );
-}
-
-/// Every path under `dir` whose file name is `name`.
-fn find_file(dir: &std::path::Path, name: &str) -> Vec<std::path::PathBuf> {
-    let mut found = Vec::new();
-    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            found.extend(find_file(&path, name));
-        } else if path.file_name().is_some_and(|file| file == name) {
-            found.push(path);
-        }
-    }
-    found
 }
 
 /// The file each generated NPC card will save, one label per card. A text run repeats its
@@ -3030,36 +2983,6 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     // moves when a status is added above it.
     d.expect_same("Open in World returns to the World view of npc-stat-block-deleted-in-world");
     d.state("npc-stat-block-repair-from-search", Sizes::All);
-
-    // An unsaved World NPC survives Open in World: its card comes first, and says why.
-    d.click("New ▾");
-    d.click("Generate NPC");
-    let world = npc_saves(d);
-    go_encounters(d);
-    d.expect("Open in World");
-    d.click("Open in World");
-    d.settle();
-    d.observe(
-        "iter-14-D3-reveal-kept",
-        d.current_page() == "World"
-            && world.len() == 1
-            && npc_saves(d) == world
-            && d.visible_text("Save or discard this NPC to open "),
-        "Open in World keeps the unsaved World NPC and says what waits behind it",
-    );
-    d.state("world-npc-kept-on-reveal", Sizes::Default);
-    if d.has("Save NPC") {
-        d.click("Save NPC");
-        d.settle();
-    }
-    d.observe(
-        "iter-14-D3-reveal-saved",
-        world
-            .first()
-            .is_some_and(|file| root(d).join(format!("NPCs/{file}")).exists())
-            && d.visible_text("Watchkeeper Guard · Not found"),
-        "The kept NPC saves, and then the revealed note opens",
-    );
 }
 
 /// Copying a typed note must keep both files reachable.

@@ -534,10 +534,8 @@ readable body says `Nothing written yet.` only. The file line keeps the one `Edi
 A History list gives its dates one column, as wide as the widest date in the list plus an `S` gap, so event
 names share one left edge and a wrapped summary stays right of the dates. The column takes at most a third of
 the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
-column empty. Nothing drops an unsaved NPC on the World page. Lookup's `Use your own names` opens World on its
-own card, which says `Lookup keeps <name>. Save or discard this NPC to move it here.` while Lookup holds that NPC.
-`Open in World` keeps the card first, says `Save or discard this NPC to open <note>.`, and opens that note
-after the NPC is saved or discarded. A repair opens over the card, and the card returns after the repair.
+column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
+which says `Lookup keeps <name>. Save or discard this NPC to move it here.` while Lookup holds that NPC.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
