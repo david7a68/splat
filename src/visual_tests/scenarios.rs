@@ -6670,7 +6670,33 @@ pub mod session_notes {
         );
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        d.state("session-folder-move-offered", Sizes::All);
+        // FT4 (round 16): with no run and no other form, moving the files is the one primary,
+        // as Move runs and save is on Rules and runs.
+        d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
+            super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+        });
+        // Must stay true: the open details form owns its own save, so the move is not primary.
+        d.click("Edit details");
+        d.expect("Save details");
+        d.scroll_until(pos2(600.0, 400.0), "Move files and save", 20);
+        let frame = d.control_frame("Move files and save");
+        assert!(
+            frame.is_some(),
+            "Move files and save is painted below the details form"
+        );
+        d.observe(
+            "iter-16-C-FT4-details",
+            frame.as_ref().is_some_and(|frame| {
+                let colors = crate::design::colors();
+                frame.fill != colors.accent_fill && frame.fill != colors.accent_hover
+            }),
+            format!(
+                "With the details form open, Move files and save has no accent fill: {frame:?}"
+            ),
+        );
+        d.click("Cancel");
+        d.scroll_up_at(pos2(600.0, 400.0), 20);
+        d.expect("Move files and save");
         d.click("Move files and save");
         d.expect("Moved 1 note, 4 events, 2 templates and 1 recording to 30 Sessions.");
         d.observe_both(
@@ -7363,7 +7389,7 @@ pub mod session_recording {
         }
     }
 
-    fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
+    pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {
         assert!(
             d.in_view(expected),
             "The expected primary action is visible"
@@ -7850,6 +7876,27 @@ pub mod session_recording {
     }
 
     /// FT-3: a warned result is a status like its siblings, on the row's second line.
+    /// FT3 (round 16): the recording row states an empty check once, in its warning line.
+    fn check_empty_check_once(d: &mut Driver<'_>, id: &str) {
+        let mut said = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.contains("returned nothing") || words.contains("returned no result") {
+                said.push(words.clone());
+            }
+        });
+        d.observe(
+            &format!("{id}-warning"),
+            d.visible_text(WARNING),
+            "The warning line still says the check returned nothing",
+        );
+        d.observe(
+            id,
+            said.len() == 1,
+            format!("The empty check is said once on screen: {said:?}"),
+        );
+    }
+
     fn check_warned_row(d: &mut Driver<'_>) {
         let row = d.nodes().into_iter().find(|node| {
             node.in_view()
@@ -8549,6 +8596,7 @@ pub mod session_recording {
         d.state_prepared("recording-warned", Sizes::All, |d| {
             check_result_row(d);
             check_warned_row(d);
+            check_empty_check_once(d, "iter-16-C-FT3");
         });
 
         d.click_containing("More actions for 2026-01-01");
@@ -8574,9 +8622,10 @@ pub mod session_recording {
             // AT1: a check that ran and gave nothing back is not a check that never ran.
             d.observe(
                 "iter-15-C-AT1",
-                d.visible_text("Check returned no result") && !d.visible_text("No check ran"),
-                "The warned recording says Check returned no result beside Raw transcript",
+                d.visible_text(WARNING) && !d.visible_text("No check ran"),
+                "The warned recording says the check returned nothing, not No check ran",
             );
+            check_empty_check_once(d, "iter-16-C-FT3-confirm");
             d.observe(
                 "iter-11-C-ST1",
                 message.zip(buttons).is_some_and(|(message, (not_now, replace))| {
@@ -8597,7 +8646,9 @@ pub mod session_recording {
         d.click_containing("More actions for 2026-01-01");
         d.expect("Delete recording:");
         check_events_gap(d, "iter-15-C-FT2-menu");
-        d.state("recording-row-menu", Sizes::All);
+        d.state_prepared("recording-row-menu", Sizes::All, |d| {
+            check_empty_check_once(d, "iter-16-C-FT3-menu");
+        });
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));

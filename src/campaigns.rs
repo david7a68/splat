@@ -1007,11 +1007,14 @@ impl Campaigns {
     }
 
     /// Edit the active campaign's details from the page that links to them.
-    pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) {
-        if self.editing.is_some() {
+    /// Draws the details form while it is open, and says whether it drew it (with its primary save).
+    pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) -> bool {
+        let open = self.editing.is_some();
+        if open {
             ui.add_space(design::S);
             self.form(ui, false, true);
         }
+        open
     }
 
     pub fn form_open(&self) -> bool {

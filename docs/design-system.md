@@ -517,7 +517,8 @@ and permits a folder in an Obsidian vault. Disconnected campaign-link help opens
 Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
-or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
+or Save without moving. Move files and save is primary when no other primary is in view; it is secondary while a
+run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
 run-settings saves while a run is open. Folder changes name hidden unfinished runs and their states. A move
@@ -1164,7 +1165,8 @@ sits an L gap after it. Add and On the timeline align left in that column. Row r
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice: This draft was written automatically. Check it against your memory. If the check returned nothing, put `Check returned no result` beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
+states an empty check once, in the warning line; no label beside Raw transcript repeats it. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings
