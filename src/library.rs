@@ -2333,13 +2333,13 @@ impl Library {
                 }
             }
         }
-        let (undo_copy, use_copy) = if self.package_copy.is_some() {
+        let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
             design::message_with_actions(
                 ui,
                 Tone::Success,
                 &format!(
                     "{} is registered · {}",
-                    self.package_copy.as_ref().unwrap().module.name,
+                    copy.module.name,
                     if self.copy_campaign_before.is_some() {
                         "Used here"
                     } else {
