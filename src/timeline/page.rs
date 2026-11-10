@@ -1528,4 +1528,25 @@ mod tests {
             "Removed “Bridge Ambush” (Round 3 · Paused)."
         );
     }
+
+    /// An event with no session has no "other" event of its name: the sentence is left out.
+    #[test]
+    fn iter12_c2_removal_without_a_session_names_no_other_event() {
+        let mut book = Book::default();
+        let mut fight = |result: &str| {
+            let id = book.add(Kind::Encounter, None);
+            let event = book.events.iter_mut().find(|event| event.id == id).unwrap();
+            event.title = "Bridge Ambush".to_owned();
+            event.result = result.to_owned();
+            event.run = Some(Uuid::new_v4());
+            id
+        };
+        let paused = fight("Round 2");
+        fight("Held the bridge, round 1");
+        book.remove(&paused);
+        assert_eq!(
+            timeline_removal_words(&book, "Bridge Ambush", 1),
+            "Removed “Bridge Ambush” (Round 2 · Paused). 1 note still links to it."
+        );
+    }
 }

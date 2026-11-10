@@ -9282,6 +9282,58 @@ pub mod run_no_groups {
     }
 }
 
+/// FT3 repair: a crowded party bar at the minimum window never cuts an item off.
+pub mod party_bar_crowded {
+    use super::*;
+    const HURT: [(&str, &str); 2] = [("Iselle Marrowind", "8"), ("Oren Thistlewick", "23")];
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        // Kestrel is already Bloodied. Two more make three of five; two keep temporary HP.
+        for (name, damage) in HURT {
+            d.click_row(name);
+            d.type_text(damage);
+            d.press(Key::Enter);
+            d.expect(&format!("Undo: {damage} damage to {name}"));
+        }
+        d.click(NAV_SESSIONS);
+        d.state_prepared("three-bloodied", Sizes::Default, |d| {
+            let (items, _) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            let hide = d.place_of("Hide the party");
+            let more = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains(" more: "))
+                .map(|node| node.name);
+            let named = |part: &str| {
+                items.iter().filter(|item| item.name.contains(part)).count()
+                    + more.as_deref().map_or(0, |more| more.matches(part).count())
+            };
+            let shown = items.len()
+                + more
+                    .as_deref()
+                    .and_then(|more| more.split_whitespace().next()?.parse::<usize>().ok())
+                    .unwrap_or(0);
+            d.observe(
+                &format!("iter-12-C2-FT3-whole-{width}"),
+                !items.is_empty()
+                    && shown == 5
+                    && named("Bloodied") == 3
+                    && hide.is_some_and(|hide| {
+                        hide.right() <= width
+                            && items.iter().all(|item| item.rect.right() <= hide.left())
+                    }),
+                format!(
+                    "At {width}, 3 of 5 Bloodied: every party item lies whole before Hide the \
+                     party, and every player is named ({} items, {more:?})",
+                    items.len()
+                ),
+            );
+        });
+    }
+}
+
 /// W13: one creature joins a fight with nothing prepared, made up or found.
 pub mod run_add_creature {
     use super::*;

@@ -64,10 +64,12 @@ pub fn removed_event_words(
         None => format!("Removed “{label}”."),
     };
     // "The other" only makes sense when the removed fight was in this session; a removal made on
-    // the Timeline page from another session names no other fight here.
-    if !book
-        .removed_event()
-        .is_some_and(|event| event.is_in(session))
+    // the Timeline page from another session names no other fight here. An event with no session
+    // has no "other": events with no session are not one group.
+    if session.is_none()
+        || !book
+            .removed_event()
+            .is_some_and(|event| event.is_in(session))
     {
         return words;
     }

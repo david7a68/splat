@@ -949,7 +949,12 @@ the value, in the Party list's order `AC`, `Per`, `Ins`, `DC`. `DC` is left out 
 save DC. Items sit `M` apart, with no boxes. All items show the same number of stats; when they do not fit,
 the source status gives way first, then the optional stats (`Per`, `Ins`, `DC`) drop from the end, down to
 `AC`. Then the portraits go together, and then `AC`: AC answers "does a 17 hit?", and a portrait repeats the
-name beside it. The first name, HP, temporary HP and the state word always stay. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
+name beside it. HP and temporary HP always stay. The exception, when first names and HP still do not fit: the
+names shorten to an initial (`B.`), with the full name in hover and the accessible name. If that does not fit,
+the names go and the portraits come back. A portrait is wider than an initial, so if that does not fit either,
+initials stay and the HP state keeps its icon and colour without its word (the word stays in hover and the
+accessible name). No item is ever cut off: when even that does not fit, the items that fit show whole, and a
+muted `N more` names the rest, with HP, in hover and its accessible name. Hover shows the full name in `Strong`, then one fact to a muted `Small` line: HP, AC and DC, passive scores, conditions, and the
 source. Hover fill and the 2 px focus ring use `RADIUS_CONTROL`. A click opens the sheet on Party.
 
 ### Timeline

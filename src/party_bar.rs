@@ -105,11 +105,19 @@ pub enum Choice {
 struct Item {
     /// The portrait goes after the optional stats and before AC, so that words name each item.
     portrait: bool,
-    /// The first name, so that the DM need not know each portrait. It always stays.
+    /// The name drawn: the first name, its initial, or none (see [`Names`]).
     name: Option<Arc<egui::Galley>>,
+    /// The first name, so that the DM need not know each portrait.
+    first: Option<Arc<egui::Galley>>,
+    /// The first name's initial (`B.`), when even first names do not fit. Hover and the
+    /// accessible name keep the full name.
+    initial: Option<Arc<egui::Galley>>,
     hp_width: f32,
     temp: Option<Arc<egui::Galley>>,
+    /// The HP state's icon and word, or the icon alone (see [`Step`]).
     word: Option<Arc<egui::Galley>>,
+    full_word: Option<Arc<egui::Galley>>,
+    icon_word: Option<Arc<egui::Galley>>,
     /// Each stat as one run of text: its muted label, a space, and its value.
     stats: Vec<Arc<egui::Galley>>,
 }
@@ -130,12 +138,19 @@ impl Item {
         let temp = (glance.temp > 0).then(|| {
             painter.layout_no_wrap(design::temp_hp_text(glance.temp), small.clone(), c.hp.temp)
         });
-        let word = design::hp_word(glance.hp, glance.max_hp).map(|(icon, word, color)| {
+        let state = design::hp_word(glance.hp, glance.max_hp);
+        let word = state.map(|(icon, word, color)| {
             painter.layout_no_wrap(format!("{icon} {word}"), small.clone(), color)
         });
+        let icon_word = state
+            .map(|(icon, _, color)| painter.layout_no_wrap(icon.to_owned(), small.clone(), color));
         let first = glance.name.split_whitespace().next().unwrap_or_default();
         let name = (!first.is_empty())
             .then(|| painter.layout_no_wrap(first.to_owned(), small.clone(), c.text));
+        let initial = first
+            .chars()
+            .next()
+            .map(|letter| painter.layout_no_wrap(format!("{letter}."), small.clone(), c.text));
         let stats = glance
             .stats()
             .into_iter()
@@ -152,10 +167,14 @@ impl Item {
             .collect();
         Self {
             portrait: true,
-            name,
+            name: name.clone(),
+            first: name,
+            initial,
             hp_width,
             temp,
-            word,
+            word: word.clone(),
+            full_word: word,
+            icon_word,
             stats,
         }
     }
@@ -182,6 +201,77 @@ impl Item {
     }
 }
 
+/// Which name each item draws.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Names {
+    First,
+    Initial,
+    None,
+}
+
+/// One way to draw the bar: how many stats, with or without portraits, which names, and
+/// whether the HP state keeps its word.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Step {
+    shown: usize,
+    portrait: bool,
+    names: Names,
+    state_word: bool,
+}
+
+/// From the fullest bar down. The source gives way first, and stays on hover. Then the optional
+/// stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go together, then AC.
+/// HP and temporary HP always stay. Only when first names and HP do not fit do the names
+/// shorten to an initial (`B.`). If that does not fit, the names go and the portraits come back.
+/// The portraits are wider than initials, so if that does not fit either, initials stay and the
+/// HP state keeps its icon and colour without its word. No item is ever cut off: below the
+/// narrowest of these, the narrowest is drawn. Every item shows the same parts, and hover and
+/// the accessible name keep everything.
+fn steps(most: usize) -> Vec<Step> {
+    let step = |shown, portrait, names, state_word| Step {
+        shown,
+        portrait,
+        names,
+        state_word,
+    };
+    let mut steps: Vec<Step> = (most.min(1)..=most)
+        .rev()
+        .map(|shown| step(shown, true, Names::First, true))
+        .collect();
+    steps.extend([
+        step(most.min(1), false, Names::First, true),
+        step(0, false, Names::First, true),
+        step(0, false, Names::Initial, true),
+        step(0, true, Names::None, true),
+        step(0, false, Names::Initial, false),
+    ]);
+    steps
+}
+
+/// Draw every item as `step` says.
+fn set(items: &mut [Item], step: Step) {
+    for item in items {
+        item.portrait = step.portrait;
+        item.name = match step.names {
+            Names::First => item.first.clone(),
+            Names::Initial => item.initial.clone(),
+            Names::None => None,
+        };
+        item.word = if step.state_word {
+            item.full_word.clone()
+        } else {
+            item.icon_word.clone()
+        };
+    }
+}
+
+/// The width of every item drawn as `step` says, and the gaps between them.
+fn needed(items: &mut [Item], step: Step, gap: f32) -> f32 {
+    set(items, step);
+    items.iter().map(|item| item.width(step.shown)).sum::<f32>()
+        + gap * items.len().saturating_sub(1) as f32
+}
+
 /// The bar's contents. It returns what the DM chose.
 pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Choice> {
     let mut choice = None;
@@ -199,36 +289,49 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
         .size()
         .x;
     let mut items: Vec<Item> = glances.iter().map(|g| Item::measure(ui, g)).collect();
-    // With `shown` stats and with or without portraits, the width of every item and the gaps.
-    let needed = |items: &mut [Item], (shown, portrait): (usize, bool)| {
-        for item in items.iter_mut() {
-            item.portrait = portrait;
-        }
-        items.iter().map(|item| item.width(shown)).sum::<f32>()
-            + gap * items.len().saturating_sub(1) as f32
-    };
     let room =
         ui.available_width() - label.size().x - design::L - Density::Read.control() - design::S;
     let with_source = room - source_width - design::L;
-    // From the fullest bar down. The source gives way first, and stays on hover. Then the
-    // optional stats (Per, Ins, DC) drop from the end, down to AC. Then the portraits go
-    // together, then AC. The first name and HP, with temporary HP and the state word, always
-    // stay. Every item shows the same number of stats, and hover keeps everything.
-    let most = items.iter().map(|item| item.stats.len()).max().unwrap_or(0);
-    let mut steps: Vec<(usize, bool)> = (most.min(1)..=most).rev().map(|s| (s, true)).collect();
-    steps.extend([(most.min(1), false), (0, false)]);
-    let fullest = steps[0];
-    let show_source = needed(&mut items, fullest) <= with_source;
+    let steps = steps(items.iter().map(|item| item.stats.len()).max().unwrap_or(0));
+    let show_source = needed(&mut items, steps[0], gap) <= with_source;
     let room = if show_source { with_source } else { room };
-    let (shown, portrait) = steps
+    let step = steps
         .iter()
         .copied()
-        .find(|&step| needed(&mut items, step) <= room)
-        .unwrap_or((0, false));
+        .find(|&step| needed(&mut items, step, gap) <= room)
+        .unwrap_or_else(|| {
+            // Below every step, the narrowest one, so that the most items show whole.
+            steps
+                .iter()
+                .copied()
+                .min_by(|a, b| needed(&mut items, *a, gap).total_cmp(&needed(&mut items, *b, gap)))
+                .unwrap_or(steps[0])
+        });
+    set(&mut items, step);
     for item in &mut items {
-        item.stats.truncate(shown);
-        item.portrait = portrait;
+        item.stats.truncate(step.shown);
     }
+    // No item is ever cut off. When even the narrowest step does not fit, the items that fit
+    // show whole, and `N more` names the rest on hover and in its accessible name.
+    let (painter, small) = (ui.painter().clone(), Type::Small.font(ui));
+    let more = |hidden: usize| {
+        painter.layout_no_wrap(format!("{hidden} more"), small.clone(), colors().muted)
+    };
+    let widths: Vec<f32> = items.iter().map(|item| item.width(step.shown)).collect();
+    let kept = (0..=items.len())
+        .rev()
+        .find(|&kept| {
+            let shown = widths[..kept].iter().sum::<f32>() + gap * kept.saturating_sub(1) as f32;
+            let hidden = items.len() - kept;
+            let count = if hidden == 0 {
+                0.0
+            } else {
+                gap + more(hidden).size().x
+            };
+            shown + count <= room
+        })
+        .unwrap_or(0);
+    items.truncate(kept);
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = design::L;
         // In its own column, as `Add` is on the plan's strip.
@@ -243,6 +346,10 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
                     if paint(ui, glance, item, &source.word).clicked() {
                         choice = Some(Choice::Open(glance.id.clone()));
                     }
+                }
+                let hidden = &glances[kept..];
+                if !hidden.is_empty() {
+                    more_players(ui, more(hidden.len()), hidden);
                 }
             },
         );
@@ -264,6 +371,37 @@ pub fn show(ui: &mut egui::Ui, glances: &[Glance], source: &Source) -> Option<Ch
         });
     });
     choice
+}
+
+/// The players that do not fit, as a muted count. Hover and the accessible name list each one
+/// with HP.
+fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) {
+    let c = colors();
+    let (rect, response) = ui.allocate_exact_size(count.size(), egui::Sense::hover());
+    ui.painter().galley(rect.min, count, c.muted);
+    let hp = |glance: &Glance| glance.facts().into_iter().next().unwrap_or_default();
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::Label,
+            true,
+            format!(
+                "{} more: {}",
+                hidden.len(),
+                hidden
+                    .iter()
+                    .map(|glance| format!("{} · {}", glance.name, hp(glance)))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
+        )
+    });
+    response.on_hover_ui(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for glance in hidden {
+            ui.label(Type::Strong.rich(ui, &glance.name).color(c.text));
+            ui.label(Type::Small.rich(ui, hp(glance)).color(c.muted));
+        }
+    });
 }
 
 fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::Response {
@@ -351,30 +489,27 @@ fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::
 mod tests {
     use super::*;
 
-    const NAMES: [&str; 5] = [
+    const NAMES: [&str; 6] = [
         "Brannoch Ironhide",
         "Iselle Varn",
         "Kestrel Moor",
         "Oren Thistlewick",
         "Sable Quill",
+        "Wren Ashdown",
     ];
 
-    /// At one bar width: how many first names, portraits, full accessible names, AC values and
-    /// Per values are drawn.
-    fn draw(width: f32) -> (usize, usize, usize, usize, usize) {
-        let ctx = egui::Context::default();
-        design::theme::install(&ctx);
-        ctx.enable_accesskit();
-        let glances: Vec<_> = NAMES
+    /// `count` players. The first `bloodied` are at 11/41; the last `temp` have 5 temporary HP.
+    fn party(count: usize, bloodied: usize, temp: usize) -> Vec<Glance> {
+        NAMES[..count]
             .iter()
             .enumerate()
             .map(|(at, name)| Glance {
                 id: at.to_string(),
                 name: (*name).to_owned(),
                 portrait: None,
-                hp: Some(11),
+                hp: Some(if at < bloodied { 11 } else { 41 }),
                 max_hp: Some(41),
-                temp: 5,
+                temp: if at + temp >= count { 5 } else { 0 },
                 ac: Some(15),
                 perception: Some(14),
                 insight: Some(11),
@@ -382,7 +517,55 @@ mod tests {
                 spell_dc: Some(13),
                 conditions: Vec::new(),
             })
-            .collect();
+            .collect()
+    }
+
+    /// What one bar width draws.
+    #[derive(Debug, PartialEq)]
+    struct Drawn {
+        /// Items that paint their whole first name, and items that paint its initial.
+        firsts: usize,
+        initials: usize,
+        portraits: usize,
+        /// Items whose accessible name is the full name, then HP.
+        spoken: usize,
+        ac: usize,
+        per: usize,
+        /// Items that paint the word `Bloodied` beside its icon.
+        bloodied: usize,
+        /// Each item's rect, and the rect of Hide the party at the bar's right edge.
+        items: Vec<egui::Rect>,
+        close: egui::Rect,
+        /// The accessible name of `N more`, when some players do not fit.
+        more: Option<String>,
+    }
+
+    impl Drawn {
+        /// Every item lies whole before Hide the party, and Hide the party is in the window.
+        fn whole(&self, width: f32) -> bool {
+            self.close.right() <= width
+                && self
+                    .items
+                    .iter()
+                    .all(|item| item.left() >= 0.0 && item.right() <= self.close.left())
+        }
+
+        fn parts(&self) -> (usize, usize, usize, usize, usize, usize) {
+            (
+                self.firsts,
+                self.initials,
+                self.portraits,
+                self.ac,
+                self.per,
+                self.bloodied,
+            )
+        }
+    }
+
+    fn draw(width: f32, glances: &[Glance]) -> Drawn {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        ctx.enable_accesskit();
         let source = Source {
             icon: icons::OK,
             word: "From tonight".to_owned(),
@@ -398,7 +581,7 @@ mod tests {
             },
             |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    show(ui, &glances, &source);
+                    show(ui, glances, &source);
                 });
             },
         );
@@ -416,74 +599,139 @@ mod tests {
         for clipped in &output.shapes {
             walk(&clipped.shape, &mut texts, &mut circles);
         }
-        let firsts = NAMES
-            .iter()
-            .filter(|name| {
-                let first = name.split_whitespace().next().unwrap();
-                texts.iter().any(|text| text == first)
-            })
-            .count();
+        let first = |glance: &Glance| glance.name.split_whitespace().next().unwrap().to_owned();
+        let painted = |word: String| texts.iter().filter(|text| **text == word).count();
         let nodes = output.platform_output.accesskit_update.unwrap().nodes;
-        let spoken = NAMES
+        let rect = |node: &egui::accesskit::Node| {
+            let b = node.bounds().expect("bounds");
+            egui::Rect::from_min_max(
+                egui::pos2(b.x0 as f32, b.y0 as f32),
+                egui::pos2(b.x1 as f32, b.y1 as f32),
+            )
+        };
+        let items: Vec<_> = glances
             .iter()
-            .filter(|name| {
-                nodes.iter().any(|(_, node)| {
-                    node.label()
-                        .is_some_and(|label| label.starts_with(&format!("{name} · HP 11/41")))
-                })
+            .filter_map(|glance| {
+                nodes
+                    .iter()
+                    .find(|(_, node)| {
+                        node.label().is_some_and(|label| {
+                            label.starts_with(&format!("{} · HP ", glance.name))
+                        })
+                    })
+                    .map(|(_, node)| rect(node))
             })
-            .count();
+            .collect();
         let stat = |label: &str| texts.iter().filter(|text| text.starts_with(label)).count();
-        (firsts, circles, spoken, stat("AC "), stat("Per "))
+        Drawn {
+            firsts: glances.iter().map(|g| painted(first(g))).sum(),
+            initials: glances
+                .iter()
+                .map(|g| painted(format!("{}.", first(g).chars().next().unwrap())))
+                .sum(),
+            portraits: circles,
+            spoken: items.len(),
+            ac: stat("AC "),
+            per: stat("Per "),
+            bloodied: texts
+                .iter()
+                .filter(|text| text.ends_with(" Bloodied"))
+                .count(),
+            items,
+            more: nodes
+                .iter()
+                .filter_map(|(_, node)| node.label().or_else(|| node.value()))
+                .map(|words| words.to_string())
+                .find(|words| words.contains(" more: ")),
+            close: nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Hide the party"))
+                .map(|(_, node)| rect(node))
+                .expect("Hide the party"),
+        }
     }
 
-    /// FT3: the optional stats drop first, then the portraits go together, then AC. First
-    /// names and HP always stay, and each item keeps its full accessible name at every width.
+    /// FT3 and its repair: the optional stats drop first, then the portraits go together, then
+    /// AC. Then first names shorten to an initial, then the state word to its icon. No item is
+    /// ever cut off: at every width tested, from 300 px to 2000 px, each item lies whole before
+    /// Hide the party, and the players that do not fit are named by `N more`.
     #[test]
-    fn ac_stays_until_the_portraits_have_gone() {
-        let drawn: Vec<_> = (2..=20)
-            .map(|step| (step * 100, draw(step as f32 * 100.0)))
-            .collect();
-        assert_eq!(
-            drawn.last().unwrap().1,
-            (5, 5, 5, 5, 5),
-            "a wide bar shows everything: {drawn:?}"
-        );
-        assert_eq!(
-            drawn[0].1,
-            (5, 0, 5, 0, 0),
-            "the narrowest bar keeps names and HP only: {drawn:?}"
-        );
-        for (width, (names, portraits, spoken, ac, per)) in &drawn {
+    fn no_item_is_cut_off_and_ac_stays_until_the_portraits_have_gone() {
+        for (count, bloodied, temp) in [(5, 3, 2), (5, 5, 5), (6, 1, 6), (6, 6, 6), (5, 0, 0)] {
+            let glances = party(count, bloodied, temp);
+            let drawn: Vec<_> = (30..=200)
+                .map(|step| (step * 10, draw(step as f32 * 10.0, &glances)))
+                .collect();
+            let case = format!("{count} players, {bloodied} Bloodied, {temp} with temporary HP");
+            for (width, at) in &drawn {
+                assert!(
+                    at.whole(*width as f32),
+                    "{case}: cut off at {width}: {at:?}"
+                );
+                // Every player is named: by its item, or by `N more`.
+                let hidden: Vec<_> = glances[at.spoken..].iter().map(|g| &g.name).collect();
+                assert!(
+                    at.spoken > 0
+                        && (hidden.is_empty() && at.more.is_none()
+                            || at.more.as_ref().is_some_and(|more| {
+                                more.starts_with(&format!("{} more: ", hidden.len()))
+                                    && hidden.iter().all(|name| more.contains(name.as_str()))
+                            })),
+                    "{case}: {hidden:?} at {width}: {at:?}"
+                );
+                let n = at.spoken;
+                let (firsts, initials, portraits, ac, per, _) = at.parts();
+                assert!(
+                    [0, n].contains(&firsts)
+                        && [0, n].contains(&initials)
+                        && [0, n].contains(&portraits)
+                        && [0, n].contains(&ac)
+                        && [0, n].contains(&per),
+                    "{case}: the parts go together, never item by item, at {width}: {at:?}"
+                );
+                assert!(
+                    firsts + initials == n,
+                    "{case}: names stay at {width}: {at:?}"
+                );
+                assert!(
+                    portraits == 0 || ac == n,
+                    "{case}: AC before portraits at {width}"
+                );
+                assert!(
+                    per == 0 || portraits == n,
+                    "{case}: portraits before Per at {width}"
+                );
+                assert!(
+                    initials == 0 || ac == 0,
+                    "{case}: AC before first names at {width}"
+                );
+            }
             assert_eq!(
-                (*names, *spoken),
-                (5, 5),
-                "names always stay at {width}: {drawn:?}"
+                drawn.last().unwrap().1.parts(),
+                (count, 0, count, count, count, bloodied),
+                "{case}: a wide bar shows everything"
             );
             assert!(
-                [0, 5].contains(portraits) && [0, 5].contains(ac) && [0, 5].contains(per),
-                "the parts go all together, never item by item, at {width}: {drawn:?}"
-            );
-            // A portrait never stays when AC has gone, and Per never stays without portraits.
-            assert!(
-                *portraits == 0 || *ac == 5,
-                "AC before portraits at {width}: {drawn:?}"
-            );
-            assert!(
-                *per == 0 || *portraits == 5,
-                "portraits before Per at {width}: {drawn:?}"
+                drawn[0].1.spoken < count,
+                "{case}: the narrowest bar keeps whole items and counts the rest"
             );
         }
-        // Every step of the order is reached, in order of width.
+        // Every step of the order is reached, narrow to wide, for 3 Bloodied and 2 with temp HP.
+        let glances = party(5, 3, 2);
+        let drawn: Vec<_> = (30..=200)
+            .map(|step| draw(step as f32 * 10.0, &glances).parts())
+            .collect();
         let order = [
-            (5, 0, 5, 0, 0),
-            (5, 0, 5, 5, 0),
-            (5, 5, 5, 5, 0),
-            (5, 5, 5, 5, 5),
+            (0, 5, 0, 0, 0, 0),
+            (0, 5, 0, 0, 0, 3),
+            (5, 0, 0, 0, 0, 3),
+            (5, 0, 0, 5, 0, 3),
+            (5, 0, 5, 5, 0, 3),
+            (5, 0, 5, 5, 5, 3),
         ];
         let reached: Vec<_> = order
             .iter()
-            .map(|step| drawn.iter().position(|(_, at)| at == step))
+            .map(|step| drawn.iter().position(|at| at == step))
             .collect();
         assert!(
             reached.iter().all(Option::is_some) && reached.is_sorted(),
