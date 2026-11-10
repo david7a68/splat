@@ -6692,7 +6692,7 @@ pub mod session_recording {
             "Resume is visible before its direct click"
         );
         d.click(resume);
-        d.goal_within(
+        d.audit_goal_within(
             "iter-5-C-FT2",
             "resume a timeline fight from its plan row",
             1,
