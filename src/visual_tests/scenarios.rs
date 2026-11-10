@@ -3088,7 +3088,8 @@ pub mod party_from_run {
         // A caster's page, so that the capture shows the state it names.
         d.click_row(CASTER);
         d.click(SHEET_SUBPAGE);
-        d.state("sheet-spells-beside-run", Sizes::Default);
+        d.expect("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+        d.state("sheet-spells-beside-run", Sizes::All);
         d.observe(
             "Spells beside run",
             d.visible_text("Fire Bolt"),
@@ -3960,7 +3961,24 @@ pub mod run_edge_states {
             resumed_copy,
             "Resume opens the recovery copy closed last",
         );
-        d.state("resumed-last-closed-copy", Sizes::Default);
+        d.observe_both(
+            "iter-5-B-FT1",
+            "A recovery copy keeps End visible beside Close run",
+            |d| {
+                d.in_view("End encounter…")
+                    && (d.visible_text("End…") || d.visible_text("End encounter…"))
+            },
+        );
+        d.state("resumed-last-closed-copy", Sizes::All);
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            d.set_base(size);
+            assert!(d.in_view("End encounter…"));
+            assert!(d.visible_text("End…") || d.visible_text("End encounter…"));
+            d.click("End encounter…");
+            d.expect("Outcome");
+            d.click("Keep playing");
+        }
+        d.set_base(SMALL);
         d.unreached(
             "HP unknown on a live row",
             "the setup view, because a live run requires known HP (Run::open and Begin refuse otherwise)",
@@ -6870,6 +6888,15 @@ pub mod encounter_groups {
                 .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
             "A typed total places the group, with no roll",
         );
+        d.observe_both(
+            "iter-5-B-FT3",
+            "The arrival notice names only the group and total; the tie action stays",
+            |d| {
+                d.visible_text("Rival Team joined at\u{a0}14.")
+                    && !d.visible_text("entered by the DM")
+                    && d.in_view("Move Rival Team before Kestrel Dunmoor")
+            },
+        );
         d.state("group-added-with-a-total", Sizes::All);
         d.observe(
             "T13.2",
@@ -6912,7 +6939,7 @@ pub mod encounter_groups {
         d.click(NEXT_TURN);
         d.observe(
             "T13.2",
-            !d.has_containing("Encounter group "),
+            !d.has_containing("Encounter group ") && !d.has_containing(" joined at"),
             "The panel's line about an addition ends with the next step",
         );
         for _ in 0..25 {
