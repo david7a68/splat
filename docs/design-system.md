@@ -786,7 +786,8 @@ emphasis, and visible markup in the plain face and faint colour. Store exactly w
 reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
 (at most 75 characters per line).
 Write keeps the same left-aligned READER_MEASURE as Read (at most 75 characters per line), inside a
-frame that follows the column. Stored line breaks stay unchanged. Events and recordings follow column width;
+frame no wider than READER_MEASURE plus its padding, anchored left. Spare width stays outside the frame.
+Stored line breaks stay unchanged. Events and recordings follow column width;
 book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
 delay. Disk changes stop saving and open the comparison in Keeping a draft. Missing notes show Notes not saved
@@ -799,7 +800,8 @@ Read view keeps only its inline Write link; hide tab-row Write until the note ha
 centres on the title action row. Last time is one line linking the previous session and recap, with full recap
 on hover. Without recap, use prose under What happened and omit link-only lines; without either, show the
 session link alone. An older session warns once and links the session being played, which the list marks
-Playing. Reading old notes changes neither the destination for new events nor runs: use the newest session
+Playing. The action says Return to the session being played. When the two session numbers match, the warning
+names both note files. Reading old notes changes neither the destination for new events nor runs: use the newest session
 unless the DM chooses another, and name that destination on Timeline before adding.
 
 Read shows Obsidian links inline exactly as written. Hide link-only Plan for tonight when its fights and
@@ -954,7 +956,11 @@ jobs.
 
 Use one spinner and Processing progress line. Rail and session list say Processing; hover keeps the full step.
 Errors and setup help call the chosen text service the transcript and summary service, as in Settings.
-Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Put destination
+Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Process and
+Continue processing are primary when no open run owns Next turn and no other primary action is in view.
+Only the first recording that needs processing owns that primary action; later rows use secondary actions.
+While recording consent is open, Start recording owns primary.
+They are secondary while a run is open. A stalled recording keeps Record again as its primary action. Put destination
 below enabled Process or Continue processing, in Small muted text at reader measure, and in Process again
 confirmation. With a complete transcript, name raw transcript and session context and say audio is not sent
 again. With a partial transcript, name remaining audio parts and destination.
@@ -965,7 +971,8 @@ secondary Not now and red Replace the results; Keep the recording is secondary. 
 READER_MEASURE. Clean and warned results say Processed in the rail until a later recording or processing replaces the result.
 Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour; row,
 hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
-and transcript markers. Marker actions sit beside text.
+and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
+sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width.
 
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
