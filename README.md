@@ -244,6 +244,11 @@ or else the newest file does;
 Encounters wait for that repair. A roster edit updates any failed start check at once.
 An empty fight **Prep** tab offers **Edit encounter** while the encounter exists.
 
+World checks Part of on disk before every group change, including during a run. If it cannot read the
+field, it keeps the file, names the source line and offers **Edit in Obsidian**. Other form fields can
+still save without changing the unread group text. **Overwrite with my draft** keeps unread disk groups
+and saves the other changed fields. Empty optional links say **not set** in Edit.
+
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
 open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file

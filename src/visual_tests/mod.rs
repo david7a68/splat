@@ -54,7 +54,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 72] = [
+const SCENARIOS: [(&str, Seed, Script); 74] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -271,6 +271,16 @@ const SCENARIOS: [(&str, Seed, Script); 72] = [
         "world-note-deleted",
         Seed::World,
         scenarios::world_build::world_note_deleted,
+    ),
+    (
+        "world-empty-links",
+        Seed::World,
+        scenarios::world_build::empty_links,
+    ),
+    (
+        "world-part-of-safety",
+        Seed::World,
+        scenarios::world_build::part_of_safety,
     ),
     (
         "world-edit-round-trip",

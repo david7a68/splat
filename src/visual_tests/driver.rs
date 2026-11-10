@@ -474,7 +474,10 @@ impl<'a> Driver<'a> {
     }
 
     /// Each text painted now, with the clip of the pane it is in.
-    fn each_painted_text(&self, mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect)) {
+    pub(super) fn each_painted_text(
+        &self,
+        mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect),
+    ) {
         fn walk(
             shape: &egui::Shape,
             clip: egui::Rect,

@@ -408,7 +408,7 @@ impl ContentIndex {
                     lower: e.entry.name.to_lowercase(),
                     subtitle: if duplicate_identity {
                         format!(
-                            "{} · {} Same entry in two files",
+                            "{} · {} Same note in two files",
                             presentation::subtitle(&e.entry),
                             icons::WARN
                         )
@@ -2439,13 +2439,28 @@ mod tests {
     fn copied_world_notes_stay_visible_in_world_and_lookup() {
         let id = Uuid::new_v4();
         let before = entry_note(id, "Rook", "  type: npc");
-        let (dir, campaign) = campaign_with(&[("Rook.md", &before), ("Rook copy.md", &before)]);
+        let creature = crate::library::note_text("Guard", "creature", None);
+        let (dir, campaign) = campaign_with(&[
+            ("Rook.md", &before),
+            ("Rook copy.md", &before),
+            ("Guard.md", &creature),
+        ]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let guard = index
+            .items
+            .iter()
+            .find(|item| item.entry.name == "Guard")
+            .unwrap();
+        assert_eq!(guard.subtitle, "Creature · CR 1/8");
+        assert!(
+            !guard.result_detail().contains("note"),
+            "FD6-neighbour: creature result wording stays unchanged"
+        );
         assert_eq!(index.duplicate_world.len(), 2);
         for item in index.items.iter().filter(|item| item.entry.name == "Rook") {
             assert_eq!(
                 item.subtitle,
-                format!("NPC · {} Same entry in two files", icons::WARN)
+                format!("NPC · {} Same note in two files", icons::WARN)
             );
             assert!(!item.subtitle.contains(&item.entry.path));
             assert!(

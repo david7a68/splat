@@ -679,7 +679,7 @@ impl WorldPage {
             design::reader::section_heading(ui, "Dates outside events");
             note(
                 ui,
-                "A date in words belongs on an event's page. An event has a date that Splat can put in order.",
+                "A date in words belongs on an event's note. An event has a date that Splat can put in order.",
             );
             by_page(ui, &checks.loose_dates);
         }
@@ -694,7 +694,7 @@ impl WorldPage {
             design::reader::section_heading(ui, "Pages to write");
             note(
                 ui,
-                "A link names each of these, and no page has the name. The page that most lines want is first.",
+                "A link names each of these, and no note has the name. The note that most lines want is first.",
             );
             for (name, lines, from) in checks.wanted.iter().take(CHECK_ROWS) {
                 ui.horizontal_wrapped(|ui| {
@@ -716,7 +716,7 @@ impl WorldPage {
             ),
             (
                 "Nothing points here",
-                "These entries show on no other page. No line names them, they name no other entry, and they are in no place and part of no group.",
+                "These notes show on no other note. No line names them, they name no other note, and they are in no place and part of no group.",
                 &checks.alone,
             ),
         ] {
@@ -729,13 +729,13 @@ impl WorldPage {
         }
         for (title, words, found) in [
             (
-                "One name on two entries",
-                "A line that uses the name shows on each of these pages.",
+                "One name on two notes",
+                "A line that uses the name shows on each of these notes.",
                 &checks.shared_names,
             ),
             (
                 "Said twice",
-                "The same sentence is on each of these pages. Keep it on the page of its subject.",
+                "The same sentence is on each of these notes. Keep it on the note of its subject.",
                 &checks.repeated,
             ),
         ] {
@@ -778,7 +778,7 @@ impl WorldPage {
                     entry.name.clone()
                 };
                 let detail = if duplicate {
-                    format!("{} Same entry in two files", icons::WARN)
+                    format!("{} Same note in two files", icons::WARN)
                 } else if !entry.flags.is_empty() {
                     format!(
                         "{} {}",

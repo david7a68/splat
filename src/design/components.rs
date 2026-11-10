@@ -1923,11 +1923,11 @@ pub enum DiskConflictChoice {
     Reload,
 }
 
-pub fn disk_conflict_choices(ui: &mut Ui) -> Option<DiskConflictChoice> {
+pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
     message(
         ui,
         Tone::Warning,
-        "This entry changed on disk. Your draft is safe until you choose.",
+        &format!("This {noun} changed on disk. Your draft is safe until you choose."),
     );
     let mut choice = None;
     ui.horizontal_wrapped(|ui| {

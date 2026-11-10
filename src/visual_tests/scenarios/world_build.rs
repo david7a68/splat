@@ -195,7 +195,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.replace_text_in("Note text", &fixed);
     fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
     d.settle();
-    d.expect("This entry changed on disk. Your draft is safe until you choose.");
+    d.expect("This note changed on disk. Your draft is safe until you choose.");
     d.state("dirty-repair-compares-disk", Sizes::All);
     d.click("Reload and lose my draft");
     d.expect("Undo reload");
@@ -364,7 +364,7 @@ pub fn facts(d: &mut Driver<'_>) {
     d.click(NAV_WORLD);
 
     d.click_containing("Horn Rings · ");
-    d.expect("From other pages");
+    d.expect("From other notes");
     d.observe(
         "T15.1",
         d.has("Look: Gilded horn rings, loud and new.")
@@ -414,6 +414,20 @@ pub fn facts(d: &mut Driver<'_>) {
     for name in ["Status", "Change In", "Change Part of", "Text"] {
         d.expect(name);
     }
+    d.observe_both(
+        "iter-9-D-SD3-AD3",
+        "An empty optional place says not set in Edit",
+        |d| {
+            d.expect("Change In");
+            let change = d.place_of("Change In").unwrap();
+            let label = d.place_of("In").unwrap();
+            d.painted_in(egui::Rect::from_min_max(
+                egui::pos2(label.left(), change.top()),
+                change.max,
+            ))
+            .contains("not set")
+        },
+    );
     d.state("empty-world-fields-in-edit", Sizes::All);
     let lore_path = root(d).join("Lore/Horn Rings.md");
     let unchanged = fs::read_to_string(&lore_path).unwrap();
@@ -490,7 +504,7 @@ pub fn facts(d: &mut Driver<'_>) {
     let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
     fs::write(&lore_path, &external).unwrap();
     d.click("Save changes");
-    d.expect("This entry changed on disk");
+    d.expect("This note changed on disk");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -909,7 +923,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     reload(d);
     d.click_containing("Unread groups · ");
     d.click("Edit Unread groups");
-    d.expect("Part of could not be read. Repair it first.");
+    d.expect("Part of could not be read (line 7). Repair it first.");
     d.observe_both(
         "iter-8-D2-unread-groups",
         "An unread Part of list blocks only its picker and explains the repair",
@@ -921,6 +935,17 @@ pub fn round_trip(d: &mut Driver<'_>) {
                 && !d.is_disabled("Status")
                 && !d.is_disabled("Text")
                 && !d.is_disabled("Change In")
+        },
+    );
+    d.observe_both(
+        "iter-9-D-FD4-link",
+        "The unread Edit field keeps its source line and quiet Obsidian repair link",
+        |d| {
+            d.expect("Part of could not be read (line 7). Repair it first.");
+            d.has("Edit in Obsidian")
+                && d.nodes().iter().any(|node| {
+                    node.name == "Edit in Obsidian" && node.role == Role::Link && node.in_view()
+                })
         },
     );
     d.type_into("Status", "ready");
@@ -938,7 +963,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     // Removing the unread property leaves the parsed fields unchanged. The open form
     // must still notice its cleared flag and make the group picker available again.
     d.click("Edit Unread groups");
-    d.expect("Part of could not be read. Repair it first.");
+    d.expect("Part of could not be read (line 7). Repair it first.");
     fs::write(&unread_path, before.replace(&unread_groups, "")).unwrap();
     reload(d);
     d.expect("Change Part of");
@@ -1680,7 +1705,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, changed.replace("Cinder Bite.", "Ash Bite.")).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
+    d.wait_for_text("This note changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
     d.state("package-draft-changed-on-disk", Sizes::All);
     d.click("Reload and lose my draft");
@@ -2330,8 +2355,8 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.expect("6. Rook Ambry");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
-    d.expect("These two files claim to be the same entry.");
-    d.expect("Make Rook Ambry copy.md a separate entry");
+    d.expect("These two files claim to be the same note.");
+    d.expect("Make Rook Ambry copy.md a separate note");
     assert!(
         !d.has("Changed"),
         "A copied NPC note does not change its roster values"
@@ -2339,24 +2364,72 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.expect("Rook's watch keeps Rook Ambry.md.");
     d.expect("Rook's watch will then use Rook Ambry copy.md.");
     d.state("copied-world-npc-encounter-keeps-guard", Sizes::All);
-    d.click("Make Rook Ambry copy.md a separate entry");
-    d.wait_for_text("Undo separate entry");
-    d.expect("Rook Ambry copy.md is now a separate entry.");
+    d.click("Make Rook Ambry copy.md a separate note");
+    d.wait_for_text("Undo separate note");
+    d.expect("Rook Ambry copy.md is now a separate note.");
     d.state("duplicate-npc-repaired-from-encounter", Sizes::All);
-    d.click("Undo separate entry");
-    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
+    d.click("Undo separate note");
+    d.wait_for_text("Make Rook Ambry copy.md a separate note");
     d.click(NAV_WORLD);
     d.click_starting("Rook Ambry.md ·");
-    d.expect("Make Rook Ambry copy.md a separate entry");
-    d.expect("Make Rook Ambry.md a separate entry");
+    d.expect("Make Rook Ambry copy.md a separate note");
+    d.expect("Make Rook Ambry.md a separate note");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let consequences = d.at_size(size, |d| {
+            let first = "Existing links keep NPCs/Rook Ambry.md.";
+            let second = "Existing links will then use NPCs/Rook Ambry copy.md.";
+            for name in [
+                "Make Rook Ambry copy.md a separate note",
+                "Make Rook Ambry.md a separate note",
+                first,
+                second,
+            ] {
+                d.expect(name);
+            }
+            let mut matched = 0;
+            let mut muted_small = true;
+            d.each_painted_text(|text, clip| {
+                if [first, second].contains(&text.galley.job.text.as_str())
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    matched += 1;
+                    muted_small &= text.galley.job.sections.iter().all(|section| {
+                        section.format.color == design::colors().muted
+                            && section.format.font_id.size == design::Type::Small.size()
+                    });
+                }
+            });
+            let actions: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::Button
+                        && [
+                            "Make Rook Ambry copy.md a separate note",
+                            "Make Rook Ambry.md a separate note",
+                        ]
+                        .contains(&node.name.as_str())
+                })
+                .collect();
+            matched == 2
+                && muted_small
+                && actions.len() == 2
+                && actions.iter().all(|node| node.in_view())
+        });
+        d.observe(
+            "iter-9-D-FD7",
+            consequences,
+            format!("Each duplicate repair has a muted consequence at {size:?}"),
+        );
+    }
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
-    d.expect("Make Rook Ambry copy.md a separate entry");
+    d.expect("Make Rook Ambry copy.md a separate note");
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("Make Rook Ambry copy.md a separate entry");
-    d.wait_for_text("Undo separate entry");
-    d.expect("Rook Ambry copy.md is now a separate entry.");
+    d.click("Make Rook Ambry copy.md a separate note");
+    d.wait_for_text("Undo separate note");
+    d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
         Some(id)
@@ -2368,14 +2441,14 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo separate entry");
-    d.wait_for_text("Make Rook Ambry copy.md a separate entry");
+    d.click("Undo separate note");
+    d.wait_for_text("Make Rook Ambry copy.md a separate note");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
     d.state("world-copy-repair-undone", Sizes::All);
-    d.click("Make Rook Ambry copy.md a separate entry");
-    d.wait_for_text("Undo separate entry");
-    d.expect("Rook Ambry copy.md is now a separate entry.");
+    d.click("Make Rook Ambry copy.md a separate note");
+    d.wait_for_text("Undo separate note");
+    d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
     reload(d);
@@ -2665,4 +2738,210 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "manifest-only-hand-repair-keeps-original-roster",
         Sizes::All,
     );
+}
+
+pub fn part_of_safety(d: &mut Driver<'_>) {
+    flat_entry(
+        d,
+        "Factions/Added Guild.md",
+        "Added Guild",
+        "splat_type: faction",
+        "A new group.\n",
+    );
+    let path = root(d).join("NPCs/Safe Rook.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let id = Uuid::new_v4();
+    let readable = format!(
+        "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Safe Rook\nsplat_type: npc\nsplat_part_of: # Keep the stored groups.\n- \"[[Zarel|the Archdevil]]\" # Keep the alias.\nsplat_status: alive\n---\n\n# Safe Rook\n\nKeeps the gate.\n"
+    );
+    let unread_groups = format!(
+        "splat_part_of: # Keep the stored groups.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n",
+        Uuid::new_v4()
+    );
+    let unread = readable.replace("splat_part_of: # Keep the stored groups.\n- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n", &unread_groups);
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.click(NAV_WORLD);
+    d.click_containing("Safe Rook · ");
+    d.expect("Change Part of");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Added Guild");
+    fs::write(&path, &unread).unwrap();
+    d.expect("Added Guild");
+    d.click("Added Guild");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        unread.as_bytes(),
+        "iter-9-D-SD1-raw: Read picker preserves the reported disk fixture"
+    );
+    let reason = "Part of could not be read (line 7). Repair it first.";
+    d.expect(reason);
+    d.observe_both(
+        "iter-9-D-SD1-reader",
+        "The refused write closes the picker and gives the source line and repair link",
+        |d| {
+            d.expect(reason);
+            d.expect("Edit in Obsidian");
+            !d.has("Find a group")
+        },
+    );
+    d.state("read-picker-unread-disk-kept", Sizes::All);
+
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    d.observe(
+        "iter-9-D-repaired-reader",
+        !d.has(reason),
+        "Repair clears the old refused-write reason",
+    );
+    d.click("Edit Safe Rook");
+    d.replace_text_in("Status", "ready");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Added Guild");
+    d.click("Added Guild");
+    fs::write(&path, &unread).unwrap();
+    d.click("Save changes");
+    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.state("group-draft-disk-conflict", Sizes::All);
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    let saved = fs::read_to_string(&path).unwrap();
+    assert!(
+        saved.contains(&unread_groups),
+        "iter-9-D-overwrite-raw: keep the entire unread Part of block"
+    );
+    assert!(saved.contains("splat_status: ready"));
+    d.expect(reason);
+    d.observe_both(
+        "iter-9-D-overwrite",
+        "Overwrite saves other fields, keeps disk groups, explains the refusal and closes the form",
+        |d| {
+            d.expect(reason);
+            d.expect("Undo changes");
+            !d.has("Save changes")
+        },
+    );
+    d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
+    d.click("Undo changes");
+    assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
+    reload(d);
+    d.click("Edit Safe Rook");
+    d.expect(reason);
+    d.observe_both(
+        "iter-9-D-FD4",
+        "Unread groups name the source line and put a quiet repair link beside it",
+        |d| {
+            for name in [
+                reason,
+                "Edit in Obsidian",
+                "Change Part of",
+                "Change In",
+                "Text",
+            ] {
+                d.expect(name);
+            }
+            let links: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
+                .collect();
+            d.is_disabled("Change Part of")
+                && !d.is_disabled("Change In")
+                && !d.is_disabled("Text")
+                && links.len() == 1
+                && links.iter().all(|node| node.in_view())
+        },
+    );
+    d.state("unread-groups-edit-repair-link", Sizes::All);
+    d.click("Discard");
+
+    // Compact Read has no group Change. Use its real Edit → Change → Save route.
+    fs::write(&path, &readable).unwrap();
+    reload(d);
+    go_encounters(d);
+    resume_run_from_cold_start(d);
+    look_up(d, "Safe Rook");
+    d.expect("Edit Safe Rook");
+    d.click("Edit Safe Rook");
+    d.expect("Change Part of");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Added Guild");
+    fs::write(&path, &unread).unwrap();
+    d.expect("Added Guild");
+    d.click("Added Guild");
+    d.click("Save changes");
+    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        unread.as_bytes(),
+        "iter-9-D-AT1-raw: live group change preserves every byte and writes no Log"
+    );
+    d.expect(reason);
+    d.observe_both("iter-9-D-AT1", "The live group change keeps unread disk groups, closes the form and keeps Next turn visible", |d| {
+        d.expect(reason);
+        d.expect(NEXT_TURN);
+        !d.has("Find a group") && !d.has("Save changes")
+    });
+    d.state("live-picker-unread-disk-kept", Sizes::All);
+}
+
+pub fn empty_links(d: &mut Driver<'_>) {
+    d.click(NAV_WORLD);
+    for (label, value) in [("null", "null"), ("empty", "''"), ("whitespace", "'   '")] {
+        let name = format!("Optional {label}");
+        let path = format!("NPCs/{name}.md");
+        flat_entry(
+            d,
+            &path,
+            &name,
+            &format!("splat_type: npc\nsplat_in: {value}\nsplat_stat_block: {value}"),
+            "Keeps the gate.\n",
+        );
+        let before = fs::read(root(d).join(&path)).unwrap();
+        reload(d);
+        d.click_containing(&format!("{name} · "));
+        d.observe_both(
+            "iter-9-D-empty-reader",
+            "An unset place stays hidden; an NPC keeps its empty Stat block row",
+            |d| {
+                d.expect("Change Stat block");
+                !d.has("Change In") && !d.has_containing("Place not found")
+            },
+        );
+        d.click(&format!("Edit {name}"));
+        for size in [SMALL, DEFAULT, LARGE] {
+            let empty = d.at_size(size, |d| {
+                ["In", "Stat block"].iter().all(|label| {
+                    let name = format!("Change {label}");
+                    d.expect(&name);
+                    let change = d.place_of(&name).unwrap();
+                    let label = d.place_of(label).unwrap();
+                    d.painted_in(egui::Rect::from_min_max(
+                        egui::pos2(label.left(), change.top()),
+                        change.max,
+                    ))
+                    .contains("not set")
+                })
+            });
+            d.observe(
+                "iter-9-D-SD3-AD3",
+                empty,
+                format!("Both {label} optional links say not set at {size:?}"),
+            );
+        }
+        d.replace_text_in("Status", "ready");
+        d.state(&format!("{label}-links-in-edit"), Sizes::All);
+        d.click("Save changes");
+        d.wait_for_text("Changes saved.");
+        let saved = fs::read_to_string(root(d).join(&path)).unwrap();
+        assert!(
+            saved.contains(&format!("splat_in: {value}\n"))
+                && saved.contains(&format!("splat_stat_block: {value}\n")),
+            "iter-9-D-empty-bytes: unrelated save keeps both raw optional fields"
+        );
+        d.click("Undo changes");
+        assert_eq!(fs::read(root(d).join(&path)).unwrap(), before);
+    }
 }
