@@ -1690,6 +1690,16 @@ impl<'a> Driver<'a> {
         self.last_goal = self.interactions;
     }
 
+    /// Steps that prove a result and come back to the same place. The task being counted
+    /// keeps its own cost: these steps are not part of it. Only proof steps that end in the
+    /// state they started from go inside; no step of the DM's task may, or its cost hides.
+    pub fn aside<T>(&mut self, steps: impl FnOnce(&mut Self) -> T) -> T {
+        let before = self.interactions;
+        let result = steps(self);
+        self.last_goal += self.interactions - before;
+        result
+    }
+
     /// Record how many interactions the user needed to reach a goal, counted
     /// from the previous goal in this scenario.
     pub fn goal(&mut self, goal: &str) -> u32 {

@@ -172,7 +172,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px takes its width from the link's own minimum size, never from spaces in the text: the word starts at the text edge and the underline covers only the word |
@@ -1055,8 +1055,9 @@ actions; a flagged day keeps its Day icon and adds a muted `Small` word after th
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with Undo separate session. Moved drafts
-offer the new path and Let it go. Missing session and run folders offer Choose folder.
+Make <file> a separate session with Undo separate session. Moved or deleted note drafts
+offer the new path, a new file and red `Discard`; Discard says `Draft discarded.` with `Undo discard`. After
+`Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
 ### Notes panel
 
@@ -1152,7 +1153,7 @@ sits an L gap after it. Add and On the timeline align left in that column. Row r
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
-views share a Small draft notice: This draft was written automatically. Check it against your memory. If no check ran, put No check ran beside Raw transcript. Keep row menu
+views share a Small draft notice: This draft was written automatically. Check it against your memory. If the check returned nothing, put `Check returned no result` beside Raw transcript. Keep row menu
 beside title and `L` between its actions and events heading.
 
 ## Settings
