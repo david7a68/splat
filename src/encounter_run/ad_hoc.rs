@@ -15,6 +15,8 @@ use std::sync::Arc;
 const FIELD: &str = "Find or name a creature";
 const DEFAULT_SIDE: &str = "enemies";
 const MATCHES_SHOWN: usize = 5;
+/// How many matches Show all lists before it scrolls.
+const MATCHES_LISTED: usize = 8;
 const BUTTON_NAME: usize = 24;
 const MAX_HP: i64 = 1_000_000;
 const MAX_AC: i64 = 1000;
@@ -37,6 +39,8 @@ pub(super) struct AdHoc {
     pub(super) ac: String,
     pub(super) total: String,
     pub(super) side: Option<String>,
+    /// The words for which the DM chose Show all.
+    pub(super) show_all: Option<String>,
 }
 
 /// What the form says now, when it can be added.
@@ -277,49 +281,84 @@ impl Run {
                 width,
             );
             let typed = self.ad_hoc.query.trim().to_lowercase();
+            // Show all lasts while the words stay the same: new words start a short list again.
+            if self.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
+                self.ad_hoc.show_all = None;
+            }
             if typed.is_empty() {
                 return;
             }
             let matches = matches_for(&known, &typed);
-            for creature in matches.iter().take(MATCHES_SHOWN) {
-                // The whole name typed is already the one the button adds.
-                let row = design::row(
-                    ui,
-                    Density::Scan.row() + design::S,
-                    creature.lower == typed,
-                    &creature.entry.name,
-                    |_, _| {},
-                );
-                ui.scope_builder(
-                    egui::UiBuilder::new()
-                        .accessibility_parent(row.id)
-                        .max_rect(row.rect.shrink2(egui::vec2(design::S, design::XS))),
-                    |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.label(Type::Body.rich(ui, &creature.entry.name).color(c.text));
+            let all = self.ad_hoc.show_all.is_some();
+            let shown = if all { matches.len() } else { MATCHES_SHOWN };
+            let mut chosen = None;
+            let mut rows = |ui: &mut egui::Ui| {
+                for creature in matches.iter().take(shown) {
+                    // The whole name typed is already the one the button adds.
+                    let row = design::row(
+                        ui,
+                        Density::Scan.row() + design::S,
+                        creature.lower == typed,
+                        &creature.entry.name,
+                        |_, _| {},
+                    );
+                    // egui does not scroll to a widget that Tab focuses. The list does, so every
+                    // match can be reached from the keyboard.
+                    if row.gained_focus() {
+                        row.scroll_to_me(None);
+                    }
+                    // A long list lays out only the rows in view. Every row keeps its control and
+                    // name, so focus and the accessible list stay whole. The words go in a child
+                    // that does not move the cursor, and a hidden row skips the one id that child
+                    // takes, so every row has the same pitch and later rows keep their ids.
+                    if ui.is_rect_visible(row.rect) {
+                        let mut words = ui.new_child(
+                            egui::UiBuilder::new()
+                                .accessibility_parent(row.id)
+                                .max_rect(row.rect.shrink2(egui::vec2(design::S, design::XS))),
+                        );
+                        words.spacing_mut().item_spacing.y = 0.0;
+                        words.label(Type::Body.rich(&words, &creature.entry.name).color(c.text));
                         let parts: Vec<_> = creature.detail.split(" · ").collect();
                         let source = parts.last().copied().filter(|part| {
                             !["CR ", "HP ", "AC "]
                                 .iter()
                                 .any(|prefix| part.starts_with(prefix))
                         });
-                        crate::encounters::detail_columns(ui, &creature.detail, source);
-                    },
-                );
-                design::named(ui, &row, &format!("Choose {}", creature.entry.name));
-                if row.clicked() {
-                    self.ad_hoc.picked = Some((*creature).clone());
+                        crate::encounters::detail_columns(&mut words, &creature.detail, source);
+                    } else {
+                        ui.skip_ahead_auto_ids(1);
+                    }
+                    design::named(ui, &row, &format!("Choose {}", creature.entry.name));
+                    if row.clicked() {
+                        chosen = Some(Arc::clone(creature));
+                    }
+                }
+            };
+            if all {
+                // A bounded list, so the field above and the form below stay in reach.
+                let step = Density::Scan.row() + design::S + ui.spacing().item_spacing.y;
+                egui::ScrollArea::vertical()
+                    .id_salt("run_creature_matches")
+                    .max_height(MATCHES_LISTED as f32 * step)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| rows(ui));
+            } else {
+                rows(ui);
+            }
+            if !all && matches.len() > MATCHES_SHOWN {
+                let label = format!("Show all {}", matches.len());
+                if Action::quiet(&label)
+                    .density(Density::Read)
+                    .hint("List every creature that matches, without more typing")
+                    .show(ui)
+                    .clicked()
+                {
+                    self.ad_hoc.show_all = Some(typed.clone());
                 }
             }
-            if matches.len() > MATCHES_SHOWN {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!("{} more. Keep typing.", matches.len() - MATCHES_SHOWN),
-                        )
-                        .color(c.muted),
-                );
+            if chosen.is_some() {
+                self.ad_hoc.picked = chosen;
             }
         }
         // A base value is the hint, so that a blank field reads as that value.
