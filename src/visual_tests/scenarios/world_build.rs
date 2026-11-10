@@ -1465,6 +1465,13 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
                     .is_some_and(|frame| frame.stroke.width > 0.0),
             "Manifest error, bordered repair and muted consequence share the text edge in order",
         );
+        // The pane has room for the short consequence, so it stays on one line.
+        d.observe(
+            "iter-10-E-FD8",
+            consequence.height() <= design::Type::Small.line() * 1.5
+                && consequence.right() > action.right(),
+            "The replacement consequence wraps at the pane measure, not the action width",
+        );
     }
 }
 
@@ -1792,7 +1799,22 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click_containing("About Ashen Marches");
     d.expect("Write the manifest again");
     assert!(!d.has_containing("Replace with a basic"));
-    d.state("plain-readme-missing-manifest", Sizes::All);
+    d.observe(
+        "iter-10-E-SD3",
+        !d.has_containing("Package.md was written again")
+            && !d.has_containing("Undo write Package.md"),
+        "A write result whose file became a README clears with its Undo",
+    );
+    d.observe(
+        "iter-10-E-SD3-readme",
+        fs::read(&path).is_ok_and(|bytes| bytes == readme.as_bytes()),
+        "The README at the manifest name keeps its bytes",
+    );
+    // Without the stale result, the view is the deleted-manifest repair again.
+    d.assert_state_matches(
+        "plain-readme-missing-manifest",
+        "manifest-deleted-library-repair",
+    );
     d.click("Write the manifest again");
     d.wait_for_text("Module.md was written again.");
     assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());

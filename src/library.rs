@@ -49,19 +49,25 @@ fn repair_notice(
             "Write the manifest again".into()
         };
         let tone = if *exists { Tone::Error } else { Tone::Warning };
-        ui.scope(|ui| {
-            // Keep the action below the error at the text edge, even in a wide pane.
-            let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
-                Action::secondary(&label)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                    + inset,
-            );
-            ui.set_max_width(ui.available_width().min(width).min(EDITOR_MAX_WIDTH));
-            let pressed = design::locked(ui, blocked, |ui| {
-                design::message_with_action(ui, tone, problem, &label)
-            });
-            if *exists {
+        let pressed = ui
+            .scope(|ui| {
+                // Keep the action below the error at the text edge, even in a wide pane.
+                let width = (design::number_width(ui, problem, &Type::Body.font(ui)) + inset).max(
+                    Action::secondary(&label)
+                        .density(Density::Read)
+                        .natural_width(ui)
+                        + inset,
+                );
+                ui.set_max_width(ui.available_width().min(width).min(EDITOR_MAX_WIDTH));
+                design::locked(ui, blocked, |ui| {
+                    design::message_with_action(ui, tone, problem, &label)
+                })
+            })
+            .inner;
+        if *exists {
+            // The consequence wraps at the pane's notice measure, not at the action's width.
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
                 ui.horizontal(|ui| {
                     ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
                     ui.add(
@@ -73,10 +79,9 @@ fn repair_notice(
                         .wrap(),
                     );
                 });
-            }
-            pressed
-        })
-        .inner
+            });
+        }
+        pressed
     } else if crate::formats_ui::is_old(problem) {
         // Conversion remains the safe repair for an old-layout note.
         crate::formats_ui::old_notice(
@@ -2156,6 +2161,9 @@ impl Library {
                             self.reveal_row |= self.selected.is_some();
                             self.focus_repair =
                                 self.selected.is_some_and(|i| l.notes[i].error.is_some());
+                            crate::content_workspace::ManifestWrite::forget_if_changed(
+                                &mut self.manifest_write,
+                            );
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -7666,6 +7674,40 @@ mod tests {
                 readme.as_bytes()
             );
         }
+    }
+
+    #[test]
+    fn iter10_e_stale_manifest_write_result_clears_on_reload() {
+        use crate::content_workspace::ManifestWrite;
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let path = module.path.join("Package.md");
+        fs::remove_file(&path).unwrap();
+        let mut write = Some(ManifestWrite::write(&module).unwrap());
+        // The reload just after the write keeps the result and its Undo.
+        ManifestWrite::forget_if_changed(&mut write);
+        assert!(write.as_ref().is_some_and(ManifestWrite::on_disk));
+        // The written file becomes a README: the result and its Undo go.
+        let readme = "Notes on this adventure.\n";
+        fs::write(&path, readme).unwrap();
+        ManifestWrite::forget_if_changed(&mut write);
+        assert!(write.is_none());
+        assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+        // A deleted file also ends the result.
+        fs::remove_file(&path).unwrap();
+        let mut write = Some(ManifestWrite::write(&module).unwrap());
+        fs::remove_file(&path).unwrap();
+        ManifestWrite::forget_if_changed(&mut write);
+        assert!(write.is_none());
+        // A replacement whose file changed back to the broken text also ends.
+        let broken = "---\nsplat_kind: [\n---\n";
+        fs::write(&path, broken).unwrap();
+        let mut write = Some(ManifestWrite::write(&module).unwrap());
+        assert!(write.as_ref().unwrap().replaced());
+        fs::write(&path, broken).unwrap();
+        ManifestWrite::forget_if_changed(&mut write);
+        assert!(write.is_none());
+        assert_eq!(fs::read(&path).unwrap(), broken.as_bytes());
     }
 
     #[test]
