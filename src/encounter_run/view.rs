@@ -1269,8 +1269,10 @@ impl Run {
     }
 
     fn row_sync_word(&self, index: usize) -> Option<SyncState> {
-        self.sync_word(index)
-            .filter(|state| *state != SyncState::Stopped)
+        self.sync_word(index).map(|state| match state {
+            SyncState::Stopped => SyncState::Off,
+            state => state,
+        })
     }
 
     /// Every row's layout at this width. Rows with only a name can give up height when
@@ -5935,9 +5937,13 @@ fn condition_links(
         let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
             .translate(origin.to_vec2());
         // The words are smaller than a target may be, so the target grows, inside its row.
-        let bottom = (word.center().y + 12.0).min(rect.bottom());
+        let bottom = (word.center().y + design::XL / 2.0).min(rect.bottom());
+        let width = word.width().max(design::XL);
+        let left = (word.center().x - width / 2.0)
+            .max(rect.left())
+            .min(rect.right() - width);
         let target =
-            Rect::from_min_max(pos2(word.left(), bottom - 24.0), pos2(word.right(), bottom));
+            Rect::from_min_max(pos2(left, bottom - design::XL), pos2(left + width, bottom));
         let id = ui.id().with(("condition_rule", key, position));
         let response = ui
             .interact(target, id, egui::Sense::click())
@@ -6833,6 +6839,11 @@ mod tests {
             crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
         );
         assert_eq!(run.row_sync_word(0), Some(SyncState::Conflict));
+        assert_eq!(run.row_sync_word(1), Some(SyncState::Off));
+        let mut stopped = crate::combat_sync::CombatSync::default();
+        stopped.start();
+        stopped.session_ended();
+        run.syncs.insert(1, stopped);
         assert_eq!(run.row_sync_word(1), Some(SyncState::Off));
     }
 
