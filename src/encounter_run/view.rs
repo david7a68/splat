@@ -411,6 +411,14 @@ impl Run {
         if self.back_out_on_escape(ui) {
             return;
         }
+        // Escape in a row's initiative field closes the field and nothing else. The field
+        // has lost focus by now, so the check above does not keep the key from here.
+        if self.live_initiative.is_some()
+            && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+        {
+            self.live_initiative = None;
+            return;
+        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -1372,6 +1380,7 @@ impl Run {
         let mut spans = Vec::with_capacity(count);
         let mut edit_initiative = None;
         let mut set_initiative = None;
+        let mut close_initiative = false;
         let order = self.state.order.clone();
         let output = egui::ScrollArea::vertical()
             .id_salt("run_roster")
@@ -1500,6 +1509,51 @@ impl Run {
                             design::focus_ring(ui, target);
                         }
                     }
+                    // In combat the number itself opens a field to change it.
+                    // With several targets, this place holds the half-damage mark.
+                    if self.state.phase == Phase::Running
+                        && self.live_initiative != Some(index)
+                        && (!selected || self.also.is_empty())
+                    {
+                        // Inside the row, as its second target, like the missing-total link.
+                        // A short summary row keeps it to the row, with no clamp to panic.
+                        let middle = (rect.top() + layout.line_y(scale, rect.height()))
+                            .min(rect.bottom() - Density::Read.control() / 2.0)
+                            .max(rect.top() + Density::Read.control() / 2.0);
+                        let target = Rect::from_min_max(
+                            pos2(
+                                rect.left() + design::S,
+                                middle - Density::Read.control() / 2.0,
+                            ),
+                            pos2(
+                                rect.left() + layout.initiative_right + design::XS,
+                                middle + Density::Read.control() / 2.0,
+                            ),
+                        )
+                        .intersect(rect);
+                        let number = ui
+                            .interact(
+                                target,
+                                ui.id().with(("change_initiative", &p.key)),
+                                egui::Sense::click(),
+                            )
+                            .on_hover_text("Change initiative")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        number.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Link,
+                                true,
+                                format!("Change initiative for {}", p.name),
+                            )
+                        });
+                        if number.clicked() {
+                            edit_initiative = Some(index);
+                            clicked = None;
+                        }
+                        if number.has_focus() {
+                            design::focus_ring(ui, target);
+                        }
+                    }
                     if self.live_initiative == Some(index) {
                         let field = Rect::from_min_size(
                             pos2(
@@ -1521,14 +1575,20 @@ impl Run {
                                 Density::Read.control(),
                             );
                             if self.focus_field == Some(index) {
-                                response.request_focus();
+                                // Typing replaces the total that is there.
+                                design::focus_and_select(ui, response.id, text);
                                 self.focus_field = None;
                             }
-                            if ui.input(|i| i.key_pressed(Key::Enter))
+                            let enter = ui.input(|i| i.key_pressed(Key::Enter));
+                            if enter
                                 && (response.has_focus() || response.lost_focus())
                                 && let Ok(total) = text.parse()
                             {
                                 set_initiative = Some((index, total));
+                            } else if response.lost_focus() {
+                                // Escape, a click away, or Enter with no number leaves the
+                                // total as it was.
+                                close_initiative = true;
                             }
                         });
                     }
@@ -1595,13 +1655,21 @@ impl Run {
                 }
             });
         self.overflow_note(ui, &output, &spans);
+        if close_initiative {
+            self.live_initiative = None;
+        }
         if let Some(index) = edit_initiative {
             self.live_initiative = Some(index);
             self.focus_field = Some(index);
-            self.setup_inputs.insert(index, String::new());
+            let total = self.state.participants[index].initiative;
+            self.setup_inputs
+                .insert(index, total.map_or_else(String::new, |n| n.to_string()));
         }
         if let Some((index, total)) = set_initiative {
-            self.run_command(Command::Initiative(index, Some(total)));
+            // The same total again changes nothing, and is no step to undo.
+            if self.state.participants[index].initiative != Some(total) {
+                self.run_command(Command::Initiative(index, Some(total)));
+            }
             self.live_initiative = None;
         }
         if let Some(index) = toggle_half {
@@ -3679,12 +3747,19 @@ impl Run {
                             "No initiative yet: last in the order until you set it. The current turn stays.",
                             colors().result.warning,
                         )
+                    } else if self.current() == Some(index) {
+                        // Moving it now would skip others, or give them a second turn.
+                        (
+                            "The turn stays. If the new total moves this row, it moves when its turn ends.",
+                            colors().muted,
+                        )
                     } else {
                         (
                             "This row moves. The current turn stays.",
                             colors().muted,
                         )
                     };
+                    let had = p.initiative;
                     ui.add_space(design::L);
                     design::group_heading(ui, "Correct initiative", 0);
                     let field = format!("Initiative for {}", p.name);
@@ -3714,7 +3789,10 @@ impl Run {
                         if (pressed || enter)
                             && let Some(total) = total
                         {
-                            command = Some(Command::Initiative(index, Some(total)));
+                            // The same total again changes nothing, and is no step to undo.
+                            if had != Some(total) {
+                                command = Some(Command::Initiative(index, Some(total)));
+                            }
                             text.clear();
                             self.return_focus = self.lookup_open;
                         }
@@ -6681,6 +6759,72 @@ mod tests {
             .get_by_label(&format!("Move {last} before {first}"))
             .rect();
         assert!(down.left() >= up.right(), "down {down:?}, up {up:?}");
+    }
+
+    #[test]
+    fn a_combat_row_initiative_opens_a_field_to_change_it() {
+        use egui_kittest::kittest::Queryable;
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1280.0, 720.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut run = shown.borrow_mut();
+                    run.live_keys(ui);
+                    run.roster(ui, 600.0, 0.0);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        run.borrow_mut().select(1);
+        harness.run_steps(2);
+        // Escape leaves the total as it was, and the DM's look at another row stays.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, Some(2));
+        harness.key_press(Key::Escape);
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, None);
+        assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+        assert_eq!(run.borrow().selected, 1);
+        // Enter with no number closes the field too.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        harness.key_press(Key::Backspace);
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(run.borrow().live_initiative, None);
+        assert_eq!(run.borrow().state.participants[2].initiative, Some(10));
+        // The field opens on the total, and what is typed replaces it.
+        harness
+            .get_by_label("Change initiative for Guard 3")
+            .click();
+        harness.run_steps(3);
+        assert_eq!(
+            run.borrow().setup_inputs.get(&2).map(String::as_str),
+            Some("10")
+        );
+        harness
+            .get_by_label("Initiative for Guard 3")
+            .type_text("18");
+        harness.run_steps(1);
+        harness.key_press(Key::Enter);
+        harness.run_steps(3);
+        let run = run.borrow();
+        assert_eq!(run.state.participants[2].initiative, Some(18));
+        assert_eq!(run.state.order, vec![0, 2, 1]);
+        assert_eq!(run.current(), Some(0));
+        assert_eq!(run.live_initiative, None);
     }
 
     #[test]

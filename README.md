@@ -130,7 +130,8 @@ values: `darkvision`, `habitat:forest`, `type:dragon`, `cr:5-10`, `cr:5+`,
 `immune:fire` or `lang:"deep speech"`. A creature with habitat `Any` is found
 under every habitat.
 
-A live initiative change says `acts next round` when its place has passed. Setup counts
+A live initiative change says `acts next round` when its place has passed, and
+`acts again this round` when a row that already acted moves below the current turn. Setup counts
 rows below the visible list, including missing initiatives and ties between independent rolls. Shared rolls do not produce a tie warning. Session note boxes
 keep their edges visible while the text scrolls. Saved runs keep the last change in the
 same words as the close dialog.
@@ -708,6 +709,12 @@ roll each participant using its supplied bonus. Rows hold still while you type, 
 each tied total has **Tie** and two fixed arrow slots below it. The setup header warns about ties even while the panel is open. Fill in
 unknown HP values through the row menu's **Correct…** action, then choose **Begin combat**. **Next turn** advances through present participants and counts
 rounds. Absent participants keep their state and initiative when they return.
+In combat, click a row's initiative, type the new total, and press Enter; Escape
+leaves it as it was. The row moves to its new place as one step of undo, and the
+current turn stays. A tie keeps its order, or roster order when the campaign uses it.
+The current participant keeps its turn and its row until **Next turn**: then it moves,
+so no one is skipped or acts twice. A lower total acts later this round, as a delay;
+a higher one acts next round.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
