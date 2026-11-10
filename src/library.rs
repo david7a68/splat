@@ -4721,7 +4721,7 @@ impl Library {
             }
         };
         let save_row = editable && (self.source || dirty);
-        let mut step = ui.input_mut(history::take_any);
+        let mut step = history::take_any(ui.ctx());
         let can_copy = note
             .entry
             .as_ref()

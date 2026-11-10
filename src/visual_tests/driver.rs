@@ -1428,15 +1428,25 @@ impl<'a> Driver<'a> {
         });
         let caption = format!("Press: mouse {button:?} over {over}");
         self.film_caption(&caption);
-        for pressed in [true, false] {
-            self.harness.event(egui::Event::PointerButton {
-                pos: rect.center(),
-                button,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            });
+        let mut raw = egui::RawInput {
+            events: [true, false]
+                .map(|pressed| egui::Event::PointerButton {
+                    pos: rect.center(),
+                    button,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                })
+                .into(),
+            ..Default::default()
+        };
+        // Kittest does not call eframe's raw input hook, which sets the side buttons aside.
+        let ctx = self.harness.ctx.clone();
+        eframe::App::raw_input_hook(self.harness.state_mut(), &ctx, &mut raw);
+        for event in raw.events {
+            self.harness.event(event);
         }
         self.harness.step();
+        crate::history::set_aside(&ctx, &mut Vec::new());
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();

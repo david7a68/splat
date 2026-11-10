@@ -1671,13 +1671,17 @@ impl Lookup {
         }
     }
 
+    /// With nothing that way, nothing changes, so a stray press keeps a written note open.
     fn step(&mut self, step: Step) {
-        self.reading_written = None;
         let here = self.current_id();
         let (from, to) = match step {
             Step::Back => (&mut self.history, &mut self.forward),
             Step::Forward => (&mut self.forward, &mut self.history),
         };
+        if from.is_empty() {
+            return;
+        }
+        self.reading_written = None;
         if let Some(id) = from.pop()
             && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
         {
@@ -1693,7 +1697,7 @@ impl Lookup {
         if !self.open {
             return;
         }
-        let Some(request) = ctx.input(history::pending) else {
+        let Some(request) = history::pending(ctx) else {
             return;
         };
         let rect = ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")));
@@ -1706,8 +1710,7 @@ impl Lookup {
                     .is_some_and(|response| here(response.rect.center())),
                 history::Source::Button(pos) => here(pos),
             };
-        if mine {
-            ctx.input_mut(|input| history::take(input, request));
+        if mine && history::take(ctx, request) {
             self.step(request.0);
         }
     }
@@ -1726,8 +1729,10 @@ impl Lookup {
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
+        // With the margin, so a press anywhere on the panel counts as here.
+        let panel = ui.max_rect().expand(design::M);
         ui.ctx()
-            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), ui.max_rect()));
+            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), panel));
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
@@ -2439,6 +2444,13 @@ mod tests {
         assert_eq!(lookup.current, Some(0));
         lookup.step(Step::Forward);
         assert_eq!(lookup.current, Some(2));
+        lookup.reading_written = Some(0);
+        lookup.step(Step::Forward);
+        assert_eq!(
+            lookup.reading_written,
+            Some(0),
+            "nothing ahead keeps the note open"
+        );
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
@@ -2447,7 +2459,7 @@ mod tests {
     fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
         let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
             let ctx = egui::Context::default();
-            let raw = egui::RawInput {
+            let mut raw = egui::RawInput {
                 events: vec![egui::Event::PointerButton {
                     pos: egui::pos2(x, 50.0),
                     button: egui::PointerButton::Extra1,
@@ -2456,13 +2468,14 @@ mod tests {
                 }],
                 ..Default::default()
             };
+            history::set_aside(&ctx, &mut raw.events);
             let mut left = None;
             let _ = ctx.run(raw, |ctx| {
                 let panel =
                     egui::Rect::from_min_max(egui::pos2(300.0, 0.0), egui::pos2(600.0, 400.0));
                 ctx.data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), panel));
                 lookup.history_input(ctx, library_page);
-                left = ctx.input(history::pending).map(|request| request.0);
+                left = history::pending(ctx).map(|request| request.0);
             });
             left
         };
