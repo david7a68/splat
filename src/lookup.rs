@@ -5,6 +5,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
     design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
+    history::{self, Step},
     library::{presentation, view},
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
@@ -1372,6 +1373,8 @@ pub struct Lookup {
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
     history: Vec<Uuid>,
+    /// What Back left, newest last.
+    forward: Vec<Uuid>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
@@ -1634,10 +1637,11 @@ impl Lookup {
     }
 
     fn navigate(&mut self, position: usize) {
-        if let Some(id) = self.current_id()
-            && self.current != Some(position)
-        {
-            self.history.push(id);
+        if self.current != Some(position) {
+            self.forward.clear();
+            if let Some(id) = self.current_id() {
+                self.history.push(id);
+            }
         }
         self.current = Some(position);
     }
@@ -1667,33 +1671,44 @@ impl Lookup {
         }
     }
 
-    fn back(&mut self) {
+    fn step(&mut self, step: Step) {
         self.reading_written = None;
-        if let Some(id) = self.history.pop()
+        let here = self.current_id();
+        let (from, to) = match step {
+            Step::Back => (&mut self.history, &mut self.forward),
+            Step::Forward => (&mut self.forward, &mut self.history),
+        };
+        if let Some(id) = from.pop()
             && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
         {
+            to.extend(here);
             self.current = Some(position);
             self.results_open = false;
         }
     }
 
-    pub(crate) fn back_key(&mut self, ctx: &egui::Context, library_page: bool) {
-        if !self.open
-            || !ctx.input(|input| input.modifiers.alt && input.key_pressed(egui::Key::ArrowLeft))
-        {
+    /// Back and Forward. Beside the Library page, a key acts here only with focus here,
+    /// and a mouse button only with the pointer here; the Library takes the rest.
+    pub(crate) fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
+        if !self.open {
             return;
         }
-        let focused_here = ctx
-            .memory(|memory| memory.focused())
-            .and_then(|id| ctx.read_response(id))
-            .is_some_and(|response| {
-                ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")))
-                    .is_some_and(|rect| rect.contains(response.rect.center()))
-            });
-        if (!library_page || focused_here)
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
-        {
-            self.back();
+        let Some(request) = ctx.input(history::pending) else {
+            return;
+        };
+        let rect = ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")));
+        let here = |pos: egui::Pos2| rect.is_some_and(|rect| rect.contains(pos));
+        let mine = !library_page
+            || match request.1 {
+                history::Source::Key => ctx
+                    .memory(|memory| memory.focused())
+                    .and_then(|id| ctx.read_response(id))
+                    .is_some_and(|response| here(response.rect.center())),
+                history::Source::Button(pos) => here(pos),
+            };
+        if mine {
+            ctx.input_mut(|input| history::take(input, request));
+            self.step(request.0);
         }
     }
 
@@ -1726,7 +1741,7 @@ impl Lookup {
                     .show(ui)
                     .clicked()
             {
-                self.back();
+                self.step(Step::Back);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
@@ -2397,6 +2412,72 @@ mod tests {
         item.from_sheet = true;
         assert_eq!(item.origin(), Origin::Sheet, "a sheet's copy ranks last");
         assert!(Origin::Own < Origin::Book && Origin::Book < Origin::Sheet);
+    }
+
+    fn browsed_lookup() -> Lookup {
+        let mut lookup = Lookup {
+            open: true,
+            index: Some(Arc::new(ContentIndex::load(&[], None).unwrap())),
+            ..Default::default()
+        };
+        lookup.navigate(0);
+        lookup.navigate(1);
+        lookup
+    }
+
+    #[test]
+    fn forward_returns_to_what_back_left_until_another_entry() {
+        let mut lookup = browsed_lookup();
+        lookup.step(Step::Back);
+        assert_eq!(lookup.current, Some(0));
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.current, Some(1));
+        lookup.step(Step::Back);
+        lookup.navigate(2);
+        assert!(lookup.forward.is_empty(), "a new entry starts a new trail");
+        lookup.step(Step::Back);
+        assert_eq!(lookup.current, Some(0));
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.current, Some(2));
+    }
+
+    /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
+    /// the rest in the input for the Library.
+    #[test]
+    fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
+        let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
+            let ctx = egui::Context::default();
+            let raw = egui::RawInput {
+                events: vec![egui::Event::PointerButton {
+                    pos: egui::pos2(x, 50.0),
+                    button: egui::PointerButton::Extra1,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            let mut left = None;
+            let _ = ctx.run(raw, |ctx| {
+                let panel =
+                    egui::Rect::from_min_max(egui::pos2(300.0, 0.0), egui::pos2(600.0, 400.0));
+                ctx.data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), panel));
+                lookup.history_input(ctx, library_page);
+                left = ctx.input(history::pending).map(|request| request.0);
+            });
+            left
+        };
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, true), Some(Step::Back));
+        assert_eq!(
+            lookup.current,
+            Some(1),
+            "over the Library page, Lookup stays"
+        );
+        assert_eq!(press(&mut lookup, 400.0, true), None);
+        assert_eq!(lookup.current, Some(0), "over Lookup, Lookup goes back");
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, false), None);
+        assert_eq!(lookup.current, Some(0), "on other pages, Lookup goes back");
     }
 
     #[test]

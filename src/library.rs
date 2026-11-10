@@ -9,6 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
+    history::{self, Step},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
@@ -1692,6 +1693,8 @@ pub struct Library {
     /// An entry to read beside the open draft, in Lookup.
     pub peek: Option<Uuid>,
     history: Vec<BackStep>,
+    /// What Back left, newest last.
+    forward: Vec<BackStep>,
     dependency_undo: Option<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
     link_choices: Vec<Uuid>,
@@ -2007,18 +2010,9 @@ impl Library {
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
-        if let Some(current) = self
-            .selected
-            .and_then(|i| self.loaded.as_ref().and_then(|l| l.notes.get(i)))
-            .filter(|_| self.selected != Some(index))
-        {
-            self.history.push(BackStep {
-                owner: current.owner.id(),
-                path: current.path.clone(),
-                scope: self.scope,
-                section: self.section,
-                search: self.search.clone(),
-            });
+        if self.selected != Some(index) {
+            self.forward.clear();
+            self.history.extend(self.here());
         }
         if !note.is_manifest() && !self.loaded.as_ref().unwrap().in_scope(note, self.scope) {
             self.scope = Scope::All;
@@ -4055,28 +4049,53 @@ impl Library {
         self.new_place = (place != default_place).then_some(place);
     }
 
-    fn go_back(&mut self) {
+    /// The open entry, as Back or Forward returns to it.
+    fn here(&self) -> Option<BackStep> {
+        let current = self.loaded.as_ref()?.notes.get(self.selected?)?;
+        Some(BackStep {
+            owner: current.owner.id(),
+            path: current.path.clone(),
+            scope: self.scope,
+            section: self.section,
+            search: self.search.clone(),
+        })
+    }
+
+    fn trail(&self, step: Step) -> &[BackStep] {
+        match step {
+            Step::Back => &self.history,
+            Step::Forward => &self.forward,
+        }
+    }
+
+    fn go(&mut self, step: Step) {
         if self.dirty() {
             return;
         }
-        let Some(step) = self.history.pop() else {
+        let here = self.here();
+        let (from, to) = match step {
+            Step::Back => (&mut self.history, &mut self.forward),
+            Step::Forward => (&mut self.forward, &mut self.history),
+        };
+        let Some(target) = from.pop() else {
             return;
         };
         let Some(index) = self.loaded.as_ref().and_then(|l| {
             l.notes
                 .iter()
-                .position(|n| n.owner.id() == step.owner && n.path == step.path)
+                .position(|n| n.owner.id() == target.owner && n.path == target.path)
         }) else {
             return;
         };
+        to.extend(here);
         self.selected = Some(index);
         self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         self.disk_change = None;
         self.scope_notice = None;
-        self.scope = step.scope;
-        self.section = step.section;
-        self.search = step.search;
+        self.scope = target.scope;
+        self.section = target.section;
+        self.search = target.search;
         self.matches = None;
         self.source = false;
         self.error = None;
@@ -4551,8 +4570,7 @@ impl Library {
             }
         };
         let save_row = editable && (self.source || dirty);
-        let mut go_back =
-            ui.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft));
+        let mut step = ui.input_mut(history::take_any);
         let can_copy = note
             .entry
             .as_ref()
@@ -4632,7 +4650,7 @@ impl Library {
                     .show(ui)
                     .clicked()
             {
-                go_back = true;
+                step = Some(Step::Back);
             }
             if overflow {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5586,20 +5604,20 @@ impl Library {
                 self.reveal_row = true;
             }
         }
-        if go_back {
+        if let Some(step) = step {
             if dirty {
-                self.peek = self.history.last().and_then(|step| {
+                self.peek = self.trail(step).last().and_then(|target| {
                     self.loaded
                         .as_ref()?
                         .notes
                         .iter()
-                        .find(|note| note.owner.id() == step.owner && note.path == step.path)?
+                        .find(|note| note.owner.id() == target.owner && note.path == target.path)?
                         .entry
                         .as_ref()
                         .map(|e| e.id)
                 });
             } else {
-                self.go_back();
+                self.go(step);
             }
         }
     }
@@ -6673,10 +6691,28 @@ mod tests {
         library.open_entry(1);
         library.draft.push_str("Unsaved ruling.");
         let draft = library.draft.clone();
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.draft, draft);
         assert_eq!(library.history.len(), 1);
+    }
+
+    #[test]
+    fn forward_returns_to_what_back_left_until_another_link() {
+        let mut library = navigation_library();
+        library.open_entry(0);
+        library.open_entry(1);
+        library.go(Step::Back);
+        assert_eq!(library.selected, Some(0));
+        library.go(Step::Forward);
+        assert_eq!(library.selected, Some(1));
+        library.go(Step::Back);
+        library.open_entry(2);
+        assert!(library.forward.is_empty(), "a new link starts a new trail");
+        library.go(Step::Back);
+        assert_eq!(library.selected, Some(0));
+        library.go(Step::Forward);
+        assert_eq!(library.selected, Some(2));
     }
 
     #[test]
@@ -6691,7 +6727,7 @@ mod tests {
         library.search = "Second".into();
         library.open_entry(2);
         library.scope = Scope::All;
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.selected, Some(1));
         assert_eq!(library.scope, Scope::Package(owner));
         assert_eq!(library.search, "Second");
@@ -6709,7 +6745,7 @@ mod tests {
         library.open_entry(2);
         let loaded = library.loaded.as_ref().unwrap();
         assert!(loaded.in_scope(&loaded.notes[2], library.scope));
-        library.go_back();
+        library.go(Step::Back);
         assert_eq!(library.scope, Scope::Package(owner));
     }
     /// Run alone so the first load starts without a warmed process cache.
