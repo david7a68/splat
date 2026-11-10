@@ -17,6 +17,8 @@ use std::{
 };
 use uuid::Uuid;
 
+use crate::matching::{self, Fit, Typed};
+
 const RESULT_ROW: f32 = design::XXL;
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
@@ -39,7 +41,7 @@ pub struct Written {
 }
 
 /// One line of the results.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Hit {
     Entry(usize),
     Written(usize),
@@ -61,6 +63,82 @@ pub(crate) fn name_rank(name: &str, query: &str) -> Option<u8> {
         Some(3)
     } else {
         None
+    }
+}
+
+/// Something the DM wrote, in lower case and with its words, for search.
+#[derive(Default)]
+struct WrittenSearch {
+    title: String,
+    text: String,
+    text_words: Vec<String>,
+}
+
+impl WrittenSearch {
+    fn new(written: &Written) -> Self {
+        let text = written.text.to_lowercase();
+        Self {
+            title: written.title.to_lowercase(),
+            text_words: matching::word_set(&text),
+            text,
+        }
+    }
+}
+
+/// What the DM wrote that has these words: the title as typed, then the title's words, then
+/// the text as typed, then the text's words. A typo comes last. True marks a result found only
+/// with a typo.
+fn search_written(written: &[WrittenSearch], query: &str) -> Vec<(usize, bool)> {
+    const WORDS: u8 = 4;
+    let typed = Typed::new(query);
+    let mut found: Vec<(u8, usize)> = written
+        .iter()
+        .enumerate()
+        .filter_map(|(at, written)| {
+            let in_title = typed.in_name(matching::words(&written.title));
+            let rank = match in_title {
+                _ if written.title.contains(query) => 0,
+                Some(Fit::Exact) => 1,
+                Some(Fit::Start) => 2,
+                _ if written.text.contains(query) => 3,
+                _ => words_rank(in_title, typed.in_text(&written.text_words), WORDS)?,
+            };
+            Some((rank, at))
+        })
+        .collect();
+    found.sort_unstable();
+    found
+        .into_iter()
+        .map(|(rank, at)| (at, rank >= WORDS + TYPO_FROM))
+        .collect()
+}
+
+/// Entries, then what the DM wrote, each found as typed. Then the same, found only with a
+/// typo, so that a typo never comes before something found as typed.
+fn merge_hits(entries: &[(usize, bool)], written: &[(usize, bool)]) -> Vec<Hit> {
+    let hits = |typo: bool| {
+        let entries = entries.iter().filter(move |(_, t)| *t == typo);
+        let written = written.iter().filter(move |(_, t)| *t == typo);
+        entries
+            .map(|&(at, _)| Hit::Entry(at))
+            .chain(written.map(|&(at, _)| Hit::Written(at)))
+    };
+    hits(false).chain(hits(true)).collect()
+}
+
+/// How far after `first` a `words_rank` is a typo.
+const TYPO_FROM: u8 = 2;
+
+/// The rank, from `first` on, for a search by words that is not in the name or text as typed:
+/// each word in the text, then the start of each word in the text, then a typo in the name,
+/// then, last of all, a typo in the text.
+fn words_rank(in_name: Option<Fit>, in_text: Option<Fit>, first: u8) -> Option<u8> {
+    match (in_name, in_text) {
+        (_, Some(Fit::Exact)) => Some(first),
+        (_, Some(Fit::Start)) => Some(first + 1),
+        (Some(Fit::Typo), _) => Some(first + 2),
+        (_, Some(Fit::Typo)) => Some(first + 3),
+        _ => None,
     }
 }
 
@@ -103,6 +181,9 @@ pub struct Item {
     duplicate_identity: bool,
     /// For notes and world entries, whose words can also be searched.
     lower_body: String,
+    /// The words of `lower`, and the different words of `lower_body`, for a search by words.
+    name_words: Vec<String>,
+    body_words: Vec<String>,
 }
 
 fn next_generation() -> u64 {
@@ -235,6 +316,8 @@ fn note_items(
         source,
         duplicate_identity: false,
         lower_body,
+        name_words: Vec::new(),
+        body_words: Vec::new(),
         entry,
     };
     // The reader already shows the name as the title.
@@ -353,6 +436,8 @@ impl ContentIndex {
                     } else {
                         String::new()
                     },
+                    name_words: Vec::new(),
+                    body_words: Vec::new(),
                     entry: {
                         let mut entry = e.entry.clone();
                         if e.private
@@ -382,6 +467,13 @@ impl ContentIndex {
             let owner = owner_name(campaign.id, true);
             for note in scan.notes {
                 items.extend(note_items(note, &owner, &scan.images));
+            }
+        }
+        for item in &mut items {
+            item.name_words = matching::words(&item.lower).map(str::to_owned).collect();
+            // A session's words are searched from what the DM wrote, not from here.
+            if !matches!(item.source, Source::Note(Role::Session | Role::Transcript)) {
+                item.body_words = matching::word_set(&item.lower_body);
             }
         }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
@@ -947,21 +1039,18 @@ impl ContentIndex {
         self.mentions.get(&id).map_or(&[], Vec::as_slice)
     }
 
-    /// Creatures by name, exact matches first and then each word's start.
+    /// Creatures by name, best first as `matching::name_fit` ranks them.
     pub fn creatures_matching(&self, query: &str, limit: usize) -> Vec<usize> {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
             return Vec::new();
         }
+        let typed = Typed::new(&query);
         let mut found: Vec<(u8, usize)> = self
             .creatures
             .iter()
             .filter_map(|&at| {
-                let name = &self.items[at].lower;
-                name.contains(&query).then(|| {
-                    let rank = u8::from(*name != query) + u8::from(!name.starts_with(&query));
-                    (rank, at)
-                })
+                matching::name_fit(&self.items[at].lower, &query, &typed).map(|rank| (rank, at))
             })
             .collect();
         found.sort_unstable();
@@ -1050,9 +1139,20 @@ impl ContentIndex {
         self.by_id.get(&id).copied()
     }
 
-    /// Best first: exact name, then a prefix, then a word, then anywhere in the name. A note's
-    /// words come last.
+    /// Best first: exact name, then a prefix, then a word, then anywhere in the name, then
+    /// each word of the search in any order. Then the section's name, then a note's words. A
+    /// typo comes last: in a name, and then, last of all, in a note's words.
     pub(crate) fn search(&self, query: &str) -> Vec<usize> {
+        self.search_typos(query)
+            .into_iter()
+            .map(|(at, _)| at)
+            .collect()
+    }
+
+    /// `search`, with true for a result found only with a typo.
+    fn search_typos(&self, query: &str) -> Vec<(usize, bool)> {
+        const WORDS: u8 = 8;
+        let typed = Typed::new(query);
         let mut found: Vec<(u8, Origin, usize)> = self
             .items
             .iter()
@@ -1064,18 +1164,23 @@ impl ContentIndex {
                 }
                 let rank = if let Some(rank) = name_rank(&item.lower, query) {
                     rank
-                } else if item.section.label().to_lowercase() == query {
-                    4
-                } else if item.lower_body.contains(query) {
-                    5
                 } else {
-                    return None;
+                    let in_name = typed.in_name(item.name_words.iter().map(String::as_str));
+                    match in_name {
+                        Some(fit) if fit < Fit::Typo => matching::words_fit(fit),
+                        _ if item.section.label().to_lowercase() == query => 6,
+                        _ if item.lower_body.contains(query) => 7,
+                        _ => words_rank(in_name, typed.in_text(&item.body_words), WORDS)?,
+                    }
                 };
                 Some((rank, item.origin(), index))
             })
             .collect();
         found.sort_unstable();
-        found.into_iter().map(|(.., index)| index).collect()
+        found
+            .into_iter()
+            .map(|(rank, _, index)| (index, rank >= WORDS + TYPO_FROM))
+            .collect()
     }
 }
 
@@ -1111,6 +1216,8 @@ pub struct Lookup {
     /// What the DM wrote, read once each time the panel opens.
     written: Vec<Written>,
     written_stale: bool,
+    /// `written` prepared for search once, not on each key.
+    written_search: Vec<WrittenSearch>,
     /// The note or event being read, in place of an entry.
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
@@ -1260,6 +1367,7 @@ impl Lookup {
     }
 
     pub fn set_written(&mut self, written: Vec<Written>) {
+        self.written_search = written.iter().map(WrittenSearch::new).collect();
         self.written = written;
         self.written_stale = false;
         self.matches = None;
@@ -1382,21 +1490,6 @@ impl Lookup {
             self.history.push(id);
         }
         self.current = Some(position);
-    }
-
-    /// What the DM wrote that has these words. A name match comes before words in a note.
-    fn search_written(&self, query: &str) -> Vec<usize> {
-        let mut found: Vec<(bool, usize)> = self
-            .written
-            .iter()
-            .enumerate()
-            .filter_map(|(at, written)| {
-                let in_title = written.title.to_lowercase().contains(query);
-                (in_title || written.text.to_lowercase().contains(query)).then_some((!in_title, at))
-            })
-            .collect();
-        found.sort_unstable();
-        found.into_iter().map(|(_, at)| at).collect()
     }
 
     /// Go to a result. A heading's result opens its note at that heading.
@@ -1606,12 +1699,10 @@ impl Lookup {
             let found = if query.is_empty() {
                 Vec::new()
             } else {
-                index
-                    .search(&query)
-                    .into_iter()
-                    .map(Hit::Entry)
-                    .chain(self.search_written(&query).into_iter().map(Hit::Written))
-                    .collect()
+                merge_hits(
+                    &index.search_typos(&query),
+                    &search_written(&self.written_search, &query),
+                )
             };
             self.matches = Some((query.clone(), found));
             self.highlight = 0;
@@ -2576,6 +2667,118 @@ mod tests {
         assert_eq!(index.items[wolves[0]].entry.name, "Wolf");
         assert!(wolves.len() > 1);
     }
+    #[test]
+    fn words_find_a_name_in_any_order_and_with_a_typo() {
+        let index = ContentIndex::load(&[], None).unwrap();
+        let first = |query: &str| index.items[index.search(query)[0]].entry.name.clone();
+        let potion = first("potion of healing");
+        assert!(potion.starts_with("Potion of Healing"), "{potion}");
+        for query in ["healing potion", "potion healing", "potoin of healng"] {
+            assert_eq!(first(query), potion, "{query}");
+        }
+        assert!(
+            index
+                .search("healing")
+                .into_iter()
+                .any(|at| index.items[at].entry.name == potion)
+        );
+        // A typo comes after every name that has the word as typed.
+        let fire = index.search("fire");
+        let typo = fire
+            .iter()
+            .position(|&at| !index.items[at].lower.contains("fire"))
+            .unwrap_or(fire.len());
+        assert!(
+            fire[typo..]
+                .iter()
+                .all(|&at| !index.items[at].lower.contains("fire"))
+        );
+    }
+
+    #[test]
+    fn what_the_dm_wrote_ranks_as_typed_before_a_typo() {
+        let written = |title: &str, text: &str| {
+            WrittenSearch::new(&Written {
+                title: title.into(),
+                detail: String::new(),
+                text: text.into(),
+                place: WrittenIn::Event(String::new()),
+            })
+        };
+        let notes = [
+            written("Session 3", "The smuglers paid."),
+            written("Session 2", "Smugglers hid at the mill."),
+            written("Smugglers at the mill", ""),
+            written("Mill smugglers", ""),
+        ];
+        assert_eq!(
+            search_written(&notes, "smugglers"),
+            [(2, false), (3, false), (1, false), (0, true)]
+        );
+        assert_eq!(
+            search_written(&notes, "mill smugglers"),
+            [(3, false), (2, false), (1, false)]
+        );
+    }
+
+    #[test]
+    fn a_typo_never_comes_before_a_result_as_typed() {
+        let hits = merge_hits(&[(5, false), (6, true)], &[(1, false), (2, true)]);
+        assert_eq!(
+            hits,
+            [
+                Hit::Entry(5),
+                Hit::Written(1),
+                Hit::Entry(6),
+                Hit::Written(2)
+            ]
+        );
+    }
+
+    #[test]
+    fn the_creature_picker_puts_a_typo_last() {
+        let index = ContentIndex::load(&[], None).unwrap();
+        let names: Vec<String> = index
+            .creatures_matching("wolf", 50)
+            .into_iter()
+            .map(|at| index.items[at].entry.name.clone())
+            .collect();
+        assert_eq!(names[0], "Wolf");
+        let typo = names
+            .iter()
+            .position(|name| !name.to_lowercase().contains("wolf"));
+        if let Some(typo) = typo {
+            assert!(
+                names[typo..]
+                    .iter()
+                    .all(|name| !name.to_lowercase().contains("wolf"))
+            );
+        }
+        let typo = index.creatures_matching("wolff", 5);
+        assert!(index.items[typo[0]].entry.name.contains("Wolf"));
+    }
+
+    #[test]
+    fn a_typo_in_note_text_comes_last() {
+        let (_dir, campaign) = campaign_with(&[
+            ("Harbor.md", "# Harbor\n\nThe smugglers hide here.\n"),
+            ("Smuggler Den.md", "# Smuggler Den\n\nA quiet room.\n"),
+            ("Market.md", "# Market\n\nSmuglers sell here.\n"),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let names = |query: &str| -> Vec<String> {
+            index
+                .search(query)
+                .into_iter()
+                .filter(|&at| index.items[at].is_private())
+                .map(|at| index.items[at].entry.name.clone())
+                .collect()
+        };
+        // Words as typed in a note, then a typo in a name, then a typo in a note.
+        assert_eq!(names("smugglers"), ["Harbor", "Smuggler Den", "Market"]);
+        assert_eq!(names("hide smugglers"), ["Harbor"]);
+    }
+
     #[test]
     fn wiki_links_share_campaign_scope_aliases_headings_and_reference_keys() {
         let (dir, campaign) = campaign_with(&[
