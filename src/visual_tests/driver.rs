@@ -1097,10 +1097,19 @@ impl<'a> Driver<'a> {
 
     /// The page's title: the first label at the top of the page, right of the rail.
     pub fn page_title(&self) -> Option<String> {
-        self.nodes()
+        let nodes = self.nodes();
+        // The party bar stands above the Session page's title, so the title starts below it.
+        let top = nodes
+            .iter()
+            .find(|node| node.name == "Hide the party")
+            .map_or(0.0, |node| node.rect.max.y + crate::design::XS);
+        nodes
             .into_iter()
             .filter(|node| {
-                node.role == Role::Label && node.rect.min.x > 140.0 && node.rect.min.y < 40.0
+                node.role == Role::Label
+                    && node.rect.min.x > 140.0
+                    && node.rect.min.y >= top
+                    && node.rect.min.y < top + 40.0
             })
             .min_by(|a, b| a.rect.min.x.total_cmp(&b.rect.min.x))
             .map(|node| node.name)
@@ -2021,6 +2030,16 @@ impl<'a> Driver<'a> {
 
     /// Capture the current state with the pointer resting on a control.
     pub fn state_hovering(&mut self, name: &str, target: &str) {
+        self.capture_hovering(name, target, 2);
+    }
+
+    /// Capture the current state with the pointer resting on a control until its tooltip shows.
+    pub fn state_with_tooltip(&mut self, name: &str, target: &str) {
+        // A tooltip waits half a second, and one frame here is a quarter second.
+        self.capture_hovering(name, target, 6);
+    }
+
+    fn capture_hovering(&mut self, name: &str, target: &str, steps: usize) {
         self.finish_capture_saves();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
@@ -2028,7 +2047,7 @@ impl<'a> Driver<'a> {
             node.name == target && !matches!(node.role, Role::Label | Role::TextRun)
         });
         self.harness.hover_at(rect.center());
-        self.harness.run_steps(2);
+        self.harness.run_steps(steps);
         let expect_same = self.expect_same.take();
         self.capture(&label, self.base, 1.0, expect_same, Capture::Save);
         self.harness.remove_cursor();
@@ -2174,17 +2193,36 @@ impl<'a> Driver<'a> {
     }
 }
 
+/// Each worker thread keeps one software device for all its scenarios and restarts.
+/// Every app still gets its own egui renderer, so no textures are shared.
 fn software_renderer() -> egui_kittest::wgpu::WgpuTestRenderer {
+    use eframe::{egui_wgpu, wgpu};
     use egui_kittest::wgpu::{WgpuTestRenderer, create_render_state, default_wgpu_setup};
-    let state = create_render_state(default_wgpu_setup());
-    let adapter = state.adapter.get_info();
-    assert_eq!(
-        adapter.device_type,
-        eframe::wgpu::DeviceType::Cpu,
-        "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
-        adapter.name,
-        adapter.backend,
-    );
+    thread_local! {
+        static DEVICE: egui_wgpu::RenderState = {
+            let mut setup = default_wgpu_setup();
+            // Only Vulkan has the software rasterizer. Other backends load drivers for nothing.
+            if let egui_wgpu::WgpuSetup::CreateNew(new) = &mut setup {
+                new.instance_descriptor.backends = wgpu::Backends::VULKAN;
+            }
+            let state = create_render_state(setup);
+            let adapter = state.adapter.get_info();
+            assert_eq!(
+                adapter.device_type,
+                wgpu::DeviceType::Cpu,
+                "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
+                adapter.name,
+                adapter.backend,
+            );
+            state
+        };
+    }
+    let mut state = DEVICE.with(Clone::clone);
+    state.renderer = std::sync::Arc::new(egui::mutex::RwLock::new(egui_wgpu::Renderer::new(
+        &state.device,
+        state.target_format,
+        egui_wgpu::RendererOptions::PREDICTABLE,
+    )));
     WgpuTestRenderer::from_render_state(state)
 }
 

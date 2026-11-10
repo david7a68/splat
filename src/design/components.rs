@@ -1502,6 +1502,18 @@ pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
     });
 }
 
+/// The word that goes with an HP colour, as an icon, a word and a colour. Colour is never the
+/// only sign. Healthy and damaged HP need no word.
+pub fn hp_word(hp: Option<i64>, max: Option<i64>) -> Option<(&'static str, &'static str, Color32)> {
+    let c = colors();
+    match hp_state(hp, max) {
+        HpState::Zero => Some((icons::ZERO_HP, "0 HP", c.hp.zero)),
+        HpState::Bloodied => Some((icons::BLOODIED, "Bloodied", c.hp.bloodied)),
+        HpState::Unknown => Some((icons::WARN, "HP unknown", c.muted)),
+        _ => None,
+    }
+}
+
 /// How HP stands. Bloodied is half or less, and it is a label with no rule behind it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum HpState {

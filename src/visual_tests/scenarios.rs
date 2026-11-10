@@ -9665,6 +9665,27 @@ pub mod session_plan {
             "Passive Perception and Insight compare without opening a sheet",
         );
 
+        // The party stays in view above the Session page while the session is played.
+        d.click(NAV_SESSIONS);
+        if d.has("Show party") {
+            d.click("Show party");
+        }
+        d.state("session-party-bar", Sizes::All);
+        d.observe(
+            "T12.0",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains("Passive Perception") && node.name.contains("HP ")),
+            "The Session page keeps each player's HP and stats in view, with the rest on hover",
+        );
+        let member = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("Passive Perception"))
+            .map(|node| node.name)
+            .expect("a party bar item");
+        d.state_with_tooltip("session-party-bar-hover", &member);
+
         // Keep the original independent paused copy for the existing duplicate-run checks.
         std::fs::write(&paused.path, paused_bytes).unwrap();
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
