@@ -7,11 +7,6 @@ pub fn run(d: &mut Driver<'_>) {
     let folder = crate::sessions::folder(&campaign).unwrap();
     let path = folder.join(crate::timeline::FILE);
     let before = fs::read_to_string(&path).unwrap();
-    let rook_path = campaign.path.join("NPCs/Rook.md");
-    let rook = fs::read_to_string(&rook_path).unwrap();
-    let old_rook = rook.replacen("splat_schema: 2", "splat_schema: 1", 1);
-    assert_ne!(old_rook, rook);
-    fs::write(&rook_path, old_rook).unwrap();
     d.click(NAV_CAMPAIGN);
     d.click("Convert files…");
     d.click("File to convert");
@@ -50,20 +45,9 @@ pub fn run(d: &mut Driver<'_>) {
             "Next difference moves the small preview to the later change: {before_click:?} -> {after_click:?}"
         ),
     );
+    assert!(after_click.is_some() && after_click != before_click);
+    d.expect_same("Next difference moves the small preview. At larger sizes all aligned rows already fit, so its new destination needs no scroll.");
     d.state("timeline-next-change-group", Sizes::All);
-    d.click("File to convert");
-    d.click_containing("NPCs/Rook.md");
-    let rook = fs::read_to_string(campaign.path.join("NPCs/Rook.md")).unwrap();
-    let converted_rook = splat::content::formats::convert("NPCs/Rook.md", &rook).unwrap();
-    let rook_lines = rook.lines().chain(converted_rook.lines()).collect();
-    check_preview(
-        d,
-        &rook_lines,
-        [&rook, &converted_rook],
-        false,
-        "iter-5-A-short",
-    );
-    d.state("short-rook-conversion-preview", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
@@ -312,7 +296,7 @@ pub fn run(d: &mut Driver<'_>) {
 }
 
 /// Measure the painted source labels against the actual scroll view at every capture size.
-fn check_preview(
+pub(super) fn check_preview(
     d: &mut Driver<'_>,
     source: &std::collections::BTreeSet<&str>,
     text: [&str; 2],

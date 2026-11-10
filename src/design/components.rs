@@ -2499,6 +2499,8 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
         for side in 0..2 {
             let ui = &mut columns[side];
             let min_width = ui.available_width().max(source_width);
+            // ScrollArea's normal paint margin can leak the next row above its bar.
+            ui.visuals_mut().clip_rect_margin = 0.0;
             let output = egui::ScrollArea::both()
                 .id_salt(state.with(side))
                 .auto_shrink([false, false])
@@ -2519,9 +2521,13 @@ pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash)
                                 ui.set_min_width(min_width);
                                 ui.set_min_height(line_height);
                                 if let Some(line) = lines[side][at] {
-                                    ui.add_sized(
-                                        vec2(min_width, line_height),
-                                        egui::Label::new(Type::Mono.rich(ui, line)).extend(),
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Mono
+                                                .rich(ui, line)
+                                                .line_height(Some(line_height)),
+                                        )
+                                        .extend(),
                                     );
                                 } else {
                                     let (rect, _) = ui.allocate_exact_size(
