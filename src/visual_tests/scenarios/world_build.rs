@@ -218,6 +218,206 @@ pub fn broken(d: &mut Driver<'_>) {
     );
 }
 
+fn flat_entry(d: &Driver<'_>, path: &str, name: &str, fields: &str, body: &str) {
+    let id = splat::character::stable_id(path);
+    let path = root(d).join(path);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        format!(
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\n{fields}\n---\n\n# {name}\n\n{body}"
+        ),
+    )
+    .unwrap();
+}
+
+/// One home for each fact: a page shows what other pages say about it, from their lines,
+/// their relations, their dates and their Logs. See `docs/design/world-data.md`.
+pub fn facts(d: &mut Driver<'_>) {
+    flat_entry(
+        d,
+        "Lore/Horn Rings.md",
+        "Horn Rings",
+        "splat_type: lore",
+        "Tieflings wear one ring on their horns for each kept ancestor.\n\n- [ ] Can a horn ring be sold?\n",
+    );
+    flat_entry(
+        d,
+        "Factions/Arena Guild.md",
+        "Arena Guild",
+        "splat_type: faction",
+        "The organizers of the race, under court supervision.\n",
+    );
+    flat_entry(
+        d,
+        "Places/The Arena.md",
+        "The Arena",
+        "splat_type: location",
+        "The arena at the capital, where the race starts.\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Zarel.md",
+        "Zarel",
+        "splat_type: npc\nsplat_status: alive\nsplat_part_of:\n- '[[Arena Guild]]'",
+        "Tiefling. The Games-Master, who runs the race.\n\n- **Look:** Gilded [[Horn Rings|horn rings]], loud and new.\n- **Says:** \"Filed!\"\n\nSee [[Horn Rings]].\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Haltha.md",
+        "Haltha",
+        "splat_type: npc\nsplat_status: alive",
+        "- **Look:** Dull iron [[Horn Rings|horn rings]], and old scars that look a little too even.\n",
+    );
+    flat_entry(
+        d,
+        "NPCs/Tordra.md",
+        "Tordra",
+        "splat_type: npc\nsplat_status: alive",
+        "An elf convict, who frees other prisoners.\n",
+    );
+    flat_entry(
+        d,
+        "History/The Revolt.md",
+        "The Revolt",
+        "splat_type: event\nsplat_when: 90 years ago\nsplat_until: 85 years ago",
+        "The miners took the Arena and held it for five years.\n",
+    );
+    flat_entry(
+        d,
+        "History/The Massacre.md",
+        "The Massacre",
+        "splat_type: event\nsplat_when: 120 years ago",
+        "Soldiers fired on protesting miners at [[The Arena]].\n",
+    );
+    fs::write(
+        root(d).join("Visitors.md"),
+        "# Visitors\n\nSee [[Horn Rings]].\n",
+    )
+    .unwrap();
+    let sessions = root(d).join(crate::sessions::DEFAULT_FOLDER);
+    fs::create_dir_all(&sessions).unwrap();
+    fs::write(
+        sessions.join("Session 1.md"),
+        format!(
+            "---\nsession_id: {}\nsession_number: 1\nsession_title: ''\nsession_date: {}\n---\n\nThe race began.\n",
+            splat::character::stable_id("visual:session:facts"),
+            // A change goes in the Log only while a session is played, which is on its date.
+            crate::hermetic::today()
+        ),
+    )
+    .unwrap();
+    d.app_mut().sessions.refresh();
+    reload(d);
+    d.click(NAV_WORLD);
+
+    d.click_containing("Horn Rings · ");
+    d.expect("From other pages");
+    d.observe(
+        "T15.1",
+        d.has("Look: Gilded horn rings, loud and new.")
+            && d.has_containing("Look: Dull iron horn rings")
+            && d.visible_text("Also linked from")
+            && d.has("Visitors"),
+        "A page shows each line that names it, under its page, and a line of links adds only its page",
+    );
+    d.state("lines-from-other-pages", Sizes::All);
+    d.click("Look: Gilded horn rings, loud and new.");
+    d.observe(
+        "T15.1",
+        d.visible_text("Tiefling. The Games-Master, who runs the race."),
+        "Pressing a line opens the page that holds it",
+    );
+
+    d.click_containing("Arena Guild · ");
+    d.expect("Members");
+    d.observe(
+        "T15.2",
+        d.has("Zarel") && d.visible_text("Tiefling. The Games-Master, who runs the race."),
+        "A group lists its members, each with what it is",
+    );
+    d.state("group-members", Sizes::All);
+
+    d.click_containing("The Arena · ");
+    d.expect("History");
+    let (first, second) = (
+        d.painted_rect_in("120 years ago", egui::Rect::EVERYTHING),
+        d.painted_rect_in("90 to 85 years ago", egui::Rect::EVERYTHING),
+    );
+    d.observe(
+        "T15.3",
+        first
+            .zip(second)
+            .is_some_and(|(first, second)| first.top() < second.top()),
+        "A place shows the events that concern it, oldest first, each with its date",
+    );
+    d.state("place-history", Sizes::All);
+
+    d.click_containing("Zarel · ");
+    let path = root(d).join("NPCs/Zarel.md");
+    let before = fs::read_to_string(&path).unwrap();
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    let after = fs::read_to_string(&path).unwrap();
+    d.observe(
+        "T15.4",
+        after.contains("splat_part_of:\n- '[[Arena Guild]]'\n- '[[The Arena]]'")
+            && after.ends_with(
+                "## Log\n\n- [[Session 1]]: Part of [[Arena Guild]] → [[Arena Guild]], [[The Arena]].\n",
+            ),
+        "A change in play writes the value and one Log line in the entry",
+    );
+    d.state("group-joined-with-log", Sizes::All);
+    d.click("Undo group change");
+    d.observe(
+        "T15.4",
+        fs::read_to_string(&path).unwrap() == before,
+        "One undo removes the value and its Log line",
+    );
+    // The index reads the entry again in the background, and the picker offers what it knows.
+    reload(d);
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+    assert_eq!(fs::read_to_string(&path).unwrap(), after);
+    reload(d);
+    d.click(NAV_SESSIONS);
+    d.click_containing("Session 1 · ");
+    d.click("Note");
+    if d.has("Read") {
+        d.click("Read");
+    }
+    d.expect("World changes");
+    d.observe(
+        "T15.4",
+        d.has("Zarel") && d.visible_text("Part of Arena Guild → Arena Guild, The Arena."),
+        "The session lists what play changed, from the entry's Log",
+    );
+    d.state("session-world-changes", Sizes::All);
+    d.click(NAV_WORLD);
+
+    d.click_containing("Open questions · ");
+    d.expect("Can a horn ring be sold?");
+    d.state("open-questions", Sizes::All);
+    d.click("Can a horn ring be sold?");
+    d.observe(
+        "T15.5",
+        d.visible_text("Tieflings wear one ring on their horns for each kept ancestor."),
+        "An open question opens the page that holds it",
+    );
+    d.click_containing("Problems · ");
+    d.expect("No summary");
+    d.observe(
+        "T15.5",
+        d.has("Haltha") && d.visible_text("Nothing points here") && d.has("Tordra"),
+        "The problems name an entry with no summary and an entry that shows on no other page",
+    );
+    d.state("world-problems", Sizes::All);
+}
+
 pub fn places(d: &mut Driver<'_>) {
     entry(
         d,
@@ -358,7 +558,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     d.expect("Edit in Obsidian");
     d.observe(
         "W12",
-        fs::read_to_string(root(d).join("Notes/Ashfall Faction.md"))
+        fs::read_to_string(root(d).join("Factions/Ashfall Faction.md"))
             .unwrap()
             .contains("type: faction"),
         "New Note accepts an optional World type and offers the file editor",
@@ -380,7 +580,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         );
     }
     d.state("new-faction-note", Sizes::All);
-    let faction_path = root(d).join("Notes/Ashfall Faction.md");
+    let faction_path = root(d).join("Factions/Ashfall Faction.md");
     let faction_before = fs::read_to_string(&faction_path).unwrap();
     d.expect("Edit Ashfall Faction");
     d.click("Edit Ashfall Faction");

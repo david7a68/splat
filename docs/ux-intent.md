@@ -581,6 +581,11 @@ reading the code, not from a test run.
 | T14.4 | A rule found by its heading, beside a run, in ≤ 2 | world | cost, view | New |
 | T14.5 | A new NPC joins the fight, and the run stays on screen | world | state | New |
 | T14.7 | The generator gives a name and three attributes, and writes nothing until the DM saves | world | state | New |
+| T15.1 | A page shows each line on another page that names it, under that page, and a press opens the line's page | world-facts | state | New |
+| T15.2 | A group lists its members, each with what it is | world-facts | state | New |
+| T15.3 | A page shows the dated entries that concern it, oldest first | world-facts | state | New |
+| T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line | world-facts | state | New |
+| T15.5 | The World page lists the open questions and the problems, and each opens its page | world-facts | state | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

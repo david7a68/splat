@@ -1200,13 +1200,7 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     for item in &index.items {
         if !item.entry.name.to_lowercase().contains(query)
             || !(item.entry.kind == "creature"
-                || item
-                    .entry
-                    .fields
-                    .get("splat_world")
-                    .and_then(|world| world.get("type"))
-                    .and_then(Value::as_str)
-                    == Some("npc"))
+                || (item.entry.kind == "world" && crate::world::fights(&item.entry)))
         {
             continue;
         }
@@ -1382,14 +1376,7 @@ impl Snapshot {
     }
     fn npc_stat_block(&self, id: Uuid) -> Option<(Uuid, String)> {
         let npc = &self.catalogue.entries.get(&id)?.entry;
-        if npc.kind != "world"
-            || npc
-                .fields
-                .get("splat_world")
-                .and_then(|world| world.get("type"))
-                .and_then(Value::as_str)
-                != Some("npc")
-        {
+        if npc.kind != "world" || !crate::world::fights(npc) {
             return None;
         }
         let value = npc.fields.get("splat_world")?.get("creature")?;
@@ -1491,13 +1478,7 @@ impl Snapshot {
             .values()
             .filter_map(|entry| {
                 let npc = &entry.entry;
-                if (npc.kind != "world"
-                    || npc
-                        .fields
-                        .get("splat_world")
-                        .and_then(|world| world.get("type"))
-                        .and_then(Value::as_str)
-                        != Some("npc"))
+                if (npc.kind != "world" || !crate::world::fights(npc))
                     || !(entry.private && entry.owner == campaign.id
                         || closure.direct.contains(&npc.id)
                         || closure.required.contains_key(&npc.id))
