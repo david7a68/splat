@@ -3,7 +3,7 @@
 //! here and after a restart, and the column beside it takes what is left.
 use super::tokens::*;
 use eframe::egui::{
-    self, Context, Id, InnerResponse, Ui,
+    self, Context, Id, Ui,
     containers::panel::{PanelState, Side},
 };
 use std::{collections::BTreeMap, ops::RangeInclusive};
@@ -91,7 +91,7 @@ impl Column {
         let shown = self
             .panel_within(ctx, ctx.available_rect().width())
             .show(ctx, |ui| fill_and_add(ui, add));
-        finish_handle(ctx, id, &shown);
+        finish_handle(ctx, id, &shown.response);
         shown.inner
     }
 
@@ -101,7 +101,7 @@ impl Column {
         let shown = self
             .panel_within(&ctx, ui.available_width())
             .show_inside(ui, |ui| fill_and_add(ui, add));
-        finish_handle(&ctx, id, &shown);
+        finish_handle(&ctx, id, &shown.response);
         shown.inner
     }
 
@@ -176,7 +176,7 @@ fn fill_and_add<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     add(ui)
 }
 
-fn finish_handle<R>(ctx: &Context, id: &'static str, shown: &InnerResponse<R>) {
+fn finish_handle(ctx: &Context, id: &'static str, shown: &egui::Response) {
     // The handle's id is egui's own. A test drags a handle, so an update cannot lose it.
     let handle = Id::new(id).with("__resize");
     let Some(response) = ctx.read_response(handle) else {
@@ -211,7 +211,7 @@ fn finish_handle<R>(ctx: &Context, id: &'static str, shown: &InnerResponse<R>) {
         );
     }
     if response.dragged() {
-        let width = shown.response.rect.width();
+        let width = shown.rect.width();
         ctx.data_mut(|data| {
             data.get_temp_mut_or_default::<Widths>(widths_id())
                 .0

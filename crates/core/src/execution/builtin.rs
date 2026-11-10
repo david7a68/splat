@@ -1,6 +1,5 @@
 use crate::content::Entry;
-use include_dir::{Dir, include_dir};
-static MECHANICS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-mechanics");
+use include_dir::Dir;
 pub fn entries() -> Result<Vec<Entry>, String> {
     fn walk(dir: &Dir<'_>, entries: &mut Vec<Entry>) -> Result<(), String> {
         for file in dir.files() {
@@ -17,7 +16,7 @@ pub fn entries() -> Result<Vec<Entry>, String> {
         Ok(())
     }
     let mut entries = Vec::new();
-    walk(&MECHANICS, &mut entries)?;
+    walk(&splat_assets::MECHANICS, &mut entries)?;
     entries.sort_by(|a, b| a.key.cmp(&b.key));
     Ok(entries)
 }

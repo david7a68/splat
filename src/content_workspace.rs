@@ -1167,7 +1167,7 @@ impl Catalogue {
                     if problem == DELETED_MANIFEST {
                         ""
                     } else {
-                        " Entries are still available."
+                        ". Entries are still available."
                     }
                 ));
                 // The registration keeps ownership while the on-disk manifest is repaired.

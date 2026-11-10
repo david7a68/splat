@@ -1,18 +1,13 @@
 //! Whole-SRD catalogue. Structural validity and execution readiness are separate.
 use super::{Diagnostic, Entry, Report, builtin, field, resource_key, validate};
-use include_dir::{Dir, File, include_dir};
+use include_dir::{Dir, File};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use splat_assets::{CONTRACTS, COVERAGE};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::OnceLock;
-
-static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-definitions");
-/// builtin/dnd2024-definitions/coverage.json and contracts.json without layout whitespace.
-/// build.rs writes them; most of each pretty-printed file is indentation.
-const COVERAGE: &str = include_str!(concat!(env!("OUT_DIR"), "/coverage.json"));
-const CONTRACTS: &str = include_str!(concat!(env!("OUT_DIR"), "/contracts.json"));
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -201,7 +196,7 @@ pub fn source_file(path: &str) -> Option<&'static str> {
     FILES
         .get_or_init(|| {
             let mut files = Vec::new();
-            markdown_files(&DEFINITIONS, &mut files);
+            markdown_files(&splat_assets::DEFINITIONS, &mut files);
             files.into_iter().map(|file| (file.path(), file)).collect()
         })
         .get(Path::new(path.strip_prefix("definitions/")?))?
@@ -223,8 +218,12 @@ pub fn entries() -> Result<&'static [Entry], String> {
     static ENTRIES: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
     ENTRIES
         .get_or_init(|| {
-            // Every catalogue needs the SRD entries too. Read both at the same time.
-            rayon::join(builtin::entries, parse_entries).1
+            // Read both at once without making a Rayon worker wait on a
+            // OnceLock whose initializer also needs the Rayon pool.
+            std::thread::scope(|scope| {
+                scope.spawn(builtin::entries);
+                parse_entries()
+            })
         })
         .as_deref()
         .map_err(Clone::clone)
@@ -232,7 +231,7 @@ pub fn entries() -> Result<&'static [Entry], String> {
 
 fn parse_entries() -> Result<Vec<Entry>, String> {
     let mut files = Vec::new();
-    markdown_files(&DEFINITIONS, &mut files);
+    markdown_files(&splat_assets::DEFINITIONS, &mut files);
     // The reports are large JSON files. Read them while the notes are parsed.
     let (result, reports) = rayon::join(
         || {
@@ -436,7 +435,7 @@ pub fn verify() -> CatalogueReport {
                 return Err(format!("Definition identity mismatch: {key}"));
             }
             let path = record["path"].as_str().ok_or("Inventory path missing")?;
-            let raw = DEFINITIONS
+            let raw = splat_assets::DEFINITIONS
                 .get_file(path)
                 .and_then(|f| f.contents_utf8())
                 .ok_or("Inventory file missing")?;
