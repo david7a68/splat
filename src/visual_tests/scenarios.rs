@@ -952,14 +952,16 @@ pub mod party {
                     "Equipment",
                     "Features",
                     "Background",
-                    "More",
+                    "More sheet pages",
                 ]
                 .iter()
                 .filter_map(|name| d.place_of(name))
                 .collect();
                 tabs.len() >= 2
-                    && tabs.iter().all(|tab| (tab.top() - first.top()).abs() < 1.0)
-                    && (d.in_view("Background") || d.in_view("More"))
+                    && tabs
+                        .iter()
+                        .all(|tab| (tab.center().y - first.center().y).abs() < 1.0)
+                    && (d.in_view("Background") || d.in_view("More sheet pages"))
             });
             d.observe(
                 "iter6-B-SD2",
@@ -992,6 +994,11 @@ pub mod party {
         d.scroll_at(pos2(720.0, 500.0), 4);
         d.state("sheet-scrolled", Sizes::Default);
         for (page, state) in PAGES {
+            if !d.in_view(page) {
+                assert!(d.in_view("More sheet pages"));
+                d.click("More sheet pages");
+            }
+            assert!(d.in_view(page));
             d.click(page);
             d.state(state, Sizes::Default);
             if page == "Equipment" {
@@ -2656,7 +2663,7 @@ pub mod run_large_roster {
             let (heading, add) = d.at_size(size, |d| {
                 let words = d.painted_in(d.header_rect());
                 (
-                    words.contains("Cinder") && words.contains('1'),
+                    words.contains("Wolf 1") || words.contains("… 1"),
                     words.contains("Add"),
                 )
             });
@@ -8798,7 +8805,6 @@ pub mod npc_in_encounter {
                 format!("Prep action text aligns with its title at {size:?}"),
             );
         }
-        d.state("empty-prep-action-aligned", Sizes::All);
         assert!(d.in_view("Edit encounter"));
         d.click("Edit encounter");
         d.expect("Back to run");

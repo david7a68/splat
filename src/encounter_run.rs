@@ -1319,7 +1319,7 @@ impl Run {
                 .map(|p| (p, total))
         }) {
             initiative.push_str(&format!(
-                ". Tied with {} at\u{a0}{total}, placed after.",
+                ". Tied with {} at\u{a0}{total}, placed after",
                 Self::roll_block_name(state, p)
             ));
         }

@@ -227,16 +227,20 @@ impl Party {
         });
         if self.sync_stopped {
             let mut dismiss = false;
-            ui.horizontal_top(|ui| {
-                let room = ui.available_width() - Density::Read.control() - design::S;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(room, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        design::message(ui, Tone::Warning, SYNC_STOPPED);
-                    },
-                );
-                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.horizontal_top(|ui| {
+                    let room = ui.available_width() - Density::Read.control() - design::S;
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(room, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            design::message(ui, Tone::Warning, SYNC_STOPPED);
+                        },
+                    );
+                    dismiss =
+                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+                });
             });
             if dismiss {
                 self.sync_stopped = false;

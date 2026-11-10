@@ -649,7 +649,8 @@ Setup has a `Label` column heading INITIATIVE above empty, labelled number field
 An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
 have initiative, a muted ordinal follows each field, updates with totals or tie rulings, and the ready line
 names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
-row menu opens Correct. Overflow uses the live list's band and counts hidden missing initiatives and ties.
+row menu opens Correct. Unread-row notices use compact message type and the unused ready-line space
+so the roster keeps its height. Overflow uses the live list's band and counts hidden missing initiatives and ties.
 
 A made-up creature shows current and maximum HP and typed initiative as a total, without printed values. A
 side of its own keeps its word on live rows. Setup and live play share side, HP, temporary HP and AC parts.

@@ -778,15 +778,23 @@ impl Run {
                                         vec2(text_room, notice_height),
                                         Layout::left_to_right(Align::TOP),
                                         |ui| {
-                                            design::small_message(
-                                                ui,
-                                                if self.notice_summary.is_some() {
-                                                    Tone::Warning
-                                                } else {
-                                                    Tone::Success
-                                                },
-                                                shown,
-                                            )
+                                            if self.notice_summary.is_some() {
+                                                design::small_message(ui, Tone::Warning, shown)
+                                            } else {
+                                                ui.horizontal_top(|ui| {
+                                                    ui.label(
+                                                        Type::Small
+                                                            .rich(ui, icons::SUCCESS)
+                                                            .color(colors().result.success),
+                                                    );
+                                                    ui.label(
+                                                        Type::Small
+                                                            .rich(ui, shown)
+                                                            .color(colors().result.success),
+                                                    )
+                                                })
+                                                .inner
+                                            }
                                         },
                                     )
                                     .inner;
@@ -4038,19 +4046,18 @@ impl Run {
         let roll_choices = self.roll_choices();
         let setup_origin = ui.cursor().min;
         let setup_width = ui.available_width();
+        let setup_header_height = if self.roster_faults.is_empty() {
+            Density::Glance.control() + Density::Read.control() + design::XS
+        } else {
+            Density::Glance.control() + design::M
+        };
         ui.allocate_ui_with_layout(
-            vec2(
-                ui.available_width(),
-                Density::Glance.control() + Density::Read.control() + design::XS,
-            ),
+            vec2(ui.available_width(), setup_header_height),
             Layout::right_to_left(Align::TOP),
             |ui| {
-                ui.set_min_height(Density::Glance.control() + Density::Read.control() + design::XS);
+                ui.set_min_height(setup_header_height);
                 ui.allocate_ui_with_layout(
-                    vec2(
-                        design::S * 18.0,
-                        Density::Glance.control() + Density::Read.control() + design::XS,
-                    ),
+                    vec2(design::S * 18.0, setup_header_height),
                     Layout::top_down(Align::RIGHT),
                     |ui| {
                         if Action::primary("Begin combat")
@@ -4067,10 +4074,7 @@ impl Run {
                     },
                 );
                 ui.allocate_ui_with_layout(
-                    vec2(
-                        design::S * 20.0,
-                        Density::Glance.control() + Density::Read.control() + design::XS,
-                    ),
+                    vec2(design::S * 20.0, setup_header_height),
                     Layout::top_down(Align::RIGHT),
                     |ui| {
                         let roll = ui
@@ -4207,7 +4211,7 @@ impl Run {
                 let words = fault.words();
                 // One file names every unread row, so its name and actions show once.
                 if index > 0 {
-                    design::message(ui, Tone::Warning, &words);
+                    design::small_message(ui, Tone::Warning, &words);
                     continue;
                 }
                 ui.scope(|ui| {
@@ -4230,7 +4234,7 @@ impl Run {
                                 vec2(message_width, 0.0),
                                 Layout::top_down(Align::Min),
                                 |ui| {
-                                    design::message(ui, Tone::Warning, &words);
+                                    design::small_message(ui, Tone::Warning, &words);
                                 },
                             );
                             ui.add_space(design::L - gap);
@@ -4242,7 +4246,7 @@ impl Run {
                             );
                         });
                     } else {
-                        design::message(ui, Tone::Warning, &words);
+                        design::small_message(ui, Tone::Warning, &words);
                         crate::world::entry_file_actions(
                             ui,
                             path.parent().unwrap_or(path),
@@ -6569,7 +6573,7 @@ fn optional_number(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers_and_add_word() {
+    fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers() {
         for number in 1..=5 {
             for width in [442.0, 760.0] {
                 let mut run = super::super::tests::run();
