@@ -1,39 +1,76 @@
-//! The software renderer for captures and video frames.
+//! The renderer for captures and video frames.
 //!
-//! It draws as `egui_kittest::wgpu::WgpuTestRenderer` does. Reading the frame back differs:
-//! kittest copies it one byte at a time, which cost about a tenth of a capture run's CPU.
-//! This one copies each row at once.
+//! It draws as `egui_kittest::wgpu::WgpuTestRenderer` does, with two differences. It uses a
+//! GPU when one is available: on the laptop's Intel GPU, a capture run took 94 CPU-s
+//! instead of 133 with Mesa's software rasterizer. And kittest reads the frame back one
+//! byte at a time, which cost about a tenth of a capture run's CPU. This one copies each
+//! row at once.
+//!
+//! Compare captures only with captures from the same computer and renderer. Two runs on
+//! one GPU give the same pixels. A GPU and the software rasterizer differ on a few edge
+//! pixels, so `renderer.txt` in the output folder records which one drew a run.
 use eframe::{egui, egui_wgpu, wgpu};
 use egui_kittest::wgpu::{create_render_state, default_wgpu_setup};
 use image::RgbaImage;
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 const WAIT: Duration = Duration::from_secs(10);
 
-pub(super) struct SoftwareRenderer {
+static ADAPTER: OnceLock<String> = OnceLock::new();
+
+/// The device that drew this run's frames, once one has drawn.
+pub(super) fn adapter() -> Option<&'static str> {
+    ADAPTER.get().map(String::as_str)
+}
+
+/// Lower is preferred. An integrated GPU comes first: it shares memory with the CPU, so
+/// reading frames back is cheap, and it does not wake a discrete GPU.
+/// `SPLAT_VISUAL_RENDERER=software` puts Mesa's software rasterizer first.
+fn rank(device: wgpu::DeviceType, software: bool) -> u8 {
+    match device {
+        wgpu::DeviceType::Cpu if software => 0,
+        wgpu::DeviceType::IntegratedGpu => 1,
+        wgpu::DeviceType::DiscreteGpu => 2,
+        wgpu::DeviceType::Cpu => 3,
+        wgpu::DeviceType::VirtualGpu | wgpu::DeviceType::Other => 4,
+    }
+}
+
+pub(super) struct CaptureRenderer {
     state: egui_wgpu::RenderState,
 }
 
-impl SoftwareRenderer {
-    /// Each worker thread keeps one software device for all its scenarios and restarts.
+impl CaptureRenderer {
+    /// Each worker thread keeps one device for all its scenarios and restarts.
     /// Every app still gets its own egui renderer, so no textures are shared.
     pub(super) fn new() -> Self {
         thread_local! {
             static DEVICE: egui_wgpu::RenderState = {
+                let software =
+                    std::env::var("SPLAT_VISUAL_RENDERER").is_ok_and(|value| value == "software");
                 let mut setup = default_wgpu_setup();
-                // Only Vulkan has the software rasterizer. Other backends load drivers for nothing.
                 if let egui_wgpu::WgpuSetup::CreateNew(new) = &mut setup {
+                    // devenv lists Mesa's Vulkan drivers. Other backends load drivers for nothing.
                     new.instance_descriptor.backends = wgpu::Backends::VULKAN;
+                    new.native_adapter_selector = Some(Arc::new(move |adapters, _| {
+                        adapters
+                            .iter()
+                            .min_by_key(|adapter| rank(adapter.get_info().device_type, software))
+                            .cloned()
+                            .ok_or_else(|| {
+                                "No Vulkan adapter. Use `devenv shell -- visual-test`.".to_owned()
+                            })
+                    }));
                 }
                 let state = create_render_state(setup);
-                let adapter = state.adapter.get_info();
-                assert_eq!(
-                    adapter.device_type,
-                    wgpu::DeviceType::Cpu,
-                    "Captures must use a software rasterizer so they repeat between machines. Found {} ({:?}). Use `devenv shell -- visual-test`.",
-                    adapter.name,
-                    adapter.backend,
-                );
+                let info = state.adapter.get_info();
+                let _ = ADAPTER.set(format!(
+                    "{} ({:?}, {} {})",
+                    info.name, info.device_type, info.driver, info.driver_info
+                ));
                 state
             };
         }
@@ -47,7 +84,7 @@ impl SoftwareRenderer {
     }
 }
 
-impl egui_kittest::TestRenderer for SoftwareRenderer {
+impl egui_kittest::TestRenderer for CaptureRenderer {
     fn setup_eframe(&self, cc: &mut eframe::CreationContext<'_>, frame: &mut eframe::Frame) {
         cc.wgpu_render_state = Some(self.state.clone());
         frame.wgpu_render_state = Some(self.state.clone());
@@ -157,4 +194,16 @@ impl egui_kittest::TestRenderer for SoftwareRenderer {
         RgbaImage::from_raw(extent.width, extent.height, pixels)
             .ok_or_else(|| "The capture has the wrong size.".to_owned())
     }
+}
+
+#[test]
+fn renderers_prefer_a_gpu_unless_software_is_asked_for() {
+    use wgpu::DeviceType::{Cpu, DiscreteGpu, IntegratedGpu, Other};
+    let order = |software| {
+        let mut devices = [Other, Cpu, DiscreteGpu, IntegratedGpu];
+        devices.sort_by_key(|device| rank(*device, software));
+        devices
+    };
+    assert_eq!(order(false), [IntegratedGpu, DiscreteGpu, Cpu, Other]);
+    assert_eq!(order(true), [Cpu, IntegratedGpu, DiscreteGpu, Other]);
 }
