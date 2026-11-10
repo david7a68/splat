@@ -1406,6 +1406,68 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert!(!d.has("Undo save"));
 }
 
+fn check_read_repair(d: &mut Driver<'_>, title: &str) {
+    let read = d.place_of("Read").expect("Read tab is visible");
+    let area = egui::Rect::from_min_max(read.min, egui::pos2(10000.0, 10000.0));
+    let title = d
+        .painted_rect_in(title, area)
+        .expect("Reader title is visible");
+    let error = d
+        .painted_rect_in(
+            if d.has("Write the manifest again") {
+                "The package manifest was deleted."
+            } else {
+                "Line 4 opens a list"
+            },
+            area,
+        )
+        .expect("Specific repair error is visible");
+    d.observe(
+        "iter-9-E-FD10",
+        error.top() >= title.bottom(),
+        "The specific error follows the reader title",
+    );
+}
+
+fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
+    let save = d.place_of("Save").expect("Save row is visible");
+    let error = d
+        .painted_rect_in("Line 4 opens a list", egui::Rect::EVERYTHING)
+        .expect("The error is visible");
+    let editor = d
+        .input_frame("Markdown editor")
+        .expect("The source editor is visible")
+        .0;
+    d.observe(
+        "iter-9-E-FD9",
+        error.top() >= save.bottom()
+            && error.top() - save.bottom() <= design::S * 2.0
+            && editor.top() > error.bottom(),
+        "The error fills the reason line directly below Save and above the source",
+    );
+    if manifest {
+        let action = d
+            .place_of("Replace with a basic Package.md")
+            .expect("Replacement is visible");
+        let consequence = d
+            .painted_rect_in(
+                "Keeps the id, name and namespace. Drops the rest.",
+                egui::Rect::EVERYTHING,
+            )
+            .expect("The consequence is visible");
+        d.observe(
+            "iter-9-E-FD2",
+            action.top() >= error.bottom()
+                && consequence.top() >= action.bottom()
+                && (action.left() - error.left()).abs() <= 1.0
+                && (consequence.left() - error.left()).abs() <= 1.0
+                && d.control_frame("Replace with a basic Package.md")
+                    .is_some_and(|frame| frame.stroke.width > 0.0),
+            "Manifest error, bordered repair and muted consequence share the text edge in order",
+        );
+    }
+}
+
 fn check_unreadable_owner(d: &mut Driver<'_>, id: &str) {
     let read = d.place_of("Read").expect("The Library reader is visible");
     let reader = egui::Rect::from_min_max(read.min, egui::pos2(10000.0, 10000.0));
@@ -1434,6 +1496,18 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.wait_for_text("All entries used here");
     d.state_prepared("package-every-entry-used", Sizes::All, |d| {
         check_undo_icon(d, "Undo package use", "iter-8-E-FD3-use");
+        let read = d.place_of("Read").expect("Read tab is visible");
+        let result = d
+            .painted_rect_in(
+                "Every entry in this package is now used here.",
+                egui::Rect::EVERYTHING,
+            )
+            .expect("Package use result is visible");
+        d.observe(
+            "iter-9-E-FD8",
+            result.left() >= read.left() && result.bottom() <= read.top(),
+            "Package-use feedback stays in the reader above its tabs",
+        );
     });
     d.click("Undo package use");
     d.wait_for_text("Used here · 5 of 6 entries");
@@ -1556,7 +1630,18 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Line 4 opens a list");
     d.expect("Replace with a basic Package.md");
     d.expect("Keeps the id, name and namespace. Drops the rest.");
-    d.state("manifest-opened-for-repair", Sizes::All);
+    d.state_prepared("manifest-opened-for-repair", Sizes::All, |d| {
+        let about = d
+            .place_of(&format!("{} About Ashen Marches", design::icons::WARN))
+            .expect("The warning About row is visible");
+        let about_selected = d.app_mut().library.repairing_package_about();
+        d.observe(
+            "iter-9-E-FD3",
+            about_selected && !d.visible_text("No entries in this section.") && about.width() > 0.0,
+            "Manifest repair opens the package About row with its warning and content list",
+        );
+        check_repair_reason(d, true);
+    });
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
     d.expect("Cinder Wolf");
@@ -1615,13 +1700,28 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
     d.expect("22 (4d8 + 4)");
+    assert!(!path.exists());
+    d.expect_same("Deleting the manifest keeps the creature reader and its repair count.");
     d.state("manifest-deleted-library-keeps-entries", Sizes::All);
     search_library(d, "");
     open_local_package(d, MODULE);
     d.click_containing("About Ashen Marches");
     d.expect("Write the manifest again");
     d.state_prepared("manifest-deleted-library-repair", Sizes::All, |d| {
-        check_unreadable_owner(d, "iter-8-E-FD10-manifest");
+        let read = d.place_of("Read").expect("Read tab is visible");
+        let reader = egui::Rect::from_min_max(read.min, egui::pos2(10000.0, 10000.0));
+        let words = d.painted_in(reader);
+        d.observe(
+            "iter-9-E-SD2-AD2-FD1",
+            words.contains("Ashen Marches · Manifest deleted")
+                && !words.contains("Package.md")
+                && !words.contains("Module.md")
+                && !words.contains("Show file")
+                && words.contains("Show folder")
+                && words.matches("Ashen Marches").count() >= 2,
+            "A missing manifest shows its registered name and folder without a guessed file",
+        );
+        check_read_repair(d, "Ashen Marches");
         d.observe(
             "iter-8-E-FD8-deleted",
             !d.visible_text("Missing YAML frontmatter"),
@@ -1671,6 +1771,36 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         "manifest-restored-encounter-keeps-creatures",
         "manifest-invalid-encounter-keeps-creatures",
     );
+    // A plain note at a manifest name stays user data, through both UI write routes.
+    fs::remove_file(&path).unwrap();
+    let readme = "Notes on this adventure.\n";
+    fs::write(&path, readme).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    go_campaign(d);
+    d.click("Reload from disk");
+    d.expect("The package manifest was deleted");
+    assert!(!d.has_containing("Replace with a basic"));
+    d.click("Write the manifest again");
+    d.wait_for_text("Module.md was written again.");
+    assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+    d.click("Undo write Module.md");
+    d.wait_for_text("The package manifest was deleted");
+    assert!(!folder.join("Module.md").exists());
+    go_library(d);
+    open_local_package(d, MODULE);
+    d.click_containing("About Ashen Marches");
+    d.expect("Write the manifest again");
+    assert!(!d.has_containing("Replace with a basic"));
+    d.state("plain-readme-missing-manifest", Sizes::All);
+    d.click("Write the manifest again");
+    d.wait_for_text("Module.md was written again.");
+    assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+    d.state("manifest-written-beside-readme", Sizes::All);
+    d.click("Undo write Module.md");
+    d.wait_for_text("The package manifest was deleted");
+    assert!(!folder.join("Module.md").exists());
+    assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
@@ -1726,8 +1856,23 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.wait_for_text("Cannot be read");
     d.state_prepared("package-yaml-broken-on-disk", Sizes::All, |d| {
         check_unreadable_owner(d, "iter-8-E-FD10-entry");
+        check_read_repair(d, "Creatures/Cinder Wolf.md");
+        let fix = d
+            .place_of("Fix in Edit Markdown")
+            .expect("The direct repair is visible");
+        let error = d
+            .painted_rect_in("Line 4 opens a list", egui::Rect::EVERYTHING)
+            .expect("The error is visible");
+        d.observe(
+            "iter-9-E-FD5",
+            fix.top() >= error.bottom()
+                && (fix.left() - error.left()).abs() <= 1.0
+                && d.control_frame("Fix in Edit Markdown")
+                    .is_some_and(|frame| frame.stroke.width > 0.0),
+            "The error offers bordered repair below at its text edge",
+        );
     });
-    d.click(EDIT_MARKDOWN);
+    d.click("Fix in Edit Markdown");
     d.expect("Save");
     assert!(
         !d.has_containing("Undo discard"),
@@ -1744,6 +1889,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     );
     assert!(d.at_size((1920.0, 1080.0), visible_frame));
     d.state_prepared("package-yaml-repair-editor", Sizes::All, |d| {
+        check_repair_reason(d, false);
         d.observe(
             "iter-8-E-FD4-visible",
             d.visible_passage("splat_kind: ["),
@@ -1769,6 +1915,20 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     );
     d.press_ctrl(Key::Z);
     assert_eq!(d.editor_text().as_deref(), Some(broken.as_str()));
+    d.type_text("draft ");
+    let unsent_repair = d.editor_text().unwrap();
+    assert_ne!(unsent_repair, broken);
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(broken.as_str()));
+    d.expect("Invalid");
+    d.expect("Line 4 opens a list");
+    d.expect("Undo discard of Creatures/Cinder Wolf.md");
+    d.state("repair-draft-discarded", Sizes::All);
+    d.click("Undo discard of Creatures/Cinder Wolf.md");
+    assert_eq!(d.editor_text().as_deref(), Some(unsent_repair.as_str()));
+    d.expect("Invalid");
+    d.expect("Line 4 opens a list");
+    d.replace_editor_text(&broken);
     let before_scroll = d.input_frame("Markdown editor").unwrap().0;
     d.scroll_at(before_scroll.center(), 3);
     assert_eq!(

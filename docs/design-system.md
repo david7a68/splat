@@ -244,7 +244,10 @@ Library omits `Library / <kind>` above the title. Its kind line does not repeat 
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
 title. During a draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
-Below its title, show only the kind when known and the specific error with its file line. Keep front matter
+Below its title, show only the kind when known and the specific error with its file line.
+Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.
+It opens the editor at the error line. In Edit Markdown, put the error in the reserved reason
+line directly below Save, then an `S` gap before the source editor. Keep front matter
 out of prose. Empty readers say `No entry open` or `No note open`, then “Choose one from the list, or make a
 new one.” Library omits the creation offer without a campaign or package destination.
 
@@ -309,9 +312,16 @@ selected button say `Campaign entries`. An open package About row uses selected 
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue
 count. New packages write `Package.md`. Existing `Module.md` files keep their name. Messages and repair
-actions for existing files name the real file. A deleted manifest names no file and shows only its missing-file warning and shared message action;
-an existing manifest without front matter keeps its parse error. Show used and total entries and
-`Use every entry` with Undo; omit the entry breadcrumb and Engine support. Empty package counts have no separator.
+actions for existing files name the real file. A deleted manifest uses the registered package name
+as its reader title and `<package name> · Manifest deleted` on its owner line. Offer `Show folder`;
+show no file name or `Show file`. Keep the neutral missing-file warning and shared message action.
+Plain prose with no front matter and no `splat_` lines stays a README, even in `Package.md` or
+`Module.md`. Writing the missing manifest uses `Package.md` if free, else `Module.md`; refuse the
+write if both names hold notes. Never replace a README. Empty files, front matter and malformed
+Splat fields stay in repair. Manifest repair selects the package scope and its warning About row.
+Draw the manifest error with `message_with_action`, then its muted `Small` consequence at the same
+text edge below the action. Show used and total entries and `Use every entry` with Undo. Its result
+and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
 says how many entries need fixing; its menu opens the messages. Unreadable notes use CANNOT BE READ. Rows name
