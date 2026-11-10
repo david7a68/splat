@@ -104,6 +104,15 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.visible_text("Cancel")
         },
     );
+    let converted = splat::content::formats::convert("NPCs/Rook.md", &before).unwrap();
+    let source_lines = before.lines().chain(converted.lines()).collect();
+    super::list_formats::check_preview(
+        d,
+        &source_lines,
+        [&before, &converted],
+        false,
+        "iter-5-A-short",
+    );
     d.state("convert-files-preview", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
@@ -173,5 +182,5 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Packages");
     assert!(d.is_disabled("Convert files…"));
     assert!(d.tooltip_contains("Convert files…", "Close the run before converting files."));
-    d.state("convert-files-blocked-by-run", Sizes::All);
+    d.state("convert-files-blocked-by-run", Sizes::Standard);
 }

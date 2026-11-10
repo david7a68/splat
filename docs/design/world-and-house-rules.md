@@ -107,6 +107,10 @@ the only copy. This works in any note, so `Undercroft Tables.md` needs no frontm
 - In a run, a roll goes to the run's log with the row's text, on the run's dice, and the run's Undo takes
   it back (`Command::TableRoll`). Outside a run, the result only shows.
 - A row has no effect by itself.
+- Loot names a table by its key. `Roll 2× gems` in an encounter's `## Loot` list, or in the `Loot` term at the end
+  of a roster row's or group member's Changes, rolls on the campaign's `gems` table. These rolls use
+  `Command::Loot`, which still works after the run ends. The run keeps each line's results by its place, so two
+  lines on one table have their own, and the log has a line for each roll.
 
 This is a new marker because `splat:table` needs a key per row and an `order` list, which is too heavy for
 a table a person writes. Today an unknown marker fails the whole note's parse

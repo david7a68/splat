@@ -16,26 +16,12 @@ pub fn run(d: &mut Driver<'_>) {
     let converted = crate::timeline::formats::convert(&before, &Default::default()).unwrap();
     let source_lines: std::collections::BTreeSet<_> =
         before.lines().chain(converted.lines()).collect();
-    d.observe_both(
-        "iter-4-D-FD8",
-        "The conversion preview keeps whole source rows and both actions visible",
-        |d| {
-            let rows: Vec<_> = d
-                .nodes()
-                .into_iter()
-                .filter(|node| {
-                    node.role == egui::accesskit::Role::Label
-                        && node.in_view()
-                        && (source_lines.contains(node.name.as_str()) || node.name == "No line")
-                })
-                .collect();
-            !rows.is_empty()
-                && rows
-                    .iter()
-                    .all(|node| (node.shown.height() - node.rect.height()).abs() < 1.0)
-                && d.visible_text("Cancel")
-                && d.visible_text("Convert files")
-        },
+    check_preview(
+        d,
+        &source_lines,
+        [&before, &converted],
+        true,
+        "iter-5-A-timeline",
     );
     d.state("timeline-conversion-preview", Sizes::All);
     // Where the later change's line sits in the small window, before and after the click.
@@ -59,6 +45,8 @@ pub fn run(d: &mut Driver<'_>) {
             "Next difference moves the small preview to the later change: {before_click:?} -> {after_click:?}"
         ),
     );
+    assert!(after_click.is_some() && after_click != before_click);
+    d.expect_same("Next difference moves the small preview. At larger sizes all aligned rows already fit, so its new destination needs no scroll.");
     d.state("timeline-next-change-group", Sizes::All);
     d.click("Cancel");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
@@ -170,7 +158,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("flagged-group-in-the-plan", Sizes::All);
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
-    fight_tab(d, "Arrivals");
+    open_arrivals(d);
     d.expect("Scout (as Goblin Warrior) needs fixing");
     d.expect("Edit group");
     d.state("flagged-group-in-arrivals", Sizes::All);
@@ -268,8 +256,60 @@ pub fn run(d: &mut Driver<'_>) {
     d.settle();
     assert!(d.is_disabled("Begin combat"));
     d.expect("Changes: HP lots not read");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let fits = d.at_size(size, |d| {
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Changes: HP lots not read"));
+            let header = d.place_of("Begin combat").unwrap();
+            warning.is_some_and(|node| node.rect.top() > header.bottom())
+                && d.visible_text("Fix the unread row first.")
+                && d.in_view("Initiative for Ember Cultist 2")
+                && !d.visible_text("below, 1 needs initiative")
+        });
+        d.observe(
+            "iter-5-B-FD8",
+            fits,
+            format!("Setup warning follows the header and keeps roster room at {size:?}"),
+        );
+    }
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
+    // Two unread rows name one file: its name and actions show once.
+    let one_row = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let mut two_flagged = flagged_roster.clone();
+    let first = &splat::content::layout::Document::new(&flagged_roster)
+        .table(splat::content::list_formats::ROSTER)
+        .unwrap()
+        .rows[0][3];
+    two_flagged.replace_range(first.range.clone(), "HP lots");
+    fs::write(&roster_path, &two_flagged).unwrap();
+    d.app_mut()
+        .encounters
+        .run_mut()
+        .unwrap()
+        .guard_campaign(&campaign.path);
+    d.settle();
+    let warnings = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name.contains("Changes: HP lots not read"))
+        .count();
+    let show_file = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Show file")
+        .count();
+    d.observe(
+        "iter-5-B-FD8-two-rows",
+        one_row > 0 && warnings == 2 * one_row && show_file == 1,
+        format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
+    );
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 
@@ -305,4 +345,57 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.expect_same("Saving the corrected day returns to the original unflagged Timeline.");
     d.state("timeline-day-renumbered-on-save", Sizes::All);
+}
+
+/// Measure the painted source labels against the actual scroll view at every capture size.
+pub(super) fn check_preview(
+    d: &mut Driver<'_>,
+    source: &std::collections::BTreeSet<&str>,
+    text: [&str; 2],
+    long: bool,
+    id: &str,
+) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let passed = d.at_size(size, |d| {
+            let nodes = d.nodes();
+            let panes: Vec<_> = nodes.iter().filter(|node| {
+                ["Before source pane", "After source pane"].contains(&node.name.as_str())
+            }).collect();
+            assert_eq!(panes.len(), 2, "Both source viewports must exist");
+            let results: Vec<_> = panes.iter().map(|pane| {
+                let rows: Vec<_> = nodes.iter().filter(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.in_view()
+                        && (source.contains(node.name.as_str()) || node.name == "No line")
+                        && node.rect.left() >= pane.rect.left() - 1.0
+                        && node.rect.left() < pane.rect.right()
+                        && node.rect.center().y >= pane.rect.top()
+                        && node.rect.top() < pane.rect.bottom()
+                }).collect();
+                assert!(!rows.is_empty(), "Each source pane must paint rows");
+                let last = rows.iter().map(|node| node.rect.bottom()).fold(f32::MIN, f32::max);
+                let bottom_gap = pane.rect.bottom() - last;
+                let whole = rows.iter().all(|node| {
+                    (node.shown.height() - node.rect.height()).abs() < 1.0
+                });
+                let side = usize::from(pane.name == "After source pane");
+                let full = text[side].lines().filter(|line| !line.is_empty())
+                    .all(|line| rows.iter().any(|row| row.name == line));
+                let height = if long {
+                    // At 960x640, the header and actions take precedence over the 60% goal.
+                    full || pane.rect.height() >= if size == SMALL { size.1 * 0.5 } else { size.1 * 0.6 - 24.0 }
+                } else {
+                    // A short source ends immediately above the reserved scroll bar.
+                    bottom_gap < 1.0
+                };
+                let converted_visible = !long || pane.name != "After source pane" || rows.iter().any(|row| {
+                    row.name.starts_with("## Day ") || row.name.starts_with("- Travel:")
+                });
+                eprintln!("{id} {size:?} {}: height {}, bottom gap {bottom_gap}, whole {whole}, converted {converted_visible}", pane.name, pane.rect.height());
+                whole && bottom_gap.abs() < 1.0 && height && converted_visible
+            }).collect();
+            results.iter().all(|passed| *passed) && d.visible_text("Cancel") && d.visible_text("Convert files")
+        });
+        d.observe(id, passed, format!("Aligned source rows fill both panes, with converted text and actions visible at {}x{}", size.0, size.1));
+    }
 }

@@ -126,6 +126,19 @@ impl Party {
         self.combat.enabled && self.combat.state() == crate::combat_sync::SyncState::Conflict
     }
 
+    /// A read of the selected sheet, in D&D Beyond's own fields. Test builds have no route
+    /// to a live one, so a visual test shows the sync panel's editable values this way.
+    #[cfg(test)]
+    pub fn simulate_sheet_read(&mut self, max_hp: i64, sheet: &Value) {
+        let id = self
+            .reader
+            .selected
+            .as_deref()
+            .and_then(|id| id.parse().ok());
+        self.combat
+            .simulate_sheet(id.expect("a selected character"), max_hp, sheet);
+    }
+
     /// A change made on this page has not reached D&D Beyond.
     pub fn unconfirmed(&self) -> bool {
         self.combat.unconfirmed()
@@ -480,6 +493,20 @@ impl Party {
         crate::party_sync::portrait_path(self.reader.local_scope()?, record?)
     }
 
+    /// The open combat sync panel, with a rule under it.
+    fn sync_panel(&mut self, ui: &mut egui::Ui) {
+        let was = self.combat.enabled;
+        // The sheet's scroll bar floats over its right edge. Keep the panel clear of it.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width() - design::L);
+            self.combat.show(ui);
+        });
+        if was != self.combat.enabled {
+            self.sync_turned_off = !self.combat.enabled;
+        }
+        design::rule(ui);
+    }
+
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
         let Some(id) = &self.reader.selected.clone() else {
@@ -528,23 +555,28 @@ impl Party {
             });
             ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
-        if session.is_some() {
-            // Under the name, and it says its state while closed.
+        // The header is under the name, and it says its state while closed. Its body is at
+        // the top of the sheet's scroll area: the editable values make it tall, and one
+        // scroll for the whole column is easier at the table than a scroll inside a scroll.
+        let sync_open = session.is_some() && {
             let state = if self.combat.enabled {
                 format!("{} Combat sync · On", icons::ONLINE)
             } else {
                 format!("{} Combat sync · Off", icons::SYNC_OFF)
             };
-            let was = self.combat.enabled;
+            // One id for On and Off, so the panel stays open when the DM ticks its box.
             egui::CollapsingHeader::new(state)
+                .id_salt("combat_sync_header")
                 .icon(design::section_icon)
                 .open(std::mem::take(&mut self.wants_combat_sync).then_some(true))
-                .show(ui, |ui| self.combat.show(ui));
-            if was != self.combat.enabled {
-                self.sync_turned_off = !self.combat.enabled;
-            }
-        }
+                .show(ui, |_| ())
+                .body_returned
+                .is_some()
+        };
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
+            if sync_open {
+                self.sync_panel(ui);
+            }
             if !self.reader.loading() {
                 ui.label(
                     Type::Body
@@ -596,6 +628,12 @@ impl Party {
             .id_salt((id, self.page))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                if sync_open {
+                    self.sync_panel(ui);
+                }
+                let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
+                    return;
+                };
                 // One person has one HP on this page: the list's, while tonight's fights count.
                 let live = self
                     .tonight_values(record)
@@ -2027,7 +2065,7 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         }
         2 => {
             section_heading(ui, "Spellcasting");
-            ui.weak("Spell descriptions use their printed values. Upcasting and character-specific formulas are not evaluated.");
+            ui.weak("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
             for (label, key) in [
                 ("Spell save DC", "saveDcs"),
                 ("Spell attack", "spellAttacks"),

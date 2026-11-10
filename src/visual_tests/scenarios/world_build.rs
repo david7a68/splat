@@ -1,6 +1,7 @@
 //! Desk work in World, including a real disk edit while the app stays open.
 use super::*;
 use crate::design;
+use egui::accesskit::Role;
 use std::fs;
 use uuid::Uuid;
 
@@ -69,7 +70,72 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Overwrite with my draft");
     assert_eq!(fs::read_to_string(&path).unwrap(), outside);
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
+    let combined = "Not saved. Line 3 opens a list with [ that never closes.";
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (one_message, ordered) = d.at_size(size, |d| {
+            let errors: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::Label && node.name.contains("opens a list with [")
+                })
+                .collect();
+            let one_message = !errors.is_empty()
+                && errors.len() == 1
+                && errors
+                    .iter()
+                    .all(|node| node.name == combined && node.in_view())
+                && !d.has("Not saved: fix the problem above, then save.");
+            let state = d
+                .place_of(&format!("{} Unsaved", design::icons::DRAFT))
+                .unwrap();
+            let discard = d.place_of("Discard").unwrap();
+            let reason = d
+                .place_of(crate::encounters::draft_switch_reason())
+                .unwrap();
+            let save = d.place_of("Save repaired note").unwrap();
+            (
+                one_message,
+                state.right() <= discard.left()
+                    && discard.right() <= reason.left()
+                    && reason.right() <= save.left()
+                    && reason.top() < save.bottom()
+                    && reason.bottom() > save.top(),
+            )
+        });
+        d.observe(
+            "iter-5-D-FD9",
+            one_message,
+            format!("One failed-save message at {size:?}"),
+        );
+        d.observe(
+            "iter-5-D-FD2",
+            ordered,
+            format!("State, Discard, reason, then Save at {size:?}"),
+        );
+    }
     d.state("invalid-conflict-draft-kept-for-repair", Sizes::All);
+    d.click("Note text");
+    for size in [SMALL, LARGE, SMALL, DEFAULT] {
+        d.set_base(size);
+        d.observe(
+            "iter-5-D-draft-resize",
+            d.editor_text().as_deref() == Some(unfinished.as_str())
+                && d.focused_name().as_deref() == Some("Note text")
+                && d.visible_passage("My unfinished draft."),
+            format!("The same unsent draft, focus and visible passage survive resize to {size:?}"),
+        );
+    }
+    let stale_before = d.has_containing("Not saved.");
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(outside.as_str()));
+    d.observe(
+        "iter-5-D-FD9-discard",
+        stale_before && !d.has_containing("Not saved."),
+        "Discard drops the old Not saved message with the draft",
+    );
+    d.click("Undo discard of Broken.md");
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     let fixed = format!(
         "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_type: npc\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
@@ -103,7 +169,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "A new edit ends Undo reload and keeps the newly typed draft",
     );
     d.expect_same("Editing after reload restores the same draft as Undo reload; the recovery control is gone in both states.");
-    d.state("repair-edited-after-reload", Sizes::All);
+    d.assert_state_matches("repair-edited-after-reload", "repair-reload-undone");
     d.observe_both(
         "iter-18-A-world-lock",
         "A World repair states the campaign switch lock",
@@ -498,6 +564,21 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "New Note accepts an optional World type and offers the file editor",
     );
     d.expect("Nothing written yet.");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let one_link = d.at_size(size, |d| {
+            let links: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
+                .collect();
+            !links.is_empty() && links.len() == 1 && links.iter().all(|node| node.in_view())
+        });
+        d.observe(
+            "iter-5-D-FD12",
+            one_link,
+            format!("An empty World note has one file-edit link at {size:?}"),
+        );
+    }
     d.state("new-faction-note", Sizes::All);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -825,7 +906,10 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Read the watch spell");
     d.wait_for_text("Watch Ashfall");
     d.expect_same("Restoring the moved package preserves the same linked reader content.");
-    d.state("package-folder-restored-with-links", Sizes::All);
+    d.assert_state_matches(
+        "package-folder-restored-with-links",
+        "renamed-entry-heading-fixed",
+    );
     let package = moved;
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -883,7 +967,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Undo package use");
     d.wait_for_text("Used here · 5 of 6 entries");
     d.expect_same("Undo package use restores the original package selection and About reader.");
-    d.state("package-use-undone", Sizes::All);
+    d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
     let original = d.editor_text().unwrap();
     let renamed = crate::content_workspace::patch_fields(
@@ -946,7 +1030,22 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Package.md was deleted");
     assert!(!d.has("Find the folder…"));
-    d.state("manifest-deleted-campaign", Sizes::All);
+    d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
+        let search = d
+            .place_of("Find a needed entry")
+            .expect("The entry search is present");
+        let save = d
+            .place_of("Save selections")
+            .expect("The save action is present");
+        assert!(
+            search.width() <= crate::design::LIST_MEASURE,
+            "Search: {search:?}"
+        );
+        assert!(
+            save.right() <= search.left() + crate::design::LIST_MEASURE,
+            "Save: {save:?}; search: {search:?}"
+        );
+    });
     d.click("Write Package.md again");
     d.settle();
     assert!(!d.has_containing("Package.md was deleted"));
@@ -985,7 +1084,10 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Cinder Wolf");
     assert!(!d.has_containing("Not found"));
     d.expect_same("Deleting the manifest keeps the encounter's creature entries as before.");
-    d.state("manifest-restored-encounter-keeps-creatures", Sizes::All);
+    d.assert_state_matches(
+        "manifest-restored-encounter-keeps-creatures",
+        "manifest-invalid-encounter-keeps-creatures",
+    );
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
@@ -1267,7 +1369,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("No entry open");
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect_same("The deleted entry stays absent after focus returns.");
-    d.state("deleted-draft-after-focus", Sizes::All);
+    d.assert_state_matches("deleted-draft-after-focus", "deleted-draft-let-go");
 }
 
 /// A copied file keeps its own save target until the DM repairs its identity.
@@ -1321,7 +1423,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&copy).unwrap(), copy_text);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.expect("Cinder Wolf copy.md and Cinder Wolf.md share an identity. Choose one in Library.");
+    d.expect("These two files claim to be the same entry: Cinder Wolf copy.md and Cinder Wolf.md.");
     d.state("duplicate-package-in-roster", Sizes::All);
     d.click("Open in Library");
     d.expect("Make Cinder Wolf copy.md a separate entry");
@@ -1349,7 +1451,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         original_id
     );
     d.expect_same("Undo restores both identity warnings and the original copy reader.");
-    d.state("duplicate-identity-restored", Sizes::All);
+    d.assert_state_matches("duplicate-identity-restored", "duplicate-copy-reader");
     d.click("Make Cinder Wolf copy.md a separate entry");
     d.wait_for_text("Undo separate entry");
     d.expect("Cinder Wolf copy.md is now a separate entry.");
@@ -1699,6 +1801,17 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
     d.wait_for_text("Undo name change");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let icon = d.at_size(size, |d| {
+            d.place_of("Undo name change")
+                .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
+        });
+        d.observe(
+            "iter-5-D-name-undo",
+            icon,
+            format!("Name Undo has the shared icon at {size:?}"),
+        );
+    }
     d.state("renamed-npc-name-updated", Sizes::All);
     look_up(d, "Mara Vell");
     d.expect("Mara Vell");
@@ -1784,6 +1897,17 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Ashen Marches");
     d.expect("Ashen Reaches");
     assert_eq!(d.app_mut().campaigns.modules().len(), 2);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let icon = d.at_size(size, |d| {
+            d.place_of("Undo package registration")
+                .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
+        });
+        d.observe(
+            "iter-5-D-package-undo",
+            icon,
+            format!("Registration Undo has the shared icon at {size:?}"),
+        );
+    }
     d.state("copied-package-registered-alongside-original", Sizes::All);
     go_campaign(d);
     d.expect("Ashen Reaches");
@@ -1820,12 +1944,51 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
     d.wait_for_text("Same entry in two files");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let consequences = d.at_size(size, |d| {
+            [
+                (
+                    "ashen-marches-copy",
+                    "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
+                ),
+                (
+                    "ashen-marches",
+                    "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
+                ),
+            ]
+            .iter()
+            .all(|(folder, result)| {
+                let button = d.nodes().into_iter().find(|node| {
+                    node.name.starts_with("Make all ")
+                        && node
+                            .name
+                            .ends_with(&format!("files in {folder}/ separate entries"))
+                });
+                button.is_some_and(|button| {
+                    d.place_of(result).is_some_and(|line| {
+                        d.visible_text(result)
+                            && line.top() >= button.rect.bottom()
+                            && line.top() - button.rect.bottom() <= design::XS + 1.0
+                            && (line.left() - button.rect.left()).abs() < 1.0
+                    })
+                })
+            })
+        });
+        d.observe(
+            "iter-5-D-FD5",
+            consequences,
+            format!("Each batch choice names its encounter and remaining folder at {size:?}"),
+        );
+    }
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");
     d.expect("Make Cinder Wolf.md in ashen-marches-copy/ a separate entry");
     d.expect_same("The duplicate identity view already selects this file and names both folders.");
-    d.state("same-filenames-name-the-folder", Sizes::All);
+    d.assert_state_matches(
+        "same-filenames-name-the-folder",
+        "manifest-only-hand-repair-keeps-both-files",
+    );
     let (copied_entries, _) = splat::content::read_directory(&copied).unwrap();
     let count = copied_entries
         .iter()
@@ -1844,7 +2007,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect_same(
         "Undo restores the same duplicate identities and folder-specific repair actions.",
     );
-    d.state("copied-folder-identities-undone", Sizes::All);
+    d.assert_state_matches(
+        "copied-folder-identities-undone",
+        "manifest-only-hand-repair-keeps-both-files",
+    );
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));

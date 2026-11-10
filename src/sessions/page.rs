@@ -893,8 +893,7 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
-/// Read and a transcript use the width of `Write`'s text, so a note keeps its line breaks
-/// between the views. The DM's own notes follow the column, unlike the books' rules prose.
+/// Recording results follow the column with the same text inset as Write.
 fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width() - 2.0 * design::S);
@@ -973,17 +972,7 @@ fn session_row(
     let galley = ui
         .painter()
         .layout(title.to_owned(), font.font(ui), c.text, width);
-    let detail = detail.replace(
-        &format!("{} Playing", icons::RUN),
-        &format!("{}\u{a0}Playing", icons::RUN),
-    );
-    let word = state.map(|state| (format!("{} {}", state.icon, state.word), state.color));
-    let second = design::status_in_text(
-        ui,
-        &detail,
-        word.as_ref().map(|(word, color)| (word.as_str(), *color)),
-        width,
-    );
+    let second = session_detail(ui, detail, state, width);
     let lines = galley.size().y + second.size().y;
     let height = (lines + design::M).max(Density::Glance.control() + design::S);
     design::row(
@@ -999,6 +988,27 @@ fn session_row(
             ui.painter()
                 .galley(egui::pos2(x, top + first), second, c.muted);
         },
+    )
+}
+
+fn session_detail(
+    ui: &egui::Ui,
+    detail: &str,
+    state: Option<Status<'_>>,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let detail = plan_summary(detail);
+    let word = state.map(|state| {
+        (
+            plan_summary(&format!("{} {}", state.icon, state.word)),
+            state.color,
+        )
+    });
+    design::status_in_text(
+        ui,
+        &detail,
+        word.as_ref().map(|(word, color)| (word.as_str(), *color)),
+        width,
     )
 }
 
@@ -2586,7 +2596,7 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Warning,
-                    "This file is gone from the folder. Your words are still here. Choose where to save them, or let this draft go.",
+                    "This file is gone from the folder. Your draft is still here. Choose where to save it, or let this draft go.",
                 );
                 if let Some(path) = &draft.moved_to {
                     let label = format!(
@@ -2599,7 +2609,7 @@ impl Sessions {
                         draft.save_moved();
                     }
                 }
-                if Action::secondary("Save my words as a new file")
+                if Action::secondary("Save my draft as a new file")
                     .show(ui)
                     .clicked()
                 {
@@ -3070,130 +3080,165 @@ impl Sessions {
             ))
         });
         let mut pressed_link = None;
-        frame.show(ui, |ui| {
-            let visible_height = ui.available_height().max(design::XL);
-            let mut scroll =
-                egui::ScrollArea::vertical().id_salt(("session_editor", self.selected, in_panel));
-            if reset_scroll {
-                scroll = scroll.vertical_scroll_offset(0.0);
-            }
-            scroll
-                .max_height(visible_height)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
-                    // space would press it. Escape still leaves the panel.
-                    let mut layouter = crate::markdown_source::layouter;
-                    let output = egui::TextEdit::multiline(&mut draft.body)
-                        .lock_focus(in_panel)
-                        .frame(false)
-                        .font(design::reader::prose_type(ui).font(ui))
-                        .layouter(&mut layouter)
-                        .margin(egui::Vec2::ZERO)
-                        .desired_width(ui.available_width())
-                        .min_size(egui::vec2(0.0, visible_height + heading_offset))
-                        .show(ui);
-                    crate::markdown_source::paint_section_rules(ui, &output);
-                    pressed_link = crate::markdown_source::pressed_note_link(ui, &output, None);
-                    let place = super::slash::Place {
-                        session: self.selected,
-                        campaign: self.campaign.as_ref(),
-                        index: index.as_deref(),
-                        run_open: self.run_open,
-                    };
-                    let done = self.slash.show(ui, &output, &mut draft.body, &place);
-                    self.wants_content_refresh |= done.created;
-                    if done.edited {
-                        draft.edited();
-                        if let Some(session) = self.selected {
-                            self.mentions
-                                .insert(session, timeline::referenced_ids(&draft.body));
-                        }
+        // ScrollArea derives its ID from its Ui. Give that Ui a global session ID,
+        // so tab and side-by-side layouts share the same scroll state.
+        ui.scope_builder(
+            egui::UiBuilder::new().id(("session_editor_scope", self.selected, in_panel)),
+            |ui| {
+                frame.show(ui, |ui| {
+                    let visible_height = ui.available_height().max(design::XL);
+                    let mut scroll = egui::ScrollArea::vertical().id_salt((
+                        "session_editor",
+                        self.selected,
+                        in_panel,
+                    ));
+                    if reset_scroll {
+                        scroll = scroll.vertical_scroll_offset(0.0);
                     }
-                    if in_panel && let Some(at) = draft.body.find("## What happened") {
-                        // Even a short note must scroll its repeated heading out of the panel.
-                        let heading = draft.body[..at].chars().count();
-                        let offset = output
-                            .galley
-                            .pos_from_cursor(egui::text::CCursor::new(heading))
-                            .top();
-                        ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
-                    }
-                    let response = output.response;
-                    design::named(ui, &response, "Note text");
-                    self.note_had_focus = response.has_focus();
-                    self.note_editor_id = Some(response.id);
-                    // A click chooses the place, so what is typed goes exactly there.
-                    if focus || response.clicked() {
-                        self.break_before_words = false;
-                    }
-                    if std::mem::take(&mut self.refocus_note) {
-                        response.request_focus();
-                        let words = std::mem::take(&mut self.words_for_note);
-                        if !words.is_empty() {
-                            // These words had their break, and what follows goes on from them.
-                            self.break_before_words = false;
-                            let new_line = std::mem::take(&mut self.words_new_line);
-                            insert_at_caret(ui.ctx(), response.id, draft, &words, new_line);
-                        }
-                    }
-                    if let Some(caret) = self.caret_to_show.take() {
-                        let rect = output
-                            .galley
-                            .pos_from_cursor(egui::text::CCursor::new(if in_panel {
-                                draft
-                                    .body
-                                    .find("## What happened")
-                                    .map_or(caret, |at| draft.body[..at].chars().count())
-                            } else {
-                                caret
-                            }))
-                            .translate(output.galley_pos.to_vec2());
-                        if in_panel {
-                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                        } else {
-                            let clip = ui.clip_rect();
-                            if rect.top() < clip.top() || rect.bottom() > clip.bottom() {
-                                let wanted = (rect.bottom() - clip.height()).max(0.0);
-                                let top = output
-                                    .galley
-                                    .rows
-                                    .iter()
-                                    .map(|row| row.pos.y + output.galley_pos.y)
-                                    .find(|top| *top >= wanted)
-                                    .unwrap_or(rect.top());
-                                let visible = egui::Rect::from_min_size(
-                                    egui::pos2(rect.left(), top),
-                                    egui::vec2(rect.width(), clip.height()),
-                                );
-                                ui.scroll_to_rect(visible, Some(egui::Align::TOP));
+                    let output = scroll
+                        .max_height(visible_height)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
+                            // space would press it. Escape still leaves the panel.
+                            let mut layouter = crate::markdown_source::layouter;
+                            let output = egui::TextEdit::multiline(&mut draft.body)
+                                .id(egui::Id::new((
+                                    "session_note_text",
+                                    self.selected,
+                                    in_panel,
+                                )))
+                                .lock_focus(in_panel)
+                                .frame(false)
+                                .font(design::reader::prose_type(ui).font(ui))
+                                .layouter(&mut layouter)
+                                .margin(egui::Vec2::ZERO)
+                                .desired_width(ui.available_width())
+                                .min_size(egui::vec2(0.0, visible_height + heading_offset))
+                                .show(ui);
+                            crate::markdown_source::paint_section_rules(ui, &output);
+                            pressed_link =
+                                crate::markdown_source::pressed_note_link(ui, &output, None);
+                            let place = super::slash::Place {
+                                session: self.selected,
+                                campaign: self.campaign.as_ref(),
+                                index: index.as_deref(),
+                                run_open: self.run_open,
+                            };
+                            let done = self.slash.show(ui, &output, &mut draft.body, &place);
+                            self.wants_content_refresh |= done.created;
+                            if done.edited {
+                                draft.edited();
+                                if let Some(session) = self.selected {
+                                    self.mentions
+                                        .insert(session, timeline::referenced_ids(&draft.body));
+                                }
                             }
-                        }
-                    }
-                    if focus {
-                        response.request_focus();
-                        let (caret, changed) = fresh_line_in_note(&mut draft.body);
-                        if changed {
-                            draft.edited();
-                        }
-                        self.caret_to_show = Some(caret);
-                        let end = egui::text::CCursor::new(caret);
-                        let mut state =
-                            egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
-                        state
-                            .cursor
-                            .set_char_range(Some(egui::text::CCursorRange::one(end)));
-                        egui::TextEdit::store_state(ui.ctx(), response.id, state);
-                    }
-                    if response.changed() {
-                        draft.edited();
-                        if let Some(session) = self.selected {
-                            self.mentions
-                                .insert(session, timeline::referenced_ids(&draft.body));
-                        }
-                    }
+                            if in_panel && let Some(at) = draft.body.find("## What happened") {
+                                // Even a short note must scroll its repeated heading out of the panel.
+                                let heading = draft.body[..at].chars().count();
+                                let offset = output
+                                    .galley
+                                    .pos_from_cursor(egui::text::CCursor::new(heading))
+                                    .top();
+                                ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
+                            }
+                            let response = output.response;
+                            design::named(ui, &response, "Note text");
+                            self.note_had_focus = response.has_focus();
+                            // Narrowing keeps whichever side the DM last worked in: the note
+                            // while it has focus, the plan once focus moves to a plan field.
+                            if !in_panel && response.has_focus() {
+                                self.tab = Tab::Note;
+                            } else if !in_panel
+                                && self.tab == Tab::Note
+                                && ui.memory(|memory| memory.focused().is_some())
+                            {
+                                self.tab = Tab::Plan;
+                            }
+                            self.note_editor_id = Some(response.id);
+                            // A click chooses the place, so what is typed goes exactly there.
+                            if focus || response.clicked() {
+                                self.break_before_words = false;
+                            }
+                            if std::mem::take(&mut self.refocus_note) {
+                                response.request_focus();
+                                let words = std::mem::take(&mut self.words_for_note);
+                                if !words.is_empty() {
+                                    // These words had their break, and what follows goes on from them.
+                                    self.break_before_words = false;
+                                    let new_line = std::mem::take(&mut self.words_new_line);
+                                    insert_at_caret(ui.ctx(), response.id, draft, &words, new_line);
+                                }
+                            }
+                            if let Some(caret) = self.caret_to_show.take() {
+                                let rect = output
+                                    .galley
+                                    .pos_from_cursor(egui::text::CCursor::new(if in_panel {
+                                        draft
+                                            .body
+                                            .find("## What happened")
+                                            .map_or(caret, |at| draft.body[..at].chars().count())
+                                    } else {
+                                        caret
+                                    }))
+                                    .translate(output.galley_pos.to_vec2());
+                                if in_panel {
+                                    ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                                } else {
+                                    let clip = ui.clip_rect();
+                                    if rect.top() < clip.top() || rect.bottom() > clip.bottom() {
+                                        let wanted = (rect.bottom() - clip.height()).max(0.0);
+                                        let top = output
+                                            .galley
+                                            .rows
+                                            .iter()
+                                            .map(|row| row.pos.y + output.galley_pos.y)
+                                            .find(|top| *top >= wanted)
+                                            .unwrap_or(rect.top());
+                                        let visible = egui::Rect::from_min_size(
+                                            egui::pos2(rect.left(), top),
+                                            egui::vec2(rect.width(), clip.height()),
+                                        );
+                                        ui.scroll_to_rect(visible, Some(egui::Align::TOP));
+                                    }
+                                }
+                            }
+                            if focus {
+                                response.request_focus();
+                                let (caret, changed) = fresh_line_in_note(&mut draft.body);
+                                if changed {
+                                    draft.edited();
+                                }
+                                self.caret_to_show = Some(caret);
+                                let end = egui::text::CCursor::new(caret);
+                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                    .unwrap_or_default();
+                                state
+                                    .cursor
+                                    .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                                egui::TextEdit::store_state(ui.ctx(), response.id, state);
+                            }
+                            if response.changed() {
+                                draft.edited();
+                                if let Some(session) = self.selected {
+                                    self.mentions
+                                        .insert(session, timeline::referenced_ids(&draft.body));
+                                }
+                            }
+                        });
+                    #[cfg(test)]
+                    ui.data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("session_editor_proof"),
+                            (self.note_editor_id.unwrap(), output.state.offset),
+                        )
+                    });
+                    #[cfg(not(test))]
+                    let _ = output;
                 });
-        });
+            },
+        );
         if let Some(target) = pressed_link {
             self.open_note_link(target);
         }
@@ -3369,7 +3414,8 @@ impl Sessions {
             .id_salt(("session_reader", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                note_width(ui, |ui| {
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
                     if !has_written_text(&compact) {
                         ui.horizontal(|ui| {
                             ui.label(
@@ -3855,7 +3901,12 @@ impl Sessions {
                     let running = event.run.is_some() && event.run == plan.open_run;
                     let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
-                    let saved = saved_fight.and_then(|fight| fight.saved.as_ref()).filter(|_| !running);
+                    let saved = plan.saved_runs.iter().find(|saved| {
+                        saved.standing == crate::encounter_run::Standing::Unfinished
+                            && saved.id.is_some()
+                            && saved.id == event.run
+                            && !running
+                    });
                     let summary = if event.run.is_some() {
                         timeline::played_fight_summary(event, running)
                     } else {
@@ -5546,7 +5597,7 @@ impl Sessions {
                     "{} and {filename} claim to be the same session.",
                     note.path.file_name().unwrap_or_default().to_string_lossy()
                 ),
-                &crate::world::separate_entry_action(&filename),
+                &format!("Make {filename} a separate session"),
             ) {
                 match super::new_identity(copy) {
                     Ok(undo) => {
@@ -5562,8 +5613,8 @@ impl Sessions {
             if design::undo_message(
                 ui,
                 Tone::Success,
-                &crate::world::separate_entry_result(&filename),
-                crate::world::SEPARATE_ENTRY_UNDO,
+                &format!("{filename} is now a separate session."),
+                "Undo separate session",
             ) {
                 match undo.undo() {
                     Ok(()) => {
@@ -6549,8 +6600,8 @@ impl Sessions {
     }
 }
 
-/// Draw a pane under a fixed id while `fixed`, so a group draft keeps its typed text, focus and
-/// scroll when the page crosses the side-by-side width. Otherwise the pane keeps its usual ids.
+/// Keep the note and group editor under stable IDs across the side-by-side breakpoint.
+/// Other panes keep their usual IDs.
 fn fixed_scope<R>(
     ui: &mut egui::Ui,
     fixed: bool,
@@ -6568,6 +6619,113 @@ fn fixed_scope<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iter5_c_timeline_fight_resumes_by_run_id_without_a_planned_source() {
+        use crate::encounter_run::{SavedRunInfo, Standing};
+        use egui_kittest::kittest::Queryable;
+        let session = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        let mut book = Book::default();
+        book.add(Kind::Encounter, Some(session));
+        book.events[0].title = "Bridge Ambush".into();
+        book.events[0].result = "Round 2".into();
+        book.events[0].run = Some(run);
+        let saved = SavedRunInfo {
+            path: PathBuf::from("source-deleted/run.json"),
+            id: Some(run),
+            source: None,
+            encounter: "Bridge Ambush".into(),
+            label: "Round 2".into(),
+            standing: Standing::Unfinished,
+            saved_at: None,
+            unsent: vec!["Kestrel".into()],
+        };
+        let mut other = saved.clone();
+        other.id = Some(Uuid::new_v4());
+        other.path = PathBuf::from("other-run.json");
+        let page = Sessions {
+            selected: Some(session),
+            ..Default::default()
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH, 640.0))
+            .build_state(
+                |ctx,
+                 (page, book, runs, open): &mut (
+                    Sessions,
+                    Book,
+                    Vec<SavedRunInfo>,
+                    Option<Uuid>,
+                )| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &[],
+                        saved_runs: runs,
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: *open,
+                        open_state: "Round 2".into(),
+                        open_encounter: None,
+                    };
+                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan));
+                },
+                (page, book, vec![other, saved.clone()], None),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Resume: Bridge Ambush").click();
+        harness.run_steps(2);
+        assert_eq!(
+            harness.state().0.wants_saved_run.as_ref(),
+            Some(&saved.path)
+        );
+        for state in [Standing::Ended, Standing::Unreadable] {
+            harness.state_mut().2[1].standing = state;
+            harness.run_steps(2);
+            assert!(harness.query_by_label("Resume: Bridge Ambush").is_none());
+        }
+        harness.state_mut().2[1].standing = Standing::Unfinished;
+        harness.state_mut().3 = Some(run);
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Resume: Bridge Ambush").is_none());
+    }
+
+    #[test]
+    fn iter5_c_session_detail_keeps_separators_and_warning_together() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for status in ["Processed", "Processed, with a warning"] {
+                    let detail = format!("2026-01-01 · {status} · {} Playing", icons::RUN);
+                    for width in [170.0, 200.0, 216.0, 330.0] {
+                        let galley = session_detail(ui, &detail, None, width);
+                        let rows: Vec<String> = galley
+                            .rows
+                            .iter()
+                            .map(|row| row.glyphs.iter().map(|g| g.chr).collect())
+                            .collect();
+                        for row in &rows {
+                            assert!(!row.trim_end().ends_with('·'), "{width}: {rows:?}");
+                        }
+                        assert!(
+                            rows.iter()
+                                .any(|row| row.replace('\u{a0}', " ").contains(status)),
+                            "State stays whole: {width}: {rows:?}"
+                        );
+                    }
+                }
+            });
+        });
+    }
 
     #[test]
     fn iter1_c_completed_processing_uses_processed_in_the_rail() {

@@ -68,8 +68,9 @@ devenv shell -- visual-test work --only run-lookup,party
 devenv shell -- audit-gate final
 ```
 
-This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
-1200x800 and 1920x1080, `ergonomics.json`, `ergonomics.md`,
+This also writes to `artifacts/screenshots/iter-0/`: PNGs at 960x640 and 1200x800,
+with 1920x1080 for width-sensitive layouts and recorded wide proof states. Selected
+states also have a 2x-density capture. The folder holds `ergonomics.json`, `ergonomics.md`,
 `manifest.txt`, and one `video/<scenario>.mp4` per scenario. Rendering uses Mesa's
 software Vulkan driver, so captures repeat between runs. Video needs the host's
 `ffmpeg`. The optional contact sheet needs `montage` and can use several GB of RAM.
@@ -97,18 +98,34 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
+- `Sizes::Standard` captures and checks 960x640 and 1200x800. `StandardAndHiDpi`
+  adds 2x density. Use `All` or `AllAndHiDpi` for readers, forms, lists, panes,
+  action notices and wide proof states where width matters. The older `Default`
+  sets capture both sizes but run 1x ergonomics only at the minimum window.
 - Each capture must differ from every earlier step of its scenario at the same size
-  in at least 0.1% of pixels. Use `d.expect_same("reason")` before an intended return.
-  Captures finish pending note and Timeline saves before they render.
+  in at least 0.1% of pixels. For an intended return, first assert the restored state,
+  then use `d.assert_state_matches("return-name", "earlier-name")`. It runs the
+  earlier state's sizes and checks, and compares every pixel within the existing
+  two-level channel tolerance. It writes a PNG only if the comparison fails.
+  `state_changed_at` saves the sizes that change and compares the others.
+  `state_changed_at_prepared` also retains per-size setup and observations. For example,
+  `Sizes::Small` keeps a narrow tab change when a wide layout already shows both panes.
+  `check_state` retains all checks when another scenario supplies the same image.
+  `state_captured_at` keeps distinct sizes when only some views are shared.
+  Use `d.expect_same("reason")` only for an intended small visual change, after its
+  behaviour assertion. The repeated-capture check still runs on later captures.
+  Captures and frame comparisons finish pending note and Timeline saves first.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
 
-Session Read view omits plan links already shown beside the note, including group links.
+Session Read view keeps a left-aligned prose width of at most 75 characters per line. Write follows
+the column. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
+A paused fight on the plan offers Resume even when it came from a timeline event.
 The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. An empty note has one inline Write link. The note file keeps its Markdown and prose. Campaign dependency issues name the entry
 that needs repair and keep raw references in Technical details.
 
@@ -124,7 +141,7 @@ provides `Edit in Obsidian` and `Show file`.
 Conversion and draft comparisons align unchanged lines. Their highlights and counts
 show actual changes. **Next difference** moves between separate change groups and
 stays hidden when there is only one group.
-Long conversion previews give the source panes about 60% of the window height and show whole rows.
+Long conversion previews give the source panes about 60% of the window height and show whole aligned rows, with space reserved for the horizontal scroll bar.
 
 Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
 writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
@@ -202,8 +219,8 @@ An empty fight **Prep** tab offers **Edit encounter** while the encounter exists
 Moving a typed World note keeps its stored identity. Plain notes use temporary
 path identities; their name links still work after a folder move. Duplicate names
 open a chooser, including an NPC's **In** link in World and Lookup. Each choice pairs its file
-with **Always use this one**. Empty World notes say **Nothing written yet.** and
-offer **Edit in Obsidian**.
+with **Always use this one**. An empty World note says **Nothing written yet.**
+Its file line keeps the one **Edit in Obsidian** link.
 
 With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
@@ -415,9 +432,10 @@ Copy link and menu on the title line when they fit, and below it when they do no
 still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
 under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
 comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
-title, length, place and notes. The Add strip stays directly below Tonight, above messages and plan rows. Fight,
+title, length, place and notes. A paused fight on the plan offers Resume even when it came from a timeline event.
+The Add strip stays directly below Tonight, above messages and plan rows. Fight,
 Group and Long rest stay visible. When all actions do not fit on one line, More holds
-Day, Short rest, Travel and Major event. The visible row can wrap if needed. Timeline
+Day, Short rest, Travel and Major event. The menu uses a compact `⋯⌄` button named `More Add actions`; hover text names its actions. The strip stays on one line. Timeline
 uses the same width rule. At the top, **Last time** links to the previous session and shows the first line of its recap. The title and date share one line. A **Playing** status marks the session being played.
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them and shows note links in place. **Templates** opens from the page header; **← Sessions** returns to the notes.
@@ -523,6 +541,34 @@ must cover what the dice can roll. A bad table says so, and the rest of the note
 
 **Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
 run's log, and Undo takes it back. Otherwise it only shows.
+
+### Loot
+
+An encounter's **Loot** list, under its roster, holds what the party finds when the fight is over. Type in **Add loot**
+and press Enter to add the words as a line, such as `30 gp`. While you type, the field offers the campaign's roll
+tables and Library items; the arrow keys and Enter, or a click, choose one. **Roll on a table** lists every table.
+A roll line has a count and its table, and a key that no table has says **Cannot roll** before play. Each line's
+**⋯** menu has **Remove**, with Undo. The note keeps the list as `## Loot`, which Obsidian shows too:
+
+```markdown
+## Loot
+
+- 30 gp
+- [[Potion of Healing]]
+- Roll 2× gems
+```
+
+One creature can carry loot of its own. Open **Changes** on its roster row or group member, and use the same list
+under **Loot**. The table's Changes cell keeps it last, so its words can hold commas:
+`HP +5, Loot Iron key; Roll goblin-pockets`. A line there cannot hold `;`. The row's Changes link says **Loot**, and
+names any table key that cannot roll. Each creature that an encounter group adds carries its member's loot.
+
+In a run, a creature's card shows its loot in one line. When the creature drops to 0 HP, its row says **Loot** and its
+card lists the loot with a **Roll** button for each roll. When the fight ends, the ended view lists the encounter's loot
+and the loot of each creature at 0 HP, with how many rolls are left. **Roll all** makes every roll as one step.
+A result takes the place of its button, the saved run keeps it, and Undo takes it back. Rolls still work after the
+end, because that is when the party searches. **Copy loot** copies the list, with the results, as Markdown for the
+session note. Loot on creatures still standing is under **more creatures carry loot**.
 
 **New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
 entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a
@@ -777,7 +823,7 @@ member's bonus (identical NPCs, or the encounter's initiative groups), a roll fo
 combat, and the same group can be added again. Each member is a new participant at full HP, with its
 own key and numbered name. In combat the group takes its place on that total and the current turn stays
 current. It joins the saved run and the log, and **Undo** takes back the whole group until later
-steps stand in the way.
+steps stand in the way. The arrival notice gives the group and its initiative totals. The Log keeps member names and roll details.
 
 The row and card of a creature with changes say `Changed`, and the card lists each base and changed
 value. AC, maximum HP and initiative changes appear once, in the stat block's value trio with the printed value below. An NPC's row says which stat block it uses, such as `as Bandit Captain`; its name alone does not count as a stat change. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
@@ -786,7 +832,7 @@ change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
-**End encounter** records a manual ending and your outcome. Runs save automatically
+**End encounter…** records a manual ending and your outcome. It shortens to **End…** before it moves into a menu, and stays visible while it fits. Runs save automatically
 after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
 with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Saved times use relative time for today and yesterday, then a short date. Deletion has one step of undo.

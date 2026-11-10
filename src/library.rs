@@ -9,6 +9,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
+    matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
 };
 use eframe::egui;
@@ -144,7 +145,11 @@ pub(crate) fn duplicate_repair_consequence(
     keeps: bool,
 ) {
     if !users.is_empty() {
-        let verb = if keeps { "keeps" } else { "will then use" };
+        let verb = match (keeps, users.len()) {
+            (true, 1) => "keeps",
+            (true, _) => "keep",
+            (false, _) => "will then use",
+        };
         ui.label(
             Type::Small
                 .rich(ui, format!("{} {verb} {remaining}.", name_list(users)))
@@ -334,19 +339,31 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
-    /// Plain words match the name, path or section, or a creature's facts. `habitat:forest`
-    /// and the other fact terms match creatures only.
-    fn matches(&self, section: Section, query: &Query, facets: Option<&Facets>) -> bool {
+    /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
+    /// words match the name (in any order, or with a typo), path or section, or a creature's
+    /// facts. `habitat:forest` and the other fact terms match creatures only.
+    fn search_rank(
+        &self,
+        section: Section,
+        query: &Query,
+        typed: &Typed,
+        facets: Option<&Facets>,
+    ) -> Option<Rank> {
         let words = query.words.as_str();
         if words.is_empty() && !query.names_facts() {
-            return section == Section::All || self.section() == section;
+            return (section == Section::All || self.section() == section)
+                .then_some(Rank::typed(0));
         }
-        let text = words.is_empty()
-            || self.name().to_lowercase().contains(words)
-            || self.path.to_lowercase().contains(words)
+        if query.names_facts() && !facets.is_some_and(|facets| query.matches_facts(facets)) {
+            return None;
+        }
+        if words.is_empty() {
+            return Some(Rank::typed(0));
+        }
+        let other = self.path.to_lowercase().contains(words)
             || self.section().label().to_lowercase().contains(words)
             || facets.is_some_and(|facets| query.words_in(self.name(), facets));
-        text && (!query.names_facts() || facets.is_some_and(|facets| query.matches_facts(facets)))
+        with_other(typed.name(&self.name().to_lowercase()), other)
     }
 }
 #[derive(Default)]
@@ -1432,6 +1449,8 @@ pub struct Library {
     filter: Filter,
     /// The filter that `matches` used.
     matched_filter: Filter,
+    /// Where results found only with a typo start in `matches`.
+    typo_from: usize,
     section: Section,
     unreadable_kind: Option<Section>,
     error: Option<String>,
@@ -2330,7 +2349,7 @@ impl Library {
             }
         }
         if self.package_copy.is_some()
-            && design::message_with_action(
+            && design::undo_message(
                 ui,
                 Tone::Success,
                 &format!(
@@ -2653,14 +2672,14 @@ impl Library {
             self.reveal_row |= self.matches_scope != Some(scope);
             self.matches_scope = Some(scope);
             let parsed = Query::parse(&query);
+            let typed = Typed::new(&parsed.words);
             let facets = loaded.facets();
-            let mut found: Vec<usize> = loaded
+            let mut found: Vec<(Rank, usize)> = loaded
                 .notes
                 .iter()
                 .enumerate()
                 .filter(|(i, n)| {
                     loaded.in_scope(n, scope)
-                        && n.matches(self.section, &parsed, facets[*i].as_ref())
                         && (!filtering
                             || facets[*i].as_ref().is_some_and(|f| self.filter.matches(f)))
                         && (!query.is_empty()
@@ -2669,22 +2688,30 @@ impl Library {
                                 .unreadable_kind
                                 .is_none_or(|kind| n.unreadable_kind() == kind))
                 })
-                .map(|(i, _)| i)
+                .filter_map(|(i, n)| {
+                    n.search_rank(self.section, &parsed, &typed, facets[i].as_ref())
+                        .map(|rank| (rank, i))
+                })
                 .collect();
             if !parsed.words.is_empty() {
-                // Best first: the exact name, then a prefix, then a whole word.
-                found.sort_by_key(|i| {
-                    let name = loaded.notes[*i].name().to_lowercase();
-                    let rank = crate::lookup::name_rank(&name, &parsed.words).unwrap_or(4);
+                // Best first: the exact name, then a prefix, then a whole word, then each word in
+                // any order. A path, section or fact match comes next, and a typo comes last. The
+                // sort is stable, so the list's order stays inside each rank.
+                found.sort_by_key(|&(rank, i)| {
                     (
                         rank,
                         crate::lookup::entry_origin(
-                            loaded.notes[*i].entry.as_ref(),
-                            matches!(loaded.notes[*i].owner, Owner::Campaign(_)),
+                            loaded.notes[i].entry.as_ref(),
+                            matches!(loaded.notes[i].owner, Owner::Campaign(_)),
                         ),
                     )
                 });
             }
+            self.typo_from = found
+                .iter()
+                .position(|(rank, _)| rank.typo)
+                .unwrap_or(found.len());
+            let found = found.into_iter().map(|(_, i)| i).collect();
             self.matches = Some((self.section, query.clone(), found));
         }
         let matches = &self.matches.as_ref().unwrap().2;
@@ -2697,7 +2724,11 @@ impl Library {
                 .selected
                 .is_none_or(|i| !matches.contains(&i) && !loaded.notes[i].is_manifest())
         {
-            select = matches.first().copied().filter(|_| !whole_catalogue);
+            // A name found only with a typo is a guess. It does not open by itself.
+            select = matches
+                .first()
+                .copied()
+                .filter(|_| !whole_catalogue && self.typo_from > 0);
             if select.is_none() {
                 self.selected = None;
                 self.draft.clear();
@@ -2794,6 +2825,16 @@ impl Library {
                 ui.add_space(design::XS);
                 if searching || filtering || (compact && self.section != Section::All) {
                     design::group_heading(ui, if searching { "Search results" } else if filtering { "Matches" } else { self.section.label() }, matches.len());
+                }
+                if searching && !matches.is_empty() && self.typo_from == 0 {
+                    ui.add_space(design::S);
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body.rich(ui, CLOSE_NAMES)
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
                 }
                 if matches.is_empty() {
                     ui.add_space(design::S);
@@ -4506,20 +4547,83 @@ impl Library {
                 });
             }
             let mut shown = std::collections::HashSet::new();
-            for &at in &duplicate_indices {
+            for (position, &at) in duplicate_indices.iter().enumerate() {
                 let owner = &loaded.notes[at].owner;
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    && Action::secondary(&format!(
-                        "Make all {} files in {}/ separate entries",
-                        paths.len(),
-                        owner.folder()
-                    ))
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
                 {
-                    new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+                    // Encounters outside the batch whose source changes; worked out once per load.
+                    let slot = egui::Id::new((
+                        "duplicate_folder_users",
+                        owner.id(),
+                        std::ptr::from_ref(loaded) as usize,
+                        loaded.notes.len(),
+                        // A reload in place changes some text; this cheap sum notices it.
+                        loaded
+                            .notes
+                            .iter()
+                            .map(|note| note.text.len())
+                            .sum::<usize>(),
+                    ));
+                    let users = ui
+                        .data(|data| data.get_temp::<Vec<String>>(slot))
+                        .unwrap_or_else(|| {
+                            let batch: std::collections::HashSet<&String> = paths.iter().collect();
+                            let targets: Vec<&Entry> = loaded
+                                .notes
+                                .iter()
+                                .filter(|target| {
+                                    target.owner.id() == owner.id() && batch.contains(&target.path)
+                                })
+                                .filter_map(|target| target.entry.as_ref())
+                                .collect();
+                            let mut users: Vec<String> = Vec::new();
+                            for other in &loaded.notes {
+                                // An encounter inside the batch gets the new identities with it.
+                                if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                                    continue;
+                                }
+                                let Some(encounter) = other.entry.as_ref() else {
+                                    continue;
+                                };
+                                if encounter.kind == "encounter"
+                                    && !users.contains(&encounter.name)
+                                    && targets
+                                        .iter()
+                                        .any(|entry| encounter_uses_entry(encounter, entry))
+                                {
+                                    users.push(encounter.name.clone());
+                                }
+                            }
+                            ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                            users
+                        });
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = design::XS;
+                        if Action::secondary(&format!(
+                            "Make all {} files in {}/ separate entries",
+                            paths.len(),
+                            owner.folder()
+                        ))
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                        {
+                            new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                        }
+                        let remaining = duplicate_indices
+                            .iter()
+                            .map(|&other| &loaded.notes[other].owner)
+                            .find(|other| other.id() != owner.id())
+                            .expect("a folder repair has another owner");
+                        duplicate_repair_consequence(
+                            ui,
+                            &users,
+                            &format!("the files in {}/", remaining.folder()),
+                            position == 0,
+                        );
+                    });
                 }
             }
         }
@@ -5739,12 +5843,12 @@ mod tests {
         );
         assert!(!closure.direct.contains(&id));
         assert!(closure.errors.iter().any(|error| {
-            error.contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
+            error.contains("These two files claim to be the same entry: Wolf copy.md and Wolf.md.")
         }));
         assert!(
             catalogue.unreadable[&id]
                 .word
-                .contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
+                .contains("These two files claim to be the same entry: Wolf copy.md and Wolf.md.")
         );
         let copy_index = library
             .loaded
@@ -5825,7 +5929,7 @@ mod tests {
             catalogue
                 .errors
                 .iter()
-                .any(|e| e.contains("share an identity"))
+                .any(|e| e.contains("These two files claim to be the same entry:"))
         );
         let loaded = load_all(&modules, None).unwrap();
         let wolves: Vec<_> = loaded

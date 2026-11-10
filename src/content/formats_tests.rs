@@ -2072,3 +2072,40 @@ fn vault_conversion_requirement_does_not_choose_an_ambiguous_package_path() {
     let converted = formats::convert_resolved("Third.md", &old, &entries).unwrap();
     formats::verify_conversion("Third.md", &old, &converted, &entries).unwrap();
 }
+
+#[test]
+fn loot_is_the_last_term_of_a_changes_cell_in_a_roster_and_a_group() {
+    let key = "dnd2024:creatures/goblin_warrior";
+    let roster = note("encounter", "", &format!("# Rook\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5, Loot Iron key, rusty; Roll gems | %% splat slot=actor_one %% |\n")).replace("splat_schema: 1", "splat_schema: 2");
+    let slot = &model(&roster)["splat_encounter"]["roster"][0];
+    assert_eq!(slot["overrides"]["loot"], "Iron key, rusty; Roll gems");
+    assert_eq!(slot["overrides"]["max_hp"]["add"], 5);
+    // A starting HP goes before the loot, which keeps its commas.
+    let mut encounter = model(&roster)["splat_encounter"].clone();
+    encounter["roster"][0]["initial"] = serde_yaml_ng::from_str("{hp: 3}").unwrap();
+    let edited = formats::patch_model(&roster, &[("splat_encounter", Some(encounter))]).unwrap();
+    assert!(
+        edited.contains("| HP +5, Start HP 3, Loot Iron key, rusty; Roll gems |"),
+        "{edited}"
+    );
+    assert_eq!(
+        model(&edited)["splat_encounter"]["roster"][0]["overrides"]["loot"],
+        "Iron key, rusty; Roll gems"
+    );
+    // A group member's loot is its own, and taking it out leaves the other changes.
+    let group = note("encounter_group", "splat_side: enemies", &format!("# Rook\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | | Loot 3 sp | |\n")).replace("splat_schema: 1", "splat_schema: 2");
+    let mut members = model(&group)["splat_encounter_group"].clone();
+    assert_eq!(members["members"][0]["overrides"]["loot"], "3 sp");
+    members["members"][0]["overrides"] = serde_yaml_ng::from_str("{max_hp: {add: 2}}").unwrap();
+    let edited = formats::patch_model(&group, &[("splat_encounter_group", Some(members))]).unwrap();
+    assert!(
+        edited.contains("| 2 | [Goblin](splat:dnd2024:creatures/goblin_warrior) | | HP +2 | |"),
+        "{edited}"
+    );
+    let empty = group.replace("Loot 3 sp", "HP +1, Loot");
+    assert!(
+        super::legacy::parse("Rook.md", &empty).unwrap().flags[0]
+            .message
+            .contains("Loot needs")
+    );
+}

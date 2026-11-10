@@ -12,6 +12,7 @@ use eframe::egui::{
 use egui_kittest::{Harness, Node, kittest::NodeT};
 use std::{
     cell::RefCell,
+    collections::BTreeMap,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -28,13 +29,45 @@ const TAB_LIMIT: usize = 80;
 /// The window sizes a state is captured and checked at.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Sizes {
+    /// Capture both sizes; run ergonomics at the minimum window.
     Default,
+    /// Capture and check the minimum and default sizes.
+    Standard,
+    /// Both sizes checked, plus the default size at twice the pixel density.
+    StandardAndHiDpi,
+    /// Only the minimum size, for a change specific to the narrow layout.
+    Small,
     /// The same two sizes, plus the default size at twice the pixel density.
     DefaultAndHiDpi,
     /// The minimum, default and large sizes.
     All,
     /// All three, plus the default size at twice the pixel density.
     AllAndHiDpi,
+}
+
+impl Sizes {
+    fn plan(self) -> &'static [((f32, f32), f32)] {
+        match self {
+            Self::Small => &[(SMALL, 1.0)],
+            Self::Default | Self::Standard => &[(SMALL, 1.0), (DEFAULT, 1.0)],
+            Self::DefaultAndHiDpi | Self::StandardAndHiDpi => {
+                &[(SMALL, 1.0), (DEFAULT, 1.0), (DEFAULT, 2.0)]
+            }
+            Self::All => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0)],
+            Self::AllAndHiDpi => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0), (DEFAULT, 2.0)],
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Capture<'s> {
+    Save,
+    SaveAt(&'s [((f32, f32), f32)]),
+    Compare {
+        earlier: &'s str,
+        changed: &'s [((f32, f32), f32)],
+    },
+    ChecksOnly,
 }
 
 #[derive(Default)]
@@ -58,6 +91,7 @@ pub struct Driver<'a> {
     pub root: PathBuf,
     output: Option<PathBuf>,
     states: usize,
+    named_states: BTreeMap<String, (String, Sizes)>,
     checks_run: (usize, usize),
     interactions: u32,
     last_goal: u32,
@@ -207,6 +241,7 @@ impl<'a> Driver<'a> {
             root: root.to_path_buf(),
             output: output.map(Path::to_path_buf),
             states: 0,
+            named_states: BTreeMap::new(),
             checks_run: (0, 0),
             interactions: 0,
             last_goal: 0,
@@ -1496,6 +1531,18 @@ impl<'a> Driver<'a> {
         self.harness.state_mut()
     }
 
+    /// The actual source editor's focus and scroll, for a layout transition check.
+    pub fn note_editor_view(&self) -> (bool, f32) {
+        let (id, offset) = self.harness.ctx.data(|data| {
+            data.get_temp::<(egui::Id, egui::Vec2)>(egui::Id::new("session_editor_proof"))
+                .expect("The note editor was painted")
+        });
+        (
+            self.harness.ctx.memory(|memory| memory.has_focus(id)),
+            offset.y,
+        )
+    }
+
     /// The longest line of visible text, to check reading width.
     pub fn longest_visible_line(&self) -> usize {
         self.nodes()
@@ -1598,7 +1645,70 @@ impl<'a> Driver<'a> {
         self.state_prepared(name, sizes, |_| {});
     }
 
-    /// The next capture step intentionally restores the previous view.
+    /// Check a return against a named earlier state, at every size it captured.
+    /// Rendering and ergonomics still run; no duplicate PNG is written.
+    pub fn assert_state_matches(&mut self, name: &str, earlier: &str) {
+        self.state_matching(name, earlier, None, |_| {});
+    }
+
+    /// Save only the sizes where this step changes the view. Compare the others.
+    pub fn state_changed_at(&mut self, name: &str, earlier: &str, changed: Sizes) {
+        self.state_matching(name, earlier, Some(changed), |_| {});
+    }
+
+    /// Retain per-size preparation and observations when comparing shared views.
+    pub fn state_changed_at_prepared(
+        &mut self,
+        name: &str,
+        earlier: &str,
+        changed: Sizes,
+        prepare: impl FnMut(&mut Self),
+    ) {
+        self.state_matching(name, earlier, Some(changed), prepare);
+    }
+
+    fn state_matching(
+        &mut self,
+        name: &str,
+        earlier: &str,
+        changed: Option<Sizes>,
+        prepare: impl FnMut(&mut Self),
+    ) {
+        let (label, sizes) = self
+            .named_states
+            .get(earlier)
+            .cloned()
+            .unwrap_or_else(|| panic!("{}: no earlier state named {earlier:?}", self.scenario));
+        let changed = changed.map_or(&[][..], Sizes::plan);
+        assert!(changed.iter().all(|size| sizes.plan().contains(size)));
+        self.state_prepared_inner(
+            name,
+            sizes,
+            Capture::Compare {
+                earlier: &label,
+                changed,
+            },
+            prepare,
+        );
+    }
+
+    /// Retain all size checks when another scenario already supplies the image.
+    pub fn check_state(&mut self, name: &str, sizes: Sizes) {
+        self.state_prepared_inner(name, sizes, Capture::ChecksOnly, |_| {});
+    }
+
+    /// Check every size, saving only views not already supplied by another scenario.
+    pub fn state_captured_at(&mut self, name: &str, sizes: Sizes, captures: Sizes) {
+        assert!(
+            captures
+                .plan()
+                .iter()
+                .all(|size| sizes.plan().contains(size))
+        );
+        self.state_prepared_inner(name, sizes, Capture::SaveAt(captures.plan()), |_| {});
+    }
+
+    /// The next capture intentionally changes very little. Assert its effect first.
     pub fn expect_same(&mut self, reason: &'static str) {
         assert!(!reason.trim().is_empty(), "expect_same needs a reason");
         self.expect_same = Some(reason);
@@ -1606,19 +1716,25 @@ impl<'a> Driver<'a> {
 
     /// Restore transient UI after each resize, then verify the named state before capture.
     /// Repeating setup for another capture size is not another action in the DM's task.
-    pub fn state_prepared(&mut self, name: &str, sizes: Sizes, mut prepare: impl FnMut(&mut Self)) {
+    pub fn state_prepared(&mut self, name: &str, sizes: Sizes, prepare: impl FnMut(&mut Self)) {
+        self.state_prepared_inner(name, sizes, Capture::Save, prepare);
+    }
+
+    fn state_prepared_inner(
+        &mut self,
+        name: &str,
+        sizes: Sizes,
+        capture: Capture<'_>,
+        mut prepare: impl FnMut(&mut Self),
+    ) {
         let task_interactions = self.interactions;
         self.finish_capture_saves();
         let expect_same = self.expect_same.take();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
-        let plan: &[((f32, f32), f32)] = match sizes {
-            Sizes::Default => &[(SMALL, 1.0), (DEFAULT, 1.0)],
-            Sizes::DefaultAndHiDpi => &[(SMALL, 1.0), (DEFAULT, 1.0), (DEFAULT, 2.0)],
-            Sizes::All => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0)],
-            Sizes::AllAndHiDpi => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0), (DEFAULT, 2.0)],
-        };
-        for &(size, density) in plan {
+        self.named_states
+            .insert(name.into(), (label.clone(), sizes));
+        for &(size, density) in sizes.plan() {
             self.resize(size, density);
             prepare(self);
             self.finish_capture_saves();
@@ -1639,7 +1755,7 @@ impl<'a> Driver<'a> {
                         .filter(|violation| !violation.check.ends_with(ergonomics::CHROME_SUFFIX)),
                 );
             }
-            self.capture(&label, size, density, expect_same);
+            self.capture(&label, size, density, expect_same, capture);
         }
         self.resize(self.base, 1.0);
         prepare(self);
@@ -1704,7 +1820,14 @@ impl<'a> Driver<'a> {
         ));
     }
 
-    fn capture(&mut self, state: &str, size: (f32, f32), density: f32, expect_same: Option<&str>) {
+    fn capture(
+        &mut self,
+        state: &str,
+        size: (f32, f32),
+        density: f32,
+        expect_same: Option<&str>,
+        capture: Capture<'_>,
+    ) {
         let Some(directory) = &self.output else {
             return;
         };
@@ -1723,6 +1846,35 @@ impl<'a> Driver<'a> {
             .unwrap_or_else(|error| panic!("{}: render failed: {error}", self.scenario));
         self.timing.render += started.elapsed();
         let window = format!("{}x{}@{density}", size.0, size.1);
+        let earlier = match capture {
+            Capture::Compare { earlier, changed } if !changed.contains(&(size, density)) => {
+                Some(earlier)
+            }
+            _ => None,
+        };
+        let failure = if let Some(earlier) = earlier {
+            let failure =
+                self.repeated_captures
+                    .check_named(&window, state, image.as_raw(), earlier);
+            if failure.is_none() {
+                self.outcome.passes.push(ergonomics::Pass {
+                    check: "frame-match".into(),
+                    scenario: self.scenario.into(),
+                    state: state.into(),
+                    detail: format!("{window}: matches {earlier} within the comparison tolerance"),
+                });
+            }
+            failure
+        } else {
+            self.repeated_captures
+                .check(self.states, &window, state, image.as_raw(), expect_same)
+        };
+        let matched = earlier.is_some() && failure.is_none();
+        if let Some(failure) = failure {
+            self.failed_expectations
+                .borrow_mut()
+                .push(format!("{}: {failure}", self.scenario));
+        }
         if let Some(reason) = expect_same {
             self.outcome.passes.push(ergonomics::Pass {
                 check: "expect_same".into(),
@@ -1731,13 +1883,13 @@ impl<'a> Driver<'a> {
                 detail: format!("{window}: {reason}"),
             });
         }
-        if let Some(failure) =
-            self.repeated_captures
-                .check(self.states, &window, state, image.as_raw(), expect_same)
+        // Shared views still enter the repetition history. Save no second PNG unless
+        // a named comparison fails and needs a diagnostic image.
+        if matched
+            || matches!(capture, Capture::ChecksOnly)
+            || matches!(capture, Capture::SaveAt(plan) if !plan.contains(&(size, density)))
         {
-            self.failed_expectations
-                .borrow_mut()
-                .push(format!("{}: {failure}", self.scenario));
+            return;
         }
         let started = Instant::now();
         image
@@ -1758,7 +1910,7 @@ impl<'a> Driver<'a> {
         self.harness.hover_at(rect.center());
         self.harness.run_steps(2);
         let expect_same = self.expect_same.take();
-        self.capture(&label, self.base, 1.0, expect_same);
+        self.capture(&label, self.base, 1.0, expect_same, Capture::Save);
         self.harness.remove_cursor();
         self.settle();
     }

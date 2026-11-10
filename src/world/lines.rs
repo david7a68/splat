@@ -43,7 +43,7 @@ impl Line {
     }
 
     pub fn names(&self, lower_name: &str) -> bool {
-        crate::lookup::names_lower_word(&self.lower, lower_name)
+        crate::matching::names_lower_word(&self.lower, lower_name)
     }
 
     /// The pages this line links to, as the note wrote each one, with any heading.

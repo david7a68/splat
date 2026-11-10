@@ -161,6 +161,13 @@ replaces. It never changes the creature's entry. To change a creature everywhere
 use a campaign copy.
 _Avoid_: Variant, scaling
 
+**Loot**:
+What the party can take after a fight. An encounter has its own, in its note's `## Loot` list, and a roster slot
+or encounter group member can give its one creature some. A line is words, or a roll on a roll table by its key.
+A roll's result stays with its line in the run, and the log has it too. Loot is not an override, because it changes nothing about the creature,
+but it is kept beside a slot's overrides and frozen into a run in the same way.
+_Avoid_: Treasure, drops
+
 **Encounter phase**:
 A part of an encounter governed by triggers that can cause participants to enter
 or leave combat. Phases have independent triggers and can overlap.

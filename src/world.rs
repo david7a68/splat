@@ -1380,7 +1380,7 @@ impl Reader {
                 }
                 if let Some(change) = &self.name_undo
                     && change.path == item.entry.path
-                    && design::message_with_action(ui, Tone::Info, &change.word, "Undo name change")
+                    && design::undo_message(ui, Tone::Info, &change.word, "Undo name change")
                 {
                     match change.undo(campaign) {
                         Ok(()) => {
@@ -1482,20 +1482,11 @@ impl Reader {
             && crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
                 .is_empty()
         {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Nothing written yet.")
-                        .color(colors().muted),
-                );
-                if let Some(campaign) = campaign
-                    && design::link(ui, "Edit in Obsidian").clicked()
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
-                        &campaign.path.join(&item.entry.path),
-                    )));
-                }
-            });
+            ui.label(
+                Type::Small
+                    .rich(ui, "Nothing written yet.")
+                    .color(colors().muted),
+            );
         }
         if item.is_note() {
             let followed = style::measure(ui, |ui| {
