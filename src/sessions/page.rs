@@ -3218,12 +3218,13 @@ impl Sessions {
                         // The full words stay in hover and in the row's name.
                         // A clean result is a status too, in the success colour.
                         let warned = state.is_none() && result == Some(note.id) && self.job_warned;
+                        let clean = state.is_none() && result == Some(note.id) && !warned;
                         let state = if warned {
                             Some(Status {
                                 word: "Processed",
                                 ..processed_warning()
                             })
-                        } else if state.is_none() && result == Some(note.id) {
+                        } else if clean {
                             Some(processed_clean())
                         } else {
                             state
@@ -3267,10 +3268,16 @@ impl Sessions {
                         } else {
                             detail
                         };
-                        let full = warned.then(|| {
+                        // The name speaks words, not the icon's private character.
+                        let full = if warned {
                             let short = format!("{} Processed", icons::WARN);
-                            detail.replacen(&short, processed_warning().word, 1)
-                        });
+                            Some(detail.replacen(&short, processed_warning().word, 1))
+                        } else if clean {
+                            let short = format!("{} Processed", icons::OK);
+                            Some(detail.replacen(&short, processed_clean().word, 1))
+                        } else {
+                            None
+                        };
                         let row = session_row(
                             ui,
                             self.selected == Some(note.id),

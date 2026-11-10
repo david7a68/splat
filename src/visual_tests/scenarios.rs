@@ -1755,7 +1755,8 @@ pub mod settings {
             words &= d.in_view_containing(word);
             targets.push((
                 word,
-                [SMALL, DEFAULT].map(|size| d.at_size(size, session_recording::rail_targets)),
+                [SMALL, DEFAULT, LARGE]
+                    .map(|size| d.at_size(size, session_recording::rail_targets)),
             ));
             // Not connected and failed already have their captures, from real attempts.
             match state {
@@ -1783,6 +1784,26 @@ pub mod settings {
                             })
                         },
                     );
+                    // AD2: this state really takes two lines, so the target check below compares
+                    // a one-line account with a two-line one at every size.
+                    let line = crate::design::Type::Small.line();
+                    let heights = [SMALL, DEFAULT, LARGE].map(|size| {
+                        d.at_size(size, |d| {
+                            session_recording::account_rect(d).map(|rect| rect.height())
+                        })
+                    });
+                    d.observe(
+                        "iter-11-C-AD2-two-lines",
+                        heights
+                            .iter()
+                            .all(|height| height.is_some_and(|h| h >= 2.0 * line - 0.5)),
+                        format!(
+                            "The keyring warning's account status is at least {} tall at each \
+                             size: {heights:?}",
+                            2.0 * line
+                        ),
+                    );
+                    session_recording::check_rail_anchor(d, "iter-11-C-AD2-anchor");
                 }
                 Account::NotConnected | Account::Failed | Account::RefreshFailing => {}
             }
@@ -7064,7 +7085,26 @@ pub mod session_recording {
 
     /// FT-6: Lookup, Notes, Settings and the account line keep fixed places at the rail's
     /// bottom edge. The status slot grows upward above Lookup and never reaches under it.
-    fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
+    /// The account status in the rail: every node below Settings, together.
+    pub(crate) fn account_rect(d: &Driver<'_>) -> Option<egui::Rect> {
+        let nodes = d.nodes();
+        let settings = nodes
+            .iter()
+            .filter(|node| node.name == "Settings")
+            .min_by(|a, b| a.rect.left().total_cmp(&b.rect.left()))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.rect.top() >= settings.bottom() - 0.5
+                    && node.rect.right() <= settings.right() + 1.0
+                    && node.rect.height() < 100.0
+            })
+            .map(|node| node.rect)
+            .reduce(|a, b| a.union(b))
+    }
+
+    pub(crate) fn check_rail_anchor(d: &mut Driver<'_>, id: &str) {
         let nodes = d.nodes();
         let (_, height) = d.window_size();
         let lookup = nodes
@@ -7077,36 +7117,53 @@ pub mod session_recording {
         };
         let rail =
             |rect: &egui::Rect| rect.right() <= lookup.right() + 1.0 && rect.height() < 100.0;
-        let lower: Vec<_> = nodes
+        let settings = nodes
             .iter()
-            .filter(|node| rail(&node.rect) && node.rect.top() >= lookup.top() - 0.5)
-            .collect();
-        let settings = lower.iter().find(|node| node.name == "Settings");
-        let bottom = lower
-            .iter()
-            .map(|node| node.rect.bottom())
-            .fold(f32::MIN, f32::max);
-        let account = lower
-            .iter()
-            .find(|node| (node.rect.bottom() - bottom).abs() < 0.5);
+            .any(|node| node.name == "Settings" && rail(&node.rect));
         let slot_clear = nodes.iter().all(|node| {
             !rail(&node.rect)
                 || node.rect.top() >= lookup.top() - 0.5
                 || node.rect.bottom() <= lookup.top() + 0.5
         });
-        // AD2: the account slot holds two lines. A one-line account leaves the second one empty.
+        // AD2: the account slot holds two `Small` lines and ends at the rail's bottom edge. The
+        // status starts at the slot's top. One painted line leaves the second line empty.
         let expected = height - crate::design::S;
         let line = crate::design::Type::Small.line();
+        let account = account_rect(d);
+        // Painted rows at distinct heights: the icon's own column is not another line.
+        let mut tops: Vec<f32> = Vec::new();
+        if let Some(rect) = account {
+            d.each_painted_text(|text, _| {
+                for row in &text.galley.rows {
+                    let row = row.rect().translate(text.pos.to_vec2());
+                    if rect.contains(row.center())
+                        && !tops.iter().any(|top| (top - row.top()).abs() < line / 2.0)
+                    {
+                        tops.push(row.top());
+                    }
+                }
+            });
+        }
+        let lines = tops.len();
+        let bottom = if lines >= 2 {
+            expected
+        } else {
+            expected - line
+        };
         d.observe(
             id,
-            settings.is_some()
-                && account.is_some_and(|account| account.name != "Settings")
-                && bottom <= expected + 0.5
-                && bottom >= expected - line - 0.5
-                && slot_clear,
+            settings
+                && slot_clear
+                && (1..=2).contains(&lines)
+                && account.is_some_and(|rect| {
+                    (rect.top() - (expected - 2.0 * line)).abs() <= 0.5
+                        && (rect.bottom() - bottom).abs() <= 0.5
+                }),
             format!(
-                "The account line ends in its two-line slot at the rail's bottom edge ({bottom} vs \
-                 {expected}), below Settings, and no status reaches under Lookup (top {})",
+                "The account status ({lines} lines, {account:?}) starts at the top of its two-line \
+                 slot ({}) and ends at {bottom}, below Settings; no status reaches under Lookup \
+                 (top {})",
+                expected - 2.0 * line,
                 lookup.top()
             ),
         );
@@ -7165,6 +7222,9 @@ pub mod session_recording {
         let word = format!("{} Processed", crate::design::icons::OK);
         let mut seen = Vec::new();
         let clean = rows.iter().all(|row| {
+            // The spoken name says Processed without the icon's private character.
+            let spoken = !row.name.contains(crate::design::icons::OK)
+                && (row.name.contains(" · Processed") || row.name.contains("\nProcessed"));
             let mut colored = false;
             d.each_painted_text(|text, _| {
                 if !row.rect.contains(text.visual_bounding_rect().center()) {
@@ -7180,14 +7240,16 @@ pub mod session_recording {
                     }
                 }
             });
-            colored
+            colored && spoken
         });
+        let names: Vec<_> = rows.iter().map(|row| row.name.clone()).collect();
         d.observe(
             id,
             !rows.is_empty() && clean,
             format!(
                 "Each clean Processed row shows the check icon and Processed in the success \
-                 colour: {} rows, {seen:?}",
+                 colour, and its name says Processed without the icon: {} rows, {seen:?}, \
+                 {names:?}",
                 rows.len()
             ),
         );

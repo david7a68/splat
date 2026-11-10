@@ -349,3 +349,122 @@ fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::
         })
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NAMES: [&str; 5] = [
+        "Brannoch Ironhide",
+        "Iselle Varn",
+        "Kestrel Moor",
+        "Oren Thistlewick",
+        "Sable Quill",
+    ];
+
+    /// At one bar width: how many first names, portraits and full accessible names are drawn.
+    fn draw(width: f32) -> (usize, usize, usize) {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let glances: Vec<_> = NAMES
+            .iter()
+            .enumerate()
+            .map(|(at, name)| Glance {
+                id: at.to_string(),
+                name: (*name).to_owned(),
+                portrait: None,
+                hp: Some(11),
+                max_hp: Some(41),
+                temp: 5,
+                ac: Some(15),
+                perception: Some(14),
+                insight: Some(11),
+                investigation: Some(10),
+                spell_dc: Some(13),
+                conditions: Vec::new(),
+            })
+            .collect();
+        let source = Source {
+            icon: icons::OK,
+            word: "From tonight".to_owned(),
+            color: colors().muted,
+        };
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    vec2(width, 200.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    show(ui, &glances, &source);
+                });
+            },
+        );
+        fn walk(shape: &egui::Shape, texts: &mut Vec<String>, circles: &mut usize) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| walk(shape, texts, circles));
+                }
+                egui::Shape::Text(text) => texts.push(text.galley.job.text.clone()),
+                egui::Shape::Circle(_) => *circles += 1,
+                _ => {}
+            }
+        }
+        let (mut texts, mut circles) = (Vec::new(), 0);
+        for clipped in &output.shapes {
+            walk(&clipped.shape, &mut texts, &mut circles);
+        }
+        let firsts = NAMES
+            .iter()
+            .filter(|name| {
+                let first = name.split_whitespace().next().unwrap();
+                texts.iter().any(|text| text == first)
+            })
+            .count();
+        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+        let spoken = NAMES
+            .iter()
+            .filter(|name| {
+                nodes.iter().any(|(_, node)| {
+                    node.label()
+                        .is_some_and(|label| label.starts_with(&format!("{name} · HP 11/41")))
+                })
+            })
+            .count();
+        (firsts, circles, spoken)
+    }
+
+    /// AT1: stats drop first, then portraits, then names. When first names do not fit even
+    /// without portraits, the names go and every portrait comes back. Each item keeps its full
+    /// accessible name at every width.
+    #[test]
+    fn portraits_give_way_before_names() {
+        let drawn: Vec<_> = (2..=20)
+            .map(|step| (step * 100, draw(step as f32 * 100.0)))
+            .collect();
+        assert_eq!(
+            drawn[0].1,
+            (0, 5, 5),
+            "the narrowest bar: portraits, no names: {drawn:?}"
+        );
+        assert_eq!(
+            drawn.last().unwrap().1,
+            (5, 5, 5),
+            "a wide bar shows both: {drawn:?}"
+        );
+        assert!(
+            drawn.iter().any(|(_, at)| *at == (5, 0, 5)),
+            "some width shows every name without portraits: {drawn:?}"
+        );
+        assert!(
+            drawn
+                .iter()
+                .all(|(_, at)| matches!(at, (0, 5, 5) | (5, 0, 5) | (5, 5, 5))),
+            "the parts go all together, never item by item: {drawn:?}"
+        );
+    }
+}
