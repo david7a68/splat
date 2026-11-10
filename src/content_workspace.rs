@@ -33,7 +33,7 @@ fn note_property(text: &str, property: &str) -> Option<String> {
         .find_map(|line| serde_yaml_ng::from_str(line.strip_prefix(property)?).ok())
 }
 
-pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
+pub(crate) const DELETED_MANIFEST: &str = "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
 /// Read only the manifest, so a large generated book is never scanned for conversion.
 pub(crate) fn generated_package(root: &Path) -> bool {
@@ -82,6 +82,13 @@ pub(crate) fn manifest_path_in(folder: &content::Folder, module: &Module) -> Str
                 })
         {
             return error.path.clone();
+        }
+    }
+    // Ordinary notes stay ignored by the shared reader. Only a registered package
+    // without a package entry treats a root manifest name as a repair candidate.
+    for path in ["Package.md", "Module.md"] {
+        if module.path.join(path).exists() {
+            return path.into();
         }
     }
     "Package.md".into()
@@ -367,7 +374,10 @@ impl ManifestWrite {
     pub fn write(module: &Module) -> Result<Self, String> {
         let catalogue = Catalogue::load(std::slice::from_ref(module), None)?;
         if !catalogue.manifest_problems.contains_key(&module.id) {
-            return Err("Package.md is valid. No repair is needed.".into());
+            return Err(format!(
+                "{} is valid. No repair is needed.",
+                package_manifest_path(module)
+            ));
         }
         let manifest = &catalogue
             .entries
@@ -397,6 +407,20 @@ impl ManifestWrite {
             before,
             after,
         })
+    }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn message(&self) -> String {
+        format!(
+            "{} was {}.",
+            self.path,
+            if self.replaced() {
+                "replaced"
+            } else {
+                "written again"
+            }
+        )
     }
     pub fn replaced(&self) -> bool {
         self.before.is_some()

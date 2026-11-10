@@ -679,3 +679,22 @@ fn a_file_replaced_during_a_load_is_not_a_failed_load() {
     // A directory read as a file is a real failure.
     assert!(unless_vanished(std::fs::read(temp.path())).is_err());
 }
+
+#[test]
+fn iter8_e_campaign_plain_root_manifest_names_are_ignored() {
+    let temp = tempfile::tempdir().unwrap();
+    let campaign = note(
+        "campaign",
+        "campaign",
+        "splat_namespace: campaign",
+        "Campaign",
+    );
+    std::fs::write(temp.path().join("Campaign.md"), campaign).unwrap();
+    for filename in ["Module.md", "Package.md"] {
+        std::fs::write(temp.path().join(filename), "Notes on this adventure.").unwrap();
+    }
+    let folder = read_folder(temp.path()).unwrap();
+    assert!(folder.errors.is_empty(), "{:?}", folder.errors);
+    assert_eq!(folder.entries.len(), 1);
+    assert_eq!(folder.entries[0].kind, "campaign");
+}
