@@ -935,14 +935,12 @@ pub fn round_trip(d: &mut Driver<'_>) {
     );
     d.click("Undo changes");
     assert_eq!(fs::read_to_string(&unread_path).unwrap(), before);
-    // Repair on disk must make the group picker available again.
-    fs::write(
-        &unread_path,
-        before.replace(&unread_groups, "splat_part_of: []\n"),
-    )
-    .unwrap();
-    reload(d);
+    // Removing the unread property leaves the parsed fields unchanged. The open form
+    // must still notice its cleared flag and make the group picker available again.
     d.click("Edit Unread groups");
+    d.expect("Part of could not be read. Repair it first.");
+    fs::write(&unread_path, before.replace(&unread_groups, "")).unwrap();
+    reload(d);
     d.expect("Change Part of");
     assert!(
         !d.is_disabled("Change Part of"),

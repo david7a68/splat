@@ -12,7 +12,7 @@ use crate::{
 };
 use eframe::egui;
 use serde_yaml_ng::Value;
-use splat::content::{Entry, Fields as EntryFields};
+use splat::content::{Entry, Fields as EntryFields, layout::Flag};
 use std::fs;
 use uuid::Uuid;
 
@@ -138,7 +138,7 @@ pub(super) struct EditDraft {
     name: String,
     path: String,
     /// The entry as the index read it, so a draft without changes can follow the file.
-    seen: (EntryFields, String),
+    seen: (EntryFields, String, Vec<Flag>),
     /// The whole file when editing began, or when the DM last chose between versions.
     baseline: String,
     start: Fields,
@@ -166,7 +166,11 @@ impl EditDraft {
         Ok(Self {
             name: entry.name.clone(),
             path: entry.path.clone(),
-            seen: (entry.fields.clone(), entry.body.clone()),
+            seen: (
+                entry.fields.clone(),
+                entry.body.clone(),
+                entry.flags.clone(),
+            ),
             baseline,
             now: start.clone(),
             start,
@@ -180,9 +184,12 @@ impl EditDraft {
         changed.status || changed.creature || changed.place || changed.groups || changed.text
     }
 
-    /// The index read the entry again since the form saw it. The same front matter shares
-    /// one allocation, so the usual answer costs no comparison.
+    /// The index read the entry again since the form saw it. Shared fields avoid a front
+    /// matter comparison. Flags also change when repair removes an unread property.
     fn index_moved(&mut self, entry: &Entry) -> bool {
+        if self.seen.2 != entry.flags {
+            return true;
+        }
         if std::ptr::eq::<serde_yaml_ng::Mapping>(&*self.seen.0, &*entry.fields)
             && self.seen.1 == entry.body
         {
@@ -463,7 +470,11 @@ impl Reader {
                 Ok(fresh) => draft = fresh,
                 Err(error) => {
                     // Try again when the index next changes, not on every frame.
-                    draft.seen = (item.entry.fields.clone(), item.entry.body.clone());
+                    draft.seen = (
+                        item.entry.fields.clone(),
+                        item.entry.body.clone(),
+                        item.entry.flags.clone(),
+                    );
                     self.error = Some(error);
                 }
             }
@@ -870,6 +881,30 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dir.path().join("NPCs/Rook.md")).unwrap(),
             file
+        );
+    }
+
+    #[test]
+    fn iter8_d2_clean_edit_notices_repair_when_another_field_is_still_unread() {
+        let (dir, campaign, _, _, file) = unread_group_note();
+        // Two rejected lists: repairing Part of must work while Aliases is still unread.
+        let file = file.replace("splat_part_of:", "aliases: [Rook, 17]\nsplat_part_of:");
+        let path = dir.path().join("NPCs/Rook.md");
+        fs::write(&path, &file).unwrap();
+        let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        assert_eq!(entry.flags.len(), 2);
+        let mut draft = EditDraft::open(&campaign, &entry).unwrap();
+        let start = file.find("splat_part_of:").unwrap();
+        let end = file.find("splat_status:").unwrap();
+        let repaired_file = format!("{}{}", &file[..start], &file[end..]);
+        fs::write(&path, &repaired_file).unwrap();
+        let repaired = Entry::parse("NPCs/Rook.md", &repaired_file).unwrap();
+        assert_eq!(repaired.flags.len(), 1);
+        assert_eq!(*entry.fields, *repaired.fields);
+        assert!(!draft.dirty());
+        assert!(
+            draft.index_moved(&repaired),
+            "D2-repair-refresh: changed read flags must refresh a clean form even when parsed fields are unchanged"
         );
     }
 
