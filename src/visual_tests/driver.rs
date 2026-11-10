@@ -1450,6 +1450,32 @@ impl<'a> Driver<'a> {
         self.film_result(&caption);
     }
 
+    /// Press a mouse side button over a visible node: Extra1 is Back and Extra2 is Forward.
+    pub fn press_side_button(&mut self, button: egui::PointerButton, over: &str) {
+        let rect = self.aim(&format!("{button:?} over {over:?}"), |node| {
+            node.name == over
+        });
+        let caption = format!("Press: mouse {button:?} over {over}");
+        self.film_aim(rect, &caption);
+        let mut raw = egui::RawInput {
+            events: vec![egui::Event::PointerButton {
+                pos: rect.center(),
+                button,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        // Kittest does not call eframe's raw input hook, which sets the side buttons aside.
+        let ctx = self.harness.ctx.clone();
+        eframe::App::raw_input_hook(self.harness.state_mut(), &ctx, &mut raw);
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&caption);
+    }
+
     /// Ctrl+key, with the modifiers a Linux desktop reports.
     pub fn press_ctrl(&mut self, key: egui::Key) {
         let caption = format!("Press: Ctrl+{}", key.name());

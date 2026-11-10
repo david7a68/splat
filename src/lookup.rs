@@ -5,6 +5,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
     design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
+    history::{self, Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
     world::{self, Go, Nav, Reader, Role, lines::Line},
@@ -20,6 +21,8 @@ use uuid::Uuid;
 use crate::matching::{self, Rank, Typed, names_lower_word};
 
 const RESULT_ROW: f32 = design::XXL;
+const PANEL_MARGIN: f32 = design::M;
+
 pub const SEARCH_NAME: &str = "Search everything";
 /// How many lines of a long note show where the words were found.
 const FOUND_LINES: usize = 3;
@@ -1371,7 +1374,9 @@ pub struct Lookup {
     /// The note or event being read, in place of an entry.
     reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
-    history: Vec<Uuid>,
+    trail: Trail<Uuid>,
+    /// Where the panel was drawn last, for Back and Forward beside the Library.
+    panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
     focus_search: bool,
     results_open: bool,
@@ -1634,10 +1639,8 @@ impl Lookup {
     }
 
     fn navigate(&mut self, position: usize) {
-        if let Some(id) = self.current_id()
-            && self.current != Some(position)
-        {
-            self.history.push(id);
+        if self.current != Some(position) {
+            self.trail.leave(self.current_id());
         }
         self.current = Some(position);
     }
@@ -1667,33 +1670,41 @@ impl Lookup {
         }
     }
 
-    fn back(&mut self) {
+    /// With nothing that way, nothing changes, so a stray press keeps a written note open.
+    fn step(&mut self, step: Step) {
+        if self.trail.peek(step).is_none() {
+            return;
+        }
         self.reading_written = None;
-        if let Some(id) = self.history.pop()
-            && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
+        let here = self.current_id();
+        if let Some((_, position)) = self
+            .trail
+            .go(step, here, |id| self.index.as_ref()?.position(*id))
         {
             self.current = Some(position);
             self.results_open = false;
         }
     }
 
-    pub(crate) fn back_key(&mut self, ctx: &egui::Context, library_page: bool) {
-        if !self.open
-            || !ctx.input(|input| input.modifiers.alt && input.key_pressed(egui::Key::ArrowLeft))
-        {
+    /// Back and Forward. Beside the Library page, a key acts here only with focus here,
+    /// and a mouse button only with the pointer here; the Library takes the rest.
+    pub(crate) fn history_input(&mut self, ctx: &egui::Context, library_page: bool) {
+        if !self.open {
             return;
         }
-        let focused_here = ctx
-            .memory(|memory| memory.focused())
-            .and_then(|id| ctx.read_response(id))
-            .is_some_and(|response| {
-                ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new("lookup_rect")))
-                    .is_some_and(|rect| rect.contains(response.rect.center()))
-            });
-        if (!library_page || focused_here)
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
-        {
-            self.back();
+        let over_panel = |pos: egui::Pos2| self.panel_rect.is_some_and(|rect| rect.contains(pos));
+        let step = history::take_if(ctx, |source| {
+            !library_page
+                || match source {
+                    history::Request::Key => ctx
+                        .memory(|memory| memory.focused())
+                        .and_then(|id| ctx.read_response(id))
+                        .is_some_and(|response| over_panel(response.rect.center())),
+                    history::Request::Button(pos) => over_panel(pos),
+                }
+        });
+        if let Some(step) = step {
+            self.step(step);
         }
     }
 
@@ -1705,28 +1716,29 @@ impl Lookup {
                 egui::Frame::new()
                     .fill(colors().page)
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    .inner_margin(egui::Margin::same(design::M as i8)),
+                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
             .show(ctx, |ui| self.panel(ui));
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(egui::Id::new("lookup_rect"), ui.max_rect()));
+        // With the margin, so a press anywhere on the panel counts as here.
+        let panel = ui.max_rect().expand(PANEL_MARGIN);
+        self.panel_rect = Some(panel);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
         });
         let mut close = false;
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
-            if !self.history.is_empty()
+            if self.trail.peek(Step::Back).is_some()
                 && Action::quiet("Back")
                     .icon(icons::BACK)
                     .key("Alt+Left")
                     .show(ui)
                     .clicked()
             {
-                self.back();
+                self.step(Step::Back);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
@@ -2397,6 +2409,68 @@ mod tests {
         item.from_sheet = true;
         assert_eq!(item.origin(), Origin::Sheet, "a sheet's copy ranks last");
         assert!(Origin::Own < Origin::Book && Origin::Book < Origin::Sheet);
+    }
+
+    fn browsed_lookup() -> Lookup {
+        let mut lookup = Lookup {
+            open: true,
+            index: Some(Arc::new(ContentIndex::load(&[], None).unwrap())),
+            ..Default::default()
+        };
+        lookup.navigate(0);
+        lookup.navigate(1);
+        lookup
+    }
+
+    #[test]
+    fn forward_returns_to_what_back_left_until_another_entry() {
+        let mut lookup = browsed_lookup();
+        lookup.step(Step::Back);
+        assert_eq!(lookup.current, Some(0));
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.current, Some(1));
+        lookup.step(Step::Back);
+        lookup.navigate(2);
+        assert!(
+            lookup.trail.peek(Step::Forward).is_none(),
+            "a new entry starts a new trail"
+        );
+        lookup.reading_written = Some(0);
+        lookup.step(Step::Forward);
+        assert_eq!(
+            lookup.reading_written,
+            Some(0),
+            "nothing ahead keeps the note open"
+        );
+    }
+
+    /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
+    /// the rest in the input for the Library.
+    #[test]
+    fn beside_the_library_a_side_button_acts_where_the_pointer_is() {
+        let press = |lookup: &mut Lookup, x: f32, library_page: bool| {
+            let back = history::tests::press(egui::PointerButton::Extra1, egui::pos2(x, 50.0));
+            lookup.panel_rect = Some(egui::Rect::from_min_max(
+                egui::pos2(300.0, 0.0),
+                egui::pos2(600.0, 400.0),
+            ));
+            history::tests::frame(vec![back], |ctx| {
+                lookup.history_input(ctx, library_page);
+                history::take_if(ctx, |_| true)
+            })
+        };
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, true), Some(Step::Back));
+        assert_eq!(
+            lookup.current,
+            Some(1),
+            "over the Library page, Lookup stays"
+        );
+        assert_eq!(press(&mut lookup, 400.0, true), None);
+        assert_eq!(lookup.current, Some(0), "over Lookup, Lookup goes back");
+        let mut lookup = browsed_lookup();
+        assert_eq!(press(&mut lookup, 100.0, false), None);
+        assert_eq!(lookup.current, Some(0), "on other pages, Lookup goes back");
     }
 
     #[test]
