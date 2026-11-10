@@ -1835,7 +1835,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, changed.replace("Cinder Bite.", "Ash Bite.")).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("This note changed on disk. Your draft is safe until you choose.");
+    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
     d.state("package-draft-changed-on-disk", Sizes::All);
     d.click("Reload and lose my draft");

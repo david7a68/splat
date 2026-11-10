@@ -385,7 +385,8 @@ write only the open file. A renamed copy comes first, otherwise the newest file 
 ambiguous creatures; Open in Library opens the first repair action's file. Encounter search names hidden
 duplicate notes and offers file-specific identity repair with Undo.
 
-Library and Encounters say “These two files claim to be the same entry,” with the file names. World calls the files notes, including its separate-note actions and Undo.
+Library and creature repairs say “These two files claim to be the same entry,” with the file names.
+World note repairs use “note”, including in Encounter search, their actions and Undo.
 Sessions use “session” for their repair and Undo actions. World rows say `Same note in two files`, including in Lookup. Other rows say `Same entry in two files`. World repairs say `Make <file> a separate note` and offer `Undo separate note`. Other bordered secondary repairs say `Make <file> a separate entry`. Their result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file

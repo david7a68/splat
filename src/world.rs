@@ -981,7 +981,7 @@ pub(crate) enum ChangeKind {
     StatBlock,
     Status,
     Name,
-    Identity,
+    Identity(IdentityNoun),
     /// Everything the edit form saved at once.
     Edit,
 }
@@ -1004,7 +1004,7 @@ impl ChangeKind {
             Self::Status => "Undo status change",
             Self::StatBlock => "Undo stat block change",
             Self::Name => "Undo name change",
-            Self::Identity => "Undo new identity",
+            Self::Identity(noun) => noun.undo_label(),
             Self::Edit => "Undo changes",
         }
     }
@@ -1019,6 +1019,10 @@ impl ChangeKind {
 }
 
 impl Change {
+    pub(crate) fn identity_undo_label(&self) -> &'static str {
+        self.kind.undo_label()
+    }
+
     pub(crate) fn message(&self) -> &str {
         &self.word
     }
@@ -1028,16 +1032,62 @@ impl Change {
     }
 }
 
-pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same note.";
-pub(crate) const SEPARATE_ENTRY_UNDO: &str = "Undo separate note";
+/// World notes and Library entries share identity repair, but keep their own nouns.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum IdentityNoun {
+    Note,
+    Entry,
+}
+
+impl IdentityNoun {
+    pub(crate) fn of(entry: &Entry) -> Self {
+        if entry.kind == "world" {
+            Self::Note
+        } else {
+            Self::Entry
+        }
+    }
+
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            Self::Note => "note",
+            Self::Entry => "entry",
+        }
+    }
+
+    pub(crate) fn duplicate_warning(self) -> &'static str {
+        match self {
+            Self::Note => "These two files claim to be the same note.",
+            Self::Entry => DUPLICATE_ENTRY,
+        }
+    }
+
+    pub(crate) fn action(self, filename: &str) -> String {
+        format!("Make {filename} a separate {}", self.word())
+    }
+
+    fn result(self, filename: &str) -> String {
+        format!("{filename} is now a separate {}.", self.word())
+    }
+
+    fn undo_label(self) -> &'static str {
+        match self {
+            Self::Note => "Undo separate note",
+            Self::Entry => SEPARATE_ENTRY_UNDO,
+        }
+    }
+}
+
+pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
+pub(crate) const SEPARATE_ENTRY_UNDO: &str = "Undo separate entry";
 
 pub(crate) fn separate_entry_action(filename: &str) -> String {
-    format!("Make {filename} a separate note")
+    IdentityNoun::Entry.action(filename)
 }
 
 /// Long filenames keep the complete repair action inside its secondary border.
 pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
-    let label = separate_entry_action(filename);
+    let label = IdentityNoun::Note.action(filename);
     if Action::secondary(&label).natural_width(ui) <= ui.available_width() {
         return Action::secondary(&label).show(ui).clicked();
     }
@@ -1056,12 +1106,13 @@ pub(crate) fn separate_entry_button(ui: &mut egui::Ui, filename: &str) -> bool {
 }
 
 pub(crate) fn separate_entry_result(filename: &str) -> String {
-    format!("{filename} is now a separate note.")
+    IdentityNoun::Entry.result(filename)
 }
 
 pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
     let path = note_path(&campaign.path, relative)?;
     let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let noun = IdentityNoun::of(&Entry::parse(relative, &before)?);
     let id = crate::hermetic::new_uuid();
     let after = crate::content_workspace::new_note_identity(&before, relative, id)?;
     write_note(&campaign.path, relative, Some(&before), &after)?;
@@ -1070,14 +1121,14 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
             path: relative.into(),
             before,
             after,
-            word: separate_entry_result(
+            word: noun.result(
                 Path::new(relative)
                     .file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
                     .as_ref(),
             ),
-            kind: ChangeKind::Identity,
+            kind: ChangeKind::Identity(noun),
         },
         id,
     ))
@@ -1473,7 +1524,12 @@ impl Reader {
                 self.identity_undo = None;
             }
             if let Some((_, undo)) = &self.identity_undo
-                && design::undo_message(ui, Tone::Success, undo.message(), SEPARATE_ENTRY_UNDO)
+                && design::undo_message(
+                    ui,
+                    Tone::Success,
+                    undo.message(),
+                    undo.identity_undo_label(),
+                )
             {
                 match undo.undo(campaign) {
                     Ok(()) => {
@@ -1485,7 +1541,7 @@ impl Reader {
                 }
             }
             if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
-                design::message(ui, Tone::Warning, DUPLICATE_ENTRY);
+                design::message(ui, Tone::Warning, IdentityNoun::Note.duplicate_warning());
                 let mut paths = paths.clone();
                 let first = crate::content_workspace::duplicate_repair_path(
                     paths.iter().map(|path| campaign.path.join(path)),
@@ -2946,6 +3002,8 @@ mod tests {
             fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
             before
         );
+        assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
+        assert_eq!(undo.identity_undo_label(), "Undo separate note");
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
