@@ -1734,6 +1734,97 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
     pressed
 }
 
+/// A sentence of entry links, with explicit word spaces around its conjunctions.
+pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usize> {
+    let mut clicked = None;
+    let space = number_width(ui, " ", &Type::Body.font(ui));
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.horizontal_wrapped(|ui| {
+            for (at, name) in names.iter().enumerate() {
+                if at > 0 {
+                    ui.add_space(space);
+                    ui.add(
+                        egui::Label::new(Type::Body.rich(ui, "and"))
+                            .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                    ui.add_space(space);
+                }
+                if link(ui, name).clicked() {
+                    clicked = Some(at);
+                }
+            }
+            if !names.is_empty() {
+                ui.add_space(space);
+            }
+            ui.label(Type::Body.rich(ui, suffix));
+        });
+    });
+    clicked
+}
+
+/// An Undo message whose affected entries remain links on the message line.
+pub fn undo_message_with_links(
+    ui: &mut Ui,
+    tone: Tone,
+    names: &[&str],
+    suffix: &str,
+    action: &str,
+) -> (bool, Option<usize>) {
+    fn notice(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
+        let (icon, color) = tone.parts();
+        ui.horizontal_top(|ui| {
+            let start = ui.cursor().min;
+            ui.add_space(S + 1.0);
+            ui.label(Type::Body.rich(ui, icon).color(color));
+            ui.add_space(-XS);
+            let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
+            let bar =
+                Rect::from_min_max(start, pos2(start.x + 3.0, content.response.rect.bottom()));
+            ui.painter().rect_filled(bar, 0.0, color);
+            content.inner
+        })
+        .inner
+    }
+    let button = Action::quiet(action)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let button_width = button.natural_width(ui);
+    let inset = S
+        + 1.0
+        + number_width(ui, tone.parts().0, &Type::Body.font(ui))
+        + ui.spacing().item_spacing.x * 2.0
+        - XS;
+    let words = format!("{} {suffix}", names.join(" and "));
+    let gap = ui.spacing().item_spacing.x;
+    let mut pressed = false;
+    let clicked;
+    if ui.available_width()
+        < number_width(ui, &words, &Type::Body.font(ui)) + inset + gap + button_width
+    {
+        clicked = notice(ui, tone, names, suffix);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            pressed = button.line_start().show(ui).clicked();
+        });
+    } else {
+        clicked = ui
+            .horizontal_top(|ui| {
+                let width = (ui.available_width() - button_width - gap).max(0.0);
+                let clicked = ui
+                    .allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        notice(ui, tone, names, suffix)
+                    })
+                    .inner;
+                pressed = button.show(ui).clicked();
+                clicked
+            })
+            .inner;
+    }
+    (pressed, clicked)
+}
+
 /// A message with several actions below it, aligned with the message text.
 pub fn message_with_actions<R>(
     ui: &mut Ui,

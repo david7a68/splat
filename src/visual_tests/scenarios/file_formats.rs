@@ -51,7 +51,9 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.click("Cancel");
     d.click(NAV_CAMPAIGN);
-    d.expect("2 files use the old layout.");
+    d.expect("4 files use the old layout.");
+    d.expect("Convert Cinder Wolf.md first.");
+    assert!(d.is_disabled("Save selections"));
     d.observe_both(
         "Old-layout campaign",
         "One conversion notice replaces repair rows and empty package separators",
@@ -62,7 +64,7 @@ pub fn run(d: &mut Driver<'_>) {
                     .filter(|node| {
                         node.role == egui::accesskit::Role::Label
                             && node.in_view()
-                            && node.name == "2 files use the old layout."
+                            && node.name == "4 files use the old layout."
                     })
                     .count()
                     == 1
@@ -72,8 +74,19 @@ pub fn run(d: &mut Driver<'_>) {
                     .any(|node| node.name.trim_end().ends_with('·'))
         },
     );
-    d.state("old-layout-flagged-in-campaign", Sizes::All);
-    d.click_beside_exact("2 files use the old layout.", "Convert files…");
+    d.state_prepared("old-layout-flagged-in-campaign", Sizes::All, |d| {
+        let actions: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Convert files…")
+            .collect();
+        d.observe(
+            "iter-6-C-SD1",
+            actions.len() == 1 && actions[0].in_view(),
+            "Campaign keeps exactly one conversion action beside its combined warning",
+        );
+    });
+    d.click_beside_exact("4 files use the old layout.", "Convert files…");
     d.click("File to convert");
     d.click("NPCs/Rook.md");
     d.expect("BEFORE");
