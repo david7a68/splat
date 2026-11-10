@@ -1380,7 +1380,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.click("Reload from disk");
-    d.expect("Package.md was deleted");
+    d.expect("The package manifest was deleted");
     assert!(!d.has("Find the folder…"));
     d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
         let search = d
@@ -1398,9 +1398,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Save: {save:?}; search: {search:?}"
         );
     });
-    d.click("Write Package.md again");
+    d.click("Write the manifest again");
     d.settle();
-    assert!(!d.has_containing("Package.md was deleted"));
+    assert!(!d.has_containing("The package manifest was deleted"));
     assert_eq!(
         crate::library::local_module(&folder).unwrap().id,
         crate::content_workspace::note_id(&valid).unwrap()
@@ -1411,9 +1411,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Package");
     });
     d.click("Undo write Package.md");
-    d.wait_for_text("Package.md was deleted");
+    d.wait_for_text("The package manifest was deleted");
     assert!(!path.exists());
-    d.click("Write Package.md again");
+    d.click("Write the manifest again");
     d.settle();
     fs::remove_file(&path).unwrap();
     d.focus_window(false);
@@ -1426,7 +1426,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     search_library(d, "");
     open_local_package(d, MODULE);
     d.click_containing("About Ashen Marches");
-    d.expect("Write Package.md again");
+    d.expect("Write the manifest again");
     d.state_prepared("manifest-deleted-library-repair", Sizes::All, |d| {
         check_unreadable_owner(d, "iter-8-E-FD10-manifest");
         d.observe(
@@ -1435,13 +1435,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "A deleted manifest has only its missing-file warning",
         );
         let action = d
-            .place_of("Write Package.md again")
+            .place_of("Write the manifest again")
             .expect("Manifest repair is visible");
         let text_edge = d
-            .painted_left("Package.md was deleted.")
+            .painted_left("The package manifest was deleted.")
             .expect("Missing-file warning is visible");
         let warning = d
-            .painted_rect_in("Package.md was deleted.", egui::Rect::EVERYTHING)
+            .painted_rect_in("The package manifest was deleted.", egui::Rect::EVERYTHING)
             .expect("The warning text is visible");
         let aligned = if action.top() >= warning.bottom() {
             (action.left() - text_edge).abs() <= 1.0
@@ -1455,16 +1455,16 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         );
         d.observe(
             "iter-8-E-FD9-border",
-            d.control_frame("Write Package.md again")
+            d.control_frame("Write the manifest again")
                 .is_some_and(|frame| {
                     frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
                 }),
             "Manifest repair has a secondary border",
         );
     });
-    d.click("Write Package.md again");
+    d.click("Write the manifest again");
     d.settle();
-    assert!(!d.has_containing("Package.md was deleted"));
+    assert!(!d.has_containing("The package manifest was deleted"));
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
     d.state_prepared("manifest-written-again-library", Sizes::All, |d| {

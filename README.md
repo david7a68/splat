@@ -680,7 +680,8 @@ Under **Packages → Manage packages…**, register an existing folder containin
 manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
 New packages write their manifest as `Package.md`. Existing `Module.md` files keep their name;
-repair messages and Undo actions name that file.
+repair messages for existing files and Undo actions name the file. A deleted manifest uses
+**The package manifest was deleted** and **Write the manifest again**, because its old file name is not stored.
 A copied folder offers **Register as a new package** beside its warning. **Add folder**
 stays blocked until you choose another folder.
 Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
@@ -1013,10 +1014,11 @@ until a later recording or processing replaces the result. Generated drafts ask 
 menu above **Delete…**, with confirmation before it replaces results. The Recordings tab
 keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.
 
-Package repair keeps entries available when `Package.md` breaks or is deleted.
-**Write Package.md again** restores a missing manifest. **Replace with a basic Package.md** replaces an existing manifest and says which fields it drops.
+Package repair keeps entries available when the manifest breaks or is deleted.
+**Write the manifest again** restores a missing manifest. **Replace with a basic Package.md** or
+**Replace with a basic Module.md** names the existing file and says which fields it drops.
 For an unreadable manifest, Campaign puts bordered **Open in Library** first, followed by replacement and its consequence.
-Replacing a broken file offers **Undo write Package.md**. Copied World notes stay
+Replacing a broken file offers **Undo write Package.md** or **Undo write Module.md** for the file written. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under

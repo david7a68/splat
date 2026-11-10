@@ -1204,10 +1204,10 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let folder = content::read_folder(&path)?;
-        let (entries, errors) = (folder.entries.clone(), folder.errors.clone());
+        let (entries, mut errors) = (folder.entries.clone(), folder.errors.clone());
         let manifest_path = crate::content_workspace::manifest_path_in(&folder, module);
-        let missing_manifest = !entries.iter().any(|entry| entry.kind == "package")
-            && !path.join(&manifest_path).exists();
+        let has_manifest = entries.iter().any(|entry| entry.kind == "package");
+        let missing_manifest = !has_manifest && !path.join(&manifest_path).exists();
         // The folder was just read; its texts are the ones these entries came from.
         let text_of = |path: &str| -> Result<String, String> {
             let full = note_path(&module.path, path)?;
@@ -1216,6 +1216,20 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 None => fs::read_to_string(full).map_err(|e| e.to_string()),
             }
         };
+        if !has_manifest
+            && !missing_manifest
+            && !errors.iter().any(|error| error.path == manifest_path)
+        {
+            let message = text_of(&manifest_path)
+                .and_then(|text| Entry::parse(&manifest_path, &text))
+                .err();
+            if let Some(message) = message {
+                errors.push(content::Diagnostic {
+                    path: manifest_path.clone(),
+                    message,
+                });
+            }
+        }
         for entry in entries {
             let text = text_of(&entry.path)?;
             let mismatched = entry.kind == "package" && entry.id != module.id;
@@ -4837,7 +4851,7 @@ impl Library {
             let label = if exists {
                 format!("Replace with a basic {path}")
             } else {
-                format!("Write {path} again")
+                "Write the manifest again".into()
             };
             let pressed = if exists {
                 ui.label(
@@ -7272,6 +7286,110 @@ mod tests {
                 assert!(!rendered.contains(duplicate), "{rendered}");
             }
             assert_eq!(library.draft, source);
+        }
+    }
+
+    #[test]
+    fn iter8_e_package_plain_readme_is_not_a_second_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::rename(
+            module.path.join("Package.md"),
+            module.path.join("Module.md"),
+        )
+        .unwrap();
+        fs::write(module.path.join("Package.md"), "Notes on this adventure.").unwrap();
+        let folder = content::read_folder(&module.path).unwrap();
+        assert!(folder.errors.is_empty(), "{:?}", folder.errors);
+        let loaded = load(Some(&module)).unwrap();
+        assert!(loaded.notes.iter().all(|note| note.error.is_none()));
+        assert_eq!(
+            loaded
+                .notes
+                .iter()
+                .filter(|note| note.is_manifest())
+                .count(),
+            1
+        );
+        assert!(loaded.notes.iter().all(|note| note.path != "Package.md"));
+        assert_eq!(
+            crate::content_workspace::package_manifest_path(&module),
+            "Module.md"
+        );
+        assert!(
+            Catalogue::load(std::slice::from_ref(&module), None)
+                .unwrap()
+                .manifest_problems
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn iter8_e_deleted_manifest_notice_and_action_do_not_guess_a_filename() {
+        for filename in ["Package.md", "Module.md"] {
+            let temp = tempfile::tempdir().unwrap();
+            let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+            if filename == "Module.md" {
+                fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
+            }
+            fs::remove_file(module.path.join(filename)).unwrap();
+            let loaded = load(Some(&module)).unwrap();
+            assert_eq!(loaded.notes.len(), 1);
+            assert_eq!(
+                loaded.notes[0].error.as_deref(),
+                Some(crate::content_workspace::DELETED_MANIFEST)
+            );
+            let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+            assert_eq!(
+                catalogue.manifest_problems[&module.id],
+                "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup."
+            );
+            let mut library = Library {
+                loaded: Some(loaded),
+                selected: Some(0),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            let mut rendered = String::new();
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1200.0, 2400.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            library.editor_pane(ui, "Cannot be read", &Campaigns::default());
+                        });
+                    },
+                );
+                rendered = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            assert!(
+                rendered.contains("The package manifest was deleted."),
+                "{rendered}"
+            );
+            assert!(rendered.contains("Write the manifest again"), "{rendered}");
+            assert!(!rendered.contains("Missing YAML frontmatter"), "{rendered}");
+            for guess in [
+                "Package.md was deleted",
+                "Module.md was deleted",
+                "Write Package.md again",
+                "Write Module.md again",
+            ] {
+                assert!(!rendered.contains(guess), "{rendered}");
+            }
         }
     }
 

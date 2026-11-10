@@ -1060,7 +1060,7 @@ impl CampaignContent {
                 let label = if exists {
                     format!("Replace with a basic {path}")
                 } else {
-                    format!("Write {path} again")
+                    "Write the manifest again".into()
                 };
                 let message = format!(
                     "{}: {problem}{}",
@@ -2095,6 +2095,75 @@ mod tests {
         content.reconcile.pending = Some(rx);
         tx.send(checked).unwrap();
         content.finish_check();
+    }
+
+    #[test]
+    fn iter8_e_campaign_deleted_manifest_action_does_not_guess_a_filename() {
+        for filename in ["Package.md", "Module.md"] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("campaign");
+            fs::create_dir(&root).unwrap();
+            let active = campaign(&root);
+            let package = temp.path().join("package");
+            fs::create_dir(&package).unwrap();
+            fs::write(
+                package.join("Package.md"),
+                crate::library::note_text("Test", "package", Some("test")),
+            )
+            .unwrap();
+            let module = crate::library::local_module(&package).unwrap();
+            if filename == "Module.md" {
+                fs::rename(module.path.join("Package.md"), module.path.join(filename)).unwrap();
+            }
+            let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+            campaigns.register_module(module.clone()).unwrap();
+            fs::remove_file(module.path.join(filename)).unwrap();
+            let mut content = CampaignContent {
+                snapshot: Some(load_snapshot(&active, &[module]).2.unwrap()),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            let mut rendered = String::new();
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1200.0, 2400.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            content.packages_content(ui, &campaigns, &active);
+                        });
+                    },
+                );
+                rendered = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            assert!(rendered.contains("Write the manifest again"), "{rendered}");
+            assert!(
+                rendered.contains("The package manifest was deleted."),
+                "{rendered}"
+            );
+            assert!(!rendered.contains("Missing YAML frontmatter"), "{rendered}");
+            for guess in [
+                "Package.md was deleted",
+                "Module.md was deleted",
+                "Write Package.md again",
+                "Write Module.md again",
+            ] {
+                assert!(!rendered.contains(guess), "{rendered}");
+            }
+        }
     }
 
     #[test]
