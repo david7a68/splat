@@ -689,7 +689,8 @@ so the roster keeps its height. Overflow uses the live list's band and counts hi
 
 A made-up creature shows current and maximum HP and typed initiative as a total, without printed values. A
 side of its own keeps its word on live rows. Setup and live play share side, HP, temporary HP and AC parts.
-Correct holds correction fields.
+Correct holds correction fields. Opening it does not change sync state. A row says `Sync off` only
+after the DM stops sync for that character; an untouched linked row has no sync word.
 
 ### Header, dock and panels
 
@@ -711,13 +712,14 @@ the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
-text-colour words. Centre a compact header notice in the same control-height slot as Next and Log. Keep
-an `S` gap before its bar and include that gap in the header measure. Stat-block errors use the notice icon and one fitted line, with
+text-colour words. Centre compact notices with their Log and Dismiss controls, in the header and below
+the roster. Wrapped notices keep top alignment. Keep an `XS` gap after the icon and an `S` gap before
+the bar. Include those gaps in the header measure. Stat-block errors use the notice icon and one fitted line, with
 full error on hover.
 
 Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
 remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
-the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion steps use bordered Scan icon buttons. Hover and accessibility keep full text.
+the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
 Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. Dock and footer use

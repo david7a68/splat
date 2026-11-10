@@ -508,6 +508,7 @@ pub struct Action<'a> {
     key: Option<&'a str>,
     plain: bool,
     line_start: bool,
+    min_width: Option<f32>,
 }
 
 impl<'a> Action<'a> {
@@ -524,6 +525,7 @@ impl<'a> Action<'a> {
             key: None,
             plain: false,
             line_start: false,
+            min_width: None,
         }
     }
     pub fn primary(label: &'a str) -> Self {
@@ -585,6 +587,12 @@ impl<'a> Action<'a> {
     }
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// Keep a repeated action as wide as its shared column.
+    pub fn min_width(mut self, width: f32) -> Self {
+        self.min_width = Some(width);
         self
     }
 
@@ -664,7 +672,9 @@ impl<'a> Action<'a> {
             )
         });
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
-        let width = (galley.size().x + 2.0 * padding + icon_width + key_width).max(self.height);
+        let width = (galley.size().x + 2.0 * padding + icon_width + key_width)
+            .max(self.height)
+            .max(self.min_width.unwrap_or_default());
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
             let size = vec2(width, self.height);
             let (id, allocated) = ui.allocate_space(size);
@@ -817,13 +827,51 @@ pub fn stepper(
     value: &mut i64,
     range: std::ops::RangeInclusive<i64>,
 ) -> bool {
+    stepper_with_density(ui, name, value, range, Density::Read)
+}
+
+/// The shared stepper at the control height of its row.
+pub fn stepper_with_density(
+    ui: &mut Ui,
+    name: &str,
+    value: &mut i64,
+    range: std::ops::RangeInclusive<i64>,
+    density: Density,
+) -> bool {
+    let button = |ui: &mut Ui, icon: &str, name: &str| {
+        if density == Density::Read {
+            return icon_button(ui, icon, name);
+        }
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::splat(density.control()), Sense::click());
+        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
+        locked_control(ui, &response);
+        if ui.is_rect_visible(rect) {
+            let c = colors();
+            if response.hovered() {
+                ui.painter()
+                    .rect_filled(rect, corner(RADIUS_CONTROL), c.hover);
+            }
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                icon,
+                Type::Heading.font(ui),
+                if response.hovered() { c.text } else { c.muted },
+            );
+            if response.has_focus() {
+                focus_ring(ui, rect);
+            }
+        }
+        response.on_hover_text(name)
+    };
     let before = *value;
     let (low, high) = ((*range.start()).min(before), (*range.end()).max(before));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = XS / 2.0;
         let down = ui
             .add_enabled_ui(*value > low, |ui| {
-                icon_button(ui, icons::SUBTRACT, &format!("Decrease {name}"))
+                button(ui, icons::SUBTRACT, &format!("Decrease {name}"))
             })
             .inner;
         if down.clicked() {
@@ -842,14 +890,14 @@ pub fn stepper(
                     state.weak_bg_fill = c.well;
                 }
                 widgets.inactive.bg_stroke = Stroke::new(HAIRLINE_WIDTH, c.field_border);
-                ui.spacing_mut().interact_size.y = Density::Read.control();
+                ui.spacing_mut().interact_size.y = density.control();
                 ui.add(egui::DragValue::new(value).range(low..=high).speed(0.1))
             })
             .inner;
         named(ui, &field, name);
         let up = ui
             .add_enabled_ui(*value < high, |ui| {
-                icon_button(ui, icons::ADD, &format!("Increase {name}"))
+                button(ui, icons::ADD, &format!("Increase {name}"))
             })
             .inner;
         if up.clicked() {
