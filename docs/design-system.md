@@ -718,7 +718,8 @@ When the turn heading does not fit, drop `’s turn` before shortening the name.
 such as `Cinder… 1`. Hover and accessibility keep the full name. Line
 two keeps a result icon and notice at the left and Undo at the right. Measure notice first; Undo gets the
 remainder less `L`. Undo always keeps the word `Undo`: shorten the target first, then drop the `Next:` notice
-(the roster still marks NEXT); retain copy numbers, action words, amounts and
+(the roster still marks NEXT). A state notice stays whole; beside one, Undo shows `Undo` alone when no
+shortened target fits, and a name is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and
 condition directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
 Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
