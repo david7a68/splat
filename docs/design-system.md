@@ -493,6 +493,11 @@ stored names offer `Rename the note to <file name>`, with a guarded update and U
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup.
 
+A campaign world entry has a quiet Edit icon after its title, in Lookup and World. Edit replaces the rows and
+the text with one form: Status, Stat block and In as labelled fields, then Text in the reader's prose type,
+without the title line. Save changes is primary, Unsaved follows it, then an `L` gap and quiet Cancel. One save
+writes every change with one Undo. A disk change uses the shared conflict choices.
+
 Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and

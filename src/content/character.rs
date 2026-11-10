@@ -28,6 +28,154 @@ pub struct Sheet {
     pub resource_bindings: BTreeMap<String, ResourceBinding>,
     #[serde(default)]
     pub campaign_options: BTreeMap<String, CampaignOptionState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<Background>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub details: Details,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub characteristics: Characteristics,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub story: Story,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coins: Option<Coins>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub companions: BTreeMap<String, Companion>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub custom_items: BTreeMap<String, CustomItem>,
+}
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
+/// The background as the sheet names it. Its proficiencies, choices, feats and spells are
+/// imported with the rest of the sheet, so the description is the printed text only.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Background {
+    pub name: String,
+    /// The player wrote this background on the sheet instead of choosing a published one.
+    pub custom: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// A key in `features`: the background's own feature, when it is not a feat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature: Option<String>,
+    /// Feats the background grants. They are imported as features.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub feats: Vec<String>,
+}
+/// Facts about the character that no rule reads.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Details {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alignment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faith: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifestyle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gender: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub age: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eyes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hair: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experience: Option<u64>,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Characteristics {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub personality_traits: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ideals: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bonds: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flaws: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<String>,
+}
+/// The player's notes on the sheet.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Story {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backstory: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allies: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enemies: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organizations: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub personal_possessions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_holdings: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_notes: Option<String>,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Coins {
+    pub cp: u64,
+    pub sp: u64,
+    pub ep: u64,
+    pub gp: u64,
+    pub pp: u64,
+}
+/// A creature on the sheet's Extras: a familiar, mount, Wild Shape form and so on. Its stat
+/// block is not converted, so it is not an encounter participant.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Companion {
+    pub name: String,
+    pub creature: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    pub active: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// Printed in the stat block, before anything the sheet adds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub armor_class: Option<i64>,
+    /// Printed in the stat block, before anything the sheet adds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hit_points: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub damage_taken: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporary_hp: Option<i64>,
+    pub source_id: String,
+}
+/// An item the player wrote on the sheet. It has no item definition, so it has no
+/// inventory placement.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CustomItem {
+    pub name: String,
+    pub quantity: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight_lb: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+    pub source_id: String,
 }
 /// Inactive means no selected grant, not that the campaign has disabled the system.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -257,6 +405,26 @@ pub fn validate(entry: &super::Entry) -> Result<(), String> {
                 {
                     return Err("Active campaign options require distinct, named selections".into());
                 }
+            }
+        }
+        if let Some(background) = &sheet.background {
+            if background.name.is_empty() {
+                return Err("A character background needs a name".into());
+            }
+            if let Some(key) = &background.feature
+                && !sheet.features.contains_key(key)
+            {
+                return Err(format!("Background refers to missing feature {key}"));
+            }
+        }
+        for (key, companion) in &sheet.companions {
+            if !super::local_key(key) || companion.name.is_empty() {
+                return Err("Invalid character companion".into());
+            }
+        }
+        for (key, item) in &sheet.custom_items {
+            if !super::local_key(key) || item.name.is_empty() {
+                return Err("Invalid custom item".into());
             }
         }
         for (key, spell) in &sheet.spells {

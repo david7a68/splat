@@ -27,13 +27,6 @@ struct GroupDrag(Uuid);
 
 const AMOUNT: &str = "Amount";
 const READ_ALOUD: &str = "Read-aloud and notes";
-const SHEET_PAGES: [(usize, &str); 5] = [
-    (0, "Overview"),
-    (1, "Actions"),
-    (2, "Spells"),
-    (3, "Equipment"),
-    (4, "Features"),
-];
 /// Two lines of controls in a frame.
 const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
@@ -3638,7 +3631,7 @@ impl Run {
             if !spells && self.sheet_page == 2 {
                 self.sheet_page = 0;
             }
-            let pages: Vec<_> = SHEET_PAGES
+            let pages: Vec<_> = crate::party::SHEET_PAGES
                 .iter()
                 .copied()
                 .filter(|(page, _)| *page != 2 || spells)
