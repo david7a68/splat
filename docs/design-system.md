@@ -320,7 +320,7 @@ Plain prose with no front matter and no `splat_` lines stays a README, even in `
 write if both names hold notes. Never replace a README. Empty files, front matter and malformed
 Splat fields stay in repair. Manifest repair selects the package scope and its warning About row.
 Draw the manifest error with `message_with_action`, then its muted `Small` consequence at the same
-text edge below the action. Show used and total entries and `Use every entry` with Undo. Its result
+text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. Show used and total entries and `Use every entry` with Undo. Its result
 and Undo sit in the reader above the tabs, like manifest-write results. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The amber validation count
@@ -473,7 +473,8 @@ Campaign Packages and the Library details row say `The package manifest was dele
 Write it again, or restore it from a backup.` and offer `Write the manifest again` for a missing file. The old
 file name is not stored. An existing file offers `Replace with a basic <file>` and warns that other fields
 will be dropped. Keep the registered identity and reload. Writes show a success message and `Undo write
-<file>`, naming the file written, including for a missing file.
+<file>`, naming the file written, including for a missing file. On reload, if that file no longer holds the
+written text, the message and its Undo go away.
 
 ### Link and folder
 
