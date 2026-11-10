@@ -120,6 +120,7 @@
       "package-rename": 100,
       "package-to-table": 61,
       "party": 68,
+      "party-bar-crowded": 1,
       "party-from-run": 53,
       "prep-to-table": 42,
       "reader-tables": 48,

@@ -4390,6 +4390,19 @@ pub mod run_edge_states {
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
+        // The red choice keeps an `L` gap from the safe one, which stays first on the same line.
+        d.observe_both(
+            "iter-12-FT2",
+            "Replace the file with this run keeps an L gap after Save as a new run",
+            |d| {
+                d.place_of(SAVE_AS_NEW)
+                    .zip(d.place_of(KEEP_RUN))
+                    .is_some_and(|(safe, red)| {
+                        (safe.center().y - red.center().y).abs() < 1.0
+                            && red.left() - safe.right() >= crate::design::L
+                    })
+            },
+        );
         d.state("changed-on-disk", Sizes::Default);
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
@@ -5821,6 +5834,38 @@ pub mod session_notes {
                 d.click("Add a fight");
             }
             d.wait_for_text("Bridge Ambush");
+            // FT3: with temporary HP and a Bloodied player, AC stays at 1200 and names stay at
+            // every size. Portraits give way before AC.
+            let (items, painted) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            session_recording::check_party_names(
+                d,
+                &format!("iter-12-C-FT3-names-{width}"),
+                &items,
+                &painted,
+            );
+            let has = |words: &str, label: &str| words.split_whitespace().any(|word| word == label);
+            let hurt = items
+                .iter()
+                .filter(|item| item.name.contains("Temp HP"))
+                .count();
+            let bloodied = items
+                .iter()
+                .filter(|item| item.name.contains("Bloodied"))
+                .count();
+            if width >= crate::visual_tests::driver::DEFAULT.0 {
+                d.observe(
+                    "iter-12-C-FT3",
+                    items.len() >= 4
+                        && hurt >= 2
+                        && bloodied >= 1
+                        && painted.iter().all(|(_, words)| has(words, "AC")),
+                    format!(
+                        "At {width}, with {hurt} temporary HP and {bloodied} Bloodied, every item \
+                         shows AC: {painted:?}"
+                    ),
+                );
+            }
         });
         d.press(Key::Escape);
         d.state_prepared("plan-more-add-actions", Sizes::All, |d| {
@@ -9318,6 +9363,58 @@ pub mod run_no_groups {
     }
 }
 
+/// FT3 repair: a crowded party bar at the minimum window never cuts an item off.
+pub mod party_bar_crowded {
+    use super::*;
+    const HURT: [(&str, &str); 2] = [("Iselle Marrowind", "8"), ("Oren Thistlewick", "23")];
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        // Kestrel is already Bloodied. Two more make three of five; two keep temporary HP.
+        for (name, damage) in HURT {
+            d.click_row(name);
+            d.type_text(damage);
+            d.press(Key::Enter);
+            d.expect(&format!("Undo: {damage} damage to {name}"));
+        }
+        d.click(NAV_SESSIONS);
+        d.state_prepared("three-bloodied", Sizes::Default, |d| {
+            let (items, _) = session_recording::party_bar_items(d);
+            let (width, _) = d.window_size();
+            let hide = d.place_of("Hide the party");
+            let more = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains(" more: "))
+                .map(|node| node.name);
+            let named = |part: &str| {
+                items.iter().filter(|item| item.name.contains(part)).count()
+                    + more.as_deref().map_or(0, |more| more.matches(part).count())
+            };
+            let shown = items.len()
+                + more
+                    .as_deref()
+                    .and_then(|more| more.split_whitespace().next()?.parse::<usize>().ok())
+                    .unwrap_or(0);
+            d.observe(
+                &format!("iter-12-C2-FT3-whole-{width}"),
+                !items.is_empty()
+                    && shown == 5
+                    && named("Bloodied") == 3
+                    && hide.is_some_and(|hide| {
+                        hide.right() <= width
+                            && items.iter().all(|item| item.rect.right() <= hide.left())
+                    }),
+                format!(
+                    "At {width}, 3 of 5 Bloodied: every party item lies whole before Hide the \
+                     party, and every player is named ({} items, {more:?})",
+                    items.len()
+                ),
+            );
+        });
+    }
+}
+
 /// W13: one creature joins a fight with nothing prepared, made up or found.
 pub mod run_add_creature {
     use super::*;
@@ -10068,7 +10165,22 @@ pub mod session_plan {
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
-        d.state("timeline-after-fight", Sizes::All);
+        d.state_prepared("timeline-after-fight", Sizes::All, |d| {
+            // FT4: Timeline names the removed fight as the plan does, so the row below reads true.
+            let notice = format!(
+                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
+            );
+            d.observe(
+                "iter-12-C-FT4",
+                d.visible_text(&notice),
+                format!("Timeline's removal notice names the removed fight: {notice}"),
+            );
+            d.observe(
+                "iter-12-C-FT4-row",
+                d.in_view("Undo remove") && d.has_containing("Held the bridge · Ended · Round 1"),
+                "Undo remove stays with the notice, and the played fight's row stays",
+            );
+        });
         d.click(NAV_SESSIONS);
         show_plan(d);
 

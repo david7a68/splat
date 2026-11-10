@@ -24,6 +24,7 @@ use crate::{
             SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
             rest_ruling,
         },
+        removed_event_words,
     },
 };
 use eframe::egui::{self, Color32};
@@ -1089,65 +1090,6 @@ fn session_detail(
         word.as_ref().map(|(word, color)| (word.as_str(), *color)),
         width,
     )
-}
-
-/// The plan's removal notice. It names which event went, by its result or state, and says when
-/// another event with the same name stays in this session.
-fn removed_event_words(
-    book: &Book,
-    session: Option<Uuid>,
-    days: &[u32],
-    label: &str,
-    planned: &[(String, bool)],
-) -> String {
-    let detail = book
-        .removed_event()
-        .map(|event| {
-            if event.run.is_some() {
-                timeline::played_fight_summary(event, false)
-            } else {
-                event.summary(None)
-            }
-        })
-        .filter(|detail| !detail.trim().is_empty());
-    let mut words = match detail {
-        Some(detail) => format!("Removed “{label}” ({detail})."),
-        None => format!("Removed “{label}”."),
-    };
-    // "The other" only makes sense when the removed fight was in this session; a removal made on
-    // the Timeline page from another session names no other fight here.
-    if !book
-        .removed_event()
-        .is_some_and(|event| event.is_in(session))
-    {
-        return words;
-    }
-    let same: Vec<_> = book
-        .events
-        .iter()
-        .enumerate()
-        .filter(|(at, event)| {
-            event.is_in(session) && event.label(days.get(*at).copied().unwrap_or(0)) == label
-        })
-        .map(|(_, event)| !event.result.trim().is_empty())
-        .chain(
-            planned
-                .iter()
-                .filter(|(name, _)| name == label)
-                .map(|(_, ended)| *ended),
-        )
-        .collect();
-    match same.as_slice() {
-        [] => {}
-        [true] => words.push_str(&format!(" The other “{label}” and its result stay.")),
-        [false] => words.push_str(&format!(" The other “{label}” stays.")),
-        more if more.iter().any(|&result| result) => words.push_str(&format!(
-            " {} other “{label}” events stay, with their results.",
-            more.len()
-        )),
-        more => words.push_str(&format!(" {} other “{label}” events stay.", more.len())),
-    }
-    words
 }
 
 fn recording_recovery(missing_input: bool) -> &'static str {
@@ -2225,11 +2167,7 @@ impl Sessions {
             });
         }
         if self.processed_session.is_some() {
-            return Some(Status {
-                icon: icons::SUCCESS,
-                word: "Processed",
-                color: c.result.success,
-            });
+            return Some(processed_clean());
         }
         self.just_saved().then_some(Status {
             icon: icons::OK,
@@ -7428,7 +7366,12 @@ mod tests {
             job_done: true,
             ..Default::default()
         };
-        assert_eq!(page.rail_recording_status().unwrap().word, "Processed");
+        let clean = page.rail_recording_status().unwrap();
+        assert_eq!(clean.word, "Processed");
+        // One status, one icon: the rail uses the list's and the row's clean status.
+        assert_eq!(clean.icon, processed_clean().icon);
+        assert_eq!(clean.icon, icons::OK);
+        assert_eq!(clean.color, processed_clean().color);
         page.job_warned = true;
         let status = page.rail_recording_status().unwrap();
         assert_eq!(status.word, "Processed");
