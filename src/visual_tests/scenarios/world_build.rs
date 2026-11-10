@@ -3180,6 +3180,54 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             format!("The copied-package action is bordered below the message at {size:?}"),
         );
     }
+    // AD1, a result with another action: an outside change to a copied file blocks Undo package
+    // registration with its reason, and Use the copy's entries stays. Restoring the bytes and
+    // reloading brings Undo back, so the later steps see the usual state.
+    {
+        let reload_library = |d: &mut Driver<'_>| {
+            d.click("Packages");
+            d.click("Reload from disk");
+            d.wait_for_text("Undo package registration");
+        };
+        let (entries, _) = splat::content::read_directory(&copied).unwrap();
+        let file = copied.join(
+            &entries
+                .iter()
+                .find(|entry| entry.kind != "package")
+                .expect("fixture: a copied entry")
+                .path,
+        );
+        let written = fs::read(&file).unwrap();
+        assert!(
+            !d.is_disabled("Undo package registration"),
+            "fixture: Undo starts available"
+        );
+        let mut outside = written.clone();
+        outside.extend_from_slice(b"\nAn outside note.\n");
+        fs::write(&file, &outside).unwrap();
+        reload_library(d);
+        let blocked = d.is_disabled("Undo package registration");
+        let use_kept =
+            d.in_view("Use the copy's entries") && !d.is_disabled("Use the copy's entries");
+        let reason = d.tooltip_contains(
+            "Undo package registration",
+            crate::content_workspace::UNDO_ENDED,
+        );
+        d.observe(
+            "iter-14-E-AD1-registration",
+            blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
+            format!(
+                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy's entries stays ({use_kept}); the file keeps the outside bytes"
+            ),
+        );
+        fs::write(&file, &written).unwrap();
+        reload_library(d);
+        d.observe(
+            "iter-14-E-AD1-registration-back",
+            !d.is_disabled("Undo package registration"),
+            "With the written bytes back, a reload makes Undo package registration available again",
+        );
+    }
     go_campaign(d);
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);

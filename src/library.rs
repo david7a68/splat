@@ -8513,6 +8513,23 @@ mod tests {
         );
         change_outside(&mut library);
         assert!(library.identities_undo.is_none());
+        // A deleted file of the batch also ends the result.
+        library.identities_undo =
+            Some((edit("deleted"), "2 files are now separate entries.".into()));
+        library.forget_changed_undos();
+        assert!(
+            library.identities_undo.is_some(),
+            "fixture: Undo before the delete"
+        );
+        let target = root.join(&paths[1]);
+        let kept = fs::read(&target).unwrap();
+        let first = fs::read(root.join(&paths[0])).unwrap();
+        fs::remove_file(&target).unwrap();
+        library.forget_changed_undos();
+        assert!(library.identities_undo.is_none());
+        assert!(!target.exists(), "the reload wrote nothing");
+        assert_eq!(fs::read(root.join(&paths[0])).unwrap(), first);
+        fs::write(&target, kept).unwrap();
 
         // `Undo separate entry`: one file.
         let text = fs::read_to_string(root.join(&paths[1])).unwrap();
