@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 /// One encounter note, as the page lists it.
-pub(super) struct Template {
+pub(crate) struct Template {
     pub path: String,
     pub id: Uuid,
     pub name: String,
@@ -55,7 +55,7 @@ const NO_SESSION: &str = "No session";
 
 /// The template a run came from. A save with no record of it matches by name, but only when
 /// one template has that name: entries can share a name, and a wrong match would hide one.
-pub(super) fn template_of<'a>(
+pub(crate) fn template_of<'a>(
     run: &SavedRunInfo,
     templates: &'a [Template],
 ) -> Option<&'a Template> {

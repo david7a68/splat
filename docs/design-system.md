@@ -812,6 +812,8 @@ characters.
 
 ## Sessions and the timeline
 
+The Read/Write switch sits at the right end of the note frame’s top edge at every size.
+
 ### Notes and templates
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic
@@ -868,8 +870,11 @@ text's inner edge.
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run
 is not a planned note link.
-Find the saved run by its run ID among all unfinished runs. Delete the saved run stays in the menu;
-Start a new run is available when a planned encounter supplies its source. Open fights use a status link
+Find a timeline row’s saved run by its run ID among all unfinished runs. For a planned encounter, use its
+saved source ID. For a legacy run without a source ID, use the Encounters matching rule: remove the
+` · saved …` suffix and require exactly one encounter with that name. The plan also requires exactly one
+planned fight with that name. Delete the saved run stays in the menu. Start a new run is available for
+planned encounters with a saved run, including legacy runs without a source ID. Open fights use a status link
 while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
 A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap to two lines, then shorten
@@ -979,8 +984,8 @@ Record takes an inline consent step to tell the table; hide header Record during
 the only colour on the session page. While recording, rail status stays visible everywhere and time counts
 audio saved, stopping when saving stops. One linked rail slot above account status opens the recording. Use
 Recording, Recording silence or Not saving audio consistently on rail and session. Silence has warning colour
-everywhere after a minute, including the run notice, and no banner. Rail silence omits time; hover and
-accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
+everywhere after a minute, including the run notice, and no banner. On the session page, only the icon and
+status word use warning colour; detail stays Small and muted. Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
 
 Recordings' live row owns sound state, duration, input help and Stop recording, beside Process. Hide its
 header status; Plan and notes retains the live header line. Other tabs keep header Stop recording. A row
@@ -994,9 +999,13 @@ A stopped or stalled row keeps Record again beside Process. Missing inputs put C
 Record again and Process, in row and banner. Banners and rows share the recovery sentence. Visible recording
 rows own failures, stops and stalls; other pages use a bottom banner that does not move Next turn. Automatic
 stops offer Open the session. Failures stay in banner and rail until dismissed or retried. Record again is
-primary when no open run owns it. Audio removed stays visible in results after WAV deletion. Recordings and
-their events keep LIST_MEASURE; result readers fill the pane. The session list omits date during recording or
-jobs.
+primary when no open run owns it. Unresolved recording recovery takes priority over processing: Choose an
+input when the input is missing, otherwise Record again. A blocked action never owns primary. Audio removed
+stays visible in results after WAV deletion. Recordings and their events keep LIST_MEASURE; result readers
+fill the pane. The session list omits the date during recording, jobs or a processed result. State and Playing
+share line two when they fit; otherwise Playing starts a line without a separator. Equal titles and dates show
+each note's file name on line two and in its accessible name. The rail says Processing cancelled; the list
+keeps Cancelled.
 
 ### Processing and results
 
@@ -1005,10 +1014,13 @@ Errors and setup help call the chosen text service the transcript and summary se
 Not processed uses a neutral file icon. Continue processing resumes stopped or failed work. Process and
 Continue processing are primary when no open run owns Next turn and no other primary action is in view.
 Only the first recording that needs processing owns that primary action; later rows use secondary actions.
-A recovery action in the bottom banner takes priority over processing in a recording row.
+An enabled recovery action in a row or bottom banner takes priority over processing. A visible row's
+recording recovery also takes priority over a processing retry in another session's banner. A blocked
+banner action does not take primary from an enabled row.
 While recording consent is open, Start recording owns primary.
-They are secondary while a run is open. A stalled recording keeps Record again as its primary action. Put destination
-below enabled Process or Continue processing, in Small muted text at reader measure, and in Process again
+They are secondary while a run is open. An unresolved recording recovery keeps Choose an input or Record
+again primary. Put destination below the first enabled Process or Continue processing only, in Small muted
+text at reader measure. Later rows keep it on hover and in the accessible description. Keep it in Process again
 confirmation. With a complete transcript, name raw transcript and session context and say audio is not sent
 again. With a partial transcript, name remaining audio parts and destination.
 
@@ -1019,7 +1031,7 @@ READER_MEASURE. Clean and warned results say Processed in the rail until a later
 Opening the session acknowledges the completion notice and keeps the result and its warning. Warnings retain icon and colour; row,
 hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
 and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
-sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width.
+sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 
 The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and

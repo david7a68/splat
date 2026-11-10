@@ -151,7 +151,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Video and optional contact-sheet settings work as for `visual-test`.
 
 Session Read and Write views keep the same left-aligned prose width of at most 75 characters per line.
-The Write frame is no wider than the reader measure plus its padding and stays at the left edge.
+The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
 Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links.
 A group editor stays beside the note when both fit at their width limits. Smaller pages use the Note tab.
 A paused fight on the plan offers Resume even when it came from a timeline event.
@@ -500,7 +500,7 @@ Lookup does. Each puts a link such as `[[Verori]]` where the `/` was. Escape in 
 typed. Escape after you choose a command goes back to the note without a link. A slash inside a word, as in `and/or`,
 stays a slash.
 
-A planned fight with a saved run offers **Resume**, as the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and shared run state once, such as **Held the bridge · Ended · Round 1**. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links. Plan summaries use the width below the row action. Removing a planned group keeps its message and Undo in that row’s place.
+A planned fight with a saved run offers **Resume**. A legacy run uses the same saved-name matching rule as Encounters, and only one planned fight can have that name. **Resume** is the primary action for the first waiting fight when no run is open. A run before combat says **Setup**; a closed unfinished run adds **Paused**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. Every planned fight also has **Remove from tonight**: it removes one link from the plan and offers **Undo remove** below the row. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and shared run state once, such as **Held the bridge · Ended · Round 1**. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links. Plan summaries use the width below the row action. Removing a planned group keeps its message and Undo in that row’s place.
 
 Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new plan event stays closed and uses its kind as its title. Open its row for **Title** and **Notes**, or follow **Timeline** for **How long** and **Where**. A new event on Timeline opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order. Opening Timeline or changing a filter resets the detail fields to the top. A Day shows its start time only.
 
@@ -527,8 +527,11 @@ dies, and the file stays if it does.
 
 Nothing leaves the computer until you select **Process** on a recording. Choose the services in **Settings**.
 The first recording that needs processing owns the primary **Process** or **Continue processing** action
-when no run is open and no recovery action in the bottom banner owns primary.
-Open runs keep these actions secondary.
+when no run is open and no enabled recording recovery owns primary. A stopped recording first offers primary
+**Choose an input** when its input is missing, otherwise **Record again**. Processing stays secondary during
+recovery. The destination text shows below the first available Process action; later actions keep it on hover.
+Open runs keep these actions secondary. Session rows with equal titles and dates show their file names.
+Recording state replaces the date, and **Playing** stays beside it when it fits.
 
 1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
    with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts
