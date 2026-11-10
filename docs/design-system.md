@@ -302,7 +302,7 @@ pane title and `Label` for its sections. A filtered creature list shows `MATCHES
 when search is empty.
 
 The scope control says `Can use` in both layouts, at the top of the category column. Keep those words
-whole at minimum width. At narrow widths, scope and category share an equal-width line above search.
+whole at minimum width. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
 Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. Both the scope menu and
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
@@ -485,10 +485,9 @@ visible with duplicate warnings. A duplicate NPC still has its existing name-onl
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
-NPCs show labelled Stat block, In and Status rows; locations show In. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Empty
-values say `not set`. Missing links retain names and keep `Not found` on one line. Broken links have a
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row. Missing links retain names and keep `Not found` on one line. Broken links have a
 warning icon, list warning and count in the header. Table faults use the same list warning and header
 repair link. Unread values name field, bad value, source line and repair. Folder groups use normal-case
 paths after type groups.
@@ -503,11 +502,13 @@ future path below the name. A compact NPC reader puts Fights as and In on one re
 Lookup.
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Edit replaces the rows and
-the text with one form: Status, Stat block and In as labelled fields, then Text in the reader's prose type,
+the text with one form: Status, Stat block, In and Part of as labelled fields, then Text in the reader's prose type,
 without the title line. Save changes is primary unless a live run owns Next turn; then it is secondary. Unsaved follows it, then an `L` gap and quiet Cancel. One save
 writes every change with one Undo. A disk change uses the shared conflict choices.
 
-Broken notes stay under Cannot be read and use the Campaign repair source editor. Keep drafts in memory and
+Task marks at the start of a list item show an empty box for `[ ]` and a checked box for `[x]`, with the accessible names `Open` and `Done`. Stored Markdown stays unchanged. Other brackets stay as text.
+
+Broken notes stay under Cannot be read. Each row's second line states the cause, and the group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A rolled table selects the matching row, marks it with dice and
 states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column

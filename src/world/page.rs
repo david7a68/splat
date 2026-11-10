@@ -14,6 +14,35 @@ const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
 
+/// A repair cause must stay whole even when Lookup narrows the list.
+fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
+    let width = (ui.available_width() - design::S * 2.0).max(design::XXL);
+    let font = if selected { Type::Strong } else { Type::Body };
+    let title = design::one_line(ui, path, font.font(ui), colors().text, width);
+    let detail = ui.painter().layout(
+        cause.to_owned(),
+        Type::Small.font(ui),
+        colors().muted,
+        width,
+    );
+    let height = (title.size().y + detail.size().y + design::S).max(ROW);
+    design::row(
+        ui,
+        height,
+        selected,
+        &format!("{path} · {cause}"),
+        |ui, rect| {
+            let position = rect.min + egui::vec2(design::S, design::XS);
+            ui.painter().galley(position, title.clone(), colors().text);
+            ui.painter().galley(
+                position + egui::vec2(0.0, title.size().y),
+                detail,
+                colors().muted,
+            );
+        },
+    )
+}
+
 /// What the page's larger part shows.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum View {
@@ -46,9 +75,37 @@ pub struct WorldPage {
     view: View,
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
+    /// Repair causes are read and parsed only when the index generation changes.
+    broken_details: std::collections::BTreeMap<String, String>,
 }
 
 impl WorldPage {
+    /// All file reads and repair parsing stay behind this generation check.
+    fn refresh_checks(
+        &mut self,
+        index: &ContentIndex,
+        mut read: impl FnMut(&str) -> Option<String>,
+    ) {
+        if self
+            .checks
+            .as_ref()
+            .is_some_and(|(generation, _)| *generation == index.generation())
+        {
+            return;
+        }
+        self.checks = Some((index.generation(), super::checks::run(index)));
+        self.broken_details = index
+            .broken_world
+            .iter()
+            .map(|(path, problem)| {
+                let detail = read(path)
+                    .and_then(|text| crate::campaign_content::repair_problem(path, &text).0)
+                    .unwrap_or_else(|| problem.clone());
+                (path.clone(), detail)
+            })
+            .collect();
+    }
+
     pub fn dirty(&self) -> bool {
         self.repair
             .as_ref()
@@ -209,13 +266,11 @@ impl WorldPage {
             });
             return;
         };
-        if self
-            .checks
-            .as_ref()
-            .is_none_or(|(generation, _)| *generation != index.generation())
-        {
-            self.checks = Some((index.generation(), super::checks::run(index)));
-        }
+        self.refresh_checks(index, |path| {
+            crate::library::note_path(&campaign.path, path)
+                .ok()
+                .and_then(|path| std::fs::read_to_string(path).ok())
+        });
         let groups = index.world_groups(&self.search.trim().to_lowercase());
         if broken == 0
             && groups.is_empty()
@@ -275,17 +330,19 @@ impl WorldPage {
                             })
                             .collect();
                         if !broken.is_empty() {
+                            ui.add_space(design::XS);
                             design::group_heading(ui, "Cannot be read", broken.len());
                             for (path, problem) in broken {
-                                let response = design::two_line_row(
+                                let response = broken_row(
                                     ui,
-                                    ROW,
                                     self.repair.as_ref().is_some_and(|r| r.path == *path),
                                     path,
                                     if crate::formats_ui::is_old(problem) {
                                         "Old layout"
                                     } else {
-                                        "Cannot be read"
+                                        self.broken_details
+                                            .get(path)
+                                            .map_or(problem.as_str(), String::as_str)
                                     },
                                 )
                                 .on_hover_text(problem);
@@ -838,4 +895,67 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         }
     });
     choice
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repair_details_read_once_per_index_and_follow_recovery() {
+        let mut first = ContentIndex::load(&[], None).unwrap();
+        first
+            .broken_world
+            .push(("Broken.md".into(), "Original parser error".into()));
+        let mut page = WorldPage::default();
+        let mut reads = 0;
+        let mut read = |_: &str| {
+            reads += 1;
+            Some("---\nsplat_schema: 2\nsplat_id: [\n---\n".into())
+        };
+        page.refresh_checks(&first, &mut read);
+        page.refresh_checks(&first, &mut read);
+        assert_eq!(
+            reads, 1,
+            "FD9-cache: the unchanged second render does no file read or repair parse"
+        );
+        assert!(page.broken_details["Broken.md"].contains("Line 3 opens a list"));
+
+        // A changed index re-reads the note. Failure to read it uses its current indexed error.
+        let mut unreadable = ContentIndex::load(&[], None).unwrap();
+        unreadable
+            .broken_world
+            .push(("Broken.md".into(), "The file cannot be opened".into()));
+        page.refresh_checks(&unreadable, |_| None);
+        assert_eq!(
+            page.broken_details["Broken.md"],
+            "The file cannot be opened"
+        );
+
+        // A move, rename, deletion or repair removes the old row on the next index.
+        let recovered = ContentIndex::load(&[], None).unwrap();
+        page.refresh_checks(&recovered, |_| {
+            panic!("A recovered index needs no repair reads")
+        });
+        assert!(
+            page.broken_details.is_empty(),
+            "FD9-recovery: no stale repair cause survives"
+        );
+
+        for body in [
+            "| Field | Value |\n| --- | --- |\n| Name |\n",
+            "| Field | Value |\n| --- | --- |\n| Name | Rook | extra |\n",
+            "",
+        ] {
+            let mut index = ContentIndex::load(&[], None).unwrap();
+            index
+                .broken_world
+                .push(("Broken.md".into(), "Indexed cause".into()));
+            page.refresh_checks(&index, |_| Some(format!("---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Rook\nsplat_type: lore\n---\n{body}")));
+            assert_eq!(
+                page.broken_details["Broken.md"], "Indexed cause",
+                "FD9-input: readable body syntax does not invent a front matter cause"
+            );
+        }
+    }
 }

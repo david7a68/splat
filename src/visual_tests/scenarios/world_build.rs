@@ -44,6 +44,53 @@ pub fn broken(d: &mut Driver<'_>) {
         d.visible_text("4 notes"),
         "The World total includes the note that cannot be read",
     );
+    for size in [SMALL, DEFAULT, LARGE] {
+        let cause = d.at_size(size, |d| {
+            d.expect("Notes/Broken.md · Line 3 opens a list with [ that never closes.");
+            let row = d
+                .place_of("Notes/Broken.md · Line 3 opens a list with [ that never closes.")
+                .unwrap();
+            d.painted_in(row).contains("Line 3") && !d.painted_in(row).contains("Cannot be read")
+        });
+        d.observe(
+            "iter-7-D-FD9",
+            cause,
+            format!("The unreadable row names the cause at {size:?}"),
+        );
+        let heading_gap = d.at_size(size, |d| {
+            d.expect("CANNOT BE READ 1");
+            d.expect("Powers/");
+            let nodes = d.nodes();
+            let unreadable = nodes
+                .iter()
+                .find(|node| node.role == Role::Label && node.name == "CANNOT BE READ 1")
+                .unwrap()
+                .rect;
+            let folder = nodes
+                .iter()
+                .find(|node| node.role == Role::Label && node.name.contains("Powers/"))
+                .unwrap()
+                .rect;
+            let gap = |heading: egui::Rect| {
+                let previous = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.role == Role::Button
+                            && (node.rect.left() - heading.left()).abs() < 1.0
+                            && node.rect.bottom() <= heading.top()
+                    })
+                    .max_by(|a, b| a.rect.bottom().total_cmp(&b.rect.bottom()))
+                    .expect("A heading has a preceding row");
+                heading.top() - previous.rect.bottom()
+            };
+            (gap(unreadable) - gap(folder)).abs() < 1.0
+        });
+        d.observe(
+            "iter-7-D-FD9-heading",
+            heading_gap,
+            format!("The unreadable group uses the folder heading gap at {size:?}"),
+        );
+    }
     d.state("broken-note-listed", Sizes::All);
     d.click("1 note cannot be read");
     d.expect("Save repaired note");
@@ -238,8 +285,8 @@ pub fn facts(d: &mut Driver<'_>) {
         d,
         "Lore/Horn Rings.md",
         "Horn Rings",
-        "splat_type: lore",
-        "Tieflings wear one ring on their horns for each kept ancestor.\n\n- [ ] Can a horn ring be sold?\n",
+        "splat_type: lore\nsplat_in: ''\nsplat_status: ''\nsplat_part_of: []",
+        "Tieflings wear one ring on their horns for each kept ancestor.\n\n- [ ] Can a horn ring be sold?\n- [x] A horn ring marks an ancestor.\n",
     );
     flat_entry(
         d,
@@ -321,7 +368,122 @@ pub fn facts(d: &mut Driver<'_>) {
             && d.has("Visitors"),
         "A page shows each line that names it, under its page, and a line of links adds only its page",
     );
+    for size in [SMALL, DEFAULT, LARGE] {
+        let markers = d.at_size(size, |d| {
+            d.expect("Open");
+            d.expect("Done");
+            d.visible_text(egui_phosphor::regular::SQUARE)
+                && d.visible_text(egui_phosphor::regular::CHECK_SQUARE)
+                && !d.visible_text("[ ] Can")
+                && !d.visible_text("[x] A horn")
+        });
+        d.observe(
+            "iter-7-D-FD2",
+            markers,
+            format!("Task marks have box icons and accessible names at {size:?}"),
+        );
+        let empty_fields = d.at_size(size, |d| {
+            d.expect("Edit Horn Rings");
+            !d.has("Change In")
+                && !d.has("Change Part of")
+                && !d.has("Change Status")
+                && !d.visible_text("not set")
+        });
+        d.observe(
+            "iter-7-D-FD6",
+            empty_fields,
+            format!("A lore reader omits every empty field at {size:?}"),
+        );
+    }
     d.state("lines-from-other-pages", Sizes::All);
+    d.expect("Edit Horn Rings");
+    d.click("Edit Horn Rings");
+    for name in ["Status", "Change In", "Change Part of", "Text"] {
+        d.expect(name);
+    }
+    d.state("empty-world-fields-in-edit", Sizes::All);
+    let lore_path = root(d).join("Lore/Horn Rings.md");
+    let unchanged = fs::read_to_string(&lore_path).unwrap();
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena Guild");
+    d.click("Arena Guild");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena");
+    d.click("The Arena");
+    let group_actions: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == Role::Button && node.name == "Change Part of")
+        .collect();
+    d.observe(
+        "iter-7-D-FD6-groups",
+        !group_actions.is_empty()
+            && group_actions.len() == 1
+            && d.visible_text("Arena Guild, The Arena"),
+        "Two draft groups share one Change action",
+    );
+    assert_eq!(
+        fs::read_to_string(&lore_path).unwrap(),
+        unchanged,
+        "iter-7-D-FD6-unsent: a group stays in the draft"
+    );
+    d.type_into_editor("\nWords kept across pane sizes.\n");
+    let draft_text = d.editor_text().unwrap();
+    for size in [SMALL, LARGE, SMALL, DEFAULT, SMALL] {
+        d.set_base(size);
+        d.observe(
+            "iter-7-D-FD6-draft",
+            d.editor_text().as_ref() == Some(&draft_text)
+                && d.focused_name().as_deref() == Some("Text"),
+            format!("The text and focus survive the pane boundary at {size:?}"),
+        );
+    }
+    d.click("Cancel");
+    assert_eq!(fs::read_to_string(&lore_path).unwrap(), unchanged);
+    d.expect("Undo discard of Horn Rings");
+    d.click("Undo discard of Horn Rings");
+    assert_eq!(d.editor_text().as_ref(), Some(&draft_text));
+    d.expect("Arena Guild, The Arena");
+    d.state("group-draft-restored", Sizes::All);
+    d.click("Status");
+    d.press_ctrl(Key::S);
+    d.wait_for_text("Changes saved.");
+    let saved = fs::read_to_string(&lore_path).unwrap();
+    assert!(
+        saved.contains("splat_part_of:") && saved.contains("Words kept across pane sizes."),
+        "iter-7-D-FD6-save: text and groups save together"
+    );
+    d.click("Undo changes");
+    assert_eq!(
+        fs::read_to_string(&lore_path).unwrap(),
+        unchanged,
+        "iter-7-D-FD6-undo: one Undo restores every field"
+    );
+    // A group-only draft must keep a simultaneous disk edit until the DM chooses.
+    d.click("Edit Horn Rings");
+    d.click("Change Part of");
+    d.type_into("Find a group", "Arena Guild");
+    d.click("Arena Guild");
+    let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
+    fs::write(&lore_path, &external).unwrap();
+    d.click("Save changes");
+    d.expect("This entry changed on disk");
+    assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
+    d.click("Overwrite with my draft");
+    d.wait_for_text("Changes saved.");
+    let merged = fs::read_to_string(&lore_path).unwrap();
+    assert!(
+        merged.contains("splat_part_of:")
+            && crate::sessions::split_note(&merged)
+                .unwrap()
+                .1
+                .starts_with(crate::sessions::split_note(&external).unwrap().1),
+        "iter-7-D-FD6-conflict: a group-only overwrite keeps the disk text"
+    );
+    d.click("Undo changes");
+    assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
+    fs::write(&lore_path, &unchanged).unwrap();
+    reload(d);
     d.click("Look: Gilded horn rings, loud and new.");
     d.observe(
         "T15.1",
@@ -483,6 +645,20 @@ pub fn places(d: &mut Driver<'_>) {
         "W3",
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
         "Undo restores the previous content byte for byte",
+    );
+    d.click("Change In");
+    d.click("Clear value");
+    d.expect("Undo place change");
+    d.observe(
+        "iter-7-D-FD6-cleared",
+        !d.has("Change In") && d.in_view("Undo place change"),
+        "A cleared place row disappears and its Undo stays visible",
+    );
+    d.state("cleared-place-keeps-undo", Sizes::All);
+    d.click("Undo place change");
+    assert_eq!(
+        fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap(),
+        original
     );
     d.click("Change In");
     d.click("New location…");

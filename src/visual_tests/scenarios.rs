@@ -352,7 +352,31 @@ pub mod library_author {
                 && draft_here(d, DRAFT_WORDS),
             "Read another entry while a draft is open. Its text opens in Lookup, and the draft's words stay in the editor",
         );
-        d.state("read-beside-draft", Sizes::Default);
+        {
+            let size = DEFAULT;
+            let ordered = d.at_size(size, |d| {
+                for name in [
+                    "What the Library shows: Ashen Marches",
+                    "Section",
+                    "Search the Library",
+                    "About Ashen Marches",
+                ] {
+                    d.expect(name);
+                }
+                let scope = d.place_of("What the Library shows: Ashen Marches").unwrap();
+                let category = d.place_of("Section").unwrap();
+                let search = d.place_of("Search the Library").unwrap();
+                let about = d.place_of("About Ashen Marches").unwrap();
+                scope.bottom().max(category.bottom()) <= search.top()
+                    && search.bottom() <= about.top()
+            });
+            d.observe(
+                "iter-7-D-FD10",
+                ordered,
+                format!("Scope and category precede search, then About at {size:?}"),
+            );
+        }
+        d.state("read-beside-draft", Sizes::All);
         d.press(Key::Escape);
         d.begin_task();
 
@@ -495,6 +519,21 @@ pub mod library_author {
             d.field_text("Folder").as_deref() == Some("Creatures")
         });
         d.expect("Type a new folder, or choose one. A new folder is made with the file.");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let labels = d.at_size(size, |d| {
+                ["Kind", "Destination"].into_iter().all(|word| {
+                    d.expect(word);
+                    d.place_of(word).is_some_and(|rect| {
+                        d.painted_size(rect, word) == Some(crate::design::Type::Small.size())
+                    }) && !d.visible_text(&word.to_uppercase())
+                })
+            });
+            d.observe(
+                "iter-7-D-SD1",
+                labels,
+                format!("Peer field labels use sentence-case Small at {size:?}"),
+            );
+        }
         d.state("new-entry-form", Sizes::All);
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
@@ -559,6 +598,20 @@ pub mod library_navigation {
             !d.visible_text("Captain Varra is in this campaign only."),
             "Copying the dependency also reconnects the package entry",
         );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let quiet_undo = d.at_size(size, |d| {
+                d.expect("Undo dependency copy");
+                let rect = d.place_of("Undo dependency copy").unwrap();
+                d.control_frame("Undo dependency copy")
+                    .is_some_and(|frame| frame.stroke == egui::Stroke::NONE)
+                    && d.painted_in(rect).contains(crate::design::icons::UNDO)
+            });
+            d.observe(
+                "iter-7-D-SD2",
+                quiet_undo,
+                format!("Dependency Undo is quiet and bears the Undo icon at {size:?}"),
+            );
+        }
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo dependency copy");
         d.wait_for_text("Captain Varra is in this campaign only.");

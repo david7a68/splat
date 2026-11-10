@@ -71,6 +71,7 @@ struct Fields {
     status: String,
     creature: Option<Value>,
     place: Option<Value>,
+    groups: Vec<Value>,
     text: String,
 }
 
@@ -79,6 +80,7 @@ struct Changed {
     status: bool,
     creature: bool,
     place: bool,
+    groups: bool,
     text: bool,
 }
 
@@ -93,6 +95,7 @@ impl Fields {
             status: status(entry).to_owned(),
             creature: set("creature"),
             place: set("in"),
+            groups: super::part_of(entry).into_iter().cloned().collect(),
             text: split_text(file, &entry.name)
                 .map_or(file, |(_, text)| text)
                 .to_owned(),
@@ -111,6 +114,7 @@ impl Fields {
             status: self.status.trim() != start.status,
             creature: self.creature != start.creature,
             place: self.place != start.place,
+            groups: self.groups != start.groups,
             text: self.text != start.text,
         }
     }
@@ -160,7 +164,7 @@ impl EditDraft {
 
     pub(super) fn dirty(&self) -> bool {
         let changed = self.now.changed(&self.start);
-        changed.status || changed.creature || changed.place || changed.text
+        changed.status || changed.creature || changed.place || changed.groups || changed.text
     }
 
     /// The index read the entry again since the form saw it. The same front matter shares
@@ -209,6 +213,16 @@ impl EditDraft {
                 after = super::fields::patch(&after, key, value)?;
             }
         }
+        if changed.groups {
+            let groups = self
+                .now
+                .groups
+                .iter()
+                .cloned()
+                .map(|value| stored_value(index, value))
+                .collect();
+            after = super::fields::patch(&after, "part_of", Value::Sequence(groups))?;
+        }
         if changed.text {
             let (head, _) =
                 split_text(&after, &self.name).ok_or("This note has no front matter.")?;
@@ -233,9 +247,14 @@ impl EditDraft {
                 self.start.place.as_ref().unwrap_or(&null),
                 self.now.place.as_ref().unwrap_or(&null),
             );
+            let groups = (
+                Value::Sequence(self.start.groups.clone()),
+                Value::Sequence(self.now.groups.clone()),
+            );
             for (key, changed, before, now) in [
                 ("status", changed.status, &status.0, &status.1),
                 ("in", changed.place, place.0, place.1),
+                ("part_of", changed.groups, &groups.0, &groups.1),
             ] {
                 // The same place under another spelling is not a change in play.
                 let same = key == "in"
@@ -288,6 +307,9 @@ impl EditDraft {
                     }
                     if !changed.place {
                         now.place.clone_from(&theirs.place);
+                    }
+                    if !changed.groups {
+                        now.groups.clone_from(&theirs.groups);
                     }
                     if !changed.text {
                         now.text.clone_from(&theirs.text);
@@ -480,20 +502,73 @@ impl Reader {
                 });
             });
             if self.picker.as_ref().is_some_and(|picker| picker.key == key)
-                && let Some(chosen) = self.pick(ui, item, index, campaign)
+                && let Some(chosen) = self.pick(ui, item, index, campaign, None)
             {
                 *slot = Some(chosen).filter(|value| !value.is_null());
             }
         }
+        design::field(ui, "Part of", None, None, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let names: Vec<_> = draft
+                    .now
+                    .groups
+                    .iter()
+                    .map(|value| value_name(index, value, "group"))
+                    .collect();
+                ui.label(
+                    Type::Body
+                        .rich(
+                            ui,
+                            if names.is_empty() {
+                                "not set".into()
+                            } else {
+                                names.join(", ")
+                            },
+                        )
+                        .color(colors().muted),
+                );
+                if Action::quiet("Change")
+                    .density(Density::Read)
+                    .name("Change Part of")
+                    .show(ui)
+                    .clicked()
+                {
+                    self.picker = Some(Picker {
+                        key: "part_of",
+                        focus: true,
+                        ..Default::default()
+                    });
+                }
+            });
+        });
+        if self
+            .picker
+            .as_ref()
+            .is_some_and(|picker| picker.key == "part_of")
+            && let Some(Value::Sequence(groups)) =
+                self.pick(ui, item, index, campaign, Some(&draft.now.groups))
+        {
+            draft.now.groups = groups;
+        }
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
-            ui.add(
-                egui::TextEdit::multiline(&mut draft.now.text)
-                    .font(font)
-                    .desired_width(ui.available_width() - 2.0 * design::S)
-                    .desired_rows(8)
-                    .margin(egui::vec2(design::S, design::S)),
-            )
+            let height = (ui.available_height() - Density::Read.control() - design::L - design::S)
+                .max(style::prose_type(ui).line() * 2.0);
+            egui::ScrollArea::vertical()
+                .id_salt(("world_edit_text_scroll", id))
+                .max_height(height)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut draft.now.text)
+                            .id(egui::Id::new(("world_edit_text", id)))
+                            .font(font)
+                            .desired_width(ui.available_width() - 2.0 * design::S)
+                            .desired_rows(8)
+                            .margin(egui::vec2(design::S, design::S)),
+                    )
+                })
+                .inner
         });
         design::named(ui, &text, "Text");
         focused |= text.has_focus();
@@ -612,6 +687,16 @@ mod tests {
         let entry = &index.items[index.position(id).unwrap()].entry;
         let mut draft = EditDraft::open(&campaign, entry).unwrap();
         assert!(!draft.dirty());
+        draft
+            .now
+            .groups
+            .push(Value::String("[[Watch House]]".into()));
+        assert!(
+            draft.dirty(),
+            "FD6-group-dirty: a group-only edit is unsaved"
+        );
+        draft.now.groups.clear();
+        assert!(!draft.dirty());
         assert!(
             draft.now.text.starts_with("- **Look:** A scar"),
             "{}",
@@ -619,6 +704,7 @@ mod tests {
         );
         draft.now.status = " missing ".into();
         draft.now.place = serde_yaml_ng::to_value(EntryRef::id(place)).ok();
+        draft.now.groups = vec![Value::String("[[Watch House]]".into())];
         draft.now.text.push_str("\nOwes Nell a favour.\n");
         assert!(draft.dirty());
         let change = draft.save(&campaign, &index, None).unwrap().unwrap();
@@ -629,6 +715,10 @@ mod tests {
         assert_eq!(
             world_field(&saved, "in").and_then(Value::as_str),
             Some("[[Locations/Watch House|Watch House]]")
+        );
+        assert_eq!(
+            super::super::part_of(&saved),
+            vec![&Value::String("[[Watch House]]".into())]
         );
         assert!(after.contains("\n# Rook\n"));
         assert!(after.ends_with("Owes Nell a favour.\n"));
@@ -644,6 +734,15 @@ mod tests {
         fs::write(&path, format!("{after}From Obsidian.\n")).unwrap();
         assert!(draft.save(&campaign, &index, None).unwrap().is_none());
         assert!(draft.disk.is_some());
+        let invalid = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
+        fs::write(&path, invalid).unwrap();
+        draft.now.groups.clear();
+        assert!(draft.save(&campaign, &index, None).unwrap().is_none());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            invalid,
+            "FD6-two-faults: an unreadable disk file and group draft do not write"
+        );
         fs::write(&path, &after).unwrap();
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
