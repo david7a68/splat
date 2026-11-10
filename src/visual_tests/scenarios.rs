@@ -7969,12 +7969,15 @@ pub mod session_plan {
             "iter-2-C-FT4",
             "Duplicate paused runs show one save time",
             |d| {
-                d.nodes()
+                let nodes = d.nodes();
+                let duplicates: Vec<_> = nodes
                     .iter()
                     .filter(|node| {
                         node.name.contains(" · Setup · Paused") && node.name.contains("2026-01-01")
                     })
-                    .all(|node| !node.name.contains("Saved "))
+                    .collect();
+                !duplicates.is_empty()
+                    && duplicates.iter().all(|node| !node.name.contains("Saved "))
             },
         );
         d.state("saved-runs-history", Sizes::All);

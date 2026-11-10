@@ -6197,7 +6197,7 @@ impl Sessions {
                         },
                     );
                 }
-                if locked.is_none() && blocked != Some("No changes to save.") {
+                if locked.is_none() && changed {
                     design::blocked_reason(ui, blocked);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
