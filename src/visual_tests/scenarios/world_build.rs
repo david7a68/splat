@@ -6,6 +6,10 @@ use egui::accesskit::Role;
 use std::fs;
 use uuid::Uuid;
 
+/// A free-text History date longer than a third of the reader, short enough for the list.
+const LONG_WHEN: &str = "In the winter before the founding";
+const LONG_SUMMARY: &str = "The guild held the Arena through the winter siege, and fed the miners' families from its own stores until the thaw came and the soldiers went home.";
+
 fn root(d: &Driver<'_>) -> std::path::PathBuf {
     d.root.join("campaigns/emberfall")
 }
@@ -271,6 +275,16 @@ pub fn broken(d: &mut Driver<'_>) {
     );
 }
 
+/// The file each generated NPC card will save, one label per card. A text run repeats its
+/// label's name, so it is not counted.
+fn npc_saves(d: &Driver<'_>) -> Vec<String> {
+    d.nodes()
+        .into_iter()
+        .filter(|n| n.role == Role::Label)
+        .filter_map(|n| n.name.strip_prefix("Will save NPCs/").map(str::to_owned))
+        .collect()
+}
+
 fn flat_entry(d: &Driver<'_>, path: &str, name: &str, fields: &str, body: &str) {
     let id = splat::character::stable_id(path);
     let path = root(d).join(path);
@@ -335,6 +349,14 @@ pub fn facts(d: &mut Driver<'_>) {
         "The Revolt",
         "splat_type: event\nsplat_when: 90 years ago\nsplat_until: 85 years ago",
         "The miners took the Arena and held it for five years.\n",
+    );
+    // A free-text date longer than the date column's limit, with a summary that wraps.
+    flat_entry(
+        d,
+        "History/The Long Siege.md",
+        "The Long Siege",
+        &format!("splat_type: event\nsplat_when: {LONG_WHEN}"),
+        &format!("{LONG_SUMMARY}\n"),
     );
     flat_entry(
         d,
@@ -570,6 +592,102 @@ pub fn facts(d: &mut Driver<'_>) {
             .is_some_and(|(first, second)| first.top() < second.top()),
         "A place shows the events that concern it, oldest first, each with its date",
     );
+    // FD3: the dates share one column, as wide as the widest date plus an `S` gap, but never
+    // more than a third of the reader. A longer date wraps inside its cell.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (column, bound, kept, level) = d
+            .at_size(size, |d| {
+                let body = d.painted_left("The arena at the capital, where the race starts.")?;
+                let reader = egui::Rect::from_min_max(
+                    egui::pos2(body - 1.0, 0.0),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                let short = d.painted_rect_in("120 years ago", reader)?;
+                let wide = d.painted_rect_in("90 to 85 years ago", reader)?;
+                let long = d.painted_rect_in(LONG_WHEN, reader)?;
+                let names = [
+                    d.painted_rect_in("The Massacre", reader)?,
+                    d.painted_rect_in("The Revolt", reader)?,
+                    d.painted_rect_in("The Long Siege", reader)?,
+                ];
+                let edge = names[0].left();
+                // The rule under the History heading spans the reader's own width.
+                let heading = d.painted_rect_in("History", reader)?;
+                let whole = d
+                    .hairlines_in(reader)
+                    .into_iter()
+                    .filter(|rule| rule.top() > heading.top() && rule.bottom() < short.top())
+                    .min_by(|a, b| a.top().total_cmp(&b.top()))?;
+                let summary = d.painted_word_rect(
+                    "The miners took the Arena and held it for five years.",
+                    reader,
+                )?;
+                let wrapped = d.painted_rect_in(LONG_SUMMARY, reader)?;
+                let last_row = d.painted_word_rect(LONG_SUMMARY, reader)?;
+                Some((
+                    names.iter().all(|name| (name.left() - edge).abs() <= 0.5)
+                        && edge - body >= wide.width() + design::S - 1.0
+                        && [short, wide, long]
+                            .iter()
+                            .all(|date| date.right() <= edge - design::S + 1.0),
+                    // The long date wraps in a column of at most a third of the reader's own
+                    // width, and the name after it stays inside the reader.
+                    (
+                        (whole.left() - body).abs() <= 2.0
+                            && long.height() > short.height() * 1.5
+                            && edge - body <= whole.width() / 3.0 + design::S + 1.0
+                            && names[2].right() <= whole.right(),
+                        edge - body,
+                        whole.width(),
+                    ),
+                    // Must stay true: dates start at the text edge, and a summary, also on its
+                    // wrapped lines, never sits under the date column.
+                    (short.left() - body).abs() <= 1.0
+                        && (wide.left() - body).abs() <= 1.0
+                        && (long.left() - body).abs() <= 1.0
+                        && summary.left() >= edge - 0.5
+                        && last_row.top() > wrapped.top() + 1.0
+                        && last_row.left() >= edge - 0.5,
+                    // Each date's first line sits on its name's line, also when the date wraps.
+                    [(short, names[0]), (wide, names[1]), (long, names[2])]
+                        .iter()
+                        .all(|(date, name)| {
+                            (date.top() + design::Type::Small.line() / 2.0 - name.center().y).abs()
+                                <= 1.5
+                        }),
+                ))
+            })
+            .unwrap_or_default();
+        d.observe(
+            "iter-14-D-FD3",
+            column,
+            format!(
+                "History names share one left edge after the widest date and an S gap at {size:?}"
+            ),
+        );
+        let (bound, column_width, reader_width) = bound;
+        d.observe(
+            "iter-14-D2-FD3-bound",
+            bound,
+            format!(
+                "Date column {column_width:.0} px plus S, reader {reader_width:.0} px at {size:?}. "
+            ) + &format!(
+                "A long History date wraps in a column of at most a third of the reader at {size:?}"
+            ),
+        );
+        d.observe(
+            "iter-14-D2-FD3-level",
+            level,
+            format!("Each History date's first line sits on its name's line at {size:?}"),
+        );
+        d.observe(
+            "iter-14-D2-FD3-wrap",
+            kept,
+            format!(
+                "History dates start at the text edge, and wrapped summaries stay right of them at {size:?}"
+            ),
+        );
+    }
     d.state("place-history", Sizes::All);
 
     d.click_containing("Zarel · ");
@@ -1104,6 +1222,138 @@ pub fn generator(d: &mut Driver<'_>) {
         "W9",
         d.has("Close Lookup") && !d.has("New NPC \"Names.md\""),
         "The warning opens its source note in Lookup",
+    );
+
+    // FD5: with no names table, Lookup says so in the DM's words. Its link hands this NPC to
+    // the World page, which keeps the table marker for the DM who prepares.
+    fs::remove_file(root(d).join("Names.md")).unwrap();
+    reload(d);
+    d.click("Close Lookup");
+    d.click("Discard");
+    d.observe(
+        "iter-14-D-FD5-start",
+        !d.has("Save NPC"),
+        "The World page has no generated NPC before Lookup rolls one",
+    );
+    look_up(d, "Tally");
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    // One label per card. A text run repeats its label's name, so it is not counted.
+    let saves = npc_saves;
+    let rolled = saves(d);
+    d.observe(
+        "iter-14-D-FD5-lookup",
+        rolled.len() == 1
+            && d.visible_text(crate::lookup::BUILT_IN_NAMES)
+            && !d.visible_text("splat:rolls"),
+        "Lookup's generated NPC says Built-in names. and shows no table marker",
+    );
+    d.state("generator-built-in-names-in-lookup", Sizes::All);
+    d.click(crate::lookup::USE_OWN_NAMES);
+    d.settle();
+    d.observe(
+        "iter-14-D-FD5-world",
+        d.current_page() == "World"
+            && !d.has("Close Lookup")
+            && saves(d) == rolled
+            && d.visible_text("<!-- splat:rolls key=npc-name dice=1d6 -->"),
+        "Use your own names opens the same NPC on the World page, with the table marker",
+    );
+    d.state("generator-own-names-on-world", Sizes::Default);
+    // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-14-D-FD5-moved",
+        d.has("Close Lookup") && !d.has(crate::lookup::USE_OWN_NAMES) && saves(d) == rolled,
+        "Lookup no longer holds the NPC that moved to World",
+    );
+    d.click("Close Lookup");
+    d.click("Save NPC");
+    d.settle();
+    let file = root(d).join(format!("NPCs/{}", rolled[0]));
+    d.observe(
+        "iter-14-D-FD5-saved",
+        file.exists() && !d.has("Save NPC"),
+        "Save NPC on the World page writes the NPC that Lookup rolled",
+    );
+
+    // An unsaved NPC on the World page is never replaced by Lookup's. The link opens World,
+    // and Lookup keeps its own NPC.
+    d.click("New ▾");
+    d.click("Generate NPC");
+    let world = saves(d);
+    look_up(d, "Tally");
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    let both = saves(d);
+    let lookup: Vec<String> = both
+        .iter()
+        .filter(|n| !world.contains(n))
+        .cloned()
+        .collect();
+    d.observe(
+        "iter-14-D2-FD5-two",
+        world.len() == 1 && both.len() == 2 && lookup.len() == 1,
+        "World and Lookup each hold a different unsaved NPC",
+    );
+    d.click(crate::lookup::USE_OWN_NAMES);
+    d.settle();
+    d.observe(
+        "iter-14-D2-FD5-kept",
+        d.current_page() == "World" && !d.has("Close Lookup") && saves(d) == world,
+        "Use your own names opens World, which keeps its own unsaved NPC",
+    );
+    let kept_line = |file: &str| {
+        let name = file.strip_suffix(".md").unwrap_or(file);
+        format!("Lookup keeps {name}. Save or discard this NPC to move it here.")
+    };
+    d.observe(
+        "iter-14-D3-FD5-reason",
+        d.visible_text(&kept_line(&lookup[0])),
+        "World's card says why it kept its own NPC, naming Lookup's",
+    );
+    d.state("generator-world-keeps-its-npc", Sizes::All);
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-14-D2-FD5-lookup-kept",
+        d.has("Close Lookup") && d.has(crate::lookup::USE_OWN_NAMES) && saves(d) == both,
+        "Lookup still holds its NPC after the link",
+    );
+    // The line follows Lookup's NPC: a reroll there renames it on World.
+    d.click_below(&format!("Will save NPCs/{}", lookup[0]), "Reroll");
+    d.settle();
+    let rerolled: Vec<String> = saves(d)
+        .into_iter()
+        .filter(|n| !world.contains(n))
+        .collect();
+    d.click("Close Lookup");
+    d.observe(
+        "iter-14-D3-FD5-reason-live",
+        rerolled.len() == 1
+            && rerolled != lookup
+            && d.visible_text(&kept_line(&rerolled[0]))
+            && !d.visible_text(&kept_line(&lookup[0])),
+        "World's line names the NPC Lookup holds now",
+    );
+    let lookup = rerolled;
+    d.click("Save NPC");
+    d.settle();
+    d.click(NAV_LOOKUP);
+    if d.has("Save NPC") {
+        d.click("Save NPC");
+        d.settle();
+    }
+    let written = [&world, &lookup].map(|names| {
+        names
+            .first()
+            .is_some_and(|name| root(d).join(format!("NPCs/{name}")).exists())
+    });
+    d.observe(
+        "iter-14-D2-FD5-both-saved",
+        written == [true, true],
+        "Saving both NPCs writes two files",
     );
 }
 

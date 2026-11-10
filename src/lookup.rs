@@ -1396,6 +1396,8 @@ pub struct Lookup {
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     pub open_world_repair: Option<String>,
+    /// A generated NPC that `Use your own names` hands to the World page.
+    pub open_world_names: Option<GeneratedCard>,
     /// A check of campaign and package files, away from the frame.
     pub files_changed: bool,
     checking: Option<mpsc::Receiver<u64>>,
@@ -1572,6 +1574,18 @@ impl Lookup {
 
     pub fn close(&mut self) {
         self.open = false;
+    }
+
+    /// The name of the NPC this panel rolled and has not saved.
+    pub fn generated_name(&self) -> Option<&str> {
+        self.generated.as_ref().map(|npc| npc.name.as_str())
+    }
+
+    /// Take back a generated NPC that the World page did not take.
+    pub fn keep_generated(&mut self, card: GeneratedCard) {
+        self.generated = Some(card.npc);
+        self.generator_problems = card.problems;
+        self.generator_sources = card.sources;
     }
 
     /// Open one entry from a link somewhere else in the app.
@@ -2098,19 +2112,30 @@ impl Lookup {
             });
             let mut reroll = generate;
             if let Some(npc) = &self.generated {
-                let (saved, again, discard) = generated_card(
+                let choice = generator_card(
                     ui,
                     npc,
                     &self.generator_problems,
                     &self.generator_sources,
                     self.run_open,
+                    NamesHelp::Link,
                 );
-                reroll = again;
-                if saved {
+                reroll = choice.again;
+                if choice.save {
                     made = Some(world::create_generated(&campaign, npc));
                 }
-                if discard {
+                if choice.discard {
                     self.generated = None;
+                    self.create_error = None;
+                }
+                if choice.own_names {
+                    // The NPC moves to the World page, so only one card can save it.
+                    self.open_world_names = self.generated.take().map(|npc| GeneratedCard {
+                        campaign: campaign.id,
+                        npc,
+                        problems: std::mem::take(&mut self.generator_problems),
+                        sources: std::mem::take(&mut self.generator_sources),
+                    });
                     self.create_error = None;
                 }
             }
@@ -2237,7 +2262,45 @@ impl Lookup {
     }
 }
 
-/// What the generator rolled, with its choices. Returns save, reroll and discard.
+/// A generated NPC with the table facts its card shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeneratedCard {
+    /// The campaign whose tables rolled it, and where it will be saved.
+    pub campaign: Uuid,
+    pub npc: crate::npc_generator::Generated,
+    pub problems: Vec<crate::npc_generator::TableProblem>,
+    pub sources: Vec<String>,
+}
+
+/// How a generator card says that it uses the built-in names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NamesHelp {
+    /// The World page, where the DM prepares: the table marker in full.
+    Marker,
+    /// Lookup: short words and a quiet link to the World page's card.
+    Link,
+    /// A session note's card keeps the note's keyboard, so it only says so.
+    Plain,
+}
+
+/// The text a World note needs for the generator to use its own names.
+pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, put \
+     <!-- splat:rolls key=npc-name dice=1d6 --> on the line above a table of names in any note.";
+pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
+pub(crate) const USE_OWN_NAMES: &str = "Use your own names";
+
+/// What the DM chose on a generator card.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CardChoice {
+    pub save: bool,
+    pub again: bool,
+    pub discard: bool,
+    /// Lookup's `Use your own names`: show this NPC on the World page with the full help.
+    pub own_names: bool,
+}
+
+/// What the generator rolled, with its choices. Returns save, reroll and discard. A session
+/// note's card says only that the names are built in.
 pub(crate) fn generated_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,
@@ -2245,6 +2308,20 @@ pub(crate) fn generated_card(
     sources: &[String],
     run_open: bool,
 ) -> (bool, bool, bool) {
+    let choice = generator_card(ui, npc, problems, sources, run_open, NamesHelp::Plain);
+    (choice.save, choice.again, choice.discard)
+}
+
+/// What the generator rolled, with its choices and the names help for this place.
+pub(crate) fn generator_card(
+    ui: &mut egui::Ui,
+    npc: &crate::npc_generator::Generated,
+    problems: &[crate::npc_generator::TableProblem],
+    sources: &[String],
+    run_open: bool,
+    help: NamesHelp,
+) -> CardChoice {
+    let mut choice = CardChoice::default();
     design::group_label(ui, "Generated NPC");
     ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
     for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
@@ -2258,15 +2335,20 @@ pub(crate) fn generated_card(
         );
     }
     if sources.is_empty() && problems.is_empty() {
-        ui.label(
-            Type::Small
-                .rich(
-                    ui,
-                    "Built-in names. To use your own, put <!-- splat:rolls key=npc-name dice=1d6 --> \
-                     on the line above a table of names in any note.",
-                )
-                .color(colors().muted),
-        );
+        match help {
+            NamesHelp::Marker => {
+                ui.label(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted));
+            }
+            NamesHelp::Plain => {
+                ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
+            }
+            NamesHelp::Link => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(Type::Small.rich(ui, BUILT_IN_NAMES).color(colors().muted));
+                    choice.own_names = design::link(ui, USE_OWN_NAMES).clicked();
+                });
+            }
+        }
     }
     for source in sources {
         let (kind, path) = source.split_once(": ").unwrap_or(("npc-name", source));
@@ -2318,9 +2400,8 @@ pub(crate) fn generated_card(
             )
             .color(colors().muted),
     );
-    let (mut saved, mut again, mut discard) = (false, false, false);
     ui.horizontal_wrapped(|ui| {
-        saved = (if run_open {
+        choice.save = (if run_open {
             Action::secondary("Save NPC")
         } else {
             Action::primary("Save NPC")
@@ -2328,22 +2409,73 @@ pub(crate) fn generated_card(
         .density(Density::Read)
         .show(ui)
         .clicked();
-        again = Action::secondary("Reroll")
+        choice.again = Action::secondary("Reroll")
             .icon(icons::DICE)
             .density(Density::Read)
             .show(ui)
             .clicked();
-        discard = Action::quiet("Discard")
+        choice.discard = Action::quiet("Discard")
             .density(Density::Read)
             .show(ui)
             .clicked();
     });
-    (saved, again, discard)
+    choice
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The table marker stays on the World page. Lookup links there, and a session note
+    /// only says so. A campaign table replaces the words in every place.
+    #[test]
+    fn generator_card_names_help_fits_its_place() {
+        use egui_kittest::kittest::Queryable;
+        let npc = crate::npc_generator::Generated {
+            name: "Wren Hallam".into(),
+            attributes: ["A scar".into(), "Calm".into(), "Gold".into()],
+        };
+        let table = vec!["npc-name: Names.md".to_owned()];
+        for (help, sources, marker, short, link) in [
+            (NamesHelp::Marker, vec![], true, false, false),
+            (NamesHelp::Link, vec![], false, true, true),
+            (NamesHelp::Plain, vec![], false, true, false),
+            (NamesHelp::Link, table.clone(), false, false, false),
+        ] {
+            let npc = npc.clone();
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                move |ui, pressed: &mut bool| {
+                    *pressed |= generator_card(ui, &npc, &[], &sources, false, help).own_names;
+                },
+                false,
+            );
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let case = format!("{help:?}");
+            assert!(harness.query_by_label("Save NPC").is_some(), "{case}");
+            assert_eq!(
+                harness.query_by_label(OWN_NAMES_HELP).is_some(),
+                marker,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(BUILT_IN_NAMES).is_some(),
+                short,
+                "{case}"
+            );
+            assert_eq!(
+                harness.query_by_label(USE_OWN_NAMES).is_some(),
+                link,
+                "{case}"
+            );
+            if link {
+                assert!(!*harness.state());
+                harness.get_by_label(USE_OWN_NAMES).click();
+                harness.run_steps(2);
+                assert!(*harness.state(), "{case}: the link reports its press");
+            }
+        }
+    }
 
     #[test]
     fn repaired_note_has_a_distinct_name_link_and_no_false_mention() {

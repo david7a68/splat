@@ -72,6 +72,10 @@ pub struct WorldPage {
     generator_sources: Vec<String>,
     error: Option<String>,
     repaired: Option<Uuid>,
+    /// Lookup's link found this page holding an unsaved NPC, so Lookup kept its own.
+    lookup_kept: bool,
+    /// The NPC Lookup holds now, refreshed by the app each frame while `lookup_kept`.
+    pub lookup_npc: Option<String>,
     view: View,
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
@@ -139,6 +143,40 @@ impl WorldPage {
         self.error = None;
     }
 
+    /// An unsaved generated NPC, which Lookup's link must not replace.
+    pub fn has_generated(&self) -> bool {
+        self.generated.is_some()
+    }
+
+    /// Lookup's link kept Lookup's NPC because this page holds its own.
+    pub fn lookup_kept(&mut self) {
+        self.lookup_kept = true;
+    }
+
+    /// Whether the app should tell this page which NPC Lookup holds.
+    pub fn wants_lookup_npc(&self) -> bool {
+        self.lookup_kept
+    }
+
+    /// The NPC Lookup holds now. When Lookup lets it go, the reason line goes too.
+    pub fn set_lookup_npc(&mut self, name: Option<String>) {
+        self.lookup_kept &= name.is_some();
+        self.lookup_npc = name;
+    }
+
+    /// Lookup's generated NPC, with the full help for using the campaign's own names.
+    pub fn show_generated(&mut self, card: crate::lookup::GeneratedCard) {
+        self.set_campaign(card.campaign);
+        self.view = View::Reader;
+        self.keep_repair();
+        self.new_kind = None;
+        self.error = None;
+        self.lookup_kept = false;
+        self.generated = Some(card.npc);
+        self.generator_problems = card.problems;
+        self.generator_sources = card.sources;
+    }
+
     pub fn open_repair(&mut self, campaign: &Campaign, path: &str) {
         self.set_campaign(campaign.id);
         self.keep_repair();
@@ -165,6 +203,11 @@ impl WorldPage {
         campaign: &Campaign,
     ) {
         self.set_campaign(campaign.id);
+        // Lookup's reason line ends with the NPC it explains.
+        if self.generated.is_none() {
+            self.lookup_kept = false;
+            self.lookup_npc = None;
+        }
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
         });
@@ -554,20 +597,33 @@ impl WorldPage {
             });
         }
         if let Some(npc) = &self.generated {
-            let (saved, again, discard) = crate::lookup::generated_card(
+            if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "Lookup keeps {name}. Save or discard this NPC to move it here."
+                            ),
+                        )
+                        .color(colors().muted),
+                );
+            }
+            let choice = crate::lookup::generator_card(
                 ui,
                 npc,
                 &self.generator_problems,
                 &self.generator_sources,
                 self.run_open,
+                crate::lookup::NamesHelp::Marker,
             );
-            if saved {
+            if choice.save {
                 made = Some(super::create_generated(campaign, npc));
             }
-            if again {
+            if choice.again {
                 self.begin_new("generate", Some(index));
             }
-            if discard {
+            if choice.discard {
                 self.generated = None;
             }
         }

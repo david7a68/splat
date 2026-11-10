@@ -5699,6 +5699,13 @@ pub mod world {
                 && d.has_containing("Want: "),
             "The generator gives a name and three attributes, and writes nothing yet",
         );
+        d.observe(
+            "iter-14-D-FD5",
+            d.visible_text(crate::lookup::BUILT_IN_NAMES)
+                && d.has(crate::lookup::USE_OWN_NAMES)
+                && !d.visible_text("splat:rolls"),
+            "Lookup beside a run says Built-in names. with a link, not the table marker",
+        );
         d.state("world-generated-npc", Sizes::All);
         d.click("Reroll");
         d.click("Save NPC");
