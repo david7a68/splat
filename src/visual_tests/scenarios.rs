@@ -3252,6 +3252,18 @@ pub mod run_folder_defect {
                     })
             },
         );
+        d.observe_both(
+            "iter-3-C-FT10-spacing",
+            "Full save actions stay directly below their state and reason",
+            |d| {
+                d.place_of("Discard")
+                    .zip(d.place_of("Move runs and save"))
+                    .is_some_and(|(discard, save)| {
+                        save.top() >= discard.bottom()
+                            && save.top() - discard.bottom() <= crate::design::L
+                    })
+            },
+        );
         d.state("run-folder-edited", Sizes::All);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.

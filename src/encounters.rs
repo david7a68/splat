@@ -4296,7 +4296,9 @@ impl Encounters {
                 }
                 });
                 let pressed = ui
-                    .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    .allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if run_files > 0 && !run_open {
                             let move_runs = Action::primary("Move runs and save").show(ui).clicked();
                             let leave_runs = Action::quiet("Save without moving").show(ui).clicked();

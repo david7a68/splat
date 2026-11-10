@@ -431,6 +431,7 @@ Name the campaign folder, session folder and link. The session folder has one he
 Folder label; keep its accessible field name. Fields and save actions end at `FORM_WIDTH`. A clean folder form
 shows the check icon and No changes. Locked controls have no clean-state reason. Folder help names its files
 and permits a folder in an Obsidian vault. Disconnected campaign-link help opens Settings from an inline link.
+Its state says Not connected · showing the name saved on this computer.
 
 A session-folder change counts notes, events, templates and recordings left behind. Offer Move files and save
 or Save without moving. Refuse collisions and copy every owned file before changing the manifest. A run-folder
