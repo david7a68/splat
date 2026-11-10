@@ -1,6 +1,7 @@
 //! Desk work in World, including a real disk edit while the app stays open.
 use super::*;
 use crate::design;
+use egui::accesskit::Role;
 use std::fs;
 use uuid::Uuid;
 
@@ -69,7 +70,72 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Overwrite with my draft");
     assert_eq!(fs::read_to_string(&path).unwrap(), outside);
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
+    let combined = "Not saved. Line 3 opens a list with [ that never closes.";
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (one_message, ordered) = d.at_size(size, |d| {
+            let errors: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == Role::Label && node.name.contains("opens a list with [")
+                })
+                .collect();
+            let one_message = !errors.is_empty()
+                && errors.len() == 1
+                && errors
+                    .iter()
+                    .all(|node| node.name == combined && node.in_view())
+                && !d.has("Not saved: fix the problem above, then save.");
+            let state = d
+                .place_of(&format!("{} Unsaved", design::icons::DRAFT))
+                .unwrap();
+            let discard = d.place_of("Discard").unwrap();
+            let reason = d
+                .place_of(crate::encounters::draft_switch_reason())
+                .unwrap();
+            let save = d.place_of("Save repaired note").unwrap();
+            (
+                one_message,
+                state.right() <= discard.left()
+                    && discard.right() <= reason.left()
+                    && reason.right() <= save.left()
+                    && reason.top() < save.bottom()
+                    && reason.bottom() > save.top(),
+            )
+        });
+        d.observe(
+            "iter-5-D-FD9",
+            one_message,
+            format!("One failed-save message at {size:?}"),
+        );
+        d.observe(
+            "iter-5-D-FD2",
+            ordered,
+            format!("State, Discard, reason, then Save at {size:?}"),
+        );
+    }
     d.state("invalid-conflict-draft-kept-for-repair", Sizes::All);
+    d.click("Note text");
+    for size in [SMALL, LARGE, SMALL, DEFAULT] {
+        d.set_base(size);
+        d.observe(
+            "iter-5-D-draft-resize",
+            d.editor_text().as_deref() == Some(unfinished.as_str())
+                && d.focused_name().as_deref() == Some("Note text")
+                && d.visible_passage("My unfinished draft."),
+            format!("The same unsent draft, focus and visible passage survive resize to {size:?}"),
+        );
+    }
+    let stale_before = d.has_containing("Not saved.");
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(outside.as_str()));
+    d.observe(
+        "iter-5-D-FD9-discard",
+        stale_before && !d.has_containing("Not saved."),
+        "Discard drops the old Not saved message with the draft",
+    );
+    d.click("Undo discard of Broken.md");
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     let fixed = format!(
         "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_type: npc\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
@@ -298,6 +364,21 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "New Note accepts an optional World type and offers the file editor",
     );
     d.expect("Nothing written yet.");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let one_link = d.at_size(size, |d| {
+            let links: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
+                .collect();
+            !links.is_empty() && links.len() == 1 && links.iter().all(|node| node.in_view())
+        });
+        d.observe(
+            "iter-5-D-FD12",
+            one_link,
+            format!("An empty World note has one file-edit link at {size:?}"),
+        );
+    }
     d.state("new-faction-note", Sizes::All);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -1514,6 +1595,17 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
     d.wait_for_text("Undo name change");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let icon = d.at_size(size, |d| {
+            d.place_of("Undo name change")
+                .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
+        });
+        d.observe(
+            "iter-5-D-name-undo",
+            icon,
+            format!("Name Undo has the shared icon at {size:?}"),
+        );
+    }
     d.state("renamed-npc-name-updated", Sizes::All);
     look_up(d, "Mara Vell");
     d.expect("Mara Vell");
@@ -1599,6 +1691,17 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Ashen Marches");
     d.expect("Ashen Reaches");
     assert_eq!(d.app_mut().campaigns.modules().len(), 2);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let icon = d.at_size(size, |d| {
+            d.place_of("Undo package registration")
+                .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
+        });
+        d.observe(
+            "iter-5-D-package-undo",
+            icon,
+            format!("Registration Undo has the shared icon at {size:?}"),
+        );
+    }
     d.state("copied-package-registered-alongside-original", Sizes::All);
     go_campaign(d);
     d.expect("Ashen Reaches");
@@ -1635,6 +1738,42 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.app_mut().campaigns.register_module(module).unwrap();
     d.settle();
     d.wait_for_text("Same entry in two files");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let consequences = d.at_size(size, |d| {
+            [
+                (
+                    "ashen-marches-copy",
+                    "Bridge Ambush and Shrine of Cinders keep the files in ashen-marches/.",
+                ),
+                (
+                    "ashen-marches",
+                    "Bridge Ambush and Shrine of Cinders will then use the files in ashen-marches-copy/.",
+                ),
+            ]
+            .iter()
+            .all(|(folder, result)| {
+                let button = d.nodes().into_iter().find(|node| {
+                    node.name.starts_with("Make all ")
+                        && node
+                            .name
+                            .ends_with(&format!("files in {folder}/ separate entries"))
+                });
+                button.is_some_and(|button| {
+                    d.place_of(result).is_some_and(|line| {
+                        d.visible_text(result)
+                            && line.top() >= button.rect.bottom()
+                            && line.top() - button.rect.bottom() <= design::XS + 1.0
+                            && (line.left() - button.rect.left()).abs() < 1.0
+                    })
+                })
+            })
+        });
+        d.observe(
+            "iter-5-D-FD5",
+            consequences,
+            format!("Each batch choice names its encounter and remaining folder at {size:?}"),
+        );
+    }
     d.state("manifest-only-hand-repair-keeps-both-files", Sizes::All);
     search_library(d, "Cinder Wolf");
     d.click_containing("· ashen-marches/");

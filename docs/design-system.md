@@ -370,8 +370,9 @@ duplicate notes and offers file-specific identity repair with Undo.
 Library, World and Encounters say “These two files claim to be the same entry,” with the file names.
 Sessions use “session” for their repair and Undo actions. Rows say `Same entry in two files`. Each bordered secondary repair says `Make <file> a separate entry`. Its result
 names the file and keeps `Undo separate entry` on the message line. Folder repairs use `separate
-entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each choice
-states which file an encounter will keep or use, in `Small` muted text an `XS` gap below its own action.
+entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
+or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
+`XS` gap below its own action.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -474,7 +475,7 @@ the path on this file line only; search results keep paths to distinguish names.
 one-line rows. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
-readable body says `Nothing written yet.` with `Edit in Obsidian`.
+readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
 
 NPCs show labelled Stat block, In and Status rows; locations show In. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -634,7 +635,7 @@ Setup has a `Label` column heading INITIATIVE above empty, labelled number field
 
 An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
 have initiative, a muted ordinal follows each field, updates with totals or tie rulings, and the ready line
-names who goes first. Setup names its Undo action. Begin combat's blocked reason sits below the button; the
+names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
 row menu opens Correct. Overflow uses the live list's band and counts hidden missing initiatives and ties.
 
 A made-up creature shows current and maximum HP and typed initiative as a total, without printed values. A
@@ -712,7 +713,7 @@ Only zero valid members blocks Initiative and Add. Invalid Initiative retains te
 the field to roll.`, and blocks Add and drop. Campaign → Packages opens repair.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. Never end a line with a separator; keep separators with their preceding word and `at` with
-its total in arrival messages. Live initiative notices name who joins and the total. Before the current turn,
+its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 
@@ -726,7 +727,7 @@ words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused
 with other unfinished copies names its copy beside Saved and in rail hover.
 
 A disconnected run has Connect to sync on its header only; blocked footer Sync party uses that cause on hover.
-End encounter… shortens to End…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
+End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
 between character sync blocks. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
@@ -879,7 +880,7 @@ Overview uses one group-heading style, with `L` above sheet groups. Saving throw
 edges, in two or three columns; skills sort A to Z and fill columns top to bottom. Skills use muted Small words `Proficient`, `Expertise` and `Half` after the skill name. Paired cells share the
 taller height. Use a true minus for negative modifiers. Rows without detail use one Read row. At eight entries
 or fewer, omit filters and separate count lines; count in the group heading. Death-save counts use words.
-Compact rows omit a missing spell save DC; wide tables keep the empty cell.
+Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spell help says: “Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.”
 
 Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect

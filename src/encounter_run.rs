@@ -3125,8 +3125,7 @@ impl Run {
         }
     }
     fn roster_blocked(&self) -> Option<&'static str> {
-        (!self.roster_faults.is_empty())
-            .then_some("Fix the unread roster rows or remove them in Obsidian first.")
+        (!self.roster_faults.is_empty()).then_some("Fix the unread row first.")
     }
     pub fn save(&mut self) -> Result<(), String> {
         let stopped_players = self.stopped_players();
@@ -4149,6 +4148,29 @@ mod tests {
             fs::read_to_string(dir.path().join("Ambush.md")).unwrap(),
             text
         );
+        // A moved or deleted source must not leave a stale fault on complete run snapshots.
+        let source = dir.path().join("Ambush.md");
+        let moved = dir.path().join("Moved.md");
+        fs::rename(&source, &moved).unwrap();
+        restored.refresh_roster_faults();
+        assert!(
+            restored.roster_faults.is_empty(),
+            "a moved source clears stale faults"
+        );
+        assert_eq!(serde_json::to_value(&restored.state).unwrap(), state);
+        fs::rename(&moved, &source).unwrap();
+        restored.refresh_roster_faults();
+        assert_eq!(restored.roster_faults.len(), 2);
+        fs::remove_file(&source).unwrap();
+        restored.refresh_roster_faults();
+        assert!(
+            restored.roster_faults.is_empty(),
+            "a deleted source clears stale faults"
+        );
+        assert_eq!(serde_json::to_value(&restored.state).unwrap(), state);
+        fs::write(&source, &text).unwrap();
+        restored.refresh_roster_faults();
+        assert_eq!(restored.roster_faults.len(), 2);
         // Repair one fault: the other still blocks. No state or outside prose is overwritten.
         let partial = text.replace("HP lots", "HP +5");
         fs::write(dir.path().join("Ambush.md"), &partial).unwrap();

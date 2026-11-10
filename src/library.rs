@@ -144,7 +144,11 @@ pub(crate) fn duplicate_repair_consequence(
     keeps: bool,
 ) {
     if !users.is_empty() {
-        let verb = if keeps { "keeps" } else { "will then use" };
+        let verb = match (keeps, users.len()) {
+            (true, 1) => "keeps",
+            (true, _) => "keep",
+            (false, _) => "will then use",
+        };
         ui.label(
             Type::Small
                 .rich(ui, format!("{} {verb} {remaining}.", name_list(users)))
@@ -2330,7 +2334,7 @@ impl Library {
             }
         }
         if self.package_copy.is_some()
-            && design::message_with_action(
+            && design::undo_message(
                 ui,
                 Tone::Success,
                 &format!(
@@ -4506,20 +4510,83 @@ impl Library {
                 });
             }
             let mut shown = std::collections::HashSet::new();
-            for &at in &duplicate_indices {
+            for (position, &at) in duplicate_indices.iter().enumerate() {
                 let owner = &loaded.notes[at].owner;
                 if shown.insert(owner.id())
                     && let Some(paths) = loaded.duplicate_folder_paths(owner)
-                    && Action::secondary(&format!(
-                        "Make all {} files in {}/ separate entries",
-                        paths.len(),
-                        owner.folder()
-                    ))
-                    .blocked(draft_reason)
-                    .show(ui)
-                    .clicked()
                 {
-                    new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                    ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
+                    // Encounters outside the batch whose source changes; worked out once per load.
+                    let slot = egui::Id::new((
+                        "duplicate_folder_users",
+                        owner.id(),
+                        std::ptr::from_ref(loaded) as usize,
+                        loaded.notes.len(),
+                        // A reload in place changes some text; this cheap sum notices it.
+                        loaded
+                            .notes
+                            .iter()
+                            .map(|note| note.text.len())
+                            .sum::<usize>(),
+                    ));
+                    let users = ui
+                        .data(|data| data.get_temp::<Vec<String>>(slot))
+                        .unwrap_or_else(|| {
+                            let batch: std::collections::HashSet<&String> = paths.iter().collect();
+                            let targets: Vec<&Entry> = loaded
+                                .notes
+                                .iter()
+                                .filter(|target| {
+                                    target.owner.id() == owner.id() && batch.contains(&target.path)
+                                })
+                                .filter_map(|target| target.entry.as_ref())
+                                .collect();
+                            let mut users: Vec<String> = Vec::new();
+                            for other in &loaded.notes {
+                                // An encounter inside the batch gets the new identities with it.
+                                if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                                    continue;
+                                }
+                                let Some(encounter) = other.entry.as_ref() else {
+                                    continue;
+                                };
+                                if encounter.kind == "encounter"
+                                    && !users.contains(&encounter.name)
+                                    && targets
+                                        .iter()
+                                        .any(|entry| encounter_uses_entry(encounter, entry))
+                                {
+                                    users.push(encounter.name.clone());
+                                }
+                            }
+                            ui.data_mut(|data| data.insert_temp(slot, users.clone()));
+                            users
+                        });
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = design::XS;
+                        if Action::secondary(&format!(
+                            "Make all {} files in {}/ separate entries",
+                            paths.len(),
+                            owner.folder()
+                        ))
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked()
+                        {
+                            new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                        }
+                        let remaining = duplicate_indices
+                            .iter()
+                            .map(|&other| &loaded.notes[other].owner)
+                            .find(|other| other.id() != owner.id())
+                            .expect("a folder repair has another owner");
+                        duplicate_repair_consequence(
+                            ui,
+                            &users,
+                            &format!("the files in {}/", remaining.folder()),
+                            position == 0,
+                        );
+                    });
                 }
             }
         }
