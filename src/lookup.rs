@@ -2163,12 +2163,9 @@ mod tests {
                 .count(),
             2
         );
-        assert!(
-            index
-                .errors
-                .iter()
-                .any(|error| error.contains("Choose one in World"))
-        );
+        assert!(index.errors.iter().any(|error| {
+            error.contains("These two files claim to be the same entry: Rook copy.md and Rook.md.")
+        }));
         assert!(index.position(id).is_none());
         assert!(
             matches!(index.follow("Rook", &index.items[index.world[0]]), Go::Many(positions) if positions.len() == 2)

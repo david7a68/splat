@@ -665,6 +665,18 @@ impl CampaignContent {
     }
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.repair_section_content(ui, campaigns, active);
+        });
+    }
+
+    fn repair_section_content(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+    ) {
         let mut repaired = false;
         let old: Vec<_> = self
             .repairs
@@ -830,6 +842,18 @@ impl CampaignContent {
     }
 
     fn selection_bar(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.selection_bar_content(ui, campaigns, active);
+        });
+    }
+
+    fn selection_bar_content(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        active: &Campaign,
+    ) {
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
@@ -1005,6 +1029,13 @@ impl CampaignContent {
     }
 
     fn packages(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.packages_content(ui, campaigns, active);
+        });
+    }
+
+    fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let manifest_locked = self
             .dirty()
             .then_some("Save or discard campaign changes first.");
@@ -1016,8 +1047,15 @@ impl CampaignContent {
 
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
-                ui.horizontal_wrapped(|ui| {
-                    design::message(
+                let path = &catalogue.entries[&module.id].entry.path;
+                let exists = module.path.join(path).exists();
+                let label = if exists {
+                    format!("Replace with a basic {path}")
+                } else {
+                    format!("Write {path} again")
+                };
+                let pressed = design::locked(ui, manifest_locked, |ui| {
+                    design::message_with_action(
                         ui,
                         Tone::Warning,
                         &format!(
@@ -1029,45 +1067,33 @@ impl CampaignContent {
                                 " Entries are still available."
                             }
                         ),
-                    );
-                    let path = &catalogue.entries[&module.id].entry.path;
-                    let exists = module.path.join(path).exists();
-                    let label = if exists {
-                        format!("Replace with a basic {path}")
-                    } else {
-                        format!("Write {path} again")
-                    };
-                    if exists {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
-                                .color(colors().muted),
-                        );
-                    }
-                    if Action::quiet(&label)
-                        .blocked(manifest_locked)
-                        .show(ui)
-                        .clicked()
-                    {
-                        match crate::content_workspace::ManifestWrite::write(module) {
-                            Ok(write) => {
-                                self.manifest_write = Some(write);
-                                self.refresh_pending = true;
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                    if module.path.join(path).exists()
-                        && Action::quiet("Open in Library").show(ui).clicked()
-                    {
-                        ui.ctx().data_mut(|data| {
-                            data.insert_temp(
-                                egui::Id::new("open_library_repair"),
-                                module.path.join(path),
-                            )
-                        });
-                    }
+                        &label,
+                    )
                 });
+                if exists {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                            .color(colors().muted),
+                    );
+                }
+                if pressed {
+                    match crate::content_workspace::ManifestWrite::write(module) {
+                        Ok(write) => {
+                            self.manifest_write = Some(write);
+                            self.refresh_pending = true;
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+                if exists && Action::quiet("Open in Library").show(ui).clicked() {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("open_library_repair"),
+                            module.path.join(path),
+                        )
+                    });
+                }
             }
         }
         if let Some(write) = &self.manifest_write
