@@ -486,7 +486,8 @@ impl Reader {
         let mut cancel = false;
         ui.add_space(design::S);
         ui.horizontal_wrapped(|ui| {
-            save |= (if self.sides.is_some() {
+            // Save is primary unless a run in live play owns Next turn on this screen.
+            save |= (if self.live {
                 Action::secondary("Save changes")
             } else {
                 Action::primary("Save changes")

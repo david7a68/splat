@@ -993,6 +993,8 @@ pub struct Reader {
     pub join: Option<Join>,
     pub open_timeline: Option<String>,
     pub sides: RunSides,
+    /// A run is in live play and owns `Next turn`, the screen's primary action.
+    pub live: bool,
     pub in_run: std::collections::BTreeMap<Uuid, (usize, Option<i64>)>,
     pub select_run: Option<usize>,
 }

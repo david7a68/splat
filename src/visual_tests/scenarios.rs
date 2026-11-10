@@ -5144,6 +5144,13 @@ pub mod world {
         }
         d.state("npc-add-to-run-form", Sizes::All);
         d.expect("Add to fight");
+        let add_buttons = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|n| n.name == "Add to fight" && n.role == Role::Button)
+                .count()
+        };
+        let before_join = add_buttons(d);
         d.click("Add to fight");
         d.settle();
         d.observe(
@@ -5156,12 +5163,10 @@ pub mod world {
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
+            // The NPC's own Add to fight goes; any other (the run header's) stays.
             d.has_containing("In the run · initiative 11")
-                && d.nodes()
-                    .into_iter()
-                    .filter(|n| n.name == "Add to fight" && n.role == Role::Button)
-                    .count()
-                    == 1,
+                && before_join >= 1
+                && add_buttons(d) == before_join - 1,
             "The NPC's panel links to their row after they join",
         );
         d.click("In the run · initiative 11");
