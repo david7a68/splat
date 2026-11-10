@@ -4730,6 +4730,7 @@ impl Library {
             }
         }
         let mut open_link = None;
+        let mut pressed_link = None;
         let mut copy_dependency = None;
         let mut undo_dependency = false;
         if self.source && self.disk_change.is_none() {
@@ -4749,16 +4750,21 @@ impl Library {
                         .max_height(visible_height)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let response = ui.add(
-                                egui::TextEdit::multiline(&mut self.draft)
-                                    .id_salt(("library_markdown", note.owner.id(), &note.path))
-                                    .font(egui::TextStyle::Monospace)
-                                    .frame(false)
-                                    .margin(egui::Vec2::ZERO)
-                                    .desired_width(ui.available_width())
-                                    .min_size(egui::vec2(0.0, visible_height))
-                                    .interactive(editable),
+                            let output = egui::TextEdit::multiline(&mut self.draft)
+                                .id_salt(("library_markdown", note.owner.id(), &note.path))
+                                .font(egui::TextStyle::Monospace)
+                                .frame(false)
+                                .margin(egui::Vec2::ZERO)
+                                .desired_width(ui.available_width())
+                                .min_size(egui::vec2(0.0, visible_height))
+                                .interactive(editable)
+                                .show(ui);
+                            pressed_link = crate::markdown_source::pressed_note_link(
+                                ui,
+                                &output,
+                                note.entry.as_ref().map(|entry| entry.id),
                             );
+                            let response = output.response;
                             design::named(ui, &response, "Markdown editor");
                             if std::mem::take(&mut self.focus_markdown) {
                                 response.request_focus();
@@ -4949,7 +4955,8 @@ impl Library {
             self.reload_note_from_disk(i);
             return;
         }
-        if let Some(target) = crate::markdown_view::take_note_link(ui.ctx())
+        if let Some(target) =
+            pressed_link.or_else(|| crate::markdown_view::take_note_link(ui.ctx()))
             && let Some(index) = ui.ctx().data(|data| {
                 data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
                     "reader_link_index",

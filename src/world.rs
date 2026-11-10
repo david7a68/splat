@@ -87,7 +87,11 @@ fn walk(current: &Path, files: &mut Vec<PathBuf>) {
 /// the campaign root, and a DM can keep world notes beside sessions.
 fn role_of(front: Option<&str>, inside_sessions: Option<&Path>) -> Option<Role> {
     let has = |name: &str| front.is_some_and(|front| front.lines().any(|l| l.starts_with(name)));
-    if has("splat_") || has("timeline_version:") || has("trackers_version:") {
+    if has("splat_")
+        || has("timeline_version:")
+        || has("trackers_version:")
+        || has(crate::sheet_writer::KEY)
+    {
         return None;
     }
     if has("session_id:") {
@@ -253,7 +257,7 @@ fn outside_code(body: &str, mut plain: impl FnMut(&str, &mut String)) -> String 
 }
 
 /// Every `[[link]]` in a text, as (is an embed, target, words).
-fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
+pub(crate) fn each_link(text: &str) -> Vec<(std::ops::Range<usize>, bool, String, Option<String>)> {
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(start) = text[from..].find("[[").map(|at| at + from) {

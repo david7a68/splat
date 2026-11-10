@@ -1006,7 +1006,11 @@ pub mod party {
         let note = std::fs::read_dir(&copies)
             .expect("list character copies")
             .map(|file| file.expect("read character copy").path())
-            .find(|path| path.is_file() && path.extension().is_some_and(|x| x == "md"))
+            .find(|path| {
+                path.is_file()
+                    && path.extension().is_some_and(|x| x == "md")
+                    && !path.ends_with(crate::sheet_writer::FILE)
+            })
             .expect("a character copy");
         std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
         switch_campaign(d, CAMPAIGN);
@@ -1731,6 +1735,20 @@ pub mod settings {
         );
         d.expect("Party");
         d.state("sync-stopped-recovery", Sizes::Default);
+
+        go_settings(d);
+        d.click("Touchpad");
+        d.expect("Scrolling speed");
+        d.expect("Mouse wheels keep their speed.");
+        d.state("touchpad-settings", Sizes::Default);
+        d.click("8×");
+        let chosen = d.app_mut().touchpad_speed == crate::touchpad::TouchpadSpeed::Eight;
+        d.observe(
+            "touchpad-speed",
+            chosen,
+            "Choosing a touchpad speed changes how far a touchpad scroll moves",
+        );
+        d.click("Account and campaigns");
     }
 }
 

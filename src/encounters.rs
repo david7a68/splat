@@ -2365,13 +2365,16 @@ impl Encounters {
                 .max_height(room)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    let response = ui.add(
-                        egui::TextEdit::multiline(&mut editor.fields.body)
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                            .margin(egui::vec2(design::S, design::S)),
-                    );
-                    design::named(ui, &response, "Creature text");
+                    let output = egui::TextEdit::multiline(&mut editor.fields.body)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                        .margin(egui::vec2(design::S, design::S))
+                        .show(ui);
+                    if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None)
+                    {
+                        crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                    }
+                    design::named(ui, &output.response, "Creature text");
                 });
         });
         if save {
@@ -3758,14 +3761,16 @@ impl Encounters {
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 ui.add_space(design::M);
                 design::group_heading(ui, "Read-aloud and notes", 0);
-                let response = ui.add(
-                    egui::TextEdit::multiline(&mut draft.body)
-                        .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
-                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                        .desired_rows(5)
-                        .margin(egui::vec2(design::S, design::S)),
-                );
-                design::named(ui, &response, "Read-aloud and notes");
+                let output = egui::TextEdit::multiline(&mut draft.body)
+                    .hint_text("What you read to the table, then your tactics. The run shows this before the first turn.")
+                    .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                    .desired_rows(5)
+                    .margin(egui::vec2(design::S, design::S))
+                    .show(ui);
+                if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
+                    crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                }
+                design::named(ui, &output.response, "Read-aloud and notes");
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
             .inner
