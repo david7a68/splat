@@ -1056,7 +1056,8 @@ impl CampaignContent {
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 let path = &catalogue.entries[&module.id].entry.path;
-                let exists = module.path.join(path).exists();
+                let exists = problem != crate::content_workspace::DELETED_MANIFEST
+                    && module.path.join(path).exists();
                 let label = if exists {
                     format!("Replace with a basic {path}")
                 } else {
@@ -1094,7 +1095,7 @@ impl CampaignContent {
                     })
                 };
                 if pressed {
-                    match crate::content_workspace::ManifestWrite::write(module) {
+                    match crate::content_workspace::ManifestWrite::write_as(module, path, exists) {
                         Ok(write) => {
                             self.manifest_write = Some(write);
                             self.refresh_pending = true;
