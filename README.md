@@ -1105,6 +1105,7 @@ outside tags and prose.
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.
 
-Skipped conversions offer **Convert files…** beside the skipped file. Reopening the preview
+Skipped conversions offer **Convert files…** beside the skipped file. The open file's reader
+then keeps its old-layout sentence without a second button. Reopening the preview
 keeps **Undo convert** until you apply the next conversion. Duplicate-file repair names
 the file that becomes a separate entry and offers **Undo separate entry** beside its result.
