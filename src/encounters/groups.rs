@@ -299,7 +299,7 @@ impl GroupDraft {
         list_formats::resolve(&mut entry, &entries, &source);
         if changes.is_some() {
             if let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) {
-                return Err(flag.message.clone());
+                return Err(flag.words());
             }
             let setup: GroupSetup =
                 serde_yaml_ng::from_value(entry.fields["splat_encounter_group"].clone())
@@ -717,11 +717,12 @@ fn resolve_group(
         };
         warnings.push(MemberFault::new(
             FaultKind::CannotJoin,
-            // The row, its line and the cause, as a roster row says them. `line 15` wraps whole.
+            // The row, its line and the cause, as a roster row says them; the help stays in the
+            // editor. `line 15` wraps whole.
             format!(
                 "{fault_name} · line\u{a0}{}: {}.",
                 member.flag.line,
-                member.flag.message.trim_end_matches('.')
+                member.flag.cause().trim_end_matches('.')
             ),
         ));
         let count = member.count.unwrap_or(1);
@@ -2014,11 +2015,7 @@ impl Encounters {
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
         for flag in &draft.flags {
             if !unread.iter().any(|member| member.flag.line == flag.line) {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("Line {}: {}", flag.line, flag.message),
-                );
+                design::message(ui, Tone::Warning, &flag.message);
             }
         }
 
@@ -2643,11 +2640,7 @@ fn unread_member(
     design::message_with_actions(
         ui,
         Tone::Warning,
-        &format!(
-            "Line {}: {}",
-            member.flag.line,
-            member.flag.message.trim_end_matches('.').to_owned() + "."
-        ),
+        &(member.flag.message.trim_end_matches('.').to_owned() + "."),
         |ui| {
             ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
             super::file_line(ui, &snapshot.campaign_root, &draft.path);
@@ -3272,18 +3265,31 @@ mod tests {
             "all named members remain visible"
         );
         assert!(group.summary().contains("2 of 9 can join"));
+        // FB2: the summary names the row, its line and the cause; the example is the editor's.
+        assert!(group.warnings.iter().any(|warning| warning.text
+            == "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read."));
         assert!(
             group
                 .warnings
                 .iter()
-                .any(|warning| warning.text
-                    == "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read. Use a number, such as HP +5.")
+                .all(|warning| !warning.text.contains("Use a number")),
+            "{:?}",
+            group
+                .warnings
+                .iter()
+                .map(|warning| &warning.text)
+                .collect::<Vec<_>>()
         );
         assert_eq!(group.xp_label(), "XP 100");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
         assert_eq!(unread.len(), 1);
+        assert_eq!(
+            unread[0].flag.message,
+            "Line 13: the change “HP lots” was not read. Use a number, such as HP +5.",
+            "the editor's words keep the example"
+        );
         assert_eq!(
             unread[0].before, 0,
             "the rejected row precedes the valid member"

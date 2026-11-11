@@ -9,15 +9,74 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use std::ops::Range;
 
-/// One fault in a note, at its source line. A screen shows it as `Line <line>: <message>`, so
-/// the message never names its line.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// One fault in a note, at its source line.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Flag {
     pub line: usize,
+    /// The whole sentence a reader shows, line first: `Line 19: Hit Points “about twenty” was not
+    /// read. Start with a number, such as 22 (4d8 + 4).` It is made with the flag; no screen adds
+    /// the line, so a run saved with older words shows them as they were saved.
     pub message: String,
     /// What the flag is about, so a screen can find or repair it without reading the words.
     #[serde(default, skip_serializing_if = "FlagKind::is_unsaved")]
     pub kind: FlagKind,
+    /// What is wrong, without the line or the help, for a summary that names the line its own
+    /// way. Not saved: empty in a flag read back from a saved run.
+    #[serde(skip)]
+    cause: String,
+    /// How to write the value, for the editor. Not saved.
+    #[serde(skip)]
+    help: String,
+}
+
+/// Two flags are the same fault when they say the same words about the same line. The cause and
+/// the help are parts of those words.
+impl PartialEq for Flag {
+    fn eq(&self, other: &Self) -> bool {
+        self.line == other.line && self.message == other.message && self.kind == other.kind
+    }
+}
+
+impl Eq for Flag {}
+
+/// A fault found before it has a line: what is wrong, and how to write it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fault {
+    pub cause: String,
+    pub help: String,
+}
+
+impl Fault {
+    pub fn new(cause: String, help: String) -> Self {
+        Self { cause, help }
+    }
+}
+
+impl From<String> for Fault {
+    fn from(cause: String) -> Self {
+        Self::new(cause, String::new())
+    }
+}
+
+impl From<&str> for Fault {
+    fn from(cause: &str) -> Self {
+        cause.to_owned().into()
+    }
+}
+
+/// The cause and the help in one string, for a caller that shows the fault as it is.
+impl From<Fault> for String {
+    fn from(fault: Fault) -> Self {
+        words(&fault.cause, &fault.help)
+    }
+}
+
+fn words(cause: &str, help: &str) -> String {
+    if help.is_empty() {
+        cause.to_owned()
+    } else {
+        format!("{cause} {help}")
+    }
 }
 
 /// What a flag is about. Code that looks for a flag matches its kind, never its words.
@@ -59,28 +118,55 @@ impl FlagKind {
 }
 
 impl Flag {
-    pub fn new(line: usize, message: String) -> Self {
-        Self::of(FlagKind::Plain, line, message)
+    pub fn new(line: usize, cause: String) -> Self {
+        Self::of(FlagKind::Plain, line, cause)
     }
 
-    pub fn of(kind: FlagKind, line: usize, message: String) -> Self {
+    pub fn of(kind: FlagKind, line: usize, cause: String) -> Self {
+        Self::fault(kind, line, cause.into())
+    }
+
+    /// The one place that writes a flag's sentence: `Line <line>: <cause> <help>`.
+    pub fn fault(kind: FlagKind, line: usize, fault: Fault) -> Self {
         Self {
             line,
-            message,
+            message: format!("Line {line}: {}", words(&fault.cause, &fault.help)),
             kind,
+            cause: fault.cause,
+            help: fault.help,
         }
     }
 
-    /// `<value> “<text>” was not read. <help>`, the one form for a value the note cannot use.
+    /// `<value> “<text>” was not read.` with its help, the one form for a value the note cannot
+    /// use.
     pub fn unread(field: Field, line: usize, label: &str, text: &str, help: &str) -> Self {
-        Self::of(
+        Self::fault(
             FlagKind::Unread(field),
             line,
-            format!(
-                "{label} {} was not read. {help}",
-                super::formats::quoted(text)
+            Fault::new(
+                format!("{label} {} was not read.", super::formats::quoted(text)),
+                help.to_owned(),
             ),
         )
+    }
+
+    /// What is wrong, without the line or the help. A flag read back from a saved run has only
+    /// its sentence.
+    pub fn cause(&self) -> &str {
+        if self.cause.is_empty() {
+            &self.message
+        } else {
+            &self.cause
+        }
+    }
+
+    /// The cause and the help without the line, for a screen that names the line its own way.
+    pub fn words(&self) -> String {
+        if self.cause.is_empty() {
+            self.message.clone()
+        } else {
+            words(&self.cause, &self.help)
+        }
     }
 }
 

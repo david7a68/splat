@@ -1,7 +1,7 @@
 //! Schema 2 campaign lists and encounter tables. Unknown text stays in the source.
 use super::{
     Entry, Mapping, Value, formats,
-    layout::{Document, Flag, FlagKind},
+    layout::{Document, Fault, Flag, FlagKind},
     patch_fields,
 };
 use uuid::Uuid;
@@ -63,7 +63,7 @@ fn words<'a>(value: &'a Value, key: &str) -> &'a str {
     value.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
-fn unread_change(term: &str) -> String {
+fn unread_change(term: &str) -> Fault {
     let example = term.split_whitespace().next().and_then(|stat| {
         STATS
             .iter()
@@ -73,13 +73,18 @@ fn unread_change(term: &str) -> String {
         || "Write a change such as HP +5.".to_owned(),
         |(stat, _)| format!("Use a number, such as {stat} +5."),
     );
-    format!(
-        "the change {} was not read. {repair}",
-        super::formats::quoted(term)
+    Fault::new(
+        format!("the change {} was not read.", super::formats::quoted(term)),
+        repair,
     )
 }
 
 pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
+    read_changes(text, name, note).map_err(String::from)
+}
+
+/// `changes`, with the cause of a refusal apart from its help, for a row's flag.
+fn read_changes(text: &str, name: &str, note: &str) -> Result<Mapping, Fault> {
     let mut out = Mapping::new();
     if !name.is_empty() {
         out.insert("name".into(), name.into());
@@ -124,7 +129,7 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
             };
             let number: i64 = amount.parse().map_err(|_| unread_change(term))?;
             if out.contains_key(*key) {
-                return Err(format!("Changes: duplicate {stat}"));
+                return Err(format!("Changes: duplicate {stat}").into());
             }
             out.insert(
                 (*key).into(),
@@ -479,10 +484,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                     let Some(id) =
                         machine(&row[1].value, "id").filter(|id| Uuid::parse_str(id).is_ok())
                     else {
-                        return Err(Flag {
-                            kind: FlagKind::RuleChoiceId,
-                            ..Flag::new(line, "Rule choice id not found".into())
-                        });
+                        return Err(Flag::of(
+                            FlagKind::RuleChoiceId,
+                            line,
+                            "Rule choice id not found".into(),
+                        ));
                     };
                     if choices.contains_key(slot.as_str()) {
                         return Err(Flag::new(line, "Duplicate rule choice".into()));
@@ -620,7 +626,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 if let Some(loot) = loot {
                     text.push_str(&format!(", Loot {loot}"));
                 }
-                let mut overrides = changes(&text, &row[2].value, &visible(&row[4].value))?;
+                let mut overrides = read_changes(&text, &row[2].value, &visible(&row[4].value))?;
                 if group {
                     let creature = reference(&row[1].value)?;
                     if let Some(extra) = model
@@ -731,7 +737,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             })();
             match parsed {
                 Ok(value) => rows.push(value),
-                Err(message) => flags.push(Flag::new(row.first().map_or(1, |c| c.line), message)),
+                Err(fault) => flags.push(Flag::fault(
+                    FlagKind::Plain,
+                    row.first().map_or(1, |c| c.line),
+                    fault,
+                )),
             }
         }
     } else {
@@ -1871,10 +1881,9 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                                     }
                                 )
                             };
-                            entry.flags.push(Flag {
-                                kind: FlagKind::RuleChoice,
-                                ..Flag::new(line, message)
-                            });
+                            entry
+                                .flags
+                                .push(Flag::of(FlagKind::RuleChoice, line, message));
                         }
                     }
                 }

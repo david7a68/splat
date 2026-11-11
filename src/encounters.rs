@@ -222,7 +222,7 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
             Some(RosterFault {
                 name,
                 line,
-                problem: flag.message.clone(),
+                problem: flag.words(),
             })
         })
         .collect()
@@ -251,10 +251,10 @@ fn unread_notes(
             let row = faults.iter().find(|fault| fault.line == flag.line);
             match row {
                 _ if faults.is_empty() => {
-                    format!("{path}, line {}: {}", flag.line, flag.message)
+                    format!("{path}, line {}: {}", flag.line, flag.words())
                 }
-                Some(fault) => row_fault_words(&fault.name, flag.line, &flag.message),
-                None => format!("Line {}: {}", flag.line, flag.message),
+                Some(fault) => row_fault_words(&fault.name, flag.line, &flag.words()),
+                None => flag.message.clone(),
             }
         })
         .collect()
@@ -4854,7 +4854,7 @@ impl Encounters {
             // The warning names the line; the file's path and links start at the last
             // warning's words.
             for (at, flag) in rule_flags.iter().enumerate() {
-                let text = format!("Line {}: {}", flag.line, flag.message);
+                let text = flag.message.clone();
                 if at + 1 == rule_flags.len() {
                     design::message_with_actions(ui, Tone::Warning, &text, |ui| {
                         file_line(ui, &active.path, "Campaign.md");
@@ -5226,7 +5226,7 @@ mod tests {
             for row in &rows {
                 let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
                 let fault = RosterFault {
-                    problem: flag.message.clone(),
+                    problem: flag.words(),
                     ..row.clone()
                 };
                 assert!(notes.contains(&fault.words()), "{}", fault.words());

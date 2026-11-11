@@ -6333,14 +6333,17 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (inside, detail) = d.at_size(size, |d| {
             d.expect(reason);
-            // The painted words, not the label's rect: a wrapped row's rect also holds the
-            // space after its last word.
-            let warning = d.painted_right(reason).unwrap();
+            let warning = d.place_of(reason).unwrap();
+            // The painted words too: the label's rect and its words both end at the measure.
+            let words = d.painted_right(reason).unwrap();
             let pane = d.place_of("Resize World notes column").unwrap().right();
             let measure = pane + design::S + design::READER_MEASURE;
             (
-                warning <= measure + 1.0,
-                format!("warning words end at {warning}, measure at {measure}"),
+                warning.right() <= measure + 1.0 && words <= measure + 1.0,
+                format!(
+                    "warning ends at {}, its words at {words}, measure at {measure}",
+                    warning.right()
+                ),
             )
         });
         d.observe(

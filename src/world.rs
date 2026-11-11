@@ -1473,7 +1473,7 @@ fn status_unread(entry: &Entry) -> bool {
 
 /// A value the reader could not read, as the shared reader says it (`src/library/view.rs`).
 fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    format!("Line {}: {}", flag.line, flag.message)
+    flag.message.clone()
 }
 
 impl GroupFault {

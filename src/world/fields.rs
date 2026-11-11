@@ -69,7 +69,7 @@ pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option
             })
             .map(|_| Unread {
                 line: flag.line,
-                reason: format!("Line {}: {}", flag.line, flag.message),
+                reason: flag.message.clone(),
             })
     })
 }

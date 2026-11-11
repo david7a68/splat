@@ -6,6 +6,26 @@ use std::fs;
 const SCOUT_FAULT: &str =
     "Scout (as Goblin Warrior) · line\u{a0}15: the change “HP lots” was not read.";
 
+/// FB2: each summary of the flagged member is the cause alone; the example `Use a number, such
+/// as HP +5.` belongs to the editor. The found texts also hold each painted row of a wrapped
+/// summary, so a row must be the start of the cause.
+fn scout_fault_alone(d: &mut Driver<'_>, id: &str, place: &str) {
+    let names: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name.starts_with("Scout (as Goblin Warrior) · line"))
+        .map(|node| node.name)
+        .collect();
+    d.observe(
+        id,
+        names.iter().any(|name| name == SCOUT_FAULT)
+            && names
+                .iter()
+                .all(|name| SCOUT_FAULT.starts_with(name.as_str())),
+        format!("{place} names Scout's cause without the example: {names:?}"),
+    );
+}
+
 pub fn run(d: &mut Driver<'_>) {
     let campaign = d.app_mut().campaigns.active_campaign().unwrap();
     let folder = crate::sessions::folder(&campaign).unwrap();
@@ -301,6 +321,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("2 of 3 can join");
     // FB2: every member fault says its cause, as a roster row does.
     d.expect(SCOUT_FAULT);
+    scout_fault_alone(d, "iter-24-F-FB2-list", "The groups list");
     d.state("flagged-group-in-groups-list", Sizes::All);
     d.click(NAV_SESSIONS);
     new_session(d, "Bridge watch");
@@ -309,6 +330,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Plan Bridge guards");
     d.expect("2 of 3 can join");
     d.state_prepared("flagged-group-in-the-plan", Sizes::All, |d| {
+        scout_fault_alone(d, "iter-24-F-FB2-plan", "The plan");
         // AD2: the row names the member left out, its base and its line, beside Edit group.
         let nodes = d.nodes();
         let warning = nodes
@@ -386,6 +408,7 @@ pub fn run(d: &mut Driver<'_>) {
     // FB2: every member fault says its cause, as a roster row does.
     d.expect(SCOUT_FAULT);
     d.expect("Edit group");
+    scout_fault_alone(d, "iter-24-F-FB2-arrivals", "Arrivals");
     d.state("flagged-group-in-arrivals", Sizes::All);
     close_run(d);
     d.click(NAV_ENCOUNTERS);

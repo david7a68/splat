@@ -82,7 +82,7 @@ fn check_run_entries(value: &serde_json::Value, problems: &mut Vec<String>) {
                 entry
                     .flags
                     .iter()
-                    .map(|f| format!("{} (entry {}, line {})", f.message, entry.path, f.line)),
+                    .map(|f| format!("{} (entry {}, line {})", f.words(), entry.path, f.line)),
             ),
         }
     } else {
@@ -112,7 +112,7 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             entry
                 .flags
                 .iter()
-                .map(|f| format!("{}:{}: {}", entry.path, f.line, f.message)),
+                .map(|f| format!("{}:{}: {}", entry.path, f.line, f.words())),
         );
     }
     let mut count = entries.len();
@@ -132,7 +132,7 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                         crate::timeline::formats::parse(&text)
                             .1
                             .into_iter()
-                            .map(|f| format!("{name}:{}: {}", f.line, f.message)),
+                            .map(|f| format!("{name}:{}: {}", f.line, f.words())),
                     );
                 }
             },

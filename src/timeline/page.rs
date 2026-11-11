@@ -223,7 +223,7 @@ pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> St
 /// A Timeline flag's words. The file line below the warning holds the path, so the words name
 /// only the line.
 fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    format!("Line {}: {}", flag.line, flag.message)
+    flag.message.clone()
 }
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.

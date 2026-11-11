@@ -1105,12 +1105,12 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of:\n  x: 1\n",
-                Some(format!("Part of “” was not read. {help}")),
+                Some(format!("Line 7: Part of “” was not read. {help}")),
             ),
             ("splat_part_of:\n", None),
             (
                 "splat_in:\n  x: 1\n",
-                Some("In “” was not read. Use one place name or link.".to_owned()),
+                Some("Line 7: In “” was not read. Use one place name or link.".to_owned()),
             ),
         ] {
             let file = format!(
@@ -1138,7 +1138,8 @@ mod tests {
         assert!(super::super::fields::unread_groups(&entry, &file).is_none());
         assert!(entry.flags.iter().any(|flag| flag.line == 7
             && flag.kind == FlagKind::Unread(Field::Status)
-            && flag.message == "Status “[alive]” was not read. Use a short word, such as alive."));
+            && flag.message
+                == "Line 7: Status “[alive]” was not read. Use a short word, such as alive."));
         assert!(super::super::status_unread(&entry));
         // Contract F: World finds its flags by kind. Other words on every flag change nothing; a
         // plain flag that has the old Status words is not a Status fault.
@@ -1156,7 +1157,7 @@ mod tests {
         let (notices, _) = super::super::GroupFault::flags(&entry, Some(&unread));
         assert_eq!(
             notices,
-            ["Line 8: Other words"],
+            ["Other words"],
             "only Status; Part of is the unread list"
         );
         entry.flags = vec![splat::content::layout::Flag::new(

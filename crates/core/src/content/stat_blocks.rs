@@ -1538,7 +1538,7 @@ pub(super) fn section_and_extras(
                 "Review unsupported {root} values before writing: {}",
                 invalid
                     .iter()
-                    .map(|f| f.message.as_str())
+                    .map(|f| f.words())
                     .collect::<Vec<_>>()
                     .join(", ")
             ));
