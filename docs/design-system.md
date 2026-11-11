@@ -205,11 +205,12 @@ reason after Unsaved and Discard in the save row. Reserve its height so the firs
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
-and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (`Undo heading
-change`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
-hangs its icon into the message's own icon column, so its words start at the message's words. In a
+hangs its icon into the message's own icon column, so its words start at the message's words. A quiet
+message choice without an icon (`Use the copy's entries` below the registration message) hangs its padding
+into that column instead, so its words also start at the message's words. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
@@ -218,7 +219,10 @@ World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear va
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
-icon on the message line, or below when needed. On reload, a result whose Undo would rewrite files checks
+icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
+that it follows (`Links now say <name>.` with `Undo link update`, `The first heading now says <name>.` with
+`Undo heading change`, `Encounters now use the copy's entries.` with `Undo source change`, and `<stat> is now
+<value>.` with `Undo stat change`). On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
@@ -331,7 +335,9 @@ after the kind line and one `M` gap after a spell's fact table. A standalone bol
 plain text.
 
 A stat block has a heavy rule, identity, labelled AC, HP and initiative, then a tight attribute table with
-physical and mental abilities side by side and right-aligned numbers. Detail rows follow. No card surrounds
+physical and mental abilities side by side and right-aligned numbers. Detail rows follow. Each detail row's
+label sits on the baseline of its value's first line, also when the value has dice links and a taller line
+(`Skills`): the label reads where the value's words are painted. No card surrounds
 it. Serif section headings sit over hairlines. Vitals come once from the schema-2 Stat block table. New
 creatures store identity, CR, speed and ability scores there; printed source text stays separate. An absent
 saving throw leaves an empty cell. Bad cells warn with their file line; valid values still lead in the reader
@@ -466,7 +472,8 @@ or folder choice states which file or folder an encounter will keep or use, in `
 draws the warning and its choices after the title, inside its scroll area, so they scroll with the entry;
 Edit Markdown keeps them above the editor. A file's warnings share this one place: the first-heading
 warning and its `Use <name>` action come directly above the duplicate warning, so no warning moves the
-title. `Undo heading change` takes the same place as a `line_start` quiet action.
+title. Its result, `The first heading now says <name>.` with `Undo heading change` on the message line, takes
+the same place.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
@@ -530,8 +537,10 @@ Quiet Cancel follows the named Register action after an `L` gap. It closes the f
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
 original and the copy is registered but not used. When on, it says every entry is used, including future
 entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo. After registration,
-quiet `Undo package registration` sits on the message line, as every Undo after a message does, and
-`Use the copy's entries` sits on the next line at the message words.
+quiet `Undo package registration` sits on the message line, as every Undo after a message does, and quiet
+`Use the copy's entries`, without an icon, sits on the next line as a `line_start` action: its words start at
+the message words. Its result `Encounters now use the copy's entries.` keeps `Undo source change` on its
+message line; after an outside change that Undo is blocked with its reason.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no
 longer on this computer`. Count affected campaign entries when references are known, with Remove from this

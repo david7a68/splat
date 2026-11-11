@@ -2325,6 +2325,60 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
 }
 
 /// A rename on disk keeps an identity-based package link working.
+/// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
+/// undo icon, sits on the message line after the words, or starts the next line with its words
+/// at the message words and its icon in the message's icon column, and its press area is clear.
+fn undo_follows_message(d: &mut Driver<'_>, id: &str, message: &str, undo: &str) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (words, icon, target, clear) = d.at_size(size, |d| {
+            let target = d.place_of(undo);
+            let mut words = None;
+            let mut icon = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if text.galley.job.text == message && clip.intersects(rect) {
+                    words = Some(rect);
+                }
+                if target.is_some_and(|target| target.contains(rect.center()))
+                    && text.galley.job.text == design::icons::UNDO
+                {
+                    icon = Some(rect);
+                }
+            });
+            let clear = target.map_or_else(
+                || Err(format!("{undo} is not in view")),
+                |target| super::press_area_clear(d, target, undo, None),
+            );
+            (
+                words,
+                icon,
+                target
+                    .and_then(|target| super::words_left_in(d, target).map(|left| (left, target))),
+                clear,
+            )
+        });
+        let placed = words
+            .zip(icon)
+            .zip(target)
+            .is_some_and(|((words, icon), (left, target))| {
+                if target.top() >= words.bottom() - 1.0 {
+                    (left - words.left()).abs() <= 1.0 && icon.right() <= words.left()
+                } else {
+                    (target.center().y - words.center().y).abs() <= design::XS
+                        && icon.left() > words.right()
+                        && left > icon.right()
+                }
+            });
+        d.observe(
+            id,
+            placed && clear.is_ok(),
+            format!(
+                "At {size:?}, {undo} {target:?} with its icon {icon:?} follows the message {message:?} {words:?}; press area: {clear:?}"
+            ),
+        );
+    }
+}
+
 pub fn package_rename(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
     let (entries, _) = splat::content::read_directory(&package).unwrap();
@@ -2371,6 +2425,12 @@ pub fn package_rename(d: &mut Driver<'_>) {
         },
     );
     d.state("linked-entry-renamed-on-disk", Sizes::All);
+    let warning_left = d
+        .painted_word_rect(
+            "The first heading says Ashfall, but the name is Watch Ashfall.",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
     let renamed_path = package.join("Spells/Watch Ashfall.md");
     assert!(
         !fs::read_to_string(&renamed_path)
@@ -2401,27 +2461,37 @@ pub fn package_rename(d: &mut Driver<'_>) {
                 .is_some_and(|(title, undo)| undo.top() > title.bottom())
         },
     );
-    d.observe_both(
-        "iter-16-E-FD7-undo-edge",
-        "Undo heading change is a line-start action outside a message: no icon, its words start at the reader text edge, and its target reaches S into the gutter",
-        |d| {
-            let Some(title) = reader_title(d, "Watch Ashfall") else {
-                return false;
-            };
-            let Some(undo) = d.place_of("Undo heading change") else {
-                return false;
-            };
-            d.painted_word_rect("Undo heading change", egui::Rect::EVERYTHING)
-                .is_some_and(|word| {
-                    (undo.left() - (title.left() - design::S)).abs() <= 1.0
-                        && (word.left() - title.left()).abs() <= 1.0
-                        && !d.painted_in(undo).contains(design::icons::UNDO)
-                })
-        },
+    // AD3: the fix's result is a message, and its Undo follows it with its icon. The message
+    // words start at the reader text edge, as the warning's did.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-heading",
+        "The first heading now says Watch Ashfall.",
+        "Undo heading change",
+    );
+    let result_left = d
+        .painted_word_rect(
+            "The first heading now says Watch Ashfall.",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
+    d.observe(
+        "iter-19-E-AD3-heading-edge",
+        result_left
+            .zip(warning_left)
+            .is_some_and(|(result, warning)| (result - warning).abs() <= 1.0),
+        format!(
+            "The heading result's words start at {result_left:?}, where the warning's words started ({warning_left:?})"
+        ),
     );
     d.state("renamed-entry-heading-fixed", Sizes::All);
     d.click("Undo heading change");
     d.wait_for_text("Use Watch Ashfall");
+    d.observe(
+        "iter-19-E-AD3-heading-undone",
+        !d.has_containing("The first heading now says"),
+        "After Undo heading change, its result message goes away and the warning comes back",
+    );
     assert!(
         fs::read_to_string(package.join("Spells/Watch Ashfall.md"))
             .unwrap()
@@ -2433,6 +2503,31 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
+    // AD3: a stat fix's result is a message, and its Undo follows it with its icon.
+    // The DM types a Hit Points line that disagrees with max_hp (22).
+    let typed = format!("{draft}\nHit Points 24 (4d8 + 4)\n");
+    d.replace_text_in("Markdown editor", &typed);
+    d.wait_for_text("Use 24");
+    assert!(!d.has_containing("max_hp is now"));
+    d.click("Use 24");
+    d.wait_for_text("Undo stat change");
+    let fixed = d.editor_text().unwrap();
+    assert_ne!(fixed, typed, "Use 24 did not change the draft");
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-stat",
+        "max_hp is now 24.",
+        "Undo stat change",
+    );
+    d.state("stat-fix-undo-message", Sizes::All);
+    d.click("Undo stat change");
+    d.wait_for_text("Use 24");
+    let restored = d.editor_text().unwrap();
+    d.observe(
+        "iter-19-E-AD3-stat-undone",
+        !d.has_containing("max_hp is now") && restored == typed,
+        "Undo stat change gives back the draft before the fix, and its result goes away",
+    );
     let renamed =
         crate::content_workspace::patch_fields(&draft, &[("splat_name", Some("Ash Wolf".into()))])
             .unwrap()
@@ -2446,12 +2541,30 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
     assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
+    // AD3: the update's result is a message, and its Undo follows it with its icon. The offer
+    // that asked for the update has gone.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-link",
+        "Links now say Ash Wolf.",
+        "Undo link update",
+    );
+    d.observe(
+        "iter-19-E-AD3-link-offer-gone",
+        !d.has_containing("Links still say") && !d.has("Update 1 link"),
+        "After the update, only its result shows, not the offer",
+    );
     d.state("renamed-creature-links-updated", Sizes::All);
     d.click("Undo link update");
     assert!(
         fs::read_to_string(&path)
             .unwrap()
             .contains("[[Cinder Wolf]]")
+    );
+    d.observe(
+        "iter-19-E-AD3-link-undone",
+        !d.has_containing("Links now say") && !d.has("Undo link update"),
+        "After Undo link update, its result message goes away",
     );
     d.state("renamed-creature-link-update-undone", Sizes::All);
 
@@ -4594,25 +4707,46 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {
-        let aligned = d.at_size(size, |d| {
+        // SD1 (round 19 ruling): the action below the message is a quiet `line_start` action
+        // without an icon or border. Its painted words, not its border, start at the message
+        // words, and its padding hangs `S` into the message's icon column.
+        let (action, words, message, frame, icon, clear) = d.at_size(size, |d| {
             d.expect("Use the copy's entries");
-            let action = d.place_of("Use the copy's entries").unwrap();
+            let action = d.place_of("Use the copy's entries");
+            let words = action.and_then(|action| super::words_left_in(d, action));
             let message = d
                 .nodes()
                 .into_iter()
                 .find(|n| {
                     n.role == Role::Label && n.name.starts_with("Ashen Reaches is registered")
                 })
-                .unwrap();
-            action.top() >= message.rect.bottom()
-                && (action.left() - message.rect.left()).abs() <= 1.0
-                && d.control_frame("Use the copy's entries")
-                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+                .map(|n| n.rect);
+            let frame = d
+                .control_frame("Use the copy's entries")
+                .map(|frame| frame.stroke.color);
+            let icon = action.is_some_and(|action| {
+                d.painted_in(action)
+                    .chars()
+                    .any(|c| ('\u{E000}'..='\u{F8FF}').contains(&c))
+            });
+            let clear = action.map_or_else(
+                || Err("Use the copy's entries is not in view".to_owned()),
+                |action| super::press_area_clear(d, action, "Use the copy's entries", None),
+            );
+            (action, words, message, frame, icon, clear)
         });
         d.observe(
-            "iter-6-D-FD4",
-            aligned,
-            format!("The copied-package action is bordered below the message at {size:?}"),
+            "iter-19-E-SD1",
+            action.zip(words).zip(message).is_some_and(|((action, words), message)| {
+                action.top() >= message.bottom()
+                    && (words - message.left()).abs() <= 1.0
+                    && (action.left() - (message.left() - design::S)).abs() <= 1.0
+            }) && frame != Some(design::colors().field_border)
+                && !icon
+                && clear.is_ok(),
+            format!(
+                "At {size:?}, Use the copy's entries {action:?} starts its words at {words:?}, the message words {message:?}; border {frame:?}; icon {icon}; press area: {clear:?}"
+            ),
         );
         // FD1: the Undo sits on the message line, after the words, so the message takes two
         // lines (message, then Use the copy's entries), not three.
@@ -4698,6 +4832,14 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Use the copy's entries");
     d.click("Use the copy's entries");
     d.wait_for_text("Undo source change");
+    // AD3: the result is a message, and its Undo follows it with its icon.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-source",
+        "Encounters now use the copy's entries.",
+        "Undo source change",
+    );
+    d.state("copy-entries-used", Sizes::All);
     go_encounters(d);
     if d.has("Back to encounters") {
         d.click("Back to encounters");

@@ -233,10 +233,10 @@ pub(crate) fn encounter_uses_entry(encounter: &Entry, entry: &Entry) -> bool {
 }
 
 /// The warning for a first heading that differs from the entry's name (its words, its action
-/// and the fixed text), and whether `Undo heading change` shows for this draft.
+/// and the fixed text), and the result message whose `Undo heading change` shows for this draft.
 struct HeadingChoice {
     fix: Option<(String, String, String)>,
-    undo: bool,
+    undo: Option<String>,
 }
 
 impl HeadingChoice {
@@ -250,7 +250,7 @@ impl HeadingChoice {
         let Some(entry) = entry else {
             return Self {
                 fix: None,
-                undo: false,
+                undo: None,
             };
         };
         Self {
@@ -264,7 +264,9 @@ impl HeadingChoice {
                     after,
                 )
             }),
-            undo: undo.is_some_and(|(at, _, after)| at == path && after == draft),
+            undo: undo
+                .is_some_and(|(at, _, after)| at == path && after == draft)
+                .then(|| format!("The first heading now says {}.", entry.name)),
         }
     }
 
@@ -273,13 +275,10 @@ impl HeadingChoice {
         let fix = self.fix.as_ref().is_some_and(|(text, action, _)| {
             design::message_with_action(ui, Tone::Warning, text, action)
         });
-        // A quiet action at the start of a line, outside a message: no icon, and its words
-        // start at the text edge.
-        let undo = self.undo
-            && Action::quiet("Undo heading change")
-                .line_start()
-                .show(ui)
-                .clicked();
+        // The fix's result is a message, so its Undo keeps its icon on the message line.
+        let undo = self.undo.as_ref().is_some_and(|result| {
+            design::undo_message(ui, Tone::Success, result, "Undo heading change")
+        });
         (fix, undo)
     }
 
@@ -2009,7 +2008,8 @@ pub struct Library {
     unregistered: Option<Module>,
     copied_rosters: Option<crate::content_workspace::ContentEdits>,
     renamed_links: Option<(String, String)>,
-    link_edits: Option<crate::content_workspace::ContentEdits>,
+    /// The link update and the name its links now say.
+    link_edits: Option<(crate::content_workspace::ContentEdits, String)>,
     copied_package: Option<Module>,
     copy_name: String,
     copy_name_open: bool,
@@ -2084,7 +2084,8 @@ pub struct Library {
     /// The same for `Undo source change`.
     rosters_changed: bool,
     link_choices: Vec<Uuid>,
-    vital_undo: Option<(String, String, String)>,
+    /// The file, the draft before and after a stat fix, and its result message.
+    vital_undo: Option<(String, String, String, String)>,
     heading_undo: Option<(String, String, String)>,
 }
 /// Sort so that "Level 2" comes before "Level 18".
@@ -2323,7 +2324,7 @@ impl Library {
         if self
             .link_edits
             .as_ref()
-            .is_some_and(|edits| !edits.on_disk())
+            .is_some_and(|(edits, _)| !edits.on_disk())
         {
             self.link_edits = None;
         }
@@ -3038,7 +3039,7 @@ impl Library {
             {
                 match crate::content_workspace::ContentEdits::write(files) {
                     Ok(edits) => {
-                        self.link_edits = Some(edits);
+                        self.link_edits = Some((edits, new));
                         self.renamed_links = None;
                         self.stale = true;
                         self.content_changed =
@@ -3048,11 +3049,14 @@ impl Library {
                 }
             }
         }
-        if let Some(edits) = &self.link_edits
-            && Action::quiet("Undo link update")
-                .icon(icons::UNDO)
-                .show(ui)
-                .clicked()
+        // The result is a message, so its Undo keeps its icon on the message line.
+        if let Some((edits, new)) = &self.link_edits
+            && design::undo_message(
+                ui,
+                Tone::Success,
+                &format!("Links now say {new}."),
+                "Undo link update",
+            )
         {
             match edits.undo() {
                 Ok(()) => {
@@ -3105,7 +3109,8 @@ impl Library {
                 |ui| design::undo_message(ui, Tone::Success, &words, "Undo package registration"),
             );
             // The other choice starts below, at the message words: `design::message` puts them
-            // `S + 1`, the icon and `XS` from its left edge.
+            // `S + 1`, the icon and `XS` from its left edge. It is a quiet `line_start` action
+            // without an icon, so its words, not its padding, start there.
             let use_copy = campaigns.active_campaign().is_some()
                 && self.copied_rosters.is_none()
                 && ui
@@ -3116,8 +3121,9 @@ impl Library {
                                 + design::number_width(ui, icons::SUCCESS, &Type::Body.font(ui))
                                 + design::XS,
                         );
-                        Action::secondary("Use the copy's entries")
+                        Action::quiet("Use the copy's entries")
                             .density(Density::Read)
+                            .line_start()
                             .blocked(self.draft_reason())
                             .show(ui)
                             .clicked()
@@ -3146,15 +3152,22 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
+        // The result is a message, so its Undo keeps its icon on the message line. After an
+        // outside change it stays there, blocked, and says why.
         if let Some(edits) = &self.copied_rosters
-            && Action::quiet("Undo source change")
-                .icon(icons::UNDO)
-                .blocked(
-                    self.rosters_changed
-                        .then_some(crate::content_workspace::UNDO_ENDED),
-                )
-                .show(ui)
-                .clicked()
+            && design::locked(
+                ui,
+                self.rosters_changed
+                    .then_some(crate::content_workspace::UNDO_ENDED),
+                |ui| {
+                    design::undo_message(
+                        ui,
+                        Tone::Success,
+                        "Encounters now use the copy's entries.",
+                        "Undo source change",
+                    )
+                },
+            )
         {
             match edits.undo() {
                 Ok(()) => {
@@ -5533,8 +5546,12 @@ impl Library {
                     ) {
                         match creature::use_vital(&self.draft, entry, key, value) {
                             Ok(after) => {
-                                self.vital_undo =
-                                    Some((note.path.clone(), self.draft.clone(), after.clone()));
+                                self.vital_undo = Some((
+                                    note.path.clone(),
+                                    self.draft.clone(),
+                                    after.clone(),
+                                    format!("{key} is now {value}."),
+                                ));
                                 self.draft = after;
                             }
                             Err(error) => self.error = Some(error),
@@ -5542,13 +5559,11 @@ impl Library {
                     }
                 }
             }
-            if let Some((path, before, after)) = &self.vital_undo
+            // The result is a message, so its Undo keeps its icon on the message line.
+            if let Some((path, before, after, result)) = &self.vital_undo
                 && path == &note.path
                 && after == &self.draft
-                && Action::quiet("Undo stat change")
-                    .icon(icons::UNDO)
-                    .show(ui)
-                    .clicked()
+                && design::undo_message(ui, Tone::Success, result, "Undo stat change")
             {
                 self.draft = before.clone();
                 self.vital_undo = None;
@@ -8681,7 +8696,7 @@ mod tests {
         assert!(library.dependency_undo.is_none());
 
         // `Undo link update`.
-        library.link_edits = Some(edit("links"));
+        library.link_edits = Some((edit("links"), "Ash Wolf".into()));
         library.forget_changed_undos();
         assert!(library.link_edits.is_some());
         change_outside(&mut library);
