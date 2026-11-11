@@ -225,7 +225,8 @@ that it follows (`Links now say <name>.` with `Undo link update`, `The first hea
 `Undo heading change`, `Encounters now use the copy.` with `Undo source change`, `The stat
 block now says Hit Points 24.` with `Undo stat change`, and `<name> is registered as a new campaign. Its D&D
 Beyond link is off.` with `Undo register campaign`). Another choice after the result, such as `Build an
-encounter`, does not end the result or its Undo; a later result does. On reload, a result whose Undo would rewrite files checks
+encounter`, does not end the result or its Undo; a later result does. `Undo register campaign` takes back
+only that registration: settings changed since, such as a registered package, stay. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
@@ -301,7 +302,8 @@ Notes/Broken.md as text.`), then the recovery in plain words, then quiet `Try ag
 Technical details holds the system's words. Edit Markdown is blocked with its reason, and the reader offers no
 `Fix in Edit Markdown` or manifest replacement, until a read succeeds. Try again reads every file again. When an
 open entry's file stops reading, a draft stays: the message names the file and says the draft is safe, with
-`Try again` and red `Reload and lose my draft` (with Undo discard), never a save over the file. Splat never
+`Try again` and red `Reload and lose my draft` (with Undo discard), never a save over the file. With a draft
+open, the reader's `Try again` reads the file at once and compares it with the draft, as any outside change. Splat never
 changes that file.
 Below its title, show only the kind when known and the specific error with its file line.
 Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.

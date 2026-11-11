@@ -6291,9 +6291,42 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
         "Reload and lose my draft shows the file's fault in the reader",
     );
     assert_eq!(fs::read(&path).unwrap(), not_text);
+    // Undo discard brings the draft back over the unreadable file; the fault stays.
+    d.click_starting("Undo discard");
+    d.settle();
+    let restored = d.app_mut().library.dirty();
+    d.observe(
+        "iter20-E-SD1-undo-discard",
+        restored && d.visible_text(HEADLINE) && d.has("Try again"),
+        format!("Undo discard keeps the draft ({restored}) and the file's fault"),
+    );
+    // The file reads again. The reader's Try again reads it now, with the draft open: the
+    // entry reads, or the changed file and the draft are compared.
     fs::write(&path, &text).unwrap();
+    d.settle();
     d.click("Try again");
-    d.wait_for_text("Bite");
+    d.settle();
+    let changed = d.has_containing("This entry changed on disk");
+    let read = changed || (!d.visible_text(HEADLINE) && d.visible_text("Bite"));
+    let kept = d.app_mut().library.dirty();
+    d.observe(
+        "iter20-E-SD1-draft-reload-try-again",
+        read && kept,
+        format!(
+            "With a draft open, Try again reads the file again (changed {changed}, read {read}) and keeps the draft ({kept})"
+        ),
+    );
+    if !(read && kept) {
+        // The steps below need the file read again; the failed check above is the report.
+        return;
+    }
+    if changed {
+        d.click("Reload and lose my draft");
+        if d.has("Read") {
+            d.click("Read");
+        }
+        d.wait_for_text("Bite");
+    }
 
     // The campaign path: a note that has never read as text.
     let note = root(d).join("Notes/Not text.md");

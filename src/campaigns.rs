@@ -13,7 +13,9 @@ pub struct Campaigns {
     error: Option<String>,
     manifest_errors: std::collections::BTreeMap<Uuid, String>,
     held_manifests: std::cell::RefCell<std::collections::BTreeMap<Uuid, (String, String)>>,
-    campaign_copy: Option<(crate::content_workspace::PackageCopy, UserData)>,
+    /// The copy's registration that `Undo register campaign` takes back: the copy's own file
+    /// changes, its campaign ID, and the active campaign before it.
+    campaign_copy: Option<(crate::content_workspace::PackageCopy, Uuid, Option<Uuid>)>,
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
@@ -181,6 +183,7 @@ impl Campaigns {
             crate::content_workspace::PackageCopy::write_owner(&path, &self.name, "campaign")?;
         let campaign = CampaignDocument::discover(&path)?.ok_or("Campaign.md is missing.")?;
         let name = campaign.name.clone();
+        let id = campaign.id;
         let before = self.data.clone();
         let mut after = before.clone();
         after.active_campaign_id = Some(campaign.id);
@@ -189,7 +192,7 @@ impl Campaigns {
             copy.undo()?;
             return Err(error);
         }
-        self.campaign_copy = Some((copy, before));
+        self.campaign_copy = Some((copy, id, before.active_campaign_id));
         self.clear_form();
         self.added = Some(copy_registered(&name));
         Ok(())
@@ -818,17 +821,23 @@ impl Campaigns {
         }
     }
 
-    /// `Undo register campaign`: the copy's own files and the settings go back, and the result
-    /// that the Undo followed ends.
+    /// `Undo register campaign`: the copy's own files go back and its registration goes. Other
+    /// settings, including changes made since, stay. The active campaign goes back only while
+    /// it is still the copy. The result that the Undo followed ends.
     fn undo_campaign_copy(&mut self) -> Result<(), String> {
-        let (copy, before) = self.campaign_copy.as_ref().ok_or("Nothing to undo.")?;
+        let (copy, id, active) = self.campaign_copy.as_ref().ok_or("Nothing to undo.")?;
+        let mut data = self.data.clone();
+        data.campaigns.retain(|campaign| campaign.id != *id);
+        if data.active_campaign_id == Some(*id) {
+            data.active_campaign_id =
+                active.filter(|active| data.campaigns.iter().any(|c| c.id == *active));
+        }
         self.store
             .as_ref()
             .ok_or("Settings are unavailable.")?
-            .check_save(before)?;
+            .check_save(&data)?;
         copy.undo()?;
-        let before = before.clone();
-        self.persist(before)?;
+        self.persist(data)?;
         self.campaign_copy = None;
         self.added = None;
         Ok(())
@@ -992,25 +1001,13 @@ impl Campaigns {
                     {
                         self.error = Some(error);
                     }
-                    let build = ui
-                        .horizontal(|ui| {
-                            ui.add_space(
-                                design::S
-                                    + 1.0
-                                    + design::number_width(
-                                        ui,
-                                        icons::SUCCESS,
-                                        &Type::Body.font(ui),
-                                    )
-                                    + design::XS,
-                            );
-                            Action::quiet("Build an encounter")
-                                .density(Density::Read)
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                        })
-                        .inner;
+                    let build = design::message_choice_row(ui, Tone::Success, |ui| {
+                        Action::quiet("Build an encounter")
+                            .density(Density::Read)
+                            .line_start()
+                            .show(ui)
+                            .clicked()
+                    });
                     if build {
                         self.build_encounter();
                     }
@@ -1341,10 +1338,35 @@ mod tests {
         );
         assert!(campaigns.campaign_copy.is_some(), "SD2-build-keeps-undo");
 
+        // Another settings change while the result lives: Library registers a package.
+        let package = crate::persistence::Module {
+            id: uuid::Uuid::new_v4(),
+            name: "Later package".into(),
+            path: temp.path().join("later-package"),
+        };
+        std::fs::create_dir(&package.path).unwrap();
+        campaigns.register_module(package.clone()).unwrap();
+
         campaigns.undo_campaign_copy().unwrap();
         assert!(
             campaigns.added.is_none() && campaigns.campaign_copy.is_none(),
             "SD2-undo-ends"
+        );
+        assert!(
+            campaigns
+                .modules()
+                .iter()
+                .any(|module| module.id == package.id),
+            "SD2-undo-keeps-later-changes: {:?}",
+            campaigns.modules()
+        );
+        let reloaded = Campaigns::at(temp.path().join("settings.json"));
+        assert!(
+            reloaded
+                .modules()
+                .iter()
+                .any(|module| module.id == package.id),
+            "SD2-undo-keeps-later-changes-on-disk"
         );
         assert_eq!(campaigns.all().len(), 1);
         assert_eq!(campaigns.active_campaign().unwrap().id, first);
@@ -1368,6 +1390,43 @@ mod tests {
         // A plain add has no Undo: Build an encounter ends its result, as before.
         campaigns.build_encounter();
         assert!(campaigns.added.is_none());
+    }
+
+    /// SD2: Undo takes back only the copy's registration. A campaign the DM opened since stays
+    /// active; the one active before the copy comes back only while the copy is still active.
+    #[test]
+    fn iter20_e_sd2_undo_keeps_a_campaign_opened_since() {
+        let temp = tempfile::tempdir().unwrap();
+        let (original, third, copied) = (
+            temp.path().join("original"),
+            temp.path().join("third"),
+            temp.path().join("copy"),
+        );
+        for folder in [&original, &third, &copied] {
+            std::fs::create_dir(folder).unwrap();
+        }
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        for (name, folder) in [("Original", &original), ("Third", &third)] {
+            campaigns.name = name.into();
+            campaigns.path = folder.to_string_lossy().into_owned();
+            campaigns.save_form().unwrap();
+        }
+        let first = campaigns.all()[0].id;
+        let before_copy = campaigns.active_campaign().unwrap().id;
+        assert_ne!(first, before_copy, "Third is active before the copy");
+        std::fs::copy(original.join("Campaign.md"), copied.join("Campaign.md")).unwrap();
+        campaigns.name = "Copy".into();
+        campaigns.path = copied.to_string_lossy().into_owned();
+        assert!(campaigns.save_form().is_err());
+        campaigns.register_campaign_copy().unwrap();
+        campaigns.select(Some(first));
+        campaigns.undo_campaign_copy().unwrap();
+        assert_eq!(
+            campaigns.active_campaign().map(|c| c.id),
+            Some(first),
+            "SD2-undo-keeps-opened-campaign"
+        );
+        assert_eq!(campaigns.all().len(), 2);
     }
 
     #[test]

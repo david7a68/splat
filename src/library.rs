@@ -3220,27 +3220,17 @@ impl Library {
                     .then_some(crate::content_workspace::UNDO_ENDED),
                 |ui| design::undo_message(ui, Tone::Success, &words, "Undo package registration"),
             );
-            // The other choice starts below, at the message words: `design::message` puts them
-            // `S + 1`, the icon and `XS` from its left edge. It is a quiet `line_start` action
-            // without an icon, so its words, not its padding, start there.
+            // The other choice starts below, at the message words.
             let use_copy = campaigns.active_campaign().is_some()
                 && self.copied_rosters.is_none()
-                && ui
-                    .horizontal(|ui| {
-                        ui.add_space(
-                            design::S
-                                + 1.0
-                                + design::number_width(ui, icons::SUCCESS, &Type::Body.font(ui))
-                                + design::XS,
-                        );
-                        Action::quiet(USE_COPY)
-                            .density(Density::Read)
-                            .line_start()
-                            .blocked(self.draft_reason())
-                            .show(ui)
-                            .clicked()
-                    })
-                    .inner;
+                && design::message_choice_row(ui, Tone::Success, |ui| {
+                    Action::quiet(USE_COPY)
+                        .density(Density::Read)
+                        .line_start()
+                        .blocked(self.draft_reason())
+                        .show(ui)
+                        .clicked()
+                });
             (undo, use_copy)
         } else {
             (false, false)
@@ -5922,10 +5912,6 @@ impl Library {
             &mut self.draft,
             &mut self.heading_undo,
         );
-        if read_again {
-            // A new reading of every file: the note opens again, with its text or its new fault.
-            self.stale = true;
-        }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
                 match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
@@ -6028,7 +6014,12 @@ impl Library {
             self.reload_note_from_disk(i);
             return;
         }
-        if read_disk_again && let Some(root) = note.owner.root().map(Path::to_path_buf) {
+        // Try again reads the file now. With no draft, every file is read again and the note opens
+        // with its text or its new fault. With a draft (after Undo discard), the file is compared
+        // with it as any outside change is: a load waits while a draft is open.
+        if (read_again || read_disk_again)
+            && let Some(root) = note.owner.root().map(Path::to_path_buf)
+        {
             self.refresh_destination(&root, ui.ctx());
             return;
         }
