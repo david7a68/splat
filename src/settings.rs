@@ -605,6 +605,36 @@ mod tests {
             .unwrap();
         settings.poll(&ctx);
         assert!(settings.saved_session, "the message says to select it");
+        // Round 23 SF1: only a failed Connect scrolls its retry into view.
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
+        settings.send(
+            Action::Connect {
+                cookie: Zeroizing::new("test-cookie".into()),
+                remember: false,
+            },
+            &ctx,
+        );
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Err("Could not reach D&D Beyond.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(settings.reveal_retry, "a failed Connect shows its retry");
+        // A new request ends it, before its reply.
+        settings.disconnect(&ctx);
+        assert!(!settings.reveal_retry);
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Err("The saved cookie could not be removed.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
         settings.disconnect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results
