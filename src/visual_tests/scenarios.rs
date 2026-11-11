@@ -7800,6 +7800,16 @@ pub mod signed_in {
             Some(&CLOSE_DIALOG),
         );
         d.press(Key::Escape);
+        // iter-25-S AL1/FL1/SL1 caller: the app's close dialog names the unsent changes and never
+        // says that closing ends Undo (a saved run keeps its Undo history).
+        d.request_close();
+        d.observe(
+            "iter-25-S-close-keeps-undo",
+            d.has_containing("D&D Beyond has not confirmed changes to")
+                && !d.has_containing("Closing ends Undo"),
+            "The app's close dialog names the unsent changes and no Undo-ends sentence",
+        );
+        d.press(Key::Escape);
         // Damage recorded after the session ended. Reconnecting must not take it away.
         d.click_row(MEMBER);
         d.type_text("3");
