@@ -646,6 +646,8 @@ reading the code, not from a test run.
 | G3 | No dead nav items | nav-state **new** | state | Fail |
 | G4 | All pages have no ergonomics violations at 960x640 and one high density | all | `ergonomics.rs` | Not measured |
 | G5 | Read text stays readable under every shipped theme | all | look | Fail on fixed-grey screens |
+| G6 | The unchanged evening of the audit gives the counts it gave before: each task's page transitions, interactions and path match `artifacts/dm-audit/counts.json`, and no counted act misses its control | dm-audit | cost, state | Pass |
+| G7 | The plain campaign differs from its reference only by rows of `docs/design/session-cycle.md` section 2.5, each listed in `src/visual_tests/plain_evening/allowed.json`: every view that `SCREENS` names (pages, readers, open menus, hover texts), every act's words and file writes, and every campaign file by its bytes | plain-evening | view, state | Pass |
 
 **New scenarios, in priority order:** `run-lookup`, `prep-to-table`, `run-resume`, `run-large-roster`,
 `run-sync-conflict`, `nav-state`, `party-from-run`, `library-to-encounter`.

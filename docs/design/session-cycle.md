@@ -18,7 +18,8 @@ No feature adds a page, a panel, a tab, a strip or a dialog.
 **Counts, by hand against `steps.tsv`** (section 2.1): the 41 measured tasks go from 13 page transitions and
 231 interactions to 12 and 226, or 228 when the DM opens **More** twice on the Add strip. Seven records that
 were on paper cost 14 more, and 2 more, once, when the campaign has several travel tables. The audit script
-has drifted from `steps.tsv`, so P1a measures `main` again before any feature lands.
+had drifted from `steps.tsv`. P1a repaired it and measured `main` again: 42 tasks, 17 page transitions and
+240 interactions (`artifacts/dm-audit/README.md`). That is G6's yardstick for every feature.
 
 ## 1. Rules for every feature
 
@@ -99,17 +100,21 @@ Timeline` (F4).
   `Start fight` is never an icon. An entry that has only `Add to Log` shows its word, then its icon, then
   nothing.
 
-**Sums for the header** (estimates; P1a measures the title, and T18.2 tests them). A title in `Display`
-(26 px) takes about 12 px for each letter. `Edit` takes about 64 px, `Start fight` about 104, `Add to Log`
-about 108, and its icon 28. The room after the title is the width inside, less the title, 16 and 64. A reader
-that scrolls has 12 px less, and each cell still holds. An entry with a portrait has about 80 px less,
-because `Edit` follows the art (`src/world.rs:1750-1753`): at case D a 13-letter title then shows neither.
+**Sums for the header** (P1a measured the titles and Lookup's room: `artifacts/dm-audit/titles.tsv`;
+T18.2 tests the rule). A title in `Display` (26 px) is 160.1, 196.5 and 229.5 px for 13, 16 and 19 letters:
+about 12.2 px for each letter. `Edit` is 61 px wide and starts 8 px after the title. `Start fight` takes
+about 104, `Add to Log` about 108, and its icon 28, each with a gap of 4 before it (estimates: these do not
+exist yet). Lookup's reader is 320 px inside at case D and 406 at case B. The room after `Edit` is the width
+inside, less the title, 8 and 61. A reader that scrolls has 8 px less (measured): then the 16-letter title
+at case B shows `Start fight` alone, and every other cell holds. In Lookup a campaign creature has no `Edit`, and its art (64 px)
+starts 8 px after the title, so it has about 3 px less room than an NPC with `Edit`. An entry that has both
+art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campaign has none.
 
-| Reader | Inside | `Captain Varra`, 13 letters (about 160 px) | `Oren Thistlewick`, 16 (about 195) | `Captain Varra Black`, 19 (about 230) |
+| Reader | Inside | `Captain Varra`, 13 letters (160 px) | `Oren Thistlewick`, 16 (197) | `Captain Varra Black`, 19 (230) |
 |---|---:|---|---|---|
-| Lookup at case D | 322 | 82 px: `Add to Log` as its icon | 47: the icon | 12: neither |
-| Lookup at case B | 408 | 168: `Start fight`, and the icon | 133: `Start fight` | 98: the icon |
-| The World page at 960x640 | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
+| Lookup at case D (measured) | 320 | 91 px: `Add to Log` as its icon | 54: the icon | 21: neither |
+| Lookup at case B (measured) | 406 | 177: `Start fight`, and the icon | 140: `Start fight`, and the icon, with 0.4 px to spare | 107: the icon |
+| The World page at 960x640 (estimate) | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
 
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
@@ -249,7 +254,9 @@ typed scenes cost 1 more, and 1 to come back to the plan.
 - **The More clicks and the audit script.** `steps.tsv` counts no **More** click, and the script clicks
   **More** only when `Travel` or `Short rest` is not in view. Its task for a played fight clicks an `Add to
   notes` that the app no longer has (`src/sessions/plan.rs:736`). So this document gives no total for
-  `main`: P1a repairs the script, freezes it, and measures `main`.
+  `main`: P1a repairs the script, freezes it, and measures `main`. P1a measured 17 transitions and 240
+  interactions in 42 tasks; `artifacts/dm-audit/README.md` explains each difference from 13 and 231. The
+  played fight's link now goes by the Timeline's `Copy link` and a paste in the note: 6, **T T**.
 
 ### 2.2 J2: the improvised evening
 
@@ -309,8 +316,8 @@ nothing takes focus from `Amount`.
 ### 2.4 J4: the race, between fights
 
 The Tournament of [the example](world-examples/heralds-tournament.md), with its note as it is and one
-addition that P9 makes: the bells' rival table gets `for:`. **Trackers are used between fights only**; what
-a fight may show of them is held for the owner (section 7). The start: Session page, Lookup closed, the
+addition that P9 makes: the bells' rival table gets `for:`. **Trackers are used between fights only**; in a
+fight the run shows no tracker part, and the owner accepted this cost (section 7). The start: Session page, Lookup closed, the
 clock at 30, Favor 2, no seals. **Paper** is the same race on the paper sheet: each mark, tick, note or
 erasure is one act (**p**), and each die that a table needs is one die (**d**).
 
@@ -814,8 +821,9 @@ the improvised encounter by `Close run` (cut: after a restart nothing remembers 
 **Question.** "What is due, and what are the numbers?"
 
 **The slice.** This design builds trackers for use **between fights**: the ledger, the Trackers view of
-Lookup, the Due list and the rail's `Due N` (P9). What a fight may show of a tracker is held for the owner
-(section 7), so the run has no part of F4, and the marks that a round or a day raises wait.
+Lookup, the Due list and the rail's `Due N` (P9). In a fight the DM uses Trackers through Ctrl+T, and the owner
+accepted this cost (section 7), so the run has no part of F4. Marks that a round raises are dropped, and day
+marks come in P11.
 
 The data model of [World and house rules](world-and-house-rules.md) stands, and this pull request changes
 that document in place: Trackers is a view of Lookup, the ledger is the Undo, a mark's table can name what
@@ -931,7 +939,8 @@ action. Escape closes Lookup.
 **What stays with the DM.** Awarding Favor, moving a rival, what a bell does on the map, and every rule that a
 tracker's number stands for. A proposed change applies only when the DM presses `Done`.
 
-**Not built, and why.** Any tracker part in a run, and day marks (held for the owner; section 7). The parts in
+**Not built, and why.** Any tracker part in a run (the owner accepted this cost; section 7), and day marks
+(P11). The parts in
 [World and rules: later](world-and-rules-later.md). An action on a notice for a group (**Add to fight** is the
 route, as today). A `Make house rule note` action (no band holds it today; the DM sets the note's properties).
 
@@ -1184,7 +1193,7 @@ Case A, the plan at 330 px
   at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
   block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` It
   is still an XP line, and the link and the loot are written. An amount that is not known is left out of
-  every sum and is never counted as zero. This point is proposed; the owner has not ruled yet (section 7).
+  every sum and is never counted as zero. This is the rule (section 7).
 - **Loot,** as lines under it: the encounter's loot and the loot of each creature at 0 HP. A roll that was
   made has its result. A roll that was not made is written with `(not rolled)`, as `Copy loot` writes it
   today, and the result says how many.
@@ -1697,9 +1706,9 @@ the reference of G7.
 | **P6** | F6 | `src/world.rs` (the header band and the field), `src/world/lines.rs` (reuse `add_log`, `:459`), `src/sessions/plan.rs` | P1c, P3 | New `log-from-play`. Extend `world-facts` |
 | **P7** | F7. An ordered read of the session notes that keeps an unreadable note in its place | `src/sessions.rs` (the block, the search for the newest block), `src/sessions/plan.rs`, `src/encounter_run/loot.rs`, `src/difficulty.rs` | P2, P3 | Extend `run-loot`, `session-plan` |
 | **P8** | F5, with rows 11, 16 and 18 of section 2.5. The draft's provenance, and the exact inverse of `Undo carry over` | `src/sessions.rs`, `src/sessions/page.rs` (`last_time_block`, `recap_preview`), `src/markdown_view.rs` | P3 | New `session-carry-over`. Extend `session-plan` |
-| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (it is held with P10), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
-| **P10** | Held (section 7): marks that a fight raises | – | The owner's answer, and P9 through a whole race in an app round | – |
-| **P11** | Held with P10: day marks | – | P10 | – |
+| **P9** | F4, the slice between fights: house rule notes, in play, the ledger with its save and its Undo, quick actions, instances, marks at a value with `for:`, the Due rows, the rail's count, `Add to Timeline`, the Trackers view and Ctrl+T. In the Tournament example: `for:` on the bells, `activation` not pinned (P10, which needed it, is dropped), and no line about **Make house rule note** | New `src/trackers.rs`, `src/trackers/ledger.rs`, `src/trackers/view.rs`. `src/lookup.rs`, `src/lib.rs`, `src/campaign_content.rs`, `crates/core`, the example note | P1a, P1c | New `trackers`, with the Session page's plan tab and `Start fight` beside the view. Extend `run-lookup`, `nav-state` |
+| **P10** | Dropped (section 7): marks that a fight raises | – | – | – |
+| **P11** | Day marks | – | P9 | – |
 | **P12** | The audit, again. Extend the evening to use every feature, measure it, and add the scripts for J2, J3, J4 and J6. Run G6 and G7 on the whole | `src/visual_tests/dm_audit.rs`, `artifacts/dm-audit/` | All that are built | The audit's captures, and `plain-evening` |
 
 **What can be built at the same time.**
@@ -1709,7 +1718,8 @@ the reference of G7.
   `src/encounters/list.rs`, each in its own function.
 - **Wave B, three at once:** P4, P6, P9. P4 and P9 share no file.
 - **Wave C, two at once:** P7 and P8. Both call `Draft::apply`, so neither adds a save of its own.
-- **Then:** P12. P10 and P11 wait (section 7). The full gate runs on merged source after each wave.
+- **Then:** P12, and P11 after P9. P10 is dropped (section 7). The full gate runs on merged source after each
+  wave.
 
 ## 7. Limits
 
@@ -1721,9 +1731,9 @@ Each is a limit that this design keeps and states, with its count.
   searched again after Lookup closed or showed an entry: 1 or 2 more (section 2.3, F3). `Back` is as today;
   P1c records these states in a test.
 - **The rewards block does not follow the fight** after it is written (F7).
-- **A reader's header at 960x640 with Lookup open** shows `Start fight` beside a title of up to about 10
-  letters, and the `Add to Log` icon up to about 17; a portrait takes about 80 px more. Section 1.2 counts
-  the other routes.
+- **A reader's header at 960x640 with Lookup open** shows `Start fight` beside a title of up to about 11
+  letters (143 px, measured in P1a), and the `Add to Log` icon up to about 17 (219 px); art and `Edit`
+  together take about 72 px more. Section 1.2 counts the other routes.
 - **A row's effects share its second line with today's words.** At 1200x800 it holds one counted effect and
   a count, or two counted effects with short names. At 960x640 with Lookup open it holds one long reminder,
   or one counted effect, and a count. The hover, **Conditions** and the notice line hold the whole words
@@ -1735,14 +1745,13 @@ Each is a limit that this design keeps and states, with its count.
 - **Where the note is behind its tab** (cases B, C and D), a typed line costs the tab changes: 2 in J2 and in
   J6.
 
-**Two points wait for the owner.**
+**Two rulings of the owner** (2026-11-11).
 
-1. **Trackers in a fight.** A tracker act in a fight costs three acts, because Trackers is a view of Lookup
-   and the run's own panel hides beside it. One press needs pinned quick actions in view in the run, and the
-   owner rules before a strip or a panel view joins the run. Until then the DM marks the paper sheet in a
-   fight and enters the fight's marks after it (section 2.4), a bell inside a fight shows then, and P10 and
-   P11 wait.
+1. **Trackers in a fight.** The run gets no strip, no popover and no tracker part. In a fight the DM opens
+   the Trackers view with Ctrl+T, presses, and goes back: three acts for each press, because Trackers is a
+   view of Lookup and the run's own panel hides beside it. The rail's `Due N` still shows. The owner accepted
+   this cost. P10 (marks that a fight raises) is dropped, and P11 (day marks) depends on P9 only.
 2. **F7, an award that is not known.** The XP line names the creature whose XP Splat does not know, and
-   leaves that amount out of the sum. Proposed; the owner has not ruled yet.
+   leaves that amount out of the sum.
 
 No question is open for the lead. While a run is open, a reader has no `Start fight` action.

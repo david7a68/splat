@@ -46,6 +46,7 @@
     esac
     # Feedback-only settings must not turn a merge gate into a partial/report run.
     unset SPLAT_VISUAL_SCENARIOS SPLAT_VISUAL_UPDATE_BASELINE SPLAT_VISUAL_DIAGNOSE
+    unset SPLAT_DM_AUDIT_WRITE SPLAT_PLAIN_EVENING_WRITE SPLAT_FROZEN_AT SPLAT_PLAIN_EVENING_OUT
     export SPLAT_VISUAL_ENFORCE=baseline
     # Cargo serializes compilation in this target directory, but releases its
     # build lock before running tests. Let fmt/Clippy overlap test execution.
@@ -97,6 +98,65 @@
     fi
     echo "Output: $out"
     exit "$status"
+  '';
+  # G6's counts and G7's plain reference (README.md, Visual tests).
+  #   audit-freeze counts [label]     G6: write every row of the audit's counts from this source.
+  #   audit-freeze reference [label]  G7: write the plain reference on an unchanged commit of main.
+  #   audit-freeze add [label]        Add new tasks, views and acts; keep every frozen record.
+  #   audit-freeze verify [label]     Write the reference to a scratch folder and compare bytes.
+  scripts.audit-freeze.exec = ''
+    what="''${1:-}"
+    label="''${2:-freeze}"
+    if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+      echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+      exit 2
+    fi
+    case "$label" in
+      "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
+    esac
+    export SPLAT_VISUAL_ENFORCE=report
+    # The reference is main's: only its own files may differ from the commit it names.
+    unchanged() {
+      if [ -n "$(git status --porcelain --untracked-files=no -- . \
+        ':(exclude)src/visual_tests/plain_evening/' ':(exclude)artifacts/dm-audit/titles.tsv')" ]; then
+        echo "audit-freeze $what runs on an unchanged commit of main. These files differ:" >&2
+        git status --short --untracked-files=no -- . \
+          ':(exclude)src/visual_tests/plain_evening/' ':(exclude)artifacts/dm-audit/titles.tsv' >&2
+        exit 1
+      fi
+    }
+    case "$what" in
+      counts)
+        SPLAT_DM_AUDIT_WRITE=all visual-test "$label" --only dm-audit ;;
+      reference)
+        unchanged
+        SPLAT_FROZEN_AT="$(git rev-parse HEAD)" SPLAT_PLAIN_EVENING_WRITE=all \
+          visual-test "$label" --only plain-evening ;;
+      add)
+        SPLAT_DM_AUDIT_WRITE=add SPLAT_PLAIN_EVENING_WRITE=add \
+          visual-test "$label" --only dm-audit,plain-evening ;;
+      verify)
+        unchanged
+        out="$PWD/artifacts/screenshots/$label/verify"
+        rm -rf "$out"
+        SPLAT_FROZEN_AT="$(git rev-parse HEAD)" SPLAT_PLAIN_EVENING_WRITE=all SPLAT_PLAIN_EVENING_OUT="$out" \
+          visual-test "$label" --only plain-evening || exit 1
+        tree="$PWD/src/visual_tests/plain_evening"
+        if diff -q "$out/reference.json" "$tree/reference.json" >/dev/null \
+          && diff -rq "$out/files" "$tree/files" >/dev/null \
+          && diff -q "$out/titles.tsv" "$PWD/artifacts/dm-audit/titles.tsv" >/dev/null; then
+          echo "audit-freeze verify: the reference is the one main $(git rev-parse HEAD) writes."
+        else
+          echo "audit-freeze verify: the reference differs from the one main $(git rev-parse HEAD) writes:" >&2
+          diff -rq "$out/files" "$tree/files" >&2
+          diff -q "$out/reference.json" "$tree/reference.json" >&2
+          diff -q "$out/titles.tsv" "$PWD/artifacts/dm-audit/titles.tsv" >&2
+          exit 1
+        fi ;;
+      *)
+        echo "Use: audit-freeze counts|reference|add|verify [label]" >&2
+        exit 2 ;;
+    esac
   '';
   # Apply only chrome counts from a completed full or --only run, without recapturing.
   scripts.visual-baseline-chrome.exec = ''

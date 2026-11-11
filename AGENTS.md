@@ -42,6 +42,13 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.
+- **The audit's counts (G6) run in every gate.** When your change makes a task of `artifacts/dm-audit/` cost
+  more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
+  a new task with `devenv shell -- audit-freeze add`.
+- **Pull requests of the session-cycle build plan also run G7:** `SPLAT_FROZEN=1 devenv shell -- audit-gate
+  <label>`. The plain reference changes only in one commit made by `devenv shell -- audit-freeze reference` on
+  an unchanged commit of `main`, which it records; make that commit again after each merge of `main`. A
+  feature adds its views with `devenv shell -- audit-freeze add` and its changes as rows in `allowed.json`.
 - **Run what you touched.** A focused run covers the scenarios of every file you changed, also files outside
   your task. The full `audit-gate` runs on merged source before merge. A visual scenario's ids and dice come
   from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`), not from its place in `SCENARIOS`. Add
