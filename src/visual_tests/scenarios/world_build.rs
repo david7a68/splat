@@ -2202,6 +2202,49 @@ fn result_below_file_line(
     )
 }
 
+/// FD5: one tone for one fault. The message above the roster has this tone's bar, and every
+/// roster row that states the fault marks it once, with this tone's icon and colour.
+fn fault_tone(
+    d: &Driver<'_>,
+    message: &str,
+    row_words: &str,
+    (icon, color): (&str, egui::Color32),
+) -> (bool, String) {
+    let bar = d
+        .painted_rect_in(message, egui::Rect::EVERYTHING)
+        .is_some_and(|words| d.has_tone_bar(words, color));
+    let mut rows = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        // A row's detail line starts with its side; the message has no ` · `.
+        if job.text.contains(row_words)
+            && job.text.contains(" · ")
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            rows.push(
+                job.sections
+                    .iter()
+                    .filter(|section| section.format.color != design::colors().muted)
+                    .map(|section| {
+                        (
+                            job.text[section.byte_range.clone()].trim().to_owned(),
+                            section.format.color,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+    });
+    let marked = rows.len() == 2
+        && rows
+            .iter()
+            .all(|marks| marks.len() == 1 && marks[0].0 == icon && marks[0].1 == color);
+    (
+        bar && marked,
+        format!("message {message:?} bar in {color:?}: {bar}; rows: {rows:?}"),
+    )
+}
+
 /// FD3: from the bottom of the painted file line to the top of the first prose line.
 fn prose_gap(d: &Driver<'_>, file: &str, prose: &str) -> Option<f32> {
     let pane = reader_pane(d);
@@ -3318,6 +3361,14 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.expect("Cinder Wolf");
     assert!(!d.app_mut().encounters.has_run());
     d.state("invalid-package-blocks-new-fight", Sizes::All);
+    // iter-19-B-FD5: the message and the two rows that state the same fault share its error tone.
+    let (one_tone, detail) = fault_tone(
+        d,
+        "Cinder Wolf.md cannot be read (line 4). Open in Library to fix it.",
+        "Cinder Wolf.md cannot be read (line 4)",
+        (design::icons::ERROR, design::colors().result.error),
+    );
+    d.observe("iter-19-B-FD5", one_tone, detail);
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
@@ -3384,6 +3435,14 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("Start another fight");
     assert!(!d.app_mut().encounters.has_run());
     d.state("deleted-package-blocks-new-fight", Sizes::All);
+    // iter-19-B-FD5 must stay true: a deleted entry stays a warning in the message and the rows.
+    let (warned, detail) = fault_tone(
+        d,
+        "2 Cinder Wolf rows have no creature.",
+        "Not found. Its package entry was deleted.",
+        (design::icons::WARN, design::colors().result.warning),
+    );
+    d.observe("iter-19-B-FD5-deleted", warned, detail);
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
