@@ -1051,12 +1051,12 @@ impl CampaignContent {
                     // result. The result lives from Discard to this draft's next edit, its Undo,
                     // a Save, a reload or another campaign; then the reason leads.
                     let name = path.rsplit('/').next().unwrap_or(path);
+                    // Only whether the result lives: its text is taken on Undo, never per frame.
                     let discarded = self
                         .discarded_repair
                         .as_ref()
-                        .filter(|(p, _)| p == path)
-                        .map(|(_, text)| text.clone());
-                    let result = discarded.as_ref().map(|_| format!("{name} draft discarded."));
+                        .is_some_and(|(p, _)| p == path);
+                    let result = discarded.then(|| format!("{name} draft discarded."));
                     let words = [result.as_deref(), repair.refusal.as_deref()]
                         .into_iter()
                         .flatten()
@@ -1070,7 +1070,7 @@ impl CampaignContent {
                         width,
                         words.as_deref(),
                         |ui| {
-                            let undo = discarded.is_some() && design::draft_discarded(ui, name);
+                            let undo = discarded && design::draft_discarded(ui, name);
                             if let Some(refusal) = &repair.refusal {
                                 design::message(ui, Tone::Error, refusal);
                             }
@@ -1078,10 +1078,9 @@ impl CampaignContent {
                         },
                     );
                     if undo == Some(true)
-                        && let Some(text) = discarded
+                        && let Some((_, text)) = self.discarded_repair.take()
                     {
                         repair.draft = text;
-                        self.discarded_repair = None;
                         repair.draft_changed(active, checks);
                     }
                 });

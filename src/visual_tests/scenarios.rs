@@ -2308,6 +2308,41 @@ pub mod campaign_content {
                 && upper_active[0].1,
             format!("Upper repair focused: saves {upper_active:?}"),
         );
+        // Two open repairs, each with its reserved message space, are taller than a small
+        // window, and the page does not scroll above the package list. The steps below run where
+        // both fit (a known limit, named in round 25's PR).
+        let base = d.window_size();
+        d.set_base(LARGE);
+        // Round 25 FD1: A's discard result belongs to A. B's edit leaves it, and Undo discard
+        // brings back A's draft only; B's edit stays. Each draft's words are in its own editor.
+        let b_name = crate::world::repair::editor_name("Notes/Cracked.md");
+        d.click_below("Notes/Broken.md cannot be read", "Discard");
+        let a_discarded = !d.visible_text("First draft.") && d.visible_text("Second draft.");
+        // B's edit keeps its line count, so its editor shows the same lines.
+        let b_draft = second.replacen("Second draft.", "Second draft. Kept B line.", 1);
+        d.replace_text_in(&b_name, &b_draft);
+        let b_changed = d.visible_text("Kept B line.");
+        let a_result = d.in_view("Undo discard of Broken.md");
+        if a_result {
+            d.click("Undo discard of Broken.md");
+        } else {
+            // A fault lost A's Undo: put A's words back by hand, so the observation below fails
+            // and the later steps still start from both drafts.
+            d.replace_text_in(
+                &crate::world::repair::editor_name("Notes/Broken.md"),
+                &first,
+            );
+        }
+        let a_back = d.visible_text("First draft.") && !d.has("Undo discard of Broken.md");
+        let b_kept = d.visible_text("Kept B line.");
+        d.observe(
+            "iter-25-C-FD1-owner",
+            a_discarded && b_changed && a_result && a_back && b_kept,
+            format!(
+                "A discarded {a_discarded}, B changed {b_changed}, A's Undo kept through B {a_result}, A back {a_back}, B kept {b_kept}"
+            ),
+        );
+        d.set_base(base);
         // An open run owns `Next turn`: no repair Save is primary, and both drafts stay.
         go_encounters(d);
         run_saved_encounter(d, SIBLING_ENTRY);
@@ -2379,9 +2414,7 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(file, permissions).unwrap();
         };
-        // Two open repairs, each with its reserved message space, are taller than a 960x640
-        // window, and the page does not scroll above the package list. B's steps run where both
-        // fit (a known limit, named in round 25's PR).
+        // B's steps run where both repairs fit (see above).
         let base = d.window_size();
         d.set_base(DEFAULT);
         set_read_only(&a_file, true);

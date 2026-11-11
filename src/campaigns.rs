@@ -1202,10 +1202,10 @@ impl Campaigns {
                 // holds: Save's error first, else the discard result. So neither moves the rows
                 // below the form.
                 const DISCARDED: &str = "Campaign details draft discarded.";
-                let error = self.error.clone();
-                let words = error.as_deref().or(self.discarded_details.is_some().then_some(DISCARDED));
+                let error = self.error.as_deref();
+                let words = error.or(self.discarded_details.is_some().then_some(DISCARDED));
                 let undo = design::message_space(ui, "campaign_form_message", ui.available_width(), words, |ui| {
-                    if let Some(error) = &error {
+                    if let Some(error) = error {
                         design::message(ui, Tone::Error, error);
                         false
                     } else {
