@@ -609,6 +609,7 @@ impl Campaigns {
         // The name, lock and caret share a fixed-height control.
         let top = ui.cursor().top();
         let locked = reason.is_some();
+        let column_right = ui.clip_rect().right();
         let combo = egui::ComboBox::from_id_salt("active_campaign")
             .icon(move |ui, rect, visuals, open| {
                 if locked {
@@ -627,7 +628,17 @@ impl Campaigns {
             .wrap()
             .selected_text(Type::Small.rich(ui, label).color(colors().text))
             .show_ui(ui, |ui| {
-                ui.set_min_width(220.0);
+                // The menu stays inside the navigation column, clear of its splitter. A
+                // narrow column wraps the names.
+                let room = column_right
+                    - design::S
+                    - ui.style().spacing.menu_margin.rightf()
+                    - ui.max_rect().left();
+                if room < 220.0 {
+                    ui.set_max_width(room);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                }
+                ui.set_min_width(room.min(220.0));
                 if let Some(reason) = reason {
                     design::blocked_reason(ui, Some(reason));
                     ui.add_space(design::L);
