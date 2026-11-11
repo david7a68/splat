@@ -225,7 +225,7 @@ fn part_text(part: &DamagePart) -> String {
 
 /// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll. A part with a condition
 /// follows as `or 4d6+4 piercing` or `plus 1d4 slashing`; its condition is in the text.
-fn parts_text(parts: &[DamagePart]) -> String {
+pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
     parts
         .iter()
         .map(|part| match &part.when {
@@ -281,16 +281,21 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
 
 /// Hover words and a press with its keys, on a drawn number that rolls.
 pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
-    if let Some((mode, inspired)) = mode_menu(response, link) {
-        ask(ui.ctx(), link.clone(), mode, inspired);
-    }
-    if !response.hovered() && !response.clicked() {
+    press(ui, response, link);
+    if !response.hovered() {
         return;
     }
     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     response.clone().on_hover_text(hint(link));
+}
+
+/// A click asks for `link` with the keys held; a choice in its right-click menu asks its way.
+fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
     if response.clicked() {
         ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link), false);
+    }
+    if let Some((mode, inspired)) = mode_menu(response, link) {
+        ask(ui.ctx(), link.clone(), mode, inspired);
     }
 }
 
@@ -1044,17 +1049,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
             let number = (in_run && at < 9).then_some(at + 1);
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let response = tile(ui, chip, number, lit);
-            if response.clicked() {
-                ask(
-                    &ctx,
-                    chip.link.clone(),
-                    Mode::from_keys(ui, &chip.link),
-                    false,
-                );
-            }
-            if let Some((mode, inspired)) = mode_menu(&response, &chip.link) {
-                ask(&ctx, chip.link.clone(), mode, inspired);
-            }
+            press(ui, &response, &chip.link);
         }
     });
     ui.add_space(design::XS);
@@ -1133,17 +1128,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 .selected(lit)
                 .hint(&hint(&chip.link))
                 .show(ui);
-            if response.clicked() {
-                ask(
-                    &ctx,
-                    chip.link.clone(),
-                    Mode::from_keys(ui, &chip.link),
-                    false,
-                );
-            }
-            if let Some((mode, inspired)) = mode_menu(&response, &chip.link) {
-                ask(&ctx, chip.link.clone(), mode, inspired);
-            }
+            press(ui, &response, &chip.link);
         }
     });
 }

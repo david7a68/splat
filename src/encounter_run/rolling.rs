@@ -90,14 +90,7 @@ fn parts_words(parts: &[DamagePart]) -> String {
     if parts.is_empty() {
         return "no dice".to_owned();
     }
-    parts
-        .iter()
-        .map(|part| match &part.kind {
-            Some(kind) => format!("{} {}", part.dice, kind.to_lowercase()),
-            None => part.dice.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+    rolls::parts_text(parts)
 }
 
 /// The height of the action bar above the dock while Lookup or Notes hide the panel.
@@ -141,10 +134,7 @@ impl Run {
         let Some(actor) = self.existing(ask.roller) else {
             return;
         };
-        // Inspiration pays for advantage only by a rule that says so, and only if they have it.
-        let inspired = ask.inspired
-            && self.inspiration == Some(Inspiration::Advantage)
-            && self.has_inspiration(actor);
+        let inspired = ask.inspired && self.can_buy_advantage(actor);
         let result = match &ask.link {
             RollLink::D20 {
                 what: D20::Attack, ..
@@ -235,6 +225,12 @@ impl Run {
         }
     }
 
+    /// True when this row's character can expend inspiration for advantage before a roll:
+    /// only by a rule that says so, and only if they have it.
+    fn can_buy_advantage(&self, row: usize) -> bool {
+        self.inspiration == Some(Inspiration::Advantage) && self.has_inspiration(row)
+    }
+
     /// The character expends inspiration. A synced sheet sends it to D&D Beyond; otherwise the
     /// run remembers it, and the Log says so for the DM to mark on the sheet.
     fn spend_inspiration(&mut self, row: usize) {
@@ -271,7 +267,7 @@ impl Run {
         }
         let who = self.state.participants[kept.actor].name.clone();
         let changes = self.changes(kept.actor);
-        let (outcome, old, new) = self.record(
+        let (outcome, ..) = self.record(
             |random| rolls::reroll_d20(&who, &kept.outcome, changes, random),
             |(outcome, old, new): &(Outcome, i64, i64)| {
                 let mut lines = vec![format!(
@@ -281,7 +277,6 @@ impl Run {
                 lines
             },
         )?;
-        let _ = (old, new);
         self.spend_inspiration(kept.actor);
         if matches!(
             outcome.link,
@@ -404,9 +399,7 @@ impl Run {
                     }
                     // For a player, the menu rolls for them.
                     link => {
-                        let inspired = inspired
-                            && self.inspiration == Some(Inspiration::Advantage)
-                            && self.has_inspiration(armed.actor);
+                        let inspired = inspired && self.can_buy_advantage(armed.actor);
                         self.attack(armed.actor, row, link, mode, inspired)
                     }
                 }
@@ -464,11 +457,12 @@ impl Run {
                     }
                 }
                 RollLink::D20 { .. } => {
-                    let player = self.player(armed.actor);
-                    let verb = if player { "Roll for them" } else { "Roll" };
-                    let inspired = player
-                        && self.inspiration == Some(Inspiration::Advantage)
-                        && self.has_inspiration(armed.actor);
+                    let verb = if self.player(armed.actor) {
+                        "Roll for them"
+                    } else {
+                        "Roll"
+                    };
+                    let inspired = self.can_buy_advantage(armed.actor);
                     for (words, mode, inspired) in rolls::mode_choices(verb, inspired) {
                         items.push((words, RowChoice::Roll(mode, inspired)));
                     }
@@ -774,11 +768,7 @@ impl Run {
     /// can expend inspiration for advantage.
     pub(super) fn armed_tiles_begin(&self, ctx: &egui::Context) {
         rolls::set_armed(ctx, self.armed_view());
-        rolls::set_inspired(
-            ctx,
-            self.inspiration == Some(Inspiration::Advantage)
-                && self.has_inspiration(self.panel_row()),
-        );
+        rolls::set_inspired(ctx, self.can_buy_advantage(self.panel_row()));
     }
 
     /// Handle what was pressed under the armed tile.
