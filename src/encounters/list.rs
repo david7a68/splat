@@ -826,6 +826,55 @@ mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, page::SessionLink};
 
+    /// F1: a Ready row's word joins its detail only when the detail stays whole with it on its
+    /// one line; else the line is as it was.
+    #[test]
+    fn the_difficulty_word_never_costs_a_detail_word() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let rating = crate::difficulty::Rating {
+            word: crate::difficulty::Word::AboveHigh,
+            budgets: [750, 1125, 2000],
+            xp: 6300,
+            characters: 5,
+            levels: (3, 3),
+            campaign_party: false,
+        };
+        let detail = "5 party · Cinder Tyrant · 2 × Ember Cultist";
+        let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
+        let lines = |rating: Option<&crate::difficulty::Rating>| {
+            let mut lines = Vec::new();
+            for width in &widths {
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.scope(|ui| {
+                            ui.set_max_width(*width);
+                            list_row(ui, "row", "Mill Road", detail, false, rating, |_| {});
+                        });
+                    });
+                });
+                let line = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("5 party") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                });
+                lines.push(line.unwrap());
+            }
+            lines
+        };
+        let (plain, rated) = (lines(None), lines(Some(&rating)));
+        let word = format!("{detail} · Above High");
+        for (plain, rated) in plain.iter().zip(&rated) {
+            assert!(rated == plain || (plain == detail && *rated == word), "{plain:?} → {rated:?}");
+        }
+        // The word shows where it fits, and gives way where it would cut the detail.
+        assert!(
+            rated.contains(&word) && rated.iter().any(|line| *line != word),
+            "{rated:?}"
+        );
+    }
+
     /// Astra review of PR 231: a row menu opens below or above its button, never beside it, and
     /// starts at the button's left edge only when ending at its right edge would cross the pane.
     #[test]
