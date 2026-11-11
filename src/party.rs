@@ -322,7 +322,8 @@ impl Party {
                 c.connection.connected,
             )
         } else if !checked {
-            (icons::ONLINE, "Connected · Cached sheet", c.connection.busy)
+            // Round 24 FK2: `Fetched 3 h ago` after it says the sheet is the one Splat saved.
+            (icons::ONLINE, "Connected", c.connection.busy)
         } else if self.reader.stream_open {
             (icons::ONLINE, "Live updates", c.connection.connected)
         } else {

@@ -72,6 +72,34 @@ impl Repair {
     fn dirty(&self) -> bool {
         self.draft != self.baseline
     }
+    /// Save asks its own question again, then writes. A refusal is Invalid with its cause, never
+    /// a failed Save: `Not saved.` belongs only to a write that failed on the disk. True when the
+    /// draft was written.
+    fn save(&mut self, campaign: &Campaign) -> bool {
+        let (refusal, line) = crate::world::repair::refusal(campaign, &self.path, &self.draft);
+        if refusal.is_some() {
+            (self.refusal, self.error_line) = (refusal, line);
+            self.failure = None;
+            return false;
+        }
+        match write_note(
+            &campaign.path,
+            &self.path,
+            Some(&self.baseline),
+            &self.draft,
+        ) {
+            Ok(_) => {
+                self.baseline = self.draft.clone();
+                self.failure = None;
+                true
+            }
+            // The cause stays with this repair, in its state slot.
+            Err(reason) => {
+                self.failure = Some(reason);
+                false
+            }
+        }
+    }
 }
 type Loaded = (Vec<Repair>, Result<Snapshot, String>);
 struct Checked {
@@ -251,6 +279,92 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
         }
     }
     (found.len() == 1).then(|| found.into_values().next().unwrap())
+}
+
+/// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
+/// `3 of 6 chosen`, `5 of 6 chosen · 1 needed`, `None chosen · 3 needed`.
+fn package_count(
+    count: usize,
+    required: usize,
+    total: usize,
+    partial: bool,
+    enabled: bool,
+) -> String {
+    let number = |n: usize| design::count(n, "", "").trim().to_owned();
+    let entries = || {
+        if total == 0 {
+            String::new()
+        } else {
+            format!(" · {}", design::count(total, "entry", "entries"))
+        }
+    };
+    if count == 0 && required > 0 {
+        format!("None chosen · {} needed", number(required))
+    } else if required > 0 {
+        format!(
+            "{} of {} chosen · {} needed",
+            number(count + required),
+            number(total),
+            number(required)
+        )
+    } else if partial {
+        format!("{} of {} chosen", number(count), number(total))
+    } else if enabled {
+        format!("All chosen{}", entries())
+    } else {
+        format!("None chosen{}", entries())
+    }
+}
+
+/// Whether a package's faulty manifest is still on the disk: then it cannot be read, an error;
+/// a deleted one is a warning. The Campaign message and the package row ask the same question.
+fn manifest_on_disk(module: &Module, path: &str, problem: &str) -> bool {
+    problem != crate::content_workspace::DELETED_MANIFEST && module.path.join(path).exists()
+}
+
+/// The mark that leads a package row's second line when its manifest has a fault: the fault's
+/// icon, drawn in its tone, and the words its accessible name says in place of the icon. The
+/// row is too narrow for the words beside the count; the message above names the fault.
+fn manifest_mark(on_disk: bool) -> (&'static str, &'static str) {
+    if on_disk {
+        (icons::ERROR, "Manifest cannot be read")
+    } else {
+        (icons::WARN, "Manifest deleted")
+    }
+}
+
+/// `design::two_line_row` for a package, with a fault mark on the second line in its own tone.
+/// `spoken` is the second line as the accessible name says it, with words for the mark.
+fn package_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    title: &str,
+    detail: &str,
+    spoken: &str,
+) -> egui::Response {
+    design::row(
+        ui,
+        Density::Glance.row() + design::XS,
+        selected,
+        &format!("{title} · {spoken}"),
+        |ui, rect| {
+            let c = colors();
+            let width = rect.width() - 2.0 * design::S;
+            let font = if selected { Type::Strong } else { Type::Body };
+            let galley = design::one_line(ui, title, font.font(ui), c.text, width);
+            let total = galley.size().y + Type::Small.line();
+            let top = rect.center().y - total / 2.0;
+            ui.painter()
+                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
+            let detail =
+                crate::library::marked_line(ui, detail, Type::Small.font(ui), c.muted, width);
+            ui.painter().galley(
+                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
+                detail,
+                c.muted,
+            );
+        },
+    )
 }
 
 fn folder_words(path: &std::path::Path) -> String {
@@ -739,6 +853,7 @@ impl CampaignContent {
             .filter(|repair| {
                 repair.dirty()
                     && repair.refusal.is_none()
+                    && repair.failure.is_none()
                     && ui.data(|data| {
                         data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
                             .unwrap_or(false)
@@ -746,7 +861,8 @@ impl CampaignContent {
             })
             .map(|repair| repair.path.as_str())
             .collect();
-        // Only a draft that Save would write can hold the primary.
+        // Only a draft that Save would write, and whose last Save did not fail on the disk, can
+        // hold the primary.
         let owner = (!self.run_open)
             .then(|| {
                 self.active_repair
@@ -762,22 +878,28 @@ impl CampaignContent {
             // the repair keeps until the draft changes.
             let path = repair.path.clone();
             let path = &path;
-            let problem = repair
-                .refusal
-                .clone()
-                .unwrap_or_else(|| "The repair has not been saved".into());
+            // A failed Save shows once, in the save row's state slot, so the message stops at
+            // the way to fix the file.
+            let problem = match (&repair.refusal, &repair.failure) {
+                (Some(refusal), _) => Some(refusal.clone()),
+                (None, Some(_)) => None,
+                (None, None) => Some("The repair has not been saved".into()),
+            };
             let id = egui::Id::new(("repair_open", path.as_str()));
             let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
             if design::message_with_action(
                 ui,
                 Tone::Error,
-                &format!("{path} cannot be read. Fix it here or in World. {}.", {
-                    let mut text = problem.trim_end_matches('.').to_owned();
-                    if let Some(first) = text.get_mut(..1) {
-                        first.make_ascii_uppercase();
+                &match problem {
+                    Some(problem) => {
+                        let mut text = problem.trim_end_matches('.').to_owned();
+                        if let Some(first) = text.get_mut(..1) {
+                            first.make_ascii_uppercase();
+                        }
+                        format!("{path} cannot be read. Fix it here or in World. {text}.")
                     }
-                    text
-                }),
+                    None => format!("{path} cannot be read. Fix it here or in World."),
+                },
                 if open { "Close repair" } else { "Repair" },
             ) {
                 open = !open;
@@ -878,9 +1000,13 @@ impl CampaignContent {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // One weight for a save row: primary while the draft has
                             // changes, unless an open run owns `Next turn` or another
-                            // repair is the active one.
+                            // repair is the active one. After Save failed on the disk it
+                            // stays open to try again, but is not primary until the next edit.
                             let writes = repair.dirty() && repair.refusal.is_none();
-                            let pressed = (if writes && owner.as_deref() == Some(path.as_str()) {
+                            let pressed = (if writes
+                                && repair.failure.is_none()
+                                && owner.as_deref() == Some(path.as_str())
+                            {
                                 Action::primary("Save repaired note")
                             } else {
                                 Action::secondary("Save repaired note")
@@ -901,31 +1027,7 @@ impl CampaignContent {
                                         i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
                                     }))
                             {
-                                // Save asks its own question again before it writes.
-                                let result = match crate::world::repair::refusal(
-                                    active,
-                                    path,
-                                    &repair.draft,
-                                )
-                                .0
-                                {
-                                    Some(refusal) => Err(refusal),
-                                    None => write_note(
-                                        &active.path,
-                                        path,
-                                        Some(&repair.baseline),
-                                        &repair.draft,
-                                    ),
-                                };
-                                match result {
-                                    Ok(_) => {
-                                        repair.baseline = repair.draft.clone();
-                                        repaired = true;
-                                        repair.failure = None;
-                                    }
-                                    // The cause stays with this repair, in its state slot.
-                                    Err(reason) => repair.failure = Some(reason),
-                                }
+                                repaired |= repair.save(active);
                             }
                         });
                     });
@@ -1104,8 +1206,7 @@ impl CampaignContent {
         for module in campaigns.modules() {
             if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
                 let path = &catalogue.entries[&module.id].entry.path;
-                let exists = problem != crate::content_workspace::DELETED_MANIFEST
-                    && module.path.join(path).exists();
+                let exists = manifest_on_disk(module, path, problem);
                 let label = if exists {
                     format!("Replace with a basic {path}")
                 } else {
@@ -1364,7 +1465,9 @@ impl CampaignContent {
                             for issue in &closure.missing_dependencies {
                                 ui.push_id(&issue.reference, |ui| {
                                     // FA6: a dependency issue is a warning like the flags above
-                                    // it, and its repair links start at its words.
+                                    // it, and its repairs start at its words. Round 24 FA2: a
+                                    // message action without an icon has the secondary border,
+                                    // as the flag's `Choose in Rules and runs` does.
                                     let repair = design::message_with_actions(
                                         ui,
                                         Tone::Warning,
@@ -1375,7 +1478,10 @@ impl CampaignContent {
                                                 let owner = &catalogue.entries[id];
                                                 let action = format!("Repair {}", owner.entry.name);
                                                 if let Some(path) = catalogue.file_path_of(*id)
-                                                    && design::link(ui, &action).clicked()
+                                                    && Action::secondary(&action)
+                                                        .density(Density::Read)
+                                                        .show(ui)
+                                                        .clicked()
                                                 {
                                                     repair = Some(path.to_path_buf());
                                                 }
@@ -1704,43 +1810,42 @@ impl CampaignContent {
                                                 .insert(module.id, removed.selection);
                                         }
                                     }
-                                    if design::two_line_row(
-                                        ui,
-                                        Density::Glance.row() + design::XS,
-                                        !self.dependencies && self.module == Some(module.id),
-                                        &module.name,
-                                        &if count == 0 && required > 0 {
-                                            format!(
-                                                "None chosen · {}",
-                                                design::count(required, "needed", "needed")
-                                            )
-                                        } else if required > 0 {
-                                            format!(
-                                                "{} of {} · {} needed",
-                                                design::count(count + required, "", "").trim(),
-                                                design::count(total, "", "").trim(),
-                                                design::count(required, "", "").trim()
-                                            )
-                                        } else {
-                                            format!(
-                                                "{}{}",
-                                                if partial {
-                                                    design::count(count, "selected", "selected")
-                                                } else if enabled {
-                                                    "All".into()
-                                                } else {
-                                                    "None".into()
-                                                },
-                                                if total == 0 {
-                                                    String::new()
-                                                } else {
-                                                    format!(
-                                                        " · {}",
-                                                        design::count(total, "entry", "entries")
-                                                    )
-                                                },
+                                    // Round 24 FF4: a manifest fault the warning above names
+                                    // is marked on its row too, in its tone.
+                                    let mark = catalogue.manifest_problems.get(&module.id).map(
+                                        |problem| {
+                                            let folder = campaigns
+                                                .modules()
+                                                .iter()
+                                                .find(|known| known.id == module.id);
+                                            manifest_mark(
+                                                folder
+                                                    .zip(catalogue.entries.get(&module.id))
+                                                    .is_some_and(|(folder, entry)| {
+                                                        manifest_on_disk(
+                                                            folder,
+                                                            &entry.entry.path,
+                                                            problem,
+                                                        )
+                                                    }),
                                             )
                                         },
+                                    );
+                                    let counted =
+                                        package_count(count, required, total, partial, enabled);
+                                    let (detail, spoken) = match mark {
+                                        Some((icon, words)) => (
+                                            format!("{icon} {counted}"),
+                                            format!("{words} · {counted}"),
+                                        ),
+                                        None => (counted.clone(), counted),
+                                    };
+                                    if package_row(
+                                        ui,
+                                        !self.dependencies && self.module == Some(module.id),
+                                        &module.name,
+                                        &detail,
+                                        &spoken,
                                     )
                                     .clicked()
                                     {
@@ -2220,6 +2325,35 @@ mod tests {
     }
 
     #[test]
+    fn package_counts_share_one_form() {
+        // Round 24 FF2: `<All, None or N of M> chosen`, then the entries or the needed count.
+        assert_eq!(
+            package_count(2065, 0, 2065, false, true),
+            "All chosen · 2,065 entries"
+        );
+        assert_eq!(
+            package_count(0, 0, 6, false, false),
+            "None chosen · 6 entries"
+        );
+        assert_eq!(
+            package_count(4, 1, 6, true, true),
+            "5 of 6 chosen · 1 needed"
+        );
+        assert_eq!(
+            package_count(0, 3, 6, false, false),
+            "None chosen · 3 needed"
+        );
+        assert_eq!(package_count(3, 0, 6, true, true), "3 of 6 chosen");
+        assert_eq!(package_count(0, 0, 0, false, false), "None chosen");
+        // FF4: a manifest fault leads the line in its tone's icon.
+        assert_eq!(manifest_mark(false), (icons::WARN, "Manifest deleted"));
+        assert_eq!(
+            manifest_mark(true),
+            (icons::ERROR, "Manifest cannot be read")
+        );
+    }
+
+    #[test]
     fn an_unclosed_list_names_and_marks_its_opening_line() {
         let text = "---\nsplat_schema: 2\nsplat_kind: [\n---\n";
         let (problem, line) = repair_problem("Notes/Broken.md", text);
@@ -2262,8 +2396,23 @@ mod tests {
         repair.draft_changed(&active, &mut checks);
         assert_eq!(
             (repair.refusal, repair.failure, checks),
-            (ownership, None, 1)
+            (ownership.clone(), None, 1)
         );
+        // Round 24 SA1, FA1: Save asks again before it writes. A refusal found then (here the
+        // note now belongs to another campaign) is Invalid with its cause, not `Not saved.`.
+        let mut repair = refusal(&own);
+        assert_eq!(repair.refusal, None);
+        let elsewhere = Campaign {
+            id: uuid::Uuid::new_v4(),
+            ..active.clone()
+        };
+        assert!(!repair.save(&elsewhere));
+        assert_eq!((repair.refusal, repair.failure), (ownership, None));
+        // A write that fails on the disk is the failed Save, and only it.
+        let mut repair = refusal(&rule);
+        assert!(!repair.save(&active));
+        assert_eq!(repair.refusal, None);
+        assert!(repair.failure.is_some(), "{:?}", repair.failure);
     }
 
     #[test]

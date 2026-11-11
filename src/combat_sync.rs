@@ -1625,7 +1625,21 @@ impl CombatSync {
         use crate::design;
         ui.add_space(design::XS);
         design::group_label(ui, "Hit points");
-        sheet_grid(ui, "sheet_life", |ui| {
+        let well = well_width(
+            ui,
+            [
+                Some(max_hp),
+                self.desired
+                    .get("hp")
+                    .and_then(|hp| hp["temporaryHitPoints"].as_i64()),
+                self.desired
+                    .get("hp_bonus")
+                    .and_then(|bonus| bonus["bonusHitPoints"].as_i64()),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        sheet_grid(ui, "sheet_life", well, |ui| {
             if let Some(hp) = self.desired.get_mut("hp") {
                 let mut current = current_hp(hp, max_hp);
                 let note = Some(format!("of {max_hp}"));
@@ -1753,7 +1767,8 @@ impl CombatSync {
                                 .rich(ui, "Hit dice to spend")
                                 .color(colors().muted),
                         );
-                        sheet_grid(ui, "sheet_short_rest", |ui| {
+                        let well = well_width(ui, hit_dice.values().copied());
+                        sheet_grid(ui, "sheet_short_rest", well, |ui| {
                             for dice in self.hit_dice() {
                                 let left = (dice.level - dice.used).max(0);
                                 edit_row(
@@ -1821,8 +1836,10 @@ impl CombatSync {
                 // On its own line: a stepper inside a wrapping row can run off a narrow column.
                 if let Some(level) = conditions.get_mut("4") {
                     let mut n = level.as_i64().unwrap_or(1);
+                    let column = Column::new(ui, &["Exhaustion level"], [n]);
                     if labelled_stepper(
                         ui,
+                        column,
                         "Exhaustion level",
                         "Exhaustion level",
                         &mut n,
@@ -1838,8 +1855,13 @@ impl CombatSync {
     /// Spell slots and limited uses spent.
     fn spending(&mut self, ui: &mut egui::Ui) {
         use crate::design;
+        let slots = ["slots", "pact"]
+            .iter()
+            .filter_map(|key| self.desired.get(*key))
+            .flat_map(|slots| (1..=9).map(move |level| &slots[format!("level{level}")]));
+        let well = well_width(ui, slots.filter_map(Value::as_i64));
         design::section(ui, "Spell slots spent", |ui| {
-            sheet_grid(ui, "sheet_slots", |ui| {
+            sheet_grid(ui, "sheet_slots", well, |ui| {
                 for (key, label, levels) in [("slots", "Spell slots", 9), ("pact", "Pact slots", 5)]
                 {
                     let Some(slots) = self.desired.get_mut(key) else {
@@ -1855,8 +1877,13 @@ impl CombatSync {
             });
         });
         let remote = self.remote.as_ref();
+        let uses = remote
+            .into_iter()
+            .flat_map(|r| r.named("limited/"))
+            .filter_map(|(key, _, _)| self.desired.get(key)?["uses"].as_i64());
+        let well = well_width(ui, uses);
         design::section(ui, "Limited uses spent", |ui| {
-            sheet_grid(ui, "sheet_limited", |ui| {
+            sheet_grid(ui, "sheet_limited", well, |ui| {
                 for (key, label, _) in remote.into_iter().flat_map(|r| r.named("limited/")) {
                     if let Some(resource) = self.desired.get_mut(key) {
                         step_field(resource, "uses", |n| {
@@ -1871,8 +1898,14 @@ impl CombatSync {
         let Some(purse) = self.desired.get_mut("currency") else {
             return;
         };
+        let well = well_width(
+            ui,
+            COINS
+                .iter()
+                .filter_map(|(field, _, _)| purse[*field].as_i64()),
+        );
         crate::design::section(ui, "Currency", |ui| {
-            sheet_grid(ui, "sheet_currency", |ui| {
+            sheet_grid(ui, "sheet_currency", well, |ui| {
                 for (field, _, name) in COINS {
                     step_field(purse, field, |n| edit_row(ui, name, n, 0..=MAX_COUNT, None));
                 }
@@ -1889,6 +1922,18 @@ impl CombatSync {
         if items.is_empty() {
             return;
         }
+        // One label column and one well width for every item, so each − and each + of the
+        // section sits on one x (round 24 FK4).
+        let values = items
+            .iter()
+            .filter_map(|(key, _, _)| self.desired.get(*key))
+            .flat_map(|item| {
+                [
+                    item["quantity"].as_i64(),
+                    item.get("charges").and_then(Value::as_i64),
+                ]
+            });
+        let column = Column::new(ui, &["Quantity", "Charges spent"], values.flatten());
         // The title holds the count, so the section keeps its own id as items come and go.
         design::section_with_id(
             ui,
@@ -1905,13 +1950,21 @@ impl CombatSync {
                     ui.indent(key, |ui| {
                         step_field(item, "quantity", |n| {
                             let name = format!("{name} quantity");
-                            labelled_stepper(ui, "Quantity", &name, n, 1..=MAX_COUNT, None)
+                            labelled_stepper(ui, column, "Quantity", &name, n, 1..=MAX_COUNT, None)
                         });
                         if item.get("charges").is_some() {
                             step_field(item, "charges", |n| {
                                 let name = format!("{name} charges spent");
                                 let note = max.map(|max| format!("of {max}"));
-                                labelled_stepper(ui, "Charges spent", &name, n, 0..=MAX_COUNT, note)
+                                labelled_stepper(
+                                    ui,
+                                    column,
+                                    "Charges spent",
+                                    &name,
+                                    n,
+                                    0..=MAX_COUNT,
+                                    note,
+                                )
                             });
                         }
                     });
@@ -1938,6 +1991,16 @@ impl CombatSync {
         if creatures.is_empty() {
             return;
         }
+        let values = creatures
+            .iter()
+            .filter_map(|(key, _, _)| self.desired.get(*key))
+            .flat_map(|creature| {
+                [
+                    creature["removedHitPoints"].as_i64(),
+                    creature["temporaryHitPoints"].as_i64(),
+                ]
+            });
+        let column = Column::new(ui, &["Damage taken", "Temporary HP"], values.flatten());
         design::section(ui, "Companions and summons", |ui| {
             for (key, name, max) in creatures {
                 let Some(creature) = self.desired.get_mut(key) else {
@@ -1950,11 +2013,19 @@ impl CombatSync {
                     step_field(creature, "removedHitPoints", |n| {
                         let name = format!("{name} damage taken");
                         let note = max.map(|max| format!("Stat block average {max} HP"));
-                        labelled_stepper(ui, "Damage taken", &name, n, 0..=MAX_COUNT, note)
+                        labelled_stepper(ui, column, "Damage taken", &name, n, 0..=MAX_COUNT, note)
                     });
                     step_field(creature, "temporaryHitPoints", |n| {
                         let name = format!("{name} temporary HP");
-                        labelled_stepper(ui, "Temporary HP", &name, n, 0..=MAX_HP_BONUS, None)
+                        labelled_stepper(
+                            ui,
+                            column,
+                            "Temporary HP",
+                            &name,
+                            n,
+                            0..=MAX_HP_BONUS,
+                            None,
+                        )
                     });
                 });
                 ui.add_space(design::XS);
@@ -1965,6 +2036,7 @@ impl CombatSync {
 /// A small label, the value's stepper and an optional note, kept together on one line.
 fn labelled_stepper(
     ui: &mut egui::Ui,
+    column: Column,
     label: &str,
     name: &str,
     value: &mut i64,
@@ -1973,10 +2045,70 @@ fn labelled_stepper(
 ) -> bool {
     use crate::design::{Type, colors};
     ui.horizontal(|ui| {
+        let left = ui.cursor().left();
         ui.label(Type::Small.rich(ui, label).color(colors().muted));
+        // The stepper starts at the block's label column, whatever this label's width.
+        let gap = left + column.label - ui.cursor().left();
+        if gap > 0.0 {
+            ui.add_space(gap);
+        }
+        ui.spacing_mut().interact_size.x = column.well;
         stepper_and_note(ui, name, value, range, note)
     })
     .inner
+}
+/// One block of labelled steppers: its label column (the widest label plus `S`) and one well
+/// width (the widest value), so every − and every + of the block share an x.
+#[derive(Clone, Copy)]
+struct Column {
+    label: f32,
+    well: f32,
+}
+impl Column {
+    fn new(ui: &egui::Ui, labels: &[&str], values: impl IntoIterator<Item = i64>) -> Self {
+        use crate::design::{self, Type};
+        let font = Type::Small.font(ui);
+        let label = labels
+            .iter()
+            .map(|label| {
+                ui.fonts_mut(|fonts| {
+                    fonts.layout_no_wrap(
+                        (*label).to_owned(),
+                        font.clone(),
+                        egui::Color32::PLACEHOLDER,
+                    )
+                })
+                .size()
+                .x
+            })
+            .fold(0.0, f32::max)
+            + design::S;
+        Self {
+            label,
+            well: well_width(ui, values),
+        }
+    }
+}
+/// The width of a stepper's well that holds the widest of `values`: its digit count times the
+/// widest digit, plus the well's padding, never below the usual control width. Constant text
+/// work, whatever the number of values.
+fn well_width(ui: &egui::Ui, values: impl IntoIterator<Item = i64>) -> f32 {
+    let digits = values
+        .into_iter()
+        .map(|value| value.unsigned_abs().to_string().len() + usize::from(value < 0))
+        .max()
+        .unwrap_or(1);
+    let font = ui.style().drag_value_text_style.resolve(ui.style());
+    let digit = ('0'..='9')
+        .map(|digit| {
+            ui.fonts_mut(|fonts| {
+                fonts.layout_no_wrap(digit.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
+            })
+            .size()
+            .x
+        })
+        .fold(0.0, f32::max);
+    (digit * digits as f32 + 2.0 * ui.spacing().button_padding.x).max(ui.spacing().interact_size.x)
 }
 /// A row label in a sheet grid.
 fn row_label(ui: &mut egui::Ui, label: &str) {
@@ -2013,13 +2145,17 @@ fn stepper_and_note(
     }
     changed
 }
-/// A two-column grid of sheet values: a label on the left, its stepper on the right.
-fn sheet_grid(ui: &mut egui::Ui, id: &str, rows: impl FnOnce(&mut egui::Ui)) {
+/// A two-column grid of sheet values: a label on the left, its stepper on the right. Every
+/// well is `well` wide, so the − and + of the grid each share an x.
+fn sheet_grid(ui: &mut egui::Ui, id: &str, well: f32, rows: impl FnOnce(&mut egui::Ui)) {
     use crate::design;
-    egui::Grid::new(id)
-        .num_columns(2)
-        .spacing([design::L, design::XS])
-        .show(ui, rows);
+    ui.scope(|ui| {
+        ui.spacing_mut().interact_size.x = well;
+        egui::Grid::new(id)
+            .num_columns(2)
+            .spacing([design::L, design::XS])
+            .show(ui, rows);
+    });
 }
 /// Edit the whole number at `field` in a sheet group. The group changes only when `edit` says
 /// the number changed.

@@ -1983,6 +1983,7 @@ pub mod campaign_content {
         d.click("Save repaired note");
         d.settle();
         const READ_ONLY: &str = "Not saved. This file is read only.";
+        const NOT_SAVED_TWICE: &str = "The repair has not been saved";
         let unchanged = std::fs::read(&file).unwrap() == on_disk;
         d.observe(
             "iter-23-C-FA3-disk",
@@ -1993,13 +1994,36 @@ pub mod campaign_content {
                 d.visible_text("Unsaved")
             ),
         );
+        // Round 24 FD1, AD3, SD1: the failed Save stays open for a retry, but does not own the
+        // primary. FD9: the failure shows once, in the state slot; the message above stops at
+        // the way to fix the file.
+        d.observe_both(
+            "iter-24-C-FD1",
+            "After a read-only Save, Save repaired note is open, secondary and the failure shows once",
+            |d| {
+                d.visible_text(READ_ONLY)
+                    && !d.is_disabled("Save repaired note")
+                    && super::session_recording::accent_filled(d).is_empty()
+                    && d.visible_text("Notes/Broken.md cannot be read. Fix it here or in World.")
+                    && !d.visible_text(NOT_SAVED_TWICE)
+            },
+        );
         d.state("repair-save-failed", Sizes::Default);
-        // The next edit ends it: the draft is a new one that Save has not tried.
+        // The next edit ends it: the draft is a new one that Save has not tried, and its Save is
+        // the one primary action again.
         d.replace_text_in("Note text", &format!("{valid}\nOne more line.\n"));
         d.observe(
             "iter-23-C-FA3-disk-ends",
             d.visible_text("Unsaved") && !d.visible_text(READ_ONLY),
             "An edit of the draft ends the failed Save's reason",
+        );
+        d.observe(
+            "iter-24-C-FD1-ends",
+            super::session_recording::accent_filled(d) == ["Save repaired note"],
+            format!(
+                "After the next edit the primary is {:?}",
+                super::session_recording::accent_filled(d)
+            ),
         );
         set_read_only(false);
         d.click("Discard");
@@ -3167,7 +3191,7 @@ pub mod settings {
         (Account::Busy, "Connecting"),
         (Account::Connected, "Connected"),
         (Account::NotConnected, "Not connected"),
-        (Account::Failed, "Not connected"),
+        (Account::Failed, "Connect failed"),
         (Account::KeyringWarning, "Connected · not remembered"),
     ];
     const REMOVE_CAMPAIGN: &str = "More actions for Quiet Harbor";
@@ -3248,6 +3272,14 @@ pub mod settings {
                 && !d.has_containing("access token")
                 && !d.has_containing("keyring"),
             "The connect form says what the remember box does, without token or keyring words",
+        );
+        // Round 24 FA6: after a real failed attempt, the account status and the rail name the
+        // failure, so the error colour never sits on the idle words.
+        let rail = d.rail_words();
+        d.observe(
+            "iter-24-C-FA6",
+            d.visible_text("Connect failed") && rail.contains("Connect failed"),
+            format!("After a failed Connect, the page and the rail say Connect failed: {rail}"),
         );
         d.state("connect-failed", Sizes::All);
         d.goal("try to connect without a network");
@@ -3396,6 +3428,18 @@ pub mod settings {
         d.click(REMOVE_CAMPAIGN);
         d.click("Remove…");
         d.expect(REMOVE_TITLE);
+        // Round 24 FC5: Remove campaign uses the shared dialog, anchored at the top like
+        // Unregister, so the DM meets the same question in one place.
+        d.observe_both(
+            "iter-24-C-FC5",
+            "The Remove campaign dialog's title sits at the shared top anchor",
+            |d| {
+                d.painted_rect_in(REMOVE_TITLE, egui::Rect::EVERYTHING)
+                    .is_some_and(|title| {
+                        (title.top() - (crate::design::XXL + crate::design::L)).abs() <= 2.0
+                    })
+            },
+        );
         d.state("confirm-remove-campaign", Sizes::Standard);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
@@ -6926,7 +6970,8 @@ pub mod signed_in {
     const RAIL_CONNECTED: &str = "Connected";
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
-    const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
+    // Round 24 FK2: no `Cached`; the age says the sheet is the one Splat saved.
+    const FRESHNESS: &str = "Connected · Fetched";
     const PAGES: [&str; 5] = ["Actions", "Spells", "Equipment", "Features", "Background"];
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
@@ -7025,6 +7070,11 @@ pub mod signed_in {
             d.visible_text(FRESHNESS),
             "Signed in: the sheet says it is connected, and how old it is",
         );
+        d.observe(
+            "iter-24-C-FK2",
+            d.visible_text(FRESHNESS) && !d.visible_text("Cached"),
+            "The Party header says Connected and the sheet's age, without Cached",
+        );
         for page in PAGES {
             if !d.in_view(page) {
                 assert!(d.in_view("More sheet pages"));
@@ -7095,6 +7145,36 @@ pub mod signed_in {
         for section in ["Currency", "Inventory", "Companions and summons"] {
             d.click_containing(section);
         }
+        // Round 24 FK4: in each block every − shares an x and every + shares an x, whatever the
+        // label or the number (Gold 145 beside the one-digit coins).
+        let blocks: [&[&str]; 3] = [
+            &["Platinum", "Gold", "Electrum", "Silver", "Copper"],
+            &[
+                "Crossbow Bolts quantity",
+                "Wand of Web quantity",
+                "Wand of Web charges spent",
+            ],
+            &["Grit damage taken", "Grit temporary HP"],
+        ];
+        d.observe_both(
+            "iter-24-C-FK4",
+            "Each sync block keeps its − and + in one column",
+            |d| {
+                blocks.iter().all(|names| {
+                    ["Decrease", "Increase"].iter().all(|side| {
+                        let xs: Vec<_> = names
+                            .iter()
+                            .map(|name| d.place_of(&format!("{side} {name}")).map(|r| r.left()))
+                            .collect();
+                        xs.iter().all(Option::is_some)
+                            && xs
+                                .iter()
+                                .flatten()
+                                .all(|x| (x - xs[0].unwrap()).abs() < 0.5)
+                    })
+                })
+            },
+        );
         d.state("party-sync-editable", Sizes::All);
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
@@ -13401,23 +13481,31 @@ pub mod session_plan_groups {
                     && !d.visible_text(&missing_id)
             },
         );
-        // FA6: the dependency issue is a warning message, and its repair link starts at its
-        // words, as the Campaign.md flag's choice does.
+        // FA6: the dependency issue is a warning message, and its repair starts at its words,
+        // as the Campaign.md flag's choice does. Round 24 FA2: the repair is a bordered
+        // secondary button like that choice, not a link, so its border starts at the words.
         for size in [SMALL, DEFAULT] {
-            let (tones, words, link) = d.at_size(size, |d| {
+            let (tones, words, link, bordered) = d.at_size(size, |d| {
                 let words = d
                     .painted_rect_in(
                         "Lost Patrol needs a creature that cannot be found.",
                         egui::Rect::EVERYTHING,
                     )
                     .map(|rect| rect.left());
-                let link = d
-                    .place_of("Repair Lost Patrol")
-                    .and_then(|rect| words_left_in(d, rect));
+                let link = d.place_of("Repair Lost Patrol").map(|rect| rect.left());
+                let bordered = d
+                    .nodes()
+                    .iter()
+                    .any(|node| node.name == "Repair Lost Patrol" && !node.is_link())
+                    && d.control_frame("Repair Lost Patrol").is_some_and(|frame| {
+                        frame.stroke.width > 0.0
+                            && frame.stroke.color == crate::design::colors().field_border
+                    });
                 (
                     tones_beside(d, "Lost Patrol needs a creature that cannot be found."),
                     words,
                     link,
+                    bordered,
                 )
             });
             d.observe(
@@ -13426,7 +13514,14 @@ pub mod session_plan_groups {
                     && words
                         .zip(link)
                         .is_some_and(|(words, link)| (words - link).abs() <= 1.0),
-                format!("At {size:?}: tones {tones:?}, words at {words:?}, link at {link:?}"),
+                format!("At {size:?}: tones {tones:?}, words at {words:?}, repair at {link:?}"),
+            );
+            d.observe(
+                "iter-24-C-FA2",
+                bordered,
+                format!(
+                    "At {size:?}, Repair Lost Patrol is a bordered secondary button: {bordered}"
+                ),
             );
         }
         d.state("missing-group-member", Sizes::All);
@@ -15412,6 +15507,18 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.expect("Unregister Ashen Marches?");
+        // Round 24 FC5, must stay true: an existing caller of the shared dialog keeps its place
+        // at the top anchor, where Remove campaign now sits too.
+        d.observe_both(
+            "iter-24-C-FC5-unregister",
+            "The Unregister dialog's title stays at the shared top anchor",
+            |d| {
+                d.painted_rect_in("Unregister Ashen Marches?", egui::Rect::EVERYTHING)
+                    .is_some_and(|title| {
+                        (title.top() - (crate::design::XXL + crate::design::L)).abs() <= 2.0
+                    })
+            },
+        );
         d.observe_both(
             "FD-12",
             "Unregister stays left of Keep the package on one line",
