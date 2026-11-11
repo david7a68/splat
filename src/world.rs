@@ -588,15 +588,16 @@ fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
 }
 
+/// The message's action starts at its words, below them, as every message action does.
 fn unread_groups_message(ui: &mut egui::Ui, campaign: &Campaign, path: &str, reason: &str) {
-    ui.horizontal_wrapped(|ui| {
-        design::message(ui, Tone::Warning, reason);
-        if design::link(ui, "Edit in Obsidian").clicked() {
-            ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
-                &campaign.path.join(path),
-            )));
-        }
+    let open = design::message_with_actions(ui, Tone::Warning, reason, |ui| {
+        design::link(ui, "Edit in Obsidian").clicked()
     });
+    if open {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
+            &campaign.path.join(path),
+        )));
+    }
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -985,8 +986,9 @@ fn create_at(
     Ok((id, relative))
 }
 
-/// What giving a note a type does, in the DM's words.
-pub(crate) const TYPE_HELP: &str = "Gives this note a type. Its text stays the same.";
+/// What giving a note a type gives the DM, in the DM's words. It does not repeat the section
+/// heading.
+pub(crate) const TYPE_HELP: &str = "A type adds the fields for that kind of note, such as an NPC's place and stat block. Its text stays the same.";
 /// How Splat stores the type, for Technical details only.
 pub(crate) const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
      at the top of the file.";
@@ -1526,11 +1528,16 @@ pub enum PageResult {
     Discarded(String),
 }
 
+/// The tone of a finished change to a note: a save, a value change, a name change, a repair or
+/// a separate note. Library's finished changes use it too. A result that wrote nothing (the note
+/// already held the changes, a discarded draft) keeps the info tone.
+pub(crate) const CHANGED: Tone = Tone::Success;
+
 /// The one message form for a World result. Returns true when its Undo is pressed.
 pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
     match result {
         PageResult::Repaired => {
-            design::message(ui, Tone::Success, "Note repaired.");
+            design::message(ui, CHANGED, "Note repaired.");
             false
         }
         PageResult::Discarded(name) => design::draft_discarded(ui, name),
@@ -1876,7 +1883,7 @@ impl Reader {
                 }
                 if let Some(change) = &self.name_undo
                     && change.path == item.entry.path
-                    && design::undo_message(ui, Tone::Info, &change.word, "Undo name change")
+                    && design::undo_message(ui, CHANGED, &change.word, "Undo name change")
                 {
                     match change.undo(campaign) {
                         Ok(()) => {
@@ -1908,12 +1915,7 @@ impl Reader {
                 }
             }
             if let Some((_, undo)) = &self.identity_undo
-                && design::undo_message(
-                    ui,
-                    Tone::Success,
-                    undo.message(),
-                    undo.identity_undo_label(),
-                )
+                && design::undo_message(ui, CHANGED, undo.message(), undo.identity_undo_label())
             {
                 match undo.undo(campaign) {
                     Ok(()) => {
@@ -2591,7 +2593,8 @@ impl Reader {
                 + design::number_width(ui, word, &Type::Body.font(ui))
                 + design::S
                 + design::HAIRLINE_WIDTH
-                + design::number_width(ui, design::icons::INFO, &Type::Body.font(ui))
+                // The icon of `CHANGED`, the tone of the notice.
+                + design::number_width(ui, design::icons::SUCCESS, &Type::Body.font(ui))
                 - design::XS
                 + Action::quiet(kind.undo_label())
                     .icon(design::icons::UNDO)
@@ -2601,7 +2604,7 @@ impl Reader {
     }
 
     fn change_notice(ui: &mut egui::Ui, word: &str, kind: ChangeKind) -> bool {
-        design::undo_message(ui, Tone::Info, word, kind.undo_label())
+        design::undo_message(ui, CHANGED, word, kind.undo_label())
     }
 
     /// The change to show beside this row, when it is this row's and there is room.
