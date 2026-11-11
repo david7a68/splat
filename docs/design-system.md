@@ -349,7 +349,9 @@ fixing` (Library) or `N notes need fixing` (World) link, and its menu opens that
 found.
 
 Readers hide reserved Splat data and any heading or rule whose filtered body is empty. Hidden source headings
-and comments take no space. Collapsed Source and identifiers and Technical details follow the body in its
+and comments take no space. A stat block ends with its own gap: after it, the reader adds no lead gap, so a
+creature with no source text to style (a converted or hand-written one) starts its first heading as far below the
+closing rule as a styled creature does. Collapsed Source and identifiers and Technical details follow the body in its
 scroll area, with one leading `M` gap. What Splat applies stays inside Source and identifiers. Source text and
 structured item fields stay in this end group. Unreadable files omit empty end sections. Related entries, Here
 and Mentioned in stay above them at reader measure. In narrow creature readers, each vital keeps its label and
@@ -536,7 +538,8 @@ beside Folder and the full destination below it. Creating a package opens its fi
 A copied package folder names the original under Add folder and puts its ID in Technical details. Add folder
 is blocked with `This folder is a copy.` Bordered `Register as a new package` sits on the warning's action
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
-one Undo for all files. Registration names the copy and whether the campaign uses it. Its use checkbox starts
+one Undo for all files. Registration names the copy and whether the campaign uses it, in two sentences:
+`Ashen Reaches is registered. This campaign does not use it.` (or `This campaign uses it.`). Its use checkbox starts
 off when the original is used. Keep the warning above the `Register a copy` Label title and fields.
 Quiet Cancel follows the named Register action after an `L` gap. It closes the form without writing
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
