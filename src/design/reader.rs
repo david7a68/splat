@@ -89,8 +89,10 @@ fn detail_row(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
         let room = vec2(ui.available_width().min(DETAIL_MEASURE), 0.0);
         ui.allocate_ui(room, value);
         let own = first_baseline(&galley).unwrap_or(0.0);
-        let drop = first_painted_baseline(ui, slot)
-            .map_or(0.0, |baseline| (baseline - rect.top() - own).max(0.0));
+        // The move can be up as well as down: a value's words can sit higher in their line than
+        // the label's own words do.
+        let drop =
+            first_painted_baseline(ui, slot).map_or(0.0, |baseline| baseline - rect.top() - own);
         ui.painter().set(
             slot,
             egui::Shape::galley(rect.min + vec2(0.0, drop), galley, c.text),
