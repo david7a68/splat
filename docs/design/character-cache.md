@@ -129,9 +129,11 @@ publication behavior.
 Each file has a checksum for generated content and a Personal notes section.
 Refreshes preserve everything after the checksum. A file that fails its checksum, or an
 unmanaged file, blocks replacement and produces a visible warning. A copy that Splat cannot
-read follows the same checksum, and its properties say whose copy it is. Unchanged generated text
-is written again, and an unchanged former copy goes to its archive. A changed copy stops the
-refresh and is kept; **Force read** does not replace it, so move it aside or repair it. A file that only
+read follows the same checksum, and its properties say which note it is. When they name the note
+that the refresh writes there and the generated text is unchanged, the refresh writes it again.
+Any other file that Splat cannot read counts as edited, whatever its checksum. An unchanged former
+copy without personal notes goes to its archive. One case stops **Force read** too: a changed copy
+of the sheet that Splat cannot read and that still names the character. Move it aside or repair it. A file that only
 changed during a save is not a conflict: the save reads it again. This covers two Splat
 writers at the same time. To resume updates, move the edited file aside or use
 **Force read** on the warning. Force read fetches the character again, keeps each edited

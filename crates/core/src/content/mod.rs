@@ -264,24 +264,48 @@ fn identity(fields: &Mapping) -> Result<Identity, String> {
     })
 }
 
+/// A note's text with one line ending, its properties, and where they end after the first line.
+struct Front {
+    text: String,
+    fields: Mapping,
+    end: usize,
+}
+
+fn front(text: &str) -> Result<Front, String> {
+    let text = text
+        .strip_prefix('\u{feff}')
+        .unwrap_or(text)
+        .replace("\r\n", "\n");
+    let rest = text
+        .strip_prefix("---\n")
+        .ok_or("Missing YAML frontmatter")?;
+    let end = rest
+        .find("\n---\n")
+        .or_else(|| rest.strip_suffix("\n---").map(str::len))
+        .ok_or("Unclosed YAML frontmatter")?;
+    let value: Value =
+        serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
+    let Value::Mapping(fields) = value else {
+        return Err("Frontmatter must be a mapping".into());
+    };
+    Ok(Front { text, fields, end })
+}
+
+/// The ID in a note's properties, as `Entry::parse` reads it. A note that does not load can
+/// still have one. Words below the properties never count.
+pub fn note_id(text: &str) -> Option<Uuid> {
+    let fields = front(text).ok()?.fields;
+    Uuid::parse_str(string(&fields, "splat_id").ok()?).ok()
+}
+
 impl Entry {
     pub fn parse(path: &str, text: &str) -> Result<Self, String> {
-        let text = text
-            .strip_prefix('\u{feff}')
-            .unwrap_or(text)
-            .replace("\r\n", "\n");
-        let rest = text
-            .strip_prefix("---\n")
-            .ok_or("Missing YAML frontmatter")?;
-        let end = rest
-            .find("\n---\n")
-            .or_else(|| rest.strip_suffix("\n---").map(str::len))
-            .ok_or("Unclosed YAML frontmatter")?;
-        let value: Value =
-            serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
-        let Value::Mapping(mut fields) = value else {
-            return Err("Frontmatter must be a mapping".into());
-        };
+        let Front {
+            text,
+            mut fields,
+            end,
+        } = front(text)?;
+        let rest = &text["---\n".len()..];
         match fields.get("splat_schema").and_then(Value::as_u64) {
             Some(2) => {}
             _ => return Err("Unsupported content schema; expected 2".into()),

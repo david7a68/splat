@@ -1,7 +1,7 @@
 //! Generated campaign content. Preflight every note before replacing any of the bundle.
 use super::EntitySnapshot;
 use super::campaign_package::{self, Destinations};
-use crate::content::{Entry, Reference};
+use crate::content::{Entry, Reference, note_id};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
@@ -115,7 +115,7 @@ impl EntitySnapshot {
             // Generated words that still match their checksum hold nothing of the DM's. When
             // the properties name this sheet, the refresh writes the copy again, whatever
             // Splat can read of it, and keeps the notes below it.
-            if parts(&text).intact && copy_id(&text) == Some(self.definition.splat_id) {
+            if parts(&text).intact && note_id(&text) == Some(self.definition.splat_id) {
                 paths.push(path);
                 continue;
             }
@@ -150,7 +150,7 @@ impl EntitySnapshot {
                 if named.exists()
                     && fs::read_to_string(&named)
                         .ok()
-                        .and_then(|text| copy_id(&text))
+                        .and_then(|text| note_id(&text))
                         .is_some_and(|id| id != self.definition.splat_id)
                 {
                     return Ok(named.with_file_name(format!(
@@ -237,18 +237,20 @@ impl EntitySnapshot {
                 }
             };
             let copy = previous.as_deref().map(parts);
-            if path == character_path
-                && previous
-                    .as_deref()
-                    .and_then(copy_id)
-                    .is_some_and(|id| id != self.definition.splat_id)
-            {
+            let occupant = previous.as_deref().and_then(note_id);
+            if path == character_path && occupant.is_some_and(|id| id != self.definition.splat_id) {
                 return Err(
                     "A different character already uses this file name. No file was replaced."
                         .into(),
                 );
             }
-            let edited = copy.as_ref().is_some_and(|copy| !copy.intact);
+            // A file that Splat cannot read is this note's generated copy only when its
+            // properties name this note. Any other one is the DM's, whatever its checksum.
+            let foreign = occupant != note_id(&markdown)
+                && previous
+                    .as_deref()
+                    .is_some_and(|text| Entry::parse("note.md", text).is_err());
+            let edited = foreign || copy.as_ref().is_some_and(|copy| !copy.intact);
             if edited && on_edits == OnEdits::Stop {
                 return Err(conflict(&path));
             }
@@ -444,7 +446,8 @@ fn retire_plan(
         .chain(formers.iter().map(|former| former.path.clone()))
         .collect();
     let (existing, errors) = crate::content::read_directory(campaign)?;
-    // A staged note gets its new words in this save, so what it holds now cannot stop it.
+    // A staged note gets its new words in this save, so what it holds now cannot stop it:
+    // one that Splat cannot read is this note's own copy, or it is archived as an edit.
     let errors: Vec<_> = errors
         .into_iter()
         .filter(|error| {
@@ -493,22 +496,6 @@ fn retire_plan(
         }
     }
     Ok(formers)
-}
-/// The identity in a copy's properties. This does not use the note reader, so it also holds
-/// for a copy that Splat cannot read. Words below the properties never count.
-fn copy_id(text: &str) -> Option<uuid::Uuid> {
-    #[derive(serde::Deserialize)]
-    struct Properties {
-        splat_id: uuid::Uuid,
-    }
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let (properties, _) = text
-        .strip_prefix("---\n")
-        .or_else(|| text.strip_prefix("---\r\n"))?
-        .split_once("\n---")?;
-    serde_yaml_ng::from_str::<Properties>(properties)
-        .ok()
-        .map(|properties| properties.splat_id)
 }
 fn conflict(path: &Path) -> CampaignCopyError {
     CampaignCopyError::Conflict(path.to_path_buf())
@@ -779,6 +766,16 @@ mod tests {
             );
         }
 
+        // A copy of another note where this character's rule goes is the DM's file too.
+        let rule = dependency_path(&record, root.path());
+        let foreign = unreadable_copy(uuid::Uuid::new_v4(), true, "");
+        fs::write(&rule, &foreign).unwrap();
+        assert_eq!(
+            record.save_campaign_copy(root.path()),
+            Err(CampaignCopyError::Conflict(rule.clone()))
+        );
+        assert_eq!(fs::read_to_string(&rule).unwrap(), foreign);
+
         // With a change in it, the copy is the DM's file. So is a copy whose properties name
         // another character, whatever its notes say. A refresh or Replace names the file and
         // changes nothing.
@@ -806,8 +803,12 @@ mod tests {
     fn fmt_f1_character_names_do_not_replace_another_character() {
         let record = super::super::tests::sample();
         let readable = crate::content::formats::fixture("Other.md", "splat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n", "\nA different character's note.\n").unwrap();
-        // The properties name the other character, also in a copy that Splat cannot read.
-        for other in [readable, unreadable_copy(uuid::Uuid::new_v4(), true, "")] {
+        // The properties name the other character: also in a copy that Splat cannot read, and
+        // with a property that looks like their end.
+        let odd = readable.replacen("splat_id:", "---custom: kept\nsplat_id:", 1);
+        assert!(Entry::parse("Other.md", &odd).is_ok());
+        let unreadable = unreadable_copy(uuid::Uuid::new_v4(), true, "");
+        for other in [readable, odd, unreadable.clone()] {
             let root = tempfile::tempdir().unwrap();
             let path = record.campaign_path(root.path());
             assert_eq!(path.file_name().unwrap(), "Example.md");
@@ -817,6 +818,16 @@ mod tests {
             assert_ne!(saved, path);
             assert_eq!(fs::read_to_string(path).unwrap(), other);
         }
+        // A file with this character's ID as its name is checked the same way.
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(format!(
+            "Characters/D&D Beyond/{}.md",
+            record.definition.splat_id
+        ));
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &unreadable).unwrap();
+        assert!(record.save_campaign_copy(root.path()).is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), unreadable);
     }
     #[test]
     fn overwrite_carries_readable_personal_notes_over() {
