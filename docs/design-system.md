@@ -548,10 +548,12 @@ from the package save row. Below the repair's own save row, an `L` gap and the p
 separate it from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
 The reason above names the file, so the `REPAIR` heading has no path. A repair draft's save-row state comes from
 the draft as Save checks it, as in Library: while Save would refuse it, the state says Invalid and Save is blocked
-with the cause; Unsaved and a primary Save come only when Save would write it. Save's check without writing is the text's own (YAML, identity, campaign ownership); the
-page never reads the disk on every frame for it. A Save that fails on the disk (read only, missing, a write
-error) is an action-time failure: that draft's state slot says `Not saved.` with Save's reason until the next edit
-of the draft, a successful Save or a reload. While a repair blocks the package
+with the cause; Unsaved and a primary Save come only when Save would write it. Save's check without writing is the one World's repair uses (the path rule, YAML, identity,
+campaign ownership). Each repair keeps its answer and asks again only when its draft changes, so the page never
+reads the disk or parses a draft on an unchanged frame. A Save that fails on the disk (read only, missing, a write
+error) is an action-time failure: that repair's state slot says `Not saved.` with Save's reason until its next
+edit, its successful Save, a reload or another campaign. Another repair's edit, Save or failure leaves it. Each
+repair editor's accessible name holds its file (`Note text: Notes/Broken.md`), in Campaign and World. While a repair blocks the package
 save, its reason (`Fix Notes/Broken.md first.`) sits on its own line below `Save selections` at every width, so the
 first edit in the repair moves nothing.
 
