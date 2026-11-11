@@ -4887,7 +4887,11 @@ impl Sessions {
             .id_salt(("session_recordings", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_max_width(lane_width.min(ui.available_width()).min(design::LIST_MEASURE));
+                ui.set_max_width(
+                    lane_width
+                        .min(ui.available_width())
+                        .min(design::LIST_MEASURE),
+                );
                 let recovery = self.recording_recovery_row();
                 let destination = recordings.iter().position(|recording| {
                     !recording.summary
@@ -5292,12 +5296,13 @@ impl Sessions {
                 });
             }
             // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
-            // The plan ends at the tab row's right edge, as the note's frame does, so the pane
-            // has one right edge. A group being edited keeps its own width.
+            // The plan's rows end at the tab row's right edge, as the note's frame does, so the
+            // pane has one right edge; the scroll bar's lane lies beyond it. A group being edited
+            // keeps its own width.
             Tab::Plan => {
                 ui.scope(|ui| {
                     if !editing_group_here {
-                        ui.set_max_width(toolbar_width);
+                        ui.set_max_width(toolbar_width + ui.spacing().scroll.allocated_width());
                     }
                     fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
                         self.plan_pane(ui, book, plan)
