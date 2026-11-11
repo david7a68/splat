@@ -3453,9 +3453,11 @@ impl Run {
             .min(design::LIST_MEASURE)
             .min(ui.available_width());
         // A child of its own: the pane's earlier rows already make this Ui as wide as the pane,
-        // and a Ui cannot shrink below what it holds.
+        // and a Ui cannot shrink below what it holds. A group's faults may use a list's width,
+        // so a repair link stays on its fault's line; its name, members and controls keep to
+        // the block.
         ui.scope(|ui| {
-            ui.set_max_width(block);
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
             let mut add = None;
             for (heading, list) in [
                 ("For this encounter", offered.own.as_slice()),
@@ -3472,7 +3474,7 @@ impl Run {
                 }
                 for group in list {
                     ui.push_id(group.id, |ui| {
-                        if self.group_row(ui, group, add_width) {
+                        if self.group_row(ui, group, add_width, block) {
                             add = Some(group.id);
                         }
                     });
@@ -3536,7 +3538,13 @@ impl Run {
     }
 
     /// Returns true when the DM chooses to add this group.
-    fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup, add_width: f32) -> bool {
+    fn group_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        group: &super::RunGroup,
+        add_width: f32,
+        block: f32,
+    ) -> bool {
         let c = colors();
         let name = &group.name;
         let changed = group
@@ -3546,7 +3554,7 @@ impl Run {
         let change_hint = if changed { " Changed." } else { "" };
         let status = self.group_status(group);
         let grip = ui.allocate_response(
-            vec2(ui.available_width(), Density::Read.control()),
+            vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
         );
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
@@ -3668,7 +3676,7 @@ impl Run {
         let add_word = arrival_add_word(group);
         // Initiative and Add end at the group block's right edge in every group, so they share
         // one column. The summary takes what is left.
-        let right = ui.max_rect().right();
+        let right = ui.max_rect().left() + block.min(ui.available_width());
         ui.horizontal(|ui| {
             let gap = ui.spacing().item_spacing.x;
             // The field's margins draw it a little wider than it asks for; XS covers that, and
@@ -7718,9 +7726,10 @@ mod tests {
     }
 
     #[test]
-    fn iter10_b_arrival_controls_end_at_the_panel_edge_and_bad_totals_warn_once() {
+    fn iter10_b_arrival_controls_share_one_edge_and_bad_totals_warn_once() {
         use egui_kittest::kittest::Queryable;
         let names = ["Ash Hounds", "Shrine Reserve", "Lost Patrol"];
+        let mut edges = Vec::new();
         for width in [440.0, 600.0, 760.0] {
             let mut run = super::super::tests::run();
             let groups: Vec<_> = [
@@ -7782,9 +7791,12 @@ mod tests {
                     .get_by_label(&format!("Add {name} to the initiative list"))
                     .rect()
             });
+            edges.push(buttons[0].right());
             for (button, field) in buttons.iter().zip(&fields) {
+                // AH1: one Add edge for every group, at the group block's edge, inside the pane.
                 assert!(
-                    (button.right() - edge).abs() <= 0.5,
+                    (button.right() - buttons[0].right()).abs() <= 0.5
+                        && button.right() <= edge + 0.5,
                     "iter10-B-SD5-edge at {width}: {buttons:?} vs {edge}"
                 );
                 assert!(
@@ -7823,6 +7835,12 @@ mod tests {
                 "iter10-B-FT4-mark-apart at {width}"
             );
         }
+        // AH1: the block is as wide as its groups need, not the pane: in a pane wider than that,
+        // Add stays where it was.
+        assert!(
+            (edges[1] - edges[2]).abs() <= 0.5,
+            "iter-23-R-AH1: Add follows the group block, not the pane: {edges:?}"
+        );
     }
 
     #[test]
