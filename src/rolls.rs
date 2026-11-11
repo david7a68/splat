@@ -146,13 +146,182 @@ pub(crate) fn link_label(link: &RollLink) -> &str {
     }
 }
 
+/// Words in a menu: a heading or a question. A menu's layout is justified, which would stretch
+/// the gaps of a wrapped line, so the words get a left-aligned layout of their own.
+pub(crate) fn menu_text(ui: &mut egui::Ui, text: &str, color: egui::Color32) -> egui::Response {
+    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(color)).wrap())
+    })
+    .inner
+}
+
 /// One line of a menu under a heading or a question: its words start at the heading's text.
+/// In a menu the keys opened, the first choice takes the focus.
 pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
-    Action::quiet(words)
+    let response = Action::quiet(words)
         .density(Density::Read)
         .line_start()
-        .show(ui)
-        .clicked()
+        .show(ui);
+    if ui
+        .ctx()
+        .data_mut(|data| data.remove_temp::<bool>(focus_first_choice_id()))
+        .unwrap_or(false)
+    {
+        response.request_focus();
+    }
+    if response.has_focus() {
+        let frame = ui.ctx().cumulative_frame_nr();
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(menu_choice_focus_id(), response.id);
+            data.insert_temp(menu_choice_focus_frame_id(), frame);
+        });
+    }
+    response.clicked()
+}
+
+/// The frame in which a menu choice last had the keyboard focus.
+fn menu_choice_focus_frame_id() -> egui::Id {
+    egui::Id::new("roll_menu_focused_choice_frame")
+}
+
+/// The menu choice that had the keyboard focus last.
+fn menu_choice_focus_id() -> egui::Id {
+    egui::Id::new("roll_menu_focused_choice")
+}
+
+fn focus_first_choice_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_first_choice")
+}
+
+fn menu_keys_owner_id() -> egui::Id {
+    egui::Id::new("roll_menu_opened_by_keys")
+}
+
+fn menu_owner_seen_id() -> egui::Id {
+    egui::Id::new("roll_menu_owner_seen_frame")
+}
+
+/// Where the focus was at the end of the last frame while the menu was open, when it was
+/// outside the menu: on another control. No entry means inside (the row or a menu choice).
+fn menu_focus_outside_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_outside")
+}
+
+/// A focus set back after a keyboard close, set once more in the next frame if egui cleared it.
+fn menu_focus_again_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_again")
+}
+
+/// A control that can own a menu says it is still on screen. Call it every frame, before any
+/// early return, so a menu whose last choice went away still has its owner.
+pub(crate) fn keep_menu_owner(response: &egui::Response) {
+    let ctx = &response.ctx;
+    if ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) == Some(response.id) {
+        let frame = ctx.cumulative_frame_nr();
+        ctx.data_mut(|data| data.insert_temp(menu_owner_seen_id(), frame));
+    }
+}
+
+/// The focus model of a menu the keys opened, run at the end of each frame after everything
+/// that draws a menu.
+///
+/// - The menu has one owner, its control, from when it opens until it closes.
+/// - While it is open, each frame records where the focus is: inside (the owner or a menu
+///   choice) or outside, on another control.
+/// - Closed by the keys (Escape, a choice, its last choice going away): the focus goes to the
+///   owner when the last record is inside, and to that other control when it is outside. It is
+///   set once more in the next frame, as egui clears the focus on Escape. It is never left
+///   empty.
+/// - Closed by a mouse click: the clicked control keeps the focus. When the click left none
+///   (a choice that went away), it goes to the owner.
+/// - The owner is gone (its row taken away, the run ended): the menu ends and the focus stays.
+pub(crate) fn end_menu_frame(ctx: &egui::Context) {
+    let frame = ctx.cumulative_frame_nr();
+    let focused = ctx.memory(|memory| memory.focused());
+    let again = ctx.data_mut(|data| {
+        let target = data.get_temp::<egui::Id>(menu_focus_again_id());
+        data.remove::<egui::Id>(menu_focus_again_id());
+        target
+    });
+    if let Some(target) = again
+        && focused.is_none()
+    {
+        ctx.memory_mut(|memory| memory.request_focus(target));
+    }
+    let Some(owner) = ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) else {
+        return;
+    };
+    let clear = |ctx: &egui::Context| {
+        ctx.data_mut(|data| {
+            data.remove::<egui::Id>(menu_keys_owner_id());
+            data.remove::<bool>(focus_first_choice_id());
+            data.remove::<egui::Id>(menu_choice_focus_id());
+            data.remove::<u64>(menu_choice_focus_frame_id());
+            data.remove::<u64>(menu_owner_seen_id());
+            data.remove::<egui::Id>(menu_focus_outside_id());
+        });
+    };
+    if ctx.data(|data| data.get_temp::<u64>(menu_owner_seen_id())) != Some(frame) {
+        clear(ctx);
+        return;
+    }
+    if egui::Popup::is_id_open(ctx, owner.with("popup")) {
+        let in_menu =
+            ctx.data(|data| data.get_temp::<u64>(menu_choice_focus_frame_id())) == Some(frame);
+        match focused {
+            Some(id) if id == owner || in_menu => {
+                ctx.data_mut(|data| data.remove::<egui::Id>(menu_focus_outside_id()));
+            }
+            Some(id) => ctx.data_mut(|data| data.insert_temp(menu_focus_outside_id(), id)),
+            None => {}
+        }
+        return;
+    }
+    let outside = ctx.data(|data| data.get_temp::<egui::Id>(menu_focus_outside_id()));
+    let choice = ctx.data(|data| data.get_temp::<egui::Id>(menu_choice_focus_id()));
+    let by_mouse = ctx.input(|input| input.pointer.any_click());
+    clear(ctx);
+    let target = if by_mouse {
+        (focused.is_none() || focused == choice).then_some(owner)
+    } else {
+        Some(outside.unwrap_or(owner))
+    };
+    if let Some(target) = target {
+        ctx.memory_mut(|memory| memory.request_focus(target));
+        ctx.data_mut(|data| data.insert_temp(menu_focus_again_id(), target));
+    }
+}
+
+/// Whether a right-click menu opens or closes this frame. A right-click opens it; so do
+/// Shift+F10 on the focused control and a screen reader's `show context menu`, which put the
+/// focus on its first choice and give it back to the control when the menu closes. A plain
+/// click or Enter on the control closes it.
+pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOpenCommand> {
+    use egui::accesskit::Action as Access;
+    keep_menu_owner(response);
+    let ctx = &response.ctx;
+    ctx.accesskit_node_builder(response.id, |node| node.add_action(Access::ShowContextMenu));
+    let by_keys = ctx
+        .input(|i| i.has_accesskit_action_request(response.id, Access::ShowContextMenu))
+        || (response.has_focus()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
+    if by_keys {
+        let frame = ctx.cumulative_frame_nr();
+        ctx.data_mut(|data| {
+            data.insert_temp(menu_keys_owner_id(), response.id);
+            data.insert_temp(menu_owner_seen_id(), frame);
+            data.remove::<egui::Id>(menu_focus_outside_id());
+            data.insert_temp(focus_first_choice_id(), true);
+        });
+        return Some(egui::SetOpenCommand::Bool(true));
+    }
+    if response.secondary_clicked() {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if response.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    }
 }
 
 /// The heading of a d20 roll's menu: the action's name, `Bite`, or what the number rolls,
@@ -179,13 +348,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .ctx
         .data(|data| data.get_temp::<bool>(inspired_id()))
         .unwrap_or(false);
-    let open = if response.secondary_clicked() {
-        Some(egui::SetOpenCommand::Bool(true))
-    } else if response.clicked() {
-        Some(egui::SetOpenCommand::Bool(false))
-    } else {
-        None
-    };
+    let open = menu_open_command(response);
     // As wide as its tile, and never past the pane's right edge, which `right` is: a menu
     // that ran past the window would be pushed left, over the panel's splitter.
     let margin = egui::Frame::popup(&response.ctx.style())
@@ -202,7 +365,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .show(|ui| {
             // The area keeps the size it had; the content sets it each frame.
             ui.set_width(width);
-            ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
+            menu_text(ui, &heading, colors().muted);
             for (words, mode, inspired) in mode_choices("Roll", inspired) {
                 if menu_choice(ui, &words) {
                     chosen = Some((mode, inspired));
@@ -215,7 +378,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
 
 /// What a press on this number does, in words, for hover.
 pub(crate) fn hint(link: &RollLink) -> String {
-    let keys = " Shift: advantage. Ctrl: disadvantage. Right-click for more.";
+    let keys = " Shift: advantage. Ctrl: disadvantage. Right-click or Shift+F10 for more.";
     match link {
         RollLink::D20 {
             what, bonus, label, ..

@@ -303,27 +303,51 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                             .unwrap_or(dice)
                             .to_owned();
                     }
-                    let mut widths = column_widths(ui, &rows, &columns, &display);
-                    if rolls.is_some() && !widths.is_empty() {
-                        // Reserve the roll mark so it never wraps above the row label.
-                        for row in rows.iter().skip(1) {
-                            let label =
-                                display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
-                            let marked = format!("{} {label}", design::icons::DICE);
-                            let width = ui
-                                .painter()
-                                .layout_no_wrap(marked, Type::Stat.font(ui), colors().text)
-                                .size()
-                                .x
-                                .ceil()
-                                + design::XS;
-                            widths[0] = widths[0].max(width);
+                    // A reader may give its tables the pane beyond the prose measure.
+                    let room = table_room(ui).filter(|width| *width > ui.available_width());
+                    let draw_table = |ui: &mut egui::Ui| {
+                        let mut widths = column_widths(ui, &rows, &columns, &display);
+                        if rolls.is_some() && !widths.is_empty() {
+                            // Reserve the roll mark so it never wraps above the row label.
+                            for row in rows.iter().skip(1) {
+                                let label =
+                                    display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
+                                let marked = format!("{} {label}", design::icons::DICE);
+                                let width = ui
+                                    .painter()
+                                    .layout_no_wrap(marked, Type::Stat.font(ui), colors().text)
+                                    .size()
+                                    .x
+                                    .ceil()
+                                    + design::XS;
+                                widths[0] = widths[0].max(width);
+                            }
                         }
+                        let matched = rolls
+                            .as_ref()
+                            .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
+                        reader_table(ui, &rows, &columns, &widths, &display, matched);
+                    };
+                    match room {
+                        Some(width) => {
+                            // The table draws past the measure, but the reader's column keeps
+                            // it: the rules and prose after the table keep their width.
+                            let mut area = ui.available_rect_before_wrap();
+                            area.set_width(width);
+                            let mut wide = ui.new_child(
+                                egui::UiBuilder::new()
+                                    .max_rect(area)
+                                    .layout(egui::Layout::top_down(egui::Align::Min)),
+                            );
+                            draw_table(&mut wide);
+                            let height = wide.min_rect().height();
+                            ui.allocate_exact_size(
+                                egui::vec2(ui.available_width(), height),
+                                egui::Sense::hover(),
+                            );
+                        }
+                        None => draw_table(ui),
                     }
-                    let matched = rolls
-                        .as_ref()
-                        .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
-                    reader_table(ui, &rows, &columns, &widths, &display, matched);
                     if let Some(marker) = rolls.take() {
                         crate::roll_table::roll_control(ui, &marker, &rows);
                     }
@@ -655,6 +679,33 @@ fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, s
 }
 
 const TABLE_GAP: f32 = design::M;
+
+const TABLE_ROOM: &str = "reader_table_right";
+
+/// Lets this reader's tables use the pane beyond the prose measure, up to the pane's right edge
+/// as it is here, as a table in a pane narrower than the measure already does. Prose keeps its
+/// measure. Call it outside the measure, around the whole reader body.
+pub fn with_wide_tables<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let id = egui::Id::new(TABLE_ROOM);
+    let right = ui.max_rect().right();
+    let before = ui.ctx().data(|data| data.get_temp::<f32>(id));
+    ui.ctx().data_mut(|data| data.insert_temp(id, right));
+    let inner = add(ui);
+    // Another reader drawn later this frame, such as Lookup's, keeps its own width.
+    ui.ctx().data_mut(|data| match before {
+        Some(before) => data.insert_temp(id, before),
+        None => data.remove::<f32>(id),
+    });
+    inner
+}
+
+/// The width a table here may take, when its reader allows wide tables. It ends at the visible
+/// pane's edge, so a table that still scrolls has its scroll area under all of its text.
+fn table_room(ui: &egui::Ui) -> Option<f32> {
+    ui.ctx()
+        .data(|data| data.get_temp::<f32>(egui::Id::new(TABLE_ROOM)))
+        .map(|right| right.min(ui.clip_rect().right()) - ui.cursor().left())
+}
 
 /// The row label has its own column. Only the remaining cells belong to the
 /// horizontal scroll area, so its real viewport also supplies the cell padding.

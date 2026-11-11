@@ -248,8 +248,9 @@ back to the run and does not say **Paused**. Processing says **Processing**, wit
 the full step on hover. Completed jobs say **Processed** in the rail, and the session list shows the
 same check icon and green **Processed**. Warned jobs
 keep their warning icon and full words on hover. Note conflicts say **Notes changed**. Long rest starts the next new fight at full from both Session
-and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon.
-Both pages let you turn the ruling off or on, with Undo.
+and Timeline. Every closed long-rest row shows **Everyone at full** or **Not at full**, with an icon, in the
+ruling's colour. Both pages let you turn the ruling off or on, with Undo, and the message says what the next
+fight starts with.
 Both pages name only saved, unfinished fights past Setup as keeping their saved HP.
 A saved Setup resumed after the rest starts at full. **Use the saved HP** puts back its saved HP and
 says **Party HP set to the saved values.**, with **Undo** to go back to full.

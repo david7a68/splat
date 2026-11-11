@@ -733,7 +733,7 @@ impl Draft {
                         // The kind of fault sets the tone, here where the message is made.
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
                         Invalid {
-                            tone: missing_creature_tone(unreadable.is_some()),
+                            tone: missing_creature_tone(unreadable),
                             text: unreadable.map_or_else(|| if count > 1 {
                                 format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             } else {
@@ -1337,9 +1337,10 @@ fn stat_line(text: &str) -> String {
 const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
 
 /// The tone of a roster row whose creature is not there, and of the message that states the same
-/// fault: a file that cannot be read is an error, a deleted package entry a warning.
-fn missing_creature_tone(unreadable: bool) -> Tone {
-    if unreadable {
+/// fault. The tone comes from the fault's kind: a file that cannot be read is an error; a deleted
+/// package entry and two files that claim one identity are warnings, as Library shows them.
+fn missing_creature_tone(unreadable: Option<&crate::content_workspace::UnreadableNote>) -> Tone {
+    if unreadable.is_some_and(|note| !note.duplicate) {
         Tone::Error
     } else {
         Tone::Warning
@@ -1347,7 +1348,9 @@ fn missing_creature_tone(unreadable: bool) -> Tone {
 }
 
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
-fn missing_creature_mark(unreadable: bool) -> (&'static str, egui::Color32) {
+fn missing_creature_mark(
+    unreadable: Option<&crate::content_workspace::UnreadableNote>,
+) -> (&'static str, egui::Color32) {
     match missing_creature_tone(unreadable) {
         Tone::Error => (icons::ERROR, colors().result.error),
         _ => (icons::WARN, colors().result.warning),
@@ -4631,7 +4634,7 @@ impl Encounters {
                     || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
                 // The row states the fault in the tone of the message above the roster.
-                let (fault_icon, fault_color) = missing_creature_mark(unreadable.is_some());
+                let (fault_icon, fault_color) = missing_creature_mark(unreadable);
                 let detail = if missing {
                     format!("{side_icon} {side} · {fault_icon} {}", unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
                 } else if detail.is_empty() {
@@ -5642,10 +5645,10 @@ mod tests {
                 if section.format.color == colors().muted {
                     continue;
                 }
-                // iter-19-B-FD5: a file that cannot be read is an error in the row, as in the
-                // message above the roster.
+                // Round 23 AD2: two files that claim one identity are a warning in the row, as in
+                // Library and in the message above the roster. Only an unreadable file is an error.
                 assert!(
-                    words.trim() == icons::ERROR && section.format.color == colors().result.error,
+                    words.trim() == icons::WARN && section.format.color == colors().result.warning,
                     "iter7-B-FD8: the fault colour is only for the icon: {words}"
                 );
                 marked += 1;
@@ -6638,7 +6641,7 @@ mod tests {
         assert!(invalid.text.ends_with(REPLACE_DELETED_ENTRY), "{invalid:?}");
         assert!(invalid.tone == Tone::Warning);
         // The row says the same fault in the same tone.
-        assert!(invalid.tone == missing_creature_tone(false));
+        assert!(invalid.tone == missing_creature_tone(None));
         let mut encounters = Encounters {
             snapshot: Some(deleted),
             validation_path: Some(draft.path.clone()),
@@ -6676,12 +6679,40 @@ mod tests {
             "{invalid:?}"
         );
         assert!(invalid.tone == Tone::Error, "{invalid:?}");
-        assert!(invalid.tone == missing_creature_tone(true));
+        let unread = snapshot
+            .catalogue
+            .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap());
+        assert!(invalid.tone == missing_creature_tone(unread));
+        assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
         encounters.snapshot = Some(snapshot);
         encounters.draft = Some(draft);
         encounters.error = Some(invalid.text.clone());
         encounters.validation_error = Some(invalid);
         assert!(encounters.error_tone() == Tone::Error);
+        // Round 23 AD2: two files that claim one identity are a warning, as Library shows them,
+        // in the message and in the row. The fight stays blocked until the identity is clear.
+        fs::write(&file, &original).unwrap();
+        fs::write(dir.path().join("Cinder Wolf copy.md"), &original).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let draft = encounters.draft.as_ref().unwrap();
+        let invalid = draft.validate(&snapshot).unwrap_err();
+        let duplicate = snapshot
+            .catalogue
+            .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap());
+        assert!(
+            duplicate.is_some_and(|note| note.duplicate
+                && note
+                    .word
+                    .starts_with("These two files claim to be the same entry")),
+            "{invalid:?}"
+        );
+        assert!(invalid.tone == Tone::Warning, "{invalid:?}");
+        assert!(invalid.tone == missing_creature_tone(duplicate));
+        assert_eq!(missing_creature_mark(duplicate).0, icons::WARN);
+        encounters.snapshot = Some(snapshot);
+        encounters.error = Some(invalid.text.clone());
+        encounters.validation_error = Some(invalid);
+        assert!(encounters.error_tone() == Tone::Warning);
     }
 
     /// FD7 family: an encounter's faults name the roster row as the DM sees it, never its key or a

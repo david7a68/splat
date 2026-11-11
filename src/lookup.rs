@@ -189,6 +189,9 @@ pub struct ContentIndex {
     members: HashMap<Uuid, Vec<usize>>,
     /// The dated entries that concern each entry, oldest first.
     history: HashMap<Uuid, Vec<usize>>,
+    /// World entries whose `In` chain leads back to themselves. Each one's list row shows
+    /// `Place loop`; the reader shows the loop's warning from `errors`.
+    place_loop: HashSet<Uuid>,
     /// What the campaign's files looked like just before this was read.
     files_seen: u64,
     pub errors: Vec<String>,
@@ -585,7 +588,9 @@ impl ContentIndex {
                 index.history.insert(id, history);
             }
         }
-        index.errors.extend(index.place_loops());
+        let (in_loop, loops) = index.place_loops();
+        index.place_loop = in_loop;
+        index.errors.extend(loops);
         Ok(index)
     }
 
@@ -868,15 +873,27 @@ impl ContentIndex {
         }
     }
 
-    fn place_loops(&self) -> Vec<String> {
-        self.world
+    /// Whether this world entry's `In` chain leads back to it.
+    pub(crate) fn in_place_loop(&self, id: Uuid) -> bool {
+        self.place_loop.contains(&id)
+    }
+
+    /// The entries in a place loop, and one warning for each.
+    fn place_loops(&self) -> (HashSet<Uuid>, Vec<String>) {
+        let starts: Vec<usize> = self
+            .world
             .iter()
-            .filter(|&&start| {
+            .copied()
+            .filter(|&start| {
                 std::iter::successors(self.parent(start), |&at| self.parent(at))
                     .take(self.world.len())
                     .any(|at| at == start)
             })
-            .map(|&start| {
+            .collect();
+        let in_loop = starts.iter().map(|&at| self.items[at].entry.id).collect();
+        let warnings = starts
+            .into_iter()
+            .map(|start| {
                 let mut at = start;
                 let mut parts = Vec::new();
                 for _ in 0..self.world.len() {
@@ -894,7 +911,8 @@ impl ContentIndex {
                 }
                 format!("{}. Change one of them.", parts.join(", and "))
             })
-            .collect()
+            .collect();
+        (in_loop, warnings)
     }
 
     pub fn position_of(&self, reference: &Reference) -> Option<usize> {
@@ -1753,9 +1771,12 @@ impl Lookup {
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Lookup"));
             if self.trail.peek(Step::Back).is_some()
+                // The icon buttons' density, so the title line keeps one height with or without
+                // Back, and the search field below never moves.
                 && Action::quiet("Back")
                     .icon(icons::BACK)
                     .key("Alt+Left")
+                    .density(Density::Read)
                     .show(ui)
                     .clicked()
             {
@@ -1991,7 +2012,8 @@ impl Lookup {
                             );
                             let room = (rect.width() - name.size().x).max(0.0);
                             let fitted = fitted_detail(ui, detail, room);
-                            let tail = design::one_line(
+                            // A fault mark has its own tone, as on a Library row.
+                            let tail = crate::library::marked_line(
                                 ui,
                                 &if fitted.is_empty() {
                                     String::new()
@@ -2069,41 +2091,44 @@ impl Lookup {
         if let Some(campaign) = self.campaign.clone() {
             let mut made = None;
             let mut generate = false;
-            ui.horizontal_wrapped(|ui| {
-                if !query.is_empty()
-                    && !index
-                        .items
-                        .iter()
-                        .any(|item| item.entry.name.eq_ignore_ascii_case(&query))
-                    && !self
-                        .written
-                        .iter()
-                        .any(|item| item.title.eq_ignore_ascii_case(&query))
-                {
-                    let name = typed_name(&self.query);
-                    for (at, (word, kind)) in [("New NPC", "npc"), ("New location", "location")]
-                        .into_iter()
-                        .enumerate()
-                    {
-                        let label = format!("{word} “{name}”");
-                        // No plus: a line-start action outside a message has no icon, so its
-                        // words start at the result names. The second keeps the same form.
-                        let action = Action::quiet(&label).density(Density::Read);
-                        // The second action starts a line only when it wraps.
-                        if world::starts_line(ui, action, at == 0).show(ui).clicked() {
-                            made = Some(world::create_entry(&campaign, &name, kind));
+            let new_name = !query.is_empty()
+                && !index
+                    .items
+                    .iter()
+                    .any(|item| item.entry.name.eq_ignore_ascii_case(&query))
+                && !self
+                    .written
+                    .iter()
+                    .any(|item| item.title.eq_ignore_ascii_case(&query));
+            let offer_generate =
+                query.is_empty() && self.current.is_none() && self.generated.is_none();
+            // With no creation action to show, the row takes no room.
+            if new_name || offer_generate {
+                ui.horizontal_wrapped(|ui| {
+                    if new_name {
+                        let name = typed_name(&self.query);
+                        for (at, (word, kind)) in [("New NPC", "npc"), ("New location", "location")]
+                            .into_iter()
+                            .enumerate()
+                        {
+                            let label = format!("{word} “{name}”");
+                            // No plus: a line-start action outside a message has no icon, so its
+                            // words start at the result names. The second keeps the same form.
+                            let action = Action::quiet(&label).density(Density::Read);
+                            // The second action starts a line only when it wraps.
+                            if world::starts_line(ui, action, at == 0).show(ui).clicked() {
+                                made = Some(world::create_entry(&campaign, &name, kind));
+                            }
                         }
                     }
-                }
-                generate = query.is_empty()
-                    && self.current.is_none()
-                    && self.generated.is_none()
-                    && Action::quiet("Generate NPC")
-                        .density(Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .clicked();
-            });
+                    generate = offer_generate
+                        && Action::quiet("Generate NPC")
+                            .density(Density::Read)
+                            .line_start()
+                            .show(ui)
+                            .clicked();
+                });
+            }
             let mut reroll = generate;
             if let Some(npc) = &self.generated {
                 let choice = generator_card(
@@ -2488,7 +2513,17 @@ pub(crate) fn generator_card(
                     .data(|data| data.get_temp::<String>(id))
                     .is_some_and(|name| name == npc.name);
                 if copied {
-                    design::message(ui, Tone::Success, MARKER_COPIED);
+                    // As tall as the action it replaces, so the save row below keeps its place.
+                    let height = Density::Read.control();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_min_height(height);
+                            ui.add_space(((height - Type::Body.line()) / 2.0).max(0.0));
+                            design::message(ui, Tone::Success, MARKER_COPIED);
+                        },
+                    );
                 } else {
                     // A quiet action that starts a line, outside a message, has no icon: its
                     // words start at the card's text edge.
@@ -2743,6 +2778,8 @@ mod tests {
                 "{case}"
             );
             if marker {
+                let will_save = "Will save People/Wren Hallam.md";
+                let save_before = harness.get_by_label(will_save).rect();
                 harness.get_by_label(COPY_MARKER).click();
                 harness.step();
                 let copied = harness.output().platform_output.commands.iter().any(
@@ -2757,6 +2794,12 @@ mod tests {
                     harness.query_by_label(MARKER_COPIED).is_some()
                         && harness.query_by_label(COPY_MARKER).is_none(),
                     "iter-16-D-FD3-copied: the card says the marker was copied and which dice to change"
+                );
+                // Round 23 FC4: the result keeps the action's height, so the save row stays.
+                let save_after = harness.get_by_label(will_save).rect();
+                assert!(
+                    (save_after.top() - save_before.top()).abs() < 0.5,
+                    "iter-23-D-FC4: {save_before:?} → {save_after:?}"
                 );
             }
         }

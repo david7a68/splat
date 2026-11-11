@@ -1753,9 +1753,9 @@ impl Tone {
     }
 }
 
-/// The row of a message's choice without an icon, below the message. Its words start at the
-/// message words: `message` puts them `S + 1`, the icon and `XS` from its left edge. Put a quiet
-/// `line_start` action in it, so its words, not its padding, start there.
+/// The row of a choice without an icon on its own line below a result message. The row starts
+/// at the message words: `message` puts them `S + 1`, the icon and `XS` from its left edge. Put a
+/// secondary (bordered) action in it, so its border starts there; on a result, only Undo is quiet.
 pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.horizontal(|ui| {
         ui.add_space(S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);
@@ -1899,21 +1899,23 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
     // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
     let inset = S + 1.0 + icon_width + XS + ui.spacing().item_spacing.x;
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
-    let gap = ui.spacing().item_spacing.x;
+    let spacing = ui.spacing().item_spacing.x;
     let mut pressed = false;
-    if ui.available_width() < text_width + gap + button_width {
+    // The action follows the words after `L` in all: the layout's own item gap is part of it.
+    if ui.available_width() < text_width + L + button_width {
         message(ui, tone, text);
         ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
+            ui.add_space((inset - spacing).max(0.0));
             pressed = button.show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
-            let width = (ui.available_width() - button_width - gap).max(0.0);
+            let width = (ui.available_width() - button_width - L).max(0.0);
             ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
                 ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
                 message(ui, tone, text)
             });
+            ui.add_space((L - spacing).max(0.0));
             pressed = button.show(ui).clicked();
         });
     }
@@ -1962,7 +1964,14 @@ pub fn undo_message_with_links(
         ui.horizontal_top(|ui| {
             let start = ui.cursor().min;
             ui.add_space(S + 1.0);
-            ui.label(Type::Body.rich(ui, icon).color(color));
+            // The sentence starts with a link, so its first line is a link's height. The icon
+            // centres on that line, as `message` centres it on its words.
+            let first_line = XL.max(Type::Body.line());
+            ui.allocate_ui_with_layout(
+                vec2(number_width(ui, icon, &Type::Body.font(ui)), first_line),
+                Layout::left_to_right(Align::Center),
+                |ui| ui.label(Type::Body.rich(ui, icon).color(color)),
+            );
             ui.add_space(-XS);
             let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
             let bar =
@@ -3532,6 +3541,29 @@ mod tests {
                 "test",
             );
             assert!(cut.is_empty(), "width {width}: {cut:?}");
+            // iter-23-S FK3: beside the words, the action starts `L` after their last letter.
+            if width >= 880.0 {
+                use egui_kittest::kittest::Queryable;
+                let words = harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text)
+                            if text.galley.job.text.starts_with("The party has full HP") =>
+                        {
+                            Some(Rect::from_min_size(text.pos, text.galley.size()))
+                        }
+                        _ => None,
+                    })
+                    .expect("the words are painted");
+                let action = harness.get_by_label("Undo delete saved run").rect();
+                assert!(
+                    action.top() < words.bottom()
+                        && (action.left() - words.right() - L).abs() <= 1.0,
+                    "width {width}: words {words:?}, action {action:?}"
+                );
+            }
         }
     }
 

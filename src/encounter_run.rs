@@ -776,6 +776,11 @@ enum Panel {
 const GROUP_ADDED: &str = "Encounter group ";
 /// How one creature's log line starts, with no group to name.
 const ONE_ADDED: &str = "Added by hand: ";
+/// How a step on several rows names them, after its count: `8 damage to 3 participants`. A
+/// tight Undo gives these words up, and the half count after them, before it says `Undo` alone.
+const SEVERAL_TARGETS: &str = " participants";
+/// How a several-row damage step counts the rows that took half.
+const HALF_FOR: &str = ", half for ";
 /// The source at the start of an Undo step that a sheet made. A tight Undo gives it up before
 /// its target.
 const SHEET_SOURCE: &str = "D&D Beyond ";
@@ -788,6 +793,8 @@ const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 /// The Undo step a long rest makes when it fills a saved Setup's HP.
 const REST_STEP: &str = "full HP after long rest";
+/// The log's words for full HP after a restoring rest, wherever the run learns of it.
+const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use the saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
@@ -846,7 +853,7 @@ pub(crate) const UNDO_UNREAD: &str = "Splat could not read this run’s saved Un
 pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
-const CLOSE_BLOCKED: &str =
+pub(crate) const CLOSE_BLOCKED: &str =
     "Wait for pending sync changes, resolve conflicts, or stop sync for them before closing.";
 /// What the one party action does when pressed.
 enum PartySync {
@@ -1034,9 +1041,7 @@ impl Run {
                 cursor: 0,
                 round: 0,
                 phase: Phase::Setup,
-                log: vec![
-                    "DM run prepared from saved encounter. Rules are resolved by the DM.".into(),
-                ],
+                log: vec!["Fight prepared from the saved encounter.".into()],
                 last_change: None,
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
@@ -1129,11 +1134,20 @@ impl Run {
     /// HP came from the last fight, not from the sheets, and the log says so.
     pub fn note_carry(&mut self, carry: &Carry, sheets: SheetValues) {
         self.rest_order = carry.rest_order;
-        // A fight that cannot be read carries nothing, and the log must not say it did.
+        // A fight that cannot be read carries nothing, and the log must not say it did. A
+        // restoring rest with no fight since gives full HP, in the rest's own words; `Last:`
+        // uses the same lower-case step words as every other change.
         if !sheets.is_empty() {
-            self.state
-                .log
-                .push(format!("Party HP carried over from {}.", carry.from));
+            let (line, last) = if carry.full && carry.values.is_empty() {
+                (REST_LOG.to_owned(), REST_STEP.to_owned())
+            } else {
+                (
+                    format!("Party HP carried over from {}.", carry.from),
+                    format!("party HP carried over from {}", carry.from),
+                )
+            };
+            self.state.log.push(line);
+            self.state.last_change = Some(last);
         }
         self.carried = Some(CarriedHp {
             saved: false,
@@ -1169,9 +1183,7 @@ impl Run {
         }
         self.keep_step(before, REST_STEP.into(), false);
         self.state.last_change = Some(REST_STEP.into());
-        self.state
-            .log
-            .push("Party HP is full after the long rest.".into());
+        self.state.log.push(REST_LOG.into());
         self.carried = Some(CarriedHp {
             saved: true,
             from: "the long rest".into(),
@@ -1428,7 +1440,7 @@ impl Run {
         let at = state.order.iter().position(|i| *i == index);
         if at == Some(state.cursor) {
             if Self::moves_after_turn(state).is_none() {
-                return format!("{name} moves to\u{a0}{total}. The turn stays.");
+                return format!("{name} moved to\u{a0}{total}. The turn stays.");
             }
             if !state.participants[index].present {
                 return format!("{name} moves to\u{a0}{total} when this turn ends.");
@@ -1462,7 +1474,8 @@ impl Run {
         } else {
             ""
         };
-        let verb = if had { "moves to" } else { "joins at" };
+        // The change is done, so it says so in the past tense, as Arrivals does.
+        let verb = if had { "moved to" } else { "joined at" };
         format!("{name} {verb}\u{a0}{total}{when}.")
     }
     /// Give the turn to the next present participant. A current row whose total changed in
@@ -2388,8 +2401,15 @@ impl Run {
             ),
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
-            Command::AddGroup(group, _) | Command::AddCreature(group, _) => {
-                format!("add {}", group.name)
+            Command::AddGroup(group, _) => format!("add {}", group.name),
+            // Every row it adds is named: `add 2 × Wolf`, as its button said.
+            Command::AddCreature(group, _) => {
+                let count: u64 = group.members.iter().map(|member| member.count).sum();
+                if count > 1 {
+                    format!("add {count} × {}", group.name)
+                } else {
+                    format!("add {}", group.name)
+                }
             }
             Command::Several(commands) => {
                 let word = match commands.first() {
@@ -2443,11 +2463,11 @@ impl Run {
                 let most = halves.iter().copied().max().unwrap_or(0);
                 let half = halves.iter().filter(|amount| **amount < most).count();
                 let saved = if half > 0 {
-                    format!(", half for {half}")
+                    format!("{HALF_FOR}{half}")
                 } else {
                     String::new()
                 };
-                format!("{word} {} participants{saved}", commands.len())
+                format!("{word} {}{SEVERAL_TARGETS}{saved}", commands.len())
             }
             Command::TableRoll(roll) => format!("roll {}", roll.dice),
             // Short, because the ended view's header holds it beside the title.
@@ -4216,6 +4236,8 @@ pub struct FightSummary {
 }
 
 pub struct FightRow {
+    /// The participant's identity: a player's matches its party sheet.
+    pub id: Uuid,
     pub name: String,
     pub player: bool,
     pub hp: Option<i64>,
@@ -4233,6 +4255,7 @@ fn is_player(p: &Participant) -> bool {
 impl From<&Participant> for FightRow {
     fn from(p: &Participant) -> Self {
         Self {
+            id: p.definition.id,
             name: p.name.clone(),
             player: is_player(p),
             hp: p.hp,
@@ -4409,6 +4432,23 @@ impl Run {
         self.syncs
             .values_mut()
             .for_each(crate::combat_sync::CombatSync::stop_simulating);
+    }
+    /// How many lines the Log has.
+    #[cfg(test)]
+    pub fn log_len(&self) -> usize {
+        self.state.log.len()
+    }
+    /// A read of this character's sheet that shows inspiration or none. Test builds have no
+    /// live sheet; this is the same note a read of the sheet makes.
+    #[cfg(test)]
+    pub fn simulate_sheet_inspiration(&mut self, name: &str, has: bool) {
+        let row = self
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == name)
+            .expect("participant in this run");
+        self.note_sheet_inspiration(row, has);
     }
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
@@ -7097,7 +7137,7 @@ mod tests {
             run.apply(Command::Initiative(0, Some(total))).unwrap();
             let notice = run.notice.as_deref().unwrap();
             assert!(
-                notice.contains(&format!("moves to\u{a0}{total}")),
+                notice.contains(&format!("moved to\u{a0}{total}")),
                 "{notice}"
             );
             assert_eq!(notice.contains("acts next round"), waits, "{notice}");
@@ -7553,10 +7593,27 @@ mod tests {
         // A ruling is not what the sheet began with, so sync treats it as the DM's value.
         assert_eq!(hero.started.as_ref().and_then(|s| s.hp), Some(7));
 
-        let mut run = Run::new("Next".into(), vec![hero], String::new()).unwrap();
+        let mut run = Run::new("Next".into(), vec![hero.clone()], String::new()).unwrap();
         run.note_carry(&rested, vec![(0, Some(11), 0)]);
         assert!(run.carry_missing().unwrap().contains("the shrine"));
-        assert!(run.state.log.last().unwrap().contains("carried over"));
+        // iter-23-S FL3: full HP from a rest is not carried over, and `Last:` uses the rest's
+        // own lower-case step words.
+        assert_eq!(run.state.log.last().map(String::as_str), Some(REST_LOG));
+        assert_eq!(run.state.last_change.as_deref(), Some(REST_STEP));
+        let mut after_fight = Run::new("Later".into(), vec![hero], String::new()).unwrap();
+        after_fight.note_carry(&carry, vec![(0, Some(11), 0)]);
+        assert_eq!(
+            after_fight.state.last_change.as_deref(),
+            Some("party HP carried over from the bridge")
+        );
+        assert!(
+            after_fight
+                .state
+                .log
+                .last()
+                .unwrap()
+                .contains("carried over")
+        );
         let (from, back) = run.back_to_sheets().unwrap();
         assert_eq!(from, "the long rest");
         run.apply(back).unwrap();
@@ -8298,6 +8355,10 @@ mod tests {
         run.apply(Command::AddGroup(guard_group("Wave", 2), None))
             .unwrap();
         assert_eq!(run.state.participants.len(), 5);
+        // A group's name already names its rows; only a creature added by hand counts them.
+        assert_eq!(run.undo_label(), "Undo: add Wave");
+        // A run starts with a line in the DM's words, not the code's.
+        assert_eq!(run.state.log[0], "Fight prepared from the saved encounter.");
         let added = &run.state.participants[3..];
         assert_eq!(names(&run, 3..5), vec!["Guard 4", "Guard 5"]);
         for p in added {
@@ -8706,6 +8767,8 @@ mod tests {
         assert!(p.changes.is_none(), "nothing here replaces a stat block");
         assert_eq!(p.added_from.as_ref().unwrap().group, "");
         assert!(run.state.log.last().unwrap().starts_with(ONE_ADDED));
+        // Undo names every row the step added, with the count the button said.
+        assert_eq!(run.undo_label(), "Undo: add 2 × Ghost of the Mill");
         run.undo();
         assert_eq!(run.state.participants.len(), before);
         add_from(&mut run, &ghost, &[]);
@@ -8733,6 +8796,7 @@ mod tests {
         let mut wolf = form("WOLF", "");
         wolf.total = "5".into();
         add_from(&mut run, &wolf, &known);
+        assert_eq!(run.undo_label(), "Undo: add Wolf", "one row has no count");
         let p = &run.state.participants[before];
         assert_eq!(p.max_hp, Some(20));
         assert!(p.changes.is_none());

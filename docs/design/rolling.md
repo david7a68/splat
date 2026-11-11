@@ -81,7 +81,8 @@ character has it.
 A right-click on a target row opens a menu under the row, headed `Bite against
 Cinder Wolf 2`: `Roll`, `Roll with advantage`, `Roll with disadvantage`. For a
 save it rolls that creature's save another way; for a player's attack it rolls
-for them.
+for them. Shift+F10 on the focused row, tile or number opens the same menu, so
+every choice in it, the inspiration reroll too, works from the keyboard.
 
 ### Damage that depends on a condition
 
