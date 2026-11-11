@@ -33,11 +33,9 @@ const BUILTIN_NAME: &str = "D&D 2024 · SRD 5.2.1";
 fn repair_notice(
     ui: &mut egui::Ui,
     problem: &str,
-    note: &Note,
     recovery: Option<&(Module, String, bool)>,
     blocked: Option<&str>,
     source: bool,
-    skipped: bool,
 ) -> bool {
     let inset = design::S
         + design::HAIRLINE_WIDTH
@@ -84,26 +82,6 @@ fn repair_notice(
             });
         }
         pressed
-    } else if crate::formats_ui::is_old(problem) && skipped {
-        // FILES SKIPPED names this file with its own `Convert files…`; one button is enough.
-        design::message(
-            ui,
-            Tone::Warning,
-            &crate::formats_ui::old_message(&note.path),
-        );
-        false
-    } else if crate::formats_ui::is_old(problem) {
-        // Conversion remains the safe repair for an old-layout note.
-        crate::formats_ui::old_notice(
-            ui,
-            &crate::formats_ui::old_message(&note.path),
-            note.owner
-                .root()
-                .map(|root| root.join(&note.path))
-                .into_iter()
-                .collect(),
-        );
-        false
     } else if source {
         design::message(ui, Tone::Error, problem);
         false
@@ -801,18 +779,6 @@ impl Loaded {
         *cache = Some((index.clone(), notes.clone()));
         notes
     }
-    fn old_layout_count(&self) -> usize {
-        self.notes
-            .iter()
-            .filter(|note| {
-                note.owner != Owner::Builtin
-                    && note
-                        .error
-                        .as_deref()
-                        .is_some_and(|e| e.contains(content::OLD_LAYOUT))
-            })
-            .count()
-    }
 
     fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
         !self.notes.iter().enumerate().any(|(at, note)| {
@@ -1191,9 +1157,6 @@ impl Loaded {
                     || {
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
-                        if note.error.as_deref().is_some_and(crate::formats_ui::is_old) {
-                            return "Old layout".to_owned();
-                        }
                         line.map_or_else(
                             || "Cannot be read".to_owned(),
                             |line| format!("Line {line}"),
@@ -1991,8 +1954,6 @@ pub struct Library {
     /// The draft as last parsed, with its path. The editor needs the parse on every frame,
     /// and parsing a long note each time took most of the frame.
     draft_parse: Option<(String, String, ParsedDraft)>,
-    layouts: crate::formats_ui::State,
-    layout_scope: Option<Scope>,
     /// The list should scroll to the selected entry, which arrived by a link.
     reveal_row: bool,
     list_hidden: bool,
@@ -2483,7 +2444,6 @@ impl Library {
             self.scope = Scope::All;
             self.scope_notice = Some(format!("Scope is now Everything, to show {}.", note.name()));
         }
-        self.layouts.clear();
         self.selected = Some(index);
         self.draft = note.text.clone();
         self.disk_change = None;
@@ -2521,10 +2481,6 @@ impl Library {
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
             .is_some_and(|n| n.text != self.draft)
     }
-    pub fn clear_notice(&mut self) {
-        self.layouts.leave();
-    }
-
     pub fn form_open(&self) -> bool {
         self.form || self.new_form || self.confirm_unregister.is_some()
     }
@@ -2826,18 +2782,6 @@ impl Library {
                             reload = true;
                             ui.close();
                         }
-                        if Action::quiet("Convert files…")
-                            .blocked(
-                                locked.or(self
-                                    .run_open
-                                    .then_some("Close the run before converting files.")),
-                            )
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.layouts.scan(campaigns);
-                            ui.close();
-                        }
                         if Action::quiet("Manage packages…")
                             .icon(icons::SETTINGS)
                             .show(ui)
@@ -2848,34 +2792,6 @@ impl Library {
                         }
                     });
                 });
-                if let Some(loaded) = &self.loaded {
-                    let old = loaded.old_layout_count();
-                    if old > 0
-                        && design::locked(
-                            ui,
-                            locked.or(self
-                                .run_open
-                                .then_some("Close the run before converting files.")),
-                            |ui| {
-                                design::status_link(
-                                    ui,
-                                    Status {
-                                        icon: icons::INFO,
-                                        word: &design::count(
-                                            old,
-                                            "file uses the old layout",
-                                            "files use the old layout",
-                                        ),
-                                        color: colors().muted,
-                                    },
-                                )
-                            },
-                        )
-                        .clicked()
-                    {
-                        self.layouts.scan(campaigns);
-                    }
-                }
                 let broken = self
                     .loaded
                     .as_ref()
@@ -2946,22 +2862,6 @@ impl Library {
             self.new_folder = kind_folder(&self.new_kind).into();
             self.focus_new_name = true;
             self.form = false;
-        }
-        let convert_blocked = self.draft_reason().map(str::to_owned).or_else(|| {
-            self.run_open
-                .then(|| "Close the run before converting files.".into())
-        });
-        if self.form || self.new_form || self.layout_scope.is_some_and(|scope| scope != self.scope)
-        {
-            self.layouts.clear();
-        }
-        if self.pending.is_none()
-            && self
-                .layouts
-                .show_conversion(ui, convert_blocked.as_deref(), campaigns)
-        {
-            self.stale = true;
-            self.content_changed = campaigns.active_campaign().map(|c| c.path.clone());
         }
         if let Some(words) = &self.scope_notice {
             design::message(ui, Tone::Info, words);
@@ -4574,8 +4474,6 @@ impl Library {
     }
 
     fn save_selected(&mut self, file_gone: bool) {
-        self.layouts.clear();
-        self.layout_scope = Some(self.scope);
         let Some(i) = self.selected else {
             return;
         };
@@ -5342,11 +5240,6 @@ impl Library {
                 repair_problem.unwrap_or_else(|| error.clone())
             }
         });
-        // FILES SKIPPED already offers `Convert files…` for this file; the reader keeps one.
-        let skipped_here = note
-            .owner
-            .root()
-            .is_some_and(|root| self.layouts.skips(&root.join(&note.path)));
         let mut repair_pressed = false;
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row && !conflict {
@@ -5371,7 +5264,6 @@ impl Library {
                     .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         if design::save_row_state(ui, state, dirty && !conflict, None) {
-                            self.layouts.clear();
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
                             self.draft = note.text.clone();
@@ -5381,15 +5273,7 @@ impl Library {
                 });
             });
             if let Some(problem) = &repair_problem {
-                repair_pressed = repair_notice(
-                    ui,
-                    problem,
-                    note,
-                    recovery.as_ref(),
-                    draft_reason,
-                    true,
-                    skipped_here,
-                );
+                repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
                 if discard_is_for(self.discarded.as_ref(), note)
                     && self.draft == note.text
                     && design::draft_discarded(ui, note.name())
@@ -5681,7 +5565,7 @@ impl Library {
                             } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
                             view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
                             if let Some(problem) = &repair_problem {
-                                repair_pressed = repair_notice(ui, problem, note, recovery.as_ref(), draft_reason, false, skipped_here);
+                                repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, false);
                             }
                             if choices_in_reader {
                                 heading_pressed = heading.show(ui);
@@ -6476,28 +6360,6 @@ mod tests {
     }
 
     #[test]
-    fn generated_old_files_stay_in_the_layout_count() {
-        let dir = tempfile::tempdir().unwrap();
-        let module = create_module(&dir.path().join("book"), "Book", "book").unwrap();
-        fs::write(
-            module.path.join("Wolf.md"),
-            format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium, type: beast}}\n---\n", Uuid::new_v4()),
-        )
-        .unwrap();
-        let manifest = module.path.join("Package.md");
-        let text = fs::read_to_string(&manifest).unwrap();
-        fs::write(
-            &manifest,
-            content::patch_fields(&text, &[("splat_generated", Some(true.into()))]).unwrap(),
-        )
-        .unwrap();
-        let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
-        assert_eq!(loaded.old_layout_count(), 1);
-        fs::write(manifest, text).unwrap();
-        assert!(loaded.old_layout_count() > 0);
-    }
-
-    #[test]
     fn copy_registration_and_undo_keep_campaign_choices_and_later_edits() {
         let temp = tempfile::tempdir().unwrap();
         let world = crate::visual_tests::fixture::World::build(
@@ -6695,71 +6557,6 @@ mod tests {
                 .toggled(),
             Some(egui::accesskit::Toggled::True)
         );
-    }
-
-    #[test]
-    fn i19_w9_header_counts_only_editable_old_files_and_hides_at_zero() {
-        for size in [egui::vec2(960.0, 640.0), egui::vec2(1200.0, 800.0)] {
-            let mut library = navigation_library();
-            let notes = &mut library.loaded.as_mut().unwrap().notes;
-            notes[0].owner = Owner::Builtin;
-            for index in [0, 2] {
-                notes[index].entry = None;
-                notes[index].error = Some(content::OLD_LAYOUT.into());
-            }
-
-            notes[1]
-                .entry
-                .as_mut()
-                .unwrap()
-                .fields
-                .insert("splat_schema".into(), 2.into());
-            let ctx = egui::Context::default();
-            let mut campaigns = Campaigns::default();
-            let mut render = |library: &mut Library| {
-                let mut frame = || {
-                    ctx.run(
-                        egui::RawInput {
-                            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                            ..Default::default()
-                        },
-                        |ctx| {
-                            egui::CentralPanel::default()
-                                .show(ctx, |ui| library.show(ui, &mut campaigns));
-                        },
-                    )
-                };
-                frame();
-                frame()
-                    .shapes
-                    .into_iter()
-                    .filter_map(|shape| match shape.shape {
-                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-            };
-            let text = render(&mut library);
-            assert!(
-                text.iter()
-                    .any(|text| text.ends_with("1 file uses the old layout")),
-                "{text:?}"
-            );
-            library.loaded.as_mut().unwrap().notes[2].owner = Owner::Builtin;
-            assert!(
-                render(&mut library)
-                    .iter()
-                    .all(|text| !text.contains("old layout"))
-            );
-            let notes = &mut library.loaded.as_mut().unwrap().notes;
-            notes[0].owner = notes[1].owner.clone();
-            notes[2].owner = notes[1].owner.clone();
-            assert!(
-                render(&mut library)
-                    .iter()
-                    .any(|text| text.ends_with("2 files use the old layout"))
-            );
-        }
     }
 
     #[test]

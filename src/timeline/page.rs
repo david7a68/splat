@@ -259,16 +259,7 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                 }
             });
         };
-        if crate::formats_ui::is_old(&error) {
-            crate::formats_ui::old_notice(
-                ui,
-                &crate::formats_ui::old_message(super::FILE),
-                book.path.clone().into_iter().collect(),
-            );
-            choices(ui, book);
-        } else {
-            design::message_with_actions(ui, Tone::Error, &error, |ui| choices(ui, book));
-        }
+        design::message_with_actions(ui, Tone::Error, &error, |ui| choices(ui, book));
     } else if book.conflict {
         design::message_with_actions(
             ui,

@@ -1,7 +1,7 @@
 //! The campaign's timeline: every encounter, rest, travel interval, day and major event,
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
-//! `Timeline.md`. Version 2 keeps the events in the body. Old layouts need conversion.
+//! `Timeline.md`. Version 2 keeps the events in the body.
 pub(crate) mod formats;
 pub mod page;
 
@@ -590,7 +590,6 @@ pub(crate) fn parse(text: &str) -> Result<Vec<Event>, String> {
         .and_then(serde_yaml_ng::Value::as_u64)
     {
         Some(2) => {}
-        Some(1) => return Err(splat::content::OLD_LAYOUT.into()),
         _ => return Err("Unsupported timeline version (expected 2).".into()),
     }
     Ok(formats::parse(text).0)
@@ -1960,19 +1959,15 @@ mod tests {
     }
 
     #[test]
-    fn old_timeline_is_flagged_and_not_loaded() {
+    fn version_one_timeline_is_unreadable_and_kept() {
         let dir = tempfile::tempdir().unwrap();
         let text = "---\ntimeline_version: 1\ntimeline: []\n---\n";
-        assert_eq!(parse(text).unwrap_err(), splat::content::OLD_LAYOUT);
+        let unsupported = "Unsupported timeline version (expected 2).";
+        assert_eq!(parse(text).unwrap_err(), unsupported);
         fs::write(dir.path().join(FILE), text).unwrap();
         let book = book(dir.path());
         assert!(book.events.is_empty());
-        assert!(
-            book.unreadable
-                .as_ref()
-                .unwrap()
-                .contains(splat::content::OLD_LAYOUT)
-        );
+        assert!(book.unreadable.as_ref().unwrap().contains(unsupported));
         assert_eq!(fs::read_to_string(dir.path().join(FILE)).unwrap(), text);
     }
 

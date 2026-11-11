@@ -625,16 +625,9 @@ fn resolve_group(
                 .and_then(Value::as_str);
             let name = missing_member_name(member.overrides.name.as_deref(), link);
             let fault_name = &name;
-            warnings.push(
-                if let Some(note) = catalogue
-                    .old_layout_ref(&member.creature)
-                    .and_then(|id| catalogue.unreadable.get(&id))
-                {
-                    note.word.clone()
-                } else {
-                    format!("{what}, {fault_name}: not in this campaign's packages.")
-                },
-            );
+            warnings.push(format!(
+                "{what}, {fault_name}: not in this campaign's packages."
+            ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
             continue;
@@ -680,21 +673,6 @@ fn resolve_group(
         });
     }
     for member in unread {
-        let reference = member
-            .creature
-            .clone()
-            .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
-        if let Some(note) = reference
-            .as_ref()
-            .and_then(|reference| catalogue.unreadable_ref(reference))
-            .filter(|note| note.old_layout)
-        {
-            warnings.push(note.word.clone());
-            let count = member.count.unwrap_or(1);
-            unavailable = unavailable.saturating_add(count);
-            unavailable_members.push((member.before, count, member.label.clone()));
-            continue;
-        }
         let name = member
             .creature
             .clone()
@@ -725,15 +703,11 @@ fn resolve_group(
     }
     let problem = members.is_empty().then(|| {
         let mut problems = warnings.clone();
-        // Edit cannot fix a group whose only fault is the old layout; Convert files can.
         problems.push(
-            if warnings
-                .iter()
-                .any(|word| !word.contains("uses the old layout."))
-            {
-                "No members can join. Edit group to fix them."
-            } else {
+            if warnings.is_empty() {
                 "No members can join."
+            } else {
+                "No members can join. Edit group to fix them."
             }
             .into(),
         );
@@ -2330,9 +2304,6 @@ fn members(
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
             }
-            if let Some(note) = snapshot.catalogue.unreadable_ref(&member.creature).filter(|note| note.old_layout) {
-                crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
-            }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
@@ -2444,14 +2415,6 @@ fn unread_member(
         .creature
         .clone()
         .and_then(|value| serde_yaml_ng::from_value(value).ok());
-    if let Some(note) = reference
-        .as_ref()
-        .and_then(|reference| snapshot.catalogue.unreadable_ref(reference))
-        .filter(|note| note.old_layout)
-    {
-        crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
-        return;
-    }
     let entry = reference
         .as_ref()
         .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())

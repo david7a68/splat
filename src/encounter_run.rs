@@ -4667,7 +4667,7 @@ mod tests {
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
     }
     #[test]
-    fn an_old_run_copy_requires_explicit_conversion_and_keeps_combat_state() {
+    fn a_run_with_a_schema_one_copy_does_not_open_and_is_kept() {
         fn downgrade(value: &mut serde_json::Value) {
             if value
                 .get("fields")
@@ -4692,28 +4692,19 @@ mod tests {
         run.configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         let path = run.storage.as_ref().unwrap().path.clone();
-        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        downgrade(&mut old);
-        let before = serde_json::to_string_pretty(&old).unwrap();
+        assert!(Run::open(&path, campaign).is_ok());
+        let mut copy: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        downgrade(&mut copy);
+        let before = serde_json::to_string_pretty(&copy).unwrap();
         fs::write(&path, &before).unwrap();
         assert!(
             Run::open(&path, campaign)
                 .err()
                 .unwrap()
-                .contains(splat::content::OLD_LAYOUT)
+                .contains("Unsupported content schema; expected 2")
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
-        let relative = path.strip_prefix(dir.path()).unwrap().to_str().unwrap();
-        let file = crate::conversion::preview(dir.path(), relative, before, &[]).unwrap();
-        crate::conversion::publish(&file).unwrap();
-        let reopened = Run::open(&path, campaign).unwrap();
-        assert_eq!(reopened.id, run.id);
-        assert_eq!(reopened.current(), run.current());
-        assert_eq!(reopened.state.log, run.state.log);
-        assert_eq!(
-            reopened.state.participants[0].hp,
-            run.state.participants[0].hp
-        );
     }
 
     /// Change the saved file behind the run's back, as a vault sync tool would.
