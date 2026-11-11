@@ -9,7 +9,7 @@ use egui_kittest::{
     kittest::{AccessKitNode, NodeT},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// WCAG 2.5.8 (Target Size, Minimum), in logical pixels.
 pub const MIN_TARGET: f32 = 24.0;
@@ -25,7 +25,87 @@ const CHROME_CORNER: f32 = 24.0;
 /// counts stay visible, but apart from what app code and the design system control.
 pub const CHROME_SUFFIX: &str = "/egui-chrome";
 
-pub const CHECKS: [&str; 11] = [
+/// An app target or text that overlaps egui chrome where egui's hit test can give the
+/// press to the chrome: a scroll bar or a column splitter. It is an app fault.
+pub const APP_VS_CHROME: &str = "no-overlap/app-vs-chrome";
+
+/// No baseline may allow these. Loading or writing a positive allowance fails.
+pub const NEVER_ALLOWED: [&str; 1] = [APP_VS_CHROME];
+
+/// A scenario, a state in it, and a window size, as the report names them.
+pub type StateKey<'a> = (&'a str, &'a str, &'a str);
+
+/// The only app-vs-chrome pairs a run may have, with the exact count for each state.
+///
+/// Owner: Markdown reader tables (`src/markdown_view.rs`). Egui floats a wide table's
+/// sideways scroll bar up to the reader's bottom edge, over the words of the last visible
+/// row, and the bar takes the press there. This list is code, not `baseline.json`, so no
+/// baseline refresh can add to it. It must end empty: a state with fewer pairs than listed
+/// fails the run until its line is removed or lowered.
+pub const KNOWN_APP_VS_CHROME: &[(StateKey<'static>, usize)] = &[
+    (
+        ("library-browse", "05-class-traits-and-features", "1200x800"),
+        1,
+    ),
+    (
+        (
+            "library-browse",
+            "05-class-traits-and-features",
+            "1920x1080",
+        ),
+        5,
+    ),
+];
+
+/// App-vs-chrome lines by state: a state that is not in `known` or has more pairs than
+/// listed, then a listed state with fewer pairs (the list is stale). Both fail a run. A
+/// scenario that did not run gives no line.
+pub fn compare_app_vs_chrome(
+    violations: &[Violation],
+    known: &[(StateKey<'_>, usize)],
+    scenarios: &[&str],
+) -> (Vec<String>, Vec<String>) {
+    let mut found: BTreeMap<StateKey<'_>, usize> = BTreeMap::new();
+    for violation in violations.iter().filter(|v| v.check == APP_VS_CHROME) {
+        let key = (
+            violation.scenario.as_str(),
+            violation.state.as_str(),
+            violation.window.as_str(),
+        );
+        *found.entry(key).or_default() += 1;
+    }
+    let listed = |key: StateKey<'_>| {
+        known
+            .iter()
+            .filter(|(listed, _)| *listed == key)
+            .map(|(_, count)| count)
+            .sum::<usize>()
+    };
+    let line = |(scenario, state, window): StateKey<'_>, count: usize, limit: usize| {
+        format!("{APP_VS_CHROME} / {scenario} / {state} / {window}: {count} (known {limit})")
+    };
+    let worse = found
+        .iter()
+        .filter(|(key, count)| **count > listed(**key))
+        .map(|(key, count)| line(*key, *count, listed(*key)))
+        .collect();
+    let stale = known
+        .iter()
+        .filter(|((scenario, ..), _)| scenarios.contains(scenario))
+        .filter_map(|(key, limit)| {
+            let count = found.get(key).copied().unwrap_or(0);
+            (count < *limit).then(|| {
+                format!(
+                    "{}. Fixed: lower or remove its line in KNOWN_APP_VS_CHROME",
+                    line(*key, count, *limit)
+                )
+            })
+        })
+        .collect();
+    (worse, stale)
+}
+
+pub const CHECKS: [&str; 12] = [
     "target-size",
     "accessible-name",
     "in-viewport",
@@ -35,6 +115,7 @@ pub const CHECKS: [&str; 11] = [
     "target-size/egui-chrome",
     "accessible-name/egui-chrome",
     "no-overlap/egui-chrome",
+    APP_VS_CHROME,
     "workflow",
     "missing-glyph",
 ];
@@ -88,6 +169,8 @@ pub struct Control {
     pub clip: Option<egui::Rect>,
     /// A scroll bar, resize handle or window title bar that egui adds by itself.
     pub chrome: bool,
+    /// The popup background (egui chrome) that this control or text is drawn in.
+    pub popup: Option<u64>,
 }
 
 fn rect_of(node: &AccessKitNode<'_>) -> Option<egui::Rect> {
@@ -318,65 +401,87 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
     let mut out = Vec::new();
     let root = harness.root();
     let id = root.accesskit_node().id().0;
+    // Popup backgrounds first, so each control can name the one it is drawn in.
+    let mut popups = HashSet::new();
     walk(
         &root,
         id,
         None,
         0,
-        &mut |node, scope, clip, parent_is_window, surfaces| {
-            let access = node.accesskit_node();
-            if access.role() == Role::Label
-                && let Some(rect) = rect_of(&access)
+        &mut |node, _, _, parent_is_window, _| {
+            if let Some(rect) = rect_of(&node.accesskit_node())
+                && popup_body(node, rect, parent_is_window)
             {
-                let mut parent = node.parent();
-                let mut label_owner = None;
-                while let Some(ancestor) = parent {
-                    let access = ancestor.accesskit_node();
-                    if control_role(access.role()) {
-                        label_owner = Some(access.id().0);
-                        break;
-                    }
-                    parent = ancestor.parent();
-                }
-                out.push(Control {
-                    id: access.id().0,
-                    name: access.label().unwrap_or_default(),
-                    placeholder: None,
-                    role: Role::Label,
-                    label_owner,
-                    rect,
-                    disabled: false,
-                    scope,
-                    clip,
-                    chrome: false,
-                });
-                return;
+                popups.insert(node.accesskit_node().id().0);
             }
-            if !interactive(&access) {
-                return;
-            }
-            let Some(rect) = rect_of(&access) else {
-                return;
-            };
-            out.push(Control {
-                id: access.id().0,
-                name: access
-                    .label()
-                    .filter(|label| !label.trim().is_empty())
-                    .unwrap_or_default(),
-                placeholder: access.placeholder().map(str::to_owned),
-                role: access.role(),
-                label_owner: None,
-                rect,
-                disabled: access.is_disabled(),
-                scope,
-                clip,
-                chrome: scroll_bar(&access, rect, surfaces)
-                    || column_handle(&access, rect)
-                    || popup_body(node, rect, parent_is_window),
-            });
         },
     );
+    let popup_of = |node: &Node<'_>| {
+        let mut parent = node.parent();
+        while let Some(ancestor) = parent {
+            let id = ancestor.accesskit_node().id().0;
+            if popups.contains(&id) {
+                return Some(id);
+            }
+            parent = ancestor.parent();
+        }
+        None
+    };
+    walk(&root, id, None, 0, &mut |node, scope, clip, _, surfaces| {
+        let access = node.accesskit_node();
+        if access.role() == Role::Label
+            && let Some(rect) = rect_of(&access)
+        {
+            let mut parent = node.parent();
+            let mut label_owner = None;
+            while let Some(ancestor) = parent {
+                let access = ancestor.accesskit_node();
+                if control_role(access.role()) {
+                    label_owner = Some(access.id().0);
+                    break;
+                }
+                parent = ancestor.parent();
+            }
+            out.push(Control {
+                id: access.id().0,
+                name: access.label().unwrap_or_default(),
+                placeholder: None,
+                role: Role::Label,
+                label_owner,
+                rect,
+                disabled: false,
+                scope,
+                clip,
+                chrome: false,
+                popup: popup_of(node),
+            });
+            return;
+        }
+        if !interactive(&access) {
+            return;
+        }
+        let Some(rect) = rect_of(&access) else {
+            return;
+        };
+        out.push(Control {
+            id: access.id().0,
+            name: access
+                .label()
+                .filter(|label| !label.trim().is_empty())
+                .unwrap_or_default(),
+            placeholder: access.placeholder().map(str::to_owned),
+            role: access.role(),
+            label_owner: None,
+            rect,
+            disabled: access.is_disabled(),
+            scope,
+            clip,
+            chrome: scroll_bar(&access, rect, surfaces)
+                || column_handle(&access, rect)
+                || popups.contains(&access.id().0),
+            popup: popup_of(node),
+        });
+    });
     out
 }
 
@@ -620,6 +725,38 @@ fn display_name(control: &Control) -> String {
     }
 }
 
+/// A check on one control: egui's own widgets count apart from the app's.
+fn own_check(check: &str, control: &Control) -> String {
+    if control.chrome {
+        format!("{check}{CHROME_SUFFIX}")
+    } else {
+        check.to_owned()
+    }
+}
+
+/// The check that an overlap of two controls (or a control and text) belongs to.
+///
+/// Two app controls are an app fault, and two pieces of egui chrome are egui's own count.
+/// For a mixed pair, egui's hit test decides. A popup's background is registered before
+/// the items in it, so in its own popup an enabled item is on top and takes every press.
+/// A disabled item takes no press, so the press reaches the background, which has no
+/// action, as it does in the popup's margin. That pair stays egui's count. Any other
+/// chrome (a scroll bar or a column splitter) can take the press from the app control or
+/// cover its text: that is an app fault, whatever its size.
+fn overlap_check(first: &Control, second: &Control) -> String {
+    let (app, chrome) = match (first.chrome, second.chrome) {
+        (false, false) => return "no-overlap".to_owned(),
+        (true, true) => return format!("no-overlap{CHROME_SUFFIX}"),
+        (false, true) => (first, second),
+        (true, false) => (second, first),
+    };
+    if app.popup == Some(chrome.id) {
+        format!("no-overlap{CHROME_SUFFIX}")
+    } else {
+        APP_VS_CHROME.to_owned()
+    }
+}
+
 /// Run the per-state checks over the controls in the tree.
 pub fn inspect(
     controls: &[Control],
@@ -630,13 +767,9 @@ pub fn inspect(
     window: &str,
 ) -> Vec<Violation> {
     let mut violations = Vec::new();
-    let mut report = |check: &str, control: &Control, other_chrome: bool, detail: String| {
+    let mut report = |check: String, control: &Control, detail: String| {
         violations.push(Violation {
-            check: if control.chrome || other_chrome {
-                format!("{check}{CHROME_SUFFIX}")
-            } else {
-                check.to_owned()
-            },
+            check,
             scenario: scenario.to_owned(),
             state: state.to_owned(),
             window: window.to_owned(),
@@ -671,9 +804,8 @@ pub fn inspect(
                 || control.rect.right() > shown(control).right() + OVERLAP_TOLERANCE)
         {
             report(
-                "clipped",
+                own_check("clipped", control),
                 control,
-                false,
                 format!(
                     "{:.0} wide, {:.0} shown. It is cut off at the side",
                     control.rect.width(),
@@ -687,9 +819,8 @@ pub fn inspect(
         let enabled = if control.disabled { " (disabled)" } else { "" };
         if visible && (control.rect.width() < MIN_TARGET || control.rect.height() < MIN_TARGET) {
             report(
-                "target-size",
+                own_check("target-size", control),
                 control,
-                false,
                 format!(
                     "{:.1}x{:.1}, needs {MIN_TARGET}x{MIN_TARGET}{enabled}",
                     control.rect.width(),
@@ -699,18 +830,16 @@ pub fn inspect(
         }
         if visible && control.name.trim().is_empty() {
             report(
-                "accessible-name",
+                own_check("accessible-name", control),
                 control,
-                false,
                 format!("No label{enabled}"),
             );
         }
         // A disabled control behind a dialog is not a target, and it has no scroll node.
         if !control.disabled && control.clip.is_none() && !viewport.contains_rect(control.rect) {
             report(
-                "in-viewport",
+                own_check("in-viewport", control),
                 control,
-                false,
                 format!("Outside the {window} window, and not in a scroll area{enabled}"),
             );
         }
@@ -746,9 +875,8 @@ pub fn inspect(
             }
             if overlap.width() > OVERLAP_TOLERANCE && overlap.height() > OVERLAP_TOLERANCE {
                 report(
-                    "no-overlap",
+                    overlap_check(first, second),
                     first,
-                    second.chrome,
                     format!(
                         "Overlaps {} by {:.1}x{:.1}",
                         display_name(second),
@@ -813,15 +941,47 @@ impl Baseline {
         self
     }
 
+    /// Read a baseline and refuse any allowance for a check in `NEVER_ALLOWED`.
+    pub fn parse(text: &[u8]) -> Result<Self, String> {
+        let baseline: Self =
+            serde_json::from_slice(text).map_err(|error| format!("invalid baseline: {error}"))?;
+        baseline.refuse_never_allowed()?;
+        Ok(baseline)
+    }
+
+    /// An error that names each positive count for a check that no baseline may allow.
+    pub fn refuse_never_allowed(&self) -> Result<(), String> {
+        let found: Vec<String> = NEVER_ALLOWED
+            .iter()
+            .filter_map(|check| Some((check, self.violations.get(*check)?)))
+            .flat_map(|(check, counts)| {
+                counts
+                    .iter()
+                    .filter(|(_, count)| **count > 0)
+                    .map(move |(scenario, count)| format!("{check} / {scenario}: {count}"))
+            })
+            .collect();
+        if found.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "No baseline may allow an overlap where egui chrome can take the press. Fix \
+                 the clearance instead:\n{}",
+                found.join("\n")
+            ))
+        }
+    }
+
     /// Lines where `current` is worse than this baseline, then lines where it is better.
-    /// A scenario that did not run is neither.
+    /// A scenario that did not run is neither. A check in `NEVER_ALLOWED` is not compared
+    /// here, whatever this baseline says: `compare_app_vs_chrome` compares it by state.
     pub fn compare(&self, current: &Self, scenarios: &[&str]) -> (Vec<String>, Vec<String>) {
         let mut worse = Vec::new();
         let mut better = Vec::new();
         let empty = BTreeMap::new();
-        for check in CHECKS {
-            let known = self.violations.get(check).unwrap_or(&empty);
-            let found = current.violations.get(check).unwrap_or(&empty);
+        for check in CHECKS.iter().filter(|check| !NEVER_ALLOWED.contains(check)) {
+            let known = self.violations.get(*check).unwrap_or(&empty);
+            let found = current.violations.get(*check).unwrap_or(&empty);
             for scenario in scenarios {
                 let known = known.get(*scenario).copied().unwrap_or(0);
                 let found = found.get(*scenario).copied().unwrap_or(0);
@@ -873,6 +1033,8 @@ pub struct Report<'a> {
     pub failed_scenarios: &'a [String],
     pub regressions: &'a [String],
     pub improvements: &'a [String],
+    /// The listed app-vs-chrome pairs in the scenarios that ran. See `KNOWN_APP_VS_CHROME`.
+    pub known_open: &'a [String],
     pub violations: &'a [Violation],
 }
 
@@ -899,6 +1061,10 @@ pub fn write_markdown(report: &Report<'_>) -> String {
     list("Failed scenarios", report.failed_scenarios);
     list("Regressions against the baseline", report.regressions);
     list("Improvements against the baseline", report.improvements);
+    list(
+        "Known app-vs-chrome pairs (the list must end empty)",
+        report.known_open,
+    );
     list(
         "States and journeys the suite could not reach",
         report.unreached,
@@ -968,7 +1134,7 @@ pub fn write_markdown(report: &Report<'_>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui_kittest::Harness;
+    use egui_kittest::{Harness, kittest::Queryable};
 
     #[test]
     fn chrome_refresh_preserves_unselected_and_app_allowances_and_clears_zeroes() {
@@ -1141,6 +1307,7 @@ mod tests {
             scope: 1,
             clip: None,
             chrome: false,
+            popup: None,
         }
     }
 
@@ -1219,6 +1386,411 @@ mod tests {
         let a = control("Save", at(10.0, 10.0, 80.0, 30.0));
         let b = control("Send", at(20.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
+    }
+
+    fn overlap_checks(controls: &[Control]) -> Vec<String> {
+        checks_for(controls)
+            .into_iter()
+            .filter(|check| check.starts_with("no-overlap"))
+            .collect()
+    }
+
+    /// Each order of each kind of pair: the first control is the one reported.
+    #[test]
+    fn an_overlap_is_filed_by_whether_egui_chrome_can_take_the_press() {
+        let app = control("Save", at(10.0, 10.0, 80.0, 30.0));
+        let other_app = control("Send", at(20.0, 10.0, 80.0, 30.0));
+        let mut splitter = control("Resize side panel column", at(30.0, 0.0, 10.0, 200.0));
+        splitter.role = Role::Splitter;
+        splitter.chrome = true;
+        let mut bar = control("", at(35.0, 30.0, 200.0, 8.0));
+        bar.role = Role::Unknown;
+        bar.chrome = true;
+        assert_eq!(overlap_checks(&[app.clone(), other_app]), ["no-overlap"]);
+        assert_eq!(
+            overlap_checks(&[splitter.clone(), bar.clone()]),
+            ["no-overlap/egui-chrome"]
+        );
+        assert_eq!(
+            overlap_checks(&[app.clone(), splitter.clone()]),
+            [APP_VS_CHROME]
+        );
+        assert_eq!(overlap_checks(&[splitter, app.clone()]), [APP_VS_CHROME]);
+        let mut text = control("Spellcasting", at(50.0, 20.0, 80.0, 18.0));
+        text.role = Role::Label;
+        assert_eq!(
+            overlap_checks(&[bar.clone(), text.clone()]),
+            [APP_VS_CHROME]
+        );
+        assert_eq!(overlap_checks(&[text, bar]), [APP_VS_CHROME]);
+    }
+
+    /// A popup's own background is behind its items, so they stay egui's count. Another
+    /// popup's background is not.
+    #[test]
+    fn an_item_over_its_own_popup_background_stays_egui_chrome() {
+        let mut background = control("", at(0.0, 0.0, 200.0, 120.0));
+        background.role = Role::Unknown;
+        background.chrome = true;
+        let mut item = control("Delete", at(7.0, 7.0, 186.0, 28.0));
+        item.popup = Some(background.id);
+        let mut text = control("Danger", at(9.0, 40.0, 186.0, 16.0));
+        text.role = Role::Label;
+        text.popup = Some(background.id);
+        for pair in [
+            [background.clone(), item.clone()],
+            [item.clone(), background.clone()],
+            [background.clone(), text.clone()],
+            [text, background.clone()],
+        ] {
+            assert_eq!(
+                overlap_checks(&pair),
+                ["no-overlap/egui-chrome"],
+                "{pair:?}"
+            );
+        }
+        item.popup = Some(background.id + 1);
+        assert_eq!(overlap_checks(&[background, item]), [APP_VS_CHROME]);
+    }
+
+    /// A click as the visual driver makes one: hover, then press and release.
+    fn press_at(harness: &mut Harness<'_, crate::Splat>, pos: egui::Pos2) {
+        harness.hover_at(pos);
+        harness.step();
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        harness.step();
+        harness.remove_cursor();
+        harness.run();
+    }
+
+    /// The five points a press is tried at: the middle and each corner of the overlap.
+    fn press_points(overlap: egui::Rect) -> [egui::Pos2; 5] {
+        let inner = overlap.shrink(1.0);
+        [
+            inner.center(),
+            inner.left_top(),
+            inner.right_top(),
+            inner.left_bottom(),
+            inner.right_bottom(),
+        ]
+    }
+
+    /// Egui's own hit test: a press anywhere on a menu item reaches the item, not the
+    /// popup's background behind it, so the pair stays egui's count.
+    #[test]
+    fn a_press_on_a_menu_item_reaches_the_item_and_the_pair_stays_chrome() {
+        let clicks = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counted = clicks.clone();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_state(
+                move |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.menu_button("Open", |ui| {
+                            if ui.button("Delete group").clicked() {
+                                counted.set(counted.get() + 1);
+                            }
+                            ui.label("Danger");
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        let open = |harness: &mut Harness<'_, crate::Splat>| {
+            harness.get_by_label("Open").click();
+            harness.run();
+        };
+        open(&mut harness);
+        let found = controls(&harness);
+        let item = found
+            .iter()
+            .find(|control| control.name == "Delete group")
+            .expect("the menu item is in the tree");
+        let background = found
+            .iter()
+            .find(|control| control.chrome && Some(control.id) == item.popup)
+            .expect("the item names its popup background");
+        let overlap = item.rect.intersect(background.rect);
+        assert!(overlap.width() > 1.0 && overlap.height() > 1.0);
+        let pair: Vec<_> = inspect(
+            &found,
+            &[],
+            harness.ctx.content_rect(),
+            "seeded",
+            "menu",
+            "400x300",
+        )
+        .into_iter()
+        .filter(|violation| {
+            violation.check.starts_with("no-overlap")
+                && (violation.node == "Delete group" || violation.detail.contains("Delete group"))
+        })
+        .map(|violation| violation.check)
+        .collect();
+        assert_eq!(pair, ["no-overlap/egui-chrome"]);
+        for (index, pos) in press_points(overlap).into_iter().enumerate() {
+            if index > 0 {
+                open(&mut harness);
+            }
+            press_at(&mut harness, pos);
+            assert_eq!(
+                clicks.get(),
+                index + 1,
+                "a press at {pos:?} reaches the item"
+            );
+        }
+    }
+
+    /// Egui's own hit test: a nested horizontal bar that floats over a row takes the press
+    /// there, so the row's overlap with it is an app fault. Away from the bar the row works.
+    #[test]
+    fn a_press_where_a_scroll_bar_lies_on_a_row_reaches_the_bar_and_is_an_app_fault() {
+        let clicks = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let counted = clicks.clone();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(300.0, 240.0))
+            .build_state(
+                move |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            egui::ScrollArea::horizontal()
+                                .id_salt("wide-table")
+                                .show(ui, |ui| {
+                                    for row in 0..30 {
+                                        let button = egui::Button::new(format!("Row {row}"))
+                                            .min_size(egui::vec2(600.0, 30.0));
+                                        if ui.add(button).clicked() {
+                                            counted.borrow_mut().push(row);
+                                        }
+                                    }
+                                });
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(3);
+        let found = controls(&harness);
+        let bar = found
+            .iter()
+            .find(|control| control.chrome && control.rect.width() > control.rect.height())
+            .expect("the floated bar is chrome");
+        let shown = |control: &Control| {
+            control
+                .clip
+                .map_or(control.rect, |clip| control.rect.intersect(clip))
+        };
+        let (row, under) = found
+            .iter()
+            .filter(|control| control.name.starts_with("Row "))
+            .map(|control| (control, shown(control).intersect(bar.rect)))
+            .find(|(_, overlap)| overlap.width() > 1.0 && overlap.height() > 1.0)
+            .expect("a row lies under the bar");
+        let checks: Vec<_> = inspect(
+            &found,
+            &[],
+            harness.ctx.content_rect(),
+            "seeded",
+            "table",
+            "300x240",
+        )
+        .into_iter()
+        .filter(|violation| {
+            violation.check.starts_with("no-overlap")
+                && (violation.node == row.name || violation.detail.contains(&row.name))
+        })
+        .map(|violation| violation.check)
+        .collect();
+        assert_eq!(checks, [APP_VS_CHROME]);
+        for pos in press_points(under) {
+            press_at(&mut harness, pos);
+        }
+        assert_eq!(
+            *clicks.borrow(),
+            Vec::<usize>::new(),
+            "the bar takes every press"
+        );
+        // The same row still takes a press beside the bar.
+        let visible = shown(row);
+        let beside = if under.top() - visible.top() > visible.bottom() - under.bottom() {
+            egui::pos2(visible.center().x, (visible.top() + under.top()) / 2.0)
+        } else {
+            egui::pos2(
+                visible.center().x,
+                (under.bottom() + visible.bottom()) / 2.0,
+            )
+        };
+        press_at(&mut harness, beside);
+        let number: usize = row.name["Row ".len()..].parse().unwrap();
+        assert_eq!(*clicks.borrow(), vec![number]);
+    }
+
+    /// A hand-written allowance for a mixed overlap does not load, and does not apply.
+    #[test]
+    fn a_mixed_overlap_fails_against_a_hand_written_allowance() {
+        let text =
+            br#"{"violations": {"no-overlap/app-vs-chrome": {"party": 3}}, "task_cost": {}}"#;
+        let error = Baseline::parse(text).expect_err("a positive allowance does not load");
+        assert!(
+            error.contains("no-overlap/app-vs-chrome / party: 3"),
+            "{error}"
+        );
+        let zero =
+            br#"{"violations": {"no-overlap/app-vs-chrome": {"party": 0}}, "task_cost": {}}"#;
+        assert!(Baseline::parse(zero).is_ok());
+        // Built in memory, past the loader: the allowance has no route to apply. The
+        // per-scenario comparison skips the check, and the state comparison fails the pair.
+        let known: Baseline = serde_json::from_slice(text).unwrap();
+        let violations = [mixed("party", "01-start", "960x640")];
+        let current = Baseline::measure(&violations, &[]);
+        assert_eq!(
+            current.violations[APP_VS_CHROME]["party"], 1,
+            "the run counts the pair"
+        );
+        assert_eq!(known.compare(&current, &["party"]), (vec![], vec![]));
+        let (worse, stale) = compare_app_vs_chrome(&violations, &[], &["party"]);
+        assert_eq!(
+            worse,
+            ["no-overlap/app-vs-chrome / party / 01-start / 960x640: 1 (known 0)"]
+        );
+        assert!(stale.is_empty());
+    }
+
+    fn mixed(scenario: &str, state: &str, window: &str) -> Violation {
+        Violation {
+            check: APP_VS_CHROME.to_owned(),
+            scenario: scenario.to_owned(),
+            state: state.to_owned(),
+            window: window.to_owned(),
+            node: "(unnamed Label)".to_owned(),
+            role: "Label".to_owned(),
+            rect: [0.0; 4],
+            detail: "Overlaps (egui handle at edge) by 80.0x5.0".to_owned(),
+        }
+    }
+
+    /// The pairs this round lists, in the shape of `KNOWN_APP_VS_CHROME`. The tests use
+    /// their own copy, so they keep working as the real list shrinks.
+    const LISTED: &[(StateKey<'static>, usize)] = &[
+        (
+            ("library-browse", "05-class-traits-and-features", "1200x800"),
+            1,
+        ),
+        (
+            (
+                "library-browse",
+                "05-class-traits-and-features",
+                "1920x1080",
+            ),
+            5,
+        ),
+    ];
+
+    fn listed_run() -> Vec<Violation> {
+        let mut run = vec![mixed(
+            "library-browse",
+            "05-class-traits-and-features",
+            "1200x800",
+        )];
+        for _ in 0..5 {
+            run.push(mixed(
+                "library-browse",
+                "05-class-traits-and-features",
+                "1920x1080",
+            ));
+        }
+        run
+    }
+
+    #[test]
+    fn exactly_the_listed_app_vs_chrome_pairs_pass() {
+        let run = listed_run();
+        assert_eq!(run.len(), 6);
+        let ran = ["library-browse", "party"];
+        assert_eq!(compare_app_vs_chrome(&run, LISTED, &ran), (vec![], vec![]));
+        // A scenario that did not run is neither worse nor stale.
+        assert_eq!(
+            compare_app_vs_chrome(&[], LISTED, &["party"]),
+            (vec![], vec![])
+        );
+    }
+
+    #[test]
+    fn an_app_vs_chrome_pair_in_another_scenario_fails() {
+        let mut run = listed_run();
+        run.push(mixed("npc-in-encounter", "03-npc-in-setup", "960x640"));
+        let (worse, stale) =
+            compare_app_vs_chrome(&run, LISTED, &["library-browse", "npc-in-encounter"]);
+        assert_eq!(
+            worse,
+            [
+                "no-overlap/app-vs-chrome / npc-in-encounter / 03-npc-in-setup / 960x640: 1 (known 0)"
+            ]
+        );
+        assert!(stale.is_empty());
+    }
+
+    #[test]
+    fn an_app_vs_chrome_pair_in_another_state_of_a_listed_scenario_fails() {
+        for extra in [
+            mixed("library-browse", "06-spell-table", "1920x1080"),
+            mixed("library-browse", "05-class-traits-and-features", "960x640"),
+            mixed("library-browse", "05-class-traits-and-features", "1200x800"),
+        ] {
+            let mut run = listed_run();
+            run.push(extra.clone());
+            let (worse, stale) = compare_app_vs_chrome(&run, LISTED, &["library-browse"]);
+            assert_eq!(worse.len(), 1, "{extra:?}: {worse:?}");
+            assert!(
+                worse[0].contains(&format!("{} / {}", extra.state, extra.window)),
+                "{worse:?}"
+            );
+            assert!(stale.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_fixed_app_vs_chrome_pair_fails_as_stale_until_the_list_shrinks() {
+        let mut run = listed_run();
+        run.pop();
+        assert_eq!(run.len(), 5);
+        let (worse, stale) = compare_app_vs_chrome(&run, LISTED, &["library-browse"]);
+        assert!(worse.is_empty());
+        assert_eq!(
+            stale,
+            [
+                "no-overlap/app-vs-chrome / library-browse / 05-class-traits-and-features / 1920x1080: 4 (known 5). Fixed: lower or remove its line in KNOWN_APP_VS_CHROME"
+            ]
+        );
+        let (worse, stale) = compare_app_vs_chrome(&[], LISTED, &["library-browse"]);
+        assert!(worse.is_empty());
+        assert_eq!(stale.len(), 2, "{stale:?}");
+    }
+
+    /// The real list: unique states, positive counts, and only this round's open pairs.
+    #[test]
+    fn the_known_app_vs_chrome_list_only_shrinks() {
+        let mut keys: Vec<_> = KNOWN_APP_VS_CHROME.iter().map(|(key, _)| *key).collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), KNOWN_APP_VS_CHROME.len());
+        assert!(KNOWN_APP_VS_CHROME.iter().all(|(_, count)| *count > 0));
+        for (key, count) in KNOWN_APP_VS_CHROME {
+            assert!(
+                LISTED
+                    .iter()
+                    .any(|(listed, limit)| listed == key && count <= limit),
+                "{key:?} is not one of the open pairs, or its count grew"
+            );
+        }
     }
 
     #[test]

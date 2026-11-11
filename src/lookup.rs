@@ -1927,6 +1927,7 @@ impl Lookup {
                 .icon(icons::DOWN)
                 .density(Density::Read)
                 .name("Show the results")
+                .line_start()
                 .show(ui)
                 .clicked()
         {
@@ -2055,12 +2056,14 @@ impl Lookup {
                     }
                 });
             ui.spacing_mut().item_spacing.y = design::XS;
-            // The same quiet action as Arrivals: it lists every match in place.
+            // The same quiet action as Arrivals: it lists every match in place. It starts a
+            // line, so its words start at the result rows' text.
             if !self.show_all
                 && matches.len() > RESULTS_SHOWN
                 && Action::quiet(&format!("Show all {}", matches.len()))
                     .density(Density::Read)
                     .hint("List every match, without more typing")
+                    .line_start()
                     .show(ui)
                     .clicked()
             {
@@ -2110,14 +2113,16 @@ impl Lookup {
                         })
                         .collect::<Vec<_>>()
                         .join(" ");
-                    for (word, kind) in [("New NPC", "npc"), ("New location", "location")] {
-                        let label = format!("{word} \"{name}\"");
-                        if Action::quiet(&label)
+                    for (at, (word, kind)) in [("New NPC", "npc"), ("New location", "location")]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        let label = format!("{word} “{name}”");
+                        let action = Action::quiet(&label)
                             .icon(icons::ADD)
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
+                            .density(Density::Read);
+                        // The second action starts a line only when it wraps.
+                        if world::starts_line(ui, action, at == 0).show(ui).clicked() {
                             made = Some(world::create_entry(&campaign, &name, kind));
                         }
                     }
@@ -2128,6 +2133,7 @@ impl Lookup {
                     && Action::quiet("Generate NPC")
                         .icon(icons::DICE)
                         .density(Density::Read)
+                        .line_start()
                         .show(ui)
                         .clicked();
             });

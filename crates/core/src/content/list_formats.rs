@@ -73,7 +73,10 @@ fn unread_change(term: &str) -> String {
         || "Write a change such as HP +5.".to_owned(),
         |(stat, _)| format!("Use a number, such as {stat} +5."),
     );
-    format!("the change \"{term}\" was not read. {repair}")
+    format!(
+        "the change {} was not read. {repair}",
+        super::formats::quoted(term)
+    )
 }
 
 pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
@@ -1981,7 +1984,7 @@ mod iter6_b {
     fn unread_change_names_the_value_and_a_number_repair() {
         assert_eq!(
             super::changes("HP lots", "", "").unwrap_err(),
-            "the change \"HP lots\" was not read. Use a number, such as HP +5."
+            "the change “HP lots” was not read. Use a number, such as HP +5."
         );
     }
 }

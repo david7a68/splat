@@ -105,6 +105,16 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
+- `no-overlap/app-vs-chrome` counts an app control or text that overlaps a scroll bar or a
+  column splitter. There, egui can give the press to the bar or splitter, so it is an app
+  fault. No baseline may allow it: a baseline that allows it does not load, and the full
+  writer and the chrome refresh refuse it. Fix the clearance. A menu item over its own
+  popup background stays an egui chrome count, because the item takes every press. The
+  only exceptions are the open pairs in `KNOWN_APP_VS_CHROME` (Markdown reader tables), a
+  list in code with an exact count for each scenario, state and window. A pair in a state
+  that is not listed, or more pairs than listed, fails the run. Fewer pairs than listed
+  also fails, so the list shrinks as pairs are fixed, and it must end empty. While the list
+  holds pairs, the full writer refuses every run; the chrome refresh still works.
 - After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
   applies the saved chrome counts from label `work` without running scenarios again.
   This also works after `--only`: it changes only those scenarios' egui chrome counts,
@@ -172,7 +182,8 @@ that needs repair and keep raw references in Technical details.
 
 The reader keeps ordinary bold and bold italic as emphasis. A bold phrase opens Lookup
 only when it resolves to an entry. Explicit Markdown and wiki links still work. Tab reaches each
-link in a paragraph in turn, and Enter or Space follows it.
+link in a paragraph in turn, and Enter or Space follows it. Each link, even a two-letter name, has its
+own press target at least 24 px square.
 
 Timeline files use `Fight`, `Travel`, `Short rest`, `Long rest` and `Major event`.
 The reader also accepts `Encounter` and `Event`, in any case, with or without a colon.

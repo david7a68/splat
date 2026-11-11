@@ -6094,12 +6094,12 @@ mod tests {
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Wolf.md: Hit Points \"about twenty\" not read"))
+                .any(|s| s.contains("Wolf.md: Hit Points “about twenty” not read"))
         );
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Spark.md: Level \"many\" not read"))
+                .any(|s| s.contains("Spark.md: Level “many” not read"))
         );
     }
 

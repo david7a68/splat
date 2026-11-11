@@ -764,7 +764,11 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
-    let label = format!("{} · {}.{keys}", chip.label, tile_detail(&chip.link));
+    let label = format!(
+        "{} · {}.{keys}",
+        chip_name(&chip.link),
+        tile_detail(&chip.link)
+    );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);

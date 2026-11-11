@@ -7,12 +7,14 @@ pub fn run(d: &mut Driver<'_>) {
     search_library(d, "Slate Wolf");
     d.click_containing("Slate Wolf · Creature");
     d.expect("22 (4d8 + 4)");
-    d.expect("Bite.");
+    d.expect("Bite · +");
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
     d.expect("1 value not read");
     d.click_containing("Flagged Wolf · ");
-    d.expect("Hit Points \"about twenty\" not read (line 19). Start with a number, such as 22 (4d8 + 4).");
+    d.expect(
+        "Hit Points “about twenty” not read (line 19). Start with a number, such as 22 (4d8 + 4).",
+    );
     d.expect("about twenty");
     d.expect("HIT POINTS");
     d.observe(
@@ -25,7 +27,7 @@ pub fn run(d: &mut Driver<'_>) {
     search_library(d, "Flagged Spark");
     d.expect("1 value not read");
     d.click_containing("Flagged Spark · ");
-    d.expect("Level \"many\" not read (line 15). Use a number from 0 to 9.");
+    d.expect("Level “many” not read (line 15). Use a number from 0 to 9.");
     d.expect("Keep the spark effect.");
     d.observe(
         "i19 valid spell fact",

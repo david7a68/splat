@@ -192,7 +192,7 @@ pub fn run(d: &mut Driver<'_>) {
     close_run(d);
     d.click(NAV_ENCOUNTERS);
     d.click("Edit group Bridge guards");
-    d.expect("Line 15: the change \"HP lots\" was not read. Use a number, such as HP +5.");
+    d.expect("Line 15: the change “HP lots” was not read. Use a number, such as HP +5.");
     d.expect("Goblin Warrior");
     d.observe_both(
         "F3 member warning",
@@ -202,7 +202,7 @@ pub fn run(d: &mut Driver<'_>) {
             let find = |name: &str| nodes.iter().find(|node| node.name == name);
             let first = find("1. Scout");
             let next = find("2. Goblin Warrior");
-            let warning = find("Line 15: the change \"HP lots\" was not read. Use a number, such as HP +5.");
+            let warning = find("Line 15: the change “HP lots” was not read. Use a number, such as HP +5.");
             let summary = find("CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
@@ -263,7 +263,7 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&roster_path, &flagged_roster).unwrap();
     d.click("Reload from disk");
     open_saved_encounter(d, "Shrine of Cinders");
-    d.expect("the change \"HP lots\" was not read");
+    d.expect("the change “HP lots” was not read");
     assert!(d.is_disabled("Start fight"));
     assert!(!d.app_mut().encounters.has_run());
     d.expect("Edit in Obsidian");
@@ -282,13 +282,13 @@ pub fn run(d: &mut Driver<'_>) {
         .guard_campaign(&campaign.path);
     d.settle();
     assert!(d.is_disabled("Begin combat"));
-    d.expect("the change \"HP lots\" was not read");
+    d.expect("the change “HP lots” was not read");
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let fits = d.at_size(size, |d| {
             let warning = d
                 .nodes()
                 .into_iter()
-                .find(|node| node.name.contains("the change \"HP lots\" was not read"));
+                .find(|node| node.name.contains("the change “HP lots” was not read"));
             let header = d.place_of("Begin combat").unwrap();
             warning.is_some_and(|node| node.rect.top() > header.bottom())
                 && d.visible_text("Fix the unread row first.")
@@ -301,7 +301,9 @@ pub fn run(d: &mut Driver<'_>) {
             format!("Setup warning follows the header and keeps roster room at {size:?}"),
         );
     }
-    d.expect("Ember Cultist: the change \"HP lots\" was not read (line 20). Use a number, such as HP +5.");
+    d.expect(
+        "Ember Cultist: the change “HP lots” was not read (line 20). Use a number, such as HP +5.",
+    );
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let fits = d.at_size(size, |d| {
             ["Kestrel Dunmoor", "Sable Harrowgate", "Ember Cultist 2"]
@@ -330,7 +332,7 @@ pub fn run(d: &mut Driver<'_>) {
     let one_row = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change \"HP lots\" was not read"))
+        .filter(|node| node.name.contains("the change “HP lots” was not read"))
         .count();
     let mut two_flagged = flagged_roster.clone();
     let first = &splat::content::layout::Document::new(&flagged_roster)
@@ -348,7 +350,7 @@ pub fn run(d: &mut Driver<'_>) {
     let warnings = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change \"HP lots\" was not read"))
+        .filter(|node| node.name.contains("the change “HP lots” was not read"))
         .count();
     let show_file = d
         .nodes()
