@@ -26,9 +26,10 @@ fn note_file(dir: &Path) -> String {
     fs::read_dir(dir)
         .unwrap()
         .filter_map(Result::ok)
+        .filter(|file| file.file_name() != "Timeline.md")
         .map(|file| fs::read_to_string(file.path()).unwrap_or_default())
-        .find(|text| text.contains("The Crossing"))
-        .unwrap_or_default()
+        .find(|text| text.contains("## Plan for tonight"))
+        .expect("the session note")
 }
 
 /// The journey's checks as the app holds them.
@@ -156,14 +157,17 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(PLAN_AMBUSH);
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
+    let parts = [
+        d.has("In the plan"),
+        !d.has(PLAN_AMBUSH),
+        // The fixture's Bridge Ambush has a paused run, so its row resumes it.
+        d.has("Start fight: Bridge Ambush") || d.has("Resume: Bridge Ambush"),
+        note_file(&dir).contains("- [[Bridge Ambush]]"),
+    ];
     d.observe(
         "T11.10",
-        d.has("In the plan")
-            && !d.has(PLAN_AMBUSH)
-            // The fixture's Bridge Ambush has a paused run, so its row resumes it.
-            && (d.has("Start fight: Bridge Ambush") || d.has("Resume: Bridge Ambush"))
-            && note_file(&dir).contains("- [[Bridge Ambush]]"),
-        "One click puts the fight in the plan, and the result says so",
+        parts.iter().all(|part| *part),
+        format!("One click puts the fight in the plan, and the result says so: {parts:?}"),
     );
     // Act B, unrelated: clear the first day's result. Then Undo of A takes only A's line.
     d.click("Clear the check for Day 1");
