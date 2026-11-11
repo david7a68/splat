@@ -8559,6 +8559,13 @@ pub mod session_notes {
             );
         });
         write_note(d);
+        let note_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Note text" && node.in_view())
+                .map(|node| node.shown.top())
+        };
+        let note_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, note_top));
         d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
         let draft = d.editor_text().unwrap();
         let long_draft = (0..60)
@@ -8570,6 +8577,56 @@ pub mod session_notes {
         assert!(focus.is_some());
         assert!(d.visible_passage("Unsent line 59."));
         assert!(!d.visible_passage("Unsent line 0."));
+        // iter-25-S lead ruling: a notice that arrives on its own (here, processing finished)
+        // sits in the bottom banner, so the note the DM types in keeps its text, its focus and
+        // its place at every size.
+        assert!(!d.has_containing("is processed."));
+        d.app_mut().sessions.simulate_job_finished();
+        d.settle();
+        let processed = format!("“Session 1: {TITLE}” is processed.");
+        assert!(d.has_containing(&processed));
+        let kept_parts = (
+            d.note_editor_view().0,
+            d.editor_text().as_deref() == Some(unsent.as_str()),
+            d.visible_passage("Unsent line 59."),
+        );
+        let kept_typing = kept_parts.0 && kept_parts.1 && kept_parts.2;
+        let note_after = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let banner = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(&processed) && node.in_view())
+                    .map(|node| node.rect);
+                let note = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Note text" && node.in_view())
+                    .map(|node| node.shown);
+                (
+                    note.map(|note| note.top()),
+                    banner
+                        .zip(note)
+                        .is_some_and(|(banner, note)| banner.top() >= note.bottom()),
+                )
+            })
+        });
+        let kept = kept_typing
+            && note_before
+                .iter()
+                .zip(&note_after)
+                .all(|(before, (after, below))| {
+                    *below && before.zip(*after).is_some_and(|(a, b)| (a - b).abs() < 1.0)
+                });
+        d.observe(
+            "iter-25-S-notice-banner",
+            kept,
+            format!(
+                "Focus, text and last line in view {kept_parts:?}; the note's y {note_before:?} then {note_after:?} (banner below it)"
+            ),
+        );
+        d.click("Dismiss");
+        assert!(!d.has_containing("is processed."));
         let (wide_text, wide_state) = d.at_size(LARGE, |d| {
             eprintln!(
                 "draft breakpoint large: words {}, focus {:?} -> {:?}, end {}, start {}",

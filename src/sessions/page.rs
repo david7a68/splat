@@ -266,6 +266,10 @@ pub struct Sessions {
     live: Option<Live>,
     confirm_record: bool,
     notice: Option<(Tone, String)>,
+    /// A copy of a notice that arrived on its own (processing finished). While `notice` still
+    /// equals it, the notice sits in the bottom banner; any later notice replaces it and keeps
+    /// its own place above the tabs, as the result of the DM's action.
+    arrived_notice: Option<(Tone, String)>,
     /// The session a notice is about. None means whichever is open now.
     notice_session: Option<Uuid>,
     /// A job ended while the DM may be elsewhere.
@@ -1135,6 +1139,113 @@ impl Sessions {
             .map(|(index, _)| index)
     }
 
+    /// The notice that arrived on its own is still the one to show.
+    fn notice_arrived(&self) -> bool {
+        self.notice.is_some() && self.notice == self.arrived_notice
+    }
+
+    /// The session's own banner notices are in view: the notes, or the Notes panel.
+    fn notes_in_view(&self) -> bool {
+        (self.on_page && self.view == View::Notes && self.form.is_none()) || self.notes_open
+    }
+
+    fn has_banner_notices(&self) -> bool {
+        let notes = self.on_page && self.view == View::Notes && self.form.is_none();
+        let selected = self
+            .selected
+            .and_then(|id| self.notes.iter().find(|note| note.id == id));
+        (notes
+            && self.notice_arrived()
+            && (self.notice_session.is_none() || self.notice_session == self.selected))
+            || (notes && selected.is_some_and(|note| !note.also.is_empty()))
+            || (notes && !self.unreadable.is_empty())
+            || (self.notes_in_view() && self.draft.as_ref().is_some_and(Draft::needs_attention))
+            || (self.on_page
+                && self.view == View::Templates
+                && self
+                    .template_draft
+                    .as_ref()
+                    .is_some_and(Draft::needs_attention))
+    }
+
+    /// Lead ruling, round 25: a session notice that arrives on its own (processing finished,
+    /// a file changed, moved or copied elsewhere, a save that failed) sits in the bottom banner,
+    /// so it never moves the tabs or the note the DM types in. The result of the DM's own
+    /// action keeps its place above the tabs. Each one wraps at `LIST_MEASURE`.
+    fn banner_notices(&mut self, ui: &mut egui::Ui) {
+        let notes = self.on_page && self.view == View::Notes && self.form.is_none();
+        let width = ui.available_width().min(design::LIST_MEASURE);
+        if notes
+            && self.notice_arrived()
+            && (self.notice_session.is_none() || self.notice_session == self.selected)
+            && let Some((tone, words)) = self.notice.clone()
+        {
+            ui.horizontal_top(|ui| {
+                let room = width - Density::Read.control() - design::S;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(room, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| design::message(ui, tone, &words),
+                );
+                if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
+                    self.notice = None;
+                    self.notice_session = None;
+                }
+            });
+        }
+        if notes
+            && let Some(note) = self
+                .selected
+                .and_then(|id| self.notes.iter().find(|note| note.id == id))
+                .cloned()
+        {
+            for copy in &note.also {
+                let filename = copy.file_name().unwrap_or_default().to_string_lossy();
+                if design::message_with_action(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "{} and {filename} claim to be the same session.",
+                        note.path.file_name().unwrap_or_default().to_string_lossy()
+                    ),
+                    &format!("Make {filename} a separate session"),
+                ) {
+                    match super::new_identity(copy) {
+                        Ok(undo) => {
+                            self.identity_undo = Some(undo);
+                            self.refresh();
+                        }
+                        Err(error) => self.notice = Some((Tone::Error, error)),
+                    }
+                }
+            }
+        }
+        if notes && !self.unreadable.is_empty() {
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!(
+                    "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
+                    self.unreadable.join(", ")
+                ),
+            );
+        }
+        if self.notes_in_view()
+            && let Some(draft) = self.draft.as_mut().filter(|draft| draft.needs_attention())
+        {
+            Self::draft_warning(ui, draft);
+        }
+        if self.on_page
+            && self.view == View::Templates
+            && let Some(draft) = self
+                .template_draft
+                .as_mut()
+                .filter(|draft| draft.needs_attention())
+        {
+            Self::draft_warning(ui, draft);
+        }
+    }
+
     fn banner_has_primary(&self, settings: &ProcessingSettings, run_open: bool) -> bool {
         self.banner_primary_owner(settings, run_open).is_some()
     }
@@ -1162,6 +1273,7 @@ impl Sessions {
                 .alerts
                 .iter()
                 .all(|alert| self.recording_row_here(alert.session))
+            && !self.has_banner_notices()
         {
             return;
         }
@@ -1338,6 +1450,8 @@ impl Sessions {
                 if let Some(index) = dismiss {
                     self.alerts.remove(index);
                 }
+                // After the recording alerts, in the banner's order: what arrived on its own.
+                self.banner_notices(ui);
             });
         if let Some((session, path)) = retry {
             self.process_recording(ctx, &path, settings, book, session);
@@ -1442,6 +1556,7 @@ impl Sessions {
                         "“{label}” is processed. Read the result, and add the events you want to the timeline."
                     ),
                 ));
+                self.arrived_notice.clone_from(&self.notice);
             }
             Ok(Some(warning)) => {
                 self.processed_session = Some(session);
@@ -2615,7 +2730,8 @@ impl Sessions {
         design::status(ui, Status { icon, word, color });
     }
 
-    fn draft_problem(ui: &mut egui::Ui, draft: &mut Draft) {
+    /// The result of the DM's choice about a draft, with its Undo, above the editor.
+    fn draft_result(ui: &mut egui::Ui, draft: &mut Draft) {
         // Each way of losing the draft keeps its own name: Undo names what the DM did.
         let undo = match draft.dropped {
             Some(Dropped::Reloaded(_)) => design::reloaded_draft(ui),
@@ -2627,6 +2743,11 @@ impl Sessions {
         if undo {
             draft.undo_dropped();
         }
+    }
+
+    /// What the file did to a draft: changed on disk, gone or moved, or not saved. It arrives on
+    /// its own, so it is drawn in the bottom banner, never above the editor.
+    fn draft_warning(ui: &mut egui::Ui, draft: &mut Draft) {
         // Every choice below starts at its message's text. The red choice keeps an `L` gap.
         match draft.state.clone() {
             DraftState::Conflict => {
@@ -3127,7 +3248,7 @@ impl Sessions {
             draft.save();
         }
         if in_panel {
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         if draft.state == DraftState::Conflict {
             if draft.on_disk.is_none() {
@@ -3231,8 +3352,18 @@ impl Sessions {
                         self.selected,
                         in_panel,
                     ));
+                    // A view at the note's end stays there when it gets shorter (a bottom banner
+                    // arrives), so the line being typed stays in view. Only a shorter view does
+                    // this; a note that grows keeps its place.
+                    let view_id = egui::Id::new(("session_editor_view", self.selected, in_panel));
+                    let before: Option<(f32, bool, f32)> = ui.data(|data| data.get_temp(view_id));
                     if reset_scroll {
                         scroll = scroll.vertical_scroll_offset(0.0);
+                    } else if let Some((height, at_end, content)) = before
+                        && at_end
+                        && visible_height < height - 0.5
+                    {
+                        scroll = scroll.vertical_scroll_offset((content - visible_height).max(0.0));
                     }
                     let output = scroll
                         .max_height(visible_height)
@@ -3366,6 +3497,12 @@ impl Sessions {
                                 }
                             }
                         });
+                    // Only a note that scrolls can be at its end.
+                    let room = output.content_size.y - output.inner_rect.height();
+                    let at_end = room > 1.0 && output.state.offset.y >= room - 1.0;
+                    ui.data_mut(|data| {
+                        data.insert_temp(view_id, (visible_height, at_end, output.content_size.y));
+                    });
                     #[cfg(test)]
                     ui.data_mut(|data| {
                         data.insert_temp(
@@ -3373,8 +3510,6 @@ impl Sessions {
                             (self.note_editor_id.unwrap(), output.state.offset),
                         )
                     });
-                    #[cfg(not(test))]
-                    let _ = output;
                 });
             },
         );
@@ -5025,7 +5160,7 @@ impl Sessions {
             });
             self.record_line(ui, settings);
             if let Some(draft) = &mut self.draft {
-                Self::draft_problem(ui, draft);
+                Self::draft_result(ui, draft);
                 self.note_editor(ui, false);
             }
             return;
@@ -5049,14 +5184,18 @@ impl Sessions {
         });
         self.record_line(ui, settings);
         if let Some(draft) = &mut self.draft {
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         self.expire_move(book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done() {
             self.job_done = false;
         }
-        if let Some((tone, words)) = self.notice.clone().filter(|_| shown) {
+        if let Some((tone, words)) = self
+            .notice
+            .clone()
+            .filter(|_| shown && !self.notice_arrived())
+        {
             if let Some(session) = self
                 .move_run_here
                 .as_ref()
@@ -5090,26 +5229,8 @@ impl Sessions {
                 });
             }
         }
-        for copy in &note.also {
-            let filename = copy.file_name().unwrap_or_default().to_string_lossy();
-            if design::message_with_action(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "{} and {filename} claim to be the same session.",
-                    note.path.file_name().unwrap_or_default().to_string_lossy()
-                ),
-                &format!("Make {filename} a separate session"),
-            ) {
-                match super::new_identity(copy) {
-                    Ok(undo) => {
-                        self.identity_undo = Some(undo);
-                        self.refresh();
-                    }
-                    Err(error) => self.notice = Some((Tone::Error, error)),
-                }
-            }
-        }
+        // A copy that claims this session arrives from the folder, so it sits in the bottom
+        // banner (`banner_notices`); its result stays here.
         if let Some(undo) = &self.identity_undo {
             let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
             if design::undo_message(
@@ -5316,16 +5437,7 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
     ) {
-        if !self.unreadable.is_empty() {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "Splat cannot read the properties of {}, so it is not listed. The file is safe. Repair it to bring it back.",
-                    self.unreadable.join(", ")
-                ),
-            );
-        }
+        // An unreadable note arrives from the folder: its warning is in the bottom banner.
         let holding = self.draft.as_ref().is_some_and(Draft::needs_attention);
         if self.notes.is_empty() && self.form.is_none() && !holding {
             let mut start = false;
@@ -5680,7 +5792,7 @@ impl Sessions {
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
                 draft.save();
             }
-            Self::draft_problem(ui, draft);
+            Self::draft_result(ui, draft);
         }
         let mut pressed_link = None;
         egui::ScrollArea::vertical()
@@ -6089,6 +6201,12 @@ impl Sessions {
     /// The folder scan that otherwise runs every few seconds of wall time.
     pub fn simulate_folder_scan(&mut self) {
         self.scan_folder();
+    }
+
+    /// Processing of the open session finishes now, as the background job would.
+    pub fn simulate_job_finished(&mut self) {
+        let session = self.selected.expect("an open session");
+        self.finish_job(Ok(None), session);
     }
 
     /// The open note's draft, to put back after a step that a scenario proves aside.

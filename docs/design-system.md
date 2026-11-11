@@ -1569,6 +1569,17 @@ says so: `This note was moved or renamed. It is now <file>. Your draft is still 
 is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
 `Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
 
+A session notice that arrives on its own, not as the result of the DM's action on this page, sits in the bottom
+banner where the recording banners sit, never above the tabs or the note: processing finished (`“<session>” is
+processed. …`, with the close icon named `Dismiss`), a copy that claims the session, notes whose properties cannot
+be read, and a note or template draft whose file changed on disk, went, moved or could not be saved, with their
+choices. In the banner they follow the recording alerts, whose order and one primary stay as they are, and each
+wraps at `LIST_MEASURE`. The result of the DM's own action on the page keeps its place above the tabs: `Recording
+saved: …`, `Recording deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run
+stays or moved, `No entry is named …`, and `Draft discarded.` or `Reloaded from disk.` with their Undo. When the
+banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
+typed stays in view.
+
 ### Notes panel
 
 Notes (Ctrl+J) opens the played session beside any page, using the same title, date and save words. Start at
