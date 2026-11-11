@@ -5,7 +5,7 @@
 //! party member's attack only targets the row and the DM types what the player says. A save
 //! adds each clicked row as a target and rolls its save, shown where the row's AC is. A roll
 //! changes no participant by itself: it goes to the Log, and Undo keeps it.
-use super::Run;
+use super::{Command, Run};
 use crate::rolls::{self, ArmedAction, ArmedView, Ask, Chip, Mode, Outcome, Rolled};
 use eframe::egui;
 use splat::content::Entry;
@@ -22,6 +22,8 @@ pub(super) struct Armed {
     pub mode: Mode,
     /// The actor expends inspiration for advantage on the roll made for them.
     pub inspired: bool,
+    /// A save's damage, once rolled: the total before any half.
+    pub damage: Option<i64>,
 }
 
 /// A target that waits for the DM to say which damage condition holds, as in `if the goat
@@ -99,8 +101,34 @@ fn parts_words(parts: &[DamagePart]) -> String {
 /// The most dice a row's menu offers to reroll. A roll of many dice lists its lowest.
 const REROLL_CHOICES: usize = 8;
 
-/// The height of the action bar above the dock while Lookup or Notes hide the panel.
-pub(super) const STRIP_HEIGHT: f32 = 28.0;
+/// The height of the action bar above the dock while Lookup or Notes hide the panel: its
+/// buttons, then an `XS` gap, so the bar sits apart from the dock.
+pub(super) const STRIP_HEIGHT: f32 = rolls::BAR_BUTTONS + crate::design::XS;
+
+/// The panel's scroll area for a stat block or a sheet. It starts `S` into the panel's
+/// gutter, and its margin keeps the text where it was, so a quiet action at the text edge
+/// (`Stop`, `Roll damage`) shows its whole press area.
+pub(super) fn gutter_scroll(
+    ui: &mut egui::Ui,
+    scroll: egui::ScrollArea,
+    add: impl FnOnce(&mut egui::Ui),
+) {
+    let area = ui.available_rect_before_wrap();
+    let gutter = crate::design::S;
+    // A child, so the panel's own width counts only its column, not the gutter.
+    let mut child =
+        ui.new_child(egui::UiBuilder::new().max_rect(area.with_min_x(area.min.x - gutter)));
+    scroll.show(&mut child, |ui| {
+        egui::Frame::new()
+            .inner_margin(egui::Margin {
+                left: gutter as i8,
+                ..egui::Margin::ZERO
+            })
+            .show(ui, add);
+    });
+    let used = child.min_rect().intersect(area);
+    ui.allocate_rect(used, egui::Sense::hover());
+}
 
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
@@ -118,6 +146,25 @@ fn save_bonus(entry: &Entry, ability: &str) -> Option<i64> {
     let ability = ability.to_lowercase();
     stat(&format!("save_{ability}"))
         .or_else(|| stat(&ability).map(|score| (score - 10).div_euclid(2)))
+}
+
+/// How an armed d20 rolls, in words for its hint and rows: `advantage`. `None` for a plain
+/// roll.
+fn mode_words(mode: Mode) -> Option<&'static str> {
+    match mode {
+        Mode::Advantage => Some("advantage"),
+        Mode::Disadvantage => Some("disadvantage"),
+        Mode::Normal | Mode::Critical => None,
+    }
+}
+
+/// The damage `command` gives each row: one amount, or each target's own.
+fn damage_shares(command: &Command) -> Vec<(usize, i64)> {
+    match command {
+        Command::Damage(row, amount) => vec![(*row, *amount)],
+        Command::Several(commands) => commands.iter().flat_map(damage_shares).collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// The chance that d20 + `bonus` meets `armor`, as a whole percent. A natural 1 always
@@ -170,10 +217,10 @@ impl Run {
     /// Arm an action. Its rows' results from before go.
     fn arm(&mut self, actor: usize, link: RollLink, mode: Mode, inspired: bool) {
         self.badges.clear();
+        self.state.roll_results.clear();
         self.saves.clear();
         self.asking = None;
         self.reroll = None;
-        self.save_total = None;
         if self.selected != actor {
             self.select(actor);
         }
@@ -182,6 +229,7 @@ impl Run {
             link,
             mode,
             inspired,
+            damage: None,
         });
     }
 
@@ -189,7 +237,6 @@ impl Run {
     pub(crate) fn disarm(&mut self) {
         self.armed = None;
         self.asking = None;
-        self.save_total = None;
     }
 
     /// A check, a save, a skill or dice: rolled now, shown on the actor's row.
@@ -506,12 +553,13 @@ impl Run {
                     )
                     .wrap(),
                 );
+                // The choices start at the question's words.
                 for (index, (words, _)) in asking.choices.iter().enumerate() {
-                    if rolls::menu_item(ui, words) {
+                    if rolls::menu_choice(ui, words) {
                         chosen = Some(RowChoice::Damage(index));
                     }
                 }
-                if rolls::menu_item(ui, "Cancel") {
+                if rolls::menu_choice(ui, "Cancel") {
                     chosen = Some(RowChoice::Cancel);
                 }
             });
@@ -540,7 +588,8 @@ impl Run {
                         .color(crate::design::colors().muted),
                 );
                 for (words, choice) in items {
-                    if rolls::menu_item(ui, words) {
+                    // Under a heading, the choices start at its words.
+                    if rolls::menu_choice(ui, words) {
                         chosen = Some(choice.clone());
                         ui.close();
                     }
@@ -792,12 +841,15 @@ impl Run {
         let armor = self.state.participants[row].armor_class;
         let mut words = Vec::new();
         if let Some(first) = &outcome.first {
-            let natural = first
-                .natural_words()
-                .map_or_else(String::new, |words| format!("{words} · "));
+            // The total beside the AC, with no verdict: the DM rules on cover, Shield and the
+            // like. The natural words come first, so a narrow row drops them before the
+            // comparison.
+            if let Some(natural) = first.natural_words() {
+                words.push(natural.to_owned());
+            }
             words.push(match armor {
-                Some(armor) => format!("{natural}{} vs AC {armor}", first.total),
-                None => format!("{natural}{} to hit", first.total),
+                Some(armor) => format!("{} vs AC {armor}", first.total),
+                None => format!("{} to hit", first.total),
             });
         }
         if let Some(damage) = &outcome.damage {
@@ -857,7 +909,11 @@ impl Run {
             .is_some_and(|armed| !dice_text::conditions(damage_of(&armed.link)).is_empty());
         if !conditional {
             self.refresh_save_damage();
-        } else if self.save_total.take().is_some() {
+        } else if self
+            .armed
+            .as_mut()
+            .is_some_and(|armed| armed.damage.take().is_some())
+        {
             if !self.amount_typed {
                 self.amount.clear();
             }
@@ -874,7 +930,9 @@ impl Run {
         if self.reroll.as_ref().is_some_and(|kept| kept.save.is_some()) {
             self.reroll = None;
         }
-        self.save_total = None;
+        if let Some(armed) = self.armed.as_mut() {
+            armed.damage = None;
+        }
     }
 
     /// Roll a creature target's save, in place of one it rolled before. A player rolls their
@@ -939,6 +997,11 @@ impl Run {
                 Vec::new(),
             ),
         };
+        // The way the d20 rolls leads, so the DM can tell how the next click rolls.
+        let status = match mode_words(armed.mode) {
+            Some(mode) => format!("With {mode}. {status}"),
+            None => status,
+        };
         actions.push(("Stop", ArmedAction::Stop));
         Some(ArmedView {
             link: armed.link.clone(),
@@ -961,6 +1024,10 @@ impl Run {
     pub(super) fn armed_tiles_begin(&self, ctx: &egui::Context) {
         rolls::set_armed(ctx, self.armed_view());
         rolls::set_inspired(ctx, self.can_buy_advantage(self.panel_row()));
+        // The roller's tiles show the numbers Splat rolls, with the run's changes in them.
+        if let Some(row) = self.existing(rolls::roller(ctx)) {
+            rolls::set_changes(ctx, row, self.changes(row));
+        }
     }
 
     /// Handle what was pressed under the armed tile.
@@ -1027,7 +1094,9 @@ impl Run {
             // from before is not this save's damage, so Enter must not apply it.
             self.amount.clear();
             self.reroll = None;
-            self.save_total = None;
+            if let Some(armed) = self.armed.as_mut() {
+                armed.damage = None;
+            }
             for row in self.save_targets() {
                 self.badges
                     .insert(row, "No damage · see the text".to_owned());
@@ -1051,24 +1120,34 @@ impl Run {
         Ok(())
     }
 
-    /// The armed save's rolled damage, in Amount and on each target's row.
+    /// The armed save's rolled damage: kept on the armed action until it is applied, and in
+    /// Amount. Each target's row then says what Enter gives it, from Amount; an older result
+    /// on these rows no longer stands.
     fn show_save_damage(&mut self, outcome: &Outcome) {
-        if let Some(rolled) = &outcome.damage {
-            // A new roll takes the place of an amount from before, typed or not.
-            self.amount_typed = false;
-            self.save_total = Some(rolled.total.max(0));
-            self.refresh_save_damage();
+        let Some(rolled) = &outcome.damage else {
+            return;
+        };
+        // A new roll takes the place of an amount from before, typed or not.
+        self.amount_typed = false;
+        for row in self.save_targets() {
+            self.badges.remove(&row);
+            self.state.roll_results.remove(&row);
         }
+        if let Some(armed) = self.armed.as_mut() {
+            armed.damage = Some(rolled.total.max(0));
+        }
+        self.refresh_save_damage();
     }
 
     /// Put the armed save's rolled damage in Amount again, for the targets and the saves as
     /// they are now. Enter applies Amount as it is to one target and by the half marks to
     /// several, so a change of targets, of a save or of a mark must not leave an older amount.
     fn refresh_save_damage(&mut self) {
-        let (Some(total), Some(RollLink::SaveDc { dc, half, .. })) = (
-            self.save_total,
-            self.armed.as_ref().map(|armed| armed.link.clone()),
-        ) else {
+        let Some((RollLink::SaveDc { dc, half, .. }, Some(total))) = self
+            .armed
+            .as_ref()
+            .map(|armed| (armed.link.clone(), armed.damage))
+        else {
             return;
         };
         // One target shows no half mark, so its half goes straight into Amount.
@@ -1084,9 +1163,52 @@ impl Run {
             self.amount = if lone_half { total / 2 } else { total }.to_string();
             self.focus_amount = true;
         }
-        for row in self.save_targets() {
-            self.badges.insert(row, format!("{total} damage"));
+    }
+
+    /// What a save's damage does to one target: its save, then the damage `command` gives
+    /// it, as `Saved · 1 damage (half)` or `Failed · 3 damage`. `None` for a row the save
+    /// does not target, or before its damage is rolled.
+    fn save_result(&self, row: usize, command: &Command) -> Option<String> {
+        let armed = self.armed.as_ref()?;
+        let (RollLink::SaveDc { dc, half, .. }, Some(total)) = (&armed.link, armed.damage) else {
+            return None;
+        };
+        if !self.save_targets().contains(&row) {
+            return None;
         }
+        let (_, share) = damage_shares(command)
+            .into_iter()
+            .find(|(target, _)| *target == row)?;
+        let saved = self.saves.get(&row).map(|save| save >= dc);
+        // Several targets halve by their marks; one target was given its half in Amount.
+        let halved = if self.also.is_empty() {
+            // A mark the DM gave by hand counts as a save that was made.
+            *half
+                && (saved == Some(true) || self.halved.contains(&row))
+                && share == total / 2
+                && share < total
+        } else {
+            self.halved.contains(&row)
+        };
+        let mut words = match saved {
+            Some(true) => format!("Saved · {share} damage"),
+            Some(false) => format!("Failed · {share} damage"),
+            None => format!("{share} damage"),
+        };
+        if halved {
+            words.push_str(" (half)");
+        }
+        Some(words)
+    }
+
+    /// Each save target's result, from the damage step about to apply, so its row keeps
+    /// what it was given after Amount and the targets clear. `apply` keeps them with the
+    /// step's state, and spends the save's damage. Nothing for another step.
+    pub(super) fn save_results(&self, command: &Command) -> Vec<(usize, String)> {
+        damage_shares(command)
+            .into_iter()
+            .filter_map(|(row, _)| Some((row, self.save_result(row, command)?)))
+            .collect()
     }
 
     /// Mark the save targets at or above the DC to take half, and no target under it. A
@@ -1112,10 +1234,21 @@ impl Run {
     /// What a row shows while an action is armed or after it: the chance to hit, or the
     /// result against it.
     pub(super) fn row_badge(&self, row: usize) -> Option<String> {
-        if let Some(words) = self.badges.get(&row) {
+        // A save's applied result first: it lives in the run's state, so Undo takes it back.
+        if let Some(words) = self
+            .state
+            .roll_results
+            .get(&row)
+            .or_else(|| self.badges.get(&row))
+        {
             return Some(words.clone());
         }
         let armed = self.armed.as_ref()?;
+        if armed.damage.is_some() {
+            // A save's rolled damage: what Enter gives this target, from Amount.
+            let amount = self.amount.parse::<i64>().ok()?;
+            return self.save_result(row, &self.amount_command(amount, Command::Damage));
+        }
         let RollLink::D20 {
             what: D20::Attack,
             bonus,
@@ -1129,10 +1262,11 @@ impl Run {
             return None;
         }
         let bonus = bonus + self.changes(armed.actor).0;
-        Some(format!(
-            "{}% to hit",
-            hit_chance(bonus, p.armor_class?, armed.mode)
-        ))
+        let chance = hit_chance(bonus, p.armor_class?, armed.mode);
+        Some(match mode_words(armed.mode) {
+            Some(mode) => format!("{chance}% to hit · {mode}"),
+            None => format!("{chance}% to hit"),
+        })
     }
 
     /// A save result in place of AC on a row, such as `DEX` and 19.
@@ -1204,7 +1338,6 @@ impl Run {
         self.armed = None;
         self.asking = None;
         self.reroll = None;
-        self.save_total = None;
         self.badges.clear();
         self.saves.clear();
     }
@@ -1885,9 +2018,15 @@ mod tests {
         let die = run.reroll.as_ref().unwrap().outcome.dice()[0].1;
         run.row_choice(others[1], RowChoice::Reroll(die));
         assert_eq!(run.amount, "11");
-        for row in &others {
-            assert_eq!(run.badges.get(row).map(String::as_str), Some("11 damage"));
-        }
+        // Each row says what Enter gives it from the new amount.
+        assert_eq!(
+            run.row_badge(others[0]).as_deref(),
+            Some("Saved · 5 damage (half)")
+        );
+        assert_eq!(
+            run.row_badge(others[1]).as_deref(),
+            Some("Failed · 11 damage")
+        );
         assert_eq!(
             run.halved.iter().copied().collect::<Vec<_>>(),
             vec![others[0]],
@@ -1978,10 +2117,11 @@ mod tests {
         assert_eq!(run.panel_row(), actor, "the panel stays on the attacker");
         // A natural 20 doubles the dice and adds the bonus once.
         assert_eq!(run.amount, "20");
-        assert!(
-            run.row_badge(target)
-                .unwrap()
-                .starts_with("Natural 20 · 24 vs AC")
+        let armor = run.state.participants[target].armor_class.unwrap();
+        assert_eq!(
+            run.row_badge(target).unwrap(),
+            format!("Natural 20 · 24 vs AC {armor} · 20 damage"),
+            "iter-19-R-ST2: the comparison stays beside the damage"
         );
         assert!(
             run.armed.is_some(),
@@ -2026,6 +2166,191 @@ mod tests {
         run.state.random = Random::controlled([1, 2, 3, 4]);
         run.save_damage(&armed).unwrap();
         assert_eq!(run.amount, "10");
+
+        // iter-19-R-FT1: each target says its own result, from what Enter gives it.
+        let (saved, failed) = (others[0], others[1]);
+        assert_eq!(
+            run.row_badge(saved).as_deref(),
+            Some("Saved · 5 damage (half)")
+        );
+        assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
+        let pair = [saved, failed];
+        // What damage takes: temporary HP first, then HP.
+        let hp = |run: &Run| {
+            pair.map(|row| {
+                let p = &run.state.participants[row];
+                p.hp.unwrap() + p.temporary_hp
+            })
+        };
+        // Temporary HP takes damage first: the row and the Log still name what the row took.
+        run.state.participants[saved].temporary_hp = 0;
+        run.state.participants[failed].temporary_hp = 3;
+        let before = hp(&run);
+        let log = run.state.log.len();
+        // Enter: the dock applies Amount to its targets, then clears both.
+        run.apply(run.amount_command(10, Command::Damage)).unwrap();
+        run.amount.clear();
+        run.also.clear();
+        run.halved.clear();
+        let after = hp(&run);
+        assert_eq!(
+            [before[0] - after[0], before[1] - after[1]],
+            [5.min(before[0]), 10.min(before[1])],
+            "each row loses its own amount"
+        );
+        assert_eq!(
+            run.row_badge(saved).as_deref(),
+            Some("Saved · 5 damage (half)"),
+            "the result stays on the row after Amount clears"
+        );
+        assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
+        let lines = run.state.log[log..].join("\n");
+        assert!(
+            lines.contains("5 damage applied;")
+                && lines.contains("10 damage applied (3 absorbed by temporary HP)"),
+            "the Log names each row's own amount, as the row does: {lines}"
+        );
+        // iter-19-R2-2: a later step on a target is not the save's result. The save's
+        // damage is spent, so no row shows save words for it, and the first result stays.
+        run.selected = failed;
+        run.amount = "4".into();
+        assert_eq!(
+            run.row_badge(failed).as_deref(),
+            Some("Failed · 10 damage"),
+            "typing an amount does not relabel the row"
+        );
+        run.apply(Command::Damage(failed, 4)).unwrap();
+        run.amount.clear();
+        assert_eq!(
+            run.row_badge(failed).as_deref(),
+            Some("Failed · 10 damage"),
+            "iter-19-R2-2: a later damage step keeps the save's result as it was"
+        );
+        assert_eq!(
+            run.row_badge(saved).as_deref(),
+            Some("Saved · 5 damage (half)")
+        );
+        let other = (0..3).find(|row| !pair.contains(row)).unwrap();
+        run.selected = other;
+        run.amount = "4".into();
+        assert_eq!(run.row_badge(other), None, "no save words on another row");
+        run.amount.clear();
+        // iter-19-R2-1: Undo takes back the later step, then the save's step and its results.
+        run.undo();
+        assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
+        run.undo();
+        assert_eq!(hp(&run), before, "Undo gives each row back its own HP");
+        assert_eq!(
+            [run.row_badge(saved), run.row_badge(failed)],
+            [None, None],
+            "iter-19-R2-1: Undo takes the save's results off its rows"
+        );
+    }
+
+    #[test]
+    fn a_lone_target_that_saves_is_given_its_half_and_its_row_says_so() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let save = RollLink::SaveDc {
+            label: "Fire Breath".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "4d6".into(),
+                kind: Some("Fire".into()),
+                when: None,
+            }],
+        };
+        run.roll_link(ask(save, actor));
+        let target = (0..3).find(|row| *row != actor).unwrap();
+        run.target(target, None);
+        run.saves.insert(target, 16);
+        let armed = run.armed.clone().unwrap();
+        assert_eq!(run.row_badge(target), None, "no result before the damage");
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "5");
+        assert_eq!(
+            run.row_badge(target).as_deref(),
+            Some("Saved · 5 damage (half)")
+        );
+        // A DM who types another amount sees what Enter gives.
+        run.amount = "7".into();
+        assert_eq!(run.row_badge(target).as_deref(), Some("Saved · 7 damage"));
+        run.apply(run.amount_command(7, Command::Damage)).unwrap();
+        run.amount.clear();
+        assert_eq!(run.row_badge(target).as_deref(), Some("Saved · 7 damage"));
+        // A row outside the save's targets says nothing.
+        let other = (0..3).find(|row| *row != actor && *row != target).unwrap();
+        assert_eq!(run.row_badge(other), None);
+    }
+
+    #[test]
+    fn an_attack_armed_with_advantage_says_so_in_its_hint_and_on_each_row() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let target = (0..3).find(|row| *row != actor).unwrap();
+        let mut advantage = ask(attack(), actor);
+        advantage.mode = Mode::Advantage;
+        run.roll_link(advantage);
+        let view = run.armed_view().unwrap();
+        assert!(
+            view.status.starts_with("With advantage. Click a target"),
+            "iter-19-R-FT2: {}",
+            view.status
+        );
+        assert!(
+            run.row_badge(target)
+                .unwrap()
+                .ends_with("% to hit · advantage")
+        );
+        let mut disadvantage = ask(attack(), actor);
+        disadvantage.mode = Mode::Disadvantage;
+        run.roll_link(disadvantage);
+        assert!(
+            run.armed_view()
+                .unwrap()
+                .status
+                .starts_with("With disadvantage. ")
+        );
+        assert!(
+            run.row_badge(target)
+                .unwrap()
+                .ends_with("% to hit · disadvantage")
+        );
+        // A plain roll names no mode.
+        run.roll_link(ask(attack(), actor));
+        assert!(
+            run.armed_view()
+                .unwrap()
+                .status
+                .starts_with("Click a target")
+        );
+        assert!(run.row_badge(target).unwrap().ends_with("% to hit"));
+    }
+
+    #[test]
+    fn an_attack_shows_its_total_against_the_rows_ac_with_no_verdict() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let target = (0..3).find(|row| *row != actor).unwrap();
+        let armor = run.state.participants[target].armor_class.unwrap();
+        run.roll_link(ask(attack(), actor));
+        // Below the AC, at it, and a natural 1: each the same plain comparison, and Amount
+        // gets the damage every time, for the DM to rule on.
+        for face in [armor - 5, armor - 4, 1] {
+            run.state.random = Random::controlled([face as u32, 1, 1]);
+            run.target(target, None);
+            let badge = run.row_badge(target).unwrap();
+            assert!(
+                badge.ends_with(&format!("{} vs AC {armor} · 4 damage", face + 4))
+                    && !badge.contains("Hits")
+                    && !badge.contains("Misses"),
+                "iter-19-R-ST2: {face}: {badge}"
+            );
+            assert_eq!(run.amount, "4");
+        }
     }
 
     #[test]

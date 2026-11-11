@@ -7707,6 +7707,20 @@ pub mod session_notes {
             &[DEFAULT],
         );
         d.state("run-with-old-note", Sizes::Default);
+        // The action bar above the dock sits an `XS` gap apart from it, and its first button
+        // starts at the dock's content edge, where Amount starts (iter-19 FT6).
+        d.observe_both(
+            "iter-19-R-FT6",
+            "The action bar keeps a gap above the dock and starts at its content edge",
+            |d| {
+                d.place_of("Dagger +6")
+                    .zip(d.place_of("Amount"))
+                    .is_some_and(|(bar, amount)| {
+                        (bar.left() - amount.left()).abs() < 1.0
+                            && amount.top() - bar.bottom() >= 2.0 * crate::design::XS - 0.5
+                    })
+            },
+        );
         d.observe(
             "T11.8",
             d.has_containing("Old session"),
@@ -9933,7 +9947,7 @@ pub mod encounter_groups {
         }
         d.observe(
             "T13.3",
-            d.has_containing("Changed · 3 to add by hand")
+            d.has_containing("Changed · 1 to add by hand")
                 && !d.has_containing("Maximum HP: 33 → 43 (+10)"),
             "Member changes stay in one summary until their editor opens",
         );
@@ -10855,7 +10869,19 @@ pub mod run_overrides {
         d.observe_both(
             "iter-12-F3",
             "The run card keeps hand changes in one compact summary",
-            |d| d.visible_text("Add by hand: attack +1, damage +1, speed 40 ft"),
+            |d| d.visible_text("Add by hand: speed 40 ft"),
+        );
+        // Splat's rolls include the attack and damage changes, so the card says them once:
+        // the tiles show the numbers rolled, and nothing tells the DM to add them again.
+        d.observe_both(
+            "iter-19-R-FT3",
+            "The card states the roll changes once, in the tiles' numbers",
+            |d| {
+                d.visible_text("+4 · 1d6+3\u{a0}slashing")
+                    && !d.has_containing("Add by hand: attack")
+                    && !d.has_containing("in the rolls")
+                    && d.visible_text("+1 on each attack · in Splat’s rolls")
+            },
         );
         // A number stays with its word on the row, by a space that does not wrap.
         let row = d.row_words(RIVAL).replace('\u{a0}', " ");
@@ -10871,8 +10897,7 @@ pub mod run_overrides {
             "T13.3",
             !d.has_containing(BASE_AND_CHANGED)
                 && d.visible_text("printed 33")
-                && d.visible_text("Add by hand: attack +1, damage +1, speed 40 ft")
-                && d.visible_text("Attack +1, Damage +1 · in the rolls")
+                && d.visible_text("Add by hand: speed 40 ft")
                 && d.has_containing("add by hand")
                 && d.visible_text("Speed 30 ft → 40 ft · add by hand")
                 && d.has_containing("Changed"),
@@ -10900,7 +10925,7 @@ pub mod run_overrides {
         d.observe_both(
             "iter-18-A-changes",
             "The whole hand-change link stays in view",
-            |d| d.in_view("Changed · 3 to add by hand"),
+            |d| d.in_view("Changed · 1 to add by hand"),
         );
         d.click_beside(
             FIRST_SLOT,
@@ -13202,7 +13227,9 @@ pub mod remove_package_in_use {
 /// Enter applies it. A save adds each clicked row and rolls its save. A player's attack only
 /// targets, and the DM types the player's damage. Outside a run, a tile previews.
 pub mod run_rolls {
+    use super::super::driver::Found;
     use super::*;
+    use egui::accesskit::Role;
     const ATTACKER: &str = "Cinder Wolf 1";
     const TARGET: &str = "Cinder Wolf 2";
     const CASTER: &str = "Ember Cultist";
@@ -13211,9 +13238,53 @@ pub mod run_rolls {
     const BITE: &str = "Bite · +4";
     const BURST: &str = "Ember Burst · DC 12";
 
+    /// A tile's control, by the start of its name.
+    fn tile(d: &Driver<'_>, start: &str) -> Option<Found> {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with(start) && node.role == Role::Button)
+    }
+
+    /// A roll row's first quiet action starts its words at the tiles' left edge, the panel's
+    /// text edge (FT4, AT5).
+    fn action_at_text(d: &mut Driver<'_>, id: &str, tile_name: &str, action: &str) {
+        let tile_left = tile(d, tile_name).map(|tile| tile.rect.left());
+        let words = d.painted_left(action);
+        d.observe(
+            id,
+            tile_left.zip(words).is_some_and(|(tile, words)| (tile - words).abs() < 1.0),
+            format!("`{action}` starts its words at the tiles' edge: tile {tile_left:?}, words {words:?}"),
+        );
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
         d.click_row(ATTACKER);
+        d.observe_both(
+            "iter-19-R-ST3",
+            "A tile shows where its action lands, on its own line",
+            |d| d.visible_text("Reach 5 ft"),
+        );
+        // Keyboard focus reads a tile's rules as hover does, and its description holds them.
+        let bite = tile(d, BITE).map(|tile| tile.name).unwrap_or_default();
+        let focused = d.tab_to(&bite);
+        d.observe(
+            "iter-19-R-ST3",
+            focused && d.visible_text("Melee Attack Roll: +4, reach 5 ft."),
+            format!("Tab reaches the Bite tile ({focused}) and shows its rules text"),
+        );
+        let target = tile(d, BITE).map(|tile| tile.rect.size());
+        d.observe(
+            "iter-19-R-ST3",
+            target.is_some_and(|size| size.x >= 24.0 && size.y >= 24.0),
+            format!("The focused tile stays a full target: {target:?}"),
+        );
+        d.click_row(ATTACKER);
+        d.observe(
+            "iter-19-R-ST3",
+            !d.visible_text("Melee Attack Roll: +4, reach 5 ft."),
+            "The rules text goes when the tile loses focus",
+        );
         d.state("tiles-in-the-stat-block", Sizes::All);
 
         d.begin_task();
@@ -13224,6 +13295,7 @@ pub mod run_rolls {
             "An armed tile says what to do, and each row shows the chance to hit it",
         );
         d.goal_within("T16.1", "arm the selected creature's attack", 1);
+        action_at_text(d, "iter-19-R-FT4", BITE, "Stop");
         d.state("attack-armed", Sizes::All);
 
         d.begin_task();
@@ -13233,6 +13305,29 @@ pub mod run_rolls {
             "T16.2",
             d.has_containing(" vs AC 13") && d.has_containing("Click a target"),
             "A click on a row rolls against it, and the action stays armed",
+        );
+        // The attack's total and the AC stay in view beside the damage, as a plain
+        // comparison with no hit or miss verdict.
+        d.observe_both(
+            "iter-19-R-ST2",
+            "The rolled row paints `<total> vs AC 13 · <damage> damage`, and no Hits or Misses",
+            |d| {
+                let shown = d.painted_in(egui::Rect::EVERYTHING);
+                let number_before = |text: &str| {
+                    let digits =
+                        text.len() - text.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+                    digits > 0
+                };
+                let compared = shown.match_indices(" vs AC 13 · ").any(|(at, found)| {
+                    let rest = &shown[at + found.len()..];
+                    let digits =
+                        rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+                    number_before(&shown[..at])
+                        && digits > 0
+                        && rest[digits..].starts_with(" damage")
+                });
+                compared && !shown.contains("Hits") && !shown.contains("Misses")
+            },
         );
         d.state("attack-rolled", Sizes::All);
         d.press(Key::Enter);
@@ -13275,7 +13370,21 @@ pub mod run_rolls {
 
         // Right-click a target row: roll against that one row another way.
         d.begin_task();
+        // The way the armed tile rolls is in words, in the hint and on each row.
+        d.observe(
+            "iter-19-R-FT2",
+            d.visible_text("With advantage. Click a target")
+                && d.visible_text("% to hit · advantage"),
+            "An attack armed with advantage says so in its hint and on the rows",
+        );
         d.right_click_row(TARGET);
+        d.observe(
+            "iter-19-R-FT4",
+            d.visible_text("Bite against Cinder Wolf 2")
+                && d.painted_left("Bite against Cinder Wolf 2")
+                    == d.painted_left("Roll with disadvantage"),
+            "The row menu's choices start at its heading's words",
+        );
         d.state("row-menu", Sizes::Default);
         d.click("Roll with disadvantage");
         d.observe(
@@ -13295,6 +13404,26 @@ pub mod run_rolls {
             "T16.10",
             d.has_containing("If the cultist moved") && d.has_containing("No · 1d6+2 slashing"),
             "The question names the condition, with the damage for yes and for no",
+        );
+        d.observe_both(
+            "iter-19-R-FT7",
+            "A tile alone on its line keeps every damage type",
+            |d| d.visible_text("or\u{a0}2d6+2\u{a0}slashing"),
+        );
+        // Two tiles do not fit beside each other in the panel, so each takes the line.
+        d.observe_both(
+            "iter-19-R-FT7",
+            "A tile alone on its line takes the line's width",
+            |d| {
+                tile(d, "Scorching Sickle")
+                    .zip(tile(d, BURST))
+                    .is_some_and(|(sickle, burst)| {
+                        sickle.rect.top() < burst.rect.top()
+                            // Wider than the 208 px of a tile that shares its line.
+                            && sickle.rect.width() > 208.0 + crate::design::S
+                            && (sickle.rect.width() - burst.rect.width()).abs() < 1.0
+                    })
+            },
         );
         d.state("damage-question", Sizes::Default);
         d.click_starting("Yes · 2d6+2 slashing");
@@ -13334,18 +13463,74 @@ pub mod run_rolls {
             d.has_containing(", DEX save "),
             "Each creature's save shows on its row",
         );
+        d.observe_both(
+            "iter-19-R-AT2",
+            "A save tile shows its area and what a success does",
+            |d| d.visible_text("10-ft emanation · half on a success"),
+        );
+        action_at_text(d, "iter-19-R-AT5", BURST, "Roll damage");
         d.state("save-targets", Sizes::All);
         if d.has("Half for those at or above DC") {
             d.click("Half for those at or above DC");
         }
         d.click("Roll damage");
+        let hp_before = [d.row_hp(ATTACKER), d.row_hp(TARGET)];
         d.press(Key::Enter);
         d.goal_within(
             "T16.4",
             "an area save against two creatures, then its damage",
             6,
         );
+        // Each target says its own result, and its HP fell by that row's own amount.
+        let hp_after = [d.row_hp(ATTACKER), d.row_hp(TARGET)];
+        let said = [ATTACKER, TARGET].map(|row| {
+            // The row's whole name; a narrow row can cut its painted words.
+            let words = d.row_node(row).map(|node| node.name).unwrap_or_default();
+            let saved = if words.contains("Saved · ") {
+                Some(true)
+            } else if words.contains("Failed · ") {
+                Some(false)
+            } else {
+                None
+            };
+            let amount = ["Saved · ", "Failed · "]
+                .into_iter()
+                .find_map(|word| words.split_once(word))
+                .and_then(|(_, rest)| rest.split(' ').next())
+                .and_then(|amount| amount.parse::<i64>().ok());
+            (saved, amount, words.contains("(half)"))
+        });
+        let lost = [0, 1].map(|at| hp_before[at].zip(hp_after[at]).map(|(was, is)| was - is));
+        d.observe(
+            "iter-19-R-FT1",
+            said.iter().all(|(saved, amount, _)| saved.is_some() && amount.is_some())
+                && said.iter().any(|(saved, _, half)| *saved == Some(true) && *half)
+                && said.iter().any(|(saved, _, half)| *saved == Some(false) && !*half)
+                && (0..2).all(|at| said[at].1.is_some_and(|amount| {
+                    lost[at] == Some(amount.min(hp_before[at].unwrap_or(0)))
+                })),
+            format!("Each save target says its own result and lost that much: said {said:?}, lost {lost:?}"),
+        );
+        d.observe_both("iter-19-R-FT1", "The rows name each result in words", |d| {
+            d.visible_text("Saved · ") && d.visible_text("Failed · ")
+        });
         d.state("save-applied", Sizes::Default);
+        // Undo gives each target back its own HP.
+        d.press(Key::U);
+        let hp_undone = [d.row_hp(ATTACKER), d.row_hp(TARGET)];
+        d.observe(
+            "iter-19-R-FT1",
+            hp_undone == hp_before && hp_before != hp_after,
+            format!(
+                "Undo restores each row's HP: {hp_before:?} then {hp_after:?}, undone {hp_undone:?}"
+            ),
+        );
+        // The save's results go with the step that applied them (iter-19-R2-1).
+        d.observe_both(
+            "iter-19-R2-1",
+            "After Undo no row still names the save's result",
+            |d| !d.visible_text("Failed · ") && !d.visible_text("Saved · "),
+        );
         d.press(Key::Escape);
 
         // A player rolls their own dice: the tile targets, and the DM types the damage.
@@ -13419,6 +13604,32 @@ pub mod run_rolls {
         );
         d.goal_within("T16.7", "preview an attack in the Library", 1);
         d.state("library-preview", Sizes::All);
+
+        // Two tiles share a line where the reader has room, each with its facts line, and a
+        // narrow window cuts none of their words.
+        d.click_containing("Ember Cultist");
+        let paired = d.at_size(DEFAULT, |d| {
+            tile(d, "Scorching Sickle")
+                .zip(tile(d, BURST))
+                .map(|(sickle, burst)| (sickle.rect, burst.rect))
+        });
+        d.observe(
+            "iter-19-R-ST3",
+            paired.is_some_and(|(sickle, burst)| {
+                (sickle.top() - burst.top()).abs() < 1.0 && sickle.right() < burst.left()
+            }),
+            format!("At 1200 the two tiles share one line: {paired:?}"),
+        );
+        d.observe_both(
+            "iter-19-R-ST3",
+            "Every tile word shows whole, at 1200 and at 960",
+            |d| {
+                d.visible_text("or\u{a0}2d6+2\u{a0}slashing")
+                    && d.visible_text("Reach 5 ft")
+                    && d.visible_text("10-ft emanation · half on a success")
+            },
+        );
+        d.state("library-two-tiles", Sizes::All);
     }
 }
 

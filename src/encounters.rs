@@ -5260,7 +5260,7 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let fitted = changed_detail(ui, detail, "Changed · 3 to add by hand", 400.0);
+                let fitted = changed_detail(ui, detail, "Changed · 1 to add by hand", 400.0);
                 assert!(!fitted.contains("Ashen Marches"));
                 assert!(!fitted.contains('…'), "iter8-B-FT8: {fitted}");
                 assert!(fitted.contains("as Ember Cultist"));
@@ -5313,7 +5313,7 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let word = "Changed · 3 to add by hand";
+                let word = "Changed · 1 to add by hand";
                 for width in [280.0, 320.0, 356.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
                     assert!(fitted.contains("as Ember Cultist"), "{fitted}");

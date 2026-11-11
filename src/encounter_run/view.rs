@@ -3965,15 +3965,18 @@ impl Run {
                 .collect();
             design::overflow_tabs_small(ui, &mut self.sheet_page, &pages);
             let page = self.sheet_page;
-            egui::ScrollArea::vertical()
-                .id_salt(("run_sheet", record.definition.splat_id, page))
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
+            super::rolling::gutter_scroll(
+                ui,
+                egui::ScrollArea::vertical()
+                    .id_salt(("run_sheet", record.definition.splat_id, page))
+                    .auto_shrink([false, false]),
+                |ui| {
                     crate::rolls::set_roller(ui.ctx(), Some(index));
                     self.armed_tiles_begin(ui.ctx());
                     crate::party::sheet_page(ui, &record, page, "", Some(&live));
                     crate::rolls::set_roller(ui.ctx(), None);
-                });
+                },
+            );
             return;
         }
         let mut link = None;
@@ -4009,12 +4012,14 @@ impl Run {
                 .wrap(),
             );
         }
-        egui::ScrollArea::vertical()
-            // By participant: copies of one creature can differ, and each card opens on its own
-            // changes, not at the place the last copy was left.
-            .id_salt(("run_reference", &p.key))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        super::rolling::gutter_scroll(
+            ui,
+            egui::ScrollArea::vertical()
+                // By participant: copies of one creature can differ, and each card opens on its
+                // own changes, not at the place the last copy was left.
+                .id_salt(("run_reference", &p.key))
+                .auto_shrink([false, false]),
+            |ui| {
                 changes_block(ui, p, true);
                 let links: &dyn view::Links = match &self.content {
                     Some(index) => index.as_ref(),
@@ -4046,16 +4051,6 @@ impl Run {
                                 .find(|row| row.label == "Speed")
                                 .map(|row| row.changed)
                         }),
-                        by_hand: p.changes.as_ref().map_or_else(Vec::new, |changes| {
-                            changes
-                                .overrides
-                                .table_bonuses(&changes.base)
-                                .into_iter()
-                                .filter(|line| {
-                                    line.starts_with("Attack") || line.starts_with("Damage")
-                                })
-                                .collect()
-                        }),
                     };
                     crate::rolls::set_roller(ui.ctx(), Some(index));
                     self.armed_tiles_begin(ui.ctx());
@@ -4072,7 +4067,8 @@ impl Run {
                     );
                     crate::rolls::set_roller(ui.ctx(), None);
                 }
-            });
+            },
+        );
         if link.is_some() {
             self.lookup_request = link;
         }
@@ -5701,7 +5697,13 @@ pub(crate) fn change_preview(row: &Row) -> String {
             &row.base
         }),
         numbers(&row.changed),
-        if row.by_hand { " · add by hand" } else { "" }
+        if row.by_hand {
+            " · add by hand"
+        } else if row.in_rolls {
+            " · in Splat’s rolls"
+        } else {
+            ""
+        }
     )
 }
 
@@ -7005,15 +7007,12 @@ fn paint_row(
     design::hp_bar(painter, bar, p.hp, p.max_hp, p.temporary_hp);
     // The current action's word on this row: the chance to hit, or the result. It goes under
     // the row's state, or, where the state column has no room, after its second line. The
-    // longest form that fits whole, dropping its first parts.
+    // longest form that fits whole, dropping its first parts; the result itself (its last two
+    // parts: an attack's comparison and damage, a save's result and damage, a chance and its
+    // mode) never drops, and is cut by words only where no place holds it whole.
     if let Some(badge) = badge {
         let font = Type::Small.font(ui);
         let parts: Vec<&str> = badge.split(" · ").collect();
-        let fitting = |room: f32| {
-            (0..parts.len())
-                .map(|from| parts[from..].join(" · "))
-                .find(|words| design::number_width(ui, words, &font) <= room)
-        };
         let state_left = hp_right + design::S;
         let after_detail = x
             + layout.second_left
@@ -7021,11 +7020,29 @@ fn paint_row(
                 .second_line
                 .as_ref()
                 .map_or(0.0, |line| line.size().x + design::S);
-        let place = fitting(rect.right() - state_left - design::XS)
-            .map(|words| (state_left, words))
+        let places = [
+            (state_left, rect.right() - state_left - design::XS),
+            (
+                after_detail,
+                x + layout.temp_right - after_detail - design::S,
+            ),
+        ];
+        let kept = parts.len().min(2);
+        let forms: Vec<String> = (0..=parts.len() - kept)
+            .map(|from| parts[from..].join(" · "))
+            .collect();
+        let place = forms
+            .iter()
+            .find_map(|words| {
+                places
+                    .iter()
+                    .find(|(_, room)| design::number_width(ui, words, &font) <= *room)
+                    .map(|(left, _)| (*left, words.clone()))
+            })
             .or_else(|| {
-                fitting(x + layout.temp_right - after_detail - design::S)
-                    .map(|words| (after_detail, words))
+                let (left, room) = places.iter().copied().max_by(|a, b| a.1.total_cmp(&b.1))?;
+                let words = design::words_that_fit(ui, forms.last()?, &font, room);
+                (!words.is_empty()).then_some((left, words))
             });
         if let Some((left, words)) = place {
             painter.text(
@@ -9484,16 +9501,28 @@ mod tests {
                 label: "Speed",
                 base: "30 ft.".into(),
                 changed: "40 ft".into(),
-                by_hand: true
+                by_hand: true,
+                in_rolls: false,
             }),
             "30 ft → 40 ft · add by hand"
+        );
+        assert_eq!(
+            change_preview(&Row {
+                label: "Attack bonus",
+                base: "As printed".into(),
+                changed: "+1 on each attack".into(),
+                by_hand: false,
+                in_rolls: true,
+            }),
+            "As printed → +1 on each attack · in Splat’s rolls"
         );
         assert_eq!(
             change_preview(&Row {
                 label: "Maximum HP",
                 base: "1000000".into(),
                 changed: "-28".into(),
-                by_hand: false
+                by_hand: false,
+                in_rolls: false,
             }),
             "1,000,000 → −28"
         );

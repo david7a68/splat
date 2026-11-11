@@ -292,36 +292,13 @@ fn prose(
     let all = crate::rolls::actions(body);
     let here = crate::rolls::actions(text);
     let mut tiles: Vec<(Option<usize>, crate::rolls::Chip)> = Vec::new();
-    // Action tiles in a row, with a run's attack changes under them.
+    // Action tiles in a row. In a run, a tile shows the numbers Splat rolls, with a run's
+    // attack and damage changes in them, so no line under the tiles repeats those changes.
     let flush = |ui: &mut egui::Ui, tiles: &mut Vec<(Option<usize>, crate::rolls::Chip)>| {
-        if tiles.is_empty() {
-            return;
+        if !tiles.is_empty() {
+            crate::rolls::tiles(ui, name, tiles);
+            tiles.clear();
         }
-        crate::rolls::tiles(ui, name, tiles);
-        let attack = tiles.iter().any(|(_, chip)| {
-            matches!(
-                chip.link,
-                RollLink::D20 {
-                    what: D20::Attack,
-                    ..
-                }
-            )
-        });
-        if attack
-            && let Some(values) = values
-            && !values.by_hand.is_empty()
-        {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} · in the rolls", values.by_hand.join(", ")))
-                        .color(colors().participant.changed),
-                )
-                .wrap(),
-            );
-            ui.add_space(design::S);
-        }
-        tiles.clear();
     };
     for (at, paragraph) in text
         .split("\n\n")
@@ -385,6 +362,7 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
         base: printed.into(),
         changed: speed.into(),
         by_hand: true,
+        in_rolls: false,
     });
     stat_detail(ui, "Speed", &preview, colors().participant.changed);
 }

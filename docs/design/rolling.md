@@ -33,7 +33,9 @@ The glossary names the two kinds of roll:
    enough (114 of the 336 built-in creatures have no `attack_bonus:` line). A
    run's attack and damage changes are added.
 4. **Record, do not rule.** A roll never changes HP; Enter does. There is no hit
-   or miss verdict; the chance to hit is arithmetic.
+   or miss verdict; the chance to hit is arithmetic. A rolled attack puts its
+   total beside the target's AC, `17 vs AC 13 · 10 damage`, and Amount gets the
+   damage either way, so the DM rules on cover, a Shield spell and the like.
 5. **Players roll their own dice.** For a party member, a tile targets but does
    not roll; `Roll for them` rolls if the player wants. A save's character
    targets roll at the table, and the DM uses their half mark.
@@ -44,12 +46,16 @@ The glossary names the two kinds of roll:
 
 In a stat block, each rules paragraph with an attack, a save DC or damage is a
 tile, in printed order; paragraphs next to each other share one row of tiles.
-The paragraph's text is in the tile's hover, not under it. Spellcasting stays
-prose, with its spell links. A character's Actions page shows its attacks as
-tiles. A tile has an icon (sword for an attack, shield for a save, fire for
-damage), its name, its number in a run (Ctrl+1 to Ctrl+9 arm it), and its
-numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
-Damage with a condition follows as `or 2d6+2 slashing` or `plus 1d4 slashing`.
+The paragraph's text is in the tile's hover and keyboard focus, and in its
+accessible description, not under it. Spellcasting stays prose, with its spell
+links. A character's Actions page shows its attacks as tiles. A tile has an icon
+(sword for an attack, shield for a save, fire for damage), its name, its number
+in a run (Ctrl+1 to Ctrl+9 arm it), its numbers (`+4 · 2d4+2 piercing, 1d6 fire`
+or `DC 12 Dexterity · 2d6 fire`), and, when the text says, where it lands and
+what a save does (`Reach 5 ft`, `10-ft emanation · half on a success`). Damage
+with a condition follows as `or 2d6+2 slashing` or `plus 1d4 slashing`. In a
+run, a creature changed for the encounter shows the numbers Splat rolls (`+4 ·
+1d6+3 slashing` for Attack +1 and Damage +1); hover adds the printed ones.
 
 A right-click on a tile or on a number that rolls a d20 opens a menu: `Roll`,
 `Roll with advantage`, `Roll with disadvantage`, and, by a campaign rule that
@@ -60,11 +66,14 @@ character has it.
 
 1. Click `Bite` (Shift: advantage, Ctrl: disadvantage), or press Ctrl+1. It is
    armed: its tile is marked, the panel stays on the attacker, and every other
-   row shows the chance to hit it, such as `60% to hit`.
+   row shows the chance to hit it, such as `60% to hit`. Armed with advantage or
+   disadvantage, the hint and each row say so: `With advantage. Click a target…`
+   and `84% to hit · advantage`.
 2. Click the target's row (Shift or Ctrl for advantage or disadvantage). The
    attack and its damage roll; a natural 20 rolls critical damage. The row says
-   `11 vs AC 13 · 10 damage`, the row becomes the dock's target, and Amount has
-   10. Enter applies it, as one named step of Undo.
+   `17 vs AC 13 · 10 damage` (or `11 vs AC 13 · 10 damage`), the row
+   becomes the dock's target, and Amount has 10. Enter applies it, as one named
+   step of Undo.
 3. The tile stays armed: click the next target for a Multiattack. Escape, `Stop`
    or Next turn disarms it.
 
@@ -160,16 +169,18 @@ in the panel that still waits to be sent is spent with it.
    target away.
 2. `Half for those at or above DC` marks them to take half, and takes the mark
    from a target whose save is now under the DC. `Roll damage` rolls the damage
-   once, for every target, into Amount; Enter applies it, halving where marked.
-3. The run keeps that rolled damage until an amount is applied or the action
-   ends; a step that applies no amount, such as a note, leaves it. When a target
-   is added or taken away, a save is rolled again, or the marks change, Amount
-   is made again from it: Enter applies Amount as it is to one target, so one
-   target that made its save has half in Amount. A save rolled again loses the
-   half mark of the save before it. An Amount that the DM edited since the roll
-   stays, the same digits typed again too; a new roll of the damage takes its
-   place. Damage that a condition settled for the targets before is not kept
-   for new targets: Amount is cleared, and `Roll damage` rolls it again. A
+   once, for every target, into Amount; each target's row then says what Enter
+   gives it, `Saved · 1 damage (half)` or `Failed · 3 damage`. Enter applies it,
+   halving where marked, and each row keeps its own result.
+3. The armed action keeps that rolled damage until the step that applies it, or
+   until the action ends; another step, such as a note, leaves it. When a
+   target is added or taken away, a save is rolled again, or the marks change,
+   Amount is made again from it: Enter applies Amount as it is to one target, so
+   one target that made its save has half in Amount. A save rolled again loses
+   the half mark of the save before it. An Amount that the DM edited since the
+   roll stays, the same digits typed again too; a new roll of the damage takes
+   its place. Damage that a condition settled for the targets before is not
+   kept for new targets: Amount is cleared, and `Roll damage` rolls it again. A
    selection made outside the targeting, such as by the arrow keys, ends the
    rolled damage; coming back to the same targets does not bring it back.
 
