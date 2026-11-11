@@ -411,33 +411,146 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has("Copy the text of Repaired watchkeeper"),
         "Discard draft removes the lost draft and its message",
     );
-    // A file that cannot be opened for repair: Cancel starts at the error's text.
-    fs::write(&path, [0xff, 0xfe, b'\n']).unwrap();
+    // A file that cannot be opened for repair. The pane names the file, the recovery and, in
+    // Technical details, the system's words. Its bytes never change. A second unreadable note
+    // with the longest realistic path crowds the list beside it.
+    let unreadable = [0xff, 0xfe, b'\n'];
+    let long_path = "Notes/Letters from the Northern Shore/The watchkeepers' unread letters to the Harbour Council.md";
+    let long = root(d).join(long_path);
+    fs::create_dir_all(long.parent().unwrap()).unwrap();
+    fs::write(&path, unreadable).unwrap();
+    fs::write(&long, b"# Letters\n\xe9t\xe9\n").unwrap();
     reload(d);
-    d.click("1 note cannot be read");
-    d.click_containing("Notes/Broken.md");
-    let error = d
-        .nodes()
-        .into_iter()
-        .find(|node| node.role == Role::Label && node.name.contains("UTF-8"))
-        .map(|node| node.name);
+    d.click("2 notes cannot be read");
+    let row = "Notes/Broken.md · Text format cannot be read";
+    d.observe(
+        "iter-18-D-AD2-list-cause",
+        d.has(row) && d.has(&format!("{long_path} · Text format cannot be read")),
+        "Each unreadable row states the short cause, not the system's words",
+    );
+    // The click finds the row by its path, so a wrong cause fails only the check above.
+    d.click_starting("Notes/Broken.md · ");
+    let headline = "Splat cannot read Notes/Broken.md as text.";
+    d.expect(headline);
+    d.observe(
+        "iter-18-D-AD2-headline",
+        d.has_label(headline)
+            && !d.has_containing("stream did not contain")
+            && !d.has_containing("valid UTF-8 ·"),
+        "The pane leads with the file; the system's words wait in Technical details",
+    );
+    d.observe(
+        "iter-18-D-AD1-recovery",
+        d.has_containing("Open the file in a text editor and save it as UTF-8 text, or restore it from a backup. Then choose Try again."),
+        "The pane explains the text format and the recovery",
+    );
+    d.observe(
+        "iter-18-D-AD1-file-line",
+        d.has("Show file")
+            && d.has("Edit in Obsidian")
+            && d.place_of("Show file")
+                .zip(d.place_of(headline))
+                .is_some_and(|(show, words)| show.bottom() <= words.top()),
+        "The file line with Show file sits above the message",
+    );
     action_at_text_edge(
         d,
-        "iter-17-D-error-cancel",
-        "Cancel",
+        "iter-18-D-try-again-edge",
+        "Try again",
         "Resize World notes column",
         &[SMALL, DEFAULT, LARGE],
-        |d| error.as_deref().and_then(|error| d.painted_left(error)),
+        |d| d.painted_left(headline),
     );
-    d.state("repair-cannot-open", Sizes::Default);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (again, cancel) = d.at_size(size, |d| (d.place_of("Try again"), d.place_of("Cancel")));
+        d.observe(
+            "iter-18-D-cancel-follows",
+            again.zip(cancel).is_some_and(|(again, cancel)| {
+                (again.top() - cancel.top()).abs() < 0.5 && cancel.left() >= again.right()
+            }),
+            format!("At {size:?}, Cancel {cancel:?} follows Try again {again:?} on its line"),
+        );
+    }
+    d.state("repair-cannot-open", Sizes::All);
+    d.click("Technical details");
+    d.observe(
+        "iter-18-D-AD2-details",
+        d.has_containing("stream did not contain valid UTF-8"),
+        "Technical details keeps the system's words",
+    );
+    d.expect_same(
+        "Technical details opens one short line of the system's words under its heading.",
+    );
+    d.state("repair-cannot-open-details", Sizes::Default);
     d.click("Cancel");
     d.observe(
         "iter-17-D-error-cancel-closes",
-        error.is_some_and(|error| !d.has(&error)),
+        !d.has(headline),
         "Cancel removes the error",
     );
-    fs::write(&path, &fixed).unwrap();
+    d.observe(
+        "iter-18-D-AD1-bytes-cancel",
+        fs::read(&path).unwrap() == unreadable,
+        "Opening and cancelling leave the file's bytes as they were",
+    );
+    // Another note's row takes the pane, as it does from an open repair.
+    d.click_starting("Notes/Broken.md · ");
+    d.expect(headline);
+    d.click("Gate Mechanics · ");
+    d.observe(
+        "iter-18-D-row-yields",
+        !d.has(headline) && !d.has("Try again") && d.has_label("Gate Mechanics"),
+        "A note row opens that note in the reader and ends the unreadable pane",
+    );
+    // The longest path wraps in the list at 960, whole, with its cause below it.
+    let long_row = format!("{long_path} · Text format cannot be read");
+    let whole = d.at_size(SMALL, |d| {
+        d.place_of(&long_row).is_some_and(|row| {
+            let painted = d.painted_in(row);
+            painted.contains("Harbour Council.md") && painted.contains("Text format cannot be read")
+        })
+    });
+    d.observe(
+        "iter-18-D-long-row-wraps",
+        whole,
+        "At 960, the longest unreadable path wraps whole in its row, above its cause",
+    );
+    // The longest path wraps at 960 and keeps its choices in view.
+    d.click_starting(&format!("{long_path} · "));
+    let long_headline = format!("Splat cannot read {long_path} as text.");
+    d.expect(&long_headline);
+    let fits = d.at_size(SMALL, |d| {
+        d.nodes()
+            .iter()
+            .any(|node| node.name == long_headline && node.fully_in_view())
+            && d.in_view("Try again")
+            && d.in_view("Cancel")
+    });
+    d.observe(
+        "iter-18-D-long-path-960",
+        fits,
+        "At 960, the longest path's message wraps whole and its choices stay in view",
+    );
+    d.state("repair-cannot-open-long", Sizes::Small);
+    // A file deleted outside Splat while its pane is open ends the pane on the next load.
+    fs::remove_file(&long).unwrap();
+    fs::remove_dir(long.parent().unwrap()).unwrap();
     reload(d);
+    d.observe(
+        "iter-18-D-deleted-closes",
+        !d.has(&long_headline) && !d.has("Try again"),
+        "A deleted file's pane closes with its row",
+    );
+    // Saved again as UTF-8 text outside Splat: Try again opens the note in the reader.
+    d.click_starting("Notes/Broken.md · ");
+    d.expect(headline);
+    fs::write(&path, &fixed).unwrap();
+    d.click("Try again");
+    d.observe(
+        "iter-18-D-try-again-opens",
+        !d.has(headline) && d.has("Edit Repaired watchkeeper"),
+        "Try again reads the folder again and opens the repaired note",
+    );
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
@@ -3186,40 +3299,29 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
-    // iter-17-B: Undo replacement starts its line above the slot rows. Their words start at the
-    // row edge, so the action uses `line_start` with no icon (it is outside a message): its words
-    // start at the rows' words, and its press area reaches `S` into the page's gutter, never
-    // into the navigation splitter.
+    // iter-18-B: the replacement's result is a short message, so its Undo keeps the undo icon as
+    // every other Undo does, and its press area stays clear of the splitter.
+    d.observe_both(
+        "iter-18-B-replacement-message",
+        "The replacement says what changed, with Undo replacement beside it",
+        |d| d.has_containing("2 Cinder Wolf rows replaced with Guard."),
+    );
     for size in [SMALL, DEFAULT, LARGE] {
-        let (undo, slot, clear) = d.at_size(size, |d| {
-            let slot = d
-                .nodes()
-                .into_iter()
-                .find(|node| node.name.starts_with("1. ") && node.in_view())
-                .map(|node| node.rect);
-            let mut words = None::<f32>;
-            d.each_painted_text(|text, _| {
-                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                if slot.is_some_and(|slot| slot.contains(rect.center())) {
-                    words = Some(words.map_or(rect.left(), |left| left.min(rect.left())));
-                }
-            });
+        let (icon, clear) = d.at_size(size, |d| {
+            let target = d.place_of("Undo replacement");
             (
-                super::words_left(d, "Undo replacement"),
-                words,
-                d.place_of("Undo replacement").map_or_else(
+                target.map(|rect| d.painted_in(rect)),
+                target.map_or_else(
                     || Err("Undo replacement is not in view".to_owned()),
                     |target| super::press_area_clear(d, target, "Undo replacement", None),
                 ),
             )
         });
         d.observe(
-            "iter-17-B-undo-replacement",
-            undo.zip(slot)
-                .is_some_and(|(undo, slot)| (undo - slot).abs() <= 1.0),
-            format!(
-                "At {size:?}, Undo replacement starts at {undo:?}, the slot rows' words at {slot:?}"
-            ),
+            "iter-18-B-undo-replacement-icon",
+            icon.as_deref()
+                .is_some_and(|painted| painted.contains(crate::design::icons::UNDO)),
+            format!("At {size:?}, Undo replacement paints {icon:?}"),
         );
         d.observe(
             "iter-17-B-undo-replacement-clear",

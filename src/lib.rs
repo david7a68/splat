@@ -675,30 +675,25 @@ impl Splat {
             }
             ui.add_space(design::S);
             let loses = items.len() != background && (!only_sync || sync_loss);
-            if only_sync && (conflict.is_some() || self.settings.signed_out()) {
-                ui.horizontal(|ui| {
-                    if only_sync
-                        && conflict.is_some()
-                        && Action::quiet("Review conflict").show(ui).clicked()
-                    {
-                        if let Some(run) = self.encounters.run_mut() {
-                            run.review_conflict();
-                        }
-                        self.lookup.open = false;
-                        self.sessions.notes_open = false;
-                        self.page = Page::Run;
-                        self.confirm_close = false;
-                    }
-                    if only_sync
-                        && self.settings.signed_out()
-                        && Action::quiet("Connect to sync").show(ui).clicked()
-                    {
-                        self.page = Page::Settings;
-                        self.settings_tab = SettingsTab::default();
-                        self.settings.focus_sign_in();
-                        self.confirm_close = false;
-                    }
-                });
+            let chosen = encounter_run::view::close_recovery_actions(
+                ui,
+                only_sync && conflict.is_some(),
+                only_sync && self.settings.signed_out(),
+            );
+            if chosen.review {
+                if let Some(run) = self.encounters.run_mut() {
+                    run.review_conflict();
+                }
+                self.lookup.open = false;
+                self.sessions.notes_open = false;
+                self.page = Page::Run;
+                self.confirm_close = false;
+            }
+            if chosen.connect {
+                self.page = Page::Settings;
+                self.settings_tab = SettingsTab::default();
+                self.settings.focus_sign_in();
+                self.confirm_close = false;
             }
             let (lose, ()) = design::dialog_actions(
                 ui,
