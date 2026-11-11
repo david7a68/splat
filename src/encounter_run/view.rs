@@ -2,8 +2,8 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
-    SAVED_HP_USED, SHEET_SOURCE, Unend, display, mode_label,
+    Command, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
+    SHEET_SOURCE, Unend, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -25,14 +25,12 @@ use uuid::Uuid;
 /// What is held while an encounter group is dragged to the initiative list.
 struct GroupDrag(Uuid);
 
-const AMOUNT: &str = "Amount";
+pub(super) const AMOUNT: &str = "Amount";
 const READ_ALOUD: &str = "Read-aloud and notes";
 /// Two lines of controls in a frame.
-const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
+pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
-const DOCK_ALL_WORDS_FROM: f32 = 500.0;
-/// A roll's result has its place before there is one, so that nothing moves when it comes.
-const DICE_RESULT_WIDTH: f32 = 32.0;
+pub(super) const DOCK_ALL_WORDS_FROM: f32 = 500.0;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
@@ -162,7 +160,7 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
 }
 
 /// The width `toggle` takes, on or off: its words and the frame's padding.
-fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
+pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     #[cfg(test)]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
@@ -265,23 +263,6 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
         "Add".to_owned()
     } else {
         format!("Add {}", group.joinable_count())
-    }
-}
-
-/// What sync needs from the DM, on the line above the roster.
-struct SyncAlert {
-    text: String,
-    /// For when `text` does not fit beside a long Undo.
-    short: String,
-    color: egui::Color32,
-}
-impl SyncAlert {
-    fn new(icon: &str, text: &str, short: &str, color: egui::Color32) -> Self {
-        Self {
-            text: format!("{icon} {text}"),
-            short: format!("{icon} {short}"),
-            color,
-        }
     }
 }
 
@@ -455,7 +436,7 @@ impl Run {
         }
     }
 
-    fn clear_targets(&mut self) {
+    pub(super) fn clear_targets(&mut self) {
         self.also.clear();
         self.halved.clear();
     }
@@ -710,7 +691,7 @@ impl Run {
         }
     }
 
-    fn undo_action<'a>(&'a self, label: &'a str) -> Action<'a> {
+    pub(super) fn undo_action<'a>(&'a self, label: &'a str) -> Action<'a> {
         let action = Action::secondary(label)
             .icon(icons::UNDO)
             .density(Density::Read);
@@ -744,7 +725,7 @@ impl Run {
         }
     }
 
-    fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
+    pub(super) fn empty_undo(&self, ui: &mut egui::Ui) -> bool {
         let full = self.empty_undo_reason();
         let words = self.empty_undo_words();
         let action = self.undo_action("Undo");
@@ -1164,484 +1145,6 @@ impl Run {
         closed
     }
 
-    /// The round and the turn are the strongest things on the page, above any row, and
-    /// they grow with the rows. Next up is the only name that may be off the roster's view.
-    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
-        let c = colors();
-        let strip = self.strip();
-        let name = strip.current.as_deref().unwrap_or_default();
-        let mut next_turn = false;
-        let nobody_present = !self.state.participants.iter().any(|p| p.present);
-        // As large as the largest HP, in the row's own face: nothing outweighs the header.
-        let turn_size = scale.hp;
-        let height = header_height(scale);
-        ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), height),
-            Layout::right_to_left(Align::Center),
-            |ui| {
-                ui.set_min_height(height);
-                next_turn = Action::primary("Next turn")
-                    .icon(icons::NEXT)
-                    .density(Density::Glance)
-                    .key(if self.lookup_open { "" } else { "N" })
-                    .blocked(nobody_present.then_some(NOBODY_PRESENT))
-                    .show(ui)
-                    .clicked();
-                // As the strip pairs Back to run with Next turn: one height, one small gap.
-                ui.add_space(design::S);
-                // A narrow roster keeps its room for the turn's name.
-                let words = ui.max_rect().width() >= DOCK_ALL_WORDS_FROM;
-                if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
-                    self.show_arrivals();
-                }
-                ui.add_space(design::S);
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let response = ui.label(
-                        Type::Round
-                            .rich(ui, self.state_words(false))
-                            .font(Type::Round.sized(ui, turn_size))
-                            .color(c.text),
-                    );
-                    design::named(
-                        ui,
-                        &response,
-                        &format!("Run · {} · Round {}", self.name, self.state.round),
-                    );
-                    ui.add_space(design::S);
-                    // Drop the turn suffix before shortening the identifying name.
-                    let room = ui.available_width() - design::HAIRLINE_WIDTH;
-                    let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
-                    let full = format!("{name}’s turn");
-                    let font = Type::Name.sized(ui, turn_size);
-                    let fit = |text: &str| {
-                        (turn_size * room / design::number_width(ui, text, &font)).min(turn_size)
-                    };
-                    let (text, size) = if fit(&full) >= least {
-                        (full.clone(), fit(&full))
-                    } else if fit(name) >= least {
-                        (name.to_owned(), fit(name))
-                    } else {
-                        let font = Type::Name.sized(ui, least);
-                        (dock_name(ui, name, &font, room), least)
-                    };
-                    let response = ui.add(
-                        egui::Label::new(
-                            Type::Name
-                                .rich(ui, text)
-                                .font(Type::Name.sized(ui, size))
-                                .color(c.turn.current),
-                        )
-                        .truncate(),
-                    );
-                    design::named(ui, &response, &full);
-                    response.on_hover_text(&full);
-                });
-            },
-        );
-        ui.add_space(6.0);
-        // Measure the notice first; Undo takes the remaining room on line two.
-        let undo_label = self.undo_label();
-        let mut undo = false;
-        let mut review_conflict = false;
-        let party_sync_off = self.party_sync_off();
-        let needs_connection = strip.sync_stopped || (self.sync_needs_sign_in() && !party_sync_off);
-        let offline_color = self
-            .account_status
-            .map_or(c.connection.offline, |status| status.color);
-        let sync_alert = if let Some(name) = &strip.conflict {
-            Some(SyncAlert::new(
-                icons::WARN,
-                &format!("Sync conflict: {name}"),
-                &format!("Conflict: {name}"),
-                c.sync.conflict,
-            ))
-        } else if strip.sync_stopped {
-            Some(SyncAlert::new(
-                icons::OFFLINE,
-                "Signed out of D&D Beyond",
-                "Signed out",
-                offline_color,
-            ))
-        } else if self.sync_needs_sign_in() && !party_sync_off {
-            Some(SyncAlert::new(
-                icons::SYNC_OFF,
-                "Not connected",
-                "Not connected",
-                offline_color,
-            ))
-        } else if !strip.unsent.is_empty() {
-            Some(SyncAlert::new(
-                icons::WARN,
-                "Changes kept in Splat, not sent",
-                "Not sent",
-                c.result.warning,
-            ))
-        } else if let Some(name) = &strip.sync_error {
-            Some(SyncAlert::new(
-                icons::ERROR,
-                &format!("Sync error: {name}"),
-                "Sync error",
-                c.result.error,
-            ))
-        } else if party_sync_off {
-            Some(SyncAlert::new(
-                icons::SYNC_OFF,
-                "Sync off for the party",
-                "Sync off for the party",
-                c.muted,
-            ))
-        } else {
-            None
-        };
-        let mut sheet_notice_in_header = false;
-        ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), Density::Read.control()),
-            Layout::right_to_left(Align::Center),
-            |ui| {
-                let font = Type::Small.font(ui);
-                let notice = if self.recording_notice.is_some() && strip.conflict.is_none() {
-                    format!(
-                        "{} Recording silence · {}",
-                        icons::WARN,
-                        sync_alert.as_ref().map_or("", |alert| alert.short.as_str())
-                    )
-                } else if let Some(alert) = &sync_alert {
-                    // Measure only what is painted: no space after a notice with no link.
-                    let link = if needs_connection {
-                        "Connect to sync"
-                    } else if self.hide_panel && strip.conflict.is_some() {
-                        "Review"
-                    } else {
-                        ""
-                    };
-                    if link.is_empty() {
-                        alert.text.clone()
-                    } else {
-                        format!("{} {link}", alert.text)
-                    }
-                } else if nobody_present {
-                    format!("{} No participants are present", icons::WARN)
-                } else {
-                    strip
-                        .next
-                        .as_ref()
-                        .map_or(String::new(), |next| format!("Next: {next}"))
-                };
-                let action_font = Type::Strong.font(ui);
-                let from_sheet = self.undo_from_sheet();
-                let fitted = undo_words(
-                    ui,
-                    &undo_label,
-                    from_sheet,
-                    &self.state.participants,
-                    &action_font,
-                    f32::INFINITY,
-                );
-                let mut minimum = fitted.clone();
-                if let Some(target) = self
-                    .state
-                    .participants
-                    .iter()
-                    .filter(|p| minimum.contains(&p.name))
-                    .max_by_key(|p| p.name.len())
-                {
-                    minimum = minimum.replacen(
-                        &target.name,
-                        &dock_name(ui, &target.name, &action_font, design::L * 5.0),
-                        1,
-                    );
-                }
-                // The shortest target Undo keeps: a sheet's step also gives up its source.
-                let shortest = minimum
-                    .strip_prefix("Undo: ")
-                    .and_then(|action| action.strip_prefix(SHEET_SOURCE))
-                    .filter(|_| from_sheet)
-                    .map_or_else(|| minimum.clone(), |action| format!("Undo: {action}"));
-                let target_reserve = self.undo_action(&shortest).natural_width(ui) + design::XS;
-                let minimum = self.undo_action(&minimum).natural_width(ui)
-                    + design::XS
-                    + if self.history.is_empty() {
-                        design::number_width(ui, "Nothing to undo", &font) + design::S
-                    } else {
-                        0.0
-                    };
-                // A state notice stays whole; Undo then shortens its target, and shows the word
-                // Undo alone only when no target fits. Only the Next notice gives way to Undo's
-                // shortened target. Undo keeps its full accessible name and hover text.
-                let state_notice =
-                    sync_alert.is_some() || self.recording_notice.is_some() || nobody_present;
-                let silence_beside_sync_off = party_sync_off && self.recording_notice.is_some();
-                let beside_state = state_notice && !self.history.is_empty();
-                let minimum = if silence_beside_sync_off || beside_state {
-                    self.undo_action("Undo").natural_width(ui) + design::XS
-                } else {
-                    minimum
-                };
-                // A shortened Undo target comes before the sheet-change notice, which can go
-                // below the roster.
-                let sheet_reserve = if beside_state && !silence_beside_sync_off {
-                    target_reserve
-                } else {
-                    minimum
-                };
-                let notice_width = design::number_width(ui, &notice, &font) + design::S;
-                let sheet_room =
-                    (ui.available_width() - sheet_reserve - notice_width - design::L).max(0.0);
-                let sheet_width = |summary: &str| {
-                    design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
-                        + design::number_width(ui, "Log", &Type::Small.font(ui))
-                        + Density::Read.control()
-                        + design::L
-                        + design::S * 3.0
-                };
-                let sheet = self
-                    .notice_summary
-                    .as_ref()
-                    .filter(|_| self.notice.is_some() && self.recording_notice.is_none())
-                    .and_then(|summary| {
-                        if sheet_width(summary) <= sheet_room {
-                            return Some(summary.clone());
-                        }
-                        let compact = summary
-                            .split(", ")
-                            .next()
-                            .unwrap_or(summary)
-                            .replace(&format!("{} ", super::SHEET_CHANGED), ": ");
-                        (sheet_width(&compact) <= sheet_room).then_some(compact)
-                    });
-                let sheet_width = sheet.as_ref().map_or(0.0, |summary| sheet_width(summary));
-                sheet_notice_in_header = sheet.is_some();
-                let notice_width = (notice_width + if sheet.is_some() { sheet_width } else { 0.0 })
-                    .min((ui.available_width() - minimum - design::L).max(0.0));
-                let slot = ui.available_width() - notice_width - design::L;
-                let mut keyless = false;
-                let shown = if party_sync_off
-                    && self.recording_notice.is_some()
-                    && self.undo_action(&fitted).natural_width(ui) > slot
-                {
-                    "Undo".to_owned()
-                } else {
-                    // The key letter goes before the target does; the Keys list still has U.
-                    let mut shown = "Undo".to_owned();
-                    for drop_key in [false, true] {
-                        let width_of = |words: &str| {
-                            let action = self.undo_action(words);
-                            let action = if drop_key { action.key("") } else { action };
-                            action.natural_width(ui)
-                        };
-                        let words = undo_words(
-                            ui,
-                            &undo_label,
-                            from_sheet,
-                            &self.state.participants,
-                            &Type::Strong.font(ui),
-                            slot - width_of("") - design::XS,
-                        );
-                        if width_of(&words) <= slot && keeps_names(&words) {
-                            shown = words;
-                            keyless = drop_key;
-                            break;
-                        }
-                    }
-                    // No target fits: the step's words without it, `Undo: 8 damage to 3`,
-                    // before `Undo` alone. Hover keeps the whole step.
-                    if shown == "Undo"
-                        && let Some(compact) = undo_compact(&undo_label, &self.state.participants)
-                    {
-                        for drop_key in [false, true] {
-                            let action = self.undo_action(&compact);
-                            let action = if drop_key { action.key("") } else { action };
-                            if action.natural_width(ui) <= slot {
-                                shown = compact;
-                                keyless = drop_key;
-                                break;
-                            }
-                        }
-                    }
-                    shown
-                };
-                ui.allocate_ui_with_layout(
-                    vec2(slot, Density::Read.control()),
-                    Layout::right_to_left(Align::Center),
-                    |ui| {
-                        undo = if self.history.is_empty() {
-                            self.empty_undo(ui)
-                        } else {
-                            let action = self.undo_action(&shown);
-                            let action = if keyless { action.key("") } else { action };
-                            action
-                                .name(&undo_label)
-                                .hint(&undo_label)
-                                .show(ui)
-                                .clicked()
-                        };
-                    },
-                );
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = design::XS;
-                    let font = Type::Small.font(ui);
-                    if let Some(notice) = self.recording_notice.filter(|_| strip.conflict.is_none())
-                    {
-                        design::status(
-                            ui,
-                            Status {
-                                icon: icons::WARN,
-                                word: "Recording silence",
-                                color: c.result.warning,
-                            },
-                        )
-                        .on_hover_text(notice);
-                        if sync_alert.is_some() {
-                            ui.label(Type::Small.rich(ui, "·").color(c.muted));
-                        }
-                    }
-                    if nobody_present && self.recording_notice.is_none() && strip.conflict.is_none()
-                    {
-                        // A warning has its icon, as `2 tied` does.
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} No participants are present", icons::WARN))
-                                .color(c.result.warning),
-                        )
-                        .on_hover_text(NOBODY_PRESENT);
-                    } else if let Some(alert) = &sync_alert {
-                        let link = if strip.conflict.is_some() && self.hide_panel {
-                            "Review"
-                        } else if needs_connection {
-                            "Connect to sync"
-                        } else {
-                            ""
-                        };
-                        let full = &alert.text;
-                        let link_width = design::number_width(ui, link, &font) + design::S;
-                        let fits_link = !link.is_empty()
-                            && design::number_width(ui, &alert.short, &font)
-                                + link_width
-                                + design::XS
-                                <= ui.available_width();
-                        let text_width = ui.available_width()
-                            - if sheet.is_some() { sheet_width } else { 0.0 }
-                            - if fits_link {
-                                link_width + design::XS
-                            } else {
-                                0.0
-                            };
-                        let full_fits = design::number_width(ui, full, &font) <= text_width;
-                        let words = if full_fits { full } else { &alert.short };
-                        ui.allocate_ui_with_layout(
-                            vec2(text_width, Density::Read.control()),
-                            Layout::left_to_right(Align::Center),
-                            |ui| {
-                                if strip.conflict.is_some() {
-                                    let word = words
-                                        .split_once(' ')
-                                        .map_or(words.as_str(), |(_, word)| word);
-                                    if design::status_link(
-                                        ui,
-                                        Status {
-                                            icon: icons::WARN,
-                                            word,
-                                            color: alert.color,
-                                        },
-                                    )
-                                    .on_hover_text(full)
-                                    .clicked()
-                                    {
-                                        review_conflict = true;
-                                    }
-                                } else {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, words).color(alert.color),
-                                        )
-                                        .truncate(),
-                                    )
-                                    .on_hover_text(full);
-                                }
-                            },
-                        );
-                        if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
-                            if link == "Review" {
-                                review_conflict = true;
-                            } else {
-                                self.wants_sign_in = true;
-                            }
-                        }
-                    } else if self.recording_notice.is_none() {
-                        let text = if nobody_present {
-                            NOBODY_PRESENT.to_owned()
-                        } else {
-                            strip
-                                .next
-                                .as_ref()
-                                .map_or(String::new(), |next| format!("Next: {next}"))
-                        };
-                        // Undo is shortened first. Then the next name goes whole, because
-                        // the roster marks NEXT on its row.
-                        let shown = if nobody_present {
-                            design::words_that_fit(ui, &text, &font, ui.available_width())
-                        } else if design::number_width(ui, &text, &font) <= ui.available_width() {
-                            text
-                        } else {
-                            String::new()
-                        };
-                        ui.label(Type::Small.rich(ui, shown).color(if nobody_present {
-                            c.result.warning
-                        } else {
-                            c.turn.next
-                        }));
-                    }
-                    if let Some(summary) = &sheet {
-                        ui.add_space(design::S);
-                        // The compact message's own top alignment is useful in stacked
-                        // notices. Here its text-height box is centred by the control row.
-                        let width =
-                            design::number_width(ui, &format!("{} {summary}", icons::WARN), &font)
-                                + design::S
-                                + design::HAIRLINE_WIDTH
-                                + design::XS;
-                        let response = ui
-                            .allocate_ui_with_layout(
-                                vec2(width, Type::Small.line()),
-                                Layout::left_to_right(Align::Center),
-                                |ui| {
-                                    ui.spacing_mut().item_spacing.x = design::S;
-                                    design::small_message(ui, Tone::Warning, summary)
-                                },
-                            )
-                            .inner;
-                        let detail = self.notice.as_deref().unwrap_or(summary);
-                        design::named(ui, &response, detail);
-                        response.on_hover_text(detail);
-                        let log = log_link(ui);
-                        design::named(ui, &log, "Log");
-                        if log.clicked() {
-                            self.panel = Panel::Log;
-                            self.close_lookup = true;
-                        }
-                        if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
-                            self.notice = None;
-                            self.notice_summary = None;
-                        }
-                    }
-                });
-            },
-        );
-        ui.add_space(2.0);
-        design::rule(ui);
-        if review_conflict {
-            self.review_conflict();
-        }
-        if undo {
-            self.undo();
-            self.follow_with_keyboard();
-        }
-        if next_turn {
-            self.run_command(Command::Next);
-        }
-        sheet_notice_in_header
-    }
-
     /// The sync state a row shows, if this participant has one.
     pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
@@ -1649,7 +1152,7 @@ impl Run {
             .map(crate::combat_sync::CombatSync::state)
     }
 
-    fn party_sync_off(&self) -> bool {
+    pub(super) fn party_sync_off(&self) -> bool {
         let mut linked = self
             .state
             .participants
@@ -2236,276 +1739,13 @@ impl Run {
         );
     }
 
-    /// The entry controls have one fixed home, labelled with the row they act on, so
-    /// no row moves when the selection changes. Typing needs no pointer travel at all.
-    fn dock(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
-        let index = self.selected;
-        let mut command = None;
-        let mut open_conditions = false;
-        let mut open_side = false;
-        let frame = egui::Frame::new()
-            .fill(c.selected)
-            .inner_margin(egui::Margin::symmetric(design::S as i8, design::XS as i8));
-        frame.show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.set_height(DOCK_HEIGHT - design::S);
-            // The background takes the roster's width; the controls keep to one block, no wider
-            // than a list, so the DM never crosses the screen between them.
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let value = self.amount.parse::<i64>().ok();
-                let empty = value.is_none().then_some("Type an amount first.");
-                // The narrowest dock keeps every word by giving up the hint and an icon.
-                let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
-                ui.horizontal(|ui| {
-                    self.amount_field(ui, if narrow { 68.0 } else { 84.0 });
-                    let damage = Action::secondary("Damage").density(Density::Glance);
-                    let damage = if narrow { damage } else { damage.key("Enter") };
-                    if damage
-                        .hint("Apply damage. Temporary HP absorbs it first.")
-                        .blocked(empty)
-                        .show(ui)
-                        .clicked()
-                    {
-                        command = value.map(|n| self.amount_command(n, Command::Damage));
-                    }
-                    ui.add_space(if narrow { design::XS } else { design::M });
-                    if Action::quiet("Heal")
-                        .density(Density::Glance)
-                        .hint("Heal (Shift+Enter)")
-                        .blocked(empty)
-                        .show(ui)
-                        .clicked()
-                    {
-                        command = value.map(|n| self.amount_command(n, Command::Heal));
-                    }
-                    if Action::quiet("Temp HP")
-                        .icon(icons::TEMP_HP)
-                        .density(Density::Glance)
-                        .name("Replace temporary HP")
-                        .hint("Replace temporary HP with this amount")
-                        .blocked(empty)
-                        .show(ui)
-                        .clicked()
-                    {
-                        command = value.map(|n| self.amount_command(n, Command::TempHp));
-                    }
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        self.dice(ui, narrow);
-                    });
-                });
-                if !self.also.is_empty() {
-                    self.target_words(ui);
-                    return;
-                }
-                let p = &self.state.participants[index];
-                let death_saves = self.hide_panel && p.hp == Some(0);
-                let conditions_key = if self.lookup_open { "" } else { "C" };
-                // The selected name, `L`, then its controls: one block after the creature.
-                let (presence, hint) = presence_action(p.present);
-                let gap = ui.spacing().item_spacing.x;
-                let controls = toggle_width(ui, presence, icons::ABSENT)
-                    + gap
-                    + design::S
-                    + toggle_width(ui, "Conc", icons::CONCENTRATING)
-                    + gap
-                    + if death_saves {
-                        Action::quiet("Death saves")
-                            .density(Density::Read)
-                            .natural_width(ui)
-                            + gap
-                    } else {
-                        0.0
-                    }
-                    + Action::quiet("Conditions")
-                        .density(Density::Read)
-                        .key(conditions_key)
-                        .natural_width(ui)
-                    + gap;
-                let height = Density::Read.control();
-                // Left to right: the name, then exactly `L`, then its controls. The controls'
-                // width only limits how long a name may be.
-                ui.horizontal(|ui| {
-                    ui.set_min_height(height);
-                    if narrow && let Some((total, line)) = self.dock_roll() {
-                        ui.label(Type::Strong.rich(ui, format!("= {total}")))
-                            .on_hover_text(line);
-                    }
-                    let room = ui.available_width() - controls - design::L;
-                    let (role, shown) = dock_name_shown(ui, &p.name, room);
-                    let response = ui
-                        .label(role.rich(ui, shown).color(c.text))
-                        .on_hover_text(&p.name);
-                    design::named(ui, &response, &format!("Selected: {}", p.name));
-                    ui.add_space(design::L - gap);
-                    if Action::quiet("Conditions")
-                        .density(Density::Read)
-                        .name("Conditions for this participant")
-                        .key(conditions_key)
-                        .show(ui)
-                        .clicked()
-                    {
-                        open_conditions = true;
-                    }
-                    // Notes hide the panel with the saves, so one word leads there.
-                    if death_saves
-                        && Action::quiet("Death saves")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        open_side = true;
-                    }
-                    if toggle(
-                        ui,
-                        "Conc",
-                        icons::CONCENTRATING,
-                        p.concentration,
-                        "Concentrating",
-                        Density::Read,
-                    )
-                    .on_hover_text("Mark concentration. It records your ruling only.")
-                    .clicked()
-                    {
-                        command = Some(Command::Concentration(index, !p.concentration));
-                    }
-                    ui.add_space(design::S);
-                    if toggle(
-                        ui,
-                        presence,
-                        icons::ABSENT,
-                        !p.present,
-                        presence,
-                        Density::Read,
-                    )
-                    .on_hover_text(hint)
-                    .clicked()
-                    {
-                        command = Some(Command::Presence(index, !p.present));
-                    }
-                });
-            });
-        });
-        if open_conditions {
-            self.open_conditions_tab();
-        }
-        if open_side {
-            self.close_lookup = true;
-        }
-        if let Some(command) = command {
-            let applied = matches!(
-                command,
-                Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
-            );
-            self.run_command(command);
-            if applied {
-                self.amount.clear();
-                self.clear_targets();
-                self.follow_with_keyboard();
-            }
-        }
-    }
-
-    /// In place of the one row's actions: how many take this amount, and how to give half. The
-    /// choice is on each row, so that any number of targets stays in view.
-    fn target_words(&self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.set_min_height(28.0);
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} targets. Press a row’s mark for half, rounded down.",
-                                self.targets().len()
-                            ),
-                        )
-                        .color(colors().muted),
-                )
-                .truncate(),
-            );
-        });
-    }
-
-    /// Beside the amount, so the stat block that asks for the roll stays in view. Laid out
-    /// right to left: the result, then the button, then the field.
-    fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
-        ui.spacing_mut().item_spacing.x = design::XS;
-        if !narrow {
-            ui.allocate_ui_with_layout(
-                vec2(DICE_RESULT_WIDTH, Density::Read.control()),
-                Layout::left_to_right(Align::Center),
-                |ui| {
-                    ui.set_width(DICE_RESULT_WIDTH);
-                    if let Some((total, line)) = self.dock_roll() {
-                        ui.label(
-                            Type::Heading
-                                .rich(ui, format!("= {total}"))
-                                .color(colors().text),
-                        )
-                        .on_hover_text(line);
-                    }
-                },
-            );
-        }
-        let roll = Action::secondary("Roll");
-        let roll = if narrow { roll } else { roll.icon(icons::DICE) };
-        let pressed = roll
-            .name("Roll dice")
-            .density(Density::Read)
-            .hint("Roll this expression. The result goes in the log.")
-            .show(ui)
-            .clicked();
-        let width = if narrow { 60.0 } else { 72.0 };
-        let field = design::text_input(ui, "Dice", &mut self.dice, "1d20", width);
-        if field.gained_focus() {
-            design::focus_and_select(ui, field.id, &self.dice);
-        }
-        if pressed || (field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
-            let expression = if self.dice.trim().is_empty() {
-                "1d20".to_owned()
-            } else {
-                self.dice.trim().to_owned()
-            };
-            match self.roll_dice(&expression) {
-                Err(error) => self.error = Some(error),
-                Ok(()) => {
-                    self.condition.clear();
-                    self.note.clear();
-                }
-            }
-            self.follow_with_keyboard();
-        }
-    }
-
-    /// The dice field's last roll, beside it.
-    fn dock_roll(&self) -> Option<(i64, String)> {
-        let rolled = self.dock_roll.as_ref()?;
-        Some((rolled.total, rolled.line()))
-    }
-
-    fn open_conditions_tab(&mut self) {
+    pub(super) fn open_conditions_tab(&mut self) {
         self.panel = Panel::Conditions;
         self.close_lookup = true;
     }
 
-    /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
-    /// before it go to the note, and they never apply as an amount.
-    fn take_words_for_note(&mut self, ui: &egui::Ui) {
-        let id = design::focus_id(AMOUNT);
-        if let Some(typed) =
-            Self::words_in_number_field(self.notes_open, ui, id, |c| c.is_ascii_digit())
-        {
-            self.for_note = Some(format!("{}{typed}", std::mem::take(&mut self.amount)));
-            self.return_focus = true;
-        }
-    }
-
     /// What was typed in this field beside Notes, when it cannot be a number.
-    fn words_in_number_field(
+    pub(super) fn words_in_number_field(
         notes_open: bool,
         ui: &egui::Ui,
         id: egui::Id,
@@ -2530,26 +1770,6 @@ impl Run {
             }
             words.then_some(typed)
         })
-    }
-
-    fn amount_field(&mut self, ui: &mut egui::Ui, width: f32) {
-        self.take_words_for_note(ui);
-        let response = design::number_field(
-            ui,
-            AMOUNT,
-            &mut self.amount,
-            AMOUNT,
-            width,
-            Density::Glance.control(),
-        );
-        self.amount.retain(|d| d.is_ascii_digit());
-        // Typed, cleared or typed again: the amount is the DM's until a new roll.
-        if response.changed() {
-            self.amount_typed = true;
-        }
-        if std::mem::take(&mut self.focus_amount) {
-            response.request_focus();
-        }
     }
 
     /// The official conditions, one click each. A second click removes one. This sits
@@ -2648,13 +1868,9 @@ impl Run {
                         None => Command::Condition(index, self.condition.clone()),
                     });
                 }
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, "These record your ruling. No number changes by itself. Other effects stay local and do not sync.")
-                            .color(colors().muted),
-                    )
-                    .wrap(),
+                design::help(
+                    ui,
+                    "These record your ruling. No number changes by itself. Other effects stay local and do not sync.",
                 );
             });
         if let Some(command) = command {
@@ -2662,7 +1878,7 @@ impl Run {
         }
     }
 
-    fn sync_needs_sign_in(&self) -> bool {
+    pub(super) fn sync_needs_sign_in(&self) -> bool {
         !self.connected && !self.simulate_connection && !self.linked_participants().is_empty()
     }
 
@@ -3277,7 +2493,7 @@ impl Run {
     /// Add to fight opens Arrivals. It is beside the fight's own controls, not among the
     /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
     /// the controls in its row. Narrow layouts keep the icon and the word Add.
-    fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
+    pub(super) fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
         let action = if words {
             Action::secondary("Add to fight").icon(icons::ADD)
         } else {
@@ -3436,14 +2652,7 @@ impl Run {
                     .as_ref()
                     .is_some_and(|groups| !groups.is_empty())
                 {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(ui, "Drag a group name to the list, or use Add.")
-                                .color(colors().muted),
-                        )
-                        .wrap(),
-                    );
+                    design::help(ui, "Drag a group name to the list, or use Add.");
                 }
                 // Measured once: the search field and the group list share the block.
                 let arrival = self.arrival_block(ui);
@@ -3739,8 +2948,10 @@ impl Run {
                     design::group_heading(ui, heading, list.len());
                 }
                 if heading == "For one encounter" && !list.is_empty() {
-                    ui.add(egui::Label::new(Type::Small.rich(ui,
-                        "This run was saved before groups had an encounter, so all groups show.").color(c.muted)).wrap());
+                    design::help(
+                        ui,
+                        "This run was saved before groups had an encounter, so all groups show.",
+                    );
                 }
                 for group in list {
                     ui.push_id(group.id, |ui| {
@@ -4512,20 +3723,14 @@ impl Run {
                     optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
                 });
                 if sheet_decides {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small.rich(ui, MAX_FROM_SHEET).color(colors().muted),
-                        )
-                        .wrap(),
-                    );
+                    design::help(ui, MAX_FROM_SHEET);
                 }
                 if hp != p.hp || max != p.max_hp {
                     command = Some(Command::Health(index, hp, max));
                 }
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui,
-                        "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn."
-                    ).color(colors().muted)).wrap(),
+                design::help(
+                    ui,
+                    "You resolve conditions, Concentration, death saves and recovery. Zero HP does not remove a turn.",
                 );
                 if self.state.phase == Phase::Setup {
                     let mut bonus = p.initiative_bonus;
@@ -6435,7 +5640,7 @@ fn move_words(
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
 /// `from_sheet`: a sheet made this step, so its source can go before its target.
-fn undo_words(
+pub(super) fn undo_words(
     ui: &egui::Ui,
     label: &str,
     from_sheet: bool,
@@ -6505,7 +5710,7 @@ fn undo_words(
 /// A step's words without its target, for an Undo too narrow for any shortened target:
 /// `Undo: 8 damage to 3` for a step on several rows, `Undo: exhaustion 0 → 3` for one row.
 /// `None` when the words name no row to leave out.
-fn undo_compact(label: &str, participants: &[Participant]) -> Option<String> {
+pub(super) fn undo_compact(label: &str, participants: &[Participant]) -> Option<String> {
     let action = label.strip_prefix("Undo: ")?;
     let several = action.split(super::HALF_FOR).next().unwrap_or(action);
     if let Some(counted) = several.strip_suffix(super::SEVERAL_TARGETS) {
@@ -6525,7 +5730,7 @@ fn undo_compact(label: &str, participants: &[Participant]) -> Option<String> {
 
 /// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
 /// then the target cannot fit, and Undo shows its word alone.
-fn keeps_names(words: &str) -> bool {
+pub(super) fn keeps_names(words: &str) -> bool {
     let mut parts = words.split("… ");
     let first = parts.next().unwrap_or_default();
     words == first || !(first.is_empty() || first.ends_with(' '))
@@ -6698,7 +5903,7 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
 /// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
 /// does, and gives up whole words by `dock_name`. `Small` only when that shows the name whole,
 /// so a smaller name never also loses letters.
-fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
+pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
     if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
         (Type::Heading, name.to_owned())
     } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
@@ -6744,7 +5949,7 @@ pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f
     }
 }
 
-fn presence_action(present: bool) -> (&'static str, &'static str) {
+pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
     if present {
         (
             "Absent",
@@ -6783,7 +5988,7 @@ impl TurnMark {
 /// The notice's `Log` link. The underline covers only the word, and the word starts where the
 /// item gap puts it. The 24 px target is the link's own minimum size: a word narrower than that
 /// gets the extra width evenly on both sides, inside the gaps, so nothing beside it moves.
-fn log_link(ui: &mut egui::Ui) -> egui::Response {
+pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
     const WORD: &str = "Log";
     let c = colors();
     let galley = ui
@@ -6934,7 +6139,7 @@ struct RowLayout {
     hp_right: f32,
 }
 
-fn header_height(scale: RunScale) -> f32 {
+pub(super) fn header_height(scale: RunScale) -> f32 {
     (scale.hp * 1.6).max(36.0)
 }
 
@@ -8363,77 +7568,6 @@ mod tests {
     }
 
     #[test]
-    fn iter8_b_sheet_notice_centres_with_next_and_log_and_has_a_gap() {
-        use egui_kittest::kittest::Queryable;
-        for width in [1200.0, 1920.0] {
-            let mut run = super::super::tests::run();
-            for (index, total) in [20, 15, 10].into_iter().enumerate() {
-                run.apply(Command::Initiative(index, Some(total))).unwrap();
-            }
-            run.apply(Command::Begin).unwrap();
-            run.notice = Some("Guard 1’s sheet changed: HP 17 → 15. Undo stops here.".into());
-            run.notice_summary = Some("Guard 1: HP 17 → 15".into());
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(width, 800.0))
-                .build(move |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        run.live_header(ui, design::RUN_REGULAR);
-                    });
-                });
-            design::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let log = harness.get_by_label("Log").rect();
-            let text = |prefix: &str| {
-                harness
-                    .output()
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) if text.galley.text().starts_with(prefix) => {
-                            Some(text)
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or_else(|| panic!("Required text: {prefix}"))
-            };
-            let next = text("Next:");
-            let notice = text("Guard 1: HP");
-            let next_rect = Rect::from_min_size(next.pos, next.galley.size());
-            let notice_rect = Rect::from_min_size(notice.pos, notice.galley.size());
-            let icon = text(icons::WARN);
-            let icon_rect = Rect::from_min_size(icon.pos, icon.galley.size());
-            assert!(
-                (notice_rect.left() - icon_rect.right() - design::XS).abs() <= 1.0,
-                "iter9-B-FT7-icon-gap: {icon_rect:?}, {notice_rect:?}"
-            );
-            let bar = harness
-                .output()
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Rect(rect) if rect.fill == colors().result.warning => {
-                        Some(rect.rect)
-                    }
-                    _ => None,
-                })
-                .expect("Required warning bar");
-            assert!(
-                (notice_rect.center().y - next_rect.center().y).abs() <= 1.0
-                    && (notice_rect.center().y - log.center().y).abs() <= 1.0,
-                "iter8-B-AT2-centre: {notice_rect:?}, {next_rect:?}, {log:?}"
-            );
-            assert!(
-                bar.left() - next_rect.right() >= design::S,
-                "iter8-B-AT2-gap: {bar:?}, {next_rect:?}"
-            );
-            assert!(
-                (bar.center().y - notice_rect.center().y).abs() <= 1.0,
-                "iter8-B-AT2-bar: {bar:?}, {notice_rect:?}"
-            );
-        }
-    }
-
-    #[test]
     fn iter7_b_setup_counts_partly_hidden_rows_from_scroll_content_top() {
         use egui_kittest::kittest::Queryable;
         let mut checked = 0;
@@ -8562,89 +7696,6 @@ mod tests {
         assert!(
             names.iter().all(|text| text.galley.rows.len() == 1),
             "iter7-B-FD1: party names fit one line"
-        );
-    }
-
-    #[test]
-    fn iter6_b_turn_heading_keeps_each_of_five_copy_numbers() {
-        for number in 1..=5 {
-            for width in [442.0, 760.0] {
-                let mut run = super::super::tests::run();
-                let base = run.state.participants[0].clone();
-                run.state.participants = (1..=5)
-                    .map(|n| {
-                        let mut p = base.clone();
-                        p.name = format!("Cinder Wolf {n}");
-                        p.key = format!("wolf-{n}");
-                        p.initiative = Some(20 - n);
-                        p
-                    })
-                    .collect();
-                run.state.order = (0..5).collect();
-                run.state.cursor = number - 1;
-                run.state.phase = Phase::Running;
-                run.state.round = 1;
-                let mut harness = egui_kittest::Harness::builder()
-                    .with_size(vec2(width, 640.0))
-                    .build(move |ctx| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            run.live_header(ui, design::RUN_REGULAR);
-                        });
-                    });
-                design::theme::install(&harness.ctx);
-                harness.run_steps(2);
-                let texts: Vec<_> = harness
-                    .output()
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) => Some(text),
-                        _ => None,
-                    })
-                    .collect();
-                let heading = texts
-                    .iter()
-                    .find(|text| {
-                        text.galley
-                            .job
-                            .sections
-                            .iter()
-                            .any(|section| section.format.color == colors().turn.current)
-                    })
-                    .expect("turn heading");
-                assert!(
-                    heading.galley.text().contains(&number.to_string()),
-                    "iter6-B-FT1: {}",
-                    heading.galley.text()
-                );
-                assert!(
-                    !heading.galley.elided,
-                    "iter6-B-FT1: the fitted heading stays whole"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn iter6_b_narrow_header_keeps_add_word() {
-        let mut run = super::super::tests::run();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(vec2(442.0, 640.0))
-            .build(move |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    run.live_header(ui, design::RUN_REGULAR);
-                });
-            });
-        design::theme::install(&harness.ctx);
-        harness.run_steps(2);
-        assert!(
-            harness
-                .output()
-                .shapes
-                .iter()
-                .any(|shape| matches!(&shape.shape,
-            egui::Shape::Text(text) if text.galley.text().contains("Add") && !text.galley.elided)),
-            "iter6-B-AT2: Add keeps a whole word"
         );
     }
 
@@ -9768,40 +8819,6 @@ mod tests {
         harness.run_steps(2);
         assert!(closed.get());
         assert!(!run.borrow().closing);
-    }
-
-    #[test]
-    fn iter_2_b_sheet_notice_uses_header_room_and_keeps_undo() {
-        use egui_kittest::kittest::Queryable;
-        for (width, in_header) in [(1920.0, true), (442.0, false)] {
-            let mut run = super::super::tests::run();
-            for (index, total) in [20, 15, 10].into_iter().enumerate() {
-                run.apply(Command::Initiative(index, Some(total))).unwrap();
-            }
-            run.apply(Command::Begin).unwrap();
-            run.notice =
-                Some("Guard 1’s sheet changed: HP 17 → 15. Undo for Guard 1 stops here.".into());
-            run.notice_summary = Some("Guard 1’s sheet changed: HP 17 → 15".into());
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(vec2(width, 640.0))
-                .build(move |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        run.live_header(ui, design::RUN_REGULAR);
-                    });
-                });
-            design::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            assert_eq!(
-                harness
-                    .query_all_by_label_contains("Guard 1’s sheet changed: HP 17 → 15")
-                    .count()
-                    > 0,
-                in_header,
-                "{width}: {:?}",
-                harness.root()
-            );
-            assert!(harness.query_by_label("Undo: begin combat").is_some());
-        }
     }
 
     #[test]
