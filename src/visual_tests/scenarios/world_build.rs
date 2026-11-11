@@ -4910,8 +4910,17 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             for name in names {
                 d.expect(name);
             }
-            let [action, first, second_action, second, field] =
-                names.map(|name| d.place_of(name).unwrap());
+            // The stat block's label is its own node; a missing one fails this check.
+            let [
+                Some(action),
+                Some(first),
+                Some(second_action),
+                Some(second),
+                Some(field),
+            ] = names.map(|name| d.place_of(name))
+            else {
+                return false;
+            };
             // Neighbour: each consequence stays close below its own action.
             first.top() - action.bottom() < design::S
                 && second_action.top() - first.bottom() >= design::L - 0.5
