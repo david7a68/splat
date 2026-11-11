@@ -1,0 +1,299 @@
+{
+  "about": "G6 reads this in every gate. `devenv shell -- audit-freeze counts` writes it; a feature adds its new tasks with `devenv shell -- audit-freeze add`, which leaves every row here as it is.",
+  "tasks": [
+    {
+      "phase": "before",
+      "task": "Start tonight's session note",
+      "transitions": 1,
+      "interactions": 4,
+      "path": "Encounters > Session"
+    },
+    {
+      "phase": "before",
+      "task": "Recall what happened last session, and where the story stands",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "before",
+      "task": "Compare the party's passive Perception, to plan an ambush",
+      "transitions": 1,
+      "interactions": 1,
+      "path": "Session > Party"
+    },
+    {
+      "phase": "before",
+      "task": "Build tonight's encounter",
+      "transitions": 2,
+      "interactions": 16,
+      "path": "Party > Session > Encounters"
+    },
+    {
+      "phase": "before",
+      "task": "Make the boss your own: copy it, change it, and swap it in",
+      "transitions": 0,
+      "interactions": 5,
+      "path": "Encounters"
+    },
+    {
+      "phase": "before",
+      "task": "Write the read-aloud text and tactics for the encounter",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Encounters"
+    },
+    {
+      "phase": "before",
+      "task": "Back to the session plan, with tonight's encounter in it",
+      "transitions": 1,
+      "interactions": 4,
+      "path": "Encounters > Session"
+    },
+    {
+      "phase": "during",
+      "task": "Start recording",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Read last session's recap aloud",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "A player asks who Captain Varra is",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Note what the party decides",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "The party travels for half a day: record it",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Ambush: read the read-aloud text and start the fight",
+      "transitions": 1,
+      "interactions": 12,
+      "path": "Session > Run"
+    },
+    {
+      "phase": "during",
+      "task": "Combat: round 1",
+      "transitions": 0,
+      "interactions": 32,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "A player casts Fireball: read the spell",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Fireball hits three enemies: apply half to one, full to two",
+      "transitions": 0,
+      "interactions": 6,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "The table rules that the Fireball missed: undo it",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "A wolf frightens Oren: mark the condition",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "What does Frightened do?",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Iselle starts concentrating: mark it",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Combat: round 2",
+      "transitions": 0,
+      "interactions": 32,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Check Iselle's spell save DC and spell list",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Roll a save for a monster",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "On a player's turn, read a monster's reaction",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "A player asks what the miller said last session",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Note a moment beside the fight",
+      "transitions": 0,
+      "interactions": 3,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Combat: round 3",
+      "transitions": 0,
+      "interactions": 32,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "A wolf is dead: take it out of the order",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "End the fight",
+      "transitions": 1,
+      "interactions": 4,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "during",
+      "task": "Record a short rest",
+      "transitions": 0,
+      "interactions": 2,
+      "path": "Session"
+    },
+    {
+      "phase": "during",
+      "task": "Next fight: start it, with the party as it stands",
+      "transitions": 1,
+      "interactions": 1,
+      "path": "Session > Run"
+    },
+    {
+      "phase": "during",
+      "task": "Next fight: roll and begin",
+      "transitions": 0,
+      "interactions": 11,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "Next fight: end it after a short exchange",
+      "transitions": 1,
+      "interactions": 3,
+      "path": "Run > Session"
+    },
+    {
+      "phase": "during",
+      "task": "The players start a fight you did not plan, and then talk their way out",
+      "transitions": 3,
+      "interactions": 8,
+      "path": "Session > Encounters > Run > Session"
+    },
+    {
+      "phase": "during",
+      "task": "Stop recording",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Review how the fight went: log and final HP",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Say where the fight happened",
+      "transitions": 2,
+      "interactions": 4,
+      "path": "Session > Timeline > Session"
+    },
+    {
+      "phase": "after",
+      "task": "Process the recording and read the summary",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Add a suggested event to the timeline",
+      "transitions": 0,
+      "interactions": 1,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Write the wrap-up in the note",
+      "transitions": 0,
+      "interactions": 4,
+      "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Link the fight in the note",
+      "transitions": 2,
+      "interactions": 6,
+      "path": "Session > Timeline > Session"
+    },
+    {
+      "phase": "after",
+      "task": "Check the party's HP for next time",
+      "transitions": 1,
+      "interactions": 1,
+      "path": "Session > Party"
+    }
+  ]
+}

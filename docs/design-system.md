@@ -738,6 +738,7 @@ the path on this file line only; search results keep paths to distinguish names.
 puts the path right after the name, so the part that differs is cut last. Plain notes use
 one-line rows. A plain note's `Give this note a type` section says what a type gives the DM, and does not repeat the heading:
 `A type adds the fields for that kind of note, such as an NPC's place and stat block. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
+under a field or section (`design::help`) wraps at the reader measure. Help
 text states the purpose in the DM's words; file formats and field names go to Technical details. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
@@ -776,7 +777,9 @@ reader with no file line.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. In a narrow pane (Lookup beside World), each label stands
+gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
+`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
+are in `Body` in the warning tone, as large as a set link; only ` · Not found` is `Small`. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
 `L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
 `Not found` has its own line directly below it. The value column measures each value as it is drawn, including a
@@ -791,7 +794,10 @@ loop says `Place loop` on its list row, the header count and its menu include it
 problem says `2 broken links` only when every target is missing; when one of them waits for a choice or is in
 a loop, it says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
-the form `Line N: <Field> "<text on that line>" was not read. <How to write it>.` A line warning's sentence
+the form `Line N: <Field> "<text on that line>" was not read. <How to write it>.` In World and Lookup, a value
+longer than 40 characters is quoted by its first and last 12 characters with `…` between
+(`"{id: 32f6c87…the lost]]'}"`); the line number says where to look, and the warning's hover and accessible
+description keep the whole sentence. A line warning's sentence
 starts with `Line N:` and is made with the warning; no screen adds the line, so a run saved by an older Splat shows
 its warnings in the words it saved. When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
@@ -836,7 +842,8 @@ keeps the state at the left, then quiet `Cancel` while the form has no changes o
 has changes, and Save changes at that right edge. Save changes is primary unless a live run owns Next turn;
 then it is secondary. Cancel closes the form. Discard closes the form and offers Undo discard.
 A draft whose note is gone (deleted, or another note took its place outside Splat) warns below the open note's file line, with
-`Copy text` and, an `L` gap after it, `Discard draft`. Discard draft lets the words go with `<name> draft discarded.`
+`Copy text` (quiet, with its icon) and, an `L` gap after it, `Discard draft` with the secondary border, as every
+message action without an icon has. Discard draft lets the words go with `<name> draft discarded.`
 and `Undo discard` in the same place, until the next Edit, the next Discard or the Undo.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
 One save writes every change with one Undo. If the note on disk already reads as the save would write it
@@ -884,8 +891,12 @@ message above it names the cause), as Campaign's and Library's do: a path outsid
 or an identity the campaign does not allow. These checks read no file. A readable unchanged draft says `No changes`;
 otherwise it says `Unsaved`. An Overwrite that these checks refuse writes nothing and shows only the cause: `Not
 saved.` is only for a failure on the disk. A Save that then fails on the disk
-(read only, missing, a write error) says `Not saved` with Save's reason above the editor, and Save is no longer
-primary. That cause belongs to the draft: an edit, Discard, Reload (also when the file holds the draft's words), the
+(read only, missing, a write error) says `Not saved` with Save's reason, and Save is no longer
+primary. Nothing above the editor comes and goes: the repair's reason (Save's refusal or the disk's failure) and its
+results (`<file> draft discarded.` with Undo discard, the reload result with Undo reload) share the one message space
+below the save row (`design::message_space`, two text lines high, scrolling inside), so the editor never moves. A
+result with a live Undo comes first, so its Undo is on the space's first line, and the reason follows it in the same
+part; with no such result, the reason leads. An edit ends both Undo results, and then the reason leads. That cause belongs to the draft: an edit, Discard, Reload (also when the file holds the draft's words), the
 file followed from disk, or a successful Save ends it. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
@@ -893,12 +904,14 @@ permission) cannot open in the source editor. Its pane keeps the title and a fil
 editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
 longer be read, its error and the note's file line also offer no editor link until the file reads again. Its pane leads with an error that
 names the file only as `this note`, because the title and file line name it (`Splat cannot read this note as text.`),
-then gives the recovery in plain words at the reader measure, with Try again and Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
+then gives the recovery in plain words at the reader measure, with `Try again` and, `L` after it, `Cancel`, each with
+the secondary border, the first border at the message text. Technical details below holds the system's words. Its row's cause is short
 (`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
 still broken opens its repair, and a file moved or deleted outside Splat ends the pane. Splat never writes that file.
 Every other World message about a file that the system will not read or write, away from that file's pane, names the
 file and the recovery, never the system's words. A rolled table selects the matching row, marks it with dice and
-states the result below in UI sans. Typed rolls use well fill, a centred placeholder and dice as the column
+states the result below in UI sans, on one line reserved under the Roll row from the start, so a roll moves nothing
+below the table. A longer result ends in `…`; its hover keeps it whole. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. A marker's optional `per` word (`day`, `watch`, or hours such as `4h`) says how often a journey's
 encounter checks roll the table; a word that Splat cannot read adds the warning `Interval not read; using one check
 each day.` under that table, which still rolls. `Cannot roll` stays the words for a fault in the dice or the rows.

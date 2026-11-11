@@ -2654,10 +2654,9 @@ pub(crate) fn generator_card(
     if sources.is_empty() && problems.is_empty() {
         match help {
             NamesHelp::Marker => {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, OWN_NAMES_HELP).color(colors().muted))
-                        .wrap(),
-                );
+                // Help keeps the reader measure, so it wraps above Copy the marker (round 25
+                // AE1, FE2, AD2).
+                design::help(ui, OWN_NAMES_HELP);
                 // The result lasts until the card shows another NPC. It says what to change
                 // in the pasted line, in the one message form.
                 let id = ui.id().with("names_marker_copied");

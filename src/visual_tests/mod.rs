@@ -34,6 +34,7 @@ pub(crate) mod ergonomics;
 pub(crate) mod fixture;
 #[cfg(target_os = "linux")]
 mod isolation;
+mod plain_evening;
 mod render;
 mod repeated_captures;
 mod scenarios;
@@ -61,7 +62,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 82] = [
+const SCENARIOS: [(&str, Seed, Script); 84] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -380,6 +381,10 @@ const SCENARIOS: [(&str, Seed, Script); 82] = [
         Seed::Campaign,
         scenarios::world_build::campaign_copy_registered,
     ),
+    // G6: the frozen evening of `artifacts/dm-audit/`.
+    ("dm-audit", Seed::Campaign, dm_audit::run),
+    // G7: the plain campaign against its reference.
+    ("plain-evening", Seed::Plain, plain_evening::run),
     ("run-continue", Seed::Loot, scenarios::run_continue::run),
 ];
 
@@ -403,6 +408,18 @@ enum Enforce {
     Baseline,
     Strict,
     Report,
+}
+
+/// The first line of a panic's message.
+fn panic_line(panic: &(dyn std::any::Any + Send)) -> &str {
+    panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or("panicked")
+        .lines()
+        .next()
+        .unwrap_or("panicked")
 }
 
 fn enforcement() -> Enforce {
@@ -980,17 +997,7 @@ fn visual_suite() {
                 look_review.extend(outcome.look_review);
                 videos.extend(outcome.video);
             }
-            Err(panic) => failed.push(format!(
-                "{name}: {}",
-                panic
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| panic.downcast_ref::<&str>().copied())
-                    .unwrap_or("panicked")
-                    .lines()
-                    .next()
-                    .unwrap_or("panicked")
-            )),
+            Err(panic) => failed.push(format!("{name}: {}", panic_line(panic.as_ref()))),
         }
     }
     let names: Vec<&str> = scenarios.iter().map(|(name, ..)| *name).collect();

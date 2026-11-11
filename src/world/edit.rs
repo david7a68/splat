@@ -667,10 +667,12 @@ impl Reader {
                             // The gap starts at Copy text's target, which `line_start` draws `S`
                             // left of its place in the row.
                             ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
-                            let discard = Action::quiet("Discard draft")
+                            // A message action without an icon has the secondary border.
+                            if Action::secondary("Discard draft")
                                 .density(Density::Read)
-                                .name(&discard_name);
-                            if super::starts_line(ui, discard, false).show(ui).clicked()
+                                .name(&discard_name)
+                                .show(ui)
+                                .clicked()
                                 && let Some(draft) = self.edits.remove(&id)
                             {
                                 self.discarded = Some((id, draft));
@@ -751,6 +753,8 @@ impl Reader {
             }
         }
         ui.add_space(design::M);
+        // The frame the DM chooses Reload: its result, below the save row, scrolls into view.
+        let had_conflict = draft.disk.is_some();
         let overwrite = match draft.conflict(ui, index) {
             Conflict::Waiting => {
                 self.edits.insert(id, draft);
@@ -759,12 +763,6 @@ impl Reader {
             Conflict::Overwrite => true,
             Conflict::None => false,
         };
-        if draft.reloaded.is_some()
-            && design::reloaded_draft(ui)
-            && let Some((_, previous)) = draft.reloaded.take()
-        {
-            draft.now = previous;
-        }
         let mut focused = false;
         // The Read order: Stat block, In, Part of, then Status.
         let npc = super::fights(&item.entry);
@@ -894,7 +892,12 @@ impl Reader {
             // The warning keeps the form's right edge.
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                super::unread_groups_message(ui, campaign, &draft.path, reason);
+                let whole = draft
+                    .start
+                    .groups_unread
+                    .as_ref()
+                    .map_or(reason.as_str(), |unread| unread.whole.as_str());
+                super::unread_groups_message(ui, campaign, &draft.path, reason, whole);
             });
         }
         if self
@@ -1049,6 +1052,22 @@ impl Reader {
                 design::blocked_reason(ui, Some(switch));
             } else {
                 ui.add_space(Type::Small.line() + ui.spacing().item_spacing.y);
+            }
+        }
+        // The reload result sits below the save row, where nothing the DM works on follows it:
+        // the first edit ends it without moving a field (round 25 results family).
+        if draft.reloaded.is_some() {
+            let just_reloaded = had_conflict && draft.disk.is_none() && !overwrite;
+            let shown = ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                if design::reloaded_draft(ui)
+                    && let Some((_, previous)) = draft.reloaded.take()
+                {
+                    draft.now = previous;
+                }
+            });
+            if just_reloaded {
+                ui.scroll_to_rect(shown.response.rect, None);
             }
         }
         if cancel {
@@ -1250,7 +1269,10 @@ mod tests {
         assert!(super::super::status_unread(&entry));
         let (notices, _) = super::super::GroupFault::flags(&entry, Some(&unread));
         assert_eq!(
-            notices,
+            notices
+                .iter()
+                .map(|(shown, _)| shown.as_str())
+                .collect::<Vec<_>>(),
             ["Other words"],
             "only Status; Part of is the unread list"
         );
@@ -1336,13 +1358,22 @@ mod tests {
     }
 
     /// The Part of reason for `unread_group_note`: the object on line 9, and how to write a group.
+    /// The object is longer than 40 characters, so the reason quotes its first and last 12
+    /// characters around `…` (round 25 FD4).
     fn unread_reason(file: &str) -> String {
-        let value = file
-            .lines()
-            .find_map(|line| line.strip_prefix("- {id:"))
-            .unwrap();
+        let value: Vec<char> = format!(
+            "{{id:{}",
+            file.lines()
+                .find_map(|line| line.strip_prefix("- {id:"))
+                .unwrap()
+        )
+        .chars()
+        .collect();
+        assert!(value.len() > 40, "the fixture's value is long");
+        let start: String = value[..12].iter().collect();
+        let end: String = value[value.len() - 12..].iter().collect();
         format!(
-            "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
+            "Line 9: Part of “{start}…{end}” was not read. Write each group as a link, such as [[Arena Guild]]."
         )
     }
 
@@ -1502,6 +1533,45 @@ mod tests {
                 .unwrap()
                 .line,
             9
+        );
+        // Round 25 review: the reader draws the unread warning from a borrow of the cached
+        // fault. The first render copies the warning's words once, when it caches the fault; an
+        // unchanged second render copies none.
+        let (_dir, campaign, index, id, _) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut reader = Reader::default();
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let render = |reader: &mut Reader| {
+            let mut words = String::new();
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    reader.read(ui, item, &index, Some(&campaign));
+                });
+            });
+            for clipped in &output.shapes {
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    words.push_str(&text.galley.job.text);
+                }
+            }
+            words
+        };
+        let before = super::super::word_copies();
+        let first = render(&mut reader);
+        let cached = super::super::word_copies();
+        assert!(
+            cached > before && first.contains("was not read"),
+            "the first render caches the fault and shows its warning\n{first}"
+        );
+        let second = render(&mut reader);
+        assert!(
+            second.contains("was not read"),
+            "the warning still shows\n{second}"
+        );
+        assert_eq!(
+            super::super::word_copies(),
+            cached,
+            "review-25-2: an unchanged render copies no warning words"
         );
     }
 
