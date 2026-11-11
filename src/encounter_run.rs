@@ -5322,12 +5322,11 @@ mod tests {
             (
                 "a step without a participant of the first roster",
                 |saved| {
-                    let steps = saved["undo"]["steps"].as_array_mut().unwrap();
-                    let damage = steps.last_mut().unwrap();
-                    assert_eq!(damage["count"], 3);
-                    damage["count"] = 2.into();
-                    damage["order"] = serde_json::json!([0, 1]);
-                    damage["cursor"] = 0.into();
+                    // The oldest step, so that no older step stands on the missing row.
+                    let oldest = &mut saved["undo"]["steps"][0];
+                    assert_eq!(oldest["count"], 3);
+                    oldest["count"] = 2.into();
+                    oldest["order"] = serde_json::json!([0, 1]);
                 },
             ),
             // A step changes a row, and never gives its place to another participant.
