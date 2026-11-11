@@ -2865,7 +2865,7 @@ impl Run {
         let block = all
             .iter()
             .map(|group| {
-                let status = self.group_status(group);
+                let status = self.group_status(group, self.group_joined(group));
                 let totals = Self::group_totals_text(group);
                 let heading = design::number_width(
                     ui,
@@ -2992,26 +2992,32 @@ impl Run {
                 .any(|p| p.npc && p.side == side && p.initiative.is_some())
     }
 
-    /// What a group's row says about it before its members: when it joined, whose encounter it
-    /// is for, and `Changed`.
-    fn group_status(&self, group: &super::RunGroup) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
+    /// The newest round this group joined in (0 for setup), from one scan of the participants
+    /// and no list. Its row's status and its layout both take it from here.
+    fn group_joined(&self, group: &super::RunGroup) -> Option<u64> {
         #[cfg(test)]
         GROUP_SCANS.with(|count| count.set(count.get() + 1));
-        let added = self
-            .state
+        self.state
             .participants
             .iter()
             .filter_map(|p| p.added_from.as_ref())
             .filter(|from| from.group_id == Some(group.id))
             .map(|from| from.round)
-            .max();
-        let mut status = if let Some(round) = added {
+            .max()
+    }
+
+    /// What a group's row says about it before its members: when it joined (`joined`, from
+    /// `group_joined`), whose encounter it is for, and `Changed`.
+    fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
+        let changed = group
+            .members
+            .iter()
+            .any(|member| member.overrides.changes_creature());
+        let mut status = if let Some(round) = joined {
             if round == 0 {
-                "Added before combat".to_owned()
+                // Short enough for the member slot at 960, in the run's own phase word, so a
+                // first join in setup needs no line of its own (review 2).
+                "Added in setup".to_owned()
             } else {
                 format!("Added in round {round}")
             }
@@ -3050,7 +3056,8 @@ impl Run {
             .iter()
             .any(|member| member.overrides.changes_creature());
         let change_hint = if changed { " Changed." } else { "" };
-        let status = self.group_status(group);
+        let joined_round = self.group_joined(group);
+        let status = self.group_status(group, joined_round);
         let grip = ui.allocate_response(
             vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
@@ -3192,26 +3199,12 @@ impl Run {
         };
         // A status that cannot fit the member slot whole takes a full-width line above the
         // members and controls, where it wraps at its spaces. FB1: a group that has joined
-        // decides by its widest join status too (`Added before combat`), so a second join that
-        // changes the words never changes the row's shape.
-        // The rounds this group joined in, from the run itself.
-        #[cfg(test)]
-        GROUP_SCANS.with(|count| count.set(count.get() + 1));
-        let rounds: Vec<u64> = self
-            .state
-            .participants
-            .iter()
-            .filter_map(|p| p.added_from.as_ref())
-            .filter(|from| from.group_id == Some(group.id))
-            .map(|from| from.round)
-            .collect();
+        // decides by its widest join status too, so a second join that changes the words never
+        // changes the row's shape.
+        // A group that joined can show `Added in round N` again; its row keeps that room.
         let widest = format!(
-            "{}{}",
-            if rounds.contains(&0) {
-                "Added before combat".to_owned()
-            } else {
-                format!("Added in round {}", self.state.round.max(10))
-            },
+            "Added in round {}{}",
+            self.state.round.max(10),
             if changed {
                 format!(" · {} Changed", icons::CHANGED)
             } else {
@@ -3228,9 +3221,9 @@ impl Run {
                 )
                 <= grip.rect.width();
         // Only a group that has joined can change its join words, so only its row keeps the
-        // room of the widest words it can show again: `Added before combat` once it joined
-        // then, else `Added in round NN`. A group that never joined has no blank line.
-        let joined = !rounds.is_empty();
+        // room of the widest words it can show again, `Added in round NN`. A group that never
+        // joined has no blank line, and every first join fits the slot at 960.
+        let joined = joined_round.is_some();
         let status_above = arrival_summary(ui, status_shown, &members, width).is_none()
             || (joined
                 && !widest_in_heading
@@ -8240,7 +8233,7 @@ mod tests {
                     for status in [
                         "Changed",
                         "Added in round 2 · Changed",
-                        "Added before combat",
+                        "Added in setup",
                     ] {
                         // iter-23 SA1: a status part that cannot fit the slot whole goes to a
                         // line of its own above the row; it never breaks inside a word here.

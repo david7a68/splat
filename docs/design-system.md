@@ -1306,7 +1306,7 @@ picker says Side and uses roster words. List encounter groups, tonight's plan gr
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
-say Added before combat. A status that cannot fit the member slot whole takes a full-width line above the members
+say Added in setup. A status that cannot fit the member slot whole takes a full-width line above the members
 and controls, and wraps there at its spaces, never inside a word. Names include count when adding more than one creature. No confirmation is needed;
 Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
 group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
