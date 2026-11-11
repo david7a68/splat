@@ -4914,8 +4914,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         // without an icon or border. Its painted words, not its border, start at the message
         // words, and its padding hangs `S` into the message's icon column.
         let (action, words, message, frame, icon, clear) = d.at_size(size, |d| {
-            d.expect("Use the copy's entries");
-            let action = d.place_of("Use the copy's entries");
+            d.expect(crate::library::USE_COPY);
+            let action = d.place_of(crate::library::USE_COPY);
             let words = action.and_then(|action| super::words_left_in(d, action));
             let message = d
                 .nodes()
@@ -4925,7 +4925,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 })
                 .map(|n| n.rect);
             let frame = d
-                .control_frame("Use the copy's entries")
+                .control_frame(crate::library::USE_COPY)
                 .map(|frame| frame.stroke.color);
             let icon = action.is_some_and(|action| {
                 d.painted_in(action)
@@ -4933,8 +4933,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                     .any(|c| ('\u{E000}'..='\u{F8FF}').contains(&c))
             });
             let clear = action.map_or_else(
-                || Err("Use the copy's entries is not in view".to_owned()),
-                |action| super::press_area_clear(d, action, "Use the copy's entries", None),
+                || Err("Use the copy in encounters is not in view".to_owned()),
+                |action| super::press_area_clear(d, action, crate::library::USE_COPY, None),
             );
             (action, words, message, frame, icon, clear)
         });
@@ -4948,11 +4948,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 && !icon
                 && clear.is_ok(),
             format!(
-                "At {size:?}, Use the copy's entries {action:?} starts its words at {words:?}, the message words {message:?}; border {frame:?}; icon {icon}; press area: {clear:?}"
+                "At {size:?}, Use the copy in encounters {action:?} starts its words at {words:?}, the message words {message:?}; border {frame:?}; icon {icon}; press area: {clear:?}"
             ),
         );
         // FD1: the Undo sits on the message line, after the words, so the message takes two
-        // lines (message, then Use the copy's entries), not three.
+        // lines (message, then Use the copy in encounters), not three.
         let (undo, message, action) = d.at_size(size, |d| {
             let message = d
                 .nodes()
@@ -4964,7 +4964,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             (
                 d.place_of("Undo package registration"),
                 message,
-                d.place_of("Use the copy's entries"),
+                d.place_of(crate::library::USE_COPY),
             )
         });
         d.observe(
@@ -4975,12 +4975,12 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                     && action.top() >= undo.bottom()
             }),
             format!(
-                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?}, and Use the copy's entries {action:?} is the one row below"
+                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?}, and Use the copy in encounters {action:?} is the one row below"
             ),
         );
     }
     // AD1, a result with another action: an outside change to a copied file blocks Undo package
-    // registration with its reason, and Use the copy's entries stays. Restoring the bytes and
+    // registration with its reason, and Use the copy in encounters stays. Restoring the bytes and
     // reloading brings Undo back, so the later steps see the usual state.
     {
         let reload_library = |d: &mut Driver<'_>| {
@@ -5007,7 +5007,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         reload_library(d);
         let blocked = d.is_disabled("Undo package registration");
         let use_kept =
-            d.in_view("Use the copy's entries") && !d.is_disabled("Use the copy's entries");
+            d.in_view(crate::library::USE_COPY) && !d.is_disabled(crate::library::USE_COPY);
         let reason = d.tooltip_contains(
             "Undo package registration",
             crate::content_workspace::UNDO_ENDED,
@@ -5017,7 +5017,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "iter-14-E-AD1-registration",
             blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
             format!(
-                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy's entries stays ({use_kept}); the file keeps the outside bytes"
+                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy in encounters stays ({use_kept}); the file keeps the outside bytes"
             ),
         );
         fs::write(&file, &written).unwrap();
@@ -5032,7 +5032,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Ashen Reaches");
     d.state("campaign-after-copy-registration", Sizes::All);
     go_library(d);
-    d.expect("Use the copy's entries");
+    d.expect(crate::library::USE_COPY);
     // The campaign's notes before the change, to find the encounter files that it writes.
     fn notes_in(folder: &std::path::Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
         for item in fs::read_dir(folder).unwrap().flatten() {
@@ -5047,13 +5047,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let campaign_folder = d.app_mut().campaigns.active_campaign().unwrap().path;
     let mut notes_before = Vec::new();
     notes_in(&campaign_folder, &mut notes_before);
-    d.click("Use the copy's entries");
+    d.click(crate::library::USE_COPY);
     d.wait_for_text("Undo source change");
     // AD3: the result is a message, and its Undo follows it with its icon.
     undo_follows_message(
         d,
         "iter-19-E-AD3-source",
-        "Encounters now use the copy's entries.",
+        crate::library::USE_COPY_RESULT,
         "Undo source change",
     );
     d.state("copy-entries-used", Sizes::All);
@@ -5072,7 +5072,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 let now = fs::read(path).unwrap();
                 (now != *before).then(|| (path.clone(), now))
             })
-            .expect("Use the copy's entries wrote an encounter file");
+            .expect("Use the copy in encounters wrote an encounter file");
         assert!(
             !d.is_disabled("Undo source change"),
             "fixture: Undo source change starts available"
@@ -5083,7 +5083,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         reload_library(d);
         let blocked = d.is_disabled("Undo source change");
         let reason = d.tooltip_contains("Undo source change", crate::content_workspace::UNDO_ENDED);
-        let kept = d.has("Encounters now use the copy's entries.");
+        let kept = d.has(crate::library::USE_COPY_RESULT);
         d.observe(
             "iter-19-E-AD3-source-blocked",
             blocked && reason && kept && fs::read(&changed).unwrap() == outside,
@@ -6110,4 +6110,256 @@ pub fn empty_links(d: &mut Driver<'_>) {
         d.click("Undo changes");
         assert_eq!(fs::read(root(d).join(&path)).unwrap(), before);
     }
+}
+
+/// Round 20 SD1: a Library file that stops reading as text while it is open, in a package and
+/// in a campaign, with and without a draft. Its reader names the cause, offers Show file and
+/// Try again, and no editor link or source repair. The file's bytes never change.
+pub fn library_file_fault(d: &mut Driver<'_>) {
+    const HEADLINE: &str = "Splat cannot read Creatures/Cinder Wolf.md as text.";
+    let path = d
+        .root
+        .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+    let text = fs::read(&path).unwrap();
+    // One byte that no UTF-8 text holds, inside the stat block: the rest of the file is kept.
+    let mut not_text = text.clone();
+    let at = text.windows(4).position(|w| w == b"Bite").unwrap();
+    not_text[at] = 0xff;
+    let refocus = |d: &mut Driver<'_>| {
+        d.focus_window(false);
+        d.focus_window(true);
+    };
+    go_library(d);
+    search_library(d, "Cinder Wolf");
+    d.click_starting("Cinder Wolf · ");
+    d.wait_for_text("Bite");
+    assert!(
+        !d.is_disabled(EDIT_MARKDOWN),
+        "a readable file opens in Edit Markdown"
+    );
+    // A package entry with no ID is not one the campaign uses: show the package's own entries.
+    d.click("What the Library shows: Can use");
+    d.click("Ashen Marches");
+    d.wait_for_text("Bite");
+
+    // Action-time failure with no draft: the file stops reading after it was opened.
+    fs::write(&path, &not_text).unwrap();
+    refocus(d);
+    d.wait_for_text(HEADLINE);
+    d.state_prepared("package-file-not-text", Sizes::All, |d| {
+        file_fault_reader(d, "iter20-E-SD1-package", HEADLINE, false);
+    });
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        not_text,
+        "the file keeps its bytes"
+    );
+
+    // Try again while the file is still not text: the same fault, not a repair.
+    d.click("Try again");
+    d.wait_for_text(HEADLINE);
+    d.observe(
+        "iter20-E-SD1-try-again-still",
+        d.has("Try again") && !d.has("Fix in Edit Markdown") && !d.visible_text("Bite"),
+        "Try again on a file that is still not text keeps the fault",
+    );
+    // The file reads again outside Splat. Nothing notices until Try again.
+    fs::write(&path, &text).unwrap();
+    d.settle();
+    let waiting = d.visible_text(HEADLINE);
+    d.click("Try again");
+    d.wait_for_text("Bite");
+    d.observe(
+        "iter20-E-SD1-try-again-reads",
+        waiting && !d.has("Try again") && !d.is_disabled(EDIT_MARKDOWN),
+        format!(
+            "The fault stays until Try again ({waiting}); then the entry reads, with Edit Markdown"
+        ),
+    );
+
+    // Action-time failure with a draft: the draft stays and cannot be saved over the file.
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("The draft stays safe.\n");
+    fs::write(&path, &not_text).unwrap();
+    refocus(d);
+    let conflict = format!("{HEADLINE} Your draft is safe here until you choose.");
+    d.wait_for_text(&conflict);
+    d.state_prepared("package-draft-file-not-text", Sizes::All, |d| {
+        choices_at_text(
+            d,
+            "iter20-E-SD1-draft-choices",
+            &conflict,
+            "Try again",
+            "Reload and lose my draft",
+            None,
+        );
+        d.observe(
+            "iter20-E-SD1-draft-no-save",
+            !d.has("Save my draft again")
+                && !d.has("Overwrite with my draft")
+                && !d.has("Save")
+                && !d.has_containing("has gone from disk")
+                && d.has("Technical details"),
+            "The draft's choices never save over the unreadable file",
+        );
+    });
+    assert!(d.app_mut().library.dirty(), "the draft stays");
+    assert_eq!(fs::read(&path).unwrap(), not_text);
+    // The file reads as before again: Try again ends the fault and keeps the draft.
+    fs::write(&path, &text).unwrap();
+    d.click("Try again");
+    d.settle();
+    let kept = d.app_mut().library.dirty();
+    d.observe(
+        "iter20-E-SD1-draft-try-again",
+        !d.has_containing("Your draft is safe here") && kept,
+        "Try again on a file that reads again ends the fault and keeps the draft",
+    );
+    // It stops reading again, and the DM lets the draft go: the reader shows the fault.
+    fs::write(&path, &not_text).unwrap();
+    refocus(d);
+    d.wait_for_text(&conflict);
+    d.click("Reload and lose my draft");
+    d.wait_for_text(HEADLINE);
+    let dirty = d.app_mut().library.dirty();
+    d.observe(
+        "iter20-E-SD1-draft-reload",
+        !dirty && d.has("Try again") && !d.has_containing("Your draft is safe"),
+        "Reload and lose my draft shows the file's fault in the reader",
+    );
+    assert_eq!(fs::read(&path).unwrap(), not_text);
+    fs::write(&path, &text).unwrap();
+    d.click("Try again");
+    d.wait_for_text("Bite");
+
+    // The campaign path: a note that has never read as text.
+    let note = root(d).join("Notes/Not text.md");
+    fs::create_dir_all(note.parent().unwrap()).unwrap();
+    fs::write(&note, [0xff, 0xfe, b'\n']).unwrap();
+    d.click_starting("What the Library shows: ");
+    d.click("Can use");
+    refocus(d);
+    search_library(d, "Not text");
+    d.click_starting("Notes/Not text.md");
+    let campaign_headline = "Splat cannot read Notes/Not text.md as text.";
+    d.wait_for_text(campaign_headline);
+    d.state_prepared("campaign-file-not-text", Sizes::All, |d| {
+        file_fault_reader(d, "iter20-E-SD1-campaign", campaign_headline, true);
+    });
+    assert_eq!(fs::read(&note).unwrap(), [0xff, 0xfe, b'\n']);
+}
+
+/// The reader of a file that cannot be read: the cause, Show file, Try again at the message
+/// words, Technical details, and no editor link, repair or source editing.
+fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, campaign: bool) {
+    let message = d.painted_rect_in(headline, egui::Rect::EVERYTHING);
+    let again = d.place_of("Try again");
+    let words = again.and_then(|again| super::words_left_in(d, again));
+    let clear = again.map_or_else(
+        || Err("Try again is not in view".to_owned()),
+        |again| super::press_area_clear(d, again, "Try again", None),
+    );
+    let placed = message
+        .zip(again)
+        .zip(words)
+        .is_some_and(|((message, again), words)| {
+            again.top() >= message.bottom() - 1.0 && (words - message.left()).abs() <= 1.0
+        });
+    d.observe(
+        &format!("{id}-try-again"),
+        placed && clear.is_ok(),
+        format!(
+            "Try again {again:?} starts its words {words:?} at the message words {message:?}; press area: {clear:?}"
+        ),
+    );
+    d.observe(
+        &format!("{id}-recovery"),
+        d.has("Show file")
+            && d.has("Technical details")
+            && d.visible_text("Splat reads notes as UTF-8 text.")
+            && d.has_containing("Cannot be read"),
+        "The reader names the cause, the recovery, Show file and Technical details",
+    );
+    d.observe(
+        &format!("{id}-no-repair"),
+        !d.has("Edit in Obsidian")
+            && !d.has("Fix in Edit Markdown")
+            && !d.has_containing("frontmatter")
+            && d.is_disabled(EDIT_MARKDOWN),
+        format!(
+            "No editor link, no repair of empty text, and Edit Markdown is blocked (campaign {campaign})"
+        ),
+    );
+}
+
+/// Round 20 SD2: a copied campaign's registration result names the new campaign, with its Undo on
+/// the message line and Build an encounter below at the message words. Build an encounter leaves
+/// the result and its Undo; Undo ends both.
+pub fn campaign_copy_registered(d: &mut Driver<'_>) {
+    const NAME: &str = "Emberfall Again";
+    let copy = d.root.join("campaigns/emberfall-copy");
+    fs::create_dir_all(&copy).unwrap();
+    let manifest = fs::read(root(d).join("Campaign.md")).unwrap();
+    fs::write(copy.join("Campaign.md"), &manifest).unwrap();
+    let before = d.app_mut().campaigns.active_campaign().unwrap().id;
+    go_settings(d);
+    if !d.has("Campaign name") {
+        d.click("Add campaign");
+    }
+    d.type_into("Campaign name", NAME);
+    d.type_into("Folder", &copy.display().to_string());
+    d.click_below("Folder", "Add campaign");
+    d.expect("Register as a new campaign");
+    d.click("Register as a new campaign");
+    let result = crate::campaigns::copy_registered(NAME);
+    d.wait_for_text(&result);
+    undo_follows_message(d, "iter20-E-SD2-undo", &result, "Undo register campaign");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (message, build, words, clear) = d.at_size(size, |d| {
+            let message = d.painted_rect_in(&result, egui::Rect::EVERYTHING);
+            let build = d.place_of("Build an encounter");
+            let words = build.and_then(|build| super::words_left_in(d, build));
+            let clear = build.map_or_else(
+                || Err("Build an encounter is not in view".to_owned()),
+                |build| super::press_area_clear(d, build, "Build an encounter", None),
+            );
+            (message, build, words, clear)
+        });
+        let placed = message
+            .zip(build)
+            .zip(words)
+            .is_some_and(|((message, build), words)| {
+                build.top() >= message.bottom() - 1.0 && (words - message.left()).abs() <= 1.0
+            });
+        d.observe(
+            "iter20-E-SD2-build",
+            placed && clear.is_ok(),
+            format!(
+                "At {size:?}, Build an encounter {build:?} starts its words {words:?} at the message words {message:?}; press area: {clear:?}"
+            ),
+        );
+    }
+    d.state("copy-registered", Sizes::All);
+    d.click("Build an encounter");
+    assert_eq!(d.current_page(), "Encounters");
+    go_settings(d);
+    d.wait_for_text(&result);
+    d.observe(
+        "iter20-E-SD2-build-keeps",
+        d.visible_text(&result) && d.has("Undo register campaign"),
+        "After Build an encounter, the result and its Undo are still one message",
+    );
+    // The return shows the same result and Undo as before Build an encounter.
+    d.assert_state_matches("copy-registered-after-build", "copy-registered");
+    d.click("Undo register campaign");
+    d.settle();
+    let active = d.app_mut().campaigns.active_campaign().map(|c| c.id);
+    d.observe(
+        "iter20-E-SD2-undo-ends",
+        !d.has_containing("is registered as a new campaign")
+            && !d.has("Undo register campaign")
+            && active == Some(before)
+            && fs::read(copy.join("Campaign.md")).unwrap() == manifest,
+        "Undo ends the result and its Undo, and puts the copy's file and the active campaign back",
+    );
 }

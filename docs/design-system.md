@@ -209,7 +209,8 @@ and its padding hangs `S` into the gutter. Outside a message, such an action has
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. A quiet
-message choice without an icon (`Use the copy's entries` below the registration message) hangs its padding
+message choice without an icon (`Use the copy in encounters` below a package's registration message, and
+`Build an encounter` below a copied campaign's) hangs its padding
 into that column instead, so its words also start at the message's words. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
@@ -221,9 +222,10 @@ reaches a column splitter. The World page's centre has an `L` left gutter for th
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
 icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
 that it follows (`Links now say <name>.` with `Undo link update`, `The first heading now says <name>.` with
-`Undo heading change`, `Encounters now use the copy's entries.` with `Undo source change`, and `The stat
-block now says Hit Points 24.` with `Undo stat change`). One exception is still open: `Undo register campaign`
-in Campaign stands alone. On reload, a result whose Undo would rewrite files checks
+`Undo heading change`, `Encounters now use the copy.` with `Undo source change`, `The stat
+block now says Hit Points 24.` with `Undo stat change`, and `<name> is registered as a new campaign. Its D&D
+Beyond link is off.` with `Undo register campaign`). Another choice after the result, such as `Build an
+encounter`, does not end the result or its Undo; a later result does. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
@@ -291,6 +293,16 @@ links and quiet actions centre in that row, so the title stays at one height whe
 another. When the line is too narrow and the path goes to a second row, that row is also one Read row. During a
 draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
+A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
+or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
+(`Text format cannot be read`). Its reader keeps the title and a file line with only `Show file`: no Edit in
+Obsidian, because no editor can open the file either. Below the title, an error names the file (`Splat cannot read
+Notes/Broken.md as text.`), then the recovery in plain words, then quiet `Try again` at the message words.
+Technical details holds the system's words. Edit Markdown is blocked with its reason, and the reader offers no
+`Fix in Edit Markdown` or manifest replacement, until a read succeeds. Try again reads every file again. When an
+open entry's file stops reading, a draft stays: the message names the file and says the draft is safe, with
+`Try again` and red `Reload and lose my draft` (with Undo discard), never a save over the file. Splat never
+changes that file.
 Below its title, show only the kind when known and the specific error with its file line.
 Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.
 It opens the editor at the error line. In Edit Markdown, put the error in the reserved reason
@@ -542,10 +554,11 @@ off when the original is used. Keep the warning above the `Register a copy` Labe
 Quiet Cancel follows the named Register action after an `L` gap. It closes the form without writing
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
 original and the copy is registered but not used. When on, it says every entry is used, including future
-entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo. After registration,
+entries. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
 quiet `Undo package registration` sits on the message line, as every Undo after a message does, and quiet
-`Use the copy's entries`, without an icon, sits on the next line as a `line_start` action: its words start at
-the message words. Its result `Encounters now use the copy's entries.` keeps `Undo source change` on its
+`Use the copy in encounters`, without an icon, sits on the next line as a `line_start` action: its words start at
+the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
+copy.` keeps `Undo source change` on its
 message line; after an outside change that Undo is blocked with its reason.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no

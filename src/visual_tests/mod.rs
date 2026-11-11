@@ -61,7 +61,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 78] = [
+const SCENARIOS: [(&str, Seed, Script); 80] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -267,6 +267,16 @@ const SCENARIOS: [(&str, Seed, Script); 78] = [
         "package-folder-copied",
         Seed::Campaign,
         scenarios::world_build::package_folder_copied,
+    ),
+    (
+        "library-file-fault",
+        Seed::Campaign,
+        scenarios::world_build::library_file_fault,
+    ),
+    (
+        "campaign-copy-registered",
+        Seed::Campaign,
+        scenarios::world_build::campaign_copy_registered,
     ),
     ("world-places", Seed::World, scenarios::world_build::places),
     ("world-facts", Seed::World, scenarios::world_build::facts),

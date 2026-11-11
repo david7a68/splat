@@ -159,6 +159,8 @@ impl Campaigns {
         let adding = self.editing.is_none();
         self.persist(data)?;
         self.clear_form();
+        // A new result replaces the copy's registration result, and its Undo with it.
+        self.campaign_copy = None;
         self.added = adding.then(|| format!("Added {}.", campaign.name));
         Ok(())
     }
@@ -178,6 +180,7 @@ impl Campaigns {
         let copy =
             crate::content_workspace::PackageCopy::write_owner(&path, &self.name, "campaign")?;
         let campaign = CampaignDocument::discover(&path)?.ok_or("Campaign.md is missing.")?;
+        let name = campaign.name.clone();
         let before = self.data.clone();
         let mut after = before.clone();
         after.active_campaign_id = Some(campaign.id);
@@ -188,8 +191,7 @@ impl Campaigns {
         }
         self.campaign_copy = Some((copy, before));
         self.clear_form();
-        self.added =
-            Some("The copy is registered as a new campaign. Its D&D Beyond link is off.".into());
+        self.added = Some(copy_registered(&name));
         Ok(())
     }
 
@@ -800,7 +802,36 @@ impl Campaigns {
                 data.active_campaign_id = None;
             }
             self.save(data);
+            // The result of registering a removed campaign ends with it.
+            if !self.data.campaigns.iter().any(|c| c.id == id) {
+                self.campaign_copy = None;
+                self.added = None;
+            }
         }
+    }
+
+    /// `Build an encounter` after a result: the result stays, with its Undo, for the DM's return.
+    fn build_encounter(&mut self) {
+        self.wants_encounters = true;
+        if self.campaign_copy.is_none() {
+            self.added = None;
+        }
+    }
+
+    /// `Undo register campaign`: the copy's own files and the settings go back, and the result
+    /// that the Undo followed ends.
+    fn undo_campaign_copy(&mut self) -> Result<(), String> {
+        let (copy, before) = self.campaign_copy.as_ref().ok_or("Nothing to undo.")?;
+        self.store
+            .as_ref()
+            .ok_or("Settings are unavailable.")?
+            .check_save(before)?;
+        copy.undo()?;
+        let before = before.clone();
+        self.persist(before)?;
+        self.campaign_copy = None;
+        self.added = None;
+        Ok(())
     }
 
     /// The campaign list. Which exist, where, and how each is linked.
@@ -951,33 +982,45 @@ impl Campaigns {
             if let Some(id) = open {
                 self.select(Some(id));
             }
-            if let Some(added) = self.added.clone()
-                && design::message_with_action(ui, Tone::Success, &added, "Build an encounter")
-            {
-                self.wants_encounters = true;
-                self.added = None;
-            }
-            if self.campaign_copy.is_some()
-                && Action::quiet("Undo register campaign")
-                    .icon(icons::UNDO)
-                    .show(ui)
-                    .clicked()
-            {
-                let result = (|| {
-                    let (copy, before) = self.campaign_copy.as_ref().unwrap();
-                    self.store
-                        .as_ref()
-                        .ok_or("Settings are unavailable.")?
-                        .check_save(before)?;
-                    copy.undo()?;
-                    self.persist(before.clone())
-                })();
-                match result {
-                    Ok(()) => {
-                        self.campaign_copy = None;
-                        self.added = None;
+            if let Some(added) = self.added.clone() {
+                if self.campaign_copy.is_some() {
+                    // The registration result and its Undo are one message. Build an encounter
+                    // is another choice: it starts below, at the message words, as Library's
+                    // choice after a package registration does.
+                    if design::undo_message(ui, Tone::Success, &added, "Undo register campaign")
+                        && let Err(error) = self.undo_campaign_copy()
+                    {
+                        self.error = Some(error);
                     }
-                    Err(error) => self.error = Some(error),
+                    let build = ui
+                        .horizontal(|ui| {
+                            ui.add_space(
+                                design::S
+                                    + 1.0
+                                    + design::number_width(
+                                        ui,
+                                        icons::SUCCESS,
+                                        &Type::Body.font(ui),
+                                    )
+                                    + design::XS,
+                            );
+                            Action::quiet("Build an encounter")
+                                .density(Density::Read)
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                        })
+                        .inner;
+                    if build {
+                        self.build_encounter();
+                    }
+                } else if design::message_with_action(
+                    ui,
+                    Tone::Success,
+                    &added,
+                    "Build an encounter",
+                ) {
+                    self.build_encounter();
                 }
             }
             ui.add_space(design::S);
@@ -1206,6 +1249,11 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
         == Some(remote)
 }
 
+/// The result of registering a copied campaign folder, named for the new campaign.
+pub(crate) fn copy_registered(name: &str) -> String {
+    format!("{name} is registered as a new campaign. Its D&D Beyond link is off.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1250,6 +1298,76 @@ mod tests {
             std::fs::read_to_string(copied.join("Campaign.md")).unwrap(),
             before
         );
+    }
+
+    /// SD2: the copy's registration result is named, and its Undo follows it. Build an encounter
+    /// leaves both; Undo ends both; a later result replaces both, so Undo never follows another
+    /// result. A plain add's result still ends with Build an encounter.
+    #[test]
+    fn iter20_e_sd2_register_campaign_undo_follows_its_named_result() {
+        let temp = tempfile::tempdir().unwrap();
+        let original = temp.path().join("original");
+        let copied = temp.path().join("copy");
+        let third = temp.path().join("third");
+        for folder in [&original, &copied, &third] {
+            std::fs::create_dir(folder).unwrap();
+        }
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.name = "Original".into();
+        campaigns.path = original.to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        let first = campaigns.active_campaign().unwrap().id;
+        let manifest = std::fs::read_to_string(original.join("Campaign.md")).unwrap();
+        std::fs::write(copied.join("Campaign.md"), &manifest).unwrap();
+        let register = |campaigns: &mut Campaigns| {
+            campaigns.name = "Copy of Original".into();
+            campaigns.path = copied.to_string_lossy().into_owned();
+            assert!(campaigns.save_form().is_err());
+            campaigns.register_campaign_copy().unwrap();
+        };
+
+        register(&mut campaigns);
+        let result =
+            "Copy of Original is registered as a new campaign. Its D&D Beyond link is off.";
+        assert_eq!(campaigns.added.as_deref(), Some(result), "SD2-named");
+        assert!(campaigns.campaign_copy.is_some());
+
+        campaigns.build_encounter();
+        assert!(campaigns.wants_encounters);
+        assert_eq!(
+            campaigns.added.as_deref(),
+            Some(result),
+            "SD2-build-keeps-result"
+        );
+        assert!(campaigns.campaign_copy.is_some(), "SD2-build-keeps-undo");
+
+        campaigns.undo_campaign_copy().unwrap();
+        assert!(
+            campaigns.added.is_none() && campaigns.campaign_copy.is_none(),
+            "SD2-undo-ends"
+        );
+        assert_eq!(campaigns.all().len(), 1);
+        assert_eq!(campaigns.active_campaign().unwrap().id, first);
+        assert_eq!(
+            std::fs::read_to_string(copied.join("Campaign.md")).unwrap(),
+            manifest,
+            "Undo puts the copy's own file back"
+        );
+
+        // Another result replaces the registration result and ends its Undo.
+        register(&mut campaigns);
+        campaigns.name = "Third".into();
+        campaigns.path = third.to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        assert_eq!(campaigns.added.as_deref(), Some("Added Third."));
+        assert!(
+            campaigns.campaign_copy.is_none(),
+            "SD2-new-result-ends-undo"
+        );
+
+        // A plain add has no Undo: Build an encounter ends its result, as before.
+        campaigns.build_encounter();
+        assert!(campaigns.added.is_none());
     }
 
     #[test]
