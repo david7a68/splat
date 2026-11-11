@@ -200,13 +200,13 @@ changes`. `No changes to save.` belongs only to blocked Save's hover text and ac
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
-reason and disables campaign choices. Package, encounter, repair and run-settings drafts keep their campaign-switch
+reason and disables campaign choices. Package, encounter, group, repair and run-settings drafts keep their campaign-switch
 reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (`Undo heading
-change`, `Undo replacement`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+change`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. In a
@@ -837,8 +837,10 @@ share columns and picture size; shortening bonuses changes none of these.
 
 Setup reserves initiative, Absent and menu columns on the name line, centred on initiative. Only NPC rows
 reserve Roll, before initiative, so party names use that room and all initiative fields stay aligned. Reserve
-the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column only while
-the roster has tied rows; change its width only after the initiative field loses focus. Tied rows
+the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column from the start when the
+campaign's roll mode gives two or more NPCs one shared roll, so `Roll NPCs` moves no field. Otherwise reserve it
+only while the roster has tied rows, and change its width only after the initiative field loses focus. With no
+shared roll to come (or individual rolls), setup shows no empty tie column. Tied rows
 keep fixed up and down arrow slots, in that order, with unused directions empty. Rows use the height of their name line (at least a Scan control), their Small detail line, and an XS gap.
 Do not add the live roster's minimum height to setup rows. Setup retains its first
 condition and counts the rest when needed. Shared-roll brackets stay beside fields and stop before detail.
@@ -971,7 +973,9 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
 warning. App close says Keep running, Keep recording or Keep processing for each task; recording and job
-titles name the unfinished session. Sync conflicts name the character and offer Review conflict. Stop and
+titles name the unfinished session. Sync conflicts name the character and offer Review conflict.
+The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
+Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
 close is secondary when saved work remains.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.

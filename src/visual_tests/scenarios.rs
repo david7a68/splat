@@ -2286,7 +2286,45 @@ pub mod encounter_run {
         run_saved_encounter(d, SECOND_ENCOUNTER);
         d.expect(&format!("{RUN_HEADING}{SECOND_ENCOUNTER}"));
         d.state("run-setup", Sizes::All);
+        // FT3: this roster has identical NPCs, so the default roll gives them one shared
+        // roll and tie arrows. Their slot is there from the start: the roll moves nothing.
+        let columns = |d: &Driver<'_>| {
+            let mut fields: Vec<(String, f32)> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Initiative for ") && node.in_view())
+                .map(|node| (node.name, node.rect.left()))
+                .collect();
+            fields.sort_by(|a, b| a.0.cmp(&b.0));
+            (d.painted_left("INITIATIVE"), fields)
+        };
+        let tie_arrows = |d: &Driver<'_>| {
+            d.nodes()
+                .iter()
+                .filter(|node| {
+                    node.name.starts_with("Move ")
+                        && (node.name.contains(" before ") || node.name.contains(" after "))
+                        && node.in_view()
+                })
+                .count()
+        };
+        let before = columns(d);
+        let arrows_before = tie_arrows(d);
         d.click(ROLL_NPCS);
+        let after = columns(d);
+        let arrows_after = tie_arrows(d);
+        d.observe(
+            "iter-18-B-FT3",
+            before.0.is_some()
+                && before.1.len() >= 3
+                && arrows_before == 0
+                && arrows_after > 0
+                && before.0 == after.0
+                && before.1 == after.1,
+            format!(
+                "Roll NPCs adds {arrows_after} tie arrows and moves no field: before {before:?}, after {after:?}"
+            ),
+        );
         d.observe(
             "iter-8-F10",
             !d.visible_text("1st") && !d.visible_text("2nd"),
@@ -3847,6 +3885,21 @@ pub mod run_sync_conflict {
             "T3.5",
             d.has_containing(&format!("{SYNCED} {CLOSE_PROMPT}")) && d.has("Review conflict"),
             "Closing the app with pending sync warns, and the warning names the character",
+        );
+        // FT4: the app-close dialog draws Review conflict through the run-close dialog's
+        // function, so it starts at the dialog text as it does there (signed_in, iter-17-B).
+        check_line_start(
+            d,
+            "iter-18-B-FT4",
+            "Review conflict",
+            CLOSE_PROMPT,
+            &[SMALL, DEFAULT, LARGE],
+            Some(&[
+                "Review conflict",
+                "Connect to sync",
+                "Keep running",
+                "Close and lose changes",
+            ]),
         );
         d.state("close-with-pending-sync", Sizes::Default);
         d.click("Review conflict");
@@ -9929,6 +9982,30 @@ pub mod encounter_groups {
         d.click("Remove");
         d.expect("Removed Rival Captain.");
         d.expect("Undo remove member");
+        // ST1: a dirty group blocks the campaign switch, opened from Encounters too, and its
+        // save row says why. Undo below must still match the clean editor.
+        d.observe_both(
+            "iter-18-B-ST1",
+            "A dirty group opened in Encounters says why the campaign cannot change",
+            |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
+        );
+        // FD4 family: the group notes field ends at the members' right edge, as the encounter
+        // editor's notes field ends at the roster's.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                (
+                    d.place_of("More actions for Cinder Wolf")
+                        .map(|rect| rect.right()),
+                    d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
+                        .map(|rect| rect.right()),
+                )
+            });
+            d.observe(
+                "iter-18-B-FD4-group",
+                matches!(edges, (Some(menu), Some(notes)) if (menu - notes).abs() <= 0.5),
+                format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
+            );
+        }
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);
@@ -9936,6 +10013,11 @@ pub mod encounter_groups {
             "iter4-B-AT1",
             "Undo restores the changed member and clears the removal notice",
             |d| d.has(CHANGES) && !d.has("Removed Rival Captain."),
+        );
+        d.observe(
+            "iter-18-B-ST1-clean",
+            !d.visible_text("Save or discard to switch campaign."),
+            "A group with nothing to save gives no switch reason",
         );
         d.expect_same("Undo restores the complete group editor with the changed member.");
         d.assert_state_matches("group-member-restored", "group-editor");

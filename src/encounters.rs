@@ -1148,7 +1148,16 @@ fn creature_result_row(
                 .on_hover_text("Read this entry in Lookup")
                 .clicked();
             if let Some(reason) = &c.unavailable {
-                ui.label(Type::Small.rich(ui, reason).color(colors().result.warning));
+                // A status is an icon, a word and a colour, like the other warnings here. It
+                // wraps, because a warning must not be cut to an ellipsis at 960.
+                design::wrapped_status(
+                    ui,
+                    design::Status {
+                        icon: icons::WARN,
+                        word: reason,
+                        color: colors().result.warning,
+                    },
+                );
             } else {
                 detail_columns(ui, &c.detail, c.source.as_deref());
             }
@@ -1337,6 +1346,17 @@ fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option
 struct ReplacementUndo {
     before: Vec<Slot>,
     after: Vec<Slot>,
+    /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
+    words: String,
+}
+
+/// The replacement's result for its Undo message.
+fn replacement_words(old: &str, rows: usize, new: &str) -> String {
+    if rows > 1 {
+        format!("{rows} {old} rows replaced with {new}.")
+    } else {
+        format!("{old} replaced with {new}.")
+    }
 }
 
 fn replace_roster(
@@ -2811,7 +2831,7 @@ impl Encounters {
         story: &Story<'_>,
     ) {
         // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
-        // quiet action at its text edge, such as `Undo replacement`, never reaches the splitter.
+        // quiet action at its text edge (`.line_start()`) never reaches the splitter.
         let room = ui.available_rect_before_wrap();
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + design::L - design::M)),
@@ -3721,7 +3741,7 @@ impl Encounters {
                     }
                 });
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so
-                // a quiet action there (`Undo replacement`) keeps its whole press area.
+                // a line-start quiet action there keeps its whole press area.
                 let rest = ui.available_rect_before_wrap();
                 let mut roster_ui = ui.new_child(
                     egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
@@ -4057,7 +4077,7 @@ impl Encounters {
         tabbed: bool,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
-        // A quiet action at the text edge (`Undo replacement`) reaches `S` into the page's
+        // A line-start quiet action reaches `S` into the page's
         // gutter. The scroll area starts there too, so it shows the whole target, and its margin
         // keeps the text where it was.
         let area = ui.available_rect_before_wrap();
@@ -4094,7 +4114,8 @@ impl Encounters {
                 let output = egui::TextEdit::multiline(&mut draft.body)
                     .id(egui::Id::new(("encounter_notes", draft.id)))
                     .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
-                    .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                    // The width holds the margins, so the field ends at the roster's right edge.
+                    .desired_width(ui.available_width() - 2.0 * design::S)
                     .desired_rows(5)
                     .margin(egui::vec2(design::S, design::S))
                     .show(ui);
@@ -4204,13 +4225,9 @@ impl Encounters {
             .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
         if let Some(undo) = undo {
             if undo.after == draft.setup.roster {
-                // Outside a message, a line-start action has no icon: its words start at the
-                // slot rows' words.
-                if Action::quiet("Undo replacement")
-                    .line_start()
-                    .show(ui)
-                    .clicked()
-                {
+                // The result is a message, so its Undo keeps the undo icon as every other
+                // Undo does.
+                if design::undo_message(ui, Tone::Info, &undo.words, "Undo replacement") {
                     draft.setup.roster = undo.before;
                 }
             } else {
@@ -4455,12 +4472,24 @@ impl Encounters {
         if let Some((selected, creature, all)) = replacement {
             let before = draft.setup.roster.clone();
             replace_roster(&mut draft.setup.roster, selected, creature, all, snapshot);
+            let old = roster_name(&before[selected], None, &snapshot.known_creature_names);
+            let rows = before
+                .iter()
+                .zip(&draft.setup.roster)
+                .filter(|(was, now)| was.creature != now.creature)
+                .count();
+            let new = snapshot
+                .catalogue
+                .entries
+                .get(&creature)
+                .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
             ui.ctx().data_mut(|data| {
                 data.insert_temp(
                     undo_key,
                     ReplacementUndo {
                         before,
                         after: draft.setup.roster.clone(),
+                        words: replacement_words(&old, rows, &new),
                     },
                 )
             });
@@ -4756,10 +4785,15 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
+        // FD3: the reason is a status, the warning icon and then the words.
         assert!(
             harness
-                .query_by_label("Watchkeeper Guard stat block not found")
-                .is_some()
+                .query_by_label(&format!(
+                    "{} Watchkeeper Guard stat block not found",
+                    icons::WARN
+                ))
+                .is_some(),
+            "iter18-B-FD3: the missing stat block reason has its warning icon"
         );
         assert!(harness.query_by_label("Open in World").is_some());
         assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
@@ -5072,6 +5106,80 @@ mod tests {
         assert!(
             notes.width() <= design::LIST_MEASURE,
             "iter7-B-AT1: {notes:?}"
+        );
+    }
+
+    /// The replacement result names what changed, with a count when it replaced several rows.
+    #[test]
+    fn iter18_b_replacement_words_name_the_rows() {
+        assert_eq!(
+            replacement_words("Cinder Wolf", 2, "Guard"),
+            "2 Cinder Wolf rows replaced with Guard."
+        );
+        assert_eq!(
+            replacement_words("Cinder Wolf", 1, "Guard"),
+            "Cinder Wolf replaced with Guard."
+        );
+    }
+
+    /// FD4: the loot row and the notes field end at the roster's right edge, one column edge.
+    #[test]
+    fn iter18_b_loot_and_notes_end_at_the_roster_edge() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 1080.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    Encounters::roster_pane(
+                        ui, &mut draft, &snapshot, &mut false, &mut None, None, &mut None, false,
+                    );
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        // The roster's row rule marks the column's right edge.
+        let rule = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points, .. } if points[0].y == points[1].y => {
+                    Some(points[1].x.max(points[0].x))
+                }
+                _ => None,
+            })
+            .reduce(f32::max)
+            .expect("the roster draws a row rule");
+        for name in [
+            "More actions for Cinder Wolf",
+            "Roll on a table for the encounter",
+            "Read-aloud and notes",
+        ] {
+            // The field's caption carries the same name; the widest node is the control.
+            let right = harness
+                .query_all_by_label(name)
+                .map(|node| node.rect().right())
+                .reduce(f32::max)
+                .unwrap();
+            assert!(
+                (right - rule).abs() <= 0.5,
+                "iter18-B-FD4: {name} ends at {right}, the roster rule at {rule}"
+            );
+        }
+        // Must stay true: the loot field keeps its gap before the menu.
+        let field = harness.get_by_label("Add loot to the encounter").rect();
+        let menu = harness
+            .get_by_label("Roll on a table for the encounter")
+            .rect();
+        assert!(
+            menu.left() - field.right() >= design::XS,
+            "iter18-B-FD4: the loot field and its menu stay apart: {field:?} {menu:?}"
         );
     }
 
