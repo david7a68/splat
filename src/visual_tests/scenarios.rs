@@ -14313,6 +14313,26 @@ pub mod session_plan {
                 && !d.visible_text(&notice),
             format!("The plan shows one result and one Undo after two steps: {undos:?}"),
         );
+        // Review of PR 245: Undo delete run ends only the deletion's result. The run comes back,
+        // and the removal's message and Undo show again; then delete the run again.
+        d.click("Undo delete run");
+        d.expect(&format!("Resume: {FIRST}"));
+        d.observe(
+            "iter-24-S-FL3-undo",
+            !d.has("Undo delete run")
+                && d.visible_text(&notice)
+                && d.in_view("Undo remove")
+                && d.in_view(&format!("Resume: {FIRST}")),
+            "Undo delete run brings the run back, and the removal's result returns",
+        );
+        d.click(&format!("More actions for {FIRST}"));
+        d.click("Delete the saved run");
+        d.expect(&format!("Start fight: {FIRST}"));
+        d.observe(
+            "iter-24-S-FL3",
+            !d.has("Undo remove") && d.in_view("Undo delete run"),
+            "Deleting the run again replaces the removal's result again",
+        );
         // FT4: Timeline names the removed fight as the plan does.
         d.click(NAV_TIMELINE);
         d.observe(
