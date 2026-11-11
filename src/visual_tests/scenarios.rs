@@ -9865,6 +9865,23 @@ pub mod encounter_groups {
             "A dirty group opened in Encounters says why the campaign cannot change",
             |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
         );
+        // FD4 family: the group notes field ends at the members' right edge, as the encounter
+        // editor's notes field ends at the roster's.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                (
+                    d.place_of("More actions for Cinder Wolf")
+                        .map(|rect| rect.right()),
+                    d.place_of(&format!("Group notes for {GROUP_RIVALS}"))
+                        .map(|rect| rect.right()),
+                )
+            });
+            d.observe(
+                "iter-18-B-FD4-group",
+                matches!(edges, (Some(menu), Some(notes)) if (menu - notes).abs() <= 0.5),
+                format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
+            );
+        }
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);

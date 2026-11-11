@@ -2210,7 +2210,8 @@ fn group_fields(
         let response = ui.add(
             egui::TextEdit::multiline(&mut draft.notes)
                 .desired_rows(if open.is_some() { 2 } else { 4 })
-                .desired_width(ui.available_width() - design::M)
+                // The width holds the margins, so the field ends at the members' right edge.
+                .desired_width(ui.available_width())
                 .hint_text(design::placeholder(
                     ui,
                     "When they arrive, what they want. Markdown is fine.",
