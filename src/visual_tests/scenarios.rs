@@ -12580,9 +12580,10 @@ pub mod session_plan_groups {
         // failure shows Save's reason in the state slot until the next edit.
         d.press_ctrl(Key::End);
         d.type_text("Arrive at dusk.");
-        let mut permissions = std::fs::metadata(&lost).unwrap().permissions();
-        permissions.set_readonly(true);
-        std::fs::set_permissions(&lost, permissions.clone()).unwrap();
+        let original = std::fs::metadata(&lost).unwrap().permissions();
+        let mut read_only = original.clone();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&lost, read_only).unwrap();
         d.press_ctrl(Key::S);
         let failed = (
             // In the state slot: the error icon, then Save's reason.
@@ -12595,8 +12596,7 @@ pub mod session_plan_groups {
                 .is_some_and(|text| text.contains("Arrive at dusk.")),
             std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
         );
-        permissions.set_readonly(false);
-        std::fs::set_permissions(&lost, permissions).unwrap();
+        std::fs::set_permissions(&lost, original).unwrap();
         d.type_text(" ");
         d.observe(
             "iter-23-B-FK1-save-failed",
