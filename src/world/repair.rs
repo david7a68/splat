@@ -14,6 +14,18 @@ pub(crate) fn editor(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> bool {
+    let (changed, focused) = editor_events(ui, path, draft, error_line);
+    changed || focused
+}
+
+/// The source editor, with its two events apart: the DM changed the text, and focus moved into
+/// it. A caller that keeps a result for one draft ends it on a change, not on focus.
+pub(crate) fn editor_events(
+    ui: &mut egui::Ui,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> (bool, bool) {
     egui::ScrollArea::vertical()
         .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
         .id_salt(("repair", path))
@@ -23,7 +35,7 @@ pub(crate) fn editor(
                 .desired_width(f32::INFINITY)
                 .show(ui);
             design::named(ui, &output.response, "Note text");
-            let active = output.response.changed() || output.response.gained_focus();
+            let active = (output.response.changed(), output.response.gained_focus());
             if let Some(line) = error_line {
                 let position = draft
                     .lines()
