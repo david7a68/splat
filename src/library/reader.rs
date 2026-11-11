@@ -332,6 +332,7 @@ pub(super) fn show(
     sections: &[ReadingSection<'_>],
     builtin: bool,
     has_summary: bool,
+    lead_gap: bool,
 ) {
     let table_stats = entry.is_some_and(|e| {
         e.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
@@ -360,7 +361,7 @@ pub(super) fn show(
     } else {
         sections
     };
-    if !has_summary {
+    if !has_summary && lead_gap {
         ui.add_space(crate::design::L);
     }
     if let Some(entry) = entry {
@@ -468,6 +469,7 @@ mod tests {
                             &presentation::reading_sections(body, ""),
                             false,
                             false,
+                            true,
                         );
                     });
                 },
@@ -525,6 +527,7 @@ mod tests {
                         &presentation::reading_sections(&entry.body, &entry.name),
                         false,
                         false,
+                        true,
                     );
                 });
             });
