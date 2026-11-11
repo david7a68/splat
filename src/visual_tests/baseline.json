@@ -63,6 +63,7 @@
       "share-to-package": 3,
       "signed-in": 16,
       "stat-formats": 3,
+      "travel-checks": 6,
       "world": 1,
       "world-broken-note": 3,
       "world-edit-round-trip": 1,
@@ -161,6 +162,7 @@
       "share-to-package": 35,
       "signed-in": 65,
       "stat-formats": 42,
+      "travel-checks": 20,
       "world": 60,
       "world-broken-note": 79,
       "world-edit-round-trip": 43,
@@ -386,6 +388,10 @@
     },
     "signed-in": {
       "see the remote campaign list": 2
+    },
+    "travel-checks": {
+      "T11.10: plan a result as a fight": 1,
+      "T11.9: roll a two-day journey's checks": 1
     },
     "world": {
       "T14.4: find a rule by its heading, beside a run": 2
