@@ -248,6 +248,12 @@ plan, so that Obsidian sees it too.
 Each player's HP and temporary HP from the last fight of the session being played, which the next run starts
 from. A long rest the DM marks starts everyone at full instead.
 
+**Order of play**:
+The order in which fights were last played and long rests were ruled, across the campaign. Carried state follows
+it, and not the order of events in the story. A run file owns its fight's place in it, and Undo in the run restores
+that place. The Timeline holds what the run last said.
+_Avoid_: Timeline order, which is the story's.
+
 **Session template**:
 Markdown a new session's notes start from, built in or owned by the campaign.
 

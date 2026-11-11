@@ -939,10 +939,16 @@ session plan's **Whole run** leads there. Continue fight is one named step: play
 on, the run's loot results stay, and **Undo: continue fight** puts the ending back with its outcome. When you
 choose **End encounter…** again, the outcome field starts with that outcome, selected: Enter keeps it, and typing
 replaces it. The outcome comes from the run file, so it is the same after a close and a restart. Timeline, the
-session plan and the Encounters lists follow the run each way. A fight that is opened and has every step taken back
-keeps its old place in the order of play, so the next fight still starts from the fight that was played last.
-While `Timeline.md` cannot be read, what the open run says waits in order, and is recorded when the file reads
-again, by itself or by **Read the file again**.
+session plan and the Encounters lists follow the run each way.
+
+The run file keeps when its fight was last played: its place in the campaign's order of play, and the session that
+was being played. A step sets it, and **Undo** of the step puts the older value back, also after a close or a
+restart. So a fight that is opened, continued and taken back keeps its old place, and the next fight still starts
+from the fight that was played last. The Timeline decides none of this. It takes what the run files say after each
+read of `Timeline.md` or of the run folder, so nothing is lost when the file cannot be read for a time, when the
+app restarts, or when you work in another campaign meanwhile. Moving an event on Timeline changes the story's order
+and not the order of play. One limit: a fight that is played while `Timeline.md` cannot be read takes its place
+from the run files alone, so it can fall before a long rest that no run has seen.
 With another run open, Continue fight is blocked and says **Close the open run first.**
 
 ### Run storage and campaign initiative
