@@ -154,10 +154,18 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
     if let Some(Value::Mapping(payload)) = fields.remove("splat_payload") {
         for (key, value) in payload {
             if fields.contains_key(&key) {
-                flags.push(Flag {
-                    line: 1,
-                    message: format!("Duplicate payload field {key:?}; front matter used"),
-                });
+                // A YAML key is usually text; any other key keeps its YAML form.
+                let name = key.as_str().map_or_else(
+                    || serde_yaml_ng::to_string(&key).unwrap_or_default(),
+                    str::to_owned,
+                );
+                flags.push(Flag::new(
+                    1,
+                    format!(
+                        "Duplicate payload field {}; front matter used",
+                        quoted(&name)
+                    ),
+                ));
             } else {
                 fields.insert(key, value);
             }
@@ -177,10 +185,7 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                     })
             })
             .map_or(1, |at| at + 1);
-        flags.push(Flag {
-            line,
-            message: message.into(),
-        });
+        flags.push(Flag::new(line, message.into()));
     };
     {
         super::list_formats::read(text, fields, &mut flags);

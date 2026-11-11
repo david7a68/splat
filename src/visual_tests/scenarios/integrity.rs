@@ -147,6 +147,13 @@ fn missing_folders(
     d.settle();
     d.expect("Run folder not found");
     d.expect("Choose folder");
+    // FB6: the run folder's fault has the session folder's wording.
+    d.observe(
+        "iter-23-Q-FB6",
+        d.has_containing("Run folder not found:")
+            && d.has_containing("It may have been moved or renamed."),
+        "A missing run folder says it may have been moved or renamed",
+    );
     d.observe_both(
         "i19-P2",
         "A missing run folder leaves no Resume or paused run",

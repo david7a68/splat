@@ -2177,7 +2177,7 @@ impl Lookup {
                     Type::Body
                         .rich(
                             ui,
-                            "Search built-in rules, every package, this campaign's own entries, session notes and the timeline. Press Escape to close.",
+                            "Search built-in rules, every package, this campaign’s own entries, session notes and the timeline. Press Escape to close.",
                         )
                         .color(colors().muted),
                 );
