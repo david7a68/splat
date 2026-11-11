@@ -3879,6 +3879,34 @@ pub mod run_lookup {
                     && d.in_view(SPELL),
                 format!("After a choice by the keys, the focus is on {chosen:?}"),
             );
+            // The mouse: a click opens the menu, and Escape or a choice gives the focus to
+            // the button too. Lookup and the armed action stay.
+            d.click(more);
+            d.expect(HIDDEN_ACTION);
+            // Only the keys move the focus to the first choice.
+            let opened = d.focused_name();
+            d.press(Key::Escape);
+            let back = d.focused_name();
+            d.observe(
+                "iter-24-R-SI1-mouse-escape",
+                opened.as_deref() != Some(HIDDEN_ACTION)
+                    && back.as_deref() == Some(more.as_str())
+                    && !d.has(HIDDEN_ACTION)
+                    && d.has_containing("% to hit")
+                    && d.in_view(SPELL),
+                format!("A click opens the menu with the focus on {opened:?}; Escape gives it to {back:?}"),
+            );
+            d.click(more);
+            d.click(HIDDEN_ACTION);
+            let chosen = d.focused_name();
+            d.observe(
+                "iter-24-R-SI1-mouse-choice",
+                chosen.as_deref() == Some(more.as_str())
+                    && !d.has(HIDDEN_ACTION)
+                    && d.has_containing("% to hit")
+                    && d.in_view(SPELL),
+                format!("After a choice by the mouse, the focus is on {chosen:?}"),
+            );
         }
         // A click on a result leaves no field in focus. Typing must not run commands.
         let turn = current_participant(d);

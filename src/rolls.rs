@@ -298,15 +298,19 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
     }
 }
 
-/// The keys opened `response`'s menu: it owns the menu until it closes, its first choice takes
-/// the focus, and `end_menu_frame` gives the focus back when the menu closes.
-fn opened_by_keys(response: &egui::Response) {
+/// `response` opened its menu: it owns the menu until it closes, and `end_menu_frame` gives
+/// the focus back when the menu closes. Opened by the keys, the first choice takes the focus.
+fn opened_menu(response: &egui::Response, by_keys: bool) {
     let frame = response.ctx.cumulative_frame_nr();
     response.ctx.data_mut(|data| {
         data.insert_temp(menu_keys_owner_id(), response.id);
         data.insert_temp(menu_owner_seen_id(), frame);
         data.remove::<egui::Id>(menu_focus_outside_id());
-        data.insert_temp(focus_first_choice_id(), true);
+        if by_keys {
+            data.insert_temp(focus_first_choice_id(), true);
+        } else {
+            data.remove::<bool>(focus_first_choice_id());
+        }
     });
 }
 
@@ -324,7 +328,7 @@ pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOp
         || (response.has_focus()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
     if by_keys {
-        opened_by_keys(response);
+        opened_menu(response, true);
         return Some(egui::SetOpenCommand::Bool(true));
     }
     if response.secondary_clicked() {
@@ -1825,15 +1829,15 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
         "{}. Choose one to arm it.",
         design::count(chips.len() - from, "more action", "more actions")
     ));
-    // Enter or Space opens it as the keys open a run's menu: Escape or a choice gives the
-    // focus back to this button.
+    // It owns its menu as a run's menu does: Escape or a choice gives the focus back to this
+    // button, whether a click or the keys opened it. Enter or Space also focus the first choice.
     keep_menu_owner(&response);
     let popup_id = egui::Popup::default_response_id(&response);
-    if response.clicked()
-        && !response.clicked_by(egui::PointerButton::Primary)
-        && !egui::Popup::is_id_open(&response.ctx, popup_id)
-    {
-        opened_by_keys(&response);
+    if response.clicked() && !egui::Popup::is_id_open(&response.ctx, popup_id) {
+        opened_menu(
+            &response,
+            !response.clicked_by(egui::PointerButton::Primary),
+        );
     }
     let popup = egui::Popup::menu(&response);
     // As a row's menu: it ends at the button's right edge when it would cross the pane's
