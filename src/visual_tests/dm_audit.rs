@@ -4,9 +4,13 @@
 //!
 //! The scenario `dm-audit` is G6. It plays the frozen evening and fails when a task's page
 //! transitions, interactions or path differ from `artifacts/dm-audit/counts.json`, when a task
-//! is missing or new, or when a counted act finds no control. A feature adds its acts as new
-//! tasks and freezes again. `audit-freeze <label>` sets `SPLAT_DM_AUDIT_WRITE=1`, and the
-//! scenario then writes `steps.tsv`, `summary.tsv` and `counts.json` in place of the check.
+//! is missing, new or out of order, or when a counted act finds no control.
+//!
+//! A feature adds its acts as new tasks of the evening, then runs `devenv shell -- audit-freeze
+//! add`. That writes a row for each new task and leaves every frozen row as it is; it refuses,
+//! and writes nothing, when a frozen task's transitions, interactions or path differ, or when a
+//! frozen task is missing or out of order. Only a pull request whose stated task is to freeze
+//! again runs `audit-freeze` with no `add`, which writes every row from this run.
 //!
 //! Set-up acts make the fixture ready. They are listed in `steps.tsv` as `Setup` and never
 //! counted, so a set-up change cannot move a count.
@@ -26,8 +30,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Write the frozen files from this run, in place of the G6 check.
+/// `all` writes the frozen files from this run; `add` writes rows for new tasks only. Either
+/// takes the place of the G6 check.
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
+/// The one way a feature adds its tasks.
+const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
+/// What a new task's line says, so that `add` knows the lines it may write.
+const NEW_TASK: &str = "a new task, not in counts.json";
 
 /// What an interaction was for. Only `Do` changes the game or the record.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -713,6 +722,21 @@ fn summary(record: &Record) -> String {
     out
 }
 
+/// The frozen counts. An empty file proves nothing, so it fails.
+fn read_frozen() -> Frozen {
+    let path = folder().join("counts.json");
+    let text = fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
+    let frozen: Frozen = serde_json::from_str(&text)
+        .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
+    assert!(
+        !frozen.tasks.is_empty(),
+        "G6: {} holds no task, so it can prove nothing",
+        path.display()
+    );
+    frozen
+}
+
 /// Each counted act that found no control, one line each.
 fn blocked(rows: &[Row]) -> Vec<String> {
     rows.iter()
@@ -756,7 +780,7 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
             .any(|old| old.phase == new.phase && old.task == new.task)
         {
             out.push(format!(
-                "{}: a new task, not frozen ({} transitions, {} interactions). Freeze it with audit-freeze",
+                "{}: {NEW_TASK} ({} transitions, {} interactions). A feature adds it with `{ADD_COMMAND}`",
                 name(new),
                 new.transitions,
                 new.interactions
@@ -769,7 +793,7 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
         .map(name)
         .filter(|task| order.contains(task))
         .collect();
-    if out.is_empty() && kept != order {
+    if kept != order && order.iter().all(|task| kept.contains(task)) {
         out.push("the frozen tasks are played in another order".to_owned());
     }
     out
@@ -808,20 +832,36 @@ pub fn run(d: &mut Driver<'_>) {
             tasks.iter().map(|t| t.interactions).sum::<u32>(),
         )
     };
-    if std::env::var_os(WRITE).is_some() {
+    let mode = std::env::var(WRITE).ok();
+    if let Some(mode) = mode.as_deref() {
         let blocked = blocked(&record.rows);
         assert!(
             blocked.is_empty(),
             "dm-audit: an act found no control, so nothing is frozen:\n{}",
             blocked.join("\n")
         );
-        let (transitions, interactions) = total(&measured);
+        let about = match mode {
+            "all" => "G6 reads this. audit-freeze writes it on main. A feature adds its new tasks \
+                      with `devenv shell -- audit-freeze add`, which leaves every row here as it is."
+                .to_owned(),
+            "add" => {
+                let frozen = read_frozen();
+                let refused: Vec<String> = differences(&frozen.tasks, &measured, &record.rows)
+                    .into_iter()
+                    .filter(|line| !line.contains(NEW_TASK))
+                    .collect();
+                assert!(
+                    refused.is_empty(),
+                    "dm-audit: `{ADD_COMMAND}` writes rows for new tasks only, and a frozen task differs, \
+                     so nothing is written. Put the frozen task back as it was:\n{}",
+                    refused.join("\n")
+                );
+                frozen.about
+            }
+            other => panic!("dm-audit: {WRITE} is `all` or `add`, not {other:?}"),
+        };
         let frozen = Frozen {
-            about: format!(
-                "G6 reads this. Written by audit-freeze from the dm-audit scenario: {} tasks, \
-                 {transitions} page transitions, {interactions} interactions.",
-                measured.len()
-            ),
+            about,
             tasks: measured,
         };
         let dir = folder();
@@ -835,16 +875,7 @@ pub fn run(d: &mut Driver<'_>) {
         println!("dm-audit: froze {}", dir.display());
         return;
     }
-    let path = folder().join("counts.json");
-    let text = fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
-    let frozen: Frozen = serde_json::from_str(&text)
-        .unwrap_or_else(|error| panic!("G6: cannot read {}: {error}", path.display()));
-    assert!(
-        !frozen.tasks.is_empty(),
-        "G6: {} holds no task, so it can prove nothing",
-        path.display()
-    );
+    let frozen = read_frozen();
     let found = differences(&frozen.tasks, &measured, &record.rows);
     assert!(
         found.is_empty(),

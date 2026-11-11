@@ -99,18 +99,25 @@
     echo "Output: $out"
     exit "$status"
   '';
-  # Measure the audit's evening (G6) and write the plain reference (G7) from this source.
-  # Run it on main only: the files it writes are what every later change is compared with.
+  # G6's counts and G7's plain reference. `audit-freeze add [label]` is the one way a feature adds
+  # its new tasks, views and acts: it keeps every frozen record and refuses when one differs.
+  # `audit-freeze [label]` writes everything from this source: only a pull request whose task is
+  # to freeze again runs it.
   scripts.audit-freeze.exec = ''
+    mode=all
+    if [ "''${1:-}" = add ]; then
+      mode=add
+      shift
+    fi
     if [ "$#" -gt 1 ]; then
-      echo "Use: audit-freeze [label]" >&2
+      echo "Use: audit-freeze [add] [label]" >&2
       exit 2
     fi
     label="''${1:-freeze}"
     case "$label" in
       "" | */* | .*) echo "Use a plain capture label." >&2; exit 2 ;;
     esac
-    SPLAT_VISUAL_ENFORCE=report SPLAT_DM_AUDIT_WRITE=1 SPLAT_PLAIN_EVENING_WRITE=1 \
+    SPLAT_VISUAL_ENFORCE=report SPLAT_DM_AUDIT_WRITE="$mode" SPLAT_PLAIN_EVENING_WRITE="$mode" \
       visual-test "$label" --only dm-audit,plain-evening
   '';
   # Apply only chrome counts from a completed full or --only run, without recapturing.

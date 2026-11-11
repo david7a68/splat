@@ -20,9 +20,13 @@
 //! Any other difference fails unless one row of `plain_evening/allowed.json` names exactly that
 //! difference, with its row of section 2.5. A row that matches nothing fails.
 //!
-//! `audit-freeze` sets `SPLAT_PLAIN_EVENING_WRITE=1`: the scenario then writes the reference,
-//! its files and `artifacts/dm-audit/titles.tsv` in place of the check. It refuses while
-//! `allowed.json` has a row. A feature pull request never writes the reference again.
+//! A feature adds a view of its own surface to `SCREENS` (and, where it needs one, the acts that
+//! reach it), adds rows to `allowed.json` for each difference it makes to an old record, and
+//! runs `devenv shell -- audit-freeze add`. That writes the new views and acts into the reference
+//! in their places and leaves every old record as it is; it refuses, and writes nothing, while
+//! any other difference has no row. Only a pull request whose stated task is to freeze again runs
+//! `audit-freeze` with no `add`: that writes the whole reference, its files and
+//! `artifacts/dm-audit/titles.tsv`, and refuses while `allowed.json` has a row.
 use super::{
     driver::{Driver, Sizes},
     fixture::{
@@ -43,7 +47,10 @@ use std::{
     time::SystemTime,
 };
 
+/// `all` writes the reference from this run; `add` adds new views and acts only.
 const WRITE: &str = "SPLAT_PLAIN_EVENING_WRITE";
+/// The one way a feature adds its views and acts.
+const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
@@ -71,28 +78,33 @@ use Shown::{Held, Page, Reader};
 /// Every screen of the plain evening, in the order it reaches them. G7 needs each view of each,
 /// and no other; `allowed.json` cannot change this list.
 const SCREENS: &[(&str, Shown)] = &[
+    ("start", Held),
     ("session-tonight", Page),
     ("session-tonight: More open", Held),
     ("session-tonight: Travel row menu", Held),
     ("session-tonight: fight row menu", Held),
-    ("session-tonight: Last time hover", Held),
     ("session-tonight: Travel row open", Page),
     ("session-tonight: planned fight open", Page),
+    ("session-last", Held),
     ("session-last: played fight open", Page),
     ("run-ended: played last", Page),
+    ("run-ended: closed", Held),
+    ("session-last: older fight open", Held),
     ("run-ended: played before", Page),
+    ("run-ended: older closed", Held),
     ("encounters", Page),
     ("encounters: row menu", Held),
     ("encounter-editor", Page),
     ("encounter-editor: loot table menu", Held),
     ("run-twelve", Page),
-    ("run-twelve: row hover", Held),
     ("run-keys", Page),
+    ("run-twelve: Brannoch selected", Held),
     ("run-conditions", Page),
     ("run-arrivals", Page),
     ("run-next-round", Page),
-    ("run-next-round: Undo hover", Held),
+    ("run-closed", Held),
     ("timeline", Page),
+    ("session-last: again", Held),
     ("lookup-reader Captain Varra, npc", Reader),
     ("lookup-reader Captain Varra, creature", Reader),
     ("lookup-reader Oren Thistlewick, npc", Reader),
@@ -101,9 +113,127 @@ const SCREENS: &[(&str, Shown)] = &[
     ("lookup-reader Captain Varra Black, creature", Reader),
     ("lookup-reader Road Encounters", Reader),
     ("lookup-reader Cinder Wolf", Reader),
+    ("world-list", Held),
     ("world-reader", Page),
+    ("session-new: form", Held),
+    ("session-new: form with a title", Held),
     ("session-new", Page),
+    ("session-new: note written", Held),
+    ("session-new: note saved", Held),
 ];
+
+/// What a hover rests on.
+#[derive(Clone, Copy)]
+enum Target {
+    /// A control by its whole accessible name.
+    Name(&'static str),
+    /// A control whose accessible name starts with these words.
+    Starting(&'static str),
+    /// Painted words, where the words have no control of their own.
+    Words(&'static str),
+}
+use Target::{Name, Starting, Words};
+
+/// Each hover G7 records, on the screen it belongs to: a control that section 2.5 protects, or
+/// that a feature may give words to. A control with no hover today is here too, so a hover it
+/// gains is a difference. The view is `<screen>: <label> hover`, at both sizes.
+const HOVERS: &[(&str, &str, Target, &str)] = &[
+    (
+        "session-tonight",
+        "Last time",
+        Name("Session 7: The Road to Emberfall"),
+        "Rows 11 and 16: the Last time line gains Carry over and reads another source; its hover holds the whole recap",
+    ),
+    (
+        "session-tonight",
+        "planned fight",
+        Name("Shrine of Cinders"),
+        "Row 1: a planned fight's summary gains a difficulty word, whose whole words may go to a hover",
+    ),
+    (
+        "session-tonight",
+        "Travel row menu button",
+        Name("More actions for Road to the ford"),
+        "Row 12: the Travel row's menu gains a line; its button's hover names the menu",
+    ),
+    (
+        "session-last: played fight open",
+        "played fight",
+        Name("Wolves at the Ford Below the Burning Shrine Road"),
+        "Row 10: Add rewards joins a played row whose long title may then shorten to a hover",
+    ),
+    (
+        "run-ended: played last",
+        "Continue fight",
+        Name("Continue fight"),
+        "F8: the one control that takes an ending away; a feature may give it words",
+    ),
+    (
+        "run-ended: played before",
+        "reason",
+        Words("A later fight or rest was played"),
+        "F8: the reason a fight cannot go on; a narrow place may shorten it to a hover",
+    ),
+    (
+        "encounters",
+        "row menu button",
+        Name("More actions for Shrine of Cinders"),
+        "Row 13: Remove… joins a Ready to run row's menu",
+    ),
+    (
+        "run-twelve",
+        "row",
+        Words("Bless 10 rounds"),
+        "Rows 5 and 15: a row's condition words; F2 folds effects and puts their whole words in the hover",
+    ),
+    (
+        "run-conditions",
+        "Conditions",
+        Name("Conditions for this participant"),
+        "Row 6: Effect joins the dock beside Conditions",
+    ),
+    (
+        "run-next-round",
+        "Undo",
+        Starting("Undo"),
+        "Row 20: Undo shares its line with the notice line, and its target may shorten to its hover",
+    ),
+    (
+        "world-reader",
+        "Edit",
+        Name("Edit Captain Varra Black"),
+        "Rows 8 and 9: Add to Log and Start fight follow Edit in the reader's header",
+    ),
+    (
+        "lookup-reader Cinder Wolf",
+        "art",
+        Name("Cinder Wolf"),
+        "Row 21: Start fight joins a package creature's header, after its art",
+    ),
+];
+
+/// The acts after which the screen needs no view of its own, each with why. After any other
+/// act, the screen must equal a view that G7 records, or the next view must be of it.
+const PASSING: &[(&str, &str)] = &[
+    (
+        "open Captain Varra in Lookup",
+        "Setting the stage: the same reader is the view lookup-reader Captain Varra, creature",
+    ),
+    (
+        "Next turn ",
+        "One turn of twelve: its words are in the act's record, and the round's end is a view",
+    ),
+    (
+        "close Roll on a table for the encounter at 960x640",
+        "The editor stays scrolled to its loot row, as the view of that menu at 960x640 shows",
+    ),
+];
+
+fn passing(act: &str) -> bool {
+    PASSING
+        .iter()
+        .any(|(name, _)| act == *name || (name.ends_with(' ') && act.starts_with(name)))
+}
 
 fn view_name(size: (f32, f32), lookup: Option<bool>) -> String {
     match lookup {
@@ -129,6 +259,11 @@ fn required_views() -> Vec<(String, String)> {
         for lookup in lookups {
             for size in [WIDE, NARROW] {
                 out.push(((*screen).to_owned(), view_name(size, *lookup)));
+            }
+        }
+        for (on, label, ..) in HOVERS.iter().filter(|(on, ..)| on == screen) {
+            for size in [WIDE, NARROW] {
+                out.push((format!("{on}: {label} hover"), view_name(size, None)));
             }
         }
     }
@@ -415,11 +550,23 @@ struct Evening {
     views: Vec<View>,
     acts: Vec<Act>,
     titles: Vec<String>,
+    /// Each view taken, by its window size and its controls and words.
+    seen: BTreeSet<(String, String)>,
+    /// The act after which the screen is in no view yet.
+    unseen: Option<String>,
+    /// What the evening itself found wrong.
+    faults: Vec<String>,
+}
+
+/// A view's controls and words, apart from its names.
+fn fingerprint(view: &View) -> String {
+    hex(json(&(&view.controls, &view.texts)).as_bytes())
 }
 
 impl Evening {
     /// One input of the evening, with what it showed and wrote.
     fn act(&mut self, d: &mut Driver<'_>, what: &str, step: impl FnOnce(&mut Driver<'_>)) {
+        self.check_seen();
         let before = d.last_words();
         let files = self.files.stamps();
         let ((), during) = d.traced(step);
@@ -461,6 +608,49 @@ impl Evening {
             gone: before.difference(&after).map(portable).collect(),
             files: written,
         });
+        let size = d.window_size();
+        let now = look(d, &self.files.world, "", String::new());
+        if !self
+            .seen
+            .contains(&(view_name(size, None), fingerprint(&now)))
+        {
+            self.unseen = Some(what.to_owned());
+        }
+    }
+
+    /// The screen after the last act must be in a view by now, unless that act is passing.
+    fn check_seen(&mut self) {
+        if let Some(act) = self.unseen.take()
+            && !passing(&act)
+        {
+            self.faults.push(format!(
+                "the screen after the act {act:?} is in no view: add a view of it to SCREENS, or list the act in PASSING with a reason"
+            ));
+        }
+    }
+
+    /// Keep a view, and know its screen when an act shows it again.
+    fn keep(&mut self, view: View, size: (f32, f32)) {
+        self.seen
+            .insert((view_name(size, None), fingerprint(&view)));
+        // A view taken now shows the screen that the last act left.
+        self.unseen = None;
+        self.views.push(view);
+    }
+
+    /// Each hover of `HOVERS` on this screen, at both sizes.
+    fn hovers(&mut self, d: &mut Driver<'_>, screen: &str) {
+        for (_, label, target, _) in HOVERS.iter().filter(|(on, ..)| *on == screen) {
+            let name = format!("{screen}: {label} hover");
+            self.hover(d, &name, |d| match *target {
+                Name(name) => d.hover_name(name),
+                Starting(words) => {
+                    let name = d.name_starting(words);
+                    d.hover_name(&name);
+                }
+                Words(words) => d.hover_words(words),
+            });
+        }
     }
 
     fn lookup(&mut self, d: &mut Driver<'_>, open: bool) {
@@ -483,9 +673,14 @@ impl Evening {
         for size in [WIDE, NARROW] {
             let view = view_name(size, lookup);
             let world = &self.files.world;
-            self.views
-                .push(d.at_size(size, |d| look(d, world, screen, view)));
+            let seen = d.at_size(size, |d| look(d, world, screen, view));
+            self.keep(seen, size);
         }
+    }
+
+    /// A screen as it stands, at both sizes, Lookup as it is.
+    fn held(&mut self, d: &mut Driver<'_>, screen: &str) {
+        self.both_sizes(d, screen, None);
     }
 
     /// A page with Lookup closed, then open, as Ctrl+K shows what Lookup showed last. Also a
@@ -516,7 +711,7 @@ impl Evening {
                     "G7: the menu of {screen} at {view} does not hold {wanted:?}"
                 );
             }
-            self.views.push(seen);
+            self.keep(seen, size);
             self.act(d, &format!("close {button} at {view}"), |d| {
                 d.press(Key::Escape);
             });
@@ -536,6 +731,7 @@ impl Evening {
                 seen
             });
             self.views.push(seen);
+            // A hover's view is not a screen an act leaves, so it does not count as seen.
         }
     }
 
@@ -658,6 +854,9 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         views: Vec::new(),
         acts: Vec::new(),
         titles: Vec::new(),
+        seen: BTreeSet::new(),
+        unseen: None,
+        faults: Vec::new(),
     };
     let at_start = ev.files.all();
     // Lookup holds Captain Varra's page, as the DM left it.
@@ -668,6 +867,7 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         d.settle();
     });
     ev.lookup(d, false);
+    ev.held(d, "start");
 
     ev.act(d, "Session", |d| {
         d.click(NAV_SESSIONS);
@@ -693,9 +893,7 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         "More actions for Shrine of Cinders",
         &["Remove from tonight"],
     );
-    ev.hover(d, "session-tonight: Last time hover", |d| {
-        d.hover_name(&format!("Session 7: {PLAIN_LAST}"));
-    });
+    ev.hovers(d, "session-tonight");
     ev.act(d, "open the Travel row", |d| d.click("Road to the ford"));
     ev.page(d, "session-tonight: Travel row open");
     ev.act(d, "open the planned fight", |d| {
@@ -707,8 +905,10 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         d.click_starting(&format!("Session 7: {PLAIN_LAST} ·"));
     });
     d.expect(PLAIN_PLAYED);
+    ev.held(d, "session-last");
     ev.act(d, "open the played fight", |d| d.click(PLAIN_PLAYED));
     ev.page(d, "session-last: played fight open");
+    ev.hovers(d, "session-last: played fight open");
     // `Whole run` opens the ended run in place, in the Encounters history: the fight that was
     // played last, then an older one, whose view says why it cannot go on.
     ev.act(d, "Whole run", |d| d.click_link("Whole run"));
@@ -717,23 +917,26 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         "G7: the fight that was played last offers no Continue fight"
     );
     ev.page(d, "run-ended: played last");
+    ev.hovers(d, "run-ended: played last");
     ev.act(d, "close the ended run", |d| {
         d.click_starting(&format!("Close the run of {PLAIN_PLAYED}"));
     });
+    ev.held(d, "run-ended: closed");
     ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
     ev.act(d, "open the older fight", |d| d.click(PLAIN_OLDER));
+    ev.held(d, "session-last: older fight open");
     ev.act(d, "Whole run", |d| d.click_link("Whole run"));
+    // The reason's own words are in the view, so G7 names any word that changes.
     assert!(
-        !d.has("Continue fight")
-            && d.has_label(
-                "A later fight or rest was played. Start a new run to play this one again."
-            ),
-        "G7: the older fight does not say why it cannot go on"
+        !d.has("Continue fight"),
+        "G7: the older fight offers Continue fight"
     );
     ev.page(d, "run-ended: played before");
+    ev.hovers(d, "run-ended: played before");
     ev.act(d, "close the older run", |d| {
         d.click_starting(&format!("Close the run of {PLAIN_OLDER}"));
     });
+    ev.held(d, "run-ended: older closed");
 
     ev.act(d, "Encounters", |d| d.click(NAV_ENCOUNTERS));
     ev.page(d, "encounters");
@@ -743,6 +946,7 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         "More actions for Shrine of Cinders",
         &["Start fight"],
     );
+    ev.hovers(d, "encounters");
     ev.act(d, "edit Shrine of Cinders", |d| {
         open_saved_encounter(d, "Shrine of Cinders");
     });
@@ -759,16 +963,16 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         resume_run(d, PLAIN_RUN)
     });
     ev.page(d, "run-twelve");
-    ev.hover(d, "run-twelve: row hover", |d| {
-        d.hover_words("Bless 10 rounds");
-    });
+    ev.hovers(d, "run-twelve");
     ev.act(d, "open Keys", |d| d.click("Keyboard commands"));
     ev.page(d, "run-keys");
     ev.act(d, "close Keys", |d| d.click("Keyboard commands"));
     ev.act(d, "select Brannoch", |d| d.click_row("Brannoch Vale"));
+    ev.held(d, "run-twelve: Brannoch selected");
     ev.act(d, "Conditions", |d| d.click(CONDITIONS));
     d.expect("Other effect");
     ev.page(d, "run-conditions");
+    ev.hovers(d, "run-conditions");
     ev.act(d, "Add to fight", |d| d.click("Add to fight"));
     ev.page(d, "run-arrivals");
     // A whole round, so words typed as conditions meet each turn and a new round.
@@ -776,14 +980,15 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         ev.act(d, &format!("Next turn {turn}"), |d| d.click(NEXT_TURN));
     }
     ev.page(d, "run-next-round");
-    let undo = d.name_starting("Undo");
-    ev.hover(d, "run-next-round: Undo hover", |d| d.hover_name(&undo));
+    ev.hovers(d, "run-next-round");
     ev.act(d, "close the run", close_run);
+    ev.held(d, "run-closed");
 
     ev.act(d, "Timeline", |d| d.click(NAV_TIMELINE));
     ev.page(d, "timeline");
 
     ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
+    ev.held(d, "session-last: again");
     for title in PLAIN_TITLES {
         for portrait in [false, true] {
             ev.title_reader(d, title, portrait);
@@ -798,31 +1003,39 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         d.app_mut().lookup.open_id(plain_package_creature());
         d.settle();
     });
+    ev.hovers(d, "lookup-reader Cinder Wolf");
     ev.lookup(d, false);
 
     ev.act(d, "World", |d| d.click(NAV_WORLD));
+    ev.held(d, "world-list");
     ev.act(d, "open Captain Varra Black", |d| {
         d.click_starting("Captain Varra Black");
     });
     ev.page(d, "world-reader");
+    ev.hovers(d, "world-reader");
 
     ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
     ev.act(d, "New session", |d| d.click("New session"));
+    ev.held(d, "session-new: form");
     ev.act(d, "type the title", |d| {
         d.type_into("Session title", "The Shrine");
     });
+    ev.held(d, "session-new: form with a title");
     ev.act(d, "Create session", |d| d.click("Create session"));
     ev.page(d, "session-new");
     ev.act(d, "write in the note", |d| {
         write_note(d);
         d.type_into_editor("\nThe party camps at the shrine.\n");
     });
+    ev.held(d, "session-new: note written");
     ev.act(d, "save", |d| {
         d.press_ctrl(Key::S);
         d.app_mut().sessions.flush();
         d.app_mut().timeline.save();
         d.settle();
     });
+    ev.held(d, "session-new: note saved");
+    ev.check_seen();
     let at_end = ev.files.all();
     (ev, at_start, at_end)
 }
@@ -1000,17 +1213,50 @@ fn compare_files(reference: &Reference, start: &Bytes, end: &Bytes, out: &mut Ve
     }
 }
 
+/// Old and new acts paired by name along the longest run that both keep in order, so that a
+/// feature's new act is one new act, not a change of every act after it.
+type Pair<'a> = (Option<(usize, &'a Act)>, Option<(usize, &'a Act)>);
+
+fn align<'a>(old: &'a [Act], new: &'a [Act]) -> Vec<Pair<'a>> {
+    let (n, m) = (old.len(), new.len());
+    let mut kept = vec![vec![0_u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            kept[i][j] = if old[i].act == new[j].act {
+                kept[i + 1][j + 1] + 1
+            } else {
+                kept[i + 1][j].max(kept[i][j + 1])
+            };
+        }
+    }
+    let (mut i, mut j, mut out) = (0, 0, Vec::new());
+    while i < n || j < m {
+        if i < n && j < m && old[i].act == new[j].act {
+            out.push((Some((i, &old[i])), Some((j, &new[j]))));
+            i += 1;
+            j += 1;
+        } else if j == m || (i < n && kept[i + 1][j] >= kept[i][j + 1]) {
+            out.push((Some((i, &old[i])), None));
+            i += 1;
+        } else {
+            out.push((None, Some((j, &new[j]))));
+            j += 1;
+        }
+    }
+    out
+}
+
 fn compare_acts(old: &[Act], new: &[Act], out: &mut Vec<Difference>) {
-    for index in 0..old.len().max(new.len()) {
-        let (a, b) = (old.get(index), new.get(index));
-        if a == b {
-            continue;
-        }
-        let name = |act: Option<&Act>| act.map_or("(none)".to_owned(), |act| act.act.clone());
+    for (a, b) in align(old, new) {
+        let (change, at) = match (a, b) {
+            (Some((_, a)), Some((_, b))) if a == b => continue,
+            (Some((at, _)), Some(_)) => ("changed", at),
+            (Some((at, _)), None) => ("gone", at),
+            (None, Some((at, _))) => ("new", at),
+            (None, None) => continue,
+        };
+        let (a, b) = (a.map(|(_, act)| act), b.map(|(_, act)| act));
         let mut detail = Vec::new();
-        if a.map(|act| &act.act) != b.map(|act| &act.act) {
-            detail.push(format!("the act was {:?}, now {:?}", name(a), name(b)));
-        }
         let parts: [ActPart; 3] = [
             ("appeared", |act| &act.appeared),
             ("went", |act| &act.gone),
@@ -1027,11 +1273,11 @@ fn compare_acts(old: &[Act], new: &[Act], out: &mut Vec<Difference>) {
             }
         }
         out.push(Difference {
-            screen: format!("act {}", index + 1),
+            screen: format!("act {}", at + 1),
             view: String::new(),
             what: "act".to_owned(),
-            change: "changed".to_owned(),
-            name: name(b.or(a)),
+            change: change.to_owned(),
+            name: b.or(a).map_or_else(String::new, |act| act.act.clone()),
             detail: detail.join(" | "),
         });
     }
@@ -1143,9 +1389,6 @@ fn view_faults(what: &str, views: &[View]) -> Vec<String> {
             ));
         }
     }
-    if faults.is_empty() && views != required {
-        faults.push(format!("{what} holds the views in another order"));
-    }
     faults
 }
 
@@ -1191,11 +1434,43 @@ fn write_reference(ev: Evening, start: &Bytes, end: &Bytes) {
     .expect("write titles.tsv");
 }
 
+/// The reference with this evening's new views and new acts in their places. Every record
+/// that the reference holds stays as it is and where it is, also where an allowed row lets it
+/// differ, so the diff of the reference is the new records only. A new view follows the view
+/// that the evening took before it.
+fn add_to_reference(reference: Reference, ev: &Evening) {
+    let same = |a: &View, b: &View| a.screen == b.screen && a.view == b.view;
+    let mut views = reference.views.clone();
+    let mut last: Option<usize> = None;
+    for new in &ev.views {
+        match views.iter().position(|old| same(old, new)) {
+            Some(at) => last = Some(at),
+            None => {
+                let at = last.map_or(0, |at| at + 1);
+                views.insert(at, new.clone());
+                last = Some(at);
+            }
+        }
+    }
+    let acts = align(&reference.acts, &ev.acts)
+        .into_iter()
+        .filter_map(|(old, new)| old.or(new).map(|(_, act)| act.clone()))
+        .collect();
+    let reference = Reference {
+        views,
+        acts,
+        ..reference
+    };
+    fs::write(folder().join("reference.json"), reference_text(&reference))
+        .expect("write the reference");
+}
+
 /// G7. The scenario `plain-evening`.
 pub fn run(d: &mut Driver<'_>) {
     let (ev, start, end) = play(d);
     let allowed: Allowed = read(&folder().join("allowed.json"));
     let mut faults = view_faults("this evening", &ev.views);
+    faults.extend(ev.faults.iter().cloned());
     for view in &ev.views {
         if view.controls.is_empty() || view.texts.is_empty() {
             faults.push(format!("{} / {} captured nothing", view.screen, view.view));
@@ -1204,7 +1479,14 @@ pub fn run(d: &mut Driver<'_>) {
     if ev.acts.is_empty() || start.is_empty() || end.is_empty() {
         faults.push("the evening recorded no act or no file, so it can prove nothing".into());
     }
-    if std::env::var_os(WRITE).is_some() {
+    let mode = std::env::var(WRITE).ok();
+    if let Some(mode) = mode.as_deref() {
+        assert!(
+            ["all", "add"].contains(&mode),
+            "G7: {WRITE} is `all` or `add`, not {mode:?}"
+        );
+    }
+    if mode.as_deref() == Some("all") {
         assert!(
             faults.is_empty(),
             "G7: nothing written:\n{}",
@@ -1218,8 +1500,16 @@ pub fn run(d: &mut Driver<'_>) {
         println!("plain-evening: wrote the reference");
         return;
     }
+    let adding = mode.as_deref() == Some("add");
     let reference: Reference = read(&folder().join("reference.json"));
-    faults.extend(view_faults("the reference", &reference.views));
+    // A view that SCREENS names and the reference lacks is a feature's new view: `add` writes it.
+    for fault in view_faults("the reference", &reference.views) {
+        if !fault.starts_with("the reference lacks the view") {
+            faults.push(fault);
+        } else if !adding {
+            faults.push(format!("{fault}. A feature adds it with `{ADD_COMMAND}`"));
+        }
+    }
     if reference.acts.is_empty()
         || reference.files_at_start.is_empty()
         || reference.files_at_end.is_empty()
@@ -1231,6 +1521,10 @@ pub fn run(d: &mut Driver<'_>) {
         faults.push("the reference holds an empty view, no act or no files".into());
     }
     let mut found = differences(&reference, &ev, &start, &end);
+    if adding {
+        // A feature's new act is what `add` writes, with its new views.
+        found.retain(|difference| !(difference.what == "act" && difference.change == "new"));
+    }
     for row in &allowed.rows {
         if !CONTRACT_ROWS.contains(&row.row) {
             faults.push(format!(
@@ -1258,11 +1552,24 @@ pub fn run(d: &mut Driver<'_>) {
             )),
         }
     }
-    faults.extend(
-        found
-            .iter()
-            .map(|difference| format!("not allowed: {difference}")),
-    );
+    faults.extend(found.iter().map(|difference| {
+        if difference.what == "act" && difference.change == "new" {
+            format!("not allowed: {difference}. A feature adds its acts with `{ADD_COMMAND}`")
+        } else {
+            format!("not allowed: {difference}")
+        }
+    }));
+    if adding {
+        assert!(
+            faults.is_empty(),
+            "G7: `{ADD_COMMAND}` writes new views and new acts only, and the evening differs from the \
+             reference where no row of allowed.json says so, so nothing is written:\n{}",
+            faults.join("\n")
+        );
+        add_to_reference(reference, &ev);
+        println!("plain-evening: added the new views and acts to the reference");
+        return;
+    }
     assert!(
         faults.is_empty(),
         "G7: {} differences from the plain reference. First: {}\nAll:\n{}",
