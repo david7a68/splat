@@ -4686,28 +4686,45 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     // value keeps the label column's room, so each missing link stays on one line. Must stay
     // true: Change still starts an `L` gap after its value.
     // At 960 the pane is too narrow for the whole value: the name keeps its words on one line
-    // and `Not found` takes its own line, whole, as the missing-link rule says.
+    // and `Not found` takes its own line, whole and visible, directly under the name, as the
+    // missing-link rule says.
     for size in [SMALL, DEFAULT, LARGE] {
         let (whole, detail) = d.at_size(size, |d| {
-            // The rows of each painted text with exactly these words.
-            let rows = |words: &str| {
+            // Each painted text with exactly these words, wholly visible: its rows and its rect.
+            let painted = |words: &str| {
                 let mut found = Vec::new();
                 d.each_painted_text(|text, clip| {
-                    if text.galley.job.text == words && clip.intersects(text.visual_bounding_rect())
-                    {
-                        found.push(text.galley.rows.len());
+                    let rect = text.visual_bounding_rect();
+                    if text.galley.job.text == words && clip.expand(1.0).contains_rect(rect) {
+                        found.push((text.galley.rows.len(), rect));
                     }
                 });
                 found
             };
+            let not_found = painted("Not found");
             let mut detail = Vec::new();
             let mut whole = true;
             for name in ["Watchkeeper Guard", "Watch House"] {
-                let full = rows(&format!("{} {name} · Not found", design::icons::WARN));
-                let alone = rows(&format!("{} {name}", design::icons::WARN));
-                whole &= full == [1] || (size == SMALL && alone == [1] && full.is_empty());
-                detail.push(format!("{name}: one galley {full:?}, name alone {alone:?}"));
+                let full = painted(&format!("{} {name} · Not found", design::icons::WARN));
+                let alone = painted(&format!("{} {name}", design::icons::WARN));
+                // When the value wraps, `Not found` is its own whole line directly under its
+                // name, starting at the name's left edge.
+                let under = match alone.as_slice() {
+                    [(1, name)] => not_found.iter().any(|(rows, state)| {
+                        *rows == 1
+                            && (state.left() - name.left()).abs() <= 1.0
+                            && state.top() >= name.bottom() - 0.5
+                            && state.top() - name.bottom() < design::S
+                    }),
+                    _ => false,
+                };
+                whole &= (full.len() == 1 && full[0].0 == 1)
+                    || (size == SMALL && full.is_empty() && under);
+                detail.push(format!(
+                    "{name}: one galley {full:?}, name alone {alone:?}, under {under}"
+                ));
             }
+            detail.push(format!("Not found texts {not_found:?}"));
             let change = d.place_of("Change Stat block");
             // World's value only: Lookup, to the right, names the same stat block.
             let value = change.and_then(|change| {

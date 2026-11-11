@@ -46,6 +46,41 @@ pub(crate) fn editor(
         .inner
 }
 
+/// Why Save would not write this draft: a fault in its text and the line to fix, or an identity
+/// that the campaign does not allow. It writes nothing. Save, the save row's state, its cause
+/// and Save's availability all use it, so `Unsaved` always means that Save would write.
+pub(super) fn refusal(
+    campaign: &Campaign,
+    path: &str,
+    draft: &str,
+) -> (Option<String>, Option<usize>) {
+    // The save row asks on every frame; a parse of a long note takes about 1 ms.
+    static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
+        splat::memo::Memo::new(64);
+    REFUSALS.get_or(
+        &[campaign.id.as_bytes(), path.as_bytes(), draft.as_bytes()],
+        || {
+            let (problem, line) = crate::campaign_content::repair_problem(path, draft);
+            if problem.is_some() {
+                return (problem, line);
+            }
+            match splat::content::Entry::parse(path, draft) {
+                Ok(entry)
+                    if entry.kind == "package"
+                        || (entry.kind == "campaign" && entry.id != campaign.id) =>
+                {
+                    (Some(OWNERSHIP.into()), None)
+                }
+                Ok(_) => (None, None),
+                Err(error) => (Some(error), None),
+            }
+        },
+    )
+}
+
+/// Why Save refuses a note that would claim a package, or another campaign, as its identity.
+pub(super) const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+
 /// Why a repair did not open.
 #[derive(Debug)]
 pub(super) enum OpenError {
@@ -110,7 +145,8 @@ impl Repair {
                 self.error = None;
             }
         }
-        let (problem, line) = crate::campaign_content::repair_problem(&self.path, &self.draft);
+        // Save's own checks: the state word, its cause and Save's availability all come from them.
+        let (problem, line) = refusal(campaign, &self.path, &self.draft);
         design::reader::title(
             ui,
             std::path::Path::new(&self.path)
@@ -247,17 +283,15 @@ impl Repair {
     }
 
     fn save(&mut self, campaign: &Campaign) -> bool {
-        let result = splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
-            if entry.kind == "package" || (entry.kind == "campaign" && entry.id != campaign.id) {
-                return Err("Keep campaign ownership consistent with settings.".into());
-            }
-            write_note(
+        let result = match refusal(campaign, &self.path, &self.draft) {
+            (Some(reason), _) => Err(reason),
+            (None, _) => write_note(
                 &campaign.path,
                 &self.path,
                 Some(&self.baseline),
                 &self.draft,
-            )
-        });
+            ),
+        };
         match result {
             Ok(_) => {
                 self.baseline = self.draft.clone();
@@ -403,6 +437,41 @@ mod tests {
             words.contains("Unsaved") && !words.contains("Invalid"),
             "FF2-changed\n{words}"
         );
+        // Round 23 review: a draft that parses, but that Save refuses (another campaign's
+        // identity), is Invalid with Save's reason, before and after a Save attempt. Save is
+        // not primary and writes nothing.
+        let other = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: campaign\nsplat_name: Other\nsplat_namespace: other\n",
+                uuid::Uuid::new_v4()
+            ),
+            "",
+        )
+        .unwrap();
+        assert!(
+            splat::content::Entry::parse("Broken.md", &other).is_ok(),
+            "fixture parses"
+        );
+        repair.draft = other.clone();
+        for attempt in ["before", "after"] {
+            let (primary, words) = painted(&mut repair, &campaign, false);
+            assert!(!primary, "review-refused-primary-{attempt}");
+            assert!(
+                words.contains("Invalid")
+                    && words.contains(OWNERSHIP)
+                    && !words.contains("Unsaved"),
+                "review-refused-state-{attempt}\n{words}"
+            );
+            assert!(!repair.save(&campaign), "review-refused-save-{attempt}");
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                before,
+                "review-refused-bytes-{attempt}"
+            );
+        }
+        assert_eq!(repair.draft, other);
+        repair.draft = draft.clone();
         assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
         assert_eq!(repair.draft, draft);
         for moved in [true, false] {
