@@ -13,6 +13,36 @@ use std::ops::Range;
 pub struct Flag {
     pub line: usize,
     pub message: String,
+    /// What the flag is about, so a screen can offer its repair without reading the words.
+    #[serde(default, skip_serializing_if = "FlagKind::is_plain")]
+    pub kind: FlagKind,
+}
+
+/// What a flag is about, when a screen offers a repair for it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FlagKind {
+    #[default]
+    Plain,
+    /// A `Rule choices` row of a campaign that names no single rule. Rules and runs repairs it.
+    RuleChoice,
+    /// A `Rule choices` row without a readable id. Reading the row by its rule name replaces it.
+    RuleChoiceId,
+}
+
+impl FlagKind {
+    fn is_plain(&self) -> bool {
+        *self == Self::Plain
+    }
+}
+
+impl Flag {
+    pub fn new(line: usize, message: String) -> Self {
+        Self {
+            line,
+            message,
+            kind: FlagKind::Plain,
+        }
+    }
 }
 
 pub fn label(value: &str) -> String {
@@ -278,10 +308,7 @@ impl Table {
             };
             seen = true;
             if let Some(message) = error {
-                flags.push(Flag {
-                    line: first.line,
-                    message,
-                });
+                flags.push(Flag::new(first.line, message));
             }
         }
         result

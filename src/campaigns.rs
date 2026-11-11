@@ -1109,7 +1109,7 @@ impl Campaigns {
                         self.path = path.to_string_lossy().into_owned();
                     }
                 });
-                ui.add(egui::Label::new(Type::Small.rich(ui, "Splat keeps this campaign's notes, encounters and runs here. A folder in your Obsidian vault works.").color(colors().muted)).wrap());
+                ui.add(egui::Label::new(Type::Small.rich(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.").color(colors().muted)).wrap());
                 ui.horizontal(|ui| {
                     let submit = if editing {
                         "Save details"

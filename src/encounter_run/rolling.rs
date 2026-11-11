@@ -624,7 +624,7 @@ impl Run {
             let name = &self.state.participants[row].name;
             let heading = match &armed.link {
                 RollLink::SaveDc { label, ability, .. } => {
-                    format!("{name}'s {ability} save against {label}")
+                    format!("{name}’s {ability} save against {label}")
                 }
                 link => format!("{} against {name}", rolls::link_label(link)),
             };
@@ -1005,7 +1005,7 @@ impl Run {
                     actions.push(("Roll for them", ArmedAction::RollForThem));
                 }
                 (
-                    "Click a target, then type the player's damage. Escape stops.".to_owned(),
+                    "Click a target, then type the player’s damage. Escape stops.".to_owned(),
                     actions,
                 )
             }
