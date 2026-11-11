@@ -95,7 +95,8 @@ fn import(gaps: Vec<Gap>) -> Value {
 
 impl EntitySnapshot {
     /// The final note is the creature; preceding notes are its campaign-owned dependencies.
-    /// Used by both fresh reads and version-1 caches, so migration requires no network request.
+    /// Used by both fresh reads and cached records, so publishing from the cache requires no
+    /// network request.
     ///
     /// The notes depend only on the snapshot and the built-in rules. One load and save asks
     /// for them several times (validate, route, save), so the last few are remembered.

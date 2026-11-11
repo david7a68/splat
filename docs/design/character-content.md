@@ -7,7 +7,7 @@ content editor, dependency traversal, and encounter roster use the same reader
 as authored content. Structural validity does not grant simulation support.
 
 The private `EntitySnapshot` JSON remains a lossless provider cache, not a second
-simulation format. Both fresh responses and old version-1 caches go through
+simulation format. Fresh responses and cached records go through
 `content_notes()` when published. Campaign Markdown never embeds that snapshot.
 The provider cache retains choices, custom fields, and source data for future
 conversion; incomplete semantics are reported rather than inferred from prose.
@@ -64,7 +64,7 @@ The typed `splat_character` extension contains:
 
 Custom actions become `features` entries (`custom_action_ID`) with their gaps.
 Empty fields are left out. These parts come from the private cache's character
-v5 record, so an old cache gains them on its next publication with no new read.
+v5 record, so a cached record gains them on its next publication with no new read.
 Alignment, lifestyle and creature group names use the IDs from D&D Beyond's
 `api/config/json`; an ID that Splat cannot name is a gap, and the source value
 stays in the cache. Sheet text in the Markdown body is escaped: each line's
@@ -205,9 +205,10 @@ copy or the copy has personal notes. Such a copy stays, and its edits become its
 generated content. A conflicting archive never changes: the new bytes take the next
 unused name, `.md.splat-archive.1` and so on.
 
-Loading an old private cache automatically creates the new content on its next
-publication. The offline export example also performs this migration without
-fetching source data. Existing creature UUIDs and note paths stay unchanged.
+A cached record creates the current content on its next publication, and the offline
+export example does this without fetching source data. Splat does not read a record
+that an earlier version wrote: sync that character once first. Existing creature UUIDs
+and note paths stay unchanged.
 
 ## Sheet presentation
 
