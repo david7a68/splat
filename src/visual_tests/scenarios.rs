@@ -415,8 +415,9 @@ fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static st
         .collect()
 }
 
-/// A group's `Move to…` submenu and its parent menu stay in the window and never overlap a scroll
-/// bar or column splitter, and their choice targets keep `S` clear of every one beside them.
+/// A group's `Move to…` submenu and its parent menu stay in the window. The submenu's frame and
+/// every choice keep `S` clear of each scroll bar and column splitter beside them; the parent
+/// menu's frame does not overlap one.
 /// Requires every choice of both menus. Returns the submenu's frame.
 fn submenu_clear_of_chrome(
     d: &Driver<'_>,
@@ -479,9 +480,18 @@ fn submenu_clear_of_chrome(
         for lane in beside {
             let clear =
                 |rect: egui::Rect| (lane.left() - rect.right()).max(rect.left() - lane.right());
-            if clear(frame) < 0.0 || clear(targets) < crate::design::S - 0.5 {
+            // The submenu's whole frame keeps `S`. A parent menu's frame may sit at its pane's
+            // content edge (the gallery's starts 7 px after the rail splitter, as all page
+            // content does); it must not overlap, and its choices keep `S`.
+            let frame_needs = if what == "submenu" {
+                crate::design::S - 0.5
+            } else {
+                0.0
+            };
+            if clear(frame) < frame_needs || clear(targets) < crate::design::S - 0.5 {
                 return Err(format!(
-                    "{what} {frame:?} (choices {targets:?}) is {} from {lane:?}; lanes {lanes:?}",
+                    "{what} frame {frame:?} is {} and choices {targets:?} are {} from {lane:?}; lanes {lanes:?}",
+                    clear(frame),
                     clear(targets)
                 ));
             }
@@ -11205,6 +11215,32 @@ pub mod encounter_owned_groups {
             Sizes::Small,
             clear,
         );
+        // Astra re-check of PR 231: only a resize brings the menu's button back. With the menu
+        // open, the DM's wheel moves the editor, and the editor stays where the DM left it.
+        let opener = format!("More actions for {NEW_NAME}");
+        let editor = pos2(250.0, 200.0);
+        let before = d.place_of(&opener);
+        let mut notches = 0;
+        while d.in_view(&opener) && notches < 10 {
+            d.scroll_up_at(editor, 1);
+            notches += 1;
+        }
+        let left = d.place_of(&opener);
+        d.settle();
+        let after = d.place_of(&opener);
+        d.observe(
+            "iter-22-B-SD2-wheel",
+            !d.in_view(&opener)
+                && before
+                    .zip(left)
+                    .is_some_and(|(before, left)| left.top() > before.top())
+                && left == after
+                && d.has("Make available to any encounter"),
+            format!(
+                "After {notches} wheel notches with the menu open, its button went from {before:?} to {left:?} and then {after:?}"
+            ),
+        );
+        d.scroll_until(pos2(250.0, 400.0), &opener, 20);
         d.click("Make available to any encounter");
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");

@@ -19,10 +19,30 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
         .hint(&name)
         .show(ui);
     let popup = egui::Popup::menu(&button);
-    // An open menu keeps its button in view: when the window shrinks, the pane scrolls the
-    // button back, so the menu never hangs from a button the DM cannot see.
-    if egui::Popup::is_id_open(ui.ctx(), popup.get_id()) && !inside.contains_rect(button.rect) {
-        ui.scroll_to_rect(button.rect, None);
+    // When the pane changes size under an open menu (the window shrinks), the pane brings the
+    // menu's button back into view, so the menu does not hang from a button the DM cannot see.
+    // Only a resize does this: the DM's own scrolling stays where the DM leaves it.
+    let pane = popup.get_id().with("pane size");
+    if egui::Popup::is_id_open(ui.ctx(), popup.get_id()) {
+        let last = ui.data_mut(|data| data.get_temp::<egui::Vec2>(pane));
+        let resized = last.is_some_and(|last| last != inside.size());
+        let pending = pane.with("bring back");
+        let wheel = ui.input(|input| input.raw_scroll_delta != egui::Vec2::ZERO);
+        let bring_back = !wheel
+            && (resized
+                || ui
+                    .data_mut(|data| data.get_temp::<bool>(pending))
+                    .unwrap_or(false));
+        if bring_back && !inside.contains_rect(button.rect) {
+            // The layout can settle a frame after the resize: keep asking until the button shows.
+            ui.data_mut(|data| data.insert_temp(pending, true));
+            ui.scroll_to_rect(button.rect, None);
+        } else {
+            ui.data_mut(|data| data.remove::<bool>(pending));
+        }
+        ui.data_mut(|data| data.insert_temp(pane, inside.size()));
+    } else {
+        ui.data_mut(|data| data.remove::<egui::Vec2>(pane));
     }
     let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
     let aligns = menu_aligns(button.interact_rect, size, inside);
