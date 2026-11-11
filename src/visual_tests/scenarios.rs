@@ -3254,6 +3254,14 @@ pub mod run_long_names {
             &[SMALL, DEFAULT, LARGE],
             None,
         );
+        // iter-20-R-ST1: the notice says what the card shows, subject first.
+        d.observe(
+            "iter-20-R-ST1",
+            d.visible_text(
+                "This stat block uses the copy from the start of the fight. Cinder Wolf.md has changed.",
+            ) && !d.visible_text("As at the start of this fight"),
+            "The changed-file notice says the stat block is the copy from the start of the fight",
+        );
         d.state("creature-changed-since", Sizes::All);
         // Must stay true: the action still opens the new version.
         d.click("Read the new version");
@@ -13803,6 +13811,14 @@ pub mod run_rolls {
             "T16.6",
             d.has_containing("Player rolls"),
             "A player's attack only targets the row",
+        );
+        // iter-20-R-FT6: under the notice, the character's card says only what the roster has.
+        d.observe(
+            "iter-20-R-FT6",
+            d.visible_text("This sheet uses the copy from the start of the fight.")
+                && d.visible_text("The roster has the current values.")
+                && !d.visible_text("Saved when this run began."),
+            "The sheet's notice says it once, and the next line names only the roster",
         );
         d.state("player-attack", Sizes::Default);
         d.type_text("5");
