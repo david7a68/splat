@@ -1500,6 +1500,7 @@ impl Draft {
         self.edited();
         let undo = NoteUndo {
             path: self.path.clone(),
+            note: self.note_id(),
             before,
             after,
         };
@@ -1573,6 +1574,8 @@ impl ActFault {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NoteUndo {
     path: PathBuf,
+    /// The note's ID, so a file that now holds another note at that path is not this one.
+    note: Option<Uuid>,
     before: String,
     after: String,
 }
@@ -1585,12 +1588,17 @@ impl NoteUndo {
 
     /// Whether this Undo still applies to the note in this draft.
     pub fn live(&self, draft: &Draft) -> bool {
-        draft.path == self.path && draft.body == self.after
+        self.owns(draft) && draft.body == self.after
+    }
+
+    /// Whether the draft is the note that the act changed: its file and its ID.
+    fn owns(&self, draft: &Draft) -> bool {
+        draft.path == self.path && draft.note_id() == self.note
     }
 
     /// Put back the words from before the act, through the same path as the act.
     pub fn undo(&self, draft: &mut Draft, write: Apply) -> Result<NoteUndo, ActFault> {
-        if draft.path != self.path {
+        if !self.owns(draft) {
             return Err(ActFault::OtherNote);
         }
         draft.apply(write, |words| {
@@ -2153,6 +2161,21 @@ mod tests {
             fs::read(&note.path).unwrap(),
             fs::read(&other.path).unwrap()
         );
+
+        // An Undo belongs to its note's ID too: the same path and words in another note are not
+        // that note, and its Undo writes nothing there.
+        let third = create_note(&folder, &new_note(3, "", plan)).unwrap();
+        let mut replaced = Draft::open(&third.path).unwrap();
+        let c = replaced.apply(Apply::Now, add("- [[Ash]]")).unwrap();
+        let text = fs::read_to_string(&other.path).unwrap();
+        let (prefix, _) = split_note(&text).unwrap();
+        let swapped = format!("{prefix}{}", c.after());
+        fs::write(&third.path, &swapped).unwrap();
+        replaced.follow_disk();
+        assert_eq!(replaced.body, c.after());
+        assert!(!c.live(&replaced));
+        assert_eq!(c.undo(&mut replaced, Apply::Now), Err(ActFault::OtherNote));
+        assert_eq!(fs::read_to_string(&third.path).unwrap(), swapped);
     }
 
     #[test]

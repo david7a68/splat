@@ -1814,6 +1814,8 @@ impl Lookup {
         if self.current != Some(position) {
             self.navigate(position);
         }
+        // The entry on screen, chosen again, also takes the NPC card's place.
+        self.generated_shown = false;
         self.reader.show_heading(heading);
     }
 
@@ -3063,6 +3065,11 @@ mod tests {
         lookup.open_position(3);
         assert_eq!(lookup.current, Some(3));
         assert!(!lookup.generated_shown && lookup.generated.is_some());
+        lookup.generated_shown = true;
+        let index = lookup.index.clone().unwrap();
+        lookup.open_result(&index, 3);
+        assert_eq!(lookup.current, Some(3));
+        assert!(!lookup.generated_shown, "the entry on screen, chosen again");
         lookup.generated_shown = true;
         lookup.step(Step::Back);
         assert_eq!(lookup.current, Some(2), "Back is as before");
