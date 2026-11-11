@@ -853,11 +853,19 @@ fn visual_suite() {
     let current = Baseline::measure(&violations, &costs);
     let known = Baseline::parse(BASELINE.as_bytes())
         .unwrap_or_else(|error| panic!("{BASELINE_PATH}: {error}"));
-    let ergonomics::Comparison {
-        worse: regressions,
-        better: improvements,
-        unenforced: not_enforced,
-    } = known.compare(&current, &names, ergonomics::REPORT_ONLY);
+    let (mut regressions, improvements) = known.compare(&current, &names);
+    // A new mixed pair, or a known one that is fixed, fails like a regression.
+    let (mixed, fixed) =
+        ergonomics::compare_app_vs_chrome(&violations, ergonomics::KNOWN_APP_VS_CHROME, &names);
+    regressions.extend(mixed);
+    regressions.extend(fixed);
+    let known_open: Vec<String> = ergonomics::KNOWN_APP_VS_CHROME
+        .iter()
+        .filter(|((scenario, ..), _)| names.contains(scenario))
+        .map(|((scenario, state, window), count)| {
+            format!("{scenario} / {state} / {window}: {count}")
+        })
+        .collect();
     let stale: Vec<String> = improvements
         .iter()
         .filter(|line| !line.starts_with("task-cost"))
@@ -880,7 +888,7 @@ fn visual_suite() {
         failed_scenarios: &failed,
         regressions: &regressions,
         improvements: &improvements,
-        not_enforced: &not_enforced,
+        known_open: &known_open,
         violations: &violations,
     };
     fs::write(
@@ -928,8 +936,8 @@ fn visual_suite() {
     for line in &improvements {
         println!("Improved: {line}");
     }
-    for line in &not_enforced {
-        println!("Reported: {line}");
+    for line in &known_open {
+        println!("Known app-vs-chrome pair (the list must end empty): {line}");
     }
     let silent = if names.len() == SCENARIOS.len() {
         silent_section8_tests(&passes, &violations, &not_measured, &look_review)

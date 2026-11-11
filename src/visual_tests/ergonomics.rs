@@ -32,10 +32,78 @@ pub const APP_VS_CHROME: &str = "no-overlap/app-vs-chrome";
 /// No baseline may allow these. Loading or writing a positive allowance fails.
 pub const NEVER_ALLOWED: [&str; 1] = [APP_VS_CHROME];
 
-/// Checks that the report shows but that do not yet fail a run. A check stays here only
-/// while it has known open faults; remove it when they are fixed. It still never gets
-/// an allowance.
-pub const REPORT_ONLY: &[&str] = &[APP_VS_CHROME];
+/// A scenario, a state in it, and a window size, as the report names them.
+pub type StateKey<'a> = (&'a str, &'a str, &'a str);
+
+/// The only app-vs-chrome pairs a run may have, with the exact count for each state.
+///
+/// Owner: Markdown reader tables (`src/markdown_view.rs`). Egui floats a wide table's
+/// sideways scroll bar up to the reader's bottom edge, over the words of the last visible
+/// row, and the bar takes the press there. This list is code, not `baseline.json`, so no
+/// baseline refresh can add to it. It must end empty: a state with fewer pairs than listed
+/// fails the run until its line is removed or lowered.
+pub const KNOWN_APP_VS_CHROME: &[(StateKey<'static>, usize)] = &[
+    (
+        ("library-browse", "05-class-traits-and-features", "1200x800"),
+        1,
+    ),
+    (
+        (
+            "library-browse",
+            "05-class-traits-and-features",
+            "1920x1080",
+        ),
+        5,
+    ),
+];
+
+/// App-vs-chrome lines by state: a state that is not in `known` or has more pairs than
+/// listed, then a listed state with fewer pairs (the list is stale). Both fail a run. A
+/// scenario that did not run gives no line.
+pub fn compare_app_vs_chrome(
+    violations: &[Violation],
+    known: &[(StateKey<'_>, usize)],
+    scenarios: &[&str],
+) -> (Vec<String>, Vec<String>) {
+    let mut found: BTreeMap<StateKey<'_>, usize> = BTreeMap::new();
+    for violation in violations.iter().filter(|v| v.check == APP_VS_CHROME) {
+        let key = (
+            violation.scenario.as_str(),
+            violation.state.as_str(),
+            violation.window.as_str(),
+        );
+        *found.entry(key).or_default() += 1;
+    }
+    let listed = |key: StateKey<'_>| {
+        known
+            .iter()
+            .filter(|(listed, _)| *listed == key)
+            .map(|(_, count)| count)
+            .sum::<usize>()
+    };
+    let line = |(scenario, state, window): StateKey<'_>, count: usize, limit: usize| {
+        format!("{APP_VS_CHROME} / {scenario} / {state} / {window}: {count} (known {limit})")
+    };
+    let worse = found
+        .iter()
+        .filter(|(key, count)| **count > listed(**key))
+        .map(|(key, count)| line(*key, *count, listed(*key)))
+        .collect();
+    let stale = known
+        .iter()
+        .filter(|((scenario, ..), _)| scenarios.contains(scenario))
+        .filter_map(|(key, limit)| {
+            let count = found.get(key).copied().unwrap_or(0);
+            (count < *limit).then(|| {
+                format!(
+                    "{}. Fixed: lower or remove its line in KNOWN_APP_VS_CHROME",
+                    line(*key, count, *limit)
+                )
+            })
+        })
+        .collect();
+    (worse, stale)
+}
 
 pub const CHECKS: [&str; 12] = [
     "target-size",
@@ -904,31 +972,20 @@ impl Baseline {
         }
     }
 
-    /// Lines where `current` is worse than this baseline, lines where it is better, and
-    /// lines for checks in `report_only`, which are neither. A scenario that did not run
-    /// gives no line. A check in `NEVER_ALLOWED` is compared with zero, whatever this
-    /// baseline says.
-    pub fn compare(&self, current: &Self, scenarios: &[&str], report_only: &[&str]) -> Comparison {
+    /// Lines where `current` is worse than this baseline, then lines where it is better.
+    /// A scenario that did not run is neither. A check in `NEVER_ALLOWED` is not compared
+    /// here, whatever this baseline says: `compare_app_vs_chrome` compares it by state.
+    pub fn compare(&self, current: &Self, scenarios: &[&str]) -> (Vec<String>, Vec<String>) {
         let mut worse = Vec::new();
         let mut better = Vec::new();
-        let mut unenforced = Vec::new();
         let empty = BTreeMap::new();
-        for check in CHECKS {
-            let known = if NEVER_ALLOWED.contains(&check) {
-                &empty
-            } else {
-                self.violations.get(check).unwrap_or(&empty)
-            };
-            let found = current.violations.get(check).unwrap_or(&empty);
+        for check in CHECKS.iter().filter(|check| !NEVER_ALLOWED.contains(check)) {
+            let known = self.violations.get(*check).unwrap_or(&empty);
+            let found = current.violations.get(*check).unwrap_or(&empty);
             for scenario in scenarios {
                 let known = known.get(*scenario).copied().unwrap_or(0);
                 let found = found.get(*scenario).copied().unwrap_or(0);
-                if report_only.contains(&check) {
-                    if found > 0 {
-                        unenforced
-                            .push(format!("{check} / {scenario}: {found} (not enforced yet)"));
-                    }
-                } else if found > known {
+                if found > known {
                     worse.push(format!("{check} / {scenario}: {found} (baseline {known})"));
                 } else if found < known {
                     better.push(format!("{check} / {scenario}: {found} (baseline {known})"));
@@ -959,22 +1016,8 @@ impl Baseline {
                 ));
             }
         }
-        Comparison {
-            worse,
-            better,
-            unenforced,
-        }
+        (worse, better)
     }
-}
-
-/// How a run compares with the baseline.
-pub struct Comparison {
-    /// Counts and costs above the baseline. These fail the run.
-    pub worse: Vec<String>,
-    /// Counts and costs below the baseline.
-    pub better: Vec<String>,
-    /// Counts for checks that are reported but do not fail the run yet.
-    pub unenforced: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -990,8 +1033,8 @@ pub struct Report<'a> {
     pub failed_scenarios: &'a [String],
     pub regressions: &'a [String],
     pub improvements: &'a [String],
-    /// Counts for checks that do not fail a run yet. See `REPORT_ONLY`.
-    pub not_enforced: &'a [String],
+    /// The listed app-vs-chrome pairs in the scenarios that ran. See `KNOWN_APP_VS_CHROME`.
+    pub known_open: &'a [String],
     pub violations: &'a [Violation],
 }
 
@@ -1018,7 +1061,10 @@ pub fn write_markdown(report: &Report<'_>) -> String {
     list("Failed scenarios", report.failed_scenarios);
     list("Regressions against the baseline", report.regressions);
     list("Improvements against the baseline", report.improvements);
-    list("Reported, not enforced yet", report.not_enforced);
+    list(
+        "Known app-vs-chrome pairs (the list must end empty)",
+        report.known_open,
+    );
     list(
         "States and journeys the suite could not reach",
         report.unreached,
@@ -1600,25 +1646,151 @@ mod tests {
         let zero =
             br#"{"violations": {"no-overlap/app-vs-chrome": {"party": 0}}, "task_cost": {}}"#;
         assert!(Baseline::parse(zero).is_ok());
-        // Built in memory, past the loader: the allowance still counts as zero.
+        // Built in memory, past the loader: the allowance has no route to apply. The
+        // per-scenario comparison skips the check, and the state comparison fails the pair.
         let known: Baseline = serde_json::from_slice(text).unwrap();
-        let current: Baseline = serde_json::from_value(serde_json::json!({
-            "violations": {"no-overlap/app-vs-chrome": {"party": 1}},
-            "task_cost": {}
-        }))
-        .unwrap();
-        let enforced = known.compare(&current, &["party"], &[]);
+        let violations = [mixed("party", "01-start", "960x640")];
+        let current = Baseline::measure(&violations, &[]);
         assert_eq!(
-            enforced.worse,
-            ["no-overlap/app-vs-chrome / party: 1 (baseline 0)"]
+            current.violations[APP_VS_CHROME]["party"], 1,
+            "the run counts the pair"
         );
-        assert!(enforced.better.is_empty() && enforced.unenforced.is_empty());
-        let reported = known.compare(&current, &["party"], &[APP_VS_CHROME]);
-        assert!(reported.worse.is_empty() && reported.better.is_empty());
+        assert_eq!(known.compare(&current, &["party"]), (vec![], vec![]));
+        let (worse, stale) = compare_app_vs_chrome(&violations, &[], &["party"]);
         assert_eq!(
-            reported.unenforced,
-            ["no-overlap/app-vs-chrome / party: 1 (not enforced yet)"]
+            worse,
+            ["no-overlap/app-vs-chrome / party / 01-start / 960x640: 1 (known 0)"]
         );
+        assert!(stale.is_empty());
+    }
+
+    fn mixed(scenario: &str, state: &str, window: &str) -> Violation {
+        Violation {
+            check: APP_VS_CHROME.to_owned(),
+            scenario: scenario.to_owned(),
+            state: state.to_owned(),
+            window: window.to_owned(),
+            node: "(unnamed Label)".to_owned(),
+            role: "Label".to_owned(),
+            rect: [0.0; 4],
+            detail: "Overlaps (egui handle at edge) by 80.0x5.0".to_owned(),
+        }
+    }
+
+    /// The pairs this round lists, in the shape of `KNOWN_APP_VS_CHROME`. The tests use
+    /// their own copy, so they keep working as the real list shrinks.
+    const LISTED: &[(StateKey<'static>, usize)] = &[
+        (
+            ("library-browse", "05-class-traits-and-features", "1200x800"),
+            1,
+        ),
+        (
+            (
+                "library-browse",
+                "05-class-traits-and-features",
+                "1920x1080",
+            ),
+            5,
+        ),
+    ];
+
+    fn listed_run() -> Vec<Violation> {
+        let mut run = vec![mixed(
+            "library-browse",
+            "05-class-traits-and-features",
+            "1200x800",
+        )];
+        for _ in 0..5 {
+            run.push(mixed(
+                "library-browse",
+                "05-class-traits-and-features",
+                "1920x1080",
+            ));
+        }
+        run
+    }
+
+    #[test]
+    fn exactly_the_listed_app_vs_chrome_pairs_pass() {
+        let run = listed_run();
+        assert_eq!(run.len(), 6);
+        let ran = ["library-browse", "party"];
+        assert_eq!(compare_app_vs_chrome(&run, LISTED, &ran), (vec![], vec![]));
+        // A scenario that did not run is neither worse nor stale.
+        assert_eq!(
+            compare_app_vs_chrome(&[], LISTED, &["party"]),
+            (vec![], vec![])
+        );
+    }
+
+    #[test]
+    fn an_app_vs_chrome_pair_in_another_scenario_fails() {
+        let mut run = listed_run();
+        run.push(mixed("npc-in-encounter", "03-npc-in-setup", "960x640"));
+        let (worse, stale) =
+            compare_app_vs_chrome(&run, LISTED, &["library-browse", "npc-in-encounter"]);
+        assert_eq!(
+            worse,
+            [
+                "no-overlap/app-vs-chrome / npc-in-encounter / 03-npc-in-setup / 960x640: 1 (known 0)"
+            ]
+        );
+        assert!(stale.is_empty());
+    }
+
+    #[test]
+    fn an_app_vs_chrome_pair_in_another_state_of_a_listed_scenario_fails() {
+        for extra in [
+            mixed("library-browse", "06-spell-table", "1920x1080"),
+            mixed("library-browse", "05-class-traits-and-features", "960x640"),
+            mixed("library-browse", "05-class-traits-and-features", "1200x800"),
+        ] {
+            let mut run = listed_run();
+            run.push(extra.clone());
+            let (worse, stale) = compare_app_vs_chrome(&run, LISTED, &["library-browse"]);
+            assert_eq!(worse.len(), 1, "{extra:?}: {worse:?}");
+            assert!(
+                worse[0].contains(&format!("{} / {}", extra.state, extra.window)),
+                "{worse:?}"
+            );
+            assert!(stale.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_fixed_app_vs_chrome_pair_fails_as_stale_until_the_list_shrinks() {
+        let mut run = listed_run();
+        run.pop();
+        assert_eq!(run.len(), 5);
+        let (worse, stale) = compare_app_vs_chrome(&run, LISTED, &["library-browse"]);
+        assert!(worse.is_empty());
+        assert_eq!(
+            stale,
+            [
+                "no-overlap/app-vs-chrome / library-browse / 05-class-traits-and-features / 1920x1080: 4 (known 5). Fixed: lower or remove its line in KNOWN_APP_VS_CHROME"
+            ]
+        );
+        let (worse, stale) = compare_app_vs_chrome(&[], LISTED, &["library-browse"]);
+        assert!(worse.is_empty());
+        assert_eq!(stale.len(), 2, "{stale:?}");
+    }
+
+    /// The real list: unique states, positive counts, and only this round's open pairs.
+    #[test]
+    fn the_known_app_vs_chrome_list_only_shrinks() {
+        let mut keys: Vec<_> = KNOWN_APP_VS_CHROME.iter().map(|(key, _)| *key).collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), KNOWN_APP_VS_CHROME.len());
+        assert!(KNOWN_APP_VS_CHROME.iter().all(|(_, count)| *count > 0));
+        for (key, count) in KNOWN_APP_VS_CHROME {
+            assert!(
+                LISTED
+                    .iter()
+                    .any(|(listed, limit)| listed == key && count <= limit),
+                "{key:?} is not one of the open pairs, or its count grew"
+            );
+        }
     }
 
     #[test]
