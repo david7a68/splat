@@ -9,16 +9,77 @@ use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use std::ops::Range;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// One fault in a note, at its source line.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Flag {
     pub line: usize,
+    /// The whole sentence a reader shows, line first: `Line 19: Hit Points “about twenty” was not
+    /// read. Start with a number, such as 22 (4d8 + 4).` It is made with the flag; no screen adds
+    /// the line, so a run saved with older words shows them as they were saved.
     pub message: String,
-    /// What the flag is about, so a screen can offer its repair without reading the words.
-    #[serde(default, skip_serializing_if = "FlagKind::is_plain")]
+    /// What the flag is about, so a screen can find or repair it without reading the words.
+    #[serde(default, skip_serializing_if = "FlagKind::is_unsaved")]
     pub kind: FlagKind,
+    /// What is wrong, without the line or the help, for a summary that names the line its own
+    /// way. Not saved: empty in a flag read back from a saved run.
+    #[serde(skip)]
+    cause: String,
+    /// How to write the value, for the editor. Not saved.
+    #[serde(skip)]
+    help: String,
 }
 
-/// What a flag is about, when a screen offers a repair for it.
+/// Two flags are the same fault when they say the same words about the same line. The cause and
+/// the help are parts of those words.
+impl PartialEq for Flag {
+    fn eq(&self, other: &Self) -> bool {
+        self.line == other.line && self.message == other.message && self.kind == other.kind
+    }
+}
+
+impl Eq for Flag {}
+
+/// A fault found before it has a line: what is wrong, and how to write it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fault {
+    pub cause: String,
+    pub help: String,
+}
+
+impl Fault {
+    pub fn new(cause: String, help: String) -> Self {
+        Self { cause, help }
+    }
+}
+
+impl From<String> for Fault {
+    fn from(cause: String) -> Self {
+        Self::new(cause, String::new())
+    }
+}
+
+impl From<&str> for Fault {
+    fn from(cause: &str) -> Self {
+        cause.to_owned().into()
+    }
+}
+
+/// The cause and the help in one string, for a caller that shows the fault as it is.
+impl From<Fault> for String {
+    fn from(fault: Fault) -> Self {
+        words(&fault.cause, &fault.help)
+    }
+}
+
+fn words(cause: &str, help: &str) -> String {
+    if help.is_empty() {
+        cause.to_owned()
+    } else {
+        format!("{cause} {help}")
+    }
+}
+
+/// What a flag is about. Code that looks for a flag matches its kind, never its words.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FlagKind {
     #[default]
@@ -27,21 +88,78 @@ pub enum FlagKind {
     RuleChoice,
     /// A `Rule choices` row without a readable id. Reading the row by its rule name replaces it.
     RuleChoiceId,
+    /// A value that was not read, so the note uses no value for it.
+    // The kinds below are never saved: a run's saved entry copies keep their old JSON shape, and
+    // every one of them is set again when its note is read.
+    #[serde(skip)]
+    Unread(Field),
+    /// A roster or member link that names no single creature. Resolving links makes it again.
+    #[serde(skip)]
+    CreatureNotFound,
+    /// A printed XP or PB that is not the challenge's own. The printed value is used.
+    #[serde(skip)]
+    PrintedValueUsed,
+}
+
+/// The value of an [`FlagKind::Unread`] flag, where a screen looks for that one value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    Status,
+    PartOf,
+    HitPoints,
+    Rarity,
+    Other,
 }
 
 impl FlagKind {
-    fn is_plain(&self) -> bool {
-        *self == Self::Plain
+    fn is_unsaved(&self) -> bool {
+        !matches!(self, Self::RuleChoice | Self::RuleChoiceId)
     }
 }
 
 impl Flag {
-    pub fn new(line: usize, message: String) -> Self {
+    pub fn new(line: usize, cause: String) -> Self {
+        Self::of(FlagKind::Plain, line, cause)
+    }
+
+    pub fn of(kind: FlagKind, line: usize, cause: String) -> Self {
+        Self::fault(kind, line, cause.into())
+    }
+
+    /// The one place that writes a flag's sentence: `Line <line>: <cause> <help>`.
+    pub fn fault(kind: FlagKind, line: usize, fault: Fault) -> Self {
         Self {
             line,
-            message,
-            kind: FlagKind::Plain,
+            message: format!("Line {line}: {}", words(&fault.cause, &fault.help)),
+            kind,
+            cause: fault.cause,
+            help: fault.help,
         }
+    }
+
+    /// `<value> “<text>” was not read.` with its help, the one form for a value the note cannot
+    /// use.
+    pub fn unread(field: Field, line: usize, label: &str, text: &str, help: &str) -> Self {
+        Self::fault(
+            FlagKind::Unread(field),
+            line,
+            Fault::new(
+                format!("{label} {} was not read.", super::formats::quoted(text)),
+                help.to_owned(),
+            ),
+        )
+    }
+
+    /// What is wrong, without the line or the help. None for a flag read back from a saved run:
+    /// it has only its sentence, so a screen shows that sentence and adds no line.
+    pub fn cause(&self) -> Option<&str> {
+        (!self.cause.is_empty()).then_some(self.cause.as_str())
+    }
+
+    /// The cause and the help without the line, for a screen that names the line its own way.
+    /// None for a flag read back from a saved run, as for [`Flag::cause`].
+    pub fn words(&self) -> Option<String> {
+        self.cause().map(|cause| words(cause, &self.help))
     }
 }
 

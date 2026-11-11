@@ -127,6 +127,121 @@ pub(crate) fn toggle(
     response
 }
 
+/// Armor class, hit points and initiative under capital labels, in the stat block's columns
+/// (`library::creature::vitals`): each column as wide as its label or value and `S`, `L`
+/// apart. So the trio keeps one place when the DM selects a made-up creature after a stat
+/// block.
+fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
+    ui.with_layout(
+        Layout::left_to_right(Align::Min).with_main_wrap(true),
+        |ui| {
+            ui.spacing_mut().item_spacing = vec2(design::L, 2.0);
+            for (label, value) in columns {
+                let width = design::number_width(ui, label, &Type::Label.font(ui))
+                    .max(design::number_width(ui, value, &Type::Prose.font(ui)))
+                    + design::S;
+                ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(Type::Label.rich(ui, *label).color(colors().muted));
+                    ui.label(Type::Prose.rich(ui, value).color(colors().text));
+                });
+            }
+        },
+    );
+}
+
+/// The width `toggle` takes: its words, and the frame's padding when it is selected.
+fn toggle_width(ui: &egui::Ui, label: &str, icon: &str, selected: bool) -> f32 {
+    #[cfg(test)]
+    CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
+    let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Button,
+        )
+        .size()
+        .x;
+    let v = &ui.visuals().widgets;
+    let expansion = v
+        .inactive
+        .expansion
+        .max(v.hovered.expansion)
+        .max(v.active.expansion);
+    words
+        + if selected {
+            2.0 * (ui.spacing().button_padding.x + expansion)
+        } else {
+            0.0
+        }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many toggle widths the conditions grid measured.
+    static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Each column's width: its widest name in the selected (bordered) form. Measured once per
+/// font size and padding, never from what is drawn, so no toggle moves its neighbours.
+fn condition_column_widths(ui: &egui::Ui, columns: usize) -> Vec<f32> {
+    let font = Type::Body.font(ui);
+    let key = egui::Id::new("condition_column_widths")
+        .with(font.size.to_bits())
+        .with(ui.spacing().button_padding.x.to_bits())
+        .with(ui.ctx().pixels_per_point().to_bits())
+        .with(columns);
+    if let Some(widths) = ui.data(|data| data.get_temp::<Vec<f32>>(key)) {
+        return widths;
+    }
+    let mut widths = vec![0.0_f32; columns];
+    for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
+        let width = toggle_width(ui, name, icons::OK, true);
+        widths[at % columns] = widths[at % columns].max(width);
+    }
+    ui.data_mut(|data| data.insert_temp(key, widths.clone()));
+    widths
+}
+
+/// The official conditions as toggles in fixed columns, `S` apart: the run's Conditions tab
+/// and a group member's Starting conditions. `on` says whether a condition is on. Returns
+/// the condition the DM pressed.
+pub(crate) fn conditions_grid(
+    ui: &mut egui::Ui,
+    salt: &str,
+    on: impl Fn(&str) -> bool,
+) -> Option<&'static str> {
+    let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM {
+        3
+    } else {
+        2
+    };
+    let widths = condition_column_widths(ui, columns);
+    let height = Density::Read.control();
+    let mut pressed = None;
+    ui.push_id(salt, |ui| {
+        ui.spacing_mut().item_spacing.y = design::XS;
+        for row in crate::combat_sync::CONDITIONS.chunks(columns) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = design::S;
+                for ((_, name), width) in row.iter().zip(&widths) {
+                    let size = vec2(*width, height);
+                    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+                        ui.set_min_size(size);
+                        let selected = on(name);
+                        let icon = if selected { icons::OK } else { icons::ADD };
+                        if toggle(ui, name, icon, selected, name, Density::Read).clicked() {
+                            pressed = Some(*name);
+                        }
+                    });
+                }
+            });
+        }
+    });
+    pressed
+}
+
 /// Blank means roll; invalid text must never silently request a roll.
 fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     let text = text.trim();
@@ -2102,71 +2217,121 @@ impl Run {
         frame.show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.set_height(DOCK_HEIGHT - design::S);
-            ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-            let value = self.amount.parse::<i64>().ok();
-            let empty = value.is_none().then_some("Type an amount first.");
-            // The narrowest dock keeps every word by giving up the hint and an icon.
-            let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
-            ui.horizontal(|ui| {
-                self.amount_field(ui, if narrow { 68.0 } else { 84.0 });
-                let damage = Action::secondary("Damage").density(Density::Glance);
-                let damage = if narrow { damage } else { damage.key("Enter") };
-                if damage
-                    .hint("Apply damage. Temporary HP absorbs it first.")
-                    .blocked(empty)
-                    .show(ui)
-                    .clicked()
-                {
-                    command = value.map(|n| self.amount_command(n, Command::Damage));
-                }
-                ui.add_space(if narrow { design::XS } else { design::M });
-                if Action::quiet("Heal")
-                    .density(Density::Glance)
-                    .hint("Heal (Shift+Enter)")
-                    .blocked(empty)
-                    .show(ui)
-                    .clicked()
-                {
-                    command = value.map(|n| self.amount_command(n, Command::Heal));
-                }
-                if Action::quiet("Temp HP")
-                    .icon(icons::TEMP_HP)
-                    .density(Density::Glance)
-                    .name("Replace temporary HP")
-                    .hint("Replace temporary HP with this amount")
-                    .blocked(empty)
-                    .show(ui)
-                    .clicked()
-                {
-                    command = value.map(|n| self.amount_command(n, Command::TempHp));
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    self.dice(ui, narrow);
-                });
-            });
-            if !self.also.is_empty() {
-                self.target_words(ui);
-                return;
-            }
-            let p = &self.state.participants[index];
-            ui.horizontal(|ui| {
-                ui.set_min_height(28.0);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let (presence, hint) = presence_action(p.present);
-                    if toggle(
-                        ui,
-                        presence,
-                        icons::ABSENT,
-                        !p.present,
-                        presence,
-                        Density::Read,
-                    )
-                    .on_hover_text(hint)
-                    .clicked()
+            // The background takes the roster's width; the controls keep to one block, no wider
+            // than a list, so the DM never crosses the screen between them.
+            ui.scope(|ui| {
+                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
+                let value = self.amount.parse::<i64>().ok();
+                let empty = value.is_none().then_some("Type an amount first.");
+                // The narrowest dock keeps every word by giving up the hint and an icon.
+                let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
+                ui.horizontal(|ui| {
+                    self.amount_field(ui, if narrow { 68.0 } else { 84.0 });
+                    let damage = Action::secondary("Damage").density(Density::Glance);
+                    let damage = if narrow { damage } else { damage.key("Enter") };
+                    if damage
+                        .hint("Apply damage. Temporary HP absorbs it first.")
+                        .blocked(empty)
+                        .show(ui)
+                        .clicked()
                     {
-                        command = Some(Command::Presence(index, !p.present));
+                        command = value.map(|n| self.amount_command(n, Command::Damage));
                     }
-                    ui.add_space(design::S);
+                    ui.add_space(if narrow { design::XS } else { design::M });
+                    if Action::quiet("Heal")
+                        .density(Density::Glance)
+                        .hint("Heal (Shift+Enter)")
+                        .blocked(empty)
+                        .show(ui)
+                        .clicked()
+                    {
+                        command = value.map(|n| self.amount_command(n, Command::Heal));
+                    }
+                    if Action::quiet("Temp HP")
+                        .icon(icons::TEMP_HP)
+                        .density(Density::Glance)
+                        .name("Replace temporary HP")
+                        .hint("Replace temporary HP with this amount")
+                        .blocked(empty)
+                        .show(ui)
+                        .clicked()
+                    {
+                        command = value.map(|n| self.amount_command(n, Command::TempHp));
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        self.dice(ui, narrow);
+                    });
+                });
+                if !self.also.is_empty() {
+                    self.target_words(ui);
+                    return;
+                }
+                let p = &self.state.participants[index];
+                let death_saves = self.hide_panel && p.hp == Some(0);
+                let conditions_key = if self.lookup_open { "" } else { "C" };
+                // The selected name, `L`, then its controls: one block after the creature.
+                let (presence, hint) = presence_action(p.present);
+                let gap = ui.spacing().item_spacing.x;
+                let controls = toggle_width(ui, presence, icons::ABSENT, !p.present)
+                    + gap
+                    + design::S
+                    + toggle_width(ui, "Conc", icons::CONCENTRATING, p.concentration)
+                    + gap
+                    + if death_saves {
+                        Action::quiet("Death saves")
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            + gap
+                    } else {
+                        0.0
+                    }
+                    + Action::quiet("Conditions")
+                        .density(Density::Read)
+                        .key(conditions_key)
+                        .natural_width(ui)
+                    + gap;
+                let height = Density::Read.control();
+                // Left to right: the name, then exactly `L`, then its controls. The controls'
+                // width only limits how long a name may be.
+                ui.horizontal(|ui| {
+                    ui.set_min_height(height);
+                    if narrow && let Some((total, line)) = self.dock_roll() {
+                        ui.label(Type::Strong.rich(ui, format!("= {total}")))
+                            .on_hover_text(line);
+                    }
+                    let room = ui.available_width() - controls - design::L;
+                    // Beside the actions at the minimum window it gives up size, not letters.
+                    let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui)) < room
+                    {
+                        Type::Heading
+                    } else {
+                        Type::Small
+                    };
+                    let shown = dock_name(ui, &p.name, &role.font(ui), room);
+                    let response = ui
+                        .label(role.rich(ui, shown).color(c.text))
+                        .on_hover_text(&p.name);
+                    design::named(ui, &response, &format!("Selected: {}", p.name));
+                    ui.add_space(design::L - gap);
+                    if Action::quiet("Conditions")
+                        .density(Density::Read)
+                        .name("Conditions for this participant")
+                        .key(conditions_key)
+                        .show(ui)
+                        .clicked()
+                    {
+                        open_conditions = true;
+                    }
+                    // Notes hide the panel with the saves, so one word leads there.
+                    if death_saves
+                        && Action::quiet("Death saves")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    {
+                        open_side = true;
+                    }
                     if toggle(
                         ui,
                         "Conc",
@@ -2180,49 +2345,20 @@ impl Run {
                     {
                         command = Some(Command::Concentration(index, !p.concentration));
                     }
-                    // Notes hide the panel with the saves, so one word leads there.
-                    if self.hide_panel
-                        && p.hp == Some(0)
-                        && Action::quiet("Death saves")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
+                    ui.add_space(design::S);
+                    if toggle(
+                        ui,
+                        presence,
+                        icons::ABSENT,
+                        !p.present,
+                        presence,
+                        Density::Read,
+                    )
+                    .on_hover_text(hint)
+                    .clicked()
                     {
-                        open_side = true;
+                        command = Some(Command::Presence(index, !p.present));
                     }
-                    if Action::quiet("Conditions")
-                        .density(Density::Read)
-                        .name("Conditions for this participant")
-                        .key(if self.lookup_open { "" } else { "C" })
-                        .show(ui)
-                        .clicked()
-                    {
-                        open_conditions = true;
-                    }
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        if narrow && let Some((total, line)) = self.dock_roll() {
-                            ui.label(Type::Strong.rich(ui, format!("= {total}")))
-                                .on_hover_text(line);
-                        }
-                        // Beside the actions at the minimum window it gives up size, not letters.
-                        let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui))
-                            < ui.available_width()
-                        {
-                            Type::Heading
-                        } else {
-                            Type::Small
-                        };
-                        let shown = dock_name(
-                            ui,
-                            &p.name,
-                            &role.font(ui),
-                            ui.available_width() - design::S,
-                        );
-                        let response = ui
-                            .label(role.rich(ui, shown).color(c.text))
-                            .on_hover_text(&p.name);
-                        design::named(ui, &response, &format!("Selected: {}", p.name));
-                    });
                 });
             });
         });
@@ -2402,32 +2538,19 @@ impl Run {
                 // A form, not the pane: the grid, the effects and Add stay within its width.
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM { 3 } else { 2 };
-                // Columns as wide as their longest choice, `S` apart: never spread across the form.
-                egui::Grid::new("official_conditions")
-                    .num_columns(columns)
-                    .min_col_width(0.0)
-                    .spacing([design::S, design::XS])
-                    .show(ui, |ui| {
-                        for (position, (_, name)) in
-                            crate::combat_sync::CONDITIONS.iter().enumerate()
-                        {
-                            let found = p.conditions.iter().position(|c| {
-                                c.eq_ignore_ascii_case(name)
-                                    || (*name == "Exhaustion" && c.starts_with("Exhaustion"))
-                            });
-                            if toggle(ui, name, if found.is_some() { icons::OK } else { icons::ADD }, found.is_some(), name, Density::Read).clicked()
-                            {
-                                command = Some(found.map_or_else(
-                                    || Command::Condition(index, (*name).to_owned()),
-                                    |i| Command::RemoveCondition(index, i),
-                                ));
-                            }
-                            if position % columns == columns - 1 {
-                                ui.end_row();
-                            }
-                        }
-                    });
+                let found = |name: &str| {
+                    p.conditions.iter().position(|c| {
+                        c.eq_ignore_ascii_case(name)
+                            || (name == "Exhaustion" && c.starts_with("Exhaustion"))
+                    })
+                };
+                // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
+                if let Some(name) = conditions_grid(ui, "official_conditions", |name| found(name).is_some()) {
+                    command = Some(found(name).map_or_else(
+                        || Command::Condition(index, name.to_owned()),
+                        |i| Command::RemoveCondition(index, i),
+                    ));
+                }
                 // One level, not a pile of lines. Each step replaces the last.
                 let exhausted = p.conditions.iter().position(|c| c.starts_with("Exhaustion"));
                 if let Some(at) = exhausted {
@@ -3270,7 +3393,9 @@ impl Run {
                         .wrap(),
                     );
                 }
-                self.add_creature_form(ui);
+                // Measured once: the search field and the group list share the block.
+                let arrival = self.arrival_block(ui);
+                self.add_creature_form(ui, arrival.map(|(_, block)| block));
                 if let Some(previous) = self.history.last().filter(|_| {
                     self.ad_hoc.query.trim().is_empty()
                         && self.state.log.last().is_some_and(|line| {
@@ -3327,17 +3452,13 @@ impl Run {
                                 ""
                             }
                         );
-                        let arrival =
-                            Self::roll_block_name(&self.state, &self.state.participants[first]);
+                        // The name the `joined at` message uses, so one arrival has one name.
+                        let arrival = Self::arrival_name(&self.state, first, &name);
                         let full = format!("Move {arrival} before {name}");
                         let font = Type::Strong.font(ui);
-                        design::message(ui, Tone::Info, &line);
-                        ui.horizontal(|ui| {
-                            let icon = design::number_width(ui, icons::INFO, &Type::Body.font(ui));
-                            let gap = ui.spacing().item_spacing.x;
-                            let inset =
-                                design::S + design::HAIRLINE_WIDTH + icon + gap * 2.0 - design::XS;
-                            ui.add_space((inset - gap).max(0.0));
+                        // A finished change, tie or not: the Move button shows the open choice.
+                        design::message(ui, Tone::Success, &line);
+                        design::message_choice_row(ui, Tone::Success, |ui| {
                             let shown = undo_words(
                                 ui,
                                 &full,
@@ -3368,7 +3489,7 @@ impl Run {
                     design::message(ui, Tone::Success, line);
                 }
                 design::rule(ui);
-                add = self.group_list(ui);
+                add = self.group_list(ui, arrival);
             });
         if let Some(id) = add {
             self.add_group_from_panel(id);
@@ -3412,8 +3533,73 @@ impl Run {
         Some(format!("{who} joined at\u{a0}{totals}."))
     }
 
+    /// Arrivals' one block for every group: as wide as its widest heading or summary with
+    /// Initiative and Add, and no wider than a list, so the controls stay near the names they
+    /// add, at one x in every group. Also the width of the Add slot. The search field above
+    /// takes the block's width, so the panel has one right edge. None without groups.
+    fn arrival_block(&self, ui: &egui::Ui) -> Option<(f32, f32)> {
+        let groups = self.groups.as_ref()?;
+        let offered = super::OfferedGroups::of(groups, self.source);
+        let all: Vec<_> = offered
+            .own
+            .iter()
+            .chain(&offered.any)
+            .chain(&offered.other)
+            .collect();
+        if all.is_empty() {
+            return None;
+        }
+        let add_width = all
+            .iter()
+            .map(|group| {
+                Action::secondary(&arrival_add_word(group))
+                    .density(Density::Read)
+                    .natural_width(ui)
+            })
+            .fold(0.0, f32::max);
+        // One block for every group, as wide as its widest heading or summary with Initiative
+        // and Add, and no wider than a list: the controls stay near the names they add, at one
+        // x in every group.
+        let gap = ui.spacing().item_spacing.x;
+        let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
+            + gap
+            + ARRIVAL_FIELD_WIDTH
+            + design::XS
+            + gap
+            + add_width;
+        let block = all
+            .iter()
+            .map(|group| {
+                let status = self.group_status(group);
+                let totals = Self::group_totals_text(group);
+                let heading = design::number_width(
+                    ui,
+                    &format!("{} {}", icons::DRAG, group.name),
+                    &Type::Strong.font(ui),
+                ) + design::L
+                    + design::number_width(
+                        ui,
+                        &if status.is_empty() {
+                            totals
+                        } else {
+                            format!("{status} · {totals}")
+                        },
+                        &Type::Small.font(ui),
+                    );
+                let summary =
+                    design::number_width(ui, &group.member_summary(), &Type::Small.font(ui))
+                        + gap
+                        + controls;
+                heading.max(summary)
+            })
+            .fold(0.0, f32::max)
+            .min(design::LIST_MEASURE)
+            .min(ui.available_width());
+        Some((add_width, block))
+    }
+
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
-    fn group_list(&mut self, ui: &mut egui::Ui) -> Option<Uuid> {
+    fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
         let c = colors();
         let Some(groups) = self.groups.clone() else {
             design::group_heading(ui, "Encounter groups", 0);
@@ -3458,60 +3644,7 @@ impl Run {
         if !labelled {
             design::group_heading(ui, "Encounter groups", offered.any.len());
         }
-        let add_width = offered
-            .own
-            .iter()
-            .chain(&planned)
-            .chain(&any)
-            .chain(&offered.other)
-            .map(|group| {
-                Action::secondary(&arrival_add_word(group))
-                    .density(Density::Read)
-                    .natural_width(ui)
-            })
-            .fold(0.0, f32::max);
-        // One block for every group, as wide as its widest heading or summary with Initiative
-        // and Add, and no wider than a list: the controls stay near the names they add, at one
-        // x in every group.
-        let gap = ui.spacing().item_spacing.x;
-        let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
-            + gap
-            + ARRIVAL_FIELD_WIDTH
-            + design::XS
-            + gap
-            + add_width;
-        let block = offered
-            .own
-            .iter()
-            .chain(&planned)
-            .chain(&any)
-            .chain(&offered.other)
-            .map(|group| {
-                let status = self.group_status(group);
-                let totals = Self::group_totals_text(group);
-                let heading = design::number_width(
-                    ui,
-                    &format!("{} {}", icons::DRAG, group.name),
-                    &Type::Strong.font(ui),
-                ) + design::L
-                    + design::number_width(
-                        ui,
-                        &if status.is_empty() {
-                            totals
-                        } else {
-                            format!("{status} · {totals}")
-                        },
-                        &Type::Small.font(ui),
-                    );
-                let summary =
-                    design::number_width(ui, &group.member_summary(), &Type::Small.font(ui))
-                        + gap
-                        + controls;
-                heading.max(summary)
-            })
-            .fold(0.0, f32::max)
-            .min(design::LIST_MEASURE)
-            .min(ui.available_width());
+        let (add_width, block) = arrival.unwrap_or_default();
         // A child of its own: the pane's earlier rows already make this Ui as wide as the pane,
         // and a Ui cannot shrink below what it holds. A group's faults may use a list's width,
         // so a repair link stays on its fault's line; its name, members and controls keep to
@@ -4034,25 +4167,19 @@ impl Run {
                     .rich(ui, "Made up in this fight. It has no stat block.")
                     .color(colors().muted),
             );
-            ui.horizontal(|ui| {
-                for (label, value) in [
-                    ("ARMOR CLASS", display(p.armor_class)),
+            let unknown =
+                |value: Option<i64>| value.map_or_else(|| "Unknown".to_owned(), |n| n.to_string());
+            vital_columns(
+                ui,
+                &[
+                    ("ARMOR CLASS", unknown(p.armor_class)),
                     (
                         "HIT POINTS",
-                        format!("{} / {}", display(p.hp), display(p.max_hp)),
+                        format!("{} / {}", unknown(p.hp), unknown(p.max_hp)),
                     ),
-                    ("INITIATIVE", display(p.initiative)),
-                ] {
-                    if label == "ARMOR CLASS" && p.armor_class.is_none() {
-                        continue;
-                    }
-                    ui.vertical(|ui| {
-                        ui.label(Type::Label.rich(ui, label).color(colors().muted));
-                        ui.label(Type::Prose.rich(ui, value).color(colors().text));
-                    });
-                    ui.add_space(design::L);
-                }
-            });
+                    ("INITIATIVE", unknown(p.initiative)),
+                ],
+            );
             return;
         }
         // A linked character shows the same sheet as the Party page, with its age.
@@ -4342,7 +4469,6 @@ impl Run {
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
-                    let mut reason_below = false;
                     ui.horizontal(|ui| {
                         correction_label(ui, "Initiative");
                         let response = design::number_field(
@@ -4360,9 +4486,6 @@ impl Run {
                             .blocked_if(total.is_none(), "Type a number first.")
                             .show(ui)
                             .clicked();
-                        let reason = total.is_none().then_some("Type a number first.");
-                        reason_below = reason.is_some_and(|reason| design::number_width(ui, reason, &Type::Small.font(ui)) > ui.available_width());
-                        if !reason_below { design::blocked_reason(ui, reason); }
                         if (pressed || enter)
                             && let Some(total) = total
                         {
@@ -4374,48 +4497,41 @@ impl Run {
                             self.return_focus = self.lookup_open;
                         }
                     });
-                    if reason_below {
-                        ui.horizontal(|ui| {
-                            correction_label(ui, "");
-                            design::blocked_reason(ui, Some("Type a number first."));
-                        });
-                    }
+                    correction_reason(ui, "Type a number first.", total.is_none());
                     ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                 }
                 ui.add_space(design::L);
                 design::group_heading(ui, "DM notes", 0);
-                let mut note_reason_below = false;
+                let empty = self.note.trim().is_empty();
+                // A note is a sentence: its field takes the form's whole line, and Add note
+                // starts the line below it, at the field. The reason has its own line below.
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+                    ui.horizontal(|ui| {
+                        correction_label(ui, "Note");
+                        design::text_input(
+                            ui,
+                            "DM note",
+                            &mut self.note,
+                            "What happened",
+                            // `S` clear of the tab's scroll bar when the tab is tall.
+                            (ui.available_width() - design::S).max(design::XXL),
+                        );
+                    });
+                });
                 ui.horizontal(|ui| {
-                    correction_label(ui, "Note");
-                    let reason_width = design::number_width(ui, "Type a note first.", &Type::Small.font(ui)) + design::S;
-                    let button_width = Action::secondary("Add note").density(Density::Read).natural_width(ui);
-                    let empty = self.note.trim().is_empty();
-                    note_reason_below = empty && ui.available_width() < button_width + reason_width + design::XXL * 3.0;
-                    let reserved = if empty && !note_reason_below { reason_width } else { 0.0 };
-                    design::text_input(
-                        ui,
-                        "DM note",
-                        &mut self.note,
-                        "What happened",
-                        (ui.available_width() - button_width - reserved - ui.spacing().item_spacing.x).max(design::XXL),
-                    );
+                    ui.add_space(correction_label_width(ui) + ui.spacing().item_spacing.x);
                     if Action::secondary("Add note")
                         .name("Add note")
                         .density(Density::Read)
-                        .blocked_if(self.note.trim().is_empty(), "Type a note first.")
+                        .blocked_if(empty, "Type a note first.")
                         .show(ui)
                         .clicked()
                     {
                         command = Some(Command::Note(index, self.note.clone()));
                     }
-                    if empty && !note_reason_below { design::blocked_reason(ui, Some("Type a note first.")); }
                 });
-                if note_reason_below {
-                    ui.horizontal(|ui| {
-                        correction_label(ui, "");
-                        design::blocked_reason(ui, Some("Type a note first."));
-                    });
-                }
+                correction_reason(ui, "Type a note first.", empty);
                 if !p.notes.is_empty() {
                     ui.add(
                         egui::Label::new(Type::Body.rich(ui, &p.notes).color(colors().text)).wrap(),
@@ -4758,7 +4874,7 @@ impl Run {
             }
         } else if self.saved_hp_used() {
             // The same slot, so the DM sees the result where they pressed, and can take it back.
-            if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo") {
+            if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
                 self.undo();
             }
         } else if let Some((from, back)) = self.back_to_sheets()
@@ -7551,6 +7667,28 @@ fn correction_label(ui: &mut egui::Ui, label: &str) {
     });
 }
 
+/// A Correct reason on its own line below its field, starting at the field. The line stays
+/// while the reason is gone, so nothing below moves as the DM types.
+fn correction_reason(ui: &mut egui::Ui, reason: &str, shown: bool) {
+    ui.horizontal(|ui| {
+        ui.add_space(correction_label_width(ui) + ui.spacing().item_spacing.x);
+        let words = Type::Small.rich(ui, reason).color(colors().muted);
+        if shown {
+            ui.add(egui::Label::new(words).wrap());
+        } else {
+            let size = egui::WidgetText::from(words)
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Wrap),
+                    ui.available_width(),
+                    egui::TextStyle::Body,
+                )
+                .size();
+            ui.allocate_exact_size(size, egui::Sense::hover());
+        }
+    });
+}
+
 /// Every label the Correct tab has, so they share one column as wide as the widest.
 const CORRECTION_LABELS: [&str; 5] = [
     "Current HP",
@@ -7886,7 +8024,8 @@ mod tests {
                 .with_size(vec2(width, 800.0))
                 .build(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        run.group_list(ui);
+                        let arrival = run.arrival_block(ui);
+                        run.group_list(ui, arrival);
                     });
                 });
             design::theme::install(&harness.ctx);
@@ -7968,7 +8107,8 @@ mod tests {
                 .build(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         seen.set(ui.max_rect().right());
-                        run.group_list(ui);
+                        let arrival = run.arrival_block(ui);
+                        run.group_list(ui, arrival);
                     });
                 });
             design::theme::install(&harness.ctx);
@@ -9710,6 +9850,70 @@ mod tests {
                 "iter9-B-FT12-scan: {name}"
             );
         }
+        // FI1, FJ1: the grid's columns are fixed. Turning on Frightened (middle column) leaves
+        // the third column where it was, and the widths were measured once, not every frame.
+        // The harness draws one frame before the theme sets its font size: two sizes, so
+        // up to two measures of every name, and none after.
+        let measured = CONDITION_MEASURES.with(std::cell::Cell::get);
+        assert!(measured >= crate::combat_sync::CONDITIONS.len());
+        harness.run_steps(3);
+        assert_eq!(
+            CONDITION_MEASURES.with(std::cell::Cell::get),
+            measured,
+            "iter-24-R-FI1-once: an unchanged frame measures nothing"
+        );
+        let third = |harness: &egui_kittest::Harness<'_>| {
+            ["Deafened", "Grappled", "Paralyzed"]
+                .map(|name| harness.get_by_label(name).rect().left())
+        };
+        let before = third(&harness);
+        harness.get_by_label("Frightened").click();
+        harness.run_steps(2);
+        assert!(
+            run.borrow().state.participants[0]
+                .conditions
+                .iter()
+                .any(|c| c == "Frightened"),
+            "iter-24-R-FI1: Frightened is on"
+        );
+        assert_eq!(third(&harness), before, "iter-24-R-FI1: column 3 stays");
+        assert_eq!(
+            CONDITION_MEASURES.with(std::cell::Cell::get),
+            measured,
+            "iter-24-R-FI1-once: a toggle measures nothing"
+        );
+        run.borrow_mut().undo();
+        harness.run_steps(2);
+        // Every toggle state: each condition on, then off, and no toggle in any column moves.
+        let places = |harness: &egui_kittest::Harness<'_>| {
+            crate::combat_sync::CONDITIONS.map(|(_, name)| harness.get_by_label(name).rect().left())
+        };
+        let start = places(&harness);
+        for (_, name) in crate::combat_sync::CONDITIONS {
+            let was = run.borrow().state.participants[0].conditions.clone();
+            harness.get_by_label(name).click();
+            harness.run_steps(2);
+            assert_ne!(
+                run.borrow().state.participants[0].conditions,
+                was,
+                "iter-24-R-FJ1: {name} toggled"
+            );
+            assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} toggled");
+            // Exhaustion starts on at level 2; a second press would start it again at 1.
+            if name == "Exhaustion" {
+                run.borrow_mut().undo();
+            } else {
+                harness.get_by_label(name).click();
+            }
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[0].conditions, was);
+            assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} back");
+        }
+        assert_eq!(
+            CONDITION_MEASURES.with(std::cell::Cell::get),
+            measured,
+            "iter-24-R-FI1-once: toggles measure nothing"
+        );
         harness.get_by_label("Increase Exhaustion level").click();
         harness.run_steps(2);
         assert_eq!(

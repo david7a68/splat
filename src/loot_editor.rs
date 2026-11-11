@@ -562,7 +562,7 @@ fn add_row(
                 let title = if times == 1 {
                     table.key.clone()
                 } else {
-                    format!("{times}× {}", table.key)
+                    format!("{times} × {}", table.key)
                 };
                 row(ui, &title, &detail, Pick::Table(table.key.clone()));
             }
@@ -608,7 +608,7 @@ fn add_row(
     }
 }
 
-const ROLL_MENU: &str = "Roll on a table";
+pub(crate) const ROLL_MENU: &str = "Roll on a table";
 
 /// The count typed after `Roll`, such as 2 in `Roll 2× ge`.
 fn typed_count(typed: &str) -> Option<u32> {
