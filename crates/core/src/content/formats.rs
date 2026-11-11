@@ -107,6 +107,25 @@ pub(crate) fn quoted(value: &str) -> String {
     format!("“{words}”")
 }
 
+/// The longest unread value a warning quotes whole, in characters.
+pub const SHORT_VALUE: usize = 40;
+
+/// `quoted`, cut to its first and last words around `…` when the value is longer than
+/// [`SHORT_VALUE`] characters. None when the whole value fits.
+pub(crate) fn quoted_short(value: &str) -> Option<String> {
+    const END: usize = 12;
+    let chars: Vec<char> = value
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if chars.len() <= SHORT_VALUE {
+        return None;
+    }
+    let start: String = chars[..END].iter().collect();
+    let end: String = chars[chars.len() - END..].iter().collect();
+    Some(format!("“{}…{}”", start.trim_end(), end.trim_start()))
+}
+
 /// The text of a value that was not read, without its comment, and its line. A list written
 /// below its key names its first item that is not text; the key's line names the rest.
 fn unread_value(text: &str, key_line: usize) -> (String, usize) {
