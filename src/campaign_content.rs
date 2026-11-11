@@ -1065,15 +1065,17 @@ impl CampaignContent {
                 }
             }
         }
+        // While a draft waits, only Undo greys: the write happened, so its words keep the text
+        // colour, and the draft's own save row says why.
         if let Some(write) = &self.manifest_write
-            && design::locked(ui, manifest_locked, |ui| {
-                design::undo_message(
-                    ui,
-                    Tone::Success,
-                    &write.message(),
-                    &format!("Undo write {}", write.path()),
-                )
-            })
+            && crate::library::kept_undo_message(
+                ui,
+                Tone::Success,
+                &write.message(),
+                &format!("Undo write {}", write.path()),
+                manifest_locked,
+                false,
+            )
         {
             match write.undo() {
                 Ok(_) => {
