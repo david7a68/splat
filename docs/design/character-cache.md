@@ -128,7 +128,9 @@ publication behavior.
 
 Each file has a checksum for generated content and a Personal notes section.
 Refreshes preserve everything after the checksum. A file that fails its checksum, or an
-unmanaged file, blocks replacement and produces a visible warning. A file that only
+unmanaged file, blocks replacement and produces a visible warning. A copy that Splat cannot
+read follows the same checksum: unchanged generated text is written again, and a changed copy stops
+the refresh and is kept. A file that only
 changed during a save is not a conflict: the save reads it again. This covers two Splat
 writers at the same time. To resume updates, move the edited file aside or use
 **Force read** on the warning. Force read fetches the character again, keeps each edited

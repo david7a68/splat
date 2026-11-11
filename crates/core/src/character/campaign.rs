@@ -112,6 +112,15 @@ impl EntitySnapshot {
             if !text.contains(&self.definition.splat_id.to_string()) {
                 continue;
             }
+            // Generated words that still match their checksum hold nothing of the DM's. Such
+            // a copy never blocks a refresh, whatever Splat can read of it: when it is this
+            // sheet, the refresh writes it again and keeps the notes below it.
+            if parts(&text).intact {
+                if text.contains(&format!("\nsplat_id: {}\n", self.definition.splat_id)) {
+                    paths.push(path);
+                }
+                continue;
+            }
             return Err(format!("{}: {}", path.display(), error.message).into());
         }
         match paths.len() {
@@ -702,9 +711,10 @@ mod tests {
     }
 
     #[test]
-    fn schema_one_copy_is_unreadable_and_a_refresh_keeps_it() {
-        // Splat reads only schema 2. A copy it cannot read is the DM's file: a refresh or
-        // Replace names it and changes nothing.
+    fn an_unreadable_copy_is_written_again_only_while_its_generated_words_are_unchanged() {
+        // Splat reads only schema 2. A copy it cannot read is still generated text while its
+        // checksum holds, so a refresh writes it again. With a change in it, it is the DM's
+        // file: a refresh or Replace names it and changes nothing.
         let root = tempfile::tempdir().unwrap();
         let mut record = super::super::tests::sample();
         let creature = record.save_campaign_copy(root.path()).unwrap();
@@ -712,12 +722,22 @@ mod tests {
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Copy\n---\n\nSheet.\n",
             record.definition.splat_id
         );
-        let unreadable = format!(
-            "{generated}{MARKER}{} -->\n{PERSONAL_NOTES}Kept note.\n",
-            checksum(&generated)
-        );
-        fs::write(&creature, &unreadable).unwrap();
+        let unreadable =
+            |hash: &str| format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}Kept note.\n");
+
+        fs::write(&creature, unreadable(&checksum(&generated))).unwrap();
         record.definition.splat_name = "Refreshed".into();
+        assert_eq!(record.save_campaign_copy(root.path()).unwrap(), creature);
+        let refreshed = fs::read_to_string(&creature).unwrap();
+        assert_eq!(
+            Entry::parse("sheet.md", &refreshed).unwrap().name,
+            "Refreshed"
+        );
+        assert!(refreshed.ends_with("Kept note.\n"));
+        assert!(!creature.with_extension("md.splat-archive").exists());
+
+        let changed = unreadable(&"0".repeat(64));
+        fs::write(&creature, &changed).unwrap();
         let expected = format!(
             "{}: Unsupported content schema; expected 2",
             creature.display()
@@ -730,7 +750,7 @@ mod tests {
             record.overwrite_campaign_copy(root.path()),
             Err(expected.into())
         );
-        assert_eq!(fs::read_to_string(&creature).unwrap(), unreadable);
+        assert_eq!(fs::read_to_string(&creature).unwrap(), changed);
         assert!(!creature.with_extension("md.splat-archive").exists());
     }
 

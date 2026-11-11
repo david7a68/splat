@@ -323,7 +323,9 @@ ritual and concentration rows preserve both true and false values.
 Timeline uses event lists. Campaign packages use task items. Groups and encounter
 rosters use tables. Character copies use their character's name once,
 keep their identity after a rename, and put imported data in a foldable end section.
-A provider refresh stops at a character copy that Splat cannot read, and keeps that file.
+A provider refresh writes again a character copy that Splat cannot read, when its generated
+text still matches its checksum, and keeps the personal notes. With a change in that text, the
+refresh stops and keeps the file.
 
 Session plans accept task items such as `- [ ] [[Bridge Ambush]]`. Empty session
 titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
