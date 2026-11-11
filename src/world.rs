@@ -26,7 +26,12 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use related::related;
 use serde_yaml_ng::{Mapping, Value};
 use splat::character::stable_id;
-use splat::content::{Entry, Reference, art::FORMATS, overrides::Overrides};
+use splat::content::{
+    Entry, Reference,
+    art::FORMATS,
+    layout::{Field, FlagKind},
+    overrides::Overrides,
+};
 use std::{
     collections::HashMap,
     fs,
@@ -1618,13 +1623,20 @@ struct GroupFault {
     entry: Option<Entry>,
 }
 
+/// The kind of the Part of flag, which World shows with its Change action.
+const PART_OF: FlagKind = FlagKind::Unread(Field::PartOf);
+
+/// True when the note's Status value was not read.
+fn status_unread(entry: &Entry) -> bool {
+    entry
+        .flags
+        .iter()
+        .any(|flag| flag.kind == FlagKind::Unread(Field::Status))
+}
+
 /// A value the reader could not read, as the shared reader says it (`src/library/view.rs`).
 fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    if flag.message.contains(" not read (line ") {
-        flag.message.clone()
-    } else {
-        format!("Line {}: {}", flag.line, flag.message)
-    }
+    flag.message.clone()
 }
 
 impl GroupFault {
@@ -1636,10 +1648,9 @@ impl GroupFault {
         let notices = entry
             .flags
             .iter()
-            // The Part of flag is the one with its line and words; another flag can share a line.
+            // The Part of flag is the one with its line and kind; another flag can share a line.
             .filter(|flag| {
-                unread
-                    .is_none_or(|unread| unread.line != flag.line || unread.reason != flag.message)
+                unread.is_none_or(|unread| unread.line != flag.line || flag.kind != PART_OF)
             })
             .map(flag_words)
             .collect();
@@ -2731,12 +2742,7 @@ impl Reader {
         if self.unread_groups(item.entry.id).is_some() {
             values.push(("not read".into(), Type::Small));
         }
-        let status = if item
-            .entry
-            .flags
-            .iter()
-            .any(|flag| flag.message.starts_with("Status "))
-        {
+        let status = if status_unread(&item.entry) {
             "not read"
         } else if status(&item.entry).is_empty() {
             "not set"
@@ -3457,19 +3463,10 @@ impl Reader {
         if !self.compact {
             let value_width = self.relationship_value_width(ui, item, index);
             if !self.status_editing
-                && (!status(&item.entry).trim().is_empty()
-                    || item
-                        .entry
-                        .flags
-                        .iter()
-                        .any(|flag| flag.message.starts_with("Status ")))
+                && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
             {
                 let value = status(&item.entry);
-                let unread = item
-                    .entry
-                    .flags
-                    .iter()
-                    .any(|flag| flag.message.starts_with("Status "));
+                let unread = status_unread(&item.entry);
                 let notice = self.row_notice(ui, campaign, item, ChangeKind::Status, value_width);
                 let (changed, undo) = Self::relationship_row(
                     ui,

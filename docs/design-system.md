@@ -179,7 +179,7 @@ eye during long sessions.
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left, else as far right as fits; never over a splitter or scroll bar |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
-| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
+| Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
@@ -485,7 +485,9 @@ come from the draft as it is now, checked as Save checks it. So does every other
 (`Unsaved`) means Save would accept the draft, and a draft that parses but that Save refuses (another UUID,
 kind or key) says Invalid with Save's reason, and Save and Ctrl+S are blocked with it. These checks never read the disk.
 A Save that fails on the disk (a read-only file or folder, a write error) is an action-time failure: the state
-slot says `Not saved` with the error icon, and Save's own reason sits where a refusal's reason does. It belongs to
+slot says `Not saved` with the error icon, and Save's own reason sits where a refusal's reason does. A read-only
+file or campaign folder names the next step (`This file is read only. Make it writable, then Save again.`), and the
+owner line says `Read only` with the lock icon for as long as that failure lasts. It belongs to
 that draft: the next edit, another entry or a Save that succeeds ends it. Each reason Save would refuse it (a YAML fault,
 a UUID or key that another entry uses) is the error, with Invalid. Once Save would write it, the error goes and
 the state says Unsaved. The owner line and the row keep Cannot be read until Save. A fault that is not in the text (another identity, a
@@ -756,7 +758,9 @@ loop says `Place loop` on its list row, the header count and its menu include it
 problem says `2 broken links` only when every target is missing; when one of them waits for a choice or is in
 a loop, it says `2 links need fixing`. Table faults use the
 same list warning and header repair link. Unread values name field, bad value, source line and repair, in
-the form `<Field> "<text on that line>" not read (line N). <How to write it>.` When the shape is not
+the form `Line N: <Field> "<text on that line>" was not read. <How to write it>.` A line warning's sentence
+starts with `Line N:` and is made with the warning; no screen adds the line, so a run saved by an older Splat shows
+its warnings in the words it saved. When the shape is not
 obvious, the repair gives an example: Hit Points says `Start with a number, such as 22 (4d8 + 4).` Every unread-value warning
 sits in one place: below the file line, above the value rows. It wraps at the reader measure in Read and at
 `FORM_WIDTH` in Edit, so it keeps the right edge of the rows and fields. Every other World warning sits below the file
@@ -807,7 +811,7 @@ write does; the draft stays as it is until the DM chooses. Below the
 choices, one Small line for each field that differs says what Overwrite does to it, including the groups it
 adds, removes and keeps.
 If Part of could not be read, block its Change action with the unread-value message, for example
-`Part of "{link: '[[Lost Guild]]'}" not read (line 9). Write each group as a link, such as [[Arena Guild]].`
+`Line 9: Part of "{link: '[[Lost Guild]]'}" was not read. Write each group as a link, such as [[Arena Guild]].`
 A list written below its key names its first value that is not text, and that value's line.
 In Edit, a quiet `Edit in Obsidian` link follows the reason. Read shows the reason in the same warning
 tone below the file line, whose link is the one `Edit in Obsidian`; a reader with no file line puts the link
@@ -875,7 +879,8 @@ Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, R
 HISTORY in that order. Groups and History start closed when they have rows. Each row reserves right-edge slots
 for its main action, quiet Edit and row menu. The menu holds deletion and starting another run. An encounter
 with an unfinished run appears in In progress; when it ends, it returns to Ready. Keep in Ready during a run
-leaves a blocked Start fight and a reason to resume from In progress. The header counts all Ready rows,
+leaves a blocked Start fight and a reason to resume from In progress. In the editor, a muted line below the option
+says what it does. The header counts all Ready rows,
 including these repeatable fights. Ready rows name creatures; an empty roster blocks Start with Add
 participants first. The open-run block appears once under READY TO RUN. Its Ready action says Go back to the
 run.
@@ -935,7 +940,11 @@ Its note says where party members come from in the DM's words: `Party members co
 saved last.`
 Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
 
-The editor header keeps Save and Start on line one; the name field gives up width. An unfinished encounter
+The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
+changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
+state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
@@ -948,7 +957,10 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 ### Groups and changes
 
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
-content and anchored left. The group name field and Belongs to end at one edge: the column's edge, or
+content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
+action moves when a long list starts to scroll. The group editor's header is one block that ends at that column's
+edge: the name on line one, then the save row with the state and Discard at its start and Save group at the
+column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
 actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
@@ -962,6 +974,9 @@ members, also in compact editors. Member names and stats sit above Count, Edit a
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
 Save group with Add a creature first.
+
+A change form (group member or roster slot) has one right edge: Display name, Note, the Other effect field with its
+Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 
 Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
@@ -978,7 +993,10 @@ faults and their repair links may use the list's width (`LIST_MEASURE`), so a li
 Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
-each creature needing repair: shown name, base creature when different, and source line. In the plan, each
+each creature needing repair with its cause, in the roster row's form: `Scout (as Goblin Warrior) · line 15: the change
+"HP lots" was not read.` (shown name, base creature when different, source line, cause). The example (`Use a number,
+such as HP +5.`) belongs to the group editor's warning, not to these summaries.
+In the plan, each
 such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
 still join. While a fight is open, a group that some members can join keeps `Add to fight…` in its action column and
 puts `Edit group` in its row menu; a group none of whose members can join keeps `Edit group` there, because Arrivals
@@ -1031,7 +1049,8 @@ Names that need more than two lines use `RUN_COMPACT.name` and wrap in the share
 columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
 that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
 the whole name. Pictures align with the first name line. The fight panel and the Encounters page keep an `L`
-left gutter, so a quiet action at their text edge never reaches a splitter. A scroll area there lets that
+left gutter, so a quiet action at their text edge never reaches a splitter. The Encounters page header is outside
+that gutter: its title starts at the shared page edge, as every page title does. A scroll area there lets that
 action's press area reach `S` into the gutter.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then

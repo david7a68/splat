@@ -1097,6 +1097,7 @@ impl Saved {
 mod tests {
     use super::*;
     use crate::content_workspace::EntryRef;
+    use splat::content::layout::{Field, FlagKind};
     use std::fs;
 
     #[test]
@@ -1130,7 +1131,7 @@ mod tests {
             entry
                 .flags
                 .iter()
-                .any(|flag| flag.message.contains("Part of")
+                .any(|flag| flag.kind == FlagKind::Unread(Field::PartOf)
                     && flag
                         .message
                         .contains("Write each group as a link, such as [[Arena Guild]].")),
@@ -1148,16 +1149,16 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of: [Guild, {id: 1}] # A note.\n".to_owned(),
-                Some(format!("Part of “[Guild, {{id: 1}}]” not read (line 7). {help}")),
+                Some(format!("Line 7: Part of “[Guild, {{id: 1}}]” was not read. {help}")),
             ),
             (
                 "splat_part_of: 17\n".to_owned(),
-                Some(format!("Part of “17” not read (line 7). {help}")),
+                Some(format!("Line 7: Part of “17” was not read. {help}")),
             ),
             (
                 "splat_part_of: # Kept.\n- '[[Zarel]]'\n- [[Verori]]\n\n- {link: '[[Lost]]'} # Old.\n"
                     .to_owned(),
-                Some(format!("Part of “{{link: '[[Lost]]'}}” not read (line 11). {help}")),
+                Some(format!("Line 11: Part of “{{link: '[[Lost]]'}}” was not read. {help}")),
             ),
             (
                 "splat_part_of:\n- '[[Zarel]]'\n- [[Verori]]\n".to_owned(),
@@ -1179,19 +1180,19 @@ mod tests {
             );
             // Neighbour: the flag and the message name the same line.
             if let Some(unread) = unread {
-                assert!(unread.reason.contains(&format!("(line {})", unread.line)));
+                assert!(unread.reason.starts_with(&format!("Line {}: ", unread.line)));
             }
         }
         // The last key's scan stops at the closing `---`: the note's text is never a value.
         for (front, expected) in [
             (
                 "splat_part_of:\n  x: 1\n",
-                Some(format!("Part of “” not read (line 7). {help}")),
+                Some(format!("Line 7: Part of “” was not read. {help}")),
             ),
             ("splat_part_of:\n", None),
             (
                 "splat_in:\n  x: 1\n",
-                Some("In “” not read (line 7). Use one place name or link.".to_owned()),
+                Some("Line 7: In “” was not read. Use one place name or link.".to_owned()),
             ),
         ] {
             let file = format!(
@@ -1217,8 +1218,35 @@ mod tests {
         );
         let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
         assert!(super::super::fields::unread_groups(&entry, &file).is_none());
-        assert!(entry.flags.iter().any(|flag| flag.message
-            == "Status “[alive]” not read (line 7). Use a short word, such as alive."));
+        assert!(entry.flags.iter().any(|flag| flag.line == 7
+            && flag.kind == FlagKind::Unread(Field::Status)
+            && flag.message
+                == "Line 7: Status “[alive]” was not read. Use a short word, such as alive."));
+        assert!(super::super::status_unread(&entry));
+        // Contract F: World finds its flags by kind. Other words on every flag change nothing; a
+        // plain flag that has the old Status words is not a Status fault.
+        let file = format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_part_of: 17\nsplat_status: [alive]\n---\n",
+            Uuid::new_v4()
+        );
+        let mut entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
+        let unread = super::super::fields::unread_groups(&entry, &file).unwrap();
+        assert_eq!(entry.flags.len(), 2);
+        for flag in &mut entry.flags {
+            flag.message = "Other words".into();
+        }
+        assert!(super::super::status_unread(&entry));
+        let (notices, _) = super::super::GroupFault::flags(&entry, Some(&unread));
+        assert_eq!(
+            notices,
+            ["Other words"],
+            "only Status; Part of is the unread list"
+        );
+        entry.flags = vec![splat::content::layout::Flag::new(
+            8,
+            "Status “[alive]” was not read.".into(),
+        )];
+        assert!(!super::super::status_unread(&entry));
     }
 
     #[test]
@@ -1302,7 +1330,7 @@ mod tests {
             .find_map(|line| line.strip_prefix("- {id:"))
             .unwrap();
         format!(
-            "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+            "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
         )
     }
 

@@ -4747,6 +4747,27 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("Undo replacement");
     d.expect("Not found. Its package entry was deleted.");
     d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
+    // iter-24-B FC1: Save would refuse this changed draft (2 rows have no creature), so it says
+    // Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps its bytes.
+    let bridge = d
+        .app_mut()
+        .campaigns
+        .active_campaign()
+        .unwrap()
+        .path
+        .join("Encounters/Bridge Ambush.md");
+    let on_disk = fs::read(&bridge).unwrap();
+    let invalid =
+        d.visible_text("Invalid") && !d.visible_text("Unsaved") && d.is_disabled(SAVE_ENCOUNTER);
+    d.press_ctrl(Key::S);
+    d.observe(
+        "iter-24-B-FC1",
+        invalid
+            && fs::read(&bridge).unwrap() == on_disk
+            && d.visible_text("Invalid")
+            && d.has_containing("2 Cinder Wolf rows have no creature."),
+        format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
+    );
     d.state("deleted-package-entry-replacement-undone", Sizes::All);
     go_library(d);
     search_library(d, "Ash Exposure");
@@ -6784,7 +6805,7 @@ fn unread_reason(groups: &str) -> String {
         .find_map(|line| line.strip_prefix("- {id:"))
         .expect("fixture: an object group");
     format!(
-        "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+        "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
     )
 }
 
@@ -6956,11 +6977,16 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         let (inside, detail) = d.at_size(size, |d| {
             d.expect(reason);
             let warning = d.place_of(reason).unwrap();
+            // The painted words too: the label's rect and its words both end at the measure.
+            let words = d.painted_right(reason).unwrap();
             let pane = d.place_of("Resize World notes column").unwrap().right();
             let measure = pane + design::S + design::READER_MEASURE;
             (
-                warning.right() <= measure + 1.0,
-                format!("warning ends at {}, measure at {measure}", warning.right()),
+                warning.right() <= measure + 1.0 && words <= measure + 1.0,
+                format!(
+                    "warning ends at {}, its words at {words}, measure at {measure}",
+                    warning.right()
+                ),
             )
         });
         d.observe(

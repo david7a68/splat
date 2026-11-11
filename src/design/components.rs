@@ -1775,12 +1775,45 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
         ui.add_space(S + 1.0);
         ui.label(Type::Body.rich(ui, icon).color(color));
         ui.add_space(XS);
-        let response = ui.add(egui::Label::new(Type::Body.rich(ui, text).color(c.text)).wrap());
+        let galley = wrapped_words(ui, Type::Body.rich(ui, text).color(c.text));
+        let response = ui.add(egui::Label::new(galley));
         let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
         ui.painter().rect_filled(bar, 0.0, color);
         response
     });
     inner.inner
+}
+
+/// The words of a message, wrapped as a wrapping `Label` wraps them, with a rect that ends at the
+/// last painted word. A wrapped row keeps the space it broke at; without this, that space widens
+/// the rect past the wrap width.
+fn wrapped_words(ui: &Ui, words: egui::RichText) -> std::sync::Arc<egui::Galley> {
+    let mut job = std::sync::Arc::unwrap_or_clone(egui::WidgetText::from(words).into_layout_job(
+        ui.style(),
+        egui::FontSelection::Default,
+        ui.text_valign(),
+    ));
+    job.wrap.max_width = ui.available_width();
+    job.halign = ui.layout().horizontal_placement();
+    job.justify = ui.layout().horizontal_justify();
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let right = galley
+        .rows
+        .iter()
+        .map(|row| {
+            row.glyphs
+                .iter()
+                .rev()
+                .find(|glyph| !glyph.chr.is_whitespace())
+                .map_or(row.pos.x, |glyph| row.pos.x + glyph.max_x())
+        })
+        .fold(galley.rect.left(), f32::max);
+    if right >= galley.rect.right() {
+        return galley;
+    }
+    let mut trimmed = (*galley).clone();
+    trimmed.rect.max.x = right;
+    std::sync::Arc::new(trimmed)
 }
 
 /// A compact run notice. Tone marks the icon and bar; words keep the text colour.

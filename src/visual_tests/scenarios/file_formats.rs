@@ -8,7 +8,7 @@ pub fn run(d: &mut Driver<'_>) {
     let before = fs::read_to_string(&path).unwrap();
     d.click(NAV_WORLD);
     d.click_containing("Malformed · ");
-    let warning = "Status “[alive]” not read (line 7). Use a short word, such as alive.";
+    let warning = "Line 7: Status “[alive]” was not read. Use a short word, such as alive.";
     d.expect(warning);
     d.expect("A note for tonight.");
     d.observe_both(

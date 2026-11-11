@@ -809,6 +809,7 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use splat::content::layout::{Field, FlagKind};
 
     #[test]
     fn creature_identity_uses_book_case_and_keeps_tags() {
@@ -867,7 +868,7 @@ mod tests {
             repaired
                 .flags
                 .iter()
-                .all(|flag| !flag.message.starts_with("Hit Points"))
+                .all(|flag| flag.kind != FlagKind::Unread(Field::HitPoints))
         );
     }
 
