@@ -17,8 +17,11 @@ you can show. Read source at the reviewed commit, list the author's claims, and 
 - **A proof must be able to fail.** For each new check, ask whether it would also pass on the old code. Look for
   filtered assertions that pass on an empty match, `expect_same` with no asserted change before it, and a
   fixture changed so that a check passes.
-- **A weaker gate is a BLOCK**: a deleted or loosened assertion, a new `#[ignore]`, a check moved to
-  report-only.
+- **A gate gets weaker only on purpose.** For each deleted or loosened assertion, new `#[ignore]`, or check
+  moved to report-only, name the fault it caught and what catches it now. If the task asked for the change (a
+  test simplification, a removed feature), confirm that the remaining check still fails on that fault, and list
+  any coverage the task chose to drop as a known limit. A weakening that the task did not ask for, or that the
+  PR does not state, is a BLOCK.
 - **State belongs to one object.** When a change clears or replaces a result, an Undo, a draft or cached
   state, ask whose it was: another note's, another reader's, an older action's. Walk each entry point (keyboard,
   search, drag, repair, Undo, a background timer) against each risk state (unsent text, an outside edit, a
@@ -41,5 +44,5 @@ Required repairs: numbered, only what must change before merge.
 Known limits: non-blocking notes, one line each.
 ```
 
-BLOCK for data loss, wrong game state, a weaker gate, a false claim on a save or state path, or a proof that
-cannot fail. Otherwise MERGE with required repairs.
+BLOCK for data loss, wrong game state, an undeclared weaker gate, a false claim on a save or state path, or a
+proof that cannot fail. Otherwise MERGE with required repairs.
