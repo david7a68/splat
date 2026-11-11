@@ -165,7 +165,7 @@ fn numeric(fields: &Mapping, key: &str) -> Option<i64> {
 
 /// Remove marked data blocks for the stat roots, and the headings they leave empty.
 /// The stat table owns these values, so stale marked data cannot mask it.
-pub fn without_marked_stats(text: &str, kind: &str) -> String {
+pub(super) fn without_marked_stats(text: &str, kind: &str) -> String {
     // Only a marker naming one of these roots changes the text. Most notes have none,
     // and two full Markdown parses would find nothing.
     if !roots(kind).iter().any(|root| {
@@ -1424,7 +1424,7 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
 }
 
 /// The stat section for the table-owned data, and all other mechanics for an end fence.
-pub fn section_and_extras(
+pub(super) fn section_and_extras(
     fields: &Mapping,
     kind: &str,
 ) -> Result<(String, Vec<(String, Value)>), String> {
@@ -1945,10 +1945,7 @@ fn set_cell(
 
 /// Rejected vitals are display text only. The model still has no numeric value.
 pub fn invalid_vital(entry: &Entry, key: &str) -> Option<String> {
-    if entry.kind != "creature"
-        || entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2)
-        || numeric(&entry.fields, key).is_some()
-    {
+    if entry.kind != "creature" || numeric(&entry.fields, key).is_some() {
         return None;
     }
     let names: &[&str] = match key {
@@ -1998,9 +1995,7 @@ pub fn comparison_body(entry: &Entry) -> String {
     if entry.kind == "creature" {
         body = fold_printed_stats(&body);
     }
-    let mut comparable = entry.clone();
-    comparable.fields.insert("splat_schema".into(), 2.into());
-    reading_body(&comparable, &body)
+    reading_body(entry, &body)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -2009,9 +2004,6 @@ pub fn comparison_body(entry: &Entry) -> String {
 /// Omit model-backed rows and rejected vitals shown in the reader's stat area.
 /// Unknown rows remain visible as text.
 pub fn reading_body(entry: &Entry, body: &str) -> String {
-    if entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2) {
-        return body.into();
-    }
     let clean_body = without_printed_record(body);
     let body = clean_body.as_str();
     let kind = entry.kind.as_str();

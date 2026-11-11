@@ -510,12 +510,6 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
                 == stat(entry, "max_hp")
         })
         .map(str::to_owned)
-        .or_else(|| {
-            hit_points_line(entry).and_then(|line| {
-                line.strip_prefix("HP ")
-                    .map(|text| text.trim_end_matches('\\').trim().to_owned())
-            })
-        })
         .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()))
         .or_else(|| splat::content::stat_blocks::invalid_vital(entry, "max_hp"));
     let armor_class = field(entry, "armor_class_text")
@@ -583,9 +577,7 @@ pub(super) fn vitals(ui: &mut egui::Ui, entry: &Entry, values: Option<&super::vi
                     "HIT POINTS" => stat(entry, "max_hp"),
                     _ => stat(entry, "initiative"),
                 };
-                let invalid = entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
-                    && printed.is_none()
-                    && text != "Unknown";
+                let invalid = printed.is_none() && text != "Unknown";
                 let display = if invalid {
                     format!("{} {text}", design::icons::WARN)
                 } else {
@@ -666,34 +658,6 @@ fn unbroken_dice(text: &str) -> String {
         .collect()
 }
 
-/// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The
-/// vitals show it, with the dice, so the page says it once.
-fn hit_points_line(entry: &Entry) -> Option<&str> {
-    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
-        return None;
-    }
-    let max = stat(entry, "max_hp")?;
-    entry.body.lines().map(str::trim).find(|line| {
-        line.strip_prefix("HP ")
-            .and_then(|rest| rest.split_whitespace().next())
-            .and_then(|number| number.parse::<i64>().ok())
-            == Some(max)
-    })
-}
-
-fn without_line(body: &str, line: Option<&str>) -> String {
-    let Some(line) = line else {
-        return body.to_owned();
-    };
-    let mut out = String::with_capacity(body.len());
-    for text in body.split_inclusive('\n') {
-        if text.trim() != line {
-            out.push_str(text);
-        }
-    }
-    out
-}
-
 fn detail(entry: &Entry, key: &str) -> Option<String> {
     if key == "cr_text" {
         return presentation::challenge_text(entry).map(str::to_owned);
@@ -723,17 +687,7 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
             })
         })
         .collect::<Vec<_>>();
-    if !movement.is_empty() {
-        return Some(movement.join(", "));
-    }
-    if entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2) {
-        return None;
-    }
-    entry.body.lines().find_map(|line| {
-        line.trim()
-            .strip_prefix("Speed ")
-            .map(|text| text.trim_end().trim_end_matches('\\').trim_end().to_owned())
-    })
+    (!movement.is_empty()).then(|| movement.join(", "))
 }
 
 fn stat_identity(entry: &Entry) -> String {
@@ -845,11 +799,10 @@ pub(super) fn show(
     stat_head(ui, entry, values);
     for section in sections {
         if section.title == "Source text" {
-            let body = without_line(section.body, hit_points_line(entry));
             prose(
                 ui,
                 &entry.name,
-                &rules_prose(entry, &body),
+                &rules_prose(entry, section.body),
                 values,
                 &mut spell_links,
             );
@@ -857,7 +810,7 @@ pub(super) fn show(
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
             } else {
-                without_line(section.body, hit_points_line(entry))
+                section.body.to_owned()
             };
             if body.trim().is_empty() {
                 continue;
@@ -891,31 +844,9 @@ mod tests {
     }
 
     #[test]
-    fn legacy_source_cr_and_speed_are_shown_once_without_markdown_breaks() {
+    fn source_cr_and_speed_are_shown_once_without_markdown_breaks() {
         let text = crate::library::note_text("Cinder Wolf", "creature", None);
         let mut entry = Entry::parse("Cinder Wolf.md", &text).unwrap();
-        entry.fields.insert("splat_schema".into(), 1.into());
-        entry
-            .fields
-            .get_mut("splat_creature")
-            .unwrap()
-            .as_mapping_mut()
-            .unwrap()
-            .remove("movement_text");
-        entry
-            .fields
-            .get_mut("splat_creature")
-            .unwrap()
-            .as_mapping_mut()
-            .unwrap()
-            .remove("cr_text");
-        entry
-            .fields
-            .get_mut("splat_stats")
-            .unwrap()
-            .as_mapping_mut()
-            .unwrap()
-            .remove("speed");
         entry.body = "## Source text\n\nMedium humanoid, Unaligned\\\nAC 10  Initiative +0 (10)\\\nHP 1\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\  \n\n### Actions\n\nBite. Roll damage.\n".into();
         let sections = presentation::reading_sections(&entry.body, &entry.name);
         let source = sections

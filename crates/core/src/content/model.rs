@@ -21,11 +21,9 @@ pub(super) fn entry(path: &str, body: &str, fields: &Mapping) -> Result<Entry, S
     if kind == "creature" && !fields.contains_key("splat_character") {
         read_identity(body, &mut fields);
         stat_blocks::normalize_plain_stats(&mut fields);
-    }
-    normalize(&mut fields);
-    if kind == "creature" && !fields.contains_key("splat_character") {
         stat_blocks::complete_challenge_fields(&mut fields);
     }
+    normalize(&mut fields);
     let (inventory, inventory_containers) = inventory(body)?;
     let entry = Entry {
         path: path.into(),
@@ -120,24 +118,7 @@ fn read_identity(body: &str, fields: &mut Mapping) {
 }
 
 fn normalize(fields: &mut Mapping) {
-    if let Some(value) = fields.remove("splat_origin") {
-        fields.insert("splat_origin".into(), formats::model_reference(value));
-    }
-    if let Some(Value::Sequence(values)) = fields.get_mut("splat_requires") {
-        for value in values {
-            *value = formats::model_reference(value.clone());
-        }
-    }
-    if let Some(world) = fields
-        .get_mut("splat_world")
-        .and_then(Value::as_mapping_mut)
-    {
-        for key in ["in", "creature"] {
-            if let Some(value) = world.get_mut(key) {
-                *value = formats::model_reference(value.clone());
-            }
-        }
-    }
+    formats::model_references(fields);
     // Citations are display text; no execution code consumes them.
     if let Some(Value::Sequence(sources)) = fields.get_mut("splat_sources") {
         for source in sources {

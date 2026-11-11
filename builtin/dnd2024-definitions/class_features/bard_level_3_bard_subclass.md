@@ -7,7 +7,6 @@ splat_name: 'Level 3: Bard Subclass'
 splat_origin: dnd2024:reference/pages/032
 splat_sources:
 - SRD 5.2.1, pp. 32, https://www.dndbeyond.com/srd
-
 ---
 
 # Level 3: Bard Subclass

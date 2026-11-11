@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub const GROUP: &[&str] = &["Count", "Creature", "Name", "Changes", "Note"];
 pub const ROSTER: &[&str] = &["Side", "Creature", "Name", "Changes", "Note"];
-pub const RULES: &[&str] = &["Rule", "Choice"];
+const RULES: &[&str] = &["Rule", "Choice"];
 const STATS: &[(&str, &str)] = &[
     ("HP", "max_hp"),
     ("AC", "armor_class"),
@@ -1819,7 +1819,7 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
             }
         }
     }
-    if entry.kind == "campaign" && formats::schema(&entry.fields) == Ok(2) {
+    if entry.kind == "campaign" {
         entry.flags.retain(|flag| {
             !flag.message.starts_with("Choice ") && !flag.message.contains(" choice \"")
         });
@@ -1940,9 +1940,7 @@ fn owned_ranges(body: &str, group: bool) -> Vec<std::ops::Range<usize>> {
 
 /// Notes forms show the DM's prose; the owned table stays in its original bytes.
 pub fn prose(entry: &Entry) -> String {
-    if formats::schema(&entry.fields) != Ok(2)
-        || !["encounter_group", "encounter"].contains(&entry.kind.as_str())
-    {
+    if !["encounter_group", "encounter"].contains(&entry.kind.as_str()) {
         return entry.body.trim().into();
     }
     let mut body = entry.body.clone();

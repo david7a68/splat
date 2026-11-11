@@ -334,10 +334,7 @@ pub(super) fn show(
     has_summary: bool,
     lead_gap: bool,
 ) {
-    let table_stats = entry.is_some_and(|e| {
-        e.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
-            && ["spell", "item"].contains(&e.kind.as_str())
-    });
+    let table_stats = entry.is_some_and(|e| ["spell", "item"].contains(&e.kind.as_str()));
     // This reader also receives already-split sections. Restore their headings
     // before filtering, because table ownership is defined by the named section.
     let clean_body = entry.filter(|_| table_stats).map(|entry| {

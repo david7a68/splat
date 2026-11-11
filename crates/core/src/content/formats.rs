@@ -1,15 +1,6 @@
 //! Schema-2 notes: their flat properties, model edits, and the writer. Loading never writes files.
 use super::{Entry, Mapping, Value, layout::Flag, patch_fields};
 
-pub fn schema(fields: &Mapping) -> Result<u64, String> {
-    match fields.get("splat_schema").and_then(Value::as_u64) {
-        Some(version @ (1 | 2)) => Ok(version),
-        _ => {
-            Err("Unsupported content schema (expected 1 or 2); raw source remains unchanged".into())
-        }
-    }
-}
-
 pub const WORLD_FIELDS: &[(&str, &str)] = &[
     ("type", "splat_type"),
     ("status", "splat_status"),
@@ -53,7 +44,7 @@ pub fn flat_reference(value: &Value) -> Value {
         .clone()
 }
 
-pub fn model_reference(value: Value) -> Value {
+pub(super) fn model_reference(value: Value) -> Value {
     if let Some(raw) = value.as_str() {
         if let Some((link, _)) = raw.split_once(" %% splat ") {
             let mut fields = Mapping::new();
@@ -75,6 +66,31 @@ pub fn model_reference(value: Value) -> Value {
         }
     }
     value
+}
+
+/// Give each reference in `fields` its model form. The reader and the writer share this.
+pub(super) fn model_references(fields: &mut Mapping) {
+    // Not an edit in place: `remove` puts the last field where the origin was, and `insert`
+    // puts the origin last. The writer lays out marked data in field order, so this order is
+    // part of its output.
+    if let Some(value) = fields.remove("splat_origin") {
+        fields.insert("splat_origin".into(), model_reference(value));
+    }
+    if let Some(Value::Sequence(values)) = fields.get_mut("splat_requires") {
+        for value in values {
+            *value = model_reference(std::mem::take(value));
+        }
+    }
+    if let Some(world) = fields
+        .get_mut("splat_world")
+        .and_then(Value::as_mapping_mut)
+    {
+        for key in ["in", "creature"] {
+            if let Some(value) = world.get_mut(key) {
+                *value = model_reference(std::mem::take(value));
+            }
+        }
+    }
 }
 
 /// A value the reader could not read, as UI words name it: in curly quotation marks, on one
@@ -297,24 +313,7 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
             }
         }
     }
-    if let Some(value) = fields.remove("splat_origin") {
-        fields.insert("splat_origin".into(), model_reference(value));
-    }
-    if let Some(Value::Sequence(values)) = fields.get_mut("splat_requires") {
-        for value in values {
-            *value = model_reference(value.clone());
-        }
-    }
-    if let Some(world) = fields
-        .get_mut("splat_world")
-        .and_then(Value::as_mapping_mut)
-    {
-        for key in ["in", "creature"] {
-            if let Some(value) = world.get_mut(key) {
-                *value = model_reference(value.clone());
-            }
-        }
-    }
+    model_references(fields);
     let kind = fields
         .get("splat_kind")
         .and_then(Value::as_str)
@@ -641,164 +640,166 @@ pub(super) fn note(
     Ok(format!("---\n{front}---\n{body}"))
 }
 
+/// The properties that hold a reference, or a list of references, as readable text.
+const REFERENCE_FIELDS: [&str; 3] = ["splat_origin", "splat_sources", "splat_requires"];
+
+/// The flat properties that replace a World note's `splat_world`.
+fn world_properties(fields: &Mapping) -> Result<Vec<(&'static str, Option<Value>)>, String> {
+    let Some(world) = fields.get("splat_world").and_then(Value::as_mapping) else {
+        return Ok(Vec::new());
+    };
+    if world.keys().any(|key| {
+        !WORLD_FIELDS
+            .iter()
+            .any(|(old, _)| key.as_str() == Some(old))
+    }) {
+        return Err("Unknown World properties need review before writing.".into());
+    }
+    let mut changes = vec![("splat_world", None)];
+    for &(old, flat) in WORLD_FIELDS {
+        if let Some(value) = world.get(old) {
+            changes.push((flat, Some(flat_reference(value))));
+        }
+    }
+    Ok(changes)
+}
+
+/// Each reference property of `fields`, with its references as readable text.
+fn reference_properties(fields: &Mapping) -> Result<Vec<(&'static str, Option<Value>)>, String> {
+    let mut changes = Vec::new();
+    for key in REFERENCE_FIELDS {
+        let Some(value) = fields.get(key) else {
+            continue;
+        };
+        let flat = match value {
+            Value::Sequence(values) => Value::Sequence(values.iter().map(flat_reference).collect()),
+            _ => flat_reference(value),
+        };
+        if flat.is_mapping()
+            || flat
+                .as_sequence()
+                .is_some_and(|values| values.iter().any(|v| !v.is_string()))
+        {
+            return Err(format!("{key} needs a readable reference."));
+        }
+        changes.push((key, Some(flat)));
+    }
+    Ok(changes)
+}
+
+/// Marked data for the end of a note: `value` in a YAML fence that names its `path`.
+fn fence(path: &str, value: &impl serde::Serialize) -> Result<String, String> {
+    Ok(format!(
+        "\n<!-- splat:yaml path={path} -->\n\n```yaml\n{}```\n",
+        serde_yaml_ng::to_string(value).map_err(|e| e.to_string())?
+    ))
+}
+
 /// Write a schema-2 note from its model: `fields`, and the `body` below the properties, which can
 /// also hold marked data. The written note must read back to the same model, or nothing is returned.
 pub fn write(path: &str, fields: &Mapping, body: &str) -> Result<String, String> {
     let entry = super::model::entry(path, body, fields)?;
-    if ["campaign", "encounter_group", "encounter"].contains(&entry.kind.as_str()) {
+    let kind = entry.kind.as_str();
+    if ["campaign", "encounter_group", "encounter"].contains(&kind) {
         return super::list_formats::write(&entry, fields, body);
     }
     let newline = if body.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut changes = Vec::new();
-    let stat_kind =
-        super::stat_blocks::owns(&entry.kind, entry.fields.contains_key("splat_character"));
-    let mut stat_body = String::new();
-    let mut stat_extras = Vec::new();
-    if stat_kind {
-        (stat_body, stat_extras) =
-            super::stat_blocks::section_and_extras(&entry.fields, &entry.kind)?;
-        for key in super::stat_blocks::data_roots(&entry.kind) {
-            changes.push((*key, None));
-        }
-    }
-    if let Some(world) = entry.fields.get("splat_world").and_then(Value::as_mapping) {
-        if world.keys().any(|key| {
-            !WORLD_FIELDS
-                .iter()
-                .any(|(old, _)| key.as_str() == Some(old))
-        }) {
-            return Err("Unknown World properties need review before writing.".into());
-        }
-        changes.push(("splat_world", None));
-        for &(old, flat) in WORLD_FIELDS {
-            if let Some(value) = world.get(old) {
-                changes.push((flat, Some(flat_reference(value))));
-            }
-        }
-    }
-    for key in ["splat_origin", "splat_sources", "splat_requires"] {
-        if let Some(value) = entry.fields.get(key) {
-            let flat = match value {
-                Value::Sequence(values) => {
-                    Value::Sequence(values.iter().map(flat_reference).collect())
-                }
-                _ => flat_reference(value),
-            };
-            if flat.is_mapping()
-                || flat
-                    .as_sequence()
-                    .is_some_and(|values| values.iter().any(|v| !v.is_string()))
-            {
-                return Err(format!("{key} needs a readable reference."));
-            }
-            changes.push((key, Some(flat)));
-        }
-    }
     let character = entry.fields.contains_key("splat_character");
+    // The stat table holds the data of these roots. Marked data holds what the table cannot.
+    let stats = super::stat_blocks::owns(kind, character)
+        .then(|| super::stat_blocks::section_and_extras(&entry.fields, kind))
+        .transpose()?;
+    let table_roots = match stats {
+        Some(_) => super::stat_blocks::data_roots(kind),
+        None => &[],
+    };
+    let mut changes: Vec<_> = table_roots.iter().map(|root| (*root, None)).collect();
+    changes.extend(world_properties(&entry.fields)?);
+    changes.extend(reference_properties(&entry.fields)?);
+    // Data that a property cannot show moves out of the properties: a linked character's
+    // into one payload, any other note's into one fence for each field.
     let mut fences = String::new();
     let mut payload = Mapping::new();
     for (key, value) in entry.fields.iter() {
-        let Some(key) = key.as_str() else {
+        let Some(key) = key.as_str().filter(|key| key.starts_with("splat_")) else {
             continue;
         };
-        if stat_kind && super::stat_blocks::data_roots(&entry.kind).contains(&key) {
+        if table_roots.contains(&key) || key == "splat_world" || REFERENCE_FIELDS.contains(&key) {
             continue;
         }
-        if key == "splat_world"
-            || key == "splat_sources"
-            || key == "splat_origin"
-            || key == "splat_requires"
-        {
-            continue;
-        }
-        let machine = (key.starts_with("splat_")
-            && (value.is_mapping()
-                || value
-                    .as_sequence()
-                    .is_some_and(|a| a.iter().any(|v| v.is_mapping() || v.is_sequence()))))
-            || (character
-                && key.starts_with("splat_")
-                && ![
-                    "splat_schema",
-                    "splat_id",
-                    "splat_kind",
-                    "splat_key",
-                    "splat_name",
-                ]
-                .contains(&key));
-        if !machine || !fields.contains_key(key) {
+        let nested = value.is_mapping()
+            || value
+                .as_sequence()
+                .is_some_and(|a| a.iter().any(|v| v.is_mapping() || v.is_sequence()));
+        let sheet_data = character
+            && ![
+                "splat_schema",
+                "splat_id",
+                "splat_kind",
+                "splat_key",
+                "splat_name",
+            ]
+            .contains(&key);
+        if !(nested || sheet_data) || !fields.contains_key(key) {
             continue;
         }
         changes.push((key, None));
-        if value.as_mapping().is_some_and(Mapping::is_empty)
-            && !character
-            && key == format!("splat_{}", entry.kind)
-        {
-            continue;
-        }
         if character {
             payload.insert(key.into(), value.clone());
+        } else if value.as_mapping().is_some_and(Mapping::is_empty)
+            && key == format!("splat_{kind}")
+        {
+            // An empty mapping for the note's own kind is not written.
+        } else if key == "splat_reference"
+            && let Some(mut reference) = value.as_mapping().cloned()
+        {
+            // The pages are a property.
+            reference.remove("pages");
+            fences.push_str(&fence(key, &reference)?);
         } else {
-            let mut fenced = value.clone();
-            if key == "splat_reference"
-                && let Some(reference) = fenced.as_mapping_mut()
-            {
-                reference.remove("pages");
-            }
-            fences.push_str(&format!(
-                "\n<!-- splat:yaml path={key} -->\n\n```yaml\n{}```\n",
-                serde_yaml_ng::to_string(&fenced).map_err(|e| e.to_string())?
-            ));
+            fences.push_str(&fence(key, value)?);
         }
     }
-    for (key, value) in stat_extras {
-        fences.push_str(&format!(
-            "\n<!-- splat:yaml path={key} -->\n\n```yaml\n{}```\n",
-            serde_yaml_ng::to_string(&value).map_err(|e| e.to_string())?
-        ));
+    let mut body = body.to_owned();
+    if let Some((section, extras)) = &stats {
+        for (key, value) in extras {
+            fences.push_str(&fence(key, value)?);
+        }
+        body = super::stat_blocks::without_marked_stats(&body, kind);
+        if kind == "creature" {
+            body = super::stat_blocks::fold_printed_stats(&body);
+        }
+        body = super::stat_blocks::insert_section(&body, section);
     }
     if character {
-        fences.push_str(&format!(
-            "\n<!-- splat:yaml path=splat_payload -->\n\n```yaml\n{}```\n",
-            serde_yaml_ng::to_string(&payload).map_err(|e| e.to_string())?
-        ));
+        fences.push_str(&fence("splat_payload", &payload)?);
     }
-    if let Some(reference) = entry
+    if let Some(pages) = entry
         .fields
         .get("splat_reference")
         .and_then(Value::as_mapping)
-        && let Some(pages) = reference.get("pages")
+        .and_then(|reference| reference.get("pages"))
     {
         changes.push(("splat_pages", Some(pages.clone())));
     }
-    let mut body = body.to_owned();
-    if stat_kind {
-        body = super::stat_blocks::without_marked_stats(&body, &entry.kind);
-        if entry.kind == "creature" {
-            body = super::stat_blocks::fold_printed_stats(&body);
-        }
-        body = super::stat_blocks::insert_section(&body, &stat_body);
-    }
     if !fences.is_empty() {
-        body.push_str(&format!(
-            "{newline}## {}{newline}",
-            if character {
-                "Splat data (from D&D Beyond; do not edit)"
-            } else {
-                "Splat data"
-            }
-        ));
+        let title = if character {
+            "Splat data (from D&D Beyond; do not edit)"
+        } else {
+            "Splat data"
+        };
+        body.push_str(&format!("{newline}## {title}{newline}"));
         body.push_str(&fences.replace('\n', newline));
     }
     let after = folded_data(&note(fields, changes, &body)?);
     let checked = Entry::parse(path, &after)?;
-    let mut next = (*checked.fields).clone();
-    next.remove("splat_schema");
+    let mut read_back = (*checked.fields).clone();
+    read_back.remove("splat_schema");
     let blocking_flag = checked
         .flags
         .iter()
         .any(|flag| !(flag.message.starts_with("CR ") && flag.message.ends_with(" is used")));
-    if *entry.fields != next || blocking_flag {
+    if *entry.fields != read_back || blocking_flag {
         return Err("The written note does not read back to the same values.".into());
     }
     Ok(after)
