@@ -4423,9 +4423,11 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("copied-package-registered-alongside-original", Sizes::All);
-    // SD1: below its message, `Undo package registration` starts its words at the message's
-    // words. Its icon hangs over the message's icon column, and its press area clears the
-    // entries column's splitter.
+    // SD1: `Undo package registration` follows its message on the message line through
+    // `undo_message`, with its icon before its words. When the line has no room it starts the
+    // next line, with its words at the message's words and its icon hanging over the message's
+    // icon column (the unit test `iter18_a_sd1_a_wrapped_undo_starts_its_words_at_the_message_words`
+    // reaches that branch). Either way, its press area clears the entries column's splitter.
     for size in [SMALL, DEFAULT, LARGE] {
         let (undo, message, icon, clear) = d.at_size(size, |d| {
             let target = d.place_of("Undo package registration");
@@ -4435,13 +4437,27 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                     let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
                     if target.contains(rect.center()) && text.galley.job.text == design::icons::UNDO
                     {
-                        icon = Some(rect.left());
+                        icon = Some(rect);
                     }
                 });
             }
+            let mut message = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if text
+                    .galley
+                    .job
+                    .text
+                    .starts_with("Ashen Reaches is registered")
+                    && clip.intersects(rect)
+                {
+                    message = Some(rect);
+                }
+            });
             (
-                target.and_then(|target| super::words_left_in(d, target)),
-                d.painted_left("Ashen Reaches is registered"),
+                target
+                    .and_then(|target| super::words_left_in(d, target).map(|left| (left, target))),
+                message,
                 icon,
                 target.map_or_else(
                     || Err("Undo package registration is not in view".to_owned()),
@@ -4449,17 +4465,22 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 ),
             )
         });
-        d.observe(
-            "iter-18-A-SD1",
+        let placed =
             undo.zip(message)
                 .zip(icon)
-                .is_some_and(|((undo, message), icon)| {
-                    (undo - message).abs() <= 1.0 && icon < message - design::XS
-                })
-                && clear.is_ok(),
+                .is_some_and(|(((words, target), message), icon)| {
+                    if target.top() >= message.bottom() - 1.0 {
+                        (words - message.left()).abs() <= 1.0 && icon.right() <= message.left()
+                    } else {
+                        icon.left() > message.right() && words > icon.right()
+                    }
+                });
+        d.observe(
+            "iter-18-A-SD1",
+            placed && clear.is_ok(),
             format!(
-                "At {size:?}, Undo package registration's words at {undo:?}, the message's words \
-                 at {message:?}, its icon at {icon:?}; press area: {clear:?}"
+                "At {size:?}, Undo package registration's words and target {undo:?}, the message \
+                 {message:?}, its icon {icon:?}; press area: {clear:?}"
             ),
         );
     }
