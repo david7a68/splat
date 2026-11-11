@@ -43,6 +43,8 @@ pub(super) struct Arranged<'a> {
     pub ready: Vec<ReadyRow<'a>>,
     pub history: Vec<PastSession<'a>>,
     pub unreadable: Vec<&'a SavedRunInfo>,
+    /// The run list could not be read: the lists say so, never that they are empty (AB1).
+    pub runs_unread: bool,
 }
 
 impl Arranged<'_> {

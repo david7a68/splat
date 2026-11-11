@@ -240,7 +240,14 @@ pub(super) fn list_row(
                             ui,
                             detail,
                             &Type::Small.font(ui),
-                            ui.available_width() - if status { design::L } else { 0.0 },
+                            // The run icon, and a leading warning's icon after it.
+                            ui.available_width()
+                                - if status { design::L } else { 0.0 }
+                                - if status && detail.starts_with("Changed on disk") {
+                                    design::L
+                                } else {
+                                    0.0
+                                },
                         );
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
@@ -250,6 +257,19 @@ pub(super) fn list_row(
                             if index > 0 {
                                 job.append(
                                     " · ",
+                                    0.0,
+                                    egui::TextFormat {
+                                        font_id: Type::Small.font(ui),
+                                        color: colors().muted,
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                            // FJ6: a run row's line two always starts with the run icon,
+                            // also when its first part is a warning.
+                            if index == 0 && status && warning == Some(0) {
+                                job.append(
+                                    &format!("{} ", icons::RUN),
                                     0.0,
                                     egui::TextFormat {
                                         font_id: Type::Small.font(ui),
@@ -434,6 +454,13 @@ fn paused_run_detail(
     parts.join(" · ")
 }
 
+/// AB1: what In progress and History say while the run list cannot be read. The warning above
+/// the lists names the folder and offers Choose folder.
+pub(crate) const UNFINISHED_UNREAD: &str =
+    "Splat cannot read the run folder, so it cannot show unfinished runs.";
+pub(crate) const ENDED_UNREAD: &str =
+    "Splat cannot read the run folder, so it cannot show ended fights.";
+
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -445,7 +472,9 @@ pub(super) fn in_progress_list(
 ) {
     let (blocked, loading) = availability;
     heading(ui, "IN PROGRESS", page.in_progress.len());
-    if page.in_progress.is_empty() {
+    if page.runs_unread {
+        blocked_reason(ui, Some(UNFINISHED_UNREAD));
+    } else if page.in_progress.is_empty() {
         blocked_reason(
             ui,
             Some("No unfinished runs. Start a fight from Ready to run."),
@@ -629,6 +658,11 @@ pub(super) fn history_list(
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
+    if page.runs_unread {
+        heading(ui, "HISTORY", 0);
+        blocked_reason(ui, Some(ENDED_UNREAD));
+        return;
+    }
     if page.ended_count() == 0 && page.unreadable.is_empty() {
         heading(ui, "HISTORY", 0);
         blocked_reason(ui, Some("No ended fights yet."));
@@ -768,31 +802,54 @@ fn history_summary(
             }
         }
         design::group_label(ui, "Final state");
+        // AI1: one name column, so every HP starts at one x and the DM can scan down it. The
+        // column is as wide as the longest name, up to half the room; a longer name wraps.
+        let strong = Type::Strong.font(ui);
+        let gap = ui.spacing().item_spacing.x;
+        let names = summary
+            .rows
+            .iter()
+            .map(|row| design::number_width(ui, &row.name, &strong))
+            .fold(0.0, f32::max)
+            .min(ui.available_width() / 2.0);
         for row in &summary.rows {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(Type::Strong.rich(ui, &row.name).color(colors().text));
-                let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                let max = row
-                    .max_hp
-                    .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("HP {hp}/{max}"))
-                        .color(colors().text),
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(names, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(names);
+                        ui.add(
+                            egui::Label::new(Type::Strong.rich(ui, &row.name).color(colors().text))
+                                .wrap(),
+                        );
+                    },
                 );
-                if row.temporary_hp > 0 {
+                ui.add_space(design::M - gap);
+                ui.horizontal_wrapped(|ui| {
+                    let hp = row.hp.map_or_else(|| "?".to_owned(), |hp| hp.to_string());
+                    let max = row
+                        .max_hp
+                        .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
                     ui.label(
                         Type::Small
-                            .rich(ui, format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
-                            .color(colors().hp.temp),
+                            .rich(ui, format!("HP {hp}/{max}"))
+                            .color(colors().text),
                     );
-                }
-                if !row.present {
-                    blocked_reason(ui, Some("Absent"));
-                }
-                if !row.conditions.is_empty() {
-                    blocked_reason(ui, Some(&row.conditions.join(", ")));
-                }
+                    if row.temporary_hp > 0 {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
+                                .color(colors().hp.temp),
+                        );
+                    }
+                    if !row.present {
+                        blocked_reason(ui, Some("Absent"));
+                    }
+                    if !row.conditions.is_empty() {
+                        blocked_reason(ui, Some(&row.conditions.join(", ")));
+                    }
+                });
             });
         }
         design::group_label(ui, "Combat log");

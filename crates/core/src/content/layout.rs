@@ -175,6 +175,12 @@ impl Flag {
         (!self.cause.is_empty()).then_some(self.cause.as_str())
     }
 
+    /// How to write the value, apart from the cause, for a screen that shows them apart. Empty
+    /// for a flag read back from a saved run.
+    pub fn help(&self) -> &str {
+        &self.help
+    }
+
     /// The cause and the help without the line, for a screen that names the line its own way.
     /// None for a flag read back from a saved run, as for [`Flag::cause`].
     pub fn words(&self) -> Option<String> {

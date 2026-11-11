@@ -3342,7 +3342,8 @@ impl Run {
             .collect();
         if !warnings.is_empty() || !own.is_empty() {
             for fault in warnings.iter().chain(&own) {
-                if group_fault(ui, fault) {
+                // The one member-fault row (Contract B, R): the Encounters list draws it too.
+                if crate::encounters::member_fault_row(ui, fault) {
                     if fault.kind == super::FaultKind::NotInPackages {
                         self.wants_packages = true;
                     } else {
@@ -5522,36 +5523,6 @@ pub(crate) fn change_preview(row: &Row) -> String {
             ""
         }
     )
-}
-
-/// Keep a member's repair at the end of that member's fault, with no overlapping targets.
-/// The fault's tone and repair come from its kind, so it looks the same on every screen: the
-/// Encounters list and Arrivals. FB5: the repair is a message action, a bordered secondary
-/// button after an `L` gap, or below with its border at the message words, as every message
-/// action without an icon is.
-pub(crate) fn group_fault(ui: &mut egui::Ui, fault: &super::MemberFault) -> bool {
-    let repair = if fault.kind == super::FaultKind::NotInPackages {
-        "Campaign → Packages"
-    } else {
-        "Edit group"
-    };
-    design::message_with_action(ui, fault.tone(), fault, repair)
-}
-
-/// A repair link under a message. Its words start at the message text, and its icon hangs in
-/// the gutter before them.
-pub(crate) fn hanging_link(
-    ui: &mut egui::Ui,
-    icon: &str,
-    link: impl FnOnce(&mut egui::Ui) -> bool,
-) -> bool {
-    let hang = design::number_width(ui, &format!("{icon} "), &Type::Small.font(ui));
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(-hang);
-        link(ui)
-    })
-    .inner
 }
 
 /// An Arrivals row's status and members for a slot `width` wide. None when a part of the status
@@ -8813,7 +8784,7 @@ mod tests {
             let shown = fault.clone();
             let mut harness = egui_kittest::Harness::new(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    group_fault(ui, &shown);
+                    crate::encounters::member_fault_row(ui, &shown);
                 });
             });
             design::theme::install(&harness.ctx);
