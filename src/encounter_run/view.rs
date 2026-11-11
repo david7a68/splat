@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
-    SAVED_HP_USED, SHEET_SOURCE, display, mode_label,
+    SAVED_HP_USED, SHEET_SOURCE, Unend, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -417,7 +417,7 @@ impl Run {
     }
 
     pub(super) fn run_command(&mut self, command: Command) {
-        let follow = matches!(command, Command::Next | Command::Begin);
+        let follow = matches!(command, Command::Next | Command::Begin | Command::Continue);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
         // note. The roll goes on to the first empty field.
         let keeps_keyboard = matches!(
@@ -716,13 +716,13 @@ impl Run {
         action.blocked_if(self.history.is_empty(), self.empty_undo_reason())
     }
 
-    fn empty_undo_reason(&self) -> &str {
+    pub(super) fn empty_undo_reason(&self) -> &str {
         if self.undo_stopped {
             self.undo_boundary
                 .as_deref()
                 .unwrap_or("Nothing to undo since the sheets changed")
-        } else if self.reopened {
-            "Nothing to undo since reopening"
+        } else if let Some(reason) = self.no_saved_undo {
+            reason
         } else {
             "Nothing to undo"
         }
@@ -777,6 +777,19 @@ impl Run {
                 });
                 if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
                     self.error = None;
+                }
+            });
+        }
+        // Said once: the Log keeps the line, and the next save leaves the steps out.
+        if self.undo_unread {
+            ui.horizontal_top(|ui| {
+                let width = ui.available_width() - 36.0;
+                ui.scope(|ui| {
+                    ui.set_max_width(width);
+                    design::message(ui, Tone::Warning, super::UNDO_UNREAD);
+                });
+                if design::icon_button(ui, icons::CLOSE, "Dismiss the Undo message").clicked() {
+                    self.undo_unread = false;
                 }
             });
         }
@@ -2640,6 +2653,16 @@ impl Run {
                     design::text_input(ui, "Outcome", &mut self.outcome, "Outcome, if any", 160.0);
                 if std::mem::take(&mut self.focus_outcome) {
                     field.request_focus();
+                    // An outcome that is already there is selected, so that Enter keeps it
+                    // and typing replaces it.
+                    let mut text =
+                        egui::TextEdit::load_state(ui.ctx(), field.id).unwrap_or_default();
+                    text.cursor
+                        .set_char_range(Some(egui::text::CCursorRange::two(
+                            egui::text::CCursor::new(0),
+                            egui::text::CCursor::new(self.outcome.chars().count()),
+                        )));
+                    text.store(ui.ctx(), field.id);
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 if Action::destructive("End encounter")
@@ -2649,7 +2672,7 @@ impl Run {
                     || enter
                 {
                     let outcome = if self.outcome.trim().is_empty() {
-                        "Undecided".to_owned()
+                        super::NO_OUTCOME.to_owned()
                     } else {
                         self.outcome.trim().to_owned()
                     };
@@ -2761,6 +2784,14 @@ impl Run {
             }
             if closing {
                 closed = self.request_close();
+            }
+            // The End step opens. With no outcome typed yet, it starts from the outcome of the
+            // ending that Continue fight took away.
+            if ending
+                && self.outcome.is_empty()
+                && let Some(outcome) = self.outcome_before_continue()
+            {
+                self.outcome = outcome.to_owned();
             }
             self.ending |= ending;
             self.focus_outcome |= ending;
@@ -5519,8 +5550,37 @@ impl Run {
             Phase::Ended { outcome } => outcome.clone(),
             _ => String::new(),
         };
+        // The title and the save word keep their words. When the actions cannot share their
+        // line, as beside Lookup in a small window, Undo and Continue fight take a line below.
+        let gap = ui.spacing().item_spacing.x;
+        let title_width = self.ended_title_width(ui, &outcome);
+        let glance = |action: Action<'_>| action.density(Density::Glance).natural_width(ui) + gap;
+        let mut actions = glance(Action::primary(if self.close_block().is_some() {
+            "Close after sync"
+        } else {
+            "Close run"
+        }));
+        if !self.undo_continues() || self.undo_blocked().is_some() {
+            actions += match self.continue_blocked {
+                Some(reason) => continue_reason_width(ui, reason) + gap,
+                None => glance(continue_action()),
+            };
+        }
+        if !self.history.is_empty() && self.undo_blocked().is_none() {
+            actions += glance(self.undo_action("Undo"));
+        }
+        let one_line = title_width + actions <= ui.available_width();
+        let first_line = design::L * 4.0;
         let (header_rect, _) = ui.allocate_exact_size(
-            vec2(ui.available_width(), design::L * 4.0),
+            vec2(
+                ui.available_width(),
+                first_line
+                    + if one_line {
+                        0.0
+                    } else {
+                        Density::Glance.control() + design::S
+                    },
+            ),
             egui::Sense::hover(),
         );
         design::rule(ui);
@@ -5649,7 +5709,7 @@ impl Run {
         let mut header_ui = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt("ended_header")
-                .max_rect(header_rect),
+                .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
         );
         header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.set_min_height(60.0);
@@ -5712,24 +5772,11 @@ impl Run {
                     design::blocked_reason(ui, close_reason.as_deref());
                 },
             );
-            ui.add_space((ui.available_rect_before_wrap().right() - roster_right).max(0.0));
-            if !self.history.is_empty() {
-                let label = self.undo_label();
-                if self
-                    .undo_action(&label)
-                    .density(Density::Glance)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.undo();
-                    self.return_focus = self.lookup_open;
-                }
-            } else {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Reopened, so the ending cannot be undone.")
-                        .color(c.muted),
-                );
+            if one_line {
+                self.ended_continue(ui);
+                ui.add_space((ui.available_rect_before_wrap().right() - roster_right).max(0.0));
+                let room = ui.available_width() - title_width - gap;
+                self.ended_undo(ui, room);
             }
             self.save_status(ui);
             ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
@@ -5742,9 +5789,101 @@ impl Run {
                 );
             });
         });
+        if !one_line {
+            let mut second = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("ended_header_actions")
+                    .max_rect(header_rect.with_min_y(header_rect.top() + first_line)),
+            );
+            second.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                self.ended_continue(ui);
+                let room = ui.available_width();
+                self.ended_undo(ui, room);
+            });
+        }
 
         closed
     }
+
+    /// The width the ended header keeps for its title, its outcome and its save word.
+    fn ended_title_width(&self, ui: &egui::Ui, outcome: &str) -> f32 {
+        let small = Type::Small.font(ui);
+        let title = design::number_width(ui, &self.state_words(false), &Type::Title.font(ui));
+        // A long outcome wraps. A short one keeps its line.
+        let outcome = design::number_width(ui, &format!("Outcome: {outcome}"), &small);
+        let status = self.save_status_value();
+        let saved = match &self.copy_label {
+            Some(copy) => format!("{} {} · {copy}", status.icon, status.word),
+            None => format!("{} {}", status.icon, status.word),
+        };
+        title.max(outcome.min(title * 2.0))
+            + ui.spacing().item_spacing.x
+            + design::number_width(ui, &saved, &small)
+    }
+
+    /// One control takes the ending away. While the ending is the newest step, that is Undo.
+    /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
+    /// ways out of an ended fight, with the one that changes nothing last.
+    fn ended_continue(&mut self, ui: &mut egui::Ui) {
+        if self.undo_continues() && self.undo_blocked().is_none() {
+            return;
+        }
+        // Continue fight, and Undo of an ending from the run file, are for the fight that was
+        // played last. For another fight, the reason stands where the control would be.
+        if let Some(reason) = self.continue_blocked {
+            let width = continue_reason_width(ui, reason);
+            ui.allocate_ui_with_layout(
+                vec2(width, Type::Small.line()),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                    );
+                },
+            );
+        } else if continue_action()
+            .density(Density::Glance)
+            .show(ui)
+            .clicked()
+        {
+            // The app has the Timeline, so it answers this by the rule before the next frame.
+            self.wants_unend = Some(Unend::Continue);
+        }
+    }
+
+    /// Undo in the ended header. It gives up its target before a word beside it is cut, and
+    /// keeps the target in hover and in its accessible name.
+    fn ended_undo(&mut self, ui: &mut egui::Ui, room: f32) {
+        if self.history.is_empty() || self.undo_blocked().is_some() {
+            return;
+        }
+        let full = self.undo_label();
+        let fits = self
+            .undo_action(&full)
+            .density(Density::Glance)
+            .natural_width(ui)
+            <= room;
+        let action = if fits {
+            self.undo_action(&full)
+        } else {
+            self.undo_action("Undo").name(&full).hint(&full)
+        };
+        if action.density(Density::Glance).show(ui).clicked() {
+            self.undo();
+            self.return_focus = self.lookup_open;
+        }
+    }
+}
+
+/// The width of the sentence that stands where Continue fight would be. It wraps to the
+/// lines of the ended header, so that Close run keeps its place.
+fn continue_reason_width(ui: &egui::Ui, reason: &str) -> f32 {
+    design::number_width(ui, reason, &Type::Small.font(ui)).min(design::L * 15.0)
+}
+
+/// The one control that takes an ending away, wherever it shows.
+pub(crate) fn continue_action() -> Action<'static> {
+    Action::secondary("Continue fight").icon(icons::RUN)
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.

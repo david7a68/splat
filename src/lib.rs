@@ -2175,6 +2175,12 @@ impl Splat {
             self.settings.focus_sign_in();
         }
         if let Some(run) = self.encounters.run_mut() {
+            // An act that makes an ended fight live again goes by the rule, with the Timeline
+            // as it is now.
+            if let Some(act) = run.wants_unend.take() {
+                run.unend(act, &mut self.timeline);
+                ctx.request_repaint();
+            }
             if std::mem::take(&mut run.wants_sign_in) {
                 self.page = Page::Settings;
                 self.settings_tab = SettingsTab::default();
@@ -2380,12 +2386,23 @@ impl eframe::App for Splat {
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
-            if let Some(fact) = &fact {
-                self.timeline
-                    .record_change(self.run_fact.as_ref(), fact, self.sessions.current());
+            match &fact {
+                Some(fact) => {
+                    self.timeline.record_change(
+                        self.run_fact.as_ref(),
+                        fact,
+                        self.sessions.current(),
+                    );
+                }
+                // The run closed, so its last result goes to the file now and not after the
+                // pause.
+                None => self.timeline.save(),
             }
             self.run_fact = fact;
         }
+        // Continue fight is for the fight that was played last. An ended fight on screen is
+        // told whether it is that fight, when the Timeline or that fight changed.
+        self.encounters.follow_continue_rule(&self.timeline);
         self.update_carry();
         self.sessions.open_run = self.run_fact.as_ref().and_then(|fact| {
             let event = self

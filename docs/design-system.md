@@ -915,7 +915,8 @@ leaves a blocked Start fight and a reason to resume from In progress. In the edi
 says what it does. The header counts all Ready rows,
 including these repeatable fights. Ready rows name creatures; an empty roster blocks Start with Add
 participants first. The open-run block appears once under READY TO RUN. Its Ready action says Go back to the
-run.
+run. When the header cannot hold every word, as beside Lookup at 960x640, the counts go first. Then Reload from
+disk keeps its icon, with its name, hint and blocked reason on hover. New encounter and New group stay whole.
 
 Unfinished rows show Setup · Paused or Round 2 · Paused and Resume. Open rows use status links Setup or Round
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
@@ -1147,8 +1148,9 @@ for that target goes below the roster. When no shortened target fits, Undo shows
 `Undo: 8 damage to 3` for a step on several rows (its count stays, `participants` and the half count go),
 `Undo: exhaustion 0 → 3` or `Undo: initiative` for one row. Undo shows `Undo` alone only when not even that fits. A name
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
-directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
-Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
+directions. Hover and accessibility keep the full action. Empty history says Nothing to undo, to the left of
+blocked Undo on setup and live screens. A run file from before Undo steps were saved says Nothing to undo since
+reopening, and a file whose steps could not be read says so. A narrow slot uses
 Nothing to undo with full hover and accessible text. Sheet updates name whose sheet changed; only sheet reads
 say sheet changed. Sync-panel choices stay in Log and Undo.
 
@@ -1335,6 +1337,26 @@ conflict and pending-change counts below blocked Close after sync at the panel's
 between character sync blocks. Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
 edge. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
 uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery.
+
+An ended view has one control that takes the ending away. While the ending is the newest Undo step, that is
+`Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
+`S` left of primary Close run: the two ways out of an ended fight, with the one that changes nothing last. Undo stays
+at the roster's right edge. The title, the outcome and the save word keep their words: Undo gives up its target
+first (`Undo`, with the full action in hover and its accessible name). When the actions still cannot share the
+title's line, as beside Lookup at 960x640, Close run stays on that line and Undo and Continue fight take a line of
+their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
+secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
+run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
+as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
+why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
+button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
+`15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
+line. In History it is the line under Read-only. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
+footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
+with text, the text is selected, so that Enter keeps it and typing replaces it.
+
+A run whose saved Undo steps cannot be read says so once, as a warning `message` in the error line's place with a
+Dismiss button. It wraps beside Lookup and pushes the roster down by its lines. The Log keeps the line.
 
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use

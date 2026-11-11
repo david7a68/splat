@@ -658,6 +658,9 @@ pub struct Book {
     rest_undo: Option<(Event, Event)>,
     /// Each session's note name, for links in the file's body.
     pub session_links: BTreeMap<Uuid, String>,
+    /// Goes up at each edit, read and write, so a reader can keep what it worked out from the
+    /// events until they can have changed.
+    changes: u64,
 }
 
 impl Book {
@@ -696,6 +699,7 @@ impl Book {
 
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
+        self.changes += 1;
         self.rest_undo = None;
         self.dirty = false;
         self.reordered.clear();
@@ -762,6 +766,7 @@ impl Book {
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
+        self.changes += 1;
         self.run_write = false;
         self.merged_outside = false;
         self.rest_undo = None;
@@ -788,6 +793,7 @@ impl Book {
     /// Events from the file, or merged with it, replace the ones in memory. A change there to
     /// the removal's own session (its event back from outside, say) ends it, as an edit does.
     fn accept_events(&mut self, events: Vec<Event>) {
+        self.changes += 1;
         self.events = events;
         self.end_removal_if_its_session_changed();
     }
@@ -1017,6 +1023,10 @@ impl Book {
         self.gone = false;
         self.unreadable = None;
         self.baseline = None;
+        // Before the file is written, so that it holds what the open run said meanwhile.
+        if let Some((fact, session, played)) = self.pending_run.take() {
+            self.apply_run(&fact, session, played);
+        }
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
         }
@@ -1025,6 +1035,11 @@ impl Book {
     /// An edit is waiting for its pause before it saves.
     pub fn unsaved(&self) -> bool {
         self.dirty
+    }
+
+    /// The count of edits, reads and writes so far. The events are as they were while it stays.
+    pub fn changes(&self) -> u64 {
+        self.changes
     }
 
     /// Only edits to this event affect its own save word.
@@ -1093,24 +1108,43 @@ impl Book {
             #[cfg(test)]
             let _ = SAVE_AFTER;
             ctx.request_repaint_after(SAVE_AFTER);
-        } else if self.path.is_some()
-            && !self.gone
-            && self
-                .last_check
-                .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
+        } else if self
+            .last_check
+            .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
         {
             self.last_check = Some(now);
-            self.check_copies();
-            let current = self.path.as_ref().and_then(|path| fs::read(path).ok());
-            if current != self.baseline {
-                self.reload();
-                if self.unreadable.is_none()
-                    && let Some((fact, session, played)) = self.pending_run.take()
-                {
-                    self.apply_run_keeping_removal(&fact, session, played);
-                }
+            self.read_if_changed();
+        }
+    }
+
+    /// Read the file again if it changed on disk. The poll does this once a second, and an act
+    /// that needs the newest events does it first. An edit waiting for its pause is newer, so
+    /// the file is not read over it: false says that the file changed under that edit, and
+    /// the events may lack what it holds until the save settles it.
+    pub fn read_if_changed(&mut self) -> bool {
+        if self.dirty {
+            return self.path.as_ref().and_then(|path| fs::read(path).ok()) == self.baseline;
+        }
+        // A file that went is looked for again only once it is back.
+        if !self
+            .path
+            .as_ref()
+            .is_some_and(|path| !self.gone || path.exists())
+        {
+            return true;
+        }
+        self.check_copies();
+        let current = self.path.as_ref().and_then(|path| fs::read(path).ok());
+        // A file that is back is read again, also when it is the file that went.
+        if current != self.baseline || self.gone {
+            self.reload();
+            if self.unreadable.is_none()
+                && let Some((fact, session, played)) = self.pending_run.take()
+            {
+                self.apply_run_keeping_removal(&fact, session, played);
             }
         }
+        true
     }
 
     /// Add after the session's last event, or at the end. A rest found in an old recording
@@ -2443,6 +2477,32 @@ mod tests {
         book.save_again();
         assert!(!book.gone && book.unreadable.is_none());
         assert!(fs::read_to_string(&path).unwrap().contains(&rest));
+        // What the run said while the file was gone is recorded, and is in the file.
+        assert_eq!(book.events[1].result, "Round 3");
+        assert!(fs::read_to_string(&path).unwrap().contains("Round 3"));
+        assert!(!book.not_saved());
+        // The file goes again, and comes back from outside Splat. The next look finds it,
+        // and what the run said meanwhile is recorded.
+        let valid = fs::read(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+        book.reload();
+        assert!(book.gone);
+        let next = RunFact {
+            round: 4,
+            ..fact(RunState::Running)
+        };
+        book.record_run(&next, None, true);
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert!(book.gone, "nothing to find yet");
+        fs::write(&path, valid).unwrap();
+        // A file that went is looked for once each pause between looks, not on each frame.
+        book.poll(&eframe::egui::Context::default());
+        assert!(book.gone, "the next look is after the pause");
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert!(!book.gone && book.unreadable.is_none());
+        assert_eq!(book.events[1].result, "Round 4");
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
+pub mod run_continue;
 pub mod stat_formats;
 pub mod world_build;
 
@@ -6420,12 +6421,10 @@ pub mod run_restart {
         d.click_row(OTHER);
         d.click(NEXT_TURN);
         let current = current_participant(d).unwrap_or_default();
-        d.state("before-restart", Sizes::Default);
+        let undo = d.name_starting("Undo");
+        d.state("before-restart", Sizes::All);
         d.goal("be in a run");
         d.restart();
-        d.state("after-restart", Sizes::All);
-        d.goal("restart");
-        d.begin_task();
         d.observe(
             "Restart",
             d.has_containing(RUN_HEADING)
@@ -6433,6 +6432,18 @@ pub mod run_restart {
                 && participant_is_selected(d, &current),
             format!("The run reopens by itself on the same turn, {current} selected"),
         );
+        d.observe(
+            "Restart",
+            undo == "Undo: next turn" && d.name_starting("Undo") == undo,
+            format!(
+                "Undo names the same step after the restart: {undo}, then {}",
+                d.name_starting("Undo")
+            ),
+        );
+        // The run file keeps the Undo steps, so the run looks as it did before the restart.
+        d.assert_state_matches("after-restart", "before-restart");
+        d.goal("restart");
+        d.begin_task();
         // The other pages load too, with the run still open behind them.
         go_encounters(d);
         d.observe(

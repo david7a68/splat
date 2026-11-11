@@ -42,13 +42,14 @@
       "roll-table-author": 8,
       "run-absent-player": 7,
       "run-add-creature": 7,
+      "run-continue": 24,
       "run-edge-states": 5,
       "run-large-roster": 2,
       "run-long-names": 9,
       "run-lookup": 3,
       "run-loot": 13,
       "run-overrides": 13,
-      "run-restart": 6,
+      "run-restart": 7,
       "run-rolls": 13,
       "run-roster-conflict": 4,
       "run-sync-conflict": 9,
@@ -134,6 +135,7 @@
       "roll-table-author": 26,
       "run-absent-player": 31,
       "run-add-creature": 41,
+      "run-continue": 117,
       "run-edge-states": 44,
       "run-folder-defect": 3,
       "run-large-roster": 16,
@@ -142,7 +144,7 @@
       "run-loot": 35,
       "run-no-groups": 2,
       "run-overrides": 33,
-      "run-restart": 26,
+      "run-restart": 31,
       "run-resume": 7,
       "run-rolls": 61,
       "run-roster-conflict": 24,
@@ -277,6 +279,14 @@
     "run-add-creature": {
       "add a creature made up at the table to a running fight": 11,
       "add two of a campaign's creatures to a running fight": 7
+    },
+    "run-continue": {
+      "T17.1: come back from Close run": 1,
+      "T17.1: come back from another page": 1,
+      "T17.2: go on with an ended fight": 1,
+      "T17.2: take back an ending": 1,
+      "T17.3: go on with a closed, ended fight from History": 2,
+      "T17.3: go on with a closed, ended fight from the plan": 3
     },
     "run-edge-states": {
       "record a long effect": 6,

@@ -625,6 +625,7 @@ pub(super) fn history_list(
     blocked: Option<&'static str>,
     live: Option<&SavedRunInfo>,
     read: Option<&(PathBuf, FightSummary)>,
+    not_last: Option<&'static str>,
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
@@ -706,7 +707,12 @@ pub(super) fn history_list(
                     if let Some((path, summary)) = read
                         && *path == run.path
                     {
-                        history_summary(ui, summary);
+                        // The open run is this fight, so nothing stands in its way.
+                        let here = live.is_some_and(|live| live.id == run.id);
+                        // Continue fight is for the fight that was played last.
+                        if history_summary(ui, summary, blocked.filter(|_| !here), not_last) {
+                            *action = Some(ListAction::ContinueFight(run.path.clone()));
+                        }
                     }
                 }
             }
@@ -720,7 +726,16 @@ pub(super) fn history_list(
     );
 }
 
-fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
+/// An ended fight, read in place. Returns true when the DM chooses to go on with it.
+/// `not_last` says why this fight cannot go on, when it is not the fight that was played last:
+/// then its sentence stands where the control would be.
+fn history_summary(
+    ui: &mut egui::Ui,
+    summary: &FightSummary,
+    blocked: Option<&str>,
+    not_last: Option<&str>,
+) -> bool {
+    let mut go_on = false;
     ui.indent("history_summary", |ui| {
         ui.horizontal_wrapped(|ui| {
             design::status(
@@ -737,6 +752,17 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
                     .color(colors().muted),
             );
         });
+        // The one way on from a fight that ended by mistake. Undo puts the ending back.
+        match not_last {
+            Some(reason) => blocked_reason(ui, Some(reason)),
+            None => {
+                go_on = crate::encounter_run::view::continue_action()
+                    .density(Density::Read)
+                    .blocked(blocked)
+                    .show(ui)
+                    .clicked();
+            }
+        }
         design::group_label(ui, "Final state");
         for row in &summary.rows {
             ui.horizontal_wrapped(|ui| {
@@ -770,6 +796,7 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
             blocked_reason(ui, Some(line));
         }
     });
+    go_on
 }
 
 #[cfg(test)]
