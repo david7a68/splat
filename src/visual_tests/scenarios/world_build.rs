@@ -3328,8 +3328,8 @@ fn reveal_in_space(d: &mut Driver<'_>, words: &str, control: &str) {
 
 /// Astra review of round 25: a message in the one message space below the save row is drawn and
 /// reachable, not only in the space's accessible name. At 960, 1200 and 1920, from the space's top:
-/// Tab to the space and step down with the arrow key, then from the top again turn the wheel over
-/// the space. Each traversal must bring every painted row that holds `words` fully into view inside
+/// Tab to the space and step down with the arrow key, then from the top again scroll the pointer
+/// over the space a line at a time. Each traversal must bring every painted row that holds `words` fully into view inside
 /// that space, one time or another, and `undo` (when given) fully into view. Focus goes back to
 /// exactly the widget that had it (or to none), with no click, and the step checks that the app
 /// state did not change. Returns whether the keyboard and the pointer each reached it, per size.
@@ -3363,8 +3363,14 @@ pub(super) fn space_reaches(
                 if seen.len() <= index {
                     seen.push(false);
                 }
+                // In view: most of the row's height (a wheel notch is larger than the space, so a
+                // middle row can stop a point or two short of its edge). A row's rect can run past
+                // the wrap width with its trailing space, so only its height is measured.
                 let rect = row.rect().translate(text.pos.to_vec2());
-                seen[index] |= rect.is_positive() && view.contains_rect(rect);
+                let shown = rect.intersect(view);
+                seen[index] |= rect.is_positive()
+                    && shown.is_positive()
+                    && shown.height() >= rect.height() * 0.75;
                 index += 1;
             }
         });
@@ -3409,7 +3415,11 @@ pub(super) fn space_reaches(
             d.press(egui::Key::PageUp);
             let pointer = {
                 d.scroll_up_at(space.rect.center(), 3);
-                reach(d, space.rect, &|d| d.scroll_at(space.rect.center(), 1))
+                // A line at a time, as a touchpad scrolls: a 100-point wheel notch is larger than
+                // the two-line space and can pass over a middle row (a limit of `fixed_part`).
+                reach(d, space.rect, &|d| {
+                    d.scroll_points_at(space.rect.center(), design::Type::Body.line())
+                })
             };
             d.scroll_up_at(space.rect.center(), 3);
             (keyboard, pointer)
@@ -6311,7 +6321,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     // Lookup: Open in Library selects another entry.
     let lookup_offered = removed(d);
     look_up(d, "Ash Wraith");
-    d.wait_for_text("Open in Library");
+    d.settle();
     d.click("Open in Library");
     d.settle();
     if d.has(SEARCH_LOOKUP) {
@@ -6326,7 +6336,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click_starting("Ash Wraith · ");
     d.settle();
     let list_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
-    // Another campaign: Undo would put A into its catalogue with this campaign's choice.
+    // Another campaign: Undo would put A into its catalogue with this campaign's choice. The
+    // encounter draft from earlier in this scenario would block the switch: let it go first.
+    go_encounters(d);
+    if d.has("Discard") {
+        d.click("Discard");
+    }
     gone_draft(d);
     let switch_offered = removed(d);
     switch_campaign(d, QUIET_CAMPAIGN);
