@@ -172,6 +172,8 @@ pub(crate) struct RosterFault {
     pub name: String,
     pub line: usize,
     pub problem: String,
+    /// How many read rows come before this one, so the roster shows it in its place (FC3).
+    pub before: usize,
 }
 
 impl RosterFault {
@@ -180,6 +182,50 @@ impl RosterFault {
     pub(crate) fn words(&self) -> String {
         row_fault_words(&self.name, self.line, &self.problem)
     }
+}
+
+/// Where the editor leaves the roster's unread rows, for the roster to show in their places.
+fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
+    egui::Id::new(("roster_fault_rows", draft))
+}
+
+/// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
+fn roster_row_fault_words(line: usize) -> String {
+    format!("Line {line} not read")
+}
+
+/// FC3: an unread roster row in its place, with no number (it is not in the roster Splat reads)
+/// and its warning mark. The message above names its cause, and its file line the repair.
+fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
+    ui.push_id(("unread_roster_row", fault.line), |ui| {
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Glance.row());
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add(
+                    egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
+                        .truncate(),
+                );
+                let mut job = egui::text::LayoutJob::default();
+                for (text, color) in [
+                    (format!("{} ", icons::WARN), colors().result.warning),
+                    (roster_row_fault_words(fault.line), colors().muted),
+                ] {
+                    job.append(
+                        &text,
+                        0.0,
+                        egui::TextFormat {
+                            font_id: Type::Small.font(ui),
+                            color,
+                            ..Default::default()
+                        },
+                    );
+                }
+                ui.add(egui::Label::new(job).wrap());
+            });
+        });
+        design::rule(ui);
+    });
 }
 
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
@@ -193,41 +239,50 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
     else {
         return Vec::new();
     };
-    table
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let line = row.first()?.line + entry.body_line.saturating_sub(1);
-            let flag = entry.flags.iter().find(|flag| flag.line == line)?;
-            // A row with missing cells is a fault too; never index past its end.
-            let label = row.get(1).map_or("", |cell| cell.value.as_str());
-            let target = label
-                .split("%%")
-                .next()
-                .unwrap_or(label)
-                .trim()
-                .trim_start_matches("[[")
-                .trim_end_matches("]]");
-            let named = row.get(2).map_or("", |cell| cell.value.as_str());
-            let name = if !named.is_empty() {
-                named.to_owned()
-            } else if target.is_empty() {
-                format!("Row on line {line}")
-            } else {
-                known
-                    .get(target)
-                    .cloned()
-                    .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
-            };
-            Some(RosterFault {
-                name,
-                line,
-                // A row fault names its line itself, so it needs the words without it. Rows are read
-                // from the file, never from a saved copy; `unread_notes` shows any other flag.
-                problem: flag.words()?,
-            })
-        })
-        .collect()
+    let mut read = 0;
+    let mut faults = Vec::new();
+    for row in &table.rows {
+        let Some(first) = row.first() else {
+            continue;
+        };
+        let line = first.line + entry.body_line.saturating_sub(1);
+        let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) else {
+            read += 1;
+            continue;
+        };
+        // A row with missing cells is a fault too; never index past its end.
+        let label = row.get(1).map_or("", |cell| cell.value.as_str());
+        let target = label
+            .split("%%")
+            .next()
+            .unwrap_or(label)
+            .trim()
+            .trim_start_matches("[[")
+            .trim_end_matches("]]");
+        let named = row.get(2).map_or("", |cell| cell.value.as_str());
+        let name = if !named.is_empty() {
+            named.to_owned()
+        } else if target.is_empty() {
+            format!("Row on line {line}")
+        } else {
+            known
+                .get(target)
+                .cloned()
+                .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
+        };
+        // A row fault names its line itself, so it needs the words without it. Rows are read
+        // from the file, never from a saved copy; `unread_notes` shows any other flag.
+        let Some(problem) = flag.words() else {
+            continue;
+        };
+        faults.push(RosterFault {
+            name,
+            line,
+            problem,
+            before: read,
+        });
+    }
+    faults
 }
 
 /// What the DM does about unread roster rows before a fight.
@@ -597,8 +652,12 @@ impl Draft {
         if self.baseline.is_none() {
             self.path = named_note_path(&campaign.path, "Encounters", &self.name)?;
         }
-        self.recovery
-            .check(&campaign.path, &mut self.path, self.baseline.as_deref())?;
+        self.recovery.check(
+            &campaign.path,
+            &mut self.path,
+            self.baseline.as_deref(),
+            "encounter",
+        )?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
         let text = self.write_text(&snapshot)?;
@@ -960,7 +1019,7 @@ impl CreatureEditor {
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
         self.recovery
-            .check(root, &mut self.path, Some(&self.baseline))?;
+            .check(root, &mut self.path, Some(&self.baseline), "creature")?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
@@ -1088,6 +1147,19 @@ fn editor_save_state(
             .blocked(blocked)
             .show(ui)
             .clicked()
+}
+
+/// The width a vertical scroll area's content keeps whether or not its bar shows: the room
+/// before the area, less the bar's lane. Content set to this width does not move when a list
+/// grows long enough to scroll.
+pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
+    (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
+}
+
+/// The run folder is known not to be there. A folder that cannot be looked for (a parent
+/// without permission) is not "missing": it cannot be read.
+fn folder_missing(directory: &std::path::Path) -> bool {
+    matches!(directory.try_exists(), Ok(false))
 }
 
 fn grouped(value: u64) -> String {
@@ -1438,6 +1510,9 @@ fn creature_result_row(
                         .density(Density::Read)
                         .natural_width(ui)
                     + design::M
+                    // The gaps between the words and both buttons: the results keep the scroll
+                    // bar's lane (FH3), so nothing may spill into it.
+                    + 2.0 * ui.spacing().item_spacing.x
             } else {
                 design::S * 12.0
             };
@@ -1691,6 +1766,14 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
+    /// AB1: the run list could not be read, and an issue says why. In progress and History then
+    /// say they cannot be read instead of their empty states. It ends when a read succeeds.
+    runs_unread: bool,
+    /// The run folder is not there and nothing names a run, so it may never have been made. The
+    /// page turns this into `runs_unread` when it has seen this campaign's folder hold runs.
+    runs_missing: Option<String>,
+    /// The issue `runs_unread` added, so a later read that succeeds takes exactly it away.
+    runs_error: Option<String>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
@@ -1884,30 +1967,25 @@ impl Snapshot {
             })
             .collect();
         templates.sort_by_key(|template| template.name.to_lowercase());
-        let mut issues: Vec<String> = catalogue
+        let issues: Vec<String> = catalogue
             .errors
             .iter()
             .chain(&closure.errors)
             .cloned()
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
-        let runs = match crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)
-        {
-            Ok(runs) => runs,
-            Err(error) => {
-                let folder = crate::sessions::folder(campaign).ok();
-                let timeline_names_runs = folder
-                    .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
-                    .is_some_and(|text| {
-                        text.lines()
-                            .any(|line| line.trim_start().starts_with("run:"))
-                    });
-                if timeline_names_runs {
-                    issues.push(error);
-                }
-                Vec::new()
-            }
-        };
+        let directory = options.directory(campaign)?;
+        let read = crate::encounter_run::Run::list(&directory, campaign.id);
+        // A folder the timeline names runs in is not one that was never made.
+        let missing = read.is_err()
+            && folder_missing(&directory)
+            && !crate::sessions::folder(campaign)
+                .ok()
+                .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
+                .is_some_and(|text| {
+                    text.lines()
+                        .any(|line| line.trim_start().starts_with("run:"))
+                });
         let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
         let run_creatures = Arc::new(
             creatures
@@ -1938,7 +2016,7 @@ impl Snapshot {
                 known_creature_names.insert(key.clone(), creature.name.clone());
             }
         }
-        Ok(Self {
+        let mut snapshot = Self {
             revision: Uuid::new_v4(),
             campaign_root: campaign.path.clone(),
             groups,
@@ -1947,12 +2025,50 @@ impl Snapshot {
             options: options.clone(),
             saved_options: options,
             campaign_text: document.text,
-            runs,
+            runs: Vec::new(),
+            runs_unread: false,
+            runs_missing: None,
+            runs_error: None,
             catalogue,
             creatures,
             templates,
             issues,
-        })
+        };
+        snapshot.take_run_list(read, missing);
+        Ok(snapshot)
+    }
+    /// AB1: the one classification of a run list read, for the first load, a reload and every
+    /// refresh. Runs that read replace the list. A folder known not to be there may never have
+    /// been made, so it is `runs_missing` until the page knows it held runs. Any other failure
+    /// (an unreadable folder or parent) is `runs_unread`, with its issue, until a read succeeds.
+    fn take_run_list(
+        &mut self,
+        read: Result<Vec<crate::encounter_run::SavedRunInfo>, String>,
+        missing: bool,
+    ) {
+        if let Some(old) = self.runs_error.take() {
+            self.issues.retain(|issue| *issue != old);
+        }
+        self.runs_missing = None;
+        self.runs_unread = false;
+        match read {
+            Ok(runs) => self.runs = runs,
+            Err(error) => {
+                self.runs.clear();
+                if missing {
+                    self.runs_missing = Some(error);
+                } else {
+                    self.runs_unread(error);
+                }
+            }
+        }
+    }
+    fn runs_unread(&mut self, error: String) {
+        self.runs_unread = true;
+        if !self.issues.contains(&error) {
+            self.issues.push(error.clone());
+        }
+        self.runs_error = Some(error);
     }
     /// The encounters a group can belong to, in the list's order.
     fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
@@ -1970,6 +2086,8 @@ pub struct Encounters {
     refreshing: bool,
     draft: Option<Draft>,
     search: String,
+    /// The campaign whose run folder this page has seen hold runs, or fail to read (AB1).
+    runs_known: Option<Uuid>,
     error: Option<String>,
     /// The last failed check of the open draft, with its tone. It sets the message's tone only
     /// while `error` shows its words.
@@ -2110,8 +2228,6 @@ fn edit_input(ctx: &egui::Context) -> bool {
     })
 }
 
-/// The page's own gutter beyond the shell's `M`: the content keeps `L`, the header does not.
-const PAGE_GUTTER: f32 = design::L - design::M;
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -2752,6 +2868,7 @@ impl Encounters {
                             {
                                 s.keep_edited_settings(old);
                             }
+                            self.note_run_folder(&mut s);
                             self.snapshot = Some(s);
                         }
                         Err(e) => self.error = Some(e),
@@ -2936,6 +3053,8 @@ impl Encounters {
                     snapshot.saved_options = old.saved_options;
                     snapshot.campaign_text = old.campaign_text;
                 }
+                // Every new snapshot, however it was read, says the same about the run folder.
+                self.note_run_folder(&mut snapshot);
                 self.snapshot = Some(snapshot);
             }
             Err(e) => self.error = Some(e),
@@ -2966,7 +3085,11 @@ impl Encounters {
     /// numbers a DM most often changes have fields of their own.
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
-            if let Some(keep) = editor.recovery.show(ui, &editor.text().unwrap_or_default()) {
+            if let Some(keep) =
+                editor
+                    .recovery
+                    .show(ui, &editor.text().unwrap_or_default(), "creature")
+            {
                 if keep {
                     if let Some(change) = editor.recovery.accept() {
                         editor.path = change.path;
@@ -3033,8 +3156,9 @@ impl Encounters {
             design::message(ui, Tone::Error, error);
         }
         // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
+        // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
         design::field(ui, "Name", None, None, |ui| {
-            let width = ui.available_width() - 2.0 * design::S;
+            let width = ui.available_width();
             design::text_input(ui, "Name", &mut editor.fields.name, "Name", width)
         });
         let focus_hp = std::mem::take(&mut editor.focus);
@@ -3285,26 +3409,37 @@ impl Encounters {
         self.read_runs_again(active);
         true
     }
-    pub fn read_runs_again(&mut self, active: &Campaign) {
-        if let Some(s) = &mut self.snapshot {
-            match s
-                .saved_options
-                .directory(active)
-                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
-            {
-                Ok(runs) => {
-                    s.runs = runs;
-                    s.issues
-                        .retain(|issue| !issue.starts_with("Run folder not found"));
-                }
-                Err(error) => {
-                    s.runs.clear();
-                    if !s.issues.contains(&error) {
-                        s.issues.push(error);
-                    }
-                }
-            }
+    /// AB1: a folder that held this campaign's runs and is now gone is a read failure, not an
+    /// empty list, also after a reload. The page remembers that the folder held runs until the
+    /// campaign changes.
+    fn note_run_folder(&mut self, snapshot: &mut Snapshot) {
+        let campaign = self.active.as_ref().map(|campaign| campaign.id);
+        if let Some(error) = snapshot.runs_missing.take()
+            && campaign.is_some()
+            && self.runs_known == campaign
+        {
+            snapshot.runs_unread(error);
         }
+        if !snapshot.runs.is_empty() || snapshot.runs_unread {
+            self.runs_known = campaign;
+        }
+    }
+    /// The synchronous refresh that Make it yours, a creature save and a group removal run,
+    /// for the scenarios.
+    #[cfg(test)]
+    pub(crate) fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
+        self.reload_snapshot(active, modules);
+    }
+    pub fn read_runs_again(&mut self, active: &Campaign) {
+        let Some(mut s) = self.snapshot.take() else {
+            return;
+        };
+        let directory = s.saved_options.directory(active);
+        let missing = directory.as_deref().is_ok_and(folder_missing);
+        let read = directory.and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        s.take_run_list(read, missing);
+        self.note_run_folder(&mut s);
+        self.snapshot = Some(s);
     }
     pub fn show(
         &mut self,
@@ -3313,14 +3448,9 @@ impl Encounters {
         party: &Party,
         story: &Story<'_>,
     ) {
-        // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
-        // quiet action at its text edge (`.line_start()`) never reaches the splitter. The page
-        // header gives that gutter back: its title starts at the shell's edge, as on every page.
-        let room = ui.available_rect_before_wrap();
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + PAGE_GUTTER)),
-            |ui| self.show_page(ui, campaigns, party, story),
-        );
+        // FA5: the title and the first column start at the shell's edge (x 148), as on World,
+        // Library and Campaign. A quiet action at its text edge uses `.line_start()`.
+        self.show_page(ui, campaigns, party, story);
     }
 
     fn show_page(
@@ -3420,17 +3550,40 @@ impl Encounters {
         }
         // Each undo waits while the other kind of draft is open. Restored behind that editor,
         // a draft could be neither reached nor closed.
-        if self.encounter_undo_ready()
-            && design::draft_discarded(ui, &self.discarded.as_ref().unwrap().name)
-        {
-            self.undo_discard();
+        // FF7: a draft whose file was gone was removed with it; its Undo says so.
+        if self.encounter_undo_ready() {
+            let discarded = self.discarded.as_ref().unwrap();
+            let undo = if discarded.recovery.file_gone() {
+                design::undo_message(
+                    ui,
+                    Tone::Info,
+                    &disk::removed_with_draft(&discarded.name),
+                    "Undo remove",
+                )
+            } else {
+                design::draft_discarded(ui, &discarded.name)
+            };
+            if undo {
+                self.undo_discard();
+            }
         }
         if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
         }
-        if self.group_undo_ready()
-            && design::draft_discarded(ui, &self.discarded_group.as_ref().unwrap().name())
-        {
+        let group_undo = self.group_undo_ready() && {
+            let discarded = self.discarded_group.as_ref().unwrap();
+            if discarded.file_gone() {
+                design::undo_message(
+                    ui,
+                    Tone::Info,
+                    &disk::removed_with_draft(&discarded.name()),
+                    "Undo remove",
+                )
+            } else {
+                design::draft_discarded(ui, &discarded.name())
+            }
+        };
+        if group_undo {
             self.group_draft = self.discarded_group.take();
             self.message = None;
             self.error = None;
@@ -3557,13 +3710,13 @@ impl Encounters {
                 counts.join(" · ")
             })
             .unwrap_or_else(|| "Reading encounters…".into());
-        // FE4: the title starts at the shell's edge (x 148), as Library's and World's do; only
-        // the content below the header keeps the page gutter. The header is a child that the
-        // page only steps past, so the content's left edge stays where it is.
+        // FE4, FA5: the title starts at the shell's edge (x 148), as Library's and World's do,
+        // and the content below it starts there too. The header is a child that the page only
+        // steps past.
         let room = ui.available_rect_before_wrap();
         let mut header = ui.new_child(
             egui::UiBuilder::new()
-                .max_rect(room.with_min_x(room.min.x - PAGE_GUTTER))
+                .max_rect(room)
                 .layout(egui::Layout::top_down(egui::Align::LEFT)),
         );
         {
@@ -3726,19 +3879,24 @@ impl Encounters {
             .run
             .as_ref()
             .and_then(crate::encounter_run::Run::live_info);
-        let page = history::arrange(
+        let mut page = history::arrange(
             &snapshot.templates,
             &snapshot.runs,
             live.as_ref(),
             story.events,
             story.sessions,
         );
+        page.runs_unread = snapshot.runs_unread;
         let start_blocked = self.start_blocked();
         let mut action = None;
+        // FB2: the list keeps the scroll bar's lane whether or not the bar shows, so opening
+        // Groups moves no row action.
+        let lane = scroll_lane(ui);
         egui::ScrollArea::vertical()
             .id_salt("encounter_list")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_max_width(lane);
                 in_progress_list(
                     ui,
                     &page,
@@ -3894,7 +4052,12 @@ impl Encounters {
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
             let notes = unread_notes(&draft.path, &draft.flags, &faults);
-            (notes, faults.len(), draft.path.clone())
+            let count = faults.len();
+            // FC3: the roster shows each row that blocks Start fight in its place. The faults
+            // move there; nothing is copied.
+            let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
+            ui.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
+            (notes, count, draft.path.clone())
         });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
@@ -4074,8 +4237,16 @@ impl Encounters {
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
             }
+            // FB6: while Save is blocked, Discard is the one way out.
             if dirty {
-                blocked_reason(ui, Some(draft_switch_reason()));
+                blocked_reason(
+                    ui,
+                    Some(if refusal.is_some() {
+                        blocked_draft_switch_reason()
+                    } else {
+                        draft_switch_reason()
+                    }),
+                );
             }
             if let Some(run) = &unfinished {
                 design::status(
@@ -4334,9 +4505,7 @@ impl Encounters {
             design::group_heading(ui, "Add participants", 0);
         }
         if draft.add_to.is_none() {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, PARTY_SOURCE).color(colors().muted)).wrap(),
-            );
+            design::help(ui, PARTY_SOURCE);
         }
         groups::add_target(ui, draft, snapshot);
         if draft.target_group().is_some() {
@@ -4593,10 +4762,14 @@ impl Encounters {
             } else {
                 0.0
             };
+        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
+        // `Add` keeps its x as the DM types and the list grows or shrinks.
+        let lane = scroll_lane(ui);
         egui::ScrollArea::vertical()
             .id_salt(("encounter_results", &query))
             .auto_shrink([false, false])
             .show_rows(ui, row_height, matches.len(), |ui, range| {
+                ui.set_max_width(lane);
                 for c in &matches[range] {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -4634,6 +4807,8 @@ impl Encounters {
                 .id(("encounter_roster", draft.id))
                 .max_rect(area.with_min_x(area.min.x - design::S)),
             |ui| {
+        // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
+        let lane = scroll_lane(ui) - design::S;
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
@@ -4641,7 +4816,7 @@ impl Encounters {
                 egui::Frame::new()
                     .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
                     .show(ui, |ui| {
-                ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
                 if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
@@ -4656,7 +4831,7 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 // FI7: what the option changes, in the form the sync option's help uses.
-                ui.add(egui::Label::new(Type::Small.rich(ui, REPEATABLE_HELP).color(colors().muted)).wrap());
+                design::help(ui, REPEATABLE_HELP);
                 ui.add_space(design::M);
                 Self::loot_field(ui, draft);
                 ui.add_space(design::M);
@@ -4691,14 +4866,7 @@ impl Encounters {
             );
             return;
         }
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, ENCOUNTER_LOOT_HELP)
-                    .color(colors().muted),
-            )
-            .wrap(),
-        );
+        design::help(ui, ENCOUNTER_LOOT_HELP);
         crate::loot_editor::show(ui, draft.id, "the encounter", &mut draft.loot, false);
     }
 
@@ -4711,7 +4879,8 @@ impl Encounters {
         } else {
             "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
         };
-        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+        // AD1: help under an option keeps the reader measure.
+        design::help(ui, words);
         if !draft.setup.combat_sync {
             return;
         }
@@ -4765,6 +4934,9 @@ impl Encounters {
                     .count()
             })
             .collect();
+        let fault_rows = ui
+            .data(|data| data.get_temp::<Arc<Vec<RosterFault>>>(roster_fault_rows_id(draft.id)))
+            .unwrap_or_default();
         let undo_key = ui.id().with(("replacement_undo", draft.id));
         let undo = ui
             .ctx()
@@ -4773,7 +4945,7 @@ impl Encounters {
             if undo.after == draft.setup.roster {
                 // The result is a message, so its Undo keeps the undo icon as every other
                 // Undo does.
-                if design::undo_message(ui, Tone::Info, &undo.words, "Undo replacement") {
+                if design::undo_message(ui, Tone::Success, &undo.words, "Undo replacement") {
                     draft.setup.roster = undo.before;
                 }
             } else {
@@ -4782,6 +4954,9 @@ impl Encounters {
             }
         }
         for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
+            for fault in fault_rows.iter().filter(|fault| fault.before == i) {
+                unread_roster_row(ui, fault);
+            }
             ui.push_id(slot.key.clone(), |ui| {
                 let resolved = slot
                     .creature
@@ -4792,7 +4967,9 @@ impl Encounters {
                     .map(|e| &e.entry);
                 let name = roster_name(slot, definition, &snapshot.known_creature_names);
                 let missing = definition.is_none();
-                let unreadable = slot.creature.as_ref()
+                let unreadable = slot
+                    .creature
+                    .as_ref()
                     .and_then(|reference| snapshot.catalogue.unreadable_ref(reference));
                 let creature =
                     resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
@@ -4833,10 +5010,22 @@ impl Encounters {
                     Some(source) => format!("{detail} · {source}"),
                     None => detail,
                 };
-                let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
-                let identity = definition.filter(|_| slot.overrides.contains_key("name")).map(|entry| format!(" · as {}", entry.name)).unwrap_or_default();
-                let changed = definition.is_some_and(|entry| !(slot.overrides.is_empty()
-                    || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
+                let side_icon = if slot.side == "party" {
+                    icons::PARTY
+                } else if slot.side == "enemies" {
+                    icons::ENCOUNTERS
+                } else {
+                    icons::GROUP
+                };
+                let identity = definition
+                    .filter(|_| slot.overrides.contains_key("name"))
+                    .map(|entry| format!(" · as {}", entry.name))
+                    .unwrap_or_default();
+                let changed = definition.is_some_and(|entry| {
+                    !(slot.overrides.is_empty()
+                        || slot.overrides.len() == 1
+                            && snapshot.npc_name_for(entry, &slot.overrides).is_some())
+                });
                 let side = design::reader::human_label(&slot.side);
                 // The row states the fault in the tone of the message above the roster.
                 let (fault_icon, fault_color) = missing_creature_mark(unreadable);
@@ -4865,26 +5054,63 @@ impl Encounters {
                     // Every slot is reserved, so columns line up between rows.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         row_menu(ui, &name, |ui| {
-                            if menu_action(ui, "Edit", None) { *expanded = Some(slot.key.clone()); }
-                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) { raise = Some(i); }
-                            if menu_action(ui, "Move down", (i + 1 == count).then_some("Already last.")) { lower = Some(i); }
-                            if menu_action(ui, "Duplicate", None) { duplicate = Some(i); }
-                            if creature.is_some_and(|c| !c.party) {
-                                if menu_action(ui, "Make it yours", None) { *make_yours = Some(i); }
-                                choice_note(ui, "Make it yours", Some("Edit a copy in this campaign."));
+                            if menu_action(ui, "Edit", None) {
+                                *expanded = Some(slot.key.clone());
                             }
-                            if menu_action(ui, "Remove", None) { remove = Some(i); }
+                            if menu_action(ui, "Move up", (i == 0).then_some("Already first.")) {
+                                raise = Some(i);
+                            }
+                            if menu_action(
+                                ui,
+                                "Move down",
+                                (i + 1 == count).then_some("Already last."),
+                            ) {
+                                lower = Some(i);
+                            }
+                            if menu_action(ui, "Duplicate", None) {
+                                duplicate = Some(i);
+                            }
+                            if creature.is_some_and(|c| !c.party) {
+                                if menu_action(ui, "Make it yours", None) {
+                                    *make_yours = Some(i);
+                                }
+                                choice_note(
+                                    ui,
+                                    "Make it yours",
+                                    Some("Edit a copy in this campaign."),
+                                );
+                            }
+                            if menu_action(ui, "Remove", None) {
+                                remove = Some(i);
+                            }
                         });
                         if let Some(note) = unreadable {
-                            if Action::quiet(if crate::world::repair_in_world(&note.path) { "Open in World" } else { "Open in Library" }).density(Density::Read).show(ui).clicked() {
-                                ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("open_library_repair"), note.path.clone()));
-                            }
-                        } else if Action::quiet(if creature.is_none() { "Replace…" } else { "Edit" })
+                            if Action::quiet(if crate::world::repair_in_world(&note.path) {
+                                "Open in World"
+                            } else {
+                                "Open in Library"
+                            })
                             .density(Density::Read)
-                            .name(groups::SLOT_OPTIONS)
-                            .selected(is_open)
                             .show(ui)
                             .clicked()
+                            {
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(
+                                        egui::Id::new("open_library_repair"),
+                                        note.path.clone(),
+                                    )
+                                });
+                            }
+                        } else if Action::quiet(if creature.is_none() {
+                            "Replace…"
+                        } else {
+                            "Edit"
+                        })
+                        .density(Density::Read)
+                        .name(groups::SLOT_OPTIONS)
+                        .selected(is_open)
+                        .show(ui)
+                        .clicked()
                         {
                             *expanded = if is_open {
                                 None
@@ -4907,8 +5133,20 @@ impl Encounters {
                             if missing {
                                 let split = detail.find(fault_icon).unwrap_or(0);
                                 let mut job = egui::text::LayoutJob::default();
-                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + fault_icon.len()], fault_color), (&detail[split + fault_icon.len()..], colors().muted)] {
-                                    job.append(text, 0.0, egui::TextFormat { font_id: Type::Small.font(ui), color, ..Default::default() });
+                                for (text, color) in [
+                                    (&detail[..split], colors().muted),
+                                    (&detail[split..split + fault_icon.len()], fault_color),
+                                    (&detail[split + fault_icon.len()..], colors().muted),
+                                ] {
+                                    job.append(
+                                        text,
+                                        0.0,
+                                        egui::TextFormat {
+                                            font_id: Type::Small.font(ui),
+                                            color,
+                                            ..Default::default()
+                                        },
+                                    );
                                 }
                                 let shown = ui.add(egui::Label::new(job).wrap());
                                 if let Some(note) = unreadable.filter(|note| note.duplicate) {
@@ -4920,14 +5158,54 @@ impl Encounters {
                                     ui.horizontal(|ui| {
                                         // The separator's own blanks are the gap on both sides, as in the text before it.
                                         ui.spacing_mut().item_spacing.x = 0.0;
-                                        let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
-                                        let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
-                                        let (fitted, fault_kept) = changed_detail_parts(ui, &detail, &word, ui.available_width(), hp_missing);
-                                        let detail_rect = ui.label(detail_text(ui, &stat_line(&fitted), fault_kept)).on_hover_text(&detail).rect;
-                                        let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
+                                        let word = definition
+                                            .and_then(|entry| {
+                                                Overrides::parse(&slot.overrides).ok().map(
+                                                    |overrides| {
+                                                        groups::change_words(
+                                                            &overrides,
+                                                            entry,
+                                                            &slot.side,
+                                                            &crate::loot_editor::missing_in(
+                                                                ui.ctx(),
+                                                                overrides.loot.as_deref(),
+                                                            ),
+                                                        )
+                                                    },
+                                                )
+                                            })
+                                            .unwrap_or_else(|| "Changed".into());
+                                        let change_width =
+                                            design::number_width(ui, &word, &Type::Small.font(ui));
+                                        let (fitted, fault_kept) = changed_detail_parts(
+                                            ui,
+                                            &detail,
+                                            &word,
+                                            ui.available_width(),
+                                            hp_missing,
+                                        );
+                                        let detail_rect = ui
+                                            .label(detail_text(ui, &stat_line(&fitted), fault_kept))
+                                            .on_hover_text(&detail)
+                                            .rect;
+                                        let separator = ui
+                                            .label(
+                                                Type::Small.rich(ui, " · ").color(colors().muted),
+                                            )
+                                            .rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(separator.right(), detail_rect.center().y - design::XL / 2.0);
-                                        let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
+                                        let at = egui::pos2(
+                                            separator.right(),
+                                            detail_rect.center().y - design::XL / 2.0,
+                                        );
+                                        let mut inline = ui.new_child(
+                                            egui::UiBuilder::new()
+                                                .max_rect(egui::Rect::from_min_size(
+                                                    at,
+                                                    egui::vec2(change_width, design::XL),
+                                                ))
+                                                .layout(egui::Layout::top_down(egui::Align::Min)),
+                                        );
                                         if design::small_link(&mut inline, &word).clicked() {
                                             groups::show_form_when_it_opens(ui);
                                             *expanded = Some(slot.key.clone());
@@ -4939,12 +5217,29 @@ impl Encounters {
                                 ui.spacing_mut().interact_size.y = 0.0;
                                 ui.horizontal_wrapped(|ui| {
                                     ui.spacing_mut().item_spacing.x = 0.0;
-                                    for (at, part) in detail_parts(&detail, hp_missing).iter().enumerate() {
-                                        if at > 0 { ui.label(Type::Small.rich(ui, " · ").color(colors().muted)); }
+                                    for (at, part) in
+                                        detail_parts(&detail, hp_missing).iter().enumerate()
+                                    {
+                                        if at > 0 {
+                                            ui.label(
+                                                Type::Small.rich(ui, " · ").color(colors().muted),
+                                            );
+                                        }
                                         if part.words == "Bloodied" {
-                                            design::status(ui, Status { icon: icons::BLOODIED, word: part.words, color: colors().hp.bloodied });
+                                            design::status(
+                                                ui,
+                                                Status {
+                                                    icon: icons::BLOODIED,
+                                                    word: part.words,
+                                                    color: colors().hp.bloodied,
+                                                },
+                                            );
                                         } else {
-                                            ui.label(Type::Small.rich(ui, stat_line(part.words)).color(part.color()));
+                                            ui.label(
+                                                Type::Small
+                                                    .rich(ui, stat_line(part.words))
+                                                    .color(part.color()),
+                                            );
                                         }
                                     }
                                 });
@@ -4954,7 +5249,12 @@ impl Encounters {
                 });
                 let member_row = member_row.response.rect;
                 if is_open && missing && unreadable.is_none() {
-                    if let Some((creature, all)) = replace_missing_creature(ui, snapshot, missing_counts[i], &name) { replacement = Some((i, creature, all)); *expanded = None; }
+                    if let Some((creature, all)) =
+                        replace_missing_creature(ui, snapshot, missing_counts[i], &name)
+                    {
+                        replacement = Some((i, creature, all));
+                        *expanded = None;
+                    }
                 } else if is_open && !missing {
                     ui.horizontal(|ui| {
                         ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
@@ -5010,17 +5310,13 @@ impl Encounters {
                             }
                         }
                     });
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                if synced {
-                                    "D&D Beyond decides this player’s HP while this encounter syncs."
-                                } else {
-                                    "With a value off, the creature’s own starting state applies."
-                                },
-                            )
-                            .color(colors().muted),
+                    design::help(
+                        ui,
+                        if synced {
+                            "D&D Beyond decides this player’s HP while this encounter syncs."
+                        } else {
+                            "With a value off, the creature’s own starting state applies."
+                        },
                     );
                     if let Some(entry) = definition {
                         let done = groups::overrides_form(
@@ -5031,11 +5327,17 @@ impl Encounters {
                             &slot.side,
                             Some(&sides),
                         );
-                        if done { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
+                        if done {
+                            *expanded = None;
+                            ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                        }
                     }
                 }
                 design::rule(ui);
             });
+        }
+        for fault in fault_rows.iter().filter(|fault| fault.before >= count) {
+            unread_roster_row(ui, fault);
         }
         if let Some((selected, creature, all)) = replacement {
             let before = draft.setup.roster.clone();
@@ -5186,11 +5488,7 @@ impl Encounters {
                     design::named(ui, &combo.response, "Inspiration rule");
                 });
                 if snapshot.options.inspiration().is_none() {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.")
-                            .color(colors().muted),
-                    );
+                    design::help(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.");
                 }
             }
             let changed = snapshot.options != snapshot.saved_options;
@@ -5217,7 +5515,11 @@ impl Encounters {
                 // other change too.
                 let save_key = blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                ui.horizontal(|ui| {
+                // The save state, Discard and the reasons; then Save, or the two run-moving
+                // choices.
+                macro_rules! save_state {
+                    ($ui:ident) => {{
+                        let ui = &mut *$ui;
                 if changed {
                     self.discarded_options = None;
                     design::status(
@@ -5256,13 +5558,21 @@ impl Encounters {
                     snapshot.options = options;
                 }
                 if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, Some(draft_switch_reason()));
+                    // FB6: while Save is blocked, Discard is the one way out.
+                    design::blocked_reason(
+                        ui,
+                        Some(if blocked.is_some() {
+                            blocked_draft_switch_reason()
+                        } else {
+                            draft_switch_reason()
+                        }),
+                    );
                 }
-                });
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    }};
+                }
+                macro_rules! save_actions {
+                    ($ui:ident) => {{
+                        let ui = &mut *$ui;
                         if run_files > 0 && !run_open {
                             let move_runs = Action::primary("Move runs and save").show(ui).clicked();
                             let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
@@ -5279,8 +5589,36 @@ impl Encounters {
                             design::blocked_reason(ui, blocked.filter(|_| changed));
                             pressed
                         }
-                    })
-                    .inner;
+                    }};
+                }
+                // AF1: with one Save, the state starts the row and Save ends it, as on every save
+                // row; without room, the state's words wrap before Save. The two run-moving
+                // choices need the width, so they take the row below the state.
+                let one_row = run_files == 0 || run_open;
+                let pressed = if one_row {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let pressed = save_actions!(ui);
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center)
+                                    .with_main_wrap(true),
+                                |ui| save_state!(ui),
+                            );
+                            pressed
+                        },
+                    )
+                    .inner
+                } else {
+                    ui.horizontal(|ui| save_state!(ui));
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| save_actions!(ui),
+                    )
+                    .inner
+                };
                 if (pressed || save_key) && !run_open {
                     if folder_changed && let Err(e) = &left { error = Some(e.clone()); return; }
                     match snapshot.options.save(&active, &snapshot.campaign_text) {
@@ -5315,6 +5653,8 @@ impl Encounters {
 use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
+#[cfg(test)]
+pub(crate) use list::{ENDED_UNREAD, UNFINISHED_UNREAD};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
@@ -5468,6 +5808,7 @@ mod tests {
             name: name.to_owned(),
             line,
             problem: String::new(),
+            before: 0,
         };
         // A flag read back from a saved copy has only its sentence: it follows the file or the
         // row, and no line is added, so each names its line once.
@@ -6786,8 +7127,49 @@ mod tests {
         draft.source = change.text.clone().unwrap();
         draft.baseline = change.text;
         draft.save(&campaign, &[]).unwrap();
-        let saved = fs::read_to_string(path).unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
         assert!(saved.contains("tags: [DM]") && saved.contains("My words"));
+
+        use egui_kittest::kittest::Queryable;
+        // FF7: the file goes while the draft is open. The red choice says what it removes, its
+        // result says what was lost, and Undo remove gives the draft back.
+        fs::remove_file(&path).unwrap();
+        draft.body = "My later words".into();
+        assert!(draft.save(&campaign, &[]).is_err());
+        assert!(draft.recovery.file_gone());
+        let name = draft.name.clone();
+        let editor = Encounters {
+            draft: Some(draft),
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Default::default()
+        };
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            |ctx, editor: &mut Encounters| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    editor.discard_undo(ui);
+                    if !editor.encounter_disk_view(ui, &campaign, &[]) {}
+                });
+            },
+            editor,
+        );
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Let it go").is_none());
+        harness
+            .get_by_label("Remove encounter and lose draft")
+            .click();
+        harness.run_steps(2);
+        assert!(harness.state().draft.is_none());
+        harness.get_by_label(&format!("{name} removed. Its draft was discarded."));
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        let back = harness
+            .state()
+            .draft
+            .as_ref()
+            .expect("Undo remove gives the draft back");
+        assert_eq!(back.body, "My later words");
+        assert!(harness.state().discarded.is_none());
+        assert!(!path.exists(), "nothing was written");
     }
 
     #[test]
@@ -7290,6 +7672,14 @@ mod tests {
         read_only.set_readonly(true);
         fs::set_permissions(dir.path().join(&path), read_only).unwrap();
         let draft = Draft::open(dir.path(), &path).unwrap();
+        // FC3: the reader leaves the unread row out of the roster; its fault says where it
+        // stands, after the one row that reads, so the roster shows it in its place.
+        let faults = roster_faults(&Entry::parse(&path, &flagged).unwrap(), &BTreeMap::new());
+        assert_eq!(draft.setup.roster.len(), 1);
+        assert_eq!(
+            faults.iter().map(|fault| fault.before).collect::<Vec<_>>(),
+            [1]
+        );
         let mut editor = Encounters {
             draft: Some(draft),
             ..Default::default()
@@ -7450,6 +7840,7 @@ mod tests {
         draft.add(stat_creature(dir.path(), "Wolf", 20), false);
         draft.save(&campaign, &[]).unwrap();
         let mut editor = Encounters {
+            active: Some(campaign.clone()),
             draft: Some(draft),
             ..Default::default()
         };
@@ -7483,7 +7874,7 @@ mod tests {
                 .count(),
             1
         );
-        fs::rename(dir.path().join("Moved runs"), folder).unwrap();
+        fs::rename(dir.path().join("Moved runs"), &folder).unwrap();
         editor.read_runs_again(&campaign);
         assert_eq!(editor.paused_run_count(), 1);
         assert!(
@@ -7495,6 +7886,24 @@ mod tests {
                 .iter()
                 .any(|issue| issue.starts_with("Run folder not found"))
         );
+
+        // AB1 (Astra review of PR 259): on a first load, with nothing known about earlier runs,
+        // a run folder whose parent cannot be looked in is unread, not "never made"; a folder
+        // that is simply not there is still the empty case.
+        #[cfg(unix)]
+        {
+            let aside = dir.path().join("Runs aside");
+            fs::rename(&folder, &aside).unwrap();
+            let blocker = dir.path().join("Not a folder");
+            fs::write(&blocker, "").unwrap();
+            std::os::unix::fs::symlink(blocker.join("runs"), &folder).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            assert!(snapshot.runs_unread && snapshot.runs_missing.is_none());
+            fs::remove_file(&folder).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            assert!(!snapshot.runs_unread && snapshot.runs_missing.is_some());
+            fs::rename(&aside, &folder).unwrap();
+        }
     }
 
     #[test]

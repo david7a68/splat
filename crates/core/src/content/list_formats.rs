@@ -304,6 +304,74 @@ pub fn unread_group_members(text: &str, flags: &[Flag]) -> Vec<UnreadGroupMember
     unread
 }
 
+/// The physical line of each member that reads, in the order of the group's `members`: a row of
+/// the Members table that is not unread, or else an item of `members` in block-style front
+/// matter. A member with no line of its own (flow-style front matter) is left out, so a caller
+/// matches by index and finds no line for it.
+pub fn group_member_lines(text: &str, flags: &[Flag]) -> Vec<usize> {
+    if let Some(table) = table(text, "Members", GROUP) {
+        return table
+            .rows
+            .iter()
+            .filter_map(|row| row.first())
+            .filter(|cell| {
+                !flags
+                    .iter()
+                    .any(|flag| cell.line == flag.line && flag.kind != FlagKind::CreatureNotFound)
+            })
+            .map(|cell| cell.line)
+            .collect();
+    }
+    front_matter_member_lines(text)
+}
+
+/// The items of `splat_encounter_group.members` in block-style front matter. The scan stops at
+/// the closing fence, so body text that looks like a member is never counted.
+fn front_matter_member_lines(text: &str) -> Vec<usize> {
+    let mut lines = text.lines().enumerate();
+    if lines
+        .next()
+        .is_none_or(|(_, line)| line.trim_end() != "---")
+    {
+        return Vec::new();
+    }
+    let (mut in_group, mut members, mut item) = (false, None::<usize>, None::<usize>);
+    let mut found = Vec::new();
+    for (index, line) in lines {
+        if matches!(line.trim_end(), "---" | "...") {
+            break;
+        }
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let indent = line.len() - trimmed.len();
+        let is_item = trimmed == "-" || trimmed.starts_with("- ");
+        if indent == 0 && !is_item {
+            in_group = trimmed.starts_with("splat_encounter_group:");
+            (members, item) = (None, None);
+            continue;
+        }
+        if !in_group {
+            continue;
+        }
+        match members {
+            Some(at) if indent > at || (indent == at && is_item) => {
+                if is_item && *item.get_or_insert(indent) == indent {
+                    found.push(index + 1);
+                }
+            }
+            _ => {
+                (members, item) = (None, None);
+                if trimmed.starts_with("members:") {
+                    members = Some(indent);
+                }
+            }
+        }
+    }
+    found
+}
+
 fn only_references(raw: &str) -> Result<Vec<Value>, String> {
     let mut square = 0usize;
     let mut round = 0usize;

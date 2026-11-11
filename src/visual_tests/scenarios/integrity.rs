@@ -169,6 +169,21 @@ fn missing_folders(
 ) {
     let runs = d.app_mut().encounters.saved_runs();
     let run_folder = runs[0].path.parent().unwrap().to_owned();
+    // AB1: no step below may change a saved run's bytes.
+    let run_bytes = |folder: &std::path::Path| {
+        let mut files: Vec<_> = fs::read_dir(folder)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| (entry.file_name(), fs::read(entry.path()).ok()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        files
+    };
+    let bytes_before = run_bytes(&run_folder);
+    assert!(!bytes_before.is_empty());
     let moved = campaign.path.join("Moved runs");
     fs::rename(&run_folder, &moved).unwrap();
     d.click(NAV_ENCOUNTERS);
@@ -188,8 +203,78 @@ fn missing_folders(
         "A missing run folder leaves no Resume or paused run",
         |d| !d.has("Resume") && !d.has_containing("Paused run ·"),
     );
+    // AB1: a list that cannot be read says so, never that it is empty.
+    let unread = |d: &Driver<'_>| {
+        d.has(crate::encounters::UNFINISHED_UNREAD)
+            && d.has(crate::encounters::ENDED_UNREAD)
+            && !d.has_containing("No unfinished runs")
+            && !d.has_containing("No ended fights yet")
+    };
+    d.observe(
+        "iter-25-B-AB1",
+        unread(d),
+        "In progress and History say the run folder cannot be read",
+    );
     d.state("run-folder-gone", Sizes::All);
-    fs::rename(&moved, run_folder).unwrap();
+    // A full reload reads the folder again, and still cannot.
+    d.click("Reload from disk");
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-reload",
+        unread(d),
+        "After a reload, the lists still say the run folder cannot be read",
+    );
+    // The synchronous refresh (Make it yours, a creature save, a group removal) says the same.
+    let modules = d.app_mut().campaigns.modules().to_vec();
+    d.app_mut().encounters.refresh_now(campaign, &modules);
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-refresh",
+        unread(d),
+        "After a synchronous refresh, the lists still say the run folder cannot be read",
+    );
+    fs::rename(&moved, &run_folder).unwrap();
+    d.app_mut().encounters.read_runs_again(campaign);
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-back",
+        !d.has(crate::encounters::UNFINISHED_UNREAD)
+            && !d.has(crate::encounters::ENDED_UNREAD)
+            && d.has_containing(&runs[0].encounter),
+        "When the folder is back, its runs show again",
+    );
+    // A run folder whose parent cannot be looked in is not a folder that was never made: the
+    // lists say it cannot be read, through a reload and a synchronous refresh. The parent here is
+    // a plain file, so the system answers "not a directory", not "not found" (a permission
+    // change would not hold in this sandbox).
+    #[cfg(unix)]
+    {
+        let blocker = d.root.join("Run folder parent");
+        fs::write(&blocker, "not a folder").unwrap();
+        let moved_out = d.root.join("Runs kept aside");
+        fs::rename(&run_folder, &moved_out).unwrap();
+        std::os::unix::fs::symlink(blocker.join("Encounter Runs"), &run_folder).unwrap();
+        d.click("Reload from disk");
+        d.settle();
+        let reloaded = unread(d);
+        d.app_mut().encounters.refresh_now(campaign, &modules);
+        d.settle();
+        d.observe(
+            "iter-25-B-AB1-parent",
+            reloaded && unread(d),
+            format!("A run folder under a parent that is not a folder says it cannot be read after a reload ({reloaded}) and a refresh"),
+        );
+        fs::remove_file(&run_folder).unwrap();
+        fs::rename(&moved_out, &run_folder).unwrap();
+        fs::remove_file(&blocker).unwrap();
+        d.app_mut().encounters.read_runs_again(campaign);
+        d.settle();
+    }
+    d.observe(
+        "iter-25-B-AB1-bytes",
+        run_bytes(&run_folder) == bytes_before && d.has_containing(&runs[0].encounter),
+        "Every saved run's bytes are unchanged, and the runs show again",
+    );
     d.click(NAV_SESSIONS);
     fs::rename(folder, campaign.path.join("Moved sessions")).unwrap();
     d.app_mut().sessions.refresh();

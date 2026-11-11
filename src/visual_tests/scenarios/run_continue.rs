@@ -536,6 +536,27 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Read-only");
     whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
     d.state("history-continue-fight", Sizes::All);
+    // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let xs = d.at_size(size, |d| {
+            let mut xs = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let words = &text.galley.job.text;
+                if words.starts_with("HP ")
+                    && words.contains('/')
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    xs.push(text.pos.x);
+                }
+            });
+            xs
+        });
+        d.observe(
+            "iter-25-B-AI1",
+            xs.len() >= 3 && xs.iter().all(|x| (x - xs[0]).abs() <= 0.5),
+            format!("At {size:?}, the Final state HP x: {xs:?}"),
+        );
+    }
     d.click(CONTINUE);
     d.goal_within("T17.3", "go on with a closed, ended fight from the plan", 3);
     let told = story(d);
