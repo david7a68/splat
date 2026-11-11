@@ -167,8 +167,9 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
 }
 
 /// A menu choice in the keys' focus model: the first choice takes the focus when the keys
-/// open the menu, and the choice that has it is recorded, so a close gives it back.
-fn menu_choice_focus(ui: &egui::Ui, response: &egui::Response) {
+/// open the menu, and the choice that has it is recorded, so a close gives it back. A menu
+/// drawn by egui (a `ComboBox`) calls it for each of its choices.
+pub(crate) fn menu_choice_focus(ui: &egui::Ui, response: &egui::Response) {
     if ui
         .ctx()
         .data_mut(|data| data.remove_temp::<bool>(focus_first_choice_id()))
@@ -296,6 +297,13 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
         ctx.memory_mut(|memory| memory.request_focus(target));
         ctx.data_mut(|data| data.insert_temp(menu_focus_again_id(), target));
     }
+}
+
+/// A control whose menu egui opens (a `ComboBox`, whose popup is `<control id>.with("popup")`)
+/// joins the same focus model: call this the frame its menu opens, `keep_menu_owner` every
+/// frame, and `menu_choice_focus` for each choice.
+pub(crate) fn own_menu(response: &egui::Response, by_keys: bool) {
+    opened_menu(response, by_keys);
 }
 
 /// `response` opened its menu: it owns the menu until it closes, and `end_menu_frame` gives

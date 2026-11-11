@@ -294,7 +294,7 @@ height of two text lines (see Files and recovery), so neither the reason nor the
 above the slot, and the slot below the error holds the discard result the same way. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
-A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Show secondary `Overwrite with my draft` first, then
+A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library and World
 draw the choices through `message_with_actions`: the row starts at the message text, not at the warning bar, and
 an `L` gap comes before the red choice. Library's note of the entries that need a deleted file sits in the same
@@ -770,7 +770,9 @@ than a message without an action. In an edit form, which has no file line, a res
 sits below the title. With no note open, it sits below the empty state's words.
 A finished change has the success tone, as Library's results have: `Changes saved.`, a value change beside its row
 (`In: … → …`, `Stat block: … → …`, Status, Part of), `Name changed to <name>.`, `Note repaired.` and
-`<file> is now a separate note.` (`world::CHANGED`). A result that wrote nothing keeps the info tone:
+`<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
+(`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
+group, a group moved or deleted on save, and a deleted run. A result that wrote nothing keeps the info tone:
 `Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
@@ -929,7 +931,11 @@ want; hover keeps the marker key.
 ## The encounter ledger and editor
 
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
-HISTORY in that order. Groups and History start closed when they have rows. Each row reserves right-edge slots
+HISTORY in that order. Groups and History start closed when they have rows. The list keeps the scroll bar's lane
+whether or not the bar shows, so opening Groups moves no row action; the creature results and the encounter
+roster keep it too, so `Add` and the row menus stay put as a list grows or shrinks. When the run folder cannot be
+read (a folder that held runs is gone, or cannot be listed), In progress and History say so (`Splat cannot read the
+run folder, so it cannot show unfinished runs.`), never their empty states, until a read succeeds. Each row reserves right-edge slots
 for its main action, quiet Edit and row menu. The menu holds deletion and starting another run. An encounter
 with an unfinished run appears in In progress; when it ends, it returns to Ready. Keep in Ready during a run
 leaves a blocked Start fight and a reason to resume from In progress. In the editor, a muted line below the option
@@ -939,13 +945,15 @@ participants first. The open-run block appears once under READY TO RUN. Its Read
 run. When the header cannot hold every word, as beside Lookup at 960x640, the counts go first. Then Reload from
 disk keeps its icon, with its name, hint and blocked reason on hover. New encounter and New group stay whole.
 
-Unfinished rows show Setup · Paused or Round 2 · Paused and Resume. Open rows use status links Setup or Round
+Unfinished rows show Setup · Paused or Round 2 · Paused and Resume. Every paused run's line two starts with the
+run icon, also when its first part is a warning (`▷ ⚠ Changed on disk · …`). Open rows use status links Setup or Round
 2, with only saved time on line two. One paused run uses Paused run in the rail, then the fitted encounter
 name; full hover and accessible text includes name and state. It resumes in one click. With several, Paused
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
 separator; a short rail shows Ended or Paused with full state on hover.
 
-History opens read-only final state and log in place, outside the live-run slot. Rows put outcome before ended
+History opens read-only final state and log in place, outside the live-run slot. Final state has one name column, as
+wide as the longest name up to half the room, so every HP starts at one x. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
 
@@ -988,13 +996,15 @@ the full change link, removing source before base creature. Remove a source whol
 hover keeps the full detail. The ` · ` before the link has the same blank on each side as the separators between
 the stats: no item spacing is added around it.
 
-An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The roster also shows that row in its place among the rows that read: its name with no number (the run will not add it) and `⚠ Line 20 not read` in the warning tone, so two rows of one name stay apart. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
 Its note says where party members come from in the DM's words: `Party members come from the sheets Splat
 saved last.`
-Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
+Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll. Beside the roster, `This campaign’s
+creature` ends its Name field where Save creature ends. Rules and runs puts its save state, Discard and reasons at
+the start of one row with `Save run settings` at its end; without room, the state's words wrap before Save.
 
 The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
 changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
@@ -1007,7 +1017,8 @@ for groups of controls and sentence-case field labels over single inputs; tabbed
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
 side, members and notes. The target frame has an accent outline. The Encounters page keeps groups in one
-closed section. Frames use Move to… for ownership; full editors use Belongs to. A group that no fight can offer
+closed section. Frames use Move to… for ownership; full editors use Belongs to, whose open menu is as wide as its control, as
+Library's scope menu is. A group that no fight can offer
 says so below Belongs to as a warning `small_message`, not as muted field help.
 
 ### Groups and changes
@@ -1029,7 +1040,10 @@ one dot-separated line. Members and XP share one heading. Keep a member summary 
 members, also in compact editors. Member names and stats sit above Count, Edit and the menu; count stays at
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
-Save group with Add a creature first.
+Save group with Add a creature first, and the save row says `Invalid`, as it does after any refusal of Save group
+while that refusal holds. The save row's reasons (`Add a creature first`, `Save or discard to switch campaign.`) each
+have one place, chosen as if both showed: beside Save while there is room, else a line below the save row. Those
+lines are reserved whether or not their reason shows, so the first edit or the first member moves no field.
 
 A change form (group member or roster slot) has one right edge: Display name, Note, the Other effect field with its
 Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
@@ -1050,7 +1064,11 @@ Flagged members name their line, with a file line (path, Edit in Obsidian, Show 
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
 each creature needing repair with its cause, in the roster row's form: `Scout (as Goblin Warrior) · line 15: the change
-"HP lots" was not read.` (shown name, base creature when different, source line, cause). The example (`Use a number,
+"HP lots" was not read.` (shown name, base creature when different, source line, cause). One function
+(`groups::member_fault`) builds every member fault in this form: a missing creature (`Unknown creature · line 13: not in
+this campaign’s packages.`), an invalid change, an unread row, a member with no maximum HP or a D&D Beyond sheet, in
+the list, the editor, the plan and Arrivals. Save's own check names the member the same way without a line, since a
+draft's lines can move. The example (`Use a number,
 such as HP +5.`) belongs to the group editor's warning, not to these summaries.
 In the plan, each
 such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
@@ -1059,7 +1077,7 @@ puts `Edit group` in its row menu; a group none of whose members can join keeps 
 could add nothing. Changed summaries also name the base creature. Wrap between members, never inside names; a member
 wider than its line breaks first before its `(as …)`, then at its own spaces, never inside a word, and `(line 15)`
 stays whole. When no member can join, the summary ends at the count (`Enemies · 0 of 1 can join`): no XP and no
-`Will add: none`. The editor's members heading says how many can join when not all can (`MEMBERS 3 · 2 can join ·
+`Will add: none`. `Will add:` stays on a line with its first member whenever the two fit one line. The editor's members heading says how many can join when not all can (`MEMBERS 3 · 2 can join ·
 XP 100`).
 
 Every change field shows printed value and result, including changes added by hand. Editors, run cards and
@@ -1106,10 +1124,10 @@ icon and Connected; sheet and HP facts use muted Small.
 Names that need more than two lines use `RUN_COMPACT.name` and wrap in the shared name column. The numeric
 columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
 that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
-the whole name. Pictures align with the first name line. The fight panel and the Encounters page keep an `L`
-left gutter, so a quiet action at their text edge never reaches a splitter. The Encounters page header is outside
-that gutter: its title starts at the shared page edge, as every page title does. A scroll area there lets that
-action's press area reach `S` into the gutter.
+the whole name. Pictures align with the first name line. The fight panel keeps an `L`
+left gutter, so a quiet action at its text edge never reaches a splitter. The Encounters page has no gutter of its
+own: its title and its first column (`IN PROGRESS`, each row's name) start at the shared page edge, as World,
+Library and Campaign do, and a quiet action at that edge uses `line_start`.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
 drop the bonus before more if needed. Measure sync before folding conditions into a count. Keep the first
@@ -1334,12 +1352,13 @@ In the group editor, an unread Changes cell (`Changes “HP lots” not read. �
 every unread value is, and its example line starts at the message words. `No members can join.` in the Encounters
 list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
-(`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
-Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) the same way
-when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
+(`message_with_actions`): a bordered secondary button whose frame starts at the warning text. Arrivals and the
+Encounters list draw a member fault with its repair (`Campaign → Packages` or `Edit group`) through
+`groups::member_fault_row` (`message_with_action`): a bordered secondary button beside the fault after an `L` gap, or
+below it at the words when there is no room. A message action without an icon is never a link.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
-with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Every view draws each member fault in its own tone first, then the group's own reason (`No members can join.`) as a warning message, also when no member can join. Live initiative notices name who joins and the total. Before the current turn,
+with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 
