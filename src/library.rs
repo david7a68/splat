@@ -2903,7 +2903,7 @@ impl Library {
             .ok_or("Built-in entries are read only.")?
             .to_path_buf();
         let before = note.text.clone();
-        let id = Uuid::new_v4();
+        let id = crate::hermetic::new_uuid();
         let after = crate::content_workspace::new_note_identity(&before, &note.path, id)?;
         let updated = write_note(&root, &note.path, Some(&before), &after)?;
         self.identity_undo = Some(IdentityUndo {
@@ -10030,6 +10030,11 @@ mod tests {
 
     /// The text the reader paints for the selected note, after two frames.
     fn sd1_painted(library: &mut Library) -> String {
+        sd1_painted_at(library, (900.0, 1400.0))
+    }
+
+    /// The text the reader paints for the selected note, after two frames at `size`.
+    fn sd1_painted_at(library: &mut Library, size: (f32, f32)) -> String {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let mut texts = Vec::new();
@@ -10038,7 +10043,7 @@ mod tests {
                 egui::RawInput {
                     screen_rect: Some(egui::Rect::from_min_size(
                         egui::Pos2::ZERO,
-                        egui::vec2(900.0, 1400.0),
+                        egui::vec2(size.0, size.1),
                     )),
                     ..Default::default()
                 },
@@ -10414,6 +10419,12 @@ mod tests {
         let writable = fs::metadata(&notes).unwrap().permissions();
         fs::set_permissions(&notes, fs::Permissions::from_mode(0o555)).unwrap();
         let accepted = library.draft.clone();
+        // The failed-Save check counts each run, and `DraftView` counts each read of the words.
+        let failure_work =
+            crate::test_support::CachedWork::start("Failed-Save check", &mut library, |library| {
+                let (reached, work) = library.failure_checks.get();
+                crate::test_support::Counts { reached, work }
+            });
         library.save_selected(false);
         let reason = library
             .save_failure
@@ -10425,6 +10436,10 @@ mod tests {
             painted.contains("Not saved"),
             "disk-failure-state\n{painted}"
         );
+        // The check reads none of the words, even while it is new.
+        failure_work
+            .warm(&mut library, painted.contains("Not saved"), 0)
+            .expect("disk-failure-check-reached");
         assert!(
             painted.contains(&reason),
             "disk-failure-reason {reason}\n{painted}"
@@ -10435,31 +10450,38 @@ mod tests {
         );
         assert_eq!(fs::read(&path).unwrap(), saved, "disk-failure-not-written");
         assert_eq!(library.draft, accepted, "disk-failure-draft-kept");
-        // Unchanged frames keep the failure and never read the draft's words to do so.
-        library.failure_checks.set((0, 0));
-        for _ in 0..3 {
-            let painted = sd1_painted(&mut library);
-            assert!(
-                painted.contains("Not saved"),
-                "disk-failure-kept\n{painted}"
-            );
-        }
-        let (checks, reads) = library.failure_checks.get();
-        assert!(checks >= 6, "disk-failure-checked-each-frame: {checks}");
-        assert_eq!(reads, 0, "disk-failure-no-draft-scan");
+        // Unchanged frames and a resize keep the failure and never read the draft's words to do
+        // so. Each paint is two frames, and each frame checks.
+        let steady = failure_work
+            .steady(&mut library, |library| {
+                [
+                    (900.0, 1400.0),
+                    (900.0, 1400.0),
+                    (960.0, 640.0),
+                    (1920.0, 1080.0),
+                ]
+                .into_iter()
+                .all(|size| sd1_painted_at(library, size).contains("Not saved"))
+            })
+            .expect("disk-failure-no-draft-scan");
+        assert!(
+            steady.reached >= 8,
+            "disk-failure-checked-each-frame: {steady:?}"
+        );
         // Only that draft owns it: the next edit in the editor ends it, and going back to the
         // same words does not bring it back.
         assert!(library.source, "fixture: Edit Markdown is open");
-        sd1_type(&mut library, "More.");
-        assert_ne!(
-            library.draft, accepted,
-            "fixture: the editor took the words"
-        );
-        let painted = sd1_painted(&mut library);
-        assert!(
-            painted.contains("Unsaved") && !painted.contains("Not saved"),
-            "disk-failure-edit-ends\n{painted}"
-        );
+        failure_work
+            .refresh(&mut library, 0, |library| {
+                sd1_type(library, "More.");
+                assert_ne!(
+                    library.draft, accepted,
+                    "fixture: the editor took the words"
+                );
+                let painted = sd1_painted(library);
+                painted.contains("Unsaved") && !painted.contains("Not saved")
+            })
+            .expect("disk-failure-edit-ends");
         // Edit, then the editor's Undo back to the very words that failed: still ended.
         let failed_again = |library: &mut Library| {
             library.save_selected(false);
