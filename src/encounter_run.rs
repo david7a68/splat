@@ -4684,6 +4684,15 @@ impl Run {
     pub fn hp_of(&self, index: usize) -> Option<i64> {
         self.state.participants[index].hp
     }
+    /// Undo, then roll the first loot line that has no result, with no frame between them.
+    pub fn simulate_undo_and_roll_first_loot(&mut self) {
+        self.undo();
+        let holders: Vec<_> = self.holders().into_iter().filter(|h| h.open).collect();
+        if let Some(first) = self.unrolled(&holders).into_iter().next() {
+            let pick = (first.0.clone(), first.1);
+            self.roll_loot(&[pick]);
+        }
+    }
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
     }
@@ -7881,6 +7890,25 @@ mod tests {
             reopened.history[0].participants[0].hp,
             reopened.state.participants[0].max_hp
         );
+        // Astra 1: the newest Undo step is still the first rest's `Use the saved HP`, but this
+        // rest has an offer of its own: it shows, it puts back this Setup's saved HP, and its
+        // Undo gives back the full HP.
+        assert!(
+            reopened.rest_filled_saved_hp() && !reopened.saved_hp_used(),
+            "the second rest offers its saved HP"
+        );
+        reopened.use_saved_hp().unwrap();
+        let first = |run: &Run| {
+            (
+                run.state.participants[0].hp,
+                run.state.participants[0].temporary_hp,
+            )
+        };
+        assert_eq!(first(&reopened), (Some(3), 2));
+        assert!(reopened.saved_hp_used() && !reopened.rest_filled_saved_hp());
+        reopened.undo();
+        assert_eq!(first(&reopened), (reopened.state.participants[0].max_hp, 0));
+        assert!(reopened.rest_filled_saved_hp() && !reopened.saved_hp_used());
         begin(&mut reopened);
         reopened.state.participants[0].hp = Some(4);
         let mut combat = close_and_reopen(&mut reopened, campaign);

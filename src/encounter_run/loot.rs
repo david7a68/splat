@@ -236,7 +236,7 @@ impl Run {
     }
 
     /// Roll these lines as one step.
-    fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
+    pub(super) fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
         match self.loot_rolls(picks) {
             Ok(rolls) if !rolls.is_empty() => self.run_command(Command::Loot(rolls)),
             Ok(_) => {}

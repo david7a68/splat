@@ -13404,18 +13404,34 @@ pub mod encounter_owned_groups {
         open_arrivals(d);
         d.expect(&add_group(NEW_NAME));
         d.state("own-groups-in-combat", Sizes::Default);
-        let row_before = d.place_of(&add_group(GROUP_SHRINE)).map(|rect| rect.top());
+        // iter-25-R FB1: an arrival's result never moves a group row: not when it shows, not
+        // when a tie adds its words and its Move button, not after Move or its Undo. Each
+        // group's Add, at 960, 1200 and 1920.
+        let group_rows = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    [
+                        NEW_NAME,
+                        GROUP_SHRINE,
+                        GROUP_GOBLINS,
+                        GROUP_LOST,
+                        GROUP_RIVALS,
+                    ]
+                    .map(|name| d.place_of(&add_group(name)).map(|rect| rect.top()))
+                })
+            })
+        };
+        let rows_still = group_rows(d);
         d.type_into(&format!("Initiative total for {NEW_NAME}"), "14");
         d.click(&add_group(NEW_NAME));
         d.expect("Wolf");
-        // iter-25-R FB1: the result has its own line, so no group row moves when it shows.
-        let row_after = d.place_of(&add_group(GROUP_SHRINE)).map(|rect| rect.top());
+        let row_after = group_rows(d);
         d.observe(
             "iter-25-R-FB1",
             d.visible_text(&format!("{NEW_NAME} joined at\u{a0}14."))
-                && row_before.is_some()
-                && row_before == row_after,
-            format!("The result shows and the group rows stay: {row_before:?} then {row_after:?}"),
+                && rows_still.iter().flatten().all(Option::is_some)
+                && rows_still == row_after,
+            format!("The result shows and the group rows stay: {rows_still:?} then {row_after:?}"),
         );
         d.state("own-group-added-in-combat", Sizes::Default);
         d.observe(
@@ -13434,6 +13450,35 @@ pub mod encounter_owned_groups {
             "T13.5",
             roster_places(d).len() == rows_before + 2,
             "Dragging an encounter's own group in combat adds each member",
+        );
+        // iter-25-R FB1, continued: the tied result, Move, and Undo of the move.
+        let tie_action = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(&format!("Move {GROUP_SHRINE}")))
+                .map(|node| node.name)
+        };
+        let tied = tie_action(d);
+        let after_tie = group_rows(d);
+        let mut after_move = None;
+        let mut after_undo = None;
+        if let Some(action) = &tied {
+            d.click(action);
+            d.wait_for_text("moved before");
+            after_move = Some(group_rows(d));
+            d.click_starting("Undo: ");
+            d.expect(action);
+            after_undo = Some(group_rows(d));
+        }
+        d.observe(
+            "iter-25-R-FB1-tie",
+            tied.is_some()
+                && after_tie == rows_still
+                && after_move.as_ref() == Some(&rows_still)
+                && after_undo.as_ref() == Some(&rows_still),
+            format!(
+                "Group rows stay through a tie {tied:?}: {rows_still:?}, tie {after_tie:?}, move {after_move:?}, undo {after_undo:?}"
+            ),
         );
         d.expect("Maximum HP would become −28. It must be 1 or more.");
         // The dragged group's initiative comes from the run's dice. A tie adds a notice at the
@@ -13709,6 +13754,34 @@ pub mod run_loot {
             "Each loot roll is one step that Undo takes back, after the fight has ended",
         );
         d.goal("roll the loot after a fight");
+        // iter-25-R, Astra 3: `Loot copied.` belongs to that copy. Undo ends it, and so does the
+        // next roll, even one that leaves the Log as long as it was when copied.
+        d.click("Copy loot");
+        d.wait_for_text("Loot copied.");
+        d.click_starting(UNDO_ROLLS);
+        let after_undo = d.visible_text("Loot copied.");
+        d.click(ROLL_ENCOUNTER);
+        d.expect(" on 1d4");
+        let after_roll = d.visible_text("Loot copied.");
+        d.observe(
+            "iter-25-R-loot-copy-owner",
+            !after_undo && !after_roll,
+            format!("Loot copied ends on Undo ({after_undo}) and on the next roll ({after_roll})"),
+        );
+        // The same with no frame between the Undo and the next roll.
+        d.click("Copy loot");
+        d.wait_for_text("Loot copied.");
+        d.app_mut()
+            .encounters
+            .run_mut()
+            .expect("the ended run is open")
+            .simulate_undo_and_roll_first_loot();
+        d.settle();
+        d.observe(
+            "iter-25-R-loot-copy-owner-no-draw",
+            d.visible_text(" on 1d4") && !d.visible_text("Loot copied."),
+            "Loot copied ends when Undo and a roll come before the next frame",
+        );
 
         // The editor: typed words are a line, and a table comes from the campaign's list.
         d.begin_task();
@@ -13768,6 +13841,31 @@ pub mod run_loot {
             d.observe("iter7-B-AT1", fits, format!("Roster actions and notes keep LIST_MEASURE with Add directly beside them at {size:?}"));
         }
         d.state("loot-in-the-editor", Sizes::All);
+        // iter-25-R, Astra 4: a removed loot line is a finished change: a success message, with
+        // its Undo, which puts the line back.
+        let lines = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name
+                        .starts_with("More actions for the encounter loot line")
+                })
+                .count()
+        };
+        let before = lines(d);
+        d.click("More actions for the encounter loot line 1");
+        d.click("Remove");
+        let removed =
+            d.painted_rect_in("Removed 120 gp in a locked coffer.", egui::Rect::EVERYTHING);
+        let success = removed
+            .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success));
+        let fewer = lines(d);
+        d.click("Undo remove loot");
+        d.observe(
+            "iter-25-R-loot-removed",
+            success && fewer + 1 == before && lines(d) == before && !d.visible_text("Removed 120 gp"),
+            format!("Removed is a success message {success} ({removed:?}); lines {before} → {fewer} → {}", lines(d)),
+        );
         d.observe(
             "T14.8",
             d.has("Rolls on gems, the encounter loot line 2")
