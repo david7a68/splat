@@ -137,13 +137,17 @@ Why the fields are on an entry, and not a new kind of note:
 A map has exactly one **subject**:
 
 1. If the map has no `splat_map_of`, the subject is the map's own entry.
-2. If `splat_map_of` resolves to exactly one entry or note, the subject is that entry or note.
-3. If `splat_map_of` does not resolve, the map has no subject, and Splat reports a fault.
+2. If `splat_map_of` resolves to exactly one World entry or World note, the subject is that entry or note.
+3. In each other case, the map has no subject, and Splat reports fault M5, M6, M7 or M11.
+
+`splat_map_of` holds one link in the forms of [Link cells](#link-cells), and it resolves by rule 3 of that
+section. So an `id` term decides when the link has one. This differs from `splat_in` today, which resolves
+the words of the link and does not read the term (`world_value_target` in `src/lookup.rs`).
 
 The **maps of an entry** are all maps whose subject is that entry. A Location that is a map is one of its own
 maps. Splat lists the maps of an entry in this order: scale rank (coarsest first, a map with no rank last),
-then `splat_map_level` (maps that have one first, lowest first), then name (compared as pin names are, see
-[Names](#names)), then `splat_id`.
+then `splat_map_level` (maps that have one first, lowest first), then name (in the order that
+[Names](#names) defines), then `splat_id`.
 
 | Case | In files | What Splat does |
 |---|---|---|
@@ -162,10 +166,10 @@ then `splat_map_level` (maps that have one first, lowest first), then name (comp
 3. **The nesting rule ties the scales to the tree.** Let map A have subject X and map B have subject Y, where
    X and Y are different, and both maps have a rank. If Y is an ancestor of X, then A must not be coarser than
    B. Y is an ancestor of X when Splat reaches Y by following `splat_in` from X one step or more. The chain
-   ends at an entry whose `splat_in` is absent or does not resolve to exactly one entry. An entry in a
-   `splat_in` loop has no ancestors for this rule.
+   ends at an entry whose `splat_in` is absent or does not resolve to exactly one entry. It also ends before
+   an entry that it already holds, so a `splat_in` loop ends it.
 4. **When the tree and the maps disagree, Splat reports and changes nothing.** A break of the nesting rule is
-   fault T1 on map A. Both maps stay open, and both keep all their behaviour. The DM changes a scale or
+   fault T1 on map A, once for each pair of A and B. Both maps stay open, and both keep all their behaviour. The DM changes a scale or
    changes `splat_in`.
 
 Example: The Arena is in Ixdoash. A map of Ixdoash has the scale `city`. A map of The Arena with the scale
@@ -203,8 +207,8 @@ less.
 ### A campaign's own ladder
 
 A campaign manifest can have `splat_map_scales`. **When it is present and valid, it is the whole ladder, in
-its list order.** The built-in ladder is then not used. When it is absent, or when it has a fault, the
-built-in ladder is the ladder.
+its list order.** The built-in ladder is then not used. When it is absent, or when it has fault L1, L2 or
+L3, the built-in ladder is the ladder.
 
 ```yaml
 splat_map_scales:
@@ -233,8 +237,10 @@ splat_map_scales:
 - **To remove a scale,** leave it out. The example has no `floor`. A map that still says `floor` gets fault M3.
 - **To change a key,** change it in the list and in each map note. Keys are plain words, so find and replace
   does this.
-- The ladder belongs to the campaign. A map from a package is read against the ladder of the campaign that
-  reads it.
+- The ladder belongs to the campaign. In the app, each map is read against the ladder of the active campaign,
+  and that includes a map from a package. In `splat check`, a map is read against the ladder of the campaign
+  whose folder holds the map's note: the nearest folder, at the note or above it, that holds a campaign
+  manifest. A map in no campaign folder is read against the built-in ladder.
 
 Splat writes `splat_map_scales` as a marked YAML block in the manifest's Splat data callout, as
 [Markdown layout](markdown-layout.md) says for a field with no readable form.
@@ -271,7 +277,9 @@ table, which give the four length units that Splat knows. Each other word is a *
 - **The canonical form of a counting unit** is the word in lower case, with one final `s` removed when the
   word has two letters or more. So `hop` and `Hops` are one unit. `hex` and `hexes` are two units (`hex` and
   `hexe`), which is a stated limit: write `1 hexes`.
-- **Two units are the same unit** when their canonical forms are equal.
+- **Two units are the same unit** when both are length units with one canonical form, or both are counting
+  units with one canonical form. A counting unit is never the same unit as a length unit: `kms` is a counting
+  unit, and it is not `km`.
 - **A time word is not a unit.** A word whose canonical form is `minute`, `hour`, `day`, `week`, `month` or
   `year` is a fault in a length. A time goes in a route's `Time` cell.
 - **Splat does not convert.** It never changes feet to miles, metres to kilometres, or one system to the
@@ -279,8 +287,9 @@ table, which give the four length units that Splat knows. Each other word is a *
   A feature that compares or adds lengths must first test that they are the same unit, and must stop when they
   are not.
 
-A **length** in a file is a number, one space or more, and a unit: `300 miles`, `150 ft`, `1 hop`. The number
-grammar is in [Numbers](#numbers).
+A **length** in a file is a number greater than zero, then one or more spaces or tabs, then one unit:
+`300 miles`, `150 ft`, `1 hop`. The number grammar is in [Numbers](#numbers). So `0 ft`, `300` and
+`300 sea miles` are not lengths.
 
 ## Coordinates
 
@@ -329,8 +338,8 @@ A pin's position is in its `At` cell. The cell is empty, or it has 1 to 256 poin
 `splat_map_width` states the real distance that **the full width of the image file** shows, as a length. The
 image's margins and legend are part of that width.
 
-Let `W` be the number in `splat_map_width`. Let `pw` and `ph` be the width and the height of the map image in
-pixels, as Splat shows it. Then:
+Let `W` be the number in `splat_map_width`. Let `pw` and `ph` be the width and the height of the decoded
+map image file in pixels. They do not change with the size of the window. Then:
 
 - **Extent.** The map shows `W` units from left to right and `W × ph / pw` units from top to bottom.
 - **Measured length between two points** `(x1, y1)` and `(x2, y2)`:
@@ -385,12 +394,13 @@ How the child's extent sits inside the parent:
   It multiplies by 10,000, rounds to the nearest whole number with a half going up, and writes four decimal
   places: `0.4120`, `1.0000`. One step is 1/10,000 of the image, which is less than a pixel on a scan 8,000
   pixels wide.
-- **Writing a width from a scale bar.** Splat rounds to four significant digits, with a half going up:
-  `158.7 ft`.
+- **Writing a width from a scale bar.** Splat rounds to four significant digits, with a half going up. It
+  writes the number in plain decimal, with no exponent and with no zero at the end after a decimal point:
+  `158.7 ft`, `150 ft`, `0.4521 miles`.
 - **Showing a measured length.** Splat rounds to two significant digits, with a half going up, and shows the
   word "about" before it. For `d > 0`: let `k = floor(log10(d))` and `q = 10^(k − 1)`. The shown number is
   `round(d / q) × q`. So 134.16 shows as 130, 7.44 as 7.4, 995 as 1000, and 0.0456 as 0.046. A length of 0
-  shows as 0. A hand-drawn map is not more exact than this.
+  shows as 0. Splat writes the shown number as it writes a width: `7`, not `7.0`. A hand-drawn map is not more exact than this.
 - **A stated length** shows exactly as the DM wrote it, with no "about".
 
 ### Cases that are not a flat rectangle
@@ -409,7 +419,7 @@ How the child's extent sits inside the parent:
 ### Link cells
 
 A pin's `Shows` and `Opens` cells and a route's `Shows` cell hold **links**. A link names one target. These
-are the forms, which are the forms that schema 2 already uses in roster and group tables:
+are the forms. Schema 2 already uses them in roster and group tables, except the `table` pair, which is new:
 
 | Form | Example | The target is |
 |---|---|---|
@@ -422,25 +432,30 @@ are the forms, which are the forms that schema 2 already uses in roster and grou
 Rules:
 
 1. In a table cell, Obsidian needs `\|` for the bar inside a link. Splat reads `\|` as `|`.
-2. A **Splat term** is the comment `%% splat <name>=<value> %%` directly after a link, with only white space
-   between them. It belongs to that link. The names are `id`, `key` and `table`. A link has at most one of
-   them. Splat keeps a term with another name and does not read it.
-3. **Resolution has one order.** With a `table` term, the target is that roll table. With an `id` term, it is
-   the entry with that UUID. With a `key` term, or with a package link, it is the entry with that resource key.
-   With no term, it is the page that the Reader resolves for the link: exactly one page, by Obsidian's shortest
-   path rule.
+2. A **Splat term** is the comment `%% splat … %%` directly after a link, with only white space between
+   them. It belongs to that link. The comment holds one pair or more of the form `name=value`, with white
+   space between the pairs, as the roster reader reads it (`machine` in
+   `crates/core/src/content/list_formats.rs`). A value has no white space. Splat reads the pairs `id`, `key`
+   and `table`. It keeps a pair with another name and does not read it. A link can have `id` and `key`
+   together, as Splat writes them today, and then `id` decides. A `table` pair with an `id` pair or a `key`
+   pair is a fault.
+3. **Resolution has one order.** With a `table` pair, the target is that roll table. If not, with an `id`
+   pair, it is the entry with that UUID. If not, with a `key` pair, it is the entry with that resource key. If
+   not, for a package link, it is the entry with the resource key in the link. If not, it is the one page that
+   the Reader opens for the link.
 4. A plain link with no page is not a map fault. The row is a Line, so the existing World check "A link with
-   no page" counts it. This lets the DM pin a place before its page exists.
+   no page" counts it. This lets the DM pin a place before its page exists. That check counts each link of a
+   Line, so it also counts such a link in `Opens`, beside fault P15.
 5. A plain link that matches two pages or more resolves to nothing. The Reader shows the choices and does not
    guess, as it does for all links.
-6. A term that finds nothing is a fault, because a term is an exact identity.
+6. A term or a package link that finds nothing is a fault, because each is an exact identity.
 7. When Splat writes a link to an entry, it writes the Obsidian link and the `id` term, as it does in a roster
    row. A link that the DM writes by hand needs no term.
 
 ### What a pin or a route can show
 
-A `Shows` cell holds zero links or more, with commas between them. All its links are equal: none is the
-"main" one. A target can be:
+A `Shows` cell holds zero links or more. Commas and white space between the links are allowed and have no
+meaning. Splat writes `, ` between two links. All the links are equal: none is the "main" one. A target can be:
 
 | Target | Link form | What Splat does with it |
 |---|---|---|
@@ -478,7 +493,8 @@ other cases.
 
 **Question 2: which maps can answer for these two entries?** Input: two entries, and optionally a scale.
 Answer: each map on which each of the two entries is on exactly one pin, and the two pins differ. With a
-scale, only maps with that scale. The order is the finest scale first, then name, then `splat_id`. Splat does
+scale, only maps with that scale. The order is the finest scale first, with a map with no rank last, then name (in the order
+that [Names](#names) defines), then `splat_id`. Splat does
 not choose one. The caller uses the map when there is exactly one, and asks the DM in all other cases.
 
 **Question 3: how far and how long between these two pins?** Input: a map and two different pins of it, which
@@ -490,7 +506,7 @@ An answer has these parts:
 |---|---|
 | `route` | The name of the route, or nothing for a straight line |
 | `length` | A number and a unit, or nothing |
-| `length_is` | `stated` or `measured` |
+| `length_is` | `stated` or `measured`, or nothing when `length` is nothing |
 | `time` | A count of minutes and the text that the DM wrote, or nothing |
 | `shows` | The links of the route's `Shows` cell, or nothing for a straight line |
 
@@ -546,9 +562,9 @@ they are the `splat_world` fields `map_scale`, `map_of`, `map_width` and `map_le
 | Property | Type | Required | Default | Meaning |
 |---|---|---|---|---|
 | `splat_map_scale` | Text: a key of the ladder | Yes, for a map. Its presence makes the entry a map | None | The map's scale |
-| `splat_map_of` | One link, in the same value form as `splat_in` | No | The map's own entry | The map's subject |
+| `splat_map_of` | One text value that holds one link, in the forms of [Link cells](#link-cells) | No | The map's own entry | The map's subject |
 | `splat_map_width` | Text: a length | No | None. The map then has no measured lengths | The real distance across the full width of the image |
-| `splat_map_level` | Whole number from -999 to 999 | No | None | The order of this map among the maps of its subject, such as the floor number |
+| `splat_map_level` | YAML integer from -999 to 999 | No | None | The order of this map among the maps of its subject, such as the floor number |
 
 ### The map image
 
@@ -585,7 +601,7 @@ exactly these five cells, in this order, compared in any letter case:
 |---|---|---|---|---|
 | `Pin` | Plain text | Yes | None | The pin's name. It must differ from the name of each other pin of this map |
 | `At` | Empty, or 1 to 256 points with `;` between them. A point is `x, y` | No | No position | The pin's [position](#positions) |
-| `Shows` | Zero links or more, with commas between them | No | No links | What the pin shows |
+| `Shows` | Zero links or more | No | No links | What the pin shows |
 | `Opens` | Empty, or exactly one link | No | No child map | The child map that this pin opens |
 | `Note` | Markdown text | No | Empty | Words for the DM. Links in it work, and they are not in `Shows` |
 
@@ -610,35 +626,36 @@ be exactly these eight cells, in this order:
 | `From` | Plain text: the name of a pin of this map | Yes | None | One end |
 | `To` | Plain text: the name of another pin of this map | Yes | None | The other end |
 | `Length` | Empty, or a length | No | No stated length | The stated length of the route |
-| `Time` | Empty, or a duration in the campaign clock's form, greater than zero | No | No stated time | The stated time to travel the route |
+| `Time` | Empty, or text that the campaign clock's reader (`read_duration` in `src/timeline.rs`) reads as 1 minute or more | No | No stated time | The stated time to travel the route |
 | `Via` | Empty, or 1 to 64 points with `;` between them | No | A straight line | The points that the route's line goes through, from `From` to `To` |
-| `Shows` | Zero links or more, with commas between them | No | No links | What the route shows, such as a road's Location or a roll table for the journey |
+| `Shows` | Zero links or more | No | No links | What the route shows, such as a road's Location or a roll table for the journey |
 | `Note` | Markdown text | No | Empty | Words for the DM |
 
 - A route has no direction. `From` and `To` can change places with no change of meaning, except that `Via`
   runs from `From` to `To`.
 - Two routes can join the same two pins, such as a road and a river. Each has its own name.
 - A route joins two pins of one map. It cannot end on a pin of another map.
-- The campaign clock's form is a number, or `a` or `an`, and then `minute`, `hour`, `day`, `week`, `month` or
-  `year`, singular or plural: `3 days`, `an hour`, `90 minutes`.
+- `Time` uses the campaign clock's reader and no second grammar. So a route's time and a Timeline event's
+  `duration` always read alike. Examples: `3 days`, `an hour`, `90 minutes`.
 
 ### Names
 
 A pin's name and a route's name are plain text: the cell must not contain `[[`, `](` or `%%`. Two names are
 **equal** when they are the same after these three steps: remove white space at each end, replace each run of
-white space with one space, and change to lower case. So `The  Pit` and `the pit` are equal. Pins and routes
+white space with one space, and change to Unicode lower case. So `The  Pit` and `the pit` are equal. Names
+are **ordered** by the Unicode code points of the result of those three steps. Pins and routes
 have separate sets of names: a pin and a route can have one name.
 
 ### The typed model
 
 | Type | Fields |
 |---|---|
-| Map | `scale`: key. `rank`: number or none. `subject`: entry or none. `width`: Length or none. `level`: whole number or none. `image`: file path or none. `pins`: list of Pin. `routes`: list of Route |
+| Map | `scale`: key. `rank`: number or none. `subject`: World entry, World note or none. `width`: Length or none. `level`: whole number or none. `image`: file path or none. `pins`: list of Pin. `routes`: list of Route |
 | Pin | `name`: text. `position`: none, Point, Box (two Points) or Shape (3 to 256 Points). `shows`: list of Link. `opens`: Link or none. `note`: text. `line`: number |
 | Route | `name`: text. `from`, `to`: pin names. `length`: Length or none. `time`: minutes and text, or none. `via`: list of 0 to 64 Points. `shows`: list of Link. `note`: text. `line`: number |
 | Point | `x`, `y`: numbers from 0 to 1 |
 | Length | `number`: greater than zero. `unit`: the word as written, and its canonical form |
-| Link | `text`: the link as written. `term`: none, `id`, `key` or `table`, with its value. `target`: entry, note, roll table or none |
+| Link | `text`: the link as written. `id`, `key`, `table`: the value of each pair, or none. `target`: entry, note, roll table or none |
 | Scale | `key`, `name`, `unit` or none, `rank` |
 
 ### Validation
@@ -654,18 +671,23 @@ in the **Problems** row of the World page. That row opens the note.
 | ID | Rule | Message | Effect |
 |---|---|---|---|
 | M1 | `splat_map_scale` is only on a note with `splat_kind: world` | `splat_map_scale: only a World entry can be a map.` | The note is not a map |
-| M2 | `splat_map_scale` is text that is not empty | `splat_map_scale has no value. Write a scale, for example city.` | The entry is a map with no rank |
+| M2 | `splat_map_scale` is a YAML text value that is not empty. A number, a list, a mapping, an empty value and empty text all break this rule | `splat_map_scale has no scale. Write one word, for example city.` | The entry is a map with no rank |
 | M3 | `splat_map_scale`, with white space at each end removed, is exactly a key of the ladder | `splat_map_scale: “{value}” is not a scale of this campaign. Use one of: {keys}.` | The entry is a map with no rank |
 | M4 | `splat_map_of`, `splat_map_width` and `splat_map_level` are only on a map | `{property} needs splat_map_scale. Without a scale, this note is not a map.` | The property is not used |
-| M5 | `splat_map_of` is one link | `splat_map_of: write one link, for example "[[Ixdoash]]".` | The map has no subject |
-| M6 | `splat_map_of` resolves to a page | `splat_map_of: {value} was not found.` | The map has no subject |
-| M7 | `splat_map_of` resolves to only one page | `splat_map_of: {value} matches {count} notes. Write the folder in the link.` | The map has no subject |
-| M8 | `splat_map_width` is a length: a number greater than zero, white space, one unit word | `splat_map_width: “{value}” was not read. Write a number and a unit, for example 300 miles.` | The map has no width |
+| M5 | `splat_map_of` is one text value that holds exactly one link, with its Splat term or without one, and nothing else. A `table` pair breaks this rule | `splat_map_of: write one link, for example "[[Ixdoash]]".` | The map has no subject |
+| M6 | The link in `splat_map_of` finds a target: its term or its package link finds an entry, or its words find a page | `splat_map_of: {value} was not found.` | The map has no subject |
+| M7 | A link in `splat_map_of` with no term and no package key finds only one page | `splat_map_of: {value} matches {count} notes. Write the folder in the link.` | The map has no subject |
+| M8 | `splat_map_width` is a text value that is a length, as [Units](#units) defines one | `splat_map_width: “{value}” was not read. Write a number and a unit, for example 300 miles.` | The map has no width |
 | M9 | The unit of `splat_map_width` is not a time word | `splat_map_width: “{unit}” is a time. Write a length, for example 300 miles.` | The map has no width |
-| M10 | `splat_map_level` is a whole number from -999 to 999 | `splat_map_level: “{value}” was not read. Write a whole number from -999 to 999.` | The map has no level |
+| M10 | `splat_map_level` is a YAML integer from -999 to 999. Quoted text and a number with a decimal point break this rule | `splat_map_level: “{value}” was not read. Write a whole number from -999 to 999.` | The map has no level |
+| M11 | The target of `splat_map_of` is a World entry or a World note | `splat_map_of: {name} is not a World entry or a World note.` | The map has no subject |
 
 A map with no rank still shows. Rules P19 and T1 do not test it. A value of `splat_map_of` that resolves to
 the map's own entry means the same as no value, and it is not a fault.
+
+Which of these faults go together: on a note with M1, Splat reports no other fault of this document. A
+property with M4 is not tested by M5 to M11. M3 is tested only when M2 passes. M6 and M7 are tested only when
+M5 passes, and M11 only when M6 and M7 pass. M9 is tested only when M8 passes.
 
 **Image.** The line is the line of the embed.
 
@@ -681,48 +703,56 @@ name.
 | ID | Rule | Message | Effect |
 |---|---|---|---|
 | P1 | The header row is `Pin`, `At`, `Shows`, `Opens`, `Note` (line of the header) | `The Pins table needs these columns in this order: Pin, At, Shows, Opens, Note.` | The map has no pins. Splat does not edit the table |
-| P2 | The note has one `Pins` heading (line of the second heading) | `This note has two Pins headings. Splat reads the first, at line {line}.` | The second is ordinary text |
+| P2 | The note has one `Pins` heading (reported at each `Pins` heading after the first) | `This note has more than one Pins heading. Splat reads the first, at line {line}.` | Each later one is ordinary text |
 | P3 | A row has five cells | `This row has {count} cells. A Pins row has 5.` | The row is not a pin |
 | P4 | The `Pin` cell is not empty | `This pin has no name. Write a name in the Pin column.` | The row is not a pin |
 | P5 | The `Pin` cell is plain text | `Pin “{cell}”: write the name as plain words. Put a link in Shows.` | The row is not a pin |
-| P6 | No two pins of a map have equal names. Reported on each of the rows | `Two pins are named “{pin}”, at lines {a} and {b}. Give each pin its own name.` | Both pins show. No route can use the name. Splat does not move or rename them |
+| P6 | No two pins of a map have equal names. Reported on each of the rows | `{count} pins are named “{pin}”, at lines {lines}. Give each pin its own name.` | All of them show. No route can use the name. Splat does not move or rename them |
 | P7 | `At` is empty, or points in the point grammar | `Pin “{pin}”: At “{cell}” was not read. Write x, y as two numbers from 0 to 1, for example 0.25, 0.6. Put ; between the points of an area.` | The pin has no position |
 | P8 | Each number in `At` is from 0 to 1 | `Pin “{pin}”: {number} is outside the map. Each number in At is from 0 to 1.` | The pin has no position |
 | P9 | The two points of a box differ in `x` and in `y` | `Pin “{pin}”: the two corners of a box need a different x and a different y.` | The pin has no position |
 | P10 | `At` has at most 256 points | `Pin “{pin}”: an area has at most 256 points. This one has {count}.` | The pin has no position |
 | P11 | `Shows` has only links, commas and white space | `Pin “{pin}”: Shows “{text}” is not a link. Write a link such as [[Ixdoash]], or move the words to Note.` | The links in the cell are still used |
-| P12 | A Splat term finds its target | `Pin “{pin}”: no entry has the ID {value}.` or `Pin “{pin}”: no entry has the key {value}.` or `Pin “{pin}”: no roll table has the key {value}.` | That link has no target |
-| P13 | A link has at most one of `id`, `key` and `table` | `Pin “{pin}”: a link has one of id, key or table, not two.` | That link has no target |
-| P14 | `Opens` is empty or exactly one link | `Pin “{pin}”: Opens takes one link to a map.` | The pin opens no map |
-| P15 | The link in `Opens` resolves to exactly one page | `Pin “{pin}”: Opens {link} was not found.` or `Pin “{pin}”: Opens {link} matches {count} notes. Write the folder in the link.` | The pin opens no map |
+| P12 | In `Shows`, each Splat term and each package link finds its target | `Pin “{pin}”: no entry has the ID {value}.` or `Pin “{pin}”: no entry has the key {value}.` or `Pin “{pin}”: no roll table has the key {value}.` | That link has no target |
+| P13 | In `Shows`, a link with a `table` pair has no `id` pair and no `key` pair | `Pin “{pin}”: a link to a roll table has the table key only, with no id and no key.` | That link has no target |
+| P14 | `Opens` is empty, or exactly one link, with its Splat term or without one, and nothing else | `Pin “{pin}”: Opens takes one link to a map.` | The pin opens no map |
+| P15 | The link in `Opens` finds exactly one target. A term or a package link that finds nothing, a `table` pair with an `id` pair or a `key` pair, and words that find no page all give the first message | `Pin “{pin}”: Opens {link} was not found.` or `Pin “{pin}”: Opens {link} matches {count} notes. Write the folder in the link.` | The pin opens no map |
 | P16 | The target of `Opens` is a map | `Pin “{pin}”: {name} is not a map. A map has the property splat_map_scale.` | The pin opens no map |
 | P17 | The target of `Opens` is not this map | `Pin “{pin}”: a map cannot open itself.` | The pin opens no map |
-| P18 | At most one pin of a map opens a given map. Reported on each of the rows | `Pins “{a}” and “{b}” both open {name}. Only one pin of a map opens a child map.` | None of those pins opens the map |
-| P19 | When this map and the target both have a rank, the target's scale is finer | `Pin “{pin}”: {name} has the scale {child}. This map has the scale {parent}. A pin opens a map with a finer scale. To link two maps of one scale, put the link in Shows.` | The pin opens no map |
+| P18 | At most one pin of a map opens a given map. Reported on each of the rows | `{count} pins open {name}: {pins}. Only one pin of a map opens a child map.` | None of those pins opens the map |
+| P19 | For an `Opens` link that breaks none of P14 to P18: when this map and the target both have a rank, the target's scale is finer | `Pin “{pin}”: {name} has the scale {child}. This map has the scale {parent}. A pin opens a map with a finer scale. To link two maps of one scale, put the link in Shows.` | The pin opens no map |
 | P20 | No chain of `Opens` links leads from the target back to this map. Reported on each row in the chain | `Pin “{pin}”: {name} leads back to this map: {chain}. Remove one of these Opens links.` | None of the pins in the chain opens a map |
 
-P20 tests the `Opens` links that break none of P14 to P18. It does not look at P19. So a cycle between maps
-that all have a rank gets P19 on one row or more, and P20 on each row of the cycle. In P20, `{chain}` is the
-map names with ` → ` between them, such as `Cellar → Vault → Cellar`. When a pin "opens no map", the link in
-its cell is still a link that the DM can follow.
+Notes on these rules:
+
+- P12 and P13 test `Shows` cells only. In `Opens`, P15 covers those cases.
+- In P6 and R6, `{lines}` is the line of each row with that name, in rising order, with `, ` between them. In
+  P18, `{pins}` is the name of each such pin in table order, each in `“ ”`, with `, ` between them.
+- P19 and P20 each test the `Opens` links that break none of P14 to P18. P20 does not look at P19. So a cycle
+  between maps that all have a rank gets P19 on one row or more, and P20 on each row of the cycle.
+- In P20, `{chain}` is map names with ` → ` between them, such as `Cellar → Vault → Cellar`. It starts with
+  this map, then the target, then the shortest sequence of maps that leads back to this map. When two
+  sequences are equally short, Splat takes the first one that it finds when it searches breadth-first and
+  follows the pins of each map in table order.
+- When a pin "opens no map", the link in its cell is still a link that the DM can follow.
 
 **Routes.** The line is the line of the row. `{route}` is the route's name.
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
 | R1 | The header row is `Route`, `From`, `To`, `Length`, `Time`, `Via`, `Shows`, `Note` (line of the header) | `The Routes table needs these columns in this order: Route, From, To, Length, Time, Via, Shows, Note.` | The map has no routes. Splat does not edit the table |
-| R2 | The note has one `Routes` heading (line of the second heading) | `This note has two Routes headings. Splat reads the first, at line {line}.` | The second is ordinary text |
+| R2 | The note has one `Routes` heading (reported at each `Routes` heading after the first) | `This note has more than one Routes heading. Splat reads the first, at line {line}.` | Each later one is ordinary text |
 | R3 | A row has eight cells | `This row has {count} cells. A Routes row has 8.` | The row is not a route |
 | R4 | The `Route` cell is not empty | `This route has no name. Write a name in the Route column.` | The row is not a route |
 | R5 | The `Route` cell is plain text | `Route “{cell}”: write the name as plain words. Put a link in Shows.` | The row is not a route |
-| R6 | No two routes of a map have equal names. Reported on each of the rows | `Two routes are named “{route}”, at lines {a} and {b}. Give each route its own name.` | Both routes stay in use. Splat does not rename them |
+| R6 | No two routes of a map have equal names. Reported on each of the rows | `{count} routes are named “{route}”, at lines {lines}. Give each route its own name.` | All of them stay in use. Splat does not rename them |
 | R7 | `From` and `To` are not empty | `Route “{route}”: {column} needs the name of a pin on this map.` | The route is not drawn and gives no answer |
 | R8 | `From` and `To` each equal the name of a pin of this map | `Route “{route}”: no pin on this map is named “{name}”.` | The route is not drawn and gives no answer |
 | R9 | The pin name in `From` or `To` belongs to only one pin | `Route “{route}”: two pins are named “{name}”.` | The route is not drawn and gives no answer |
 | R10 | `From` and `To` are different pins | `Route “{route}”: From and To are the same pin.` | The route is not drawn and gives no answer |
-| R11 | `Length` is empty or a length | `Route “{route}”: Length “{cell}” was not read. Write a number and a unit, for example 40 miles.` | The route has no stated length |
+| R11 | `Length` is empty, or a length as [Units](#units) defines one | `Route “{route}”: Length “{cell}” was not read. Write a number and a unit, for example 40 miles.` | The route has no stated length |
 | R12 | The unit of `Length` is not a time word | `Route “{route}”: “{unit}” is a time. Write it in Time.` | The route has no stated length |
-| R13 | `Time` is empty, or a duration in the campaign clock's form that is greater than zero | `Route “{route}”: Time “{cell}” was not read. Write a number and minutes, hours, days, weeks, months or years, for example 3 days.` | The route has no stated time |
+| R13 | `Time` is empty, or `read_duration` reads it as 1 minute or more | `Route “{route}”: Time “{cell}” was not read. Write a number and minutes, hours, days, weeks, months or years, for example 3 days.` | The route has no stated time |
 | R14 | `Via` is empty, or 1 to 64 points, each number from 0 to 1 | `Route “{route}”: Via “{cell}” was not read. Write points as x, y with ; between them. Each number is from 0 to 1, and a route has at most 64 points.` | The route has no line. It is not drawn and has no measured length. Its stated length and time still answer |
 | R15 | `Shows` obeys P11, P12 and P13 | The messages of P11, P12 and P13, with `Route “{route}”` in place of `Pin “{pin}”` | As P11, P12 and P13 |
 
@@ -734,8 +764,12 @@ its cell is still a link that the DM can follow.
 | L2 | Each `scale` is a key | `splat_map_scales: “{value}” is not a scale key. Use lower-case letters, digits and _, with a letter first.` | The built-in ladder is the ladder |
 | L3 | No key is in the list twice | `splat_map_scales: “{key}” is in the list twice.` | The built-in ladder is the ladder |
 | L4 | `unit`, when present, is one word that is not a time word | `splat_map_scales: the unit of “{key}” was not read. Write one word, for example miles.` | That scale has no default unit |
+| L5 | `name`, when present, is one line of text that is not empty | `splat_map_scales: the name of “{key}” was not read. Write one line of text.` | That scale has its default name |
 
-**The tree.** The line is the line of `splat_map_scale` on map A.
+An unknown field in an item of the list stays in the file. It is not read, and it is not a fault.
+
+**The tree.** The line is the line of `splat_map_scale` on map A. Splat reports T1 once for each pair of maps
+A and B that breaks the rule.
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
@@ -745,7 +779,7 @@ its cell is still a link that the DM can follow.
 
 - **Reading writes nothing.**
 - **A save changes only what the DM changed.** Splat sets a property with the lossless property patch that
-  World properties use (`src/world/fields.rs`). In a table, Splat rewrites the cells of the one row that
+  World properties use (`src/world/fields.rs`). In a table, Splat rewrites only the cells whose value
   changed, adds a row at the end, or removes a row. All other text stays the same, byte for byte.
 - **Unknown data stays.** An unknown property stays. A `splat_` property that Splat does not know also gets the
   existing report for an unknown field. A cell that Splat could not read stays as written until the DM changes
@@ -760,9 +794,9 @@ its cell is still a link that the DM can follow.
 `splat check <folder>` reports each fault in this document as `{path}:{line}: {message}`, with the other
 flags that it reports today. A fault counts as a flag, so the exit status is 1 when a file has one.
 
-- Faults M1, M2, M4, M5, M8 to M10, P1 to P11, P13, P14, R1 to R14, R15 (for P11 and P13) and L1 to L4 need
+- Faults M1, M2, M4, M5, M8 to M10, P1 to P11, P13, P14, R1 to R14, R15 (for P11 and P13) and L1 to L5 need
   one file only.
-- Faults M3, M6, M7, I1 to I3, P12, P15 to P20, R15 (for P12) and T1 need the other notes of the campaign,
+- Faults M3, M6, M7, M11, I1 to I3, P12, P15 to P20, R15 (for P12) and T1 need the other notes of the campaign,
   the ladder or the image files. `splat check` loads them for the folder that it checks.
 - A plain link with no page is not printed as a map fault. It is in the World page's Problems row, as today.
 - `splat check` prints no fault for a map with no image, no pins, no routes or no width.
@@ -990,13 +1024,13 @@ always an edit to one file.
 | The image is replaced by a larger scan of the same picture | Nothing changes. Positions are fractions, and the measured lengths are the same when the shape is the same |
 | The image is replaced by a picture with another crop or shape | Splat reports nothing. The pins are in the wrong places, and the DM places them again |
 | A second image file gets the same name | Fault I2. The map keeps the file that the Reader uses |
-| A Location is renamed | As for the map's file: a link with an `id` term still finds it, and Obsidian updates the others. This is the same limit that `splat_in` has |
+| A Location is renamed | As for the map's file: a link with an `id` term still finds it, and Obsidian updates the others |
 | A pin is renamed in Splat | Splat changes the `Pin` cell and each `From` and `To` cell that had the old name, in one save with one Undo |
 | A pin is renamed by hand | A route that still has the old name gets fault R8 |
 | A pin's row is removed | A route that names it gets fault R8. In Splat, the removal says how many routes use the pin, and removes nothing else |
 | A map note is removed | Each pin that opens it gets fault P15 |
 | A map loses `splat_map_scale` | The entry is no longer a map. Each pin that opens it gets fault P16. Its tables stay in the file as ordinary tables |
-| Two notes have one `splat_id` | This is the existing identity conflict. Both notes stay visible with a warning, and the DM uses the existing repair. Until then, a link with that `id` finds nothing: P12, P15 or M6 |
+| Two notes have one `splat_id` | This is the existing identity conflict. Both notes stay visible with a warning, and the DM uses the existing repair. For a map's links, this design adds one rule: until the repair, a link with that `id` finds nothing. That is P12 in `Shows`, P15 in `Opens` and M6 in `splat_map_of` |
 | Two maps name one image file | Allowed. Each map has its own pins |
 | Two maps have one subject and one scale | Allowed. They are two maps of one subject |
 | A scale's name changes in the ladder | Nothing changes in map notes |
@@ -1059,8 +1093,8 @@ Each invariant is a test. "Valid" passes with no fault. "Invalid" gives the faul
 23. **A read and a save with no change leave the file the same, byte for byte.** Valid test: open each
     example note and save it with no change; the file's bytes are the same. Invalid result: a changed byte,
     such as a rewritten `0.412` as `0.4120`.
-24. **A change to one pin changes one row.** Valid test: move the pin `Lever`; only the `At` cell of that row
-    differs. Invalid result: a difference in another row, in a property or in the text.
+24. **A move of one pin changes one cell.** Valid test: move the pin `Lever`; only the `At` cell of that row
+    differs. Invalid result: a difference in another cell, in a property or in the text.
 
 ## Out of scope
 
@@ -1097,8 +1131,9 @@ Each step is useful alone. No step needs a later step.
    opens what it shows, or lists its links when it has several. The page of an entry lists its maps. The
    pointer's position shows as `x, y` beside the image, and a click on an empty place copies it, so that the DM
    can paste it into the `At` cell in Obsidian. `splat check` and the World page's Problems row report the
-   faults M1 to M7, M10, I1 to I3, P1 to P13, L1 to L4 and T1. The `Opens` cell shows as a plain link. Splat
-   keeps `splat_map_width` and a Routes table, and does not read them yet.
+   faults M1 to M7, M10, M11, I1 to I3, P1 to P13, L1 to L5 and T1. The `Opens` cell shows as a plain link, and
+   no fault tests it. Splat registers `splat_map_width` as a known property, keeps it, and does not read it
+   yet. A Routes table is ordinary text until step 5.
    *Changes:* `WORLD_FIELDS` and the World note reader in `crates/core/src/content/formats.rs`, a new
    `src/world/maps.rs`, `src/world/page.rs`, `src/folder_check.rs`. *Done when:* the five examples in this
    document open with no fault, and each invalid example of invariants 1 to 3, 5 to 7 and 17 to 19 gives its
