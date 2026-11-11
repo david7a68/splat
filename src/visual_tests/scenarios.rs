@@ -390,6 +390,18 @@ pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
     tones_where(d, |text| text.contains(words))
 }
 
+/// The painted rect of the visible paragraph that starts with `words`.
+pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
+    let mut found = None;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text.starts_with(words) && clip.intersects(rect) {
+            found = Some(rect);
+        }
+    });
+    found
+}
+
 /// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
 fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static str> {
     let mut paragraphs = Vec::new();
@@ -2976,7 +2988,22 @@ pub mod encounter_run {
             format!("At 1920 the conditions keep three columns inside the form width: {form:?}"),
         );
         let clean = !d.row_words(TARGET).contains(CONDITION);
+        let lefts = |d: &Driver<'_>| {
+            let field = d.place_of("Other effect").unwrap_or(egui::Rect::NOTHING);
+            condition_columns(d, field.left(), 0.0)
+                .iter()
+                .map(|column| column.0)
+                .collect::<Vec<_>>()
+        };
+        let before = lefts(d);
         d.click(CONDITION);
+        // FI1: the columns are fixed, so turning on Frightened moves no other toggle.
+        let after = lefts(d);
+        d.observe(
+            "iter-24-R-FI1",
+            before.len() >= 2 && before == after,
+            format!("Condition columns before and after Frightened: {before:?} then {after:?}"),
+        );
         d.state("condition-added", Sizes::All);
         d.goal_within("T1.5", "add an official condition", 3);
         let row = d.row_words(TARGET);
@@ -3795,6 +3822,36 @@ pub mod run_lookup {
                 && d.row_node(PARTICIPANT)
                     .is_some_and(|row| row.fully_in_view())
         });
+        // SI1: at 960 the strip's hidden action is in a menu, by name and number, and the mouse
+        // arms it while Lookup stays open.
+        const HIDDEN_ACTION: &str = "Cinder Dart +3";
+        let more = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(" more") && node.role == egui::accesskit::Role::Button)
+            .map(|node| node.name);
+        d.observe(
+            "iter-24-R-SI1-menu",
+            more.as_deref() == Some("1 more") && !d.visible_text("+1"),
+            format!("The strip ends with a menu of its hidden actions: {more:?}"),
+        );
+        if let Some(more) = &more {
+            d.click(more);
+            d.expect(HIDDEN_ACTION);
+            d.observe(
+                "iter-24-R-SI1-number",
+                d.visible_text("Ctrl+3"),
+                "The menu gives the hidden action's number",
+            );
+            d.state("more-actions-menu", Sizes::Small);
+            let armed_before = d.has_containing("% to hit");
+            d.click(HIDDEN_ACTION);
+            d.observe(
+                "iter-24-R-SI1",
+                !armed_before && d.has_containing("% to hit") && d.in_view(SPELL),
+                "Choosing Cinder Dart arms it, and Lookup stays open",
+            );
+        }
         // A click on a result leaves no field in focus. Typing must not run commands.
         let turn = current_participant(d);
         d.harness_focus_nothing();
@@ -3812,6 +3869,12 @@ pub mod run_lookup {
             "T2.1",
             before != after && d.in_view(SPELL),
             format!("Next turn acts with Lookup open: {before:?} then {after:?}"),
+        );
+        // Must stay true (SI1): Next turn ends the action armed from the menu.
+        d.observe(
+            "iter-24-R-SI1-ends",
+            !d.has_containing("% to hit"),
+            "Next turn ends the action armed from the strip's menu",
         );
         // Next turn put the focus in Amount. A search word typed now is not a command.
         d.press(Key::N);
@@ -4318,13 +4381,18 @@ fn condition_columns(d: &Driver<'_>, left: f32, top: f32) -> Vec<(f32, f32, usiz
     columns
 }
 
-/// Columns of condition toggles that hold every condition, three of them, `L` or less apart.
+/// Columns of condition toggles that hold every condition, three of them, close together.
+/// A column is as wide as its widest name in the selected (bordered) form, so the gap after
+/// its widest drawn toggle is `S`, and at most `S` and that toggle's frame padding when it is
+/// off (FI1).
 fn condition_columns_close(columns: &[(f32, f32, usize)]) -> bool {
+    /// The theme's button padding, on both sides of a selected toggle's words.
+    const FRAME_PADDING: f32 = 2.0 * 10.0;
     columns.len() == 3
         && columns.iter().map(|c| c.2).sum::<usize>() == crate::combat_sync::CONDITIONS.len()
-        && columns
-            .windows(2)
-            .all(|pair| pair[1].0 > pair[0].1 && pair[1].0 - pair[0].1 <= crate::design::L)
+        && columns.windows(2).all(|pair| {
+            pair[1].0 > pair[0].1 && pair[1].0 - pair[0].1 <= crate::design::S + FRAME_PADDING + 1.0
+        })
 }
 
 /// Each painted glyph of a text: its character, then its left and right, in screen points.
@@ -4459,6 +4527,7 @@ pub mod prep_to_table {
         d.click(ROLL_NPCS);
         d.state("npcs-rolled", Sizes::All);
         d.goal("roll NPC initiative");
+        let add_to_fight = d.place_of("Add to fight");
 
         let mut row_moved = false;
         let mut focus_is_here = false;
@@ -4483,6 +4552,14 @@ pub mod prep_to_table {
                 .zip(&after)
                 .any(|(before, after)| (before - after).abs() > 1.0);
             if index == 0 {
+                // SI2: Add to fight keeps its slot while the DM types initiative; Undo, which
+                // now names a player, takes only the rest of the line.
+                let shown = d.place_of("Add to fight");
+                d.observe(
+                    "iter-24-R-SI2",
+                    d.in_view("Add to fight") && add_to_fight.is_some() && shown == add_to_fight,
+                    format!("Add to fight stays in place: {add_to_fight:?} then {shown:?}"),
+                );
                 d.state("first-player-initiative", Sizes::Default);
                 d.goal_within("T4.3", "enter one player's initiative", 2);
             }
@@ -5210,9 +5287,87 @@ pub mod party_from_run {
         d.click(SHEET_PAGE);
         d.wait_for_text("This row moves. The current turn stays.");
         d.state("correct-tab", Sizes::Default);
+        // FI3, FJ2: every reason sits on its own line below its field, at the field's left, and
+        // the note field takes the form's width up to Add note.
+        let correct = |d: &Driver<'_>| {
+            let nodes = d.nodes();
+            let find = |wanted: &dyn Fn(&str) -> bool| {
+                nodes
+                    .iter()
+                    .find(|node| wanted(&node.name))
+                    .map(|node| node.rect)
+            };
+            [
+                find(&|name| name.starts_with("Initiative for ")),
+                find(&|name| name == "Type a number first."),
+                find(&|name| name == "DM note"),
+                find(&|name| name == "Type a note first."),
+                find(&|name| name == "This row moves. The current turn stays."),
+            ]
+        };
+        let below = |field: Option<egui::Rect>, reason: Option<egui::Rect>| {
+            field.zip(reason).is_some_and(|(field, reason)| {
+                reason.top() >= field.bottom() && (reason.left() - field.left()).abs() <= 1.0
+            })
+        };
+        for size in [SMALL, DEFAULT] {
+            let [total, number, note, words, _] = d.at_size(size, |d| correct(d));
+            d.observe(
+                "iter-24-R-FI3",
+                below(total, number) && below(note, words),
+                format!("At {size:?} each reason is below its field: {total:?} {number:?}, {note:?} {words:?}"),
+            );
+            // FJ2: the note field takes the form's line; Add note is below it, at its left.
+            let add = d.at_size(size, |d| d.place_of("Add note"));
+            d.observe(
+                "iter-24-R-FJ2",
+                note.zip(add).is_some_and(|(note, add)| {
+                    add.top() >= note.bottom()
+                        && (add.left() - note.left()).abs() <= 1.0
+                        && note.right() >= add.right()
+                }),
+                format!(
+                    "At {size:?} Add note is below a field that takes the line: {note:?} {add:?}"
+                ),
+            );
+        }
+        // At 1200 and 1920 a sentence fits: the field is at least 240 px wide. At 960 the
+        // Correct label column leaves the line about 216 px.
+        for size in [DEFAULT, LARGE] {
+            let note = d.at_size(size, |d| d.place_of("DM note"));
+            d.observe(
+                "iter-24-R-FJ2-width",
+                note.is_some_and(|note| note.width() >= 240.0),
+                format!("At {size:?} the note field is at least 240 px wide: {note:?}"),
+            );
+        }
         d.click(SHEET_TAB);
         d.expect(SHEET_ONLY_TEXT);
         d.goal("read a page and return to the run");
+        // Outside the measured task: Correct again, to type a total.
+        d.click(SHEET_PAGE);
+        d.wait_for_text("This row moves. The current turn stays.");
+        // The reason's line stays when it goes: the words below keep their place.
+        let [total, _, _, _, moves] = correct(d);
+        let field = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Initiative for "))
+            .map(|node| node.name);
+        if let Some(field) = &field {
+            d.type_into(field, "7");
+        }
+        let [_, gone, _, _, moved] = correct(d);
+        d.observe(
+            "iter-24-R-FI3-reserved",
+            total.is_some() && gone.is_none() && moves.is_some() && moves == moved,
+            format!("A typed total removes the reason, and nothing below moves: {moves:?} then {moved:?}"),
+        );
+        if let Some(field) = &field {
+            d.clear_text_in(field);
+        }
+        d.click(SHEET_TAB);
+        d.expect(SHEET_ONLY_TEXT);
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
         d.click_row(MEMBER);
@@ -5866,6 +6021,24 @@ pub mod column_resize {
         let run_edge = right_of(d, NEXT_TURN) + crate::design::M;
         d.drag_column_edge(run_edge, FAR_RIGHT);
         d.state("run-panel-narrow", Sizes::All);
+        // AD1: at 1920 the dock's controls are one block after the selected name, `L` from it.
+        let (name, conditions) = d.at_size(LARGE, |d| {
+            (
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Selected: "))
+                    .map(|node| node.rect),
+                d.place_of("Conditions for this participant"),
+            )
+        });
+        d.observe(
+            "iter-24-R-AD1",
+            name.zip(conditions).is_some_and(|(name, conditions)| {
+                let gap = conditions.left() - name.right();
+                (0.0..=crate::design::L + 1.0).contains(&gap)
+            }),
+            format!("At 1920 Conditions follows the selected name: {name:?} then {conditions:?}"),
+        );
         d.drag_column_edge(DEFAULT.0 - crate::design::M - PANEL_MIN_WIDTH, FAR_LEFT);
         d.state("run-panel-wide", Sizes::All);
 
@@ -11738,7 +11911,7 @@ pub mod encounter_groups {
         assert!(d.is_disabled(&add_group(GROUP_RIVALS)));
         d.state("invalid-arrival-total", Sizes::All);
         // AH1 at the captured sizes: one Add edge for every group, within the shared block.
-        for size in [SMALL, LARGE] {
+        for size in [SMALL, DEFAULT, LARGE] {
             let (adds, pane) = d.at_size(size, |d| {
                 let adds: Vec<_> = d
                     .nodes()
@@ -11764,6 +11937,15 @@ pub mod encounter_groups {
                     }),
                 format!("At {size:?} every group's Add ends at one x inside the block: {adds:?} from {pane:?}"),
             );
+            // FH2: the search field is as wide as the group block: one right edge.
+            d.observe(
+                "iter-24-R-FH2",
+                pane.zip(adds.first())
+                    .is_some_and(|(pane, add)| (pane.right() - add).abs() <= 1.0),
+                format!(
+                    "At {size:?} the search field ends at the Add column: {pane:?} and {adds:?}"
+                ),
+            );
         }
         d.clear_text_in(TOTAL_FOR_RIVALS);
         let before = roster_places(d).len();
@@ -11774,6 +11956,20 @@ pub mod encounter_groups {
             "The valid member joins while the two unavailable members stay out",
         );
         d.state("available-member-added", Sizes::All);
+        // FH1: a tied arrival is a finished change, so its message has the success bar.
+        // FH6: its Move button names the group, as the message does, not one member.
+        let tied = painted_paragraph(d, "Lost Patrol joined at");
+        d.observe(
+            "iter-24-R-FH1",
+            tied.is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("The tied arrival's message has the success bar: {tied:?}"),
+        );
+        d.observe(
+            "iter-24-R-FH6",
+            d.in_view("Move Lost Patrol before Ember Cultist")
+                && !d.has_containing("Move Goblin Warrior before"),
+            "The Move button names Lost Patrol, as its message does",
+        );
         d.click_containing("Undo: add Lost Patrol");
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
@@ -11882,18 +12078,18 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_RIVALS));
         d.expect("placed after");
         let before = current_participant(d);
-        d.click("Move Rival Team before Rival Team");
+        d.click("Move Rival Team (Rival Captain 2) before Rival Team");
         d.at_size(DEFAULT, |d| {
-            d.expect("Rival Captain 2 moved before Rival Team at\u{a0}14")
+            d.expect("Rival Team (Rival Captain 2) moved before Rival Team at\u{a0}14")
         });
         d.observe(
             "F4",
             current_participant(d) == before
-                && d.has_containing("Undo: move Rival Captain 2 before Rival Team"),
+                && d.has_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team"),
             "Move before keeps the current turn and offers Undo",
         );
         d.state("tied-arrival-moved-before", Sizes::All);
-        d.click_containing("Undo: move Rival Captain 2 before Rival Team");
+        d.click_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team");
         d.click_containing("Undo: add Rival Team");
         d.begin_task();
 
@@ -12588,7 +12784,7 @@ pub mod run_loot {
     use super::*;
     const ADD: &str = "Add loot to the encounter";
     const GUARD: &str = "Vault Guard";
-    const ROLL_ENCOUNTER: &str = "Roll 2× gems for Sunken Vault";
+    const ROLL_ENCOUNTER: &str = "Roll 2 × gems for Sunken Vault";
     const UNDO_ROLLS: &str = "Undo: 2 loot rolls on gems";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -12639,6 +12835,12 @@ pub mod run_loot {
         d.click(ROLL_ENCOUNTER);
         d.expect(" on 1d4");
         d.state("loot-rolled", Sizes::Default);
+        // FI5: a count of rolls uses the roster's form, `2 × gems`, with a blank before `×`.
+        d.observe(
+            "iter-24-R-FI5",
+            d.visible_text("2 × gems · ") && !d.has_containing("2× gems"),
+            "The rolled loot heading says 2 × gems",
+        );
         d.observe(
             "T14.8",
             d.has_containing(UNDO_ROLLS),
@@ -12870,11 +13072,45 @@ pub mod run_add_creature {
             "A creature made up with no HP says what it needs",
         );
         d.state("arrivals-made-up-needs-hp", Sizes::All);
+        const ADD_GHOST: &str = "Add Ghost of the Mill to the initiative list";
+        // FI4: `Count` and `Initiative` fields start at one x, and `Side` starts where `HP` does.
+        let label_left = |d: &Driver<'_>, field: &str, word: &str| {
+            let field = d.place_of(field)?;
+            let area = egui::Rect::from_min_max(
+                egui::pos2(field.left() - crate::design::XXL * 3.0, field.top()),
+                egui::pos2(field.left(), field.bottom()),
+            );
+            d.painted_rect_in(word, area).map(|rect| rect.left())
+        };
+        let columns = (
+            d.place_of("New creature count").map(|r| r.left()),
+            d.place_of("New creature initiative total")
+                .map(|r| r.left()),
+            label_left(d, "New creature HP", "HP"),
+            label_left(d, "Side of the new creature", "Side"),
+        );
+        d.observe(
+            "iter-24-R-FI4",
+            matches!(columns, (Some(count), Some(total), Some(hp), Some(side))
+                if (count - total).abs() < 1.0 && (hp - side).abs() < 1.0),
+            format!("Count and Initiative fields, HP and Side words at one x each: {columns:?}"),
+        );
+        // Blocked, the button's name says `this creature`.
+        let add_before = d
+            .place_of("Add this creature to the initiative list")
+            .map(|r| r.top());
         d.type_into("New creature HP", "22");
+        // FI2: the reason's line stays, so Add does not move when the DM types the HP.
+        let add_after = d.place_of(ADD_GHOST).map(|r| r.top());
+        d.observe(
+            "iter-24-R-FI2",
+            !d.has_containing("Type its HP") && add_before.is_some() && add_before == add_after,
+            format!("The reason goes and Add stays: {add_before:?} then {add_after:?}"),
+        );
         d.type_into("New creature AC", "14");
         d.type_into("New creature initiative total", "9");
         d.state("arrivals-made-up-ready", Sizes::Default);
-        d.click("Add Ghost of the Mill to the initiative list");
+        d.click(ADD_GHOST);
         d.expect(
             "Ghost of the Mill joined at\u{a0}9. Tied with Ember Cultist at\u{a0}9, placed after.",
         );
@@ -12894,7 +13130,27 @@ pub mod run_add_creature {
             d.visible_text("22 / 22") && d.visible_text("9") && !d.visible_text("printed +0"),
             "A made-up card shows typed HP and an unsigned initiative total",
         );
+        // FK7: the trio keeps the stat block's columns when the DM selects one after the other.
+        let trio = |d: &Driver<'_>| {
+            ["ARMOR CLASS", "HIT POINTS", "INITIATIVE"].map(|word| d.painted_left(word))
+        };
+        let made_up = trio(d);
         d.state("made-up-creature-sheet", Sizes::Default);
+        d.click_row("Ember Cultist");
+        d.expect("Stat block");
+        let stat_block = trio(d);
+        d.observe(
+            "iter-24-R-FK7",
+            made_up
+                .iter()
+                .zip(&stat_block)
+                .all(|(made_up, stat_block)| {
+                    made_up
+                        .zip(*stat_block)
+                        .is_some_and(|(a, b)| (a - b).abs() <= 1.0)
+                }),
+            format!("The made-up trio {made_up:?} sits where the stat block's does {stat_block:?}"),
+        );
         d.begin_task();
         d.click_row("Ghost of the Mill");
         d.type_text("5");
@@ -14745,6 +15001,7 @@ pub mod session_plan {
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
         const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
+        const SAVED_HP_UNDO: &str = "Undo use saved HP";
         let notice_top = d
             .place_of("Party HP is full after the long rest.")
             .map(|rect| rect.top());
@@ -14767,8 +15024,8 @@ pub mod session_plan {
         );
         d.observe(
             "iter-16-B-FT2-message-undo",
-            d.in_view("Undo")
-                && d.place_of("Undo")
+            d.in_view(SAVED_HP_UNDO)
+                && d.place_of(SAVED_HP_UNDO)
                     .zip(d.place_of(SAVED_HP_SET))
                     .is_some_and(|(undo, words)| {
                         (undo.center().y - words.center().y).abs() < crate::design::S
@@ -14780,15 +15037,21 @@ pub mod session_plan {
             d.has("Undo: use the saved HP") && !d.has_containing("Nothing to undo"),
             "The header names the new step, not an empty history",
         );
+        // FJ4: the message's Undo names its step, as every other message Undo does.
+        d.observe(
+            "iter-24-R-FJ4",
+            d.has(SAVED_HP_UNDO) && !d.has("Undo"),
+            "The saved-HP result's Undo says Undo use saved HP, not a bare Undo",
+        );
         d.state("saved-hp-restored", Sizes::All);
         // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
-        let saved_hp_undo = undo_shape(d, "Undo");
+        let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
         d.observe(
             "iter-17-B-AT1",
             saved_hp_undo.is_some_and(|(stroke, _, _, icon)| stroke == egui::Stroke::NONE && icon),
             format!("The saved-HP result's Undo is quiet with the Undo icon: {saved_hp_undo:?}"),
         );
-        d.click("Undo");
+        d.click(SAVED_HP_UNDO);
         d.observe(
             "iter-16-B-FT2-undo",
             kestrel(d).contains("HP 41/41"),
