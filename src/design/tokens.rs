@@ -202,6 +202,9 @@ pub const L: f32 = 16.0;
 pub const XL: f32 = 24.0;
 pub const XXL: f32 = 32.0;
 
+/// The room an icon takes before an action's words: the Body-size glyph, its `XS` gap and 2 px.
+pub const ICON_SLOT: f32 = 20.0;
+
 pub const RADIUS_CONTROL: f32 = 3.0;
 pub const RADIUS_LAYER: f32 = 6.0;
 pub const HAIRLINE_WIDTH: f32 = 1.0;
@@ -494,6 +497,12 @@ pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// The icon slot follows the parts it is made of.
+    #[test]
+    fn iter18_a_the_icon_slot_is_the_body_glyph_and_its_gap() {
+        assert_eq!(super::ICON_SLOT, super::Type::Body.size() + super::XS + 2.0);
+    }
+
     use super::*;
 
     fn all_text(c: &Colors) -> Vec<(&'static str, Color32)> {

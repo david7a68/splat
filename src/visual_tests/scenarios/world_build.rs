@@ -1574,11 +1574,9 @@ pub fn generator(d: &mut Driver<'_>) {
             && !d.visible_text("splat:rolls"),
         "The World card says how to use your own names in words, and copies the marker",
     );
-    // FD4: the action starts a line, so its icon starts at the card's text edge, with the help
-    // above it and `Will save` below it. Its target reaches into the gutter.
-    let icon = d
-        .place_of(crate::lookup::COPY_MARKER)
-        .map(|rect| rect.left() + design::S);
+    // FD4, ST2 ruling: the action starts a line outside a message, so it has no icon and its words
+    // start at the card's text edge, with the help above it and `Will save` below it.
+    let icon = super::words_left(d, crate::lookup::COPY_MARKER);
     let help = d.painted_left(crate::lookup::OWN_NAMES_HELP);
     let save = d.painted_left("Will save ");
     d.observe(
@@ -1588,7 +1586,7 @@ pub fn generator(d: &mut Driver<'_>) {
             .is_some_and(|((icon, help), save)| {
                 (icon - help).abs() <= 1.0 && (save - help).abs() <= 1.0
             }),
-        format!("Copy the marker's icon starts at the card's text edge: icon {icon:?}, help {help:?}, Will save {save:?}"),
+        format!("Copy the marker's words start at the card's text edge: words {icon:?}, help {help:?}, Will save {save:?}"),
     );
     // The press area reaches into the pane's gutter, never into the World column's splitter.
     for size in [SMALL, DEFAULT, LARGE] {
@@ -2292,7 +2290,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.observe_both(
         "iter-16-E-FD7-undo-edge",
-        "Undo heading change is a line-start action: its target extends into the gutter left of the reader text edge, and its word follows its icon",
+        "Undo heading change is a line-start action outside a message: no icon, its words start at the reader text edge, and its target reaches S into the gutter",
         |d| {
             let Some(title) = reader_title(d, "Watch Ashfall") else {
                 return false;
@@ -2301,7 +2299,11 @@ pub fn package_rename(d: &mut Driver<'_>) {
                 return false;
             };
             d.painted_word_rect("Undo heading change", egui::Rect::EVERYTHING)
-                .is_some_and(|word| undo.left() < title.left() - 1.0 && word.left() > title.left())
+                .is_some_and(|word| {
+                    (undo.left() - (title.left() - design::S)).abs() <= 1.0
+                        && (word.left() - title.left()).abs() <= 1.0
+                        && !d.painted_in(undo).contains(design::icons::UNDO)
+                })
         },
     );
     d.state("renamed-entry-heading-fixed", Sizes::All);
@@ -3180,8 +3182,9 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
     // iter-17-B: Undo replacement starts its line above the slot rows. Their words start at the
-    // row edge, so the action uses `line_start`: its icon starts at the rows' words, and its
-    // press area reaches into the page's `L` gutter, never into the navigation splitter.
+    // row edge, so the action uses `line_start` with no icon (it is outside a message): its words
+    // start at the rows' words, and its press area reaches `S` into the page's gutter, never
+    // into the navigation splitter.
     for size in [SMALL, DEFAULT, LARGE] {
         let (undo, slot, clear) = d.at_size(size, |d| {
             let slot = d
@@ -4422,6 +4425,67 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("copied-package-registered-alongside-original", Sizes::All);
+    // SD1: `Undo package registration` follows its message on the message line through
+    // `undo_message`, with its icon before its words. When the line has no room it starts the
+    // next line, with its words at the message's words and its icon hanging over the message's
+    // icon column (the unit test `iter18_a_sd1_a_wrapped_undo_starts_its_words_at_the_message_words`
+    // reaches that branch). Either way, its press area clears the entries column's splitter.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (undo, message, icon, clear) = d.at_size(size, |d| {
+            let target = d.place_of("Undo package registration");
+            let mut icon = None;
+            if let Some(target) = target {
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if target.contains(rect.center()) && text.galley.job.text == design::icons::UNDO
+                    {
+                        icon = Some(rect);
+                    }
+                });
+            }
+            let mut message = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if text
+                    .galley
+                    .job
+                    .text
+                    .starts_with("Ashen Reaches is registered")
+                    && clip.intersects(rect)
+                {
+                    message = Some(rect);
+                }
+            });
+            (
+                target
+                    .and_then(|target| super::words_left_in(d, target).map(|left| (left, target))),
+                message,
+                icon,
+                target.map_or_else(
+                    || Err("Undo package registration is not in view".to_owned()),
+                    |target| super::press_area_clear(d, target, "Undo package registration", None),
+                ),
+            )
+        });
+        let placed =
+            undo.zip(message)
+                .zip(icon)
+                .is_some_and(|(((words, target), message), icon)| {
+                    if target.top() >= message.bottom() - 1.0 {
+                        (words - message.left()).abs() <= 1.0 && icon.right() <= message.left()
+                    } else {
+                        icon.left() > message.right() && words > icon.right()
+                    }
+                });
+        d.observe(
+            "iter-18-A-SD1",
+            placed && clear.is_ok(),
+            format!(
+                "At {size:?}, Undo package registration's words and target {undo:?}, the message \
+                 {message:?}, its icon {icon:?}; press area: {clear:?}"
+            ),
+        );
+    }
     for size in [SMALL, DEFAULT, LARGE] {
         let aligned = d.at_size(size, |d| {
             d.expect("Use the copy's entries");

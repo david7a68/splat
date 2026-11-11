@@ -35,27 +35,11 @@ pub const NEVER_ALLOWED: [&str; 1] = [APP_VS_CHROME];
 /// A scenario, a state in it, and a window size, as the report names them.
 pub type StateKey<'a> = (&'a str, &'a str, &'a str);
 
-/// The only app-vs-chrome pairs a run may have, with the exact count for each state.
-///
-/// Owner: Markdown reader tables (`src/markdown_view.rs`). Egui floats a wide table's
-/// sideways scroll bar up to the reader's bottom edge, over the words of the last visible
-/// row, and the bar takes the press there. This list is code, not `baseline.json`, so no
-/// baseline refresh can add to it. It must end empty: a state with fewer pairs than listed
-/// fails the run until its line is removed or lowered.
-pub const KNOWN_APP_VS_CHROME: &[(StateKey<'static>, usize)] = &[
-    (
-        ("library-browse", "05-class-traits-and-features", "1200x800"),
-        1,
-    ),
-    (
-        (
-            "library-browse",
-            "05-class-traits-and-features",
-            "1920x1080",
-        ),
-        5,
-    ),
-];
+/// The only app-vs-chrome pairs a run may have, with the exact count for each state. It is
+/// empty: every app target and text clears every scroll bar and splitter. This list is code, not
+/// `baseline.json`, so no baseline refresh can add to it, and it may only shrink: a state with
+/// fewer pairs than listed fails the run until its line is removed or lowered.
+pub const KNOWN_APP_VS_CHROME: &[(StateKey<'static>, usize)] = &[];
 
 /// App-vs-chrome lines by state: a state that is not in `known` or has more pairs than
 /// listed, then a listed state with fewer pairs (the list is stale). Both fail a run. A

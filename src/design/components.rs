@@ -543,7 +543,10 @@ impl<'a> Action<'a> {
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
-    /// Align a quiet action's word with the text above it. Its target extends into the gutter.
+    /// Align a quiet action's words with the text above it. Its padding, and any icon, hang left
+    /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
+    /// then sits in the message's icon column. Outside a message, give it no icon, so its target
+    /// reaches only `S` into the pane's gutter.
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
         self
@@ -636,9 +639,13 @@ impl<'a> Action<'a> {
         if self.kind == Kind::Quiet { S } else { M }
     }
 
+    fn icon_width(&self) -> f32 {
+        self.icon.map_or(0.0, |_| ICON_SLOT)
+    }
+
     /// The width before any text is cut, using the same parts as the painted button.
     pub fn natural_width(&self, ui: &Ui) -> f32 {
-        let icon = self.icon.map_or(0.0, |_| Type::Body.size() + XS + 2.0);
+        let icon = self.icon_width();
         let key = self
             .key
             .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
@@ -650,7 +657,7 @@ impl<'a> Action<'a> {
         let c = colors();
         let font = self.font().font(ui);
         let padding = self.padding();
-        let icon_width = self.icon.map_or(0.0, |_| Type::Body.size() + XS + 2.0);
+        let icon_width = self.icon_width();
         let key_room = self
             .key
             .map_or(0.0, |key| number_width(ui, key, &Type::Small.font(ui)) + S);
@@ -676,12 +683,16 @@ impl<'a> Action<'a> {
             .max(self.height)
             .max(self.min_width.unwrap_or_default());
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
-            let size = vec2(width, self.height);
+            // The words start at the text edge; the padding and any icon hang in the gutter. The
+            // row allocates all but the icon, so the next item keeps the same gap after the
+            // target as it has after a `line_start` action without an icon.
+            let size = vec2(width - icon_width, self.height);
             let (id, allocated) = ui.allocate_space(size);
             let rect = ui
                 .layout()
                 .align_size_within_rect(size, allocated)
                 .translate(vec2(-padding, 0.0));
+            let rect = rect.with_min_x(rect.min.x - icon_width);
             (rect, ui.interact(rect, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
@@ -3433,6 +3444,133 @@ mod tests {
                 .expect("The count and heading share one label");
             assert_eq!(text.galley.rows.len(), 1, "The summary fits on one line");
         }
+    }
+
+    /// The painted text shapes of a harness: each galley's words and where they are drawn.
+    fn painted_texts(harness: &egui_kittest::Harness<'_>) -> Vec<(String, Rect)> {
+        fn walk(shape: &egui::Shape, out: &mut Vec<(String, Rect)>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                egui::Shape::Text(text) => out.push((
+                    text.galley.job.text.clone(),
+                    Rect::from_min_size(text.pos, text.galley.size()),
+                )),
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        for shape in &harness.output().shapes {
+            walk(&shape.shape, &mut out);
+        }
+        out
+    }
+
+    /// SD1: an Undo below its message starts its words at the message's words; its icon hangs
+    /// over the message's icon column. Beside the message, it keeps its icon before its words.
+    #[test]
+    fn iter18_a_sd1_a_wrapped_undo_starts_its_words_at_the_message_words() {
+        const TEXT: &str = "Ashen Reaches is registered and used here.";
+        const UNDO: &str = "Undo package registration";
+        for (width, wraps) in [(260.0, true), (360.0, true), (900.0, false)] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 200.0))
+                .build_ui(|ui| {
+                    undo_message(ui, Tone::Success, TEXT, UNDO);
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts = painted_texts(&harness);
+            let left = |words: &str| {
+                texts
+                    .iter()
+                    .find(|(text, _)| text == words)
+                    .map(|(_, rect)| *rect)
+                    .unwrap_or_else(|| panic!("{words} is painted at {width}: {texts:?}"))
+            };
+            let (message, action, icon) = (left(TEXT), left(UNDO), left(icons::UNDO));
+            if wraps {
+                assert!(
+                    action.top() >= message.bottom() - 1.0
+                        && (action.left() - message.left()).abs() <= 1.0
+                        && icon.right() <= message.left(),
+                    "SD1-wrapped at {width}: message {message:?}, Undo {action:?}, icon {icon:?}"
+                );
+            } else {
+                assert!(
+                    (action.center().y - message.center().y).abs() < Density::Read.control()
+                        && icon.left() > message.right()
+                        && action.left() > icon.right(),
+                    "SD1-beside at {width}: message {message:?}, Undo {action:?}, icon {icon:?}"
+                );
+            }
+        }
+    }
+
+    /// SD1, ST2: a `line_start` quiet action puts its words at the text edge. With an icon, the
+    /// icon and the padding hang left of it (`S + ICON_SLOT`); without one, only the padding.
+    /// A normal quiet action keeps its icon and words inside its target from the edge.
+    #[test]
+    fn iter18_a_a_line_start_action_hangs_its_icon_and_padding() {
+        const EDGE: f32 = 60.0;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 200.0))
+            .build_ui(|ui| {
+                for (label, icon, line_start) in [
+                    ("Undo heading change", true, true),
+                    ("Clear value", false, true),
+                    ("Undo replacement", true, false),
+                ] {
+                    ui.horizontal(|ui| {
+                        ui.add_space(EDGE - ui.cursor().left());
+                        let action = Action::quiet(label);
+                        let action = if icon {
+                            action.icon(icons::UNDO)
+                        } else {
+                            action
+                        };
+                        let action = if line_start {
+                            action.line_start()
+                        } else {
+                            action
+                        };
+                        let _ = action.show(ui);
+                    });
+                }
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts = painted_texts(&harness);
+        let node = |name: &str| {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label(name).rect()
+        };
+        let words = |label: &str| {
+            texts
+                .iter()
+                .find(|(text, _)| text == label)
+                .map(|(_, rect)| rect.left())
+                .unwrap()
+        };
+        let hanging = node("Undo heading change");
+        assert!(
+            (words("Undo heading change") - EDGE).abs() <= 0.5
+                && (hanging.left() - (EDGE - S - ICON_SLOT)).abs() <= 0.5,
+            "hang-icon: words {}, target {hanging:?}",
+            words("Undo heading change")
+        );
+        let plain = node("Clear value");
+        assert!(
+            (words("Clear value") - EDGE).abs() <= 0.5 && (plain.left() - (EDGE - S)).abs() <= 0.5,
+            "hang-plain: words {}, target {plain:?}",
+            words("Clear value")
+        );
+        let normal = node("Undo replacement");
+        assert!(
+            (normal.left() - EDGE).abs() <= 0.5
+                && (words("Undo replacement") - (EDGE + S + ICON_SLOT)).abs() <= 0.5,
+            "no-hang: words {}, target {normal:?}",
+            words("Undo replacement")
+        );
     }
 
     #[test]

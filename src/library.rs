@@ -273,10 +273,10 @@ impl HeadingChoice {
         let fix = self.fix.as_ref().is_some_and(|(text, action, _)| {
             design::message_with_action(ui, Tone::Warning, text, action)
         });
-        // A quiet action at the start of a line: its word starts at the text edge.
+        // A quiet action at the start of a line, outside a message: no icon, and its words
+        // start at the text edge.
         let undo = self.undo
             && Action::quiet("Undo heading change")
-                .icon(icons::UNDO)
                 .line_start()
                 .show(ui)
                 .clicked();
