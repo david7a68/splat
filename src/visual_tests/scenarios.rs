@@ -2622,7 +2622,9 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
-    const CHANGED_ON_DISK: &str = "changed on disk. Your draft is safe until you choose.";
+    // One disk-change form, as World and Library: it names the encounter, never its file.
+    const CHANGED_ON_DISK: &str =
+        "This encounter changed on disk. Your draft is safe until you choose.";
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD: &str = "Reload and lose my draft";
     const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
@@ -2664,7 +2666,7 @@ pub mod encounter_build {
         d.expect(READY_TO_RUN);
         let sizes = [SMALL, DEFAULT, LARGE];
         let encounters = sizes.map(|size| d.at_size(size, |d| page_title_left(d, NAV_ENCOUNTERS)));
-        // Must stay true: the content below the header keeps the page's `L` gutter.
+        // FA5 (round 25 replaces round 24's gutter): the first column starts at the title's x.
         let content = sizes.map(|size| d.at_size(size, |d| d.painted_left(READY_TO_RUN)));
         d.click(NAV_PARTY);
         d.expect("Party");
@@ -2682,14 +2684,14 @@ pub mod encounter_build {
             ),
         );
         d.observe(
-            "iter-24-B-FE4-gutter",
+            "iter-25-B-FA5",
             encounters.iter().zip(&content).all(|(title, content)| {
-                title.zip(*content).is_some_and(|(title, content)| {
-                    (content - title - (crate::design::L - crate::design::M)).abs() < 0.5
-                })
+                title
+                    .zip(*content)
+                    .is_some_and(|(title, content)| (content - title).abs() < 0.5)
             }),
             format!(
-                "Title x {encounters:?}, list heading x {content:?}: the list keeps its gutter"
+                "Title x {encounters:?}, list heading x {content:?}: one edge at 960, 1200, 1920"
             ),
         );
         // T5.3 measures the whole build, so it starts from the cold start.
@@ -2958,6 +2960,11 @@ pub mod encounter_build {
         d.type_into("Read-aloud and notes", DRAFT_WORDS);
         d.click(SAVE_ENCOUNTER);
         d.expect(CHANGED_ON_DISK);
+        d.observe(
+            "iter-25-B-FE3",
+            !d.has_containing("Bridge Ambush.md changed on disk"),
+            "The disk-change warning names the encounter, not its file",
+        );
         d.observe(
             "iter-15-B-EC-safe",
             std::fs::read_to_string(&file).is_ok_and(|text| text == outside)
@@ -5407,6 +5414,23 @@ pub mod nav_state {
         go_campaign(d);
         let campaign = d.in_view_containing(CAMPAIGN_TAB_TEXT);
         d.state("campaign-returned", Sizes::All);
+        // AF1: the save state and Save run settings share one row, with Save at its end, at
+        // 960, 1200 and 1920.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (state, save) = d.at_size(size, |d| {
+                (
+                    d.painted_rect_in("No changes", egui::Rect::EVERYTHING),
+                    d.place_of("Save run settings"),
+                )
+            });
+            d.observe(
+                "iter-25-B-AF1",
+                state.zip(save).is_some_and(|(state, save)| {
+                    (state.center().y - save.center().y).abs() <= 1.0 && state.right() < save.left()
+                }),
+                format!("At {size:?}: No changes {state:?}, Save run settings {save:?}"),
+            );
+        }
 
         go_party(d);
         let party = d.in_view_containing(MEMBER) && d.in_view_containing(SHEET_PAGE_TEXT);
@@ -6719,6 +6743,28 @@ pub mod run_edge_states {
             "Recovery selection",
             d.has_containing("Changed on disk") && d.has_containing("Copy 2"),
             "Recovery copies show their number, and the preserved file is marked Changed on disk",
+        );
+        // FJ6: every paused run's line two starts with the run icon, also the one whose first
+        // part is the disk warning.
+        let mut details = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.contains("Paused") && !words.contains('\n') && words.contains(" · ") {
+                details.push(words.clone());
+            }
+        });
+        let run = crate::design::icons::RUN;
+        d.observe(
+            "iter-25-B-FJ6",
+            details.len() >= 3
+                && details.iter().any(|words| {
+                    words.starts_with(&format!(
+                        "{run} {} Changed on disk",
+                        crate::design::icons::WARN
+                    ))
+                })
+                && details.iter().all(|words| words.starts_with(run)),
+            format!("Each paused run's line two starts with the run icon: {details:?}"),
         );
         d.click(RESUME);
         let resumed_copy = d
@@ -12219,7 +12265,44 @@ pub mod encounter_groups {
         d.type_text("Ash Pack");
         assert!(d.is_disabled(SAVE_GROUP));
         d.expect("Add a creature first");
+        // AH1: Save refuses the empty group, so the state says Invalid, not Unsaved.
+        d.observe(
+            "iter-25-B-AH1-list",
+            d.visible_text("Invalid") && !d.visible_text("Unsaved"),
+            "An empty new group says Invalid beside its blocked Save",
+        );
         d.state("group-rejected-empty", Sizes::Default);
+        // FH3, SH2: a tall window shows every result and a short one scrolls them; each `Add`
+        // keeps its x either way.
+        // A proof aside: the search is empty again after it.
+        let lanes = d.aside(|d| {
+            d.type_into(FIND, "o");
+            let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
+                d.at_size(size, |d| {
+                    let adds = right_edges(d, ADD);
+                    let bar = adds
+                        .iter()
+                        .copied()
+                        .reduce(f32::max)
+                        .is_some_and(|edge| scroll_bar_right_of(d, edge));
+                    (adds, bar)
+                })
+            });
+            d.press(Key::Backspace);
+            lanes
+        });
+        d.observe(
+            "iter-25-B-FH3",
+            !lanes[0].1
+                && lanes[1].1
+                && !lanes[0].0.is_empty()
+                && !lanes[1].0.is_empty()
+                && lanes
+                    .iter()
+                    .flat_map(|(adds, _)| adds)
+                    .all(|x| (x - lanes[0].0[0]).abs() <= 0.5),
+            format!("Add right edges and scroll bar, tall then short: {lanes:?}"),
+        );
         d.type_into(FIND, "wolf");
         d.state("group-find-creature", Sizes::Default);
         d.click_beside_exact("Wolf", ADD);
@@ -12337,6 +12420,14 @@ pub mod encounter_groups {
             "iter-23-B-FI1",
             d.visible_text(REPLACED) && d.has("Undo replacement"),
             "Use names the replacement and offers Undo replacement",
+        );
+        // FH5, SH1: a finished change is a success message, with the success bar.
+        let replaced = d.painted_rect_in(REPLACED, egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-25-B-FH5",
+            replaced
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("The replacement result {replaced:?} has the success bar"),
         );
         d.state("group-member-replaced", Sizes::Default);
         // An unrelated edit keeps the result; Undo puts back only the creature, and its words
@@ -12470,7 +12561,9 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             d.visible_text("XP 50")
-                && d.has_containing("Member 1, Unknown creature: not in this campaign’s packages")
+                && d.has_containing(
+                    "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
+                )
                 && d.visible_text("Will\u{a0}add: 1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
@@ -12483,7 +12576,7 @@ pub mod encounter_groups {
             "T13.1",
             d.visible_text("1 of 3 can join")
                 && d.has_containing("not in this campaign’s packages")
-                && d.has_containing("Member 2, Cinder Wolf:"),
+                && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         let tones = (
@@ -12881,6 +12974,27 @@ fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
     xs
 }
 
+/// Egui's scroll bar just right of `edge`: an unnamed thin node with no role.
+fn scroll_bar_right_of(d: &Driver<'_>, edge: f32) -> bool {
+    d.nodes().iter().any(|node| {
+        node.role == egui::accesskit::Role::Unknown
+            && node.name.is_empty()
+            && node.rect.width() <= crate::design::M
+            && node.rect.height() >= crate::design::XXL
+            && node.rect.left() >= edge - 0.5
+            && node.rect.left() <= edge + crate::design::XL
+    })
+}
+
+/// The right edges of every control named `name`, top to bottom.
+fn right_edges(d: &Driver<'_>, name: &str) -> Vec<f32> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| node.name == name && node.in_view())
+        .map(|node| node.rect.right())
+        .collect()
+}
+
 /// Egui's scroll bar beside a group editor's members column: an unnamed thin node with no
 /// role, just right of the member menus.
 fn members_scroll_bar(d: &Driver<'_>) -> bool {
@@ -12938,8 +13052,35 @@ pub mod encounter_owned_groups {
     pub fn run(d: &mut Driver<'_>) {
         // The page lists what can arrive anywhere. An encounter's own stay out of the way.
         d.expect("GROUPS");
+        // FB2: opening Groups makes the page scroll at 960, and no row action moves.
+        let actions = |d: &Driver<'_>| {
+            let menus: Vec<f32> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("More actions for ") && node.in_view())
+                .map(|node| node.rect.right())
+                .collect();
+            let bar = menus
+                .iter()
+                .copied()
+                .reduce(f32::max)
+                .is_some_and(|edge| scroll_bar_right_of(d, edge));
+            (right_edges(d, "Resume"), menus, bar)
+        };
+        let closed = d.at_size(SMALL, actions);
         d.state("groups-for-encounters-closed", Sizes::All);
         d.click_starting("GROUPS");
+        let open = d.at_size(SMALL, actions);
+        d.observe(
+            "iter-25-B-FB2",
+            !closed.2
+                && open.2
+                && !closed.0.is_empty()
+                && closed.0.first() == open.0.first()
+                && !closed.1.is_empty()
+                && closed.1.first() == open.1.first(),
+            format!("At 960, Resume, row menus and scroll bar, closed {closed:?}, open {open:?}"),
+        );
         d.check_tab_order("encounters, with groups for encounters closed");
         d.observe(
             "T13.5",
@@ -13164,6 +13305,43 @@ pub mod encounter_owned_groups {
         d.click(&edit_group(GROUP_WATCH));
         d.expect("A run of any encounter offers this group.");
         d.open_combo_at(BELONGS_DROPDOWN);
+        // FB8: the open menu is as wide as its control at 960, 1200 and 1920, while it stays
+        // open across the sizes. Each choice sits the menu frame inside both control edges.
+        let frame = f32::from(d.app_style().spacing.menu_margin.left)
+            + d.app_style().visuals.window_stroke.width;
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (control, choices) = d.at_size(size, |d| {
+                (
+                    d.place_of("Belongs to: Any encounter"),
+                    ["Any encounter", RUN_ARENA].map(|name| d.place_of(name)),
+                )
+            });
+            d.observe(
+                "iter-25-B-FB8",
+                control.is_some_and(|control| {
+                    choices.iter().all(|choice| {
+                        choice.is_some_and(|choice| {
+                            let left = choice.left() - control.left();
+                            let right = control.right() - choice.right();
+                            (left - right).abs() <= 1.0 && right <= frame + 1.0
+                        })
+                    })
+                }),
+                format!(
+                    "At {size:?} the Belongs to choices {choices:?} fill the control {control:?}"
+                ),
+            );
+        }
+        // A proof aside: Escape closes it with nothing chosen, and it opens again.
+        d.aside(|d| {
+            d.press(Key::Escape);
+            d.observe(
+                "iter-25-B-FB8-escape",
+                !d.has(RUN_ARENA) && d.has("Belongs to: Any encounter"),
+                "Escape closes the Belongs to menu and keeps Any encounter",
+            );
+            d.open_combo_at(BELONGS_DROPDOWN);
+        });
         d.state("belongs-to-open", Sizes::Default);
         d.click(RUN_ARENA);
         d.expect("Only runs of this encounter offer this group.");
@@ -13270,8 +13448,8 @@ pub mod encounter_owned_groups {
                 let mut placed = true;
                 let mut detail = String::new();
                 for (fault, link) in [
-                    ("Member 1, Unknown creature", "Campaign → Packages"),
-                    ("Member 2, Cinder Wolf: Maximum HP", "Edit group"),
+                    ("Unknown creature · line\u{a0}13:", "Campaign → Packages"),
+                    ("Cinder Wolf · line\u{a0}14: Maximum HP", "Edit group"),
                 ] {
                     let text = d.painted_rect_in(fault, egui::Rect::EVERYTHING);
                     let near = |at: &Pos2| {
@@ -14101,9 +14279,31 @@ pub mod session_plan_groups {
             d.has_containing("Session 1: The Crossing"),
             "Assembling a group stays on the session's page",
         );
+        // AK1: the empty group's reason has a reserved place, so adding the first creature moves
+        // no field. AH1: Save refuses an empty group, so it says Invalid.
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let empty =
+            sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+        d.observe(
+            "iter-25-B-AH1",
+            d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.has("Add a creature first"),
+            "An empty new group says Invalid beside its blocked Save",
+        );
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
         d.click_beside_exact("Wolf", ADD);
+        let assembled =
+            sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+        d.observe(
+            "iter-25-B-AK1",
+            !d.has("Add a creature first")
+                && empty.iter().all(Option::is_some)
+                && empty == assembled
+                && d.visible_text("Unsaved"),
+            format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
+        );
         d.state("plan-group-assembled", Sizes::All);
         for size in [DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| group_field_edges(d, "Ash Pack"));
@@ -14237,6 +14437,25 @@ pub mod session_plan_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("Back to the plan");
         d.state("plan-group-edit", Sizes::Default);
+        // FK1: the first edit adds the campaign-switch reason in its reserved place, so no field
+        // moves. A proof aside: Discard puts the clean group back.
+        d.aside(|d| {
+            let sizes = [SMALL, DEFAULT, LARGE];
+            let clean =
+                sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+            d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
+            let changed =
+                sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+            d.observe(
+                "iter-25-B-FK1",
+                d.has_containing("Save or discard to switch campaign.")
+                    && clean.iter().all(Option::is_some)
+                    && clean == changed,
+                format!("Find a creature top, clean {clean:?}, changed {changed:?}"),
+            );
+            d.click("Discard");
+            d.expect(&format!("Group name: {GROUP_RIVALS}"));
+        });
         d.click("Back to the plan");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
 
@@ -14731,7 +14950,7 @@ pub mod session_plan_groups {
             d.click(&format!("Plan {name}"));
         }
         const FAULT: &str =
-            "Member 1, Cinder Wolf: Maximum HP would become −28. It must be 1 or more.";
+            "Cinder Wolf · line\u{a0}13: Maximum HP would become −28. It must be 1 or more.";
         d.expect(FAULT);
         d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
             show_plan(d);
@@ -14743,18 +14962,20 @@ pub mod session_plan_groups {
             let size = d.window_size();
             let tones = (
                 tones_where(d, |text| text == FAULT),
+                // FK5: `0 of 1 can join` and the member's fault say it; no third line does.
                 tones_where(d, |text| text.starts_with("No members can join")),
                 // The summary joins a member's words with no-break spaces.
                 tones_where(d, |text| {
                     text.replace('\u{a0}', " ")
                         .contains("Maximum HP would become −28")
-                        && !text.starts_with("Member 1")
+                        && text != FAULT
                 }),
             );
             d.observe(
                 "iter-22-B-FT1-plan",
                 tones.0 == ["error"]
-                    && tones.1 == ["warning"]
+                    && tones.1.is_empty()
+                    && d.has_containing("0 of 1 can join")
                     && !tones.2.is_empty()
                     && tones.2.iter().all(|tone| *tone == "none"),
                 format!(
@@ -16104,6 +16325,17 @@ pub mod session_plan {
         d.click("Make it yours");
         d.expect("6. Werewolf copy");
         d.state("make-it-yours", Sizes::All);
+        // AK2, FK3: the Name field and Save creature end at one edge, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (name, save) =
+                d.at_size(size, |d| (d.place_of("Name"), d.place_of("Save creature")));
+            d.observe(
+                "iter-25-B-AK2",
+                name.zip(save)
+                    .is_some_and(|(name, save)| (name.right() - save.right()).abs() <= 0.5),
+                format!("At {size:?}: Name {name:?}, Save creature {save:?}"),
+            );
+        }
         d.observe(
             "T12.0",
             d.has("Save creature") && d.has_containing("Hit points"),

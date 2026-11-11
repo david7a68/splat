@@ -172,6 +172,9 @@ pub(crate) struct RosterFault {
     pub name: String,
     pub line: usize,
     pub problem: String,
+    /// The roster slot this row reads as, so the row itself can carry the mark (FC3): the key
+    /// its Note cell names, or the one the reader gives a row without one.
+    pub slot: String,
 }
 
 impl RosterFault {
@@ -180,6 +183,16 @@ impl RosterFault {
     pub(crate) fn words(&self) -> String {
         row_fault_words(&self.name, self.line, &self.problem)
     }
+}
+
+/// Where the editor leaves the roster rows that have an unread row fault, by slot and line.
+fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
+    egui::Id::new(("roster_fault_rows", draft))
+}
+
+/// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
+fn roster_row_fault_words(line: usize) -> String {
+    format!("Line {line} not read")
 }
 
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
@@ -219,9 +232,14 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
                     .cloned()
                     .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
             };
+            let slot = row
+                .get(4)
+                .and_then(|cell| splat::content::list_formats::machine(&cell.value, "slot"))
+                .unwrap_or_else(|| format!("actor_line_{line}"));
             Some(RosterFault {
                 name,
                 line,
+                slot,
                 // A row fault names its line itself, so it needs the words without it. Rows are read
                 // from the file, never from a saved copy; `unread_notes` shows any other flag.
                 problem: flag.words()?,
@@ -597,8 +615,12 @@ impl Draft {
         if self.baseline.is_none() {
             self.path = named_note_path(&campaign.path, "Encounters", &self.name)?;
         }
-        self.recovery
-            .check(&campaign.path, &mut self.path, self.baseline.as_deref())?;
+        self.recovery.check(
+            &campaign.path,
+            &mut self.path,
+            self.baseline.as_deref(),
+            "encounter",
+        )?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
         let text = self.write_text(&snapshot)?;
@@ -960,7 +982,7 @@ impl CreatureEditor {
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
         self.recovery
-            .check(root, &mut self.path, Some(&self.baseline))?;
+            .check(root, &mut self.path, Some(&self.baseline), "creature")?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
@@ -1088,6 +1110,13 @@ fn editor_save_state(
             .blocked(blocked)
             .show(ui)
             .clicked()
+}
+
+/// The width a vertical scroll area's content keeps whether or not its bar shows: the room
+/// before the area, less the bar's lane. Content set to this width does not move when a list
+/// grows long enough to scroll.
+pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
+    (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
 }
 
 fn grouped(value: u64) -> String {
@@ -1691,6 +1720,9 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
+    /// AB1: the run list could not be read, and an issue says why. In progress and History then
+    /// say they cannot be read instead of their empty states. It ends when a read succeeds.
+    runs_unread: bool,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
@@ -1891,10 +1923,12 @@ impl Snapshot {
             .cloned()
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
-        let runs = match crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)
-        {
-            Ok(runs) => runs,
+        let directory = options.directory(campaign)?;
+        let (runs, runs_unread) = match crate::encounter_run::Run::list(&directory, campaign.id) {
+            Ok(runs) => (runs, false),
             Err(error) => {
+                // A folder that was never made holds no runs yet. One the timeline names, or
+                // one that is there but cannot be read, is a fault the lists must not hide.
                 let folder = crate::sessions::folder(campaign).ok();
                 let timeline_names_runs = folder
                     .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
@@ -1902,10 +1936,11 @@ impl Snapshot {
                         text.lines()
                             .any(|line| line.trim_start().starts_with("run:"))
                     });
-                if timeline_names_runs {
+                let unread = timeline_names_runs || directory.exists();
+                if unread {
                     issues.push(error);
                 }
-                Vec::new()
+                (Vec::new(), unread)
             }
         };
         let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
@@ -1948,6 +1983,7 @@ impl Snapshot {
             saved_options: options,
             campaign_text: document.text,
             runs,
+            runs_unread,
             catalogue,
             creatures,
             templates,
@@ -2110,8 +2146,6 @@ fn edit_input(ctx: &egui::Context) -> bool {
     })
 }
 
-/// The page's own gutter beyond the shell's `M`: the content keeps `L`, the header does not.
-const PAGE_GUTTER: f32 = design::L - design::M;
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -2966,7 +3000,11 @@ impl Encounters {
     /// numbers a DM most often changes have fields of their own.
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
-            if let Some(keep) = editor.recovery.show(ui, &editor.text().unwrap_or_default()) {
+            if let Some(keep) =
+                editor
+                    .recovery
+                    .show(ui, &editor.text().unwrap_or_default(), "creature")
+            {
                 if keep {
                     if let Some(change) = editor.recovery.accept() {
                         editor.path = change.path;
@@ -3033,8 +3071,9 @@ impl Encounters {
             design::message(ui, Tone::Error, error);
         }
         // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
+        // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
         design::field(ui, "Name", None, None, |ui| {
-            let width = ui.available_width() - 2.0 * design::S;
+            let width = ui.available_width();
             design::text_input(ui, "Name", &mut editor.fields.name, "Name", width)
         });
         let focus_hp = std::mem::take(&mut editor.focus);
@@ -3294,11 +3333,13 @@ impl Encounters {
             {
                 Ok(runs) => {
                     s.runs = runs;
+                    s.runs_unread = false;
                     s.issues
                         .retain(|issue| !issue.starts_with("Run folder not found"));
                 }
                 Err(error) => {
                     s.runs.clear();
+                    s.runs_unread = true;
                     if !s.issues.contains(&error) {
                         s.issues.push(error);
                     }
@@ -3313,14 +3354,9 @@ impl Encounters {
         party: &Party,
         story: &Story<'_>,
     ) {
-        // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
-        // quiet action at its text edge (`.line_start()`) never reaches the splitter. The page
-        // header gives that gutter back: its title starts at the shell's edge, as on every page.
-        let room = ui.available_rect_before_wrap();
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + PAGE_GUTTER)),
-            |ui| self.show_page(ui, campaigns, party, story),
-        );
+        // FA5: the title and the first column start at the shell's edge (x 148), as on World,
+        // Library and Campaign. A quiet action at its text edge uses `.line_start()`.
+        self.show_page(ui, campaigns, party, story);
     }
 
     fn show_page(
@@ -3454,7 +3490,7 @@ impl Encounters {
         if design::undo_message(
             ui,
             if deleted.unsent.is_empty() {
-                Tone::Info
+                Tone::Success
             } else {
                 Tone::Warning
             },
@@ -3556,13 +3592,13 @@ impl Encounters {
                 counts.join(" · ")
             })
             .unwrap_or_else(|| "Reading encounters…".into());
-        // FE4: the title starts at the shell's edge (x 148), as Library's and World's do; only
-        // the content below the header keeps the page gutter. The header is a child that the
-        // page only steps past, so the content's left edge stays where it is.
+        // FE4, FA5: the title starts at the shell's edge (x 148), as Library's and World's do,
+        // and the content below it starts there too. The header is a child that the page only
+        // steps past.
         let room = ui.available_rect_before_wrap();
         let mut header = ui.new_child(
             egui::UiBuilder::new()
-                .max_rect(room.with_min_x(room.min.x - PAGE_GUTTER))
+                .max_rect(room)
                 .layout(egui::Layout::top_down(egui::Align::LEFT)),
         );
         {
@@ -3725,19 +3761,24 @@ impl Encounters {
             .run
             .as_ref()
             .and_then(crate::encounter_run::Run::live_info);
-        let page = history::arrange(
+        let mut page = history::arrange(
             &snapshot.templates,
             &snapshot.runs,
             live.as_ref(),
             story.events,
             story.sessions,
         );
+        page.runs_unread = snapshot.runs_unread;
         let start_blocked = self.start_blocked();
         let mut action = None;
+        // FB2: the list keeps the scroll bar's lane whether or not the bar shows, so opening
+        // Groups moves no row action.
+        let lane = scroll_lane(ui);
         egui::ScrollArea::vertical()
             .id_salt("encounter_list")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_max_width(lane);
                 in_progress_list(
                     ui,
                     &page,
@@ -3893,6 +3934,14 @@ impl Encounters {
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
             let notes = unread_notes(&draft.path, &draft.flags, &faults);
+            // FC3: the roster marks each row that blocks Start fight, by its slot.
+            let rows: Arc<Vec<(String, usize)>> = Arc::new(
+                faults
+                    .iter()
+                    .map(|fault| (fault.slot.clone(), fault.line))
+                    .collect(),
+            );
+            ui.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
             (notes, faults.len(), draft.path.clone())
         });
         let dirty = self.encounter_dirty();
@@ -4592,10 +4641,14 @@ impl Encounters {
             } else {
                 0.0
             };
+        // FH3, SH2: the results keep the scroll bar's lane whether or not the bar shows, so each
+        // `Add` keeps its x as the DM types and the list grows or shrinks.
+        let lane = scroll_lane(ui);
         egui::ScrollArea::vertical()
             .id_salt(("encounter_results", &query))
             .auto_shrink([false, false])
             .show_rows(ui, row_height, matches.len(), |ui, range| {
+                ui.set_max_width(lane);
                 for c in &matches[range] {
                     ui.push_id(c.id, |ui| {
                         let (add, read) = creature_result_row(ui, c, "Add", (roster.already)(c));
@@ -4633,6 +4686,8 @@ impl Encounters {
                 .id(("encounter_roster", draft.id))
                 .max_rect(area.with_min_x(area.min.x - design::S)),
             |ui| {
+        // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
+        let lane = scroll_lane(ui) - design::S;
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
@@ -4640,7 +4695,7 @@ impl Encounters {
                 egui::Frame::new()
                     .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
                     .show(ui, |ui| {
-                ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
                 if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
@@ -4764,6 +4819,9 @@ impl Encounters {
                     .count()
             })
             .collect();
+        let fault_rows = ui
+            .data(|data| data.get_temp::<Arc<Vec<(String, usize)>>>(roster_fault_rows_id(draft.id)))
+            .unwrap_or_default();
         let undo_key = ui.id().with(("replacement_undo", draft.id));
         let undo = ui
             .ctx()
@@ -4772,7 +4830,7 @@ impl Encounters {
             if undo.after == draft.setup.roster {
                 // The result is a message, so its Undo keeps the undo icon as every other
                 // Undo does.
-                if design::undo_message(ui, Tone::Info, &undo.words, "Undo replacement") {
+                if design::undo_message(ui, Tone::Success, &undo.words, "Undo replacement") {
                     draft.setup.roster = undo.before;
                 }
             } else {
@@ -4838,7 +4896,16 @@ impl Encounters {
                     || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
                 // The row states the fault in the tone of the message above the roster.
-                let (fault_icon, fault_color) = missing_creature_mark(unreadable);
+                let row_fault = fault_rows
+                    .iter()
+                    .find(|(key, _)| *key == slot.key)
+                    .map(|(_, line)| *line)
+                    .filter(|_| !missing);
+                let (fault_icon, fault_color) = if row_fault.is_some() {
+                    (icons::WARN, colors().result.warning)
+                } else {
+                    missing_creature_mark(unreadable)
+                };
                 // Two files of one identity: the row says the short cause, and the message above
                 // the roster and the row's hover name the files once.
                 let fault_words = unreadable.map_or(MISSING_CREATURE, |note| {
@@ -4853,6 +4920,14 @@ impl Encounters {
                 });
                 let detail = if missing {
                     format!("{side_icon} {side} · {fault_icon} {fault_words}")
+                } else if let Some(line) = row_fault {
+                    // FC3: the row that blocks Start fight says so itself, before its stats.
+                    let words = roster_row_fault_words(line);
+                    if detail.is_empty() {
+                        format!("{side_icon} {side} · {fault_icon} {words}{identity}")
+                    } else {
+                        format!("{side_icon} {side} · {fault_icon} {words} · {detail}{identity}")
+                    }
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -4903,7 +4978,7 @@ impl Encounters {
                                 )
                                 .truncate(),
                             );
-                            if missing {
+                            if missing || row_fault.is_some() {
                                 let split = detail.find(fault_icon).unwrap_or(0);
                                 let mut job = egui::text::LayoutJob::default();
                                 for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + fault_icon.len()], fault_color), (&detail[split + fault_icon.len()..], colors().muted)] {
@@ -5216,7 +5291,33 @@ impl Encounters {
                 // other change too.
                 let save_key = blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                ui.horizontal(|ui| {
+                // AF1: the state, Discard and the reasons start the row and Save ends it, as on
+                // every save row. Without room, the state's words wrap before Save.
+                let pressed = ui
+                    .allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let pressed = {
+                        if run_files > 0 && !run_open {
+                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
+                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
+                            if move_runs {
+                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
+                                    Ok(warning) => { settings_saved = true; error = warning; },
+                                    Err(e) => error = Some(e),
+                                }
+                            }
+                            leave_runs
+                        } else {
+                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
+                                .blocked(blocked).show(ui).clicked();
+                            design::blocked_reason(ui, blocked.filter(|_| changed));
+                            pressed
+                        }
+                        };
+                        ui.with_layout(
+                            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                            |ui| {
                 if changed {
                     self.discarded_options = None;
                     design::status(
@@ -5257,27 +5358,9 @@ impl Encounters {
                 if snapshot.options != snapshot.saved_options {
                     design::blocked_reason(ui, Some(draft_switch_reason()));
                 }
-                });
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if run_files > 0 && !run_open {
-                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
-                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
-                            if move_runs {
-                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
-                                    Ok(warning) => { settings_saved = true; error = warning; },
-                                    Err(e) => error = Some(e),
-                                }
-                            }
-                            leave_runs
-                        } else {
-                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
-                                .blocked(blocked).show(ui).clicked();
-                            design::blocked_reason(ui, blocked.filter(|_| changed));
-                            pressed
-                        }
+                            },
+                        );
+                        pressed
                     })
                     .inner;
                 if (pressed || save_key) && !run_open {
@@ -5314,6 +5397,8 @@ impl Encounters {
 use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
+#[cfg(test)]
+pub(crate) use list::{ENDED_UNREAD, UNFINISHED_UNREAD};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
@@ -5461,6 +5546,7 @@ mod tests {
             name: name.to_owned(),
             line,
             problem: String::new(),
+            slot: String::new(),
         };
         // A flag read back from a saved copy has only its sentence: it follows the file or the
         // row, and no line is added, so each names its line once.

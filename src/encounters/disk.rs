@@ -19,12 +19,19 @@ pub(super) struct Change {
     pub copies: Vec<String>,
 }
 
+/// The one sentence for a draft whose file changed on disk. It names what changed, never the file.
+pub(super) fn changed_on_disk(what: &str) -> String {
+    format!("This {what} changed on disk. Your draft is safe until you choose.")
+}
+
 impl Recovery {
+    /// `what` names the draft's kind in the DM's words: `encounter`, `group` or `creature`.
     pub fn check(
         &mut self,
         root: &Path,
         path: &mut String,
         baseline: Option<&str>,
+        what: &str,
     ) -> Result<(), String> {
         let Some(baseline) = baseline else {
             return Ok(());
@@ -57,10 +64,7 @@ impl Recovery {
                 text: current,
                 copies: peers.into_iter().map(|(path, _)| path).collect(),
             });
-            return Err(
-                "This entry changed on disk. Your draft is safe. Choose which version to keep."
-                    .into(),
-            );
+            return Err(changed_on_disk(what));
         }
         self.change = None;
         Ok(())
@@ -71,12 +75,9 @@ impl Recovery {
         self.change.take()
     }
 
-    pub fn show(&self, ui: &mut egui::Ui, draft: &str) -> Option<bool> {
+    pub fn show(&self, ui: &mut egui::Ui, draft: &str, what: &str) -> Option<bool> {
         let change = self.change.as_ref()?;
-        let mut messages = vec![format!(
-            "{} changed on disk. Your draft is safe until you choose.",
-            change.path
-        )];
+        let mut messages = vec![changed_on_disk(what)];
         messages.extend(
             change
                 .copies
@@ -400,9 +401,11 @@ impl super::Encounters {
             }
             return false;
         }
-        let choice = draft
-            .recovery
-            .show(ui, &draft.comparison_text(snapshot).unwrap_or_default());
+        let choice = draft.recovery.show(
+            ui,
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            "encounter",
+        );
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = draft.recovery.accept() {

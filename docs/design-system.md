@@ -1083,10 +1083,10 @@ icon and Connected; sheet and HP facts use muted Small.
 Names that need more than two lines use `RUN_COMPACT.name` and wrap in the shared name column. The numeric
 columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
 that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
-the whole name. Pictures align with the first name line. The fight panel and the Encounters page keep an `L`
-left gutter, so a quiet action at their text edge never reaches a splitter. The Encounters page header is outside
-that gutter: its title starts at the shared page edge, as every page title does. A scroll area there lets that
-action's press area reach `S` into the gutter.
+the whole name. Pictures align with the first name line. The fight panel keeps an `L`
+left gutter, so a quiet action at its text edge never reaches a splitter. The Encounters page has no gutter of its
+own: its title and its first column (`IN PROGRESS`, each row's name) start at the shared page edge, as World,
+Library and Campaign do, and a quiet action at that edge uses `line_start`.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
 drop the bonus before more if needed. Measure sync before folding conditions into a count. Keep the first

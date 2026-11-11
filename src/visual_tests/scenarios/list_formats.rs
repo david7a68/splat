@@ -401,6 +401,14 @@ pub fn run(d: &mut Driver<'_>) {
                 && name.as_deref() == Some(painted.as_str()),
             format!("Flagged summary {name:?} paints rows {rows:?}"),
         );
+        // FC6: `Will add:` stays on a line with its first member.
+        let plain: Vec<String> = rows.iter().map(|row| row.replace('\u{a0}', " ")).collect();
+        d.observe(
+            "iter-25-B-FC6",
+            plain.iter().any(|row| row.contains("Will add: "))
+                && plain.iter().all(|row| !row.trim_end().ends_with("Will add:")),
+            format!("Flagged summary rows {plain:?}"),
+        );
     });
     d.click(NAV_ENCOUNTERS);
     run_saved_encounter(d, "Shrine of Cinders");
@@ -660,6 +668,37 @@ pub fn run(d: &mut Driver<'_>) {
             ),
         );
     }
+    // FC3: the row that blocks Start fight marks itself, once, in the warning tone; no other
+    // row does.
+    let marked: Vec<String> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name.contains("not read") && node.name.contains("Line 20"))
+        .map(|node| node.name)
+        .collect();
+    let mut tones = Vec::new();
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text.contains("Line 20 not read") {
+            tones.extend(
+                text.galley
+                    .job
+                    .sections
+                    .iter()
+                    .filter(|section| {
+                        &text.galley.job.text[section.byte_range.clone()]
+                            == crate::design::icons::WARN
+                    })
+                    .map(|section| section.format.color),
+            );
+        }
+    });
+    d.observe(
+        "iter-25-B-FC3",
+        marked.len() == 1
+            && marked[0].contains(&format!("{} Line 20 not read", crate::design::icons::WARN))
+            && tones == [crate::design::colors().result.warning],
+        format!("Marked roster rows {marked:?}, icon colours {tones:?}"),
+    );
     d.state("flagged-roster-at-start-fight", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     fs::write(&roster_path, &roster_text).unwrap();

@@ -311,17 +311,27 @@ impl RunGroup {
         width: f32,
     ) -> String {
         let summary = self.member_summary();
-        // `Will add:` may end a line of its own, so the member after it stays whole.
         let (lead, members) = match summary.strip_prefix("Will add: ") {
-            Some(members) => ("Will\u{a0}add: ", members),
+            Some(members) => ("Will\u{a0}add:", members),
             None => ("", summary.as_str()),
         };
-        let members = members
+        let mut members: Vec<_> = members
             .split(", ")
             .map(|member| keep_whole(ui, font, member, width))
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("{lead}{members}")
+            .collect();
+        if lead.is_empty() {
+            return members.join(", ");
+        }
+        // FC6: `Will add:` stays on a line with its first member when the two fit one line;
+        // only a member too wide for that takes a line of its own.
+        let first = members.first().cloned().unwrap_or_default();
+        let together = format!("{lead}\u{a0}{first}");
+        if crate::design::number_width(ui, &together, font) <= width {
+            members[0] = together;
+            members.join(", ")
+        } else {
+            format!("{lead} {}", members.join(", "))
+        }
     }
 
     /// Every creature the note names, whether or not it can be found now.

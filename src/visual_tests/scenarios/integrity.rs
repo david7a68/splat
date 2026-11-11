@@ -159,8 +159,37 @@ fn missing_folders(
         "A missing run folder leaves no Resume or paused run",
         |d| !d.has("Resume") && !d.has_containing("Paused run ·"),
     );
+    // AB1: a list that cannot be read says so, never that it is empty.
+    let unread = |d: &Driver<'_>| {
+        d.has(crate::encounters::UNFINISHED_UNREAD)
+            && d.has(crate::encounters::ENDED_UNREAD)
+            && !d.has_containing("No unfinished runs")
+            && !d.has_containing("No ended fights yet")
+    };
+    d.observe(
+        "iter-25-B-AB1",
+        unread(d),
+        "In progress and History say the run folder cannot be read",
+    );
     d.state("run-folder-gone", Sizes::All);
-    fs::rename(&moved, run_folder).unwrap();
+    // A full reload reads the folder again, and still cannot.
+    d.click("Reload from disk");
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-reload",
+        unread(d),
+        "After a reload, the lists still say the run folder cannot be read",
+    );
+    fs::rename(&moved, &run_folder).unwrap();
+    d.app_mut().encounters.read_runs_again(campaign);
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-back",
+        !d.has(crate::encounters::UNFINISHED_UNREAD)
+            && !d.has(crate::encounters::ENDED_UNREAD)
+            && d.has_containing(&runs[0].encounter),
+        "When the folder is back, its runs show again",
+    );
     d.click(NAV_SESSIONS);
     fs::rename(folder, campaign.path.join("Moved sessions")).unwrap();
     d.app_mut().sessions.refresh();

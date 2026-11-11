@@ -59,6 +59,9 @@ struct GroupSetup {
     #[serde(flatten)]
     extra: Mapping,
 }
+/// Why Save group waits on an empty group.
+const EMPTY_REASON: &str = "Add a creature first";
+
 #[derive(Clone)]
 pub(super) struct GroupDraft {
     recovery: super::disk::Recovery,
@@ -406,38 +409,44 @@ impl GroupDraft {
                 "This campaign no longer has the encounter this group belongs to. Under {BELONGS_TO}, choose another, or {ANY_ENCOUNTER}."
             ));
         }
-        for (index, member) in self.setup.members.iter().enumerate() {
-            let what = format!("Member {}", index + 1);
+        for member in &self.setup.members {
+            // FA1: Save's check names a member as every view does. A draft's lines may have
+            // moved since the note was read, so it names no line.
+            let changed = member
+                .overrides
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            let resolved_id = snapshot.catalogue.resolve_ref(&member.creature);
+            let base = resolved_id
+                .as_ref()
+                .ok()
+                .and_then(|id| snapshot.catalogue.entries.get(id))
+                .map(|entry| entry.entry.name.clone());
+            let shown = match (&changed, &base) {
+                (Some(changed), _) if !changed.trim().is_empty() => changed.trim().to_owned(),
+                (_, Some(base)) => base.clone(),
+                _ => missing_member_name(None, member.creature.link.as_deref()),
+            };
+            let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
             if !(1..=MAX_COUNT).contains(&member.count) {
-                return Err(format!("{what}: count must be from 1 to {MAX_COUNT}."));
+                return Err(fault(&format!("count must be from 1 to {MAX_COUNT}")));
             }
-            let id = snapshot
-                .catalogue
-                .resolve_ref(&member.creature)
-                .map_err(|e| format!("{what}: {e}"))?;
+            let id = resolved_id.map_err(|_| fault("not in this campaign’s packages"))?;
             let creature = snapshot
                 .creatures
                 .iter()
                 .find(|c| c.id == id)
-                .ok_or_else(|| {
-                    format!("{what}: this creature is unavailable in campaign content.")
-                })?;
+                .ok_or_else(|| fault("this creature is unavailable in campaign content"))?;
             if creature.linked {
-                return Err(format!(
-                    "{what}: {} has a D&D Beyond sheet, and a group can add it twice. Use the roster.",
-                    creature.name
-                ));
+                return Err(fault(LINKED_CAUSE));
             }
-            let named = |error: String| format!("{what} ({}): {error}", creature.name);
-            let overrides = Overrides::parse(&member.overrides).map_err(&named)?;
+            let overrides = Overrides::parse(&member.overrides).map_err(|e| fault(&e))?;
             let resolved = overrides
                 .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
-                .map_err(&named)?;
+                .map_err(|e| fault(&e))?;
             if resolved.max_hp.is_none() {
-                return Err(named(
-                    "this creature has no maximum HP, so a run cannot add it. Set it with this member’s Edit button."
-                        .into(),
-                ));
+                return Err(fault(NO_MAX_HP_CAUSE));
             }
         }
         Ok(())
@@ -485,8 +494,12 @@ impl GroupDraft {
         if self.baseline.is_none() {
             self.path = super::named_note_path(&campaign.path, FOLDER, &self.name)?;
         }
-        self.recovery
-            .check(&campaign.path, &mut self.path, self.baseline.as_deref())
+        self.recovery.check(
+            &campaign.path,
+            &mut self.path,
+            self.baseline.as_deref(),
+            "group",
+        )
     }
     pub(super) fn has_disk_change(&self) -> bool {
         self.recovery.change.is_some()
@@ -497,7 +510,9 @@ impl GroupDraft {
         root: &std::path::Path,
         snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice = self.recovery.show(ui, &self.comparison_text(snapshot)?);
+        let choice = self
+            .recovery
+            .show(ui, &self.comparison_text(snapshot)?, "group");
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -560,6 +575,38 @@ pub(super) fn shown_name(block: &Mapping, name: String) -> String {
         .map_or(name, |changed| changed.trim().to_owned())
 }
 
+/// A group's own reason when it has no member fault to show.
+const NONE_CAN_JOIN: &str = "No members can join.";
+/// Why a member with a D&D Beyond sheet cannot join from a group.
+const LINKED_CAUSE: &str = "it has a D&D Beyond sheet, so it joins from the roster";
+/// Why a member with no maximum HP cannot join. Its Edit button sets one.
+const NO_MAX_HP_CAUSE: &str = "it has no maximum HP. Set it with this member’s Edit button";
+
+/// One member's fault, in the one form every view uses (FA1, FC5): `<shown name> (as <base>) ·
+/// line N: <cause>.` The Encounters list, the group editor, the session plan, Save's check and
+/// Arrivals all take their words from here. `(as <base>)` is left out when the member keeps its
+/// base name or the base is not known; `line N` when the note gives the member no line.
+pub(crate) fn member_fault(
+    shown: &str,
+    base: Option<&str>,
+    line: Option<usize>,
+    cause: &str,
+) -> String {
+    let shown = shown.trim();
+    let mut text = shown.to_owned();
+    if let Some(base) = base
+        .map(str::trim)
+        .filter(|base| !base.is_empty() && *base != shown)
+    {
+        text.push_str(&format!(" (as {base})"));
+    }
+    if let Some(line) = line {
+        // `line 15` wraps whole.
+        text.push_str(&format!(" · line\u{a0}{line}"));
+    }
+    format!("{text}: {}.", cause.trim().trim_end_matches('.'))
+}
+
 fn missing_member_name(changed: Option<&str>, link: Option<&str>) -> String {
     let link = link.map(crate::sessions::plain_links).filter(|name| {
         Uuid::parse_str(name.trim()).is_err() && !splat::content::resource_key(name.trim())
@@ -582,14 +629,19 @@ pub(super) fn load(
         .entries
         .values()
         .filter(|e| e.private && e.owner == campaign && e.entry.kind == "encounter_group")
-        .filter_map(|e| resolve_group(&e.entry, catalogue, creatures, campaign))
+        .filter_map(|e| {
+            let source = catalogue.text_of(e.entry.id);
+            resolve_group(&e.entry, source.as_deref(), catalogue, creatures, campaign)
+        })
         .collect();
     groups.sort_by_key(|group| group.name.to_lowercase());
     groups
 }
 
+/// `source` is the note as it was read, for each member's line; without it, faults name no line.
 fn resolve_group(
     entry: &Entry,
+    source: Option<&str>,
     catalogue: &Catalogue,
     creatures: &[Creature],
     campaign: Uuid,
@@ -623,8 +675,11 @@ fn resolve_group(
     let mut unavailable = 0_u64;
     let mut unavailable_members = Vec::new();
     let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
+    let lines = source.map_or_else(Vec::new, |text| {
+        splat::content::list_formats::group_member_lines(text, &entry.flags)
+    });
     for (index, member) in group.members.iter().enumerate() {
-        let what = format!("Member {}", index + 1);
+        let line = lines.get(index).copied();
         let Some((id, creature)) = catalogue
             .resolve(&member.creature)
             .ok()
@@ -639,10 +694,16 @@ fn resolve_group(
                 .and_then(|creature| creature.get("link"))
                 .and_then(Value::as_str);
             let name = missing_member_name(member.overrides.name.as_deref(), link);
-            let fault_name = &name;
+            // The base is the name the note links, when it gives one.
+            let base = missing_member_name(None, link);
             warnings.push(MemberFault::new(
                 FaultKind::NotInPackages,
-                format!("{what}, {fault_name}: not in this campaign’s packages."),
+                member_fault(
+                    &name,
+                    link.is_some().then_some(base.as_str()),
+                    line,
+                    "not in this campaign’s packages",
+                ),
             ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
@@ -656,24 +717,19 @@ fn resolve_group(
         } else {
             format!("{shown} (as {})", entry.name)
         };
+        let fault = |cause: &str| member_fault(shown, Some(&entry.name), line, cause);
         // The kind is decided here, where the fault is found; every view takes its tone.
         let issue = if creature.linked {
-            Some(MemberFault::new(
-                FaultKind::CannotJoin,
-                format!("{what}: {member_name} has a D&D Beyond sheet."),
-            ))
+            Some(MemberFault::new(FaultKind::CannotJoin, fault(LINKED_CAUSE)))
         } else {
             match &resolved {
                 Err(error) => Some(MemberFault::new(
                     FaultKind::InvalidChange,
-                    format!("{what}, {}: {}", member_name, override_error(error)),
+                    fault(&override_error(error)),
                 )),
                 Ok(resolved) if resolved.max_hp.is_none() => Some(MemberFault::new(
                     FaultKind::CannotJoin,
-                    format!(
-                        "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
-                        member_name
-                    ),
+                    fault(NO_MAX_HP_CAUSE),
                 )),
                 Ok(_) => None,
             }
@@ -710,40 +766,27 @@ fn resolve_group(
         } else {
             &member.name
         };
-        let fault_name = if shown == &name {
-            shown.to_owned()
-        } else {
-            format!("{shown} (as {name})")
-        };
         warnings.push(MemberFault::new(
             FaultKind::CannotJoin,
             // The row, its line and the cause, as a roster row says them; the help stays in the
-            // editor. `line 15` wraps whole. A flag without its parts says its own sentence.
+            // editor. A flag without its parts (read back from a saved run) says its own
+            // sentence, which already starts with its line.
             member.flag.cause().map_or_else(
-                || format!("{fault_name}: {}", member.flag.message),
-                |cause| {
-                    format!(
-                        "{fault_name} · line\u{a0}{}: {}.",
-                        member.flag.line,
-                        cause.trim_end_matches('.')
-                    )
-                },
+                || member_fault(shown, Some(&name), None, &member.flag.message),
+                |cause| member_fault(shown, Some(&name), Some(member.flag.line), cause),
             ),
         ));
         let count = member.count.unwrap_or(1);
         unavailable = unavailable.saturating_add(count);
         unavailable_members.push((member.before, count, format!("{shown} (not read)")));
     }
+    // FK5: the member faults say why none can join, and the count line says `0 of N can join`,
+    // so the group adds its own reason only when no member fault shows.
     let problem = members.is_empty().then(|| {
         let mut problems: Vec<String> = warnings.iter().map(|fault| fault.text.clone()).collect();
-        problems.push(
-            if warnings.is_empty() {
-                "No members can join."
-            } else {
-                "No members can join. Edit group to fix them."
-            }
-            .into(),
-        );
+        if warnings.is_empty() {
+            problems.push(NONE_CAN_JOIN.into());
+        }
         problems.join("\n")
     });
     Some(Arc::new(RunGroup {
@@ -813,7 +856,7 @@ fn list_row(
         ui.label(Type::Small.rich(ui, "Cannot join").color(colors().muted));
     }
     for warning in &group.warnings {
-        if crate::encounter_run::view::group_fault(ui, warning) {
+        if member_fault_row(ui, warning) {
             if warning.kind == FaultKind::NotInPackages {
                 ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
             } else {
@@ -923,10 +966,11 @@ impl Encounters {
         if draft.recovery.change.is_none() {
             return false;
         }
-        if let Some(keep) = draft
-            .recovery
-            .show(ui, &draft.comparison_text(snapshot).unwrap_or_default())
-        {
+        if let Some(keep) = draft.recovery.show(
+            ui,
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            "group",
+        ) {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
                     draft.path = change.path;
@@ -956,7 +1000,7 @@ impl Encounters {
         };
         if design::undo_message(
             ui,
-            Tone::Info,
+            Tone::Success,
             &format!("Removed group {}.", removed.name),
             "Undo remove group",
         ) {
@@ -1168,7 +1212,7 @@ pub(super) fn of_encounter(
         } else {
             "Undo move"
         };
-        if design::undo_message(ui, Tone::Info, &words, undo) {
+        if design::undo_message(ui, Tone::Success, &words, undo) {
             let (index, removed, delete) = removed_group.take().expect("a removed group");
             if delete {
                 deleted_groups.retain(|group| group.path != removed.path);
@@ -1223,12 +1267,21 @@ fn belongs_to(
         ui.label(Type::Small.rich(ui, BELONGS_TO).color(colors().muted));
         // The choice ends where the name field ends, inside the column.
         let right = name_right.min(ui.max_rect().right());
+        let width = (right - ui.cursor().left()).max(Density::Scan.control());
         let combo = egui::ComboBox::from_id_salt("group_encounter")
             .icon(design::combo_icon)
-            .width((right - ui.cursor().left()).max(Density::Scan.control()))
+            .width(width)
             .truncate()
             .selected_text(shown)
             .show_ui(ui, |ui| {
+                // FB8: the menu is as wide as its control, as Library's scope menu is. Its
+                // content is the control's width less the menu's frame; a long name wraps.
+                let frame = ui.style().spacing.menu_margin.sum().x
+                    + 2.0 * ui.style().visuals.window_stroke.width;
+                let inner = (width - frame).max(0.0);
+                ui.set_min_width(inner);
+                ui.set_max_width(inner);
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                 if ui
                     .selectable_label(current.is_none(), ANY_ENCOUNTER)
                     .clicked()
@@ -1939,6 +1992,8 @@ impl Encounters {
         let compact = ui.available_width() < 760.0;
 
         let saved_note = self.message.clone();
+        // AH1: a draft that Save's check refused says Invalid, as the encounter editor does.
+        let refused = self.shows_validation_error();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
@@ -1979,11 +2034,16 @@ impl Encounters {
             }
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
-        // reason that has no room on the row takes its own line below it.
-        let mut below: Vec<&'static str> = Vec::new();
+        // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
+        // has one place, chosen as if both were shown, and the lines below are reserved, so a
+        // reason that comes or goes moves no field.
+        let empty = draft.setup.members.is_empty();
+        let mut below: Vec<(&'static str, bool)> = Vec::new();
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
-            let (icon, word, color) = if dirty {
+            let (icon, word, color) = if dirty && (empty || refused) {
+                (icons::ERROR, "Invalid", colors().document.invalid)
+            } else if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if saved_note.is_some() {
                 // FC1: the save row says the shared `Saved`, as the encounter editor does. The
@@ -1993,18 +2053,13 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
-            let empty = draft
-                .setup
-                .members
-                .is_empty()
-                .then_some("Add a creature first");
-            let button = if dirty && !has_run {
+            let button = if dirty && !has_run && !empty && !refused {
                 Action::primary("Save group")
             } else {
                 Action::secondary("Save group")
             }
-            .blocked(if empty.is_some() {
-                empty
+            .blocked(if empty {
+                Some(EMPTY_REASON)
             } else if !dirty {
                 Some("No changes to save.")
             } else {
@@ -2013,23 +2068,21 @@ impl Encounters {
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
             let mut room = block_right - ui.cursor().left() - button.natural_width(ui) - gap;
-            let mut fits = |reason: Option<&'static str>| {
-                reason.filter(|reason| {
-                    let width = design::number_width(ui, reason, &font) + gap;
-                    let fits = width <= room;
-                    if fits {
-                        room -= width;
-                    } else {
-                        below.push(reason);
-                    }
-                    fits
-                })
+            // Save's own reason first: it stays beside Save while there is room. A dirty group
+            // blocks the campaign switch wherever it is open, so it says so, as the encounter
+            // editor does.
+            let mut beside = |reason: &'static str, shown: bool| {
+                let width = design::number_width(ui, reason, &font) + gap;
+                if width <= room {
+                    room -= width;
+                    shown.then_some(reason)
+                } else {
+                    below.push((reason, shown));
+                    None
+                }
             };
-            // Save's own reason first: it stays beside Save while there is room.
-            let empty = fits(empty);
-            // A dirty group blocks the campaign switch wherever it is open, so it says so, as
-            // the encounter editor does.
-            let switch = fits(dirty.then(super::draft_switch_reason));
+            let empty = beside(EMPTY_REASON, empty);
+            let switch = beside(super::draft_switch_reason(), dirty);
             super::blocked_reason(ui, switch);
             ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -2043,8 +2096,23 @@ impl Encounters {
                 },
             );
         });
-        for reason in below {
-            super::blocked_reason(ui, Some(reason));
+        for (reason, shown) in below {
+            let top = ui.cursor().top();
+            let height = ui
+                .painter()
+                .layout(
+                    reason.to_owned(),
+                    Type::Small.font(ui),
+                    colors().muted,
+                    ui.available_width(),
+                )
+                .size()
+                .y;
+            if shown {
+                super::blocked_reason(ui, Some(reason));
+            }
+            let used = ui.cursor().top() - top;
+            ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
         }
         design::rule(ui);
         let unread =
@@ -2256,8 +2324,7 @@ fn members_pane(
     let top = ui.cursor().top();
     // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
     // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
-    let width = (ui.available_width() - ui.spacing().scroll.allocated_width())
-        .clamp(0.0, design::LIST_MEASURE);
+    let width = super::scroll_lane(ui).min(design::LIST_MEASURE);
     egui::ScrollArea::vertical()
         .id_salt("group_editor")
         .auto_shrink([false, false])
@@ -2385,6 +2452,7 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
     splat::content::list_formats::resolve(&mut entry, &entries, "");
     resolve_group(
         &entry,
+        None,
         &snapshot.catalogue,
         &snapshot.creatures,
         Uuid::nil(),
@@ -2531,7 +2599,7 @@ fn members(
             .get(result.index)
             .is_some_and(|member| member.creature == result.after)
     {
-        if design::undo_message(ui, Tone::Info, &result.words, "Undo replacement")
+        if design::undo_message(ui, Tone::Success, &result.words, "Undo replacement")
             && let Some(result) = draft.replaced.take()
         {
             draft.setup.members[result.index].creature = result.before;
@@ -2542,7 +2610,7 @@ fn members(
     }
     if let Some((_, _, name)) = &draft.removed_member {
         let words = format!("Removed {name}.");
-        if design::undo_message(ui, Tone::Info, &words, "Undo remove member")
+        if design::undo_message(ui, Tone::Success, &words, "Undo remove member")
             && let Some((index, member, _)) = draft.removed_member.take()
         {
             draft
@@ -2557,7 +2625,7 @@ fn members(
         .as_ref()
         .map(|(_, _, name)| format!("Removed {name}."));
     if let Some(words) = removed_unread_words
-        && design::undo_message(ui, Tone::Info, &words, "Undo remove member")
+        && design::undo_message(ui, Tone::Success, &words, "Undo remove member")
         && let Some((line, row, _)) = draft.removed_unread.take()
     {
         let at = draft
@@ -2785,26 +2853,37 @@ fn unread_member(
     design::rule(ui);
 }
 
-/// The repair link under a member's warning. Its words start at the warning text, and its icon
-/// hangs in the gutter before them.
+/// The repair under a member's warning: a bordered secondary button that starts at the warning
+/// text (FB5), as every message action without an icon is.
 fn packages_repair(ui: &mut egui::Ui) -> bool {
-    crate::encounter_run::view::hanging_link(ui, icons::CAMPAIGN, packages_link)
+    Action::secondary(PACKAGES_LINK)
+        .density(Density::Read)
+        .show(ui)
+        .clicked()
 }
+
+/// One member's fault with its repair (FB5): the fault in its own tone, then a bordered
+/// secondary button, `Campaign → Packages` for a missing creature and `Edit group` for any other.
+/// The button sits beside the words after `L` when it fits, else below them at the words. The
+/// Encounters list draws member faults with this, and Arrivals calls it too.
+pub(crate) fn member_fault_row(ui: &mut egui::Ui, fault: &MemberFault) -> bool {
+    design::message_with_action(
+        ui,
+        fault.tone(),
+        fault,
+        if fault.kind == FaultKind::NotInPackages {
+            PACKAGES_LINK
+        } else {
+            EDIT_GROUP
+        },
+    )
+}
+
+/// The repair a member fault other than a missing creature offers.
+pub(crate) const EDIT_GROUP: &str = "Edit group";
 
 /// Where a missing creature's package is chosen.
 pub(super) const PACKAGES_LINK: &str = "Campaign → Packages";
-
-pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {
-    design::status_link(
-        ui,
-        Status {
-            icon: icons::CAMPAIGN,
-            word: PACKAGES_LINK,
-            color: colors().accent,
-        },
-    )
-    .clicked()
-}
 
 /// The repair form's reason. It names the words it could not read in curly quotation marks.
 fn unread_changes(raw: &str) -> String {
@@ -3286,7 +3365,7 @@ mod tests {
         let active = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let source = format!(
-            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Broken row\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 7 | [[Scout]] | Lookout | HP lots | Keep this row |\n| 2 | [[Scout]] | | | |\n",
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Broken row\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 7 | [[Scout]] | Lookout | HP lots | Keep this row |\n| 2 | [[Scout]] | | | |\n| 1 | [[Lost scout]] | Picket | | |\n",
             Uuid::new_v4()
         );
         fs::write(dir.path().join("Broken row.md"), &source).unwrap();
@@ -3305,13 +3384,24 @@ mod tests {
         assert_eq!(group.members[0].entry.id, scout);
         assert_eq!(
             group.creature_count(),
-            9,
+            10,
             "all named members remain visible"
         );
-        assert!(group.summary().contains("2 of 9 can join"));
+        assert!(group.summary().contains("2 of 10 can join"));
         // FB2: the summary names the row, its line and the cause; the example is the editor's.
-        assert!(group.warnings.iter().any(|warning| warning.text
-            == "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read."));
+        // FA1, FC5: an unread row and a missing creature in one group take the one form, which
+        // the list, the plan and Arrivals all draw from these warnings.
+        assert_eq!(
+            group
+                .warnings
+                .iter()
+                .map(|warning| warning.text.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Picket (as Lost scout) · line\u{a0}15: not in this campaign’s packages.",
+                "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read.",
+            ]
+        );
         assert!(
             group
                 .warnings
@@ -3372,7 +3462,9 @@ mod tests {
         );
         fs::write(
             dir.path().join("Broken row.md"),
-            source.replace("| 2 | [[Scout]] | | | |\n", ""),
+            source
+                .replace("| 2 | [[Scout]] | | | |\n", "")
+                .replace("| 1 | [[Lost scout]] | Picket | | |\n", ""),
         )
         .unwrap();
         let snapshot = Snapshot::load(&active, &[]).unwrap();
@@ -3463,7 +3555,7 @@ mod tests {
         assert!(error.contains("empty"), "{error}");
         draft.add(Uuid::new_v4());
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("Member 1"), "{error}");
+        assert_eq!(error, "Unknown creature: not in this campaign’s packages.");
         assert!(!dir.path().join(&draft.path).exists());
     }
 
@@ -3479,7 +3571,7 @@ mod tests {
             serde_yaml_ng::from_str("{add: -10}").unwrap(),
         );
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("Member 1 (Scout): Maximum HP"), "{error}");
+        assert!(error.starts_with("Scout: Maximum HP"), "{error}");
         draft.setup.members[0].overrides.clear();
         draft.setup.members[0]
             .overrides
@@ -3573,7 +3665,12 @@ mod tests {
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
         assert!(!problem.contains(&id.to_string()), "{problem}");
-        assert!(problem.contains("Member 1, Unknown creature"), "{problem}");
+        // FA1: the one member-fault form, with the member's line in the note.
+        assert!(
+            problem
+                .starts_with("Unknown creature · line\u{a0}13: not in this campaign’s packages."),
+            "{problem}"
+        );
         assert_eq!(snapshot.groups[0].member_summary(), "Will add: none");
         assert!(
             problem.contains("not in this campaign’s packages"),
@@ -3623,7 +3720,7 @@ mod tests {
                 .problem
                 .as_ref()
                 .unwrap()
-                .contains("Member 1, Captain Varra:")
+                .starts_with("Captain Varra · line\u{a0}13: not in this campaign’s packages.")
         );
         assert!(!group.problem.as_ref().unwrap().contains(&id.to_string()));
         assert_eq!(group.member_summary(), "Will add: none");
@@ -3901,7 +3998,7 @@ mod tests {
         draft.name = "Renamed".into();
         draft.groups[0].name = "Changed".into();
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("Choose which version to keep"), "{error}");
+        assert_eq!(error, super::super::disk::changed_on_disk("group"));
         assert!(draft.groups[0].recovery.change.is_some());
         assert_eq!(fs::read_to_string(&note).unwrap(), external);
         assert!(draft.dirty(), "the group's change is still here to save");
@@ -4088,7 +4185,7 @@ mod tests {
         draft.add(id);
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert!(
-            error.contains("Member 1 (Blank)") && error.contains("no maximum HP"),
+            error == "Blank: it has no maximum HP. Set it with this member’s Edit button.",
             "{error}"
         );
         draft.setup.members[0].overrides = serde_yaml_ng::from_str("{max_hp: {set: 9}}").unwrap();
