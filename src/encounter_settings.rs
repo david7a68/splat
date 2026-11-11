@@ -7,6 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 use splat::content::Entry;
+use splat::content::inspiration::{self, Inspiration};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -69,16 +70,29 @@ impl Default for Initiative {
         }
     }
 }
+/// An inspiration rule the campaign can use, from its packages or its own notes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InspirationRule {
+    pub id: Uuid,
+    pub name: String,
+    pub effect: Inspiration,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Options {
     pub folder: String,
     pub initiative: Initiative,
+    /// The inspiration rules in the campaign's packages and notes. No ruleset comes first.
+    pub inspiration_rules: Vec<InspirationRule>,
+    /// The chosen rule, when there are several. With one, it is that one.
+    pub inspiration_choice: Option<Uuid>,
 }
 impl Default for Options {
     fn default() -> Self {
         Self {
             folder: "Encounter Runs".into(),
             initiative: Initiative::default(),
+            inspiration_rules: Vec::new(),
+            inspiration_choice: None,
         }
     }
 }
@@ -151,7 +165,31 @@ impl Options {
                 return Err("Unsupported initiative group order.".into());
             }
         }
+        result.inspiration_rules = inspiration_rules(campaign, catalogue, &document);
+        result.inspiration_choice = match entry
+            .fields
+            .get("splat_rule_choices")
+            .and_then(|v| v.get(inspiration::CHOICE))
+        {
+            Some(reference) => {
+                let reference: EntryRef =
+                    serde_yaml_ng::from_value(reference.clone()).map_err(|e| e.to_string())?;
+                Some(catalogue.resolve_ref(&reference)?)
+            }
+            None => None,
+        };
         Ok(result)
+    }
+    /// What inspiration does in this campaign's runs: its only rule, or the chosen one of
+    /// several. `None` when its packages have no inspiration rule or none is chosen.
+    pub fn inspiration(&self) -> Option<Inspiration> {
+        let rule = match self.inspiration_rules.as_slice() {
+            [only] => Some(only),
+            rules => rules
+                .iter()
+                .find(|rule| Some(rule.id) == self.inspiration_choice),
+        };
+        rule.map(|rule| rule.effect)
     }
     pub fn directory(&self, campaign: &Campaign) -> Result<PathBuf, String> {
         let name = self.folder.trim();
@@ -309,6 +347,27 @@ impl Options {
             })
             .map_err(|e| e.to_string())?,
         );
+        // A choice is kept only while there is something to choose between.
+        match self
+            .inspiration_choice
+            .filter(|_| self.inspiration_rules.len() > 1)
+            .and_then(|id| self.inspiration_rules.iter().find(|rule| rule.id == id))
+        {
+            Some(rule) => {
+                choices.insert(
+                    inspiration::CHOICE.into(),
+                    serde_yaml_ng::to_value(EntryRef {
+                        id: Some(rule.id),
+                        key: None,
+                        link: Some(rule.name.clone()),
+                    })
+                    .map_err(|e| e.to_string())?,
+                );
+            }
+            None => {
+                choices.remove(inspiration::CHOICE);
+            }
+        }
         let text = splat::content::formats::patch_model(
             &document.text,
             &[
@@ -338,9 +397,85 @@ impl Options {
     }
 }
 
+/// The inspiration rules a campaign can use: its own notes, and its packages' entries.
+fn inspiration_rules(
+    campaign: &Campaign,
+    catalogue: &Catalogue,
+    document: &CampaignDocument,
+) -> Vec<InspirationRule> {
+    let closure = catalogue.closure(&document.selections, campaign.id);
+    let mut rules: Vec<_> = catalogue
+        .entries
+        .iter()
+        .filter(|(id, e)| {
+            (e.private && e.owner == campaign.id)
+                || closure.direct.contains(*id)
+                || closure.required.contains_key(*id)
+        })
+        .filter_map(|(id, e)| {
+            let effect = Inspiration::from_rule(e.entry.fields.get("splat_rule")?)?.ok()?;
+            Some(InspirationRule {
+                id: *id,
+                name: e.entry.name.clone(),
+                effect,
+            })
+        })
+        .collect();
+    rules.sort_by_key(|rule| rule.name.to_lowercase());
+    rules
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn inspiration_note(root: &Path, name: &str, rule: &str) {
+        fs::create_dir_all(root.join("Rules")).unwrap();
+        let old = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: {name}\nsplat_rule: {rule}\n---\n\n# {name}\n",
+            Uuid::new_v4()
+        );
+        let text = splat::content::formats::convert(&format!("{name}.md"), &old).unwrap();
+        fs::write(root.join(format!("Rules/{name}.md")), text).unwrap();
+    }
+
+    #[test]
+    fn no_inspiration_rule_comes_first() {
+        // Without a rule in the campaign's packages or notes, there is no inspiration.
+        assert_eq!(Options::default().inspiration(), None);
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let load = || {
+            let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
+            Options::load(&campaign, &catalogue).unwrap()
+        };
+        // A new campaign uses the SRD 5.2.1 package, and so its rule.
+        assert_eq!(load().inspiration(), Some(Inspiration::Reroll));
+        inspiration_note(
+            dir.path(),
+            "Inspiration",
+            "{implementation: dnd2014:inspiration, parameters: {eligible: player_character, expend: {timing: when_making_d20_test, grants: advantage, applies_to: [attack_roll, saving_throw, ability_check]}}}",
+        );
+        let both = load();
+        assert_eq!(both.inspiration_rules.len(), 2);
+        assert_eq!(both.inspiration(), None, "two rules and no choice");
+        let pick = |effect| {
+            both.inspiration_rules
+                .iter()
+                .find(|rule| rule.effect == effect)
+                .unwrap()
+                .id
+        };
+        for effect in [Inspiration::Advantage, Inspiration::Reroll] {
+            let chosen = Options {
+                inspiration_choice: Some(pick(effect)),
+                ..both.clone()
+            };
+            let document = CampaignDocument::load(&campaign).unwrap();
+            chosen.save(&campaign, &document.text).unwrap();
+            assert_eq!(load().inspiration(), Some(effect));
+        }
+    }
+
     fn campaign(root: &Path) -> Campaign {
         let campaign = Campaign {
             id: Uuid::new_v4(),
@@ -399,7 +534,11 @@ mod tests {
         );
         assert!(!source.join("run.json").exists());
         let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
-        assert_eq!(Options::load(&campaign, &catalogue).unwrap(), next);
+        let loaded = Options::load(&campaign, &catalogue).unwrap();
+        assert_eq!(
+            (&loaded.folder, &loaded.initiative),
+            (&next.folder, &next.initiative)
+        );
     }
 
     #[test]
@@ -440,10 +579,15 @@ mod tests {
                 grouping: Grouping::BySide,
                 roster_ties: true,
             },
+            ..Options::default()
         };
         options.save(&campaign, &document.text).unwrap();
         let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
-        assert_eq!(Options::load(&campaign, &catalogue).unwrap(), options);
+        let loaded = Options::load(&campaign, &catalogue).unwrap();
+        assert_eq!(
+            (&loaded.folder, &loaded.initiative),
+            (&options.folder, &options.initiative)
+        );
         assert_eq!(
             options.directory(&campaign).unwrap(),
             dir.path().join("Sessions/Combat")

@@ -593,6 +593,16 @@ reading the code, not from a test run.
 | T15.3 | A page shows the dated entries that concern it, oldest first | world-facts | state | New |
 | T15.4 | A change in play writes one Log line in the entry, the session lists it, and one undo removes the value and the line | world-facts | state | New |
 | T15.5 | The World page lists the open questions and the problems, and each opens its page | world-facts | state | New |
+| T16.1 | An action tile arms in 1, and every row shows the chance to hit it | run-rolls | cost | New |
+| T16.2 | A click on a row rolls against it and Enter applies the damage, in 2 | run-rolls | cost | New |
+| T16.3 | A second attack against the same target applies in 2 | run-rolls | cost | New |
+| T16.4 | An area save against two creatures, then its damage, in ≤ 6 | run-rolls | cost | New |
+| T16.5 | Ctrl+number arms an action in 1 | run-rolls | cost | New |
+| T16.6 | A player's attack with their own typed damage in ≤ 4 | run-rolls | cost | New |
+| T16.7 | A Library tile previews an attack in 1 | run-rolls | cost | New |
+| T16.8 | A tile's right-click menu arms an attack with advantage in 2 | run-rolls | cost | New |
+| T16.9 | A row's right-click menu rolls against it with disadvantage in 2 | run-rolls | cost | New |
+| T16.10 | An attack whose damage depends on a condition asks, then rolls, in 3 | run-rolls | cost | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

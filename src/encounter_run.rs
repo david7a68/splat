@@ -1,18 +1,20 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
 mod loot;
+mod rolling;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
+use splat::content::inspiration::Inspiration;
 use splat::{
     content::{
         Entry,
         overrides::{Base, Overrides, Resolved, condition_names, same_condition},
     },
-    execution::dice::{Dice, Random},
+    execution::dice::Random,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -517,12 +519,6 @@ struct CarriedHp {
     /// Fights whose runs could not be read, so their HP is not here.
     missing: Vec<String>,
 }
-/// The last roll, beside the dice.
-struct LastRoll {
-    total: String,
-    /// The log line behind the total.
-    line: String,
-}
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -535,6 +531,15 @@ pub(crate) struct Run {
     roster_names: BTreeMap<String, String>,
     roster_names_revision: Option<Uuid>,
     initiative: Initiative,
+    /// What a player character's inspiration does, from the campaign's rules. None when its
+    /// packages define no inspiration rule.
+    inspiration: Option<Inspiration>,
+    /// A target waiting for the DM to say which damage condition holds.
+    asking: Option<rolling::Asking>,
+    /// The last d20 rolled for a player, which their inspiration can reroll.
+    reroll: Option<rolling::Reroll>,
+    /// Rows whose inspiration was expended without a synced sheet to send it to.
+    spent_inspiration: BTreeSet<usize>,
     storage: Option<Storage>,
     recovery: Recovery,
     /// Each character's cached portrait, by D&D Beyond ID.
@@ -559,7 +564,14 @@ pub(crate) struct Run {
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
-    last_roll: Option<LastRoll>,
+    /// The armed action, until it is stopped or the turn ends. Never saved.
+    armed: Option<rolling::Armed>,
+    /// What each row shows from the current action: its chance to hit or its result.
+    badges: BTreeMap<usize, String>,
+    /// Each save target's roll, shown where its AC is.
+    saves: BTreeMap<usize, i64>,
+    /// The dice field's last roll, beside it in the dock.
+    dock_roll: Option<crate::rolls::Rolled>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     condition: String,
@@ -846,6 +858,10 @@ impl Run {
             roster_names: BTreeMap::new(),
             roster_names_revision: None,
             initiative: Initiative::default(),
+            inspiration: None,
+            asking: None,
+            reroll: None,
+            spent_inspiration: BTreeSet::new(),
             storage: None,
             recovery: Recovery::default(),
             portraits: BTreeMap::new(),
@@ -873,7 +889,10 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: 0,
-            last_roll: None,
+            armed: None,
+            badges: BTreeMap::new(),
+            saves: BTreeMap::new(),
+            dock_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
@@ -1439,19 +1458,15 @@ impl Run {
     /// The dock's roll. It changes no game state, so it goes to the Log and is not an Undo
     /// step. Undo of an earlier step keeps its line, and the dice do not roll the same again.
     pub(super) fn roll_dice(&mut self, expression: &str) -> Result<(), String> {
-        if matches!(self.state.phase, Phase::Ended { .. }) {
-            return Err("This encounter has ended. Undo the ending to continue.".into());
-        }
-        let mut random = self.state.random.clone();
-        let roll = Dice::parse(expression)?.roll(&mut random, false)?;
-        let line = format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total);
-        for state in self.history.iter_mut().chain([&mut self.state]) {
-            state.log.push(line.clone());
-            state.random = random.clone();
-        }
-        self.dm_steps += 1;
-        self.dirty = true;
-        self.error = None;
+        let link = splat::content::dice_text::RollLink::Dice {
+            label: String::new(),
+            dice: expression.to_owned(),
+        };
+        let rolled = self.record(
+            |random| crate::rolls::roll("DM", &link, crate::rolls::Mode::Normal, 0, random),
+            |rolled| vec![rolled.line()],
+        )?;
+        self.dock_roll = Some(rolled);
         Ok(())
     }
     /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
@@ -1803,6 +1818,7 @@ impl Run {
             // Whichever way the turn moved, targets chosen for it no longer stand.
             self.also.clear();
             self.halved.clear();
+            self.end_turn_rolls();
         }
         self.dirty = true;
         self.error = None;
@@ -2055,6 +2071,7 @@ impl Run {
         ] {
             *place = place.filter(|index| *index < count);
         }
+        self.forget_removed_rollers();
     }
     /// The rules a single NPC roll can use. Initiative groups need a group to be different
     /// from individual rolls.
@@ -3078,6 +3095,9 @@ struct SavedRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     source: Option<Uuid>,
     initiative: Initiative,
+    /// Saves from before this have none, and offer no inspiration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inspiration: Option<Inspiration>,
     state: State,
     setup_details: String,
     /// Saves from before this choice load with it off. The DM can start sync from the run.
@@ -3207,6 +3227,10 @@ impl Run {
         });
         self.save()
     }
+    /// Set the campaign's inspiration rule, before the run is first saved.
+    pub fn set_inspiration(&mut self, inspiration: Option<Inspiration>) {
+        self.inspiration = inspiration;
+    }
     pub fn guard_campaign(&mut self, root: &Path) {
         if let Some(storage) = &mut self.storage {
             storage.root = root.to_owned();
@@ -3282,6 +3306,7 @@ impl Run {
             name: self.name.clone(),
             source: self.source,
             initiative: self.initiative.clone(),
+            inspiration: self.inspiration,
             state: self.state.clone(),
             setup_details: self.setup_details.clone(),
             keep_party_synced: self.keep_party_synced,
@@ -3489,6 +3514,10 @@ impl Run {
             roster_names_revision: None,
             recovery: saved.recovery,
             initiative: saved.initiative,
+            inspiration: saved.inspiration,
+            asking: None,
+            reroll: None,
+            spent_inspiration: BTreeSet::new(),
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
                 _ => 0,
@@ -3512,7 +3541,10 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
-            last_roll: None,
+            armed: None,
+            badges: BTreeMap::new(),
+            saves: BTreeMap::new(),
+            dock_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),

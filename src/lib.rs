@@ -45,6 +45,7 @@ mod persistence;
 mod processing;
 mod recording;
 mod roll_table;
+mod rolls;
 mod sessions;
 mod settings;
 mod sheet_writer;
@@ -1929,6 +1930,24 @@ impl Splat {
         }
     }
 
+    /// A press on a dice link. Beside the run, the run rolls it on its own dice and keeps it in
+    /// the Log; anywhere else it is a preview roll that changes nothing.
+    fn route_rolls(&mut self, ctx: &egui::Context) {
+        let Some(ask) = rolls::take_ask(ctx) else {
+            return;
+        };
+        // Only a number in a participant's own stat block or sheet rolls for the run. One in
+        // Lookup, even beside the run, is a preview on the entry's own action line.
+        match self
+            .encounters
+            .run_mut()
+            .filter(|_| self.page == Page::Run && ask.roller.is_some())
+        {
+            Some(run) => run.roll_link(ask),
+            None => rolls::preview(ctx, &ask),
+        }
+    }
+
     /// Requests that cross pages: read beside a draft, or open an entry where it lives.
     fn route(&mut self, ctx: &egui::Context) {
         if let Some(target) = markdown_view::take_note_link(ctx) {
@@ -2439,6 +2458,7 @@ impl eframe::App for Splat {
         );
         design::reserve_primary(ctx, false);
         self.lookup.history_input(ctx, self.page == Page::Library);
+        self.route_rolls(ctx);
         self.run_strip(ctx);
         self.party_bar(ctx);
         design::reserve_primary(ctx, self.encounters.has_run() && self.page != Page::Run);

@@ -8281,10 +8281,10 @@ mod tests {
                 "STR",
                 "Save +5",
                 "Vampiric Connection.",
-                "Umbral Dagger.",
+                // An action is a tile with its name; its rules text is in hover.
+                "Umbral Dagger",
                 "Deathless Agility.",
                 "except from its vampire master",
-                "Paralyzed",
             ] {
                 assert!(
                     rendered.contains(expected),

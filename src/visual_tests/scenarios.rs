@@ -1166,7 +1166,7 @@ pub mod library_navigation {
             "The toolbar keeps Back and every visible action on one line",
         );
         d.click(EDIT_MARKDOWN);
-        d.type_into_editor("Varra now carries a silver sword. ");
+        d.type_into_editor("\nVarra now carries a silver sword. ");
         d.state("draft-with-history", Sizes::All);
         d.observe(
             "Draft safety",
@@ -10734,7 +10734,7 @@ pub mod run_overrides {
             !d.has_containing(BASE_AND_CHANGED)
                 && d.visible_text("printed 33")
                 && d.visible_text("Add by hand: attack +1, damage +1, speed 40 ft")
-                && d.visible_text("Attack +1, Damage +1 · add by hand")
+                && d.visible_text("Attack +1, Damage +1 · in the rolls")
                 && d.has_containing("add by hand")
                 && d.visible_text("Speed 30 ft → 40 ft · add by hand")
                 && d.has_containing("Changed"),
@@ -13016,6 +13016,179 @@ pub mod remove_package_in_use {
             "A package removal does not say its creature file was deleted",
         );
         d.state("paused-run-after-package-removal", Sizes::All);
+    }
+}
+
+/// T16: rolls as in a tactics game. A tile in the stat block arms an action; each row shows
+/// the chance to hit it; a click on a row rolls against it and puts the damage in Amount, and
+/// Enter applies it. A save adds each clicked row and rolls its save. A player's attack only
+/// targets, and the DM types the player's damage. Outside a run, a tile previews.
+pub mod run_rolls {
+    use super::*;
+    const ATTACKER: &str = "Cinder Wolf 1";
+    const TARGET: &str = "Cinder Wolf 2";
+    const CASTER: &str = "Ember Cultist";
+    const PLAYER: &str = "Iselle Marrowind";
+    const BITE: &str = "Bite · +4";
+    const BURST: &str = "Ember Burst · DC 12";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run_from_cold_start(d);
+        d.click_row(ATTACKER);
+        d.state("tiles-in-the-stat-block", Sizes::All);
+
+        d.begin_task();
+        d.click_starting(BITE);
+        d.observe(
+            "T16.1",
+            d.has_containing("Click a target") && d.has_containing("% to hit"),
+            "An armed tile says what to do, and each row shows the chance to hit it",
+        );
+        d.goal_within("T16.1", "arm the selected creature's attack", 1);
+        d.state("attack-armed", Sizes::All);
+
+        d.begin_task();
+        let before = d.row_hp(TARGET);
+        d.click_row(TARGET);
+        d.observe(
+            "T16.2",
+            d.has_containing(" vs AC 13") && d.has_containing("Click a target"),
+            "A click on a row rolls against it, and the action stays armed",
+        );
+        d.state("attack-rolled", Sizes::All);
+        d.press(Key::Enter);
+        let after = d.row_hp(TARGET);
+        d.observe(
+            "T16.2",
+            before != after,
+            format!("Enter applies the rolled damage to the target: {before:?} then {after:?}"),
+        );
+        d.goal_within("T16.2", "roll against a target and apply the damage", 2);
+
+        d.begin_task();
+        d.click_row(TARGET);
+        d.press(Key::Enter);
+        d.goal_within("T16.3", "make a second attack and apply its damage", 2);
+
+        d.press(Key::Escape);
+        d.begin_task();
+        d.press_ctrl(Key::Num1);
+        d.observe(
+            "T16.5",
+            d.has_containing("Click a target"),
+            "Ctrl+1 arms the first action, as a game's action bar does",
+        );
+        d.goal_within("T16.5", "arm an action by its number", 1);
+        d.press(Key::Escape);
+
+        // Right-click a tile: how its d20 rolls.
+        d.click_row(ATTACKER);
+        d.begin_task();
+        d.right_click_starting(BITE);
+        d.state("tile-menu", Sizes::Default);
+        d.click("Roll with advantage");
+        d.observe(
+            "T16.8",
+            d.has_containing("Click a target"),
+            "A tile's right-click menu arms it with advantage",
+        );
+        d.goal_within("T16.8", "arm an attack with advantage from its menu", 2);
+
+        // Right-click a target row: roll against that one row another way.
+        d.begin_task();
+        d.right_click_row(TARGET);
+        d.state("row-menu", Sizes::Default);
+        d.click("Roll with disadvantage");
+        d.observe(
+            "T16.9",
+            d.has_containing(" vs AC 13"),
+            "A row's right-click menu rolls against it with disadvantage",
+        );
+        d.goal_within("T16.9", "roll against one target with disadvantage", 2);
+        d.press(Key::Escape);
+
+        // Damage that depends on what only the DM knows: the click asks before it rolls.
+        d.click_row(CASTER);
+        d.begin_task();
+        d.click_starting("Scorching Sickle");
+        d.click_row(TARGET);
+        d.observe(
+            "T16.10",
+            d.has_containing("If the cultist moved") && d.has_containing("No · 1d6+2 slashing"),
+            "The question names the condition, with the damage for yes and for no",
+        );
+        d.state("damage-question", Sizes::Default);
+        d.click_starting("Yes · 2d6+2 slashing");
+        d.observe(
+            "T16.10",
+            d.has_containing(" vs AC 13"),
+            "The chosen damage rolls against the row",
+        );
+        d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
+        d.press(Key::Escape);
+
+        // A save: each clicked row is a target, and its save stands where its AC is.
+        d.click_row(CASTER);
+        d.begin_task();
+        d.click_starting(BURST);
+        d.click_row(ATTACKER);
+        d.click_row(TARGET);
+        d.observe(
+            "T16.4",
+            d.has_containing(", DEX save "),
+            "Each creature's save shows on its row",
+        );
+        d.state("save-targets", Sizes::All);
+        if d.has("Half for those at or above DC") {
+            d.click("Half for those at or above DC");
+        }
+        d.click("Roll damage");
+        d.press(Key::Enter);
+        d.goal_within(
+            "T16.4",
+            "an area save against two creatures, then its damage",
+            6,
+        );
+        d.state("save-applied", Sizes::Default);
+        d.press(Key::Escape);
+
+        // A player rolls their own dice: the tile targets, and the DM types the damage.
+        d.click_row(PLAYER);
+        d.click("Actions");
+        d.begin_task();
+        d.click_starting("Dagger");
+        let before = d.row_hp(ATTACKER);
+        d.click_row(ATTACKER);
+        d.observe(
+            "T16.6",
+            d.has_containing("Player rolls"),
+            "A player's attack only targets the row",
+        );
+        d.state("player-attack", Sizes::Default);
+        d.type_text("5");
+        d.press(Key::Enter);
+        let after = d.row_hp(ATTACKER);
+        d.observe(
+            "T16.6",
+            before != after,
+            format!("The player's typed damage applies to the target: {before:?} then {after:?}"),
+        );
+        d.goal_within("T16.6", "a player's attack with their own damage", 4);
+        d.press(Key::Escape);
+
+        // Outside a run, a tile previews and changes nothing.
+        go_library(d);
+        open_local_package(d, MODULE);
+        d.click_containing("Cinder Wolf");
+        d.begin_task();
+        d.click_starting(BITE);
+        d.observe(
+            "T16.7",
+            d.has_containing("to hit"),
+            "A tile in the Library previews its attack and damage",
+        );
+        d.goal_within("T16.7", "preview an attack in the Library", 1);
+        d.state("library-preview", Sizes::All);
     }
 }
 

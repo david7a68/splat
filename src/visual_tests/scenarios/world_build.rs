@@ -2929,6 +2929,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Cinder Bite");
+    d.expect_same("The disk edit renames the Bite action, and only its tile's name changes.");
     d.state("package-edit-round-trip", Sizes::All);
     look_up(d, "Cinder Wolf");
     d.wait_for_text("Cinder Bite");
@@ -2953,6 +2954,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     });
     d.click("Reload and lose my draft");
     d.click("Read");
+    // The attribute table's rows are pointer targets, so the actions can start lower.
+    d.scroll_at(super::READER, 3);
     d.wait_for_text("Ash Bite");
     d.expect("Undo discard of Cinder Wolf");
     assert!(!d.app_mut().library.dirty());
@@ -3052,6 +3055,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.replace_editor_text(&valid);
     d.click("Save");
     d.click("Read");
+    // The attribute table's rows are pointer targets, so the actions can start lower.
+    d.scroll_at(super::READER, 3);
     d.wait_for_text("Ash Bite");
     d.expect("Ashen Marches · Used here");
     d.state("package-yaml-repaired", Sizes::All);

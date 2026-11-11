@@ -1010,6 +1010,8 @@ pub(crate) enum LinkTarget {
     Note(String),
     Lookup(String),
     Url(String),
+    /// A dice link in a stat block or a sheet. The run or the preview stream rolls it.
+    Roll(splat::content::dice_text::RollLink),
 }
 
 impl LinkTarget {
@@ -1017,6 +1019,10 @@ impl LinkTarget {
     pub(crate) fn from_destination(destination: &str) -> Option<Self> {
         if let Some(note) = destination.strip_prefix(NOTE_LINK) {
             Some(Self::Note(note.to_owned()))
+        } else if let Some(link) =
+            splat::content::dice_text::RollLink::from_destination(destination)
+        {
+            Some(Self::Roll(link))
         } else if destination.starts_with("https://") || destination.starts_with("http://") {
             Some(Self::Url(destination.to_owned()))
         } else {
@@ -1149,6 +1155,10 @@ fn draw_with_links(
         else {
             continue;
         };
+        if let LinkTarget::Roll(link) = destination {
+            crate::rolls::interact(ui, pressed, link);
+            continue;
+        }
         match press(ui, pressed, destination) {
             Some(LinkTarget::Note(note)) => {
                 let from = reader_document(ui);
@@ -1613,6 +1623,7 @@ fn link_name(words: &str, destination: &LinkTarget) -> String {
         LinkTarget::Note(note) => format!("{words} (opens {note})"),
         LinkTarget::Lookup(_) => format!("{words} (opens in Lookup)"),
         LinkTarget::Url(url) => format!("{words} (opens {url})"),
+        LinkTarget::Roll(link) => crate::rolls::hint(link),
     }
 }
 
