@@ -1262,6 +1262,125 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// Every skill bonus in view in a Skills row (a sign and digits joined by a no-break space to
+    /// a name that ends in a letter, as in `Insight +8`): how many there are, and each way one breaks the row's
+    /// rule. The rule: one blank only between the name and its bonus; the bonus has one link
+    /// target at least `XL` square, inside its entry (from the name's first letter to the bonus's
+    /// last digit), so clear of the next entry; a comma sits directly after the bonus and is
+    /// followed by one blank only; and the name, its bonus and its comma share a row.
+    pub fn skills_row_faults(&self) -> (usize, Vec<String>) {
+        let scale = self.harness.ctx.pixels_per_point();
+        let targets: Vec<egui::Rect> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| node.is_link() && node.in_view())
+            .map(|node| node.rect * (1.0 / scale))
+            .collect();
+        let mut count = 0;
+        let mut faults = Vec::new();
+        self.each_painted_text(|text, clip| {
+            // Each glyph: its row, its character, its left and right edges, and its row's middle.
+            let glyphs: Vec<(usize, char, f32, f32, f32)> = text
+                .galley
+                .rows
+                .iter()
+                .enumerate()
+                .flat_map(|(at, row)| {
+                    let middle = text.pos.y + row.rect().center().y;
+                    row.glyphs.iter().map(move |glyph| {
+                        let left = text.pos.x + row.pos.x + glyph.pos.x;
+                        (at, glyph.chr, left, left + glyph.advance_width, middle)
+                    })
+                })
+                .collect();
+            for sign in 2..glyphs.len() {
+                let (row, chr, left, _, middle) = glyphs[sign];
+                let digits = glyphs[sign + 1..]
+                    .iter()
+                    .take_while(|glyph| glyph.1.is_ascii_digit())
+                    .count();
+                if !matches!(chr, '+' | '\u{2212}' | '-')
+                    || glyphs[sign - 1].1 != '\u{a0}'
+                    || !glyphs[sign - 2].1.is_alphabetic()
+                    || digits == 0
+                    || !clip.contains(egui::pos2(left, middle))
+                {
+                    continue;
+                }
+                count += 1;
+                let last = sign + digits;
+                let right = glyphs[last].3;
+                let name_end = glyphs[sign - 2].3;
+                let blank = glyphs[sign - 1];
+                let mut start = sign - 2;
+                while start > 0
+                    && !(glyphs[start - 1].1.is_whitespace() && glyphs[start - 1].1 != '\u{a0}')
+                {
+                    start -= 1;
+                }
+                let words: String = glyphs[start..=last].iter().map(|glyph| glyph.1).collect();
+                let comma = glyphs.get(last + 1).filter(|glyph| glyph.1 == ',');
+                let unit_end = if comma.is_some() { last + 1 } else { last };
+                if glyphs[start..=unit_end].iter().any(|glyph| glyph.0 != row) {
+                    faults.push(format!("{words}: the entry is split across rows"));
+                }
+                // Glyphs snap to whole pixels, so the gap can be up to a pixel wider than the blank.
+                if left - name_end > blank.3 - blank.2 + 1.0 {
+                    faults.push(format!(
+                        "{words}: more than one blank before the bonus ({} px)",
+                        left - name_end
+                    ));
+                }
+                if let Some(comma) = comma {
+                    if (comma.2 - right).abs() > 1.0 {
+                        faults.push(format!("{words}: {} px before the comma", comma.2 - right));
+                    }
+                    if let (Some(blank), Some(next)) = (glyphs.get(last + 2), glyphs.get(last + 3))
+                        && blank.1 == ' '
+                        && next.0 == comma.0
+                        && (next.2 - blank.3 > 0.5 || blank.2 - comma.3 > 0.5)
+                    {
+                        faults.push(format!(
+                            "{words}: more than one blank after the comma ({} px)",
+                            next.2 - comma.3
+                        ));
+                    }
+                }
+                let next_entry = glyphs
+                    .get(last + 3)
+                    .filter(|next| comma.is_some() && next.0 == row)
+                    .map(|next| next.2);
+                let found: Vec<&egui::Rect> = targets
+                    .iter()
+                    .filter(|target| target.contains(egui::pos2((left + right) / 2.0, middle)))
+                    .collect();
+                let [target] = found[..] else {
+                    faults.push(format!("{words}: {} targets on the bonus", found.len()));
+                    continue;
+                };
+                if target.width() < crate::design::XL - 0.01
+                    || target.height() < crate::design::XL - 0.01
+                {
+                    faults.push(format!("{words}: target {target:?} is under XL"));
+                }
+                let entry_start = glyphs[start].2;
+                if target.left() < entry_start - 0.5 || target.right() > right + 0.5 {
+                    faults.push(format!(
+                        "{words}: target {target:?} is outside its entry, {entry_start}..{right}"
+                    ));
+                }
+                if let Some(next) = next_entry
+                    && target.right() > next + 0.5
+                {
+                    faults.push(format!(
+                        "{words}: target {target:?} is over the next entry, which starts at {next}"
+                    ));
+                }
+            }
+        });
+        (count, faults)
+    }
+
     /// Where the reader's title is, which moves when the reader scrolls.
     pub fn scroll_position_of_reader(&self, title: &str) -> Option<f32> {
         self.nodes()

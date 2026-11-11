@@ -471,7 +471,7 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
     }
     markdown.push_str(&text[at..]);
     reader_style::linked_detail(ui, "Skills", |ui| {
-        crate::markdown_view::show_compact(ui, &markdown);
+        crate::markdown_view::show_skills(ui, &markdown);
     });
 }
 
@@ -1146,6 +1146,151 @@ mod tests {
                 "FD3-even-skill-gaps: {at}: {gaps:?}"
             );
         }
+    }
+
+    /// Iteration 21, FD4 joint witness (revised): a Skills row keeps one normal blank between each
+    /// name and its bonus and one after each comma. A bonus's target is at least `XL` square: it
+    /// extends left over its own skill's name, stays inside its entry, and is clear of the other
+    /// targets. The row wraps by whole entries. From the narrowest stat block to the widest
+    /// reader, so the Library and Lookup panels at 960 and 1920 are both inside it.
+    #[test]
+    fn iter21_s_fd4_a_skill_bonus_target_covers_its_own_entry() {
+        // The tightest text: the narrowest bonus, then two bonuses as wide as they get.
+        const SKILLS: &str = "Insight +8, Perception +14, Persuasion +14";
+        let skills = [
+            ("Insight", "+8"),
+            ("Perception", "+14"),
+            ("Persuasion", "+14"),
+        ];
+        let (mut wrapped, mut one_row) = (0, 0);
+        // From the narrowest panel where the longest entry, `Persuasion +14,`, fits a line (as SD3).
+        for width in (260..=1000).step_by(4) {
+            let harness = drawn(width as f32, |ui| skills_detail(ui, SKILLS));
+            let at = format!("at {width}");
+            let glyphs = glyphs_of(&harness, "Insight");
+            if glyphs.last().unwrap().row > 0 {
+                wrapped += 1;
+            } else {
+                one_row += 1;
+            }
+            let targets = link_targets(&harness);
+            assert_eq!(targets.len(), skills.len(), "FD4-links: {at}");
+            let mut name_gaps = Vec::new();
+            for (at_skill, ((name, bonus), target)) in skills.iter().zip(&targets).enumerate() {
+                let unit = format!("{name} {bonus}");
+                let found = runs(&glyphs, &unit);
+                assert_eq!(found.len(), 1, "FD4-unit-drawn: {at}: {unit}");
+                let unit_glyphs = &found[0];
+                let name_end = unit_glyphs[name.len() - 1];
+                let digits = &unit_glyphs[name.len() + 1..];
+                let row = unit_glyphs[0].row;
+                // Find this unit's place, then what follows it.
+                let start = glyphs
+                    .iter()
+                    .position(|glyph| {
+                        glyph.row == row
+                            && glyph.chr == unit_glyphs[0].chr
+                            && glyph.left == unit_glyphs[0].left
+                    })
+                    .unwrap();
+                let after = &glyphs[start + unit.chars().count()..];
+                assert!(
+                    target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
+                    "FD4-target-size: {at}: {unit} {target:?}"
+                );
+                // The target may cover its own skill's name, but stays inside its entry.
+                assert!(
+                    target.left() >= unit_glyphs[0].left - 0.5,
+                    "FD4-target-inside-entry: {at}: {unit} target {target:?}, entry starts {}",
+                    unit_glyphs[0].left
+                );
+                let blank = unit_glyphs[name.len()];
+                name_gaps.push((digits[0].left - name_end.right, blank.right - blank.left));
+                assert!(
+                    target.contains(egui::pos2(
+                        (digits[0].left + digits.last().unwrap().right) / 2.0,
+                        digits[0].baseline - 2.0
+                    )),
+                    "FD4-target-on-bonus: {at}: {unit} target {target:?}"
+                );
+                // The spare width is all before the bonus, so its target ends with its words.
+                assert!(
+                    target.right() <= digits.last().unwrap().right + 0.5,
+                    "FD4-spare-to-the-left: {at}: {unit} target {target:?}, bonus ends {}",
+                    digits.last().unwrap().right
+                );
+                if at_skill + 1 == skills.len() {
+                    continue;
+                }
+                let [comma, blank, next, ..] = after else {
+                    panic!("FD4-next-entry: {at}: nothing follows {unit}");
+                };
+                assert_eq!(
+                    (comma.chr, blank.chr),
+                    (',', ' '),
+                    "FD4-comma: {at}: {unit}"
+                );
+                // Whole entries: the name, its bonus and its comma share a row.
+                assert!(
+                    unit_glyphs
+                        .iter()
+                        .chain([comma])
+                        .all(|glyph| glyph.row == row),
+                    "FD4-whole-entries: {at}: {unit} is split across rows"
+                );
+                // Must stay true (iteration 20): no space before the comma.
+                assert!(
+                    (comma.left - digits.last().unwrap().right).abs() <= 1.0,
+                    "FD4-no-space-before-comma: {at}: {unit}"
+                );
+                // One blank after the comma: the next entry starts where the blank's own width
+                // ends.
+                assert!(
+                    blank.left - comma.right <= 0.5 && next.left - blank.right <= 0.5,
+                    "FD4-one-blank: {at}: {unit}, comma ends {}, blank {}..{}, next starts {}",
+                    comma.right,
+                    blank.left,
+                    blank.right,
+                    next.left
+                );
+                assert!(
+                    next.row != row || target.right() <= next.left + 0.5,
+                    "FD4-target-clear-of-next: {at}: {unit} target {target:?}, next starts {}",
+                    next.left
+                );
+            }
+            // `+8` and `+14` sit as far from their names as each other. Glyphs snap to whole
+            // pixels, so the gaps can differ by one.
+            let (least, most) = name_gaps
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), (gap, _)| {
+                    (a.min(*gap), b.max(*gap))
+                });
+            assert!(
+                most - least <= 1.0,
+                "FD4-equal-name-gaps: {at}: {name_gaps:?}"
+            );
+            // One normal blank between each name and its bonus, whatever the bonus's width.
+            for (gap, blank) in &name_gaps {
+                assert!(
+                    (gap - blank).abs() <= 0.5,
+                    "FD4-one-blank-before-bonus: {at}: gap {gap}, blank {blank}"
+                );
+            }
+            for (a, first) in targets.iter().enumerate() {
+                for second in &targets[a + 1..] {
+                    let shared = first.intersect(*second);
+                    assert!(
+                        shared.width() <= 0.01 || shared.height() <= 0.01,
+                        "FD4-targets-apart: {at}: {targets:?}"
+                    );
+                }
+            }
+        }
+        assert!(
+            wrapped > 0 && one_row > 0,
+            "FD4-widths-reached: wrapped {wrapped}, one row {one_row}"
+        );
     }
 
     /// SD3: a skill and its bonus wrap as one unit at every width, and each bonus keeps its own

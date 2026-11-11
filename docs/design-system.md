@@ -326,8 +326,10 @@ a line (at the start of the paragraph, after a line break, or where it wraps) ke
 with all the space after them. Punctuation that follows a short link (`,` `.` `;` `:` `!` `?`, closing brackets
 and quotes) sits directly after its words, so `Deception +2, Religion +2` has no space before the comma. The
 words stay where the text puts them, the spare width goes after the punctuation (the punctuation and a blank
-after it count toward it), and the target grows right from the words. A short link that ends its line does the same, so a row of skills keeps one gap between each
-name and its bonus. A link right after another short link gets as much space after it as before it,
+after it count toward it), and the target grows right from the words. A short link that ends its line does the same.
+A stat block's Skills row is the one exception: each bonus ends an entry with its skill's name (`Insight +8`), so
+the row keeps the text's own layout, and the bonus's target extends left over its own entry (see stat blocks).
+Prose keeps this rule, also after a no-break space. A link right after another short link gets as much space after it as before it,
 so the pair reads evenly. The text after a link starts after its space, and the line wraps if it must. Two links
 side by side have a blank between them, so each keeps its own underline. Where the body line is shorter than
 24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, the first line
@@ -365,7 +367,10 @@ label sits on the baseline of its value's first line, also when the value has di
 (`Skills`): the label reads where the value's words are painted. Every line of every detail row has the link
 pitch (24 px), whether or not the row holds a link, so no row looks grouped with another; the extra height
 goes below the words. A skill and its bonus wrap as one unit (`Sleight of Hand +5` never splits), and the
-bonus keeps its own link target. No card surrounds
+bonus keeps its own link target. The row keeps one normal blank between each name and its bonus and one after
+each comma (`Insight +8, Perception +14`), whatever the bonus's width. A bonus's target is at least 24 × 24 px: it
+extends left from the bonus over its own skill's name (the name and bonus are one entry), stays inside that entry,
+and never meets another target. A bonus that must start a line keeps the short-link rule above. No card surrounds
 it. Serif section headings sit over hairlines. Vitals come once from the schema-2 Stat block table. New
 creatures store identity, CR, speed and ability scores there; printed source text stays separate. An absent
 saving throw leaves an empty cell. Bad cells warn with their file line; valid values still lead in the reader
