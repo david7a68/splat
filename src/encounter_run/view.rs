@@ -183,6 +183,12 @@ pub(super) fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
 
 #[cfg(test)]
 thread_local! {
+    /// How many times a group row scanned the run's participants for that group's joins.
+    static GROUP_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+thread_local! {
     /// How many toggle widths the conditions grid measured.
     static CONDITION_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -2993,6 +2999,8 @@ impl Run {
             .members
             .iter()
             .any(|member| member.overrides.changes_creature());
+        #[cfg(test)]
+        GROUP_SCANS.with(|count| count.set(count.get() + 1));
         let added = self
             .state
             .participants
@@ -3187,6 +3195,8 @@ impl Run {
         // decides by its widest join status too (`Added before combat`), so a second join that
         // changes the words never changes the row's shape.
         // The rounds this group joined in, from the run itself.
+        #[cfg(test)]
+        GROUP_SCANS.with(|count| count.set(count.get() + 1));
         let rounds: Vec<u64> = self
             .state
             .participants
@@ -7435,6 +7445,18 @@ mod tests {
                 });
             design::theme::install(&harness.ctx);
             harness.run_steps(2);
+            // iter-25-R review 2: a frame scans the participants once per group for the panel's
+            // width and once per group for its row, and builds no list of rounds besides.
+            let scans = || GROUP_SCANS.with(std::cell::Cell::get);
+            let (before, passes) = (scans(), harness.ctx.cumulative_pass_nr());
+            harness.run_steps(3);
+            let passes = (harness.ctx.cumulative_pass_nr() - passes) as usize;
+            assert!(passes > 0);
+            assert_eq!(
+                scans() - before,
+                passes * 2 * 2,
+                "two scans for each of 2 groups in each of {passes} passes"
+            );
             let fields: Vec<_> = ["Scouts", "Lost Patrol"]
                 .map(|name| {
                     harness

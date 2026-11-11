@@ -12861,8 +12861,26 @@ pub mod encounter_groups {
         run_saved_encounter(d, "Shrine of Cinders");
         open_arrivals(d);
         d.state("group-panel-in-setup", Sizes::Default);
+        // iter-25-R FB1, review 2: the first join, in setup, moves no Add and no row below it,
+        // and neither does its Undo. Each group's Add, at 960, 1200 and 1920.
+        let setup_rows = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    [
+                        "Ash Pack",
+                        GROUP_GOBLINS,
+                        GROUP_LOST,
+                        GROUP_RIVALS,
+                        GROUP_WATCH,
+                    ]
+                    .map(|name| d.place_of(&add_group(name)).map(|rect| rect.top()))
+                })
+            })
+        };
+        let setup_before = setup_rows(d);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
+        let setup_added = setup_rows(d);
         d.state("group-added-in-setup", Sizes::All);
         let overflow = d.at_size((960.0, 640.0), |d| {
             d.visible_text("2 below") && !d.has_containing("2 ties") && !d.has_containing("2 tied")
@@ -12873,6 +12891,17 @@ pub mod encounter_groups {
             "Setup names hidden shared-roll rows without a false tie warning at 960x640",
         );
         d.goal("add a group during setup");
+        d.click_containing("Undo: add Goblin Wave");
+        let setup_undone = setup_rows(d);
+        d.observe(
+            "iter-25-R-FB1-setup",
+            setup_before.iter().flatten().all(Option::is_some)
+                && setup_added == setup_before
+                && setup_undone == setup_before,
+            format!(
+                "Group rows stay through a join in setup and its Undo: {setup_before:?}, added {setup_added:?}, undone {setup_undone:?}"
+            ),
+        );
         d.click("Edit group");
         d.expect("Group name: Lost Patrol");
         let run_open = d.app_mut().encounters.has_run();
