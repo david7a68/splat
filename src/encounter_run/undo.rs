@@ -26,13 +26,18 @@ const SAVED_BYTES: usize = if cfg!(test) {
 } else {
     16 * 1024 * 1024
 };
-/// The most memory the steps read from a file may take, as `weight` counts it. Tests use
-/// smaller budgets for both, so that they can reach them with small files.
-const MEMORY_BYTES: usize = if cfg!(test) {
-    4 * 1024 * 1024
+/// The most memory the steps read from a file may take, as `Step::weight` counts it. Tests
+/// use smaller budgets for both, so that they can reach them with small files.
+pub(super) const MEMORY_BYTES: usize = if cfg!(test) {
+    32 * 1024 * 1024
 } else {
     256 * 1024 * 1024
 };
+/// One slot of a collection: a value in a list or a map, with the spare room that a
+/// collection can hold. A list of a million empty strings is small as text and large in memory.
+const SLOT: usize = 2 * (std::mem::size_of::<serde_yaml_ng::Value>() + 16);
+/// The most a step's text can grow when it is decoded: a few bytes of text name one slot.
+const DECODED: usize = 64;
 
 /// The state before each step, oldest first, with each step's name and whether a sheet made it.
 pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>);
@@ -214,10 +219,9 @@ impl Step {
                 if kept.is_some_and(|kept| same_row(row, kept)) {
                     return None;
                 }
+                // The definition is the run's, by row. A step never holds one.
                 let mut row = row.clone();
-                if kept.is_some_and(|kept| Arc::ptr_eq(&kept.definition, &row.definition)) {
-                    row.definition = same_definition();
-                }
+                row.definition = same_definition();
                 Some((at, row))
             })
             .collect();
@@ -237,34 +241,77 @@ impl Step {
         }
     }
 
-    /// The state before this step, given the state after it, and what each of its rows weighs.
-    /// A step changes rows and never names a new one: each of its rows is a row the state
-    /// after it has, in the same place, with the same key. Anything else is not a step this
-    /// version wrote, and no definition is taken for it.
-    fn before(self, after: &State, after_weights: &[usize]) -> Option<(State, Vec<usize>)> {
-        let mut rows = self.rows;
-        let mut weights = Vec::new();
-        let mut participants = Vec::new();
-        for at in 0..self.count {
-            let kept = after.participants.get(at)?;
-            match rows.remove(&at) {
-                Some(mut row) => {
-                    if row.key != kept.key {
-                        return None;
-                    }
-                    let own_definition = !is_same_definition(&row.definition);
-                    if !own_definition {
-                        row.definition = kept.definition.clone();
-                    }
-                    weights.push(row_weight(&row, own_definition));
-                    participants.push(row);
-                }
-                None => {
-                    weights.push(*after_weights.get(at)?);
-                    participants.push(kept.clone());
-                }
-            }
+    /// Check this step against the state after it, and say what each row of the state before
+    /// it weighs. Nothing is built yet. A step changes rows and never names a new one: each
+    /// of its rows is a row the state after it has, in the same place, with the same key. A
+    /// row the state before it lacks is one that arrived later. Anything else is not a step
+    /// this version wrote.
+    fn row_weights(&self, after: &State, after_weights: &[usize]) -> Option<Vec<usize>> {
+        let arrived = after.participants.get(self.count..)?;
+        if !arrived.iter().all(|row| row.added_from.is_some()) {
+            return None;
         }
+        let mut weights = after_weights.get(..self.count)?.to_vec();
+        for (at, row) in &self.rows {
+            let kept = after.participants.get(*at).filter(|_| *at < self.count)?;
+            if row.key != kept.key {
+                return None;
+            }
+            weights[*at] = row_weight(row, kept);
+        }
+        Some(weights)
+    }
+
+    /// What the state before this step weighs when it is kept: its rows, as `row_weights`
+    /// gives them, and everything else it owns. This is the one count that the memory budget
+    /// uses, and it is made before the state is built.
+    fn weight(&self, after: &State, rows: &[usize]) -> usize {
+        // The log is the log after the step, less the lines the step added, with its own.
+        let lines = after
+            .log
+            .iter()
+            .chain(&self.log.own)
+            .map(|line| SLOT + line.len());
+        rows.iter()
+            .copied()
+            .chain(lines)
+            .chain([
+                self.label.len(),
+                SLOT * self.order.len(),
+                owned(&self.phase),
+                owned(&self.last_change),
+                owned(&self.random),
+                owned(&self.loot),
+            ])
+            .fold(0, usize::saturating_add)
+    }
+
+    /// The state before this step, given the state after it. `row_weights` has checked it.
+    /// A step can change what a row has now. What a row is stays the run's: its name, side,
+    /// AC, definition, starting values, changes and arrival come from the row after the step,
+    /// whatever the file says.
+    fn before(self, after: &State) -> Option<State> {
+        let mut rows = self.rows;
+        let participants = after
+            .participants
+            .get(..self.count)?
+            .iter()
+            .enumerate()
+            .map(|(at, kept)| match rows.remove(&at) {
+                Some(row) => Participant {
+                    key: kept.key.clone(),
+                    name: kept.name.clone(),
+                    side: kept.side.clone(),
+                    armor_class: kept.armor_class,
+                    definition: kept.definition.clone(),
+                    initial: kept.initial.clone(),
+                    changes: kept.changes.clone(),
+                    added_from: kept.added_from.clone(),
+                    ..row
+                },
+                None => kept.clone(),
+            })
+            .collect();
         let state = State {
             participants,
             order: self.order,
@@ -278,8 +325,7 @@ impl Step {
             roll_results: BTreeMap::new(),
             cast: None,
         };
-        // A row for a place the state does not have is not a step this version wrote.
-        (rows.is_empty() && super::valid_state(&state)).then_some((state, weights))
+        super::valid_state(&state).then_some(state)
     }
 }
 
@@ -345,7 +391,8 @@ impl<'de: 'a, 'a> Deserialize<'de> for Newest<'a> {
 /// The steps from a run file. None when this version cannot read them: another version wrote
 /// them, or they do not fit the run's current state. A file can hold more than this version
 /// keeps, or states that would take too much memory: then the newest steps that fit are read.
-/// One step is decoded at a time, and only while its text and the state it gives fit.
+/// One step is decoded at a time, and only while its text can fit. Its state is built only
+/// after its weight is known to fit.
 pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     let saved: Saved<Newest<'_>> = serde_json::from_str(saved.get()).ok()?;
     if saved.version != VERSION {
@@ -353,29 +400,28 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     }
     let mut history = (Vec::new(), Vec::new(), Vec::new());
     let mut memory: usize = 0;
-    // The run owns its current rows and their definitions. A state read here is charged for
-    // its own copy of each row.
     let mut weights: Vec<usize> = now
         .participants
         .iter()
-        .map(|row| row_weight(row, false))
+        .map(|row| row_weight(row, row))
         .collect();
     // The newest step is next to the current state, so the states are rebuilt from the end.
     for text in saved.steps.0.iter().rev() {
-        if memory.saturating_add(text.get().len()) > MEMORY_BYTES {
+        let decoded = text.get().len().saturating_mul(DECODED);
+        if memory.saturating_add(decoded) > MEMORY_BYTES {
             break;
         }
         let mut step: Step = serde_json::from_str(text.get()).ok()?;
-        let label = std::mem::take(&mut step.label);
-        let from_sheet = step.from_sheet;
-        let (state, rows) = step.before(history.0.last().unwrap_or(now), &weights)?;
-        memory = memory.saturating_add(weight(&state, &rows));
+        let after = history.0.last().unwrap_or(now);
+        let rows = step.row_weights(after, &weights)?;
+        memory = memory.saturating_add(step.weight(after, &rows));
         if memory > MEMORY_BYTES {
             break;
         }
+        history.1.push(std::mem::take(&mut step.label));
+        history.2.push(step.from_sheet);
+        let state = step.before(after)?;
         history.0.push(state);
-        history.1.push(label);
-        history.2.push(from_sheet);
         weights = rows;
     }
     history.0.reverse();
@@ -384,35 +430,40 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     Some(history)
 }
 
-/// How many bytes a value takes as JSON: the measure of the text and numbers it owns.
-fn json_len<T: Serialize + ?Sized>(value: &T) -> usize {
-    struct Count(usize);
-    impl std::io::Write for Count {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.0 += bytes.len();
-            Ok(bytes.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
+/// The memory a value owns outside itself: its text, and a slot for each item of each list
+/// and map in it. It is counted from the value's own parts, not from its size as text.
+fn owned<T: Serialize + ?Sized>(value: &T) -> usize {
+    fn parts(value: &serde_json::Value) -> usize {
+        match value {
+            serde_json::Value::String(text) => text.len(),
+            serde_json::Value::Array(items) => items
+                .iter()
+                .map(|item| SLOT.saturating_add(parts(item)))
+                .fold(0, usize::saturating_add),
+            serde_json::Value::Object(fields) => fields
+                .iter()
+                .map(|(key, value)| (2 * SLOT + key.len()).saturating_add(parts(value)))
+                .fold(0, usize::saturating_add),
+            _ => 0,
         }
     }
-    let mut count = Count(0);
     // A value that cannot be measured counts as too large to keep.
-    serde_json::to_writer(&mut count, value).map_or(usize::MAX, |()| count.0)
+    serde_json::to_value(value).map_or(usize::MAX, |value| parts(&value))
 }
 
-/// What one row of a kept state weighs. Every field is named, so that a new field is counted.
-/// A definition shared with the state after is one allocation, which that state has.
-fn row_weight(row: &Participant, own_definition: bool) -> usize {
+/// What one row of a kept state weighs. `row` gives what a step can change, and `kept` gives
+/// what a row is, which `Step::before` takes from the row after the step. Every field is
+/// named, so that a new field is counted. The definition is shared with the run's own row.
+fn row_weight(row: &Participant, kept: &Participant) -> usize {
     let Participant {
-        key,
+        key: _,
         npc: _,
         initiative_group,
         initiative_mode: _,
-        name,
-        side,
-        definition,
-        initial,
+        name: _,
+        side: _,
+        definition: _,
+        initial: _,
         max_hp: _,
         hp: _,
         temporary_hp: _,
@@ -428,58 +479,21 @@ fn row_weight(row: &Participant, own_definition: bool) -> usize {
         notes,
         combat_values,
         started,
-        changes,
-        added_from,
+        changes: _,
+        added_from: _,
     } = row;
     [
         std::mem::size_of::<Participant>(),
-        key.len() + name.len() + side.len() + notes.len(),
-        json_len(initiative_group),
-        json_len(shared_roll),
-        json_len(conditions),
-        json_len(initial),
-        json_len(combat_values),
-        json_len(started),
-        json_len(changes),
-        json_len(added_from),
-        if own_definition {
-            json_len(definition)
-        } else {
-            0
-        },
+        kept.key.len() + kept.name.len() + kept.side.len() + notes.len(),
+        owned(&kept.initial),
+        owned(&kept.changes),
+        owned(&kept.added_from),
+        owned(initiative_group),
+        owned(shared_roll),
+        owned(conditions),
+        owned(combat_values),
+        owned(started),
     ]
     .into_iter()
     .fold(0, usize::saturating_add)
-}
-
-/// What one kept state weighs: its rows, as `row_weight` counts them, and everything else it
-/// owns. This is the one count that the memory budget uses.
-fn weight(state: &State, rows: &[usize]) -> usize {
-    let State {
-        participants: _,
-        order,
-        cursor: _,
-        round: _,
-        phase,
-        log,
-        last_change,
-        random,
-        loot,
-        roll_results: _,
-        cast: _,
-    } = state;
-    let lines = log
-        .iter()
-        .map(|line| line.len() + std::mem::size_of::<String>());
-    rows.iter()
-        .copied()
-        .chain(lines)
-        .chain([
-            std::mem::size_of_val(order.as_slice()),
-            json_len(phase),
-            json_len(last_change),
-            json_len(random),
-            json_len(loot),
-        ])
-        .fold(0, usize::saturating_add)
 }

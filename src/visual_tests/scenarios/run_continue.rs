@@ -399,6 +399,9 @@ pub fn run(d: &mut Driver<'_>) {
     // starts with the outcome of the ending that went, selected: Enter keeps it.
     d.click("Roll gems for Vault Guard");
     d.click(CONTINUE);
+    // The app starts again, so nothing typed before is left in the field: the outcome
+    // comes from the run file.
+    d.restart();
     end_encounter(d);
     let offered = d.field_text("Outcome");
     d.press(Key::Enter);

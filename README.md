@@ -938,9 +938,11 @@ the ending is the newest step. After a loot roll, or when the file has no steps,
 session plan's **Whole run** leads there. Continue fight is one named step: play returns to the turn the fight ended
 on, the run's loot results stay, and **Undo: continue fight** puts the ending back with its outcome. When you
 choose **End encounter…** again, the outcome field starts with that outcome, selected: Enter keeps it, and typing
-replaces it. Timeline, the
+replaces it. The outcome comes from the run file, so it is the same after a close and a restart. Timeline, the
 session plan and the Encounters lists follow the run each way. A fight that is opened and has every step taken back
 keeps its old place in the order of play, so the next fight still starts from the fight that was played last.
+While `Timeline.md` cannot be read, what the open run says waits in order, and is recorded when the file reads
+again, by itself or by **Read the file again**.
 With another run open, Continue fight is blocked and says **Close the open run first.**
 
 ### Run storage and campaign initiative
@@ -957,7 +959,9 @@ in memory and show an error. Changing the folder does not move old runs.
 
 The run file also holds the Undo steps, in its `undo` field. Each step is saved as its differences from the state
 after it, so 100 steps add little to the file. When the steps would take more than 16 MiB of the file, or more
-than 256 MiB of memory when read, the oldest stay out and the newest are kept. **Replace the file with this run** writes this run's steps, and
+than 256 MiB of memory when read, the oldest stay out and the newest are kept, with no message. A saved step
+changes what a participant has now and never what it is: its name, side, AC, stat block, starting values and
+changes come from the run, whatever a step in the file says. **Replace the file with this run** writes this run's steps, and
 **Save as a new run** gives the new file this run's steps and leaves the other file's steps as they are. A file
 from before this field loads with no steps. If Splat cannot read a file's steps, for example because a later
 version wrote them, the run still opens. It says once that Undo starts again from there, the Log keeps that

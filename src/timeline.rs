@@ -614,7 +614,9 @@ pub struct Book {
     pub run_open: bool,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
-    pending_run: Option<(RunFact, Option<Uuid>, bool)>,
+    /// What the open run said while the file could not be read: each change in order, as
+    /// `record_change` was given it. They are recorded, in order, when the file reads again.
+    waiting: Vec<(Option<RunFact>, RunFact, Option<Uuid>)>,
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
@@ -739,6 +741,7 @@ impl Book {
                 self.unreadable = Some(format!("{FILE} could not be read. {e}"));
             }
         }
+        self.record_waiting();
     }
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
@@ -973,6 +976,18 @@ impl Book {
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
         }
+        self.record_waiting();
+    }
+
+    /// The file reads again, by any way back: what the open run said meanwhile is recorded now,
+    /// in the order it was said, so that the result is the one a readable file would have had.
+    fn record_waiting(&mut self) {
+        if self.unreadable.is_some() {
+            return;
+        }
+        for (before, fact, session) in std::mem::take(&mut self.waiting) {
+            self.record_change(before.as_ref(), &fact, session);
+        }
     }
 
     /// An edit is waiting for its pause before it saves.
@@ -1057,11 +1072,6 @@ impl Book {
             let current = self.path.as_ref().and_then(|path| fs::read(path).ok());
             if current != self.baseline {
                 self.reload();
-                if self.unreadable.is_none()
-                    && let Some((fact, session, played)) = self.pending_run.take()
-                {
-                    self.apply_run(&fact, session, played);
-                }
             }
         }
     }
@@ -1253,6 +1263,12 @@ impl Book {
         fact: &RunFact,
         session: Option<Uuid>,
     ) {
+        // Nothing here can be decided without the events. What the DM remembers of the order
+        // of play stays as it is until then.
+        if self.unreadable.is_some() {
+            self.waiting.push((before.cloned(), fact.clone(), session));
+            return;
+        }
         // A new ID with a run already open is that run's copy, which keeps its place in the story.
         let known = self.events.iter().any(|event| {
             event.run == Some(fact.id)
@@ -1278,12 +1294,7 @@ impl Book {
         self.record(fact, session, played);
     }
 
-    /// The run's fact goes to its event now, or waits until the file can be read again.
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        if self.unreadable.is_some() {
-            self.pending_run = Some((fact.clone(), session, played));
-            return;
-        }
         self.update_event(fact, session, played);
         // The run is as it opened. If this opening moved its fight, the fight goes back.
         if fact.steps == 0 {
@@ -2004,7 +2015,7 @@ mod tests {
         fs::write(&path, "written by hand").unwrap();
         let mut book = book(dir.path());
         assert!(book.unreadable.is_some());
-        book.record_run(&fact(RunState::Running), None, true);
+        book.record_change(None, &fact(RunState::Running), None);
         assert!(book.events.is_empty());
         book.add(Kind::Day, None);
         book.save();
@@ -2268,15 +2279,57 @@ mod tests {
         book.reload();
         assert!(book.unreadable.is_some());
         book.record_change(Some(&copy), &copy_undone, later);
-        assert!(book.pending_run.is_some());
+        assert_eq!(book.waiting.len(), 1);
         fs::write(&path, valid).unwrap();
         book.last_check = None;
         book.poll(&eframe::egui::Context::default());
-        assert!(book.unreadable.is_none() && book.pending_run.is_none());
+        assert!(book.unreadable.is_none() && book.waiting.is_empty());
         assert_eq!(
             latest(&book),
             Some(shrine.id),
             "Undo during a Timeline repair restores the order of play"
+        );
+        assert_eq!(event_of(&book, copy.id).result, "Lost, round 3");
+
+        // Unreadable again. The fight is continued, takes one more step, and that step is
+        // taken back: Continue still stands, so the fight is played. The DM repairs the file
+        // and chooses Read the file again, which reads it with no poll.
+        let unreadable = |book: &mut Book| {
+            book.save();
+            let valid = fs::read(&path).unwrap();
+            fs::write(&path, "---\ntimeline_version: [broken\n---\n").unwrap();
+            book.reload();
+            assert!(book.unreadable.is_some());
+            valid
+        };
+        let valid = unreadable(&mut book);
+        let two_steps = RunFact {
+            steps: 2,
+            ..copy.clone()
+        };
+        book.record_change(Some(&copy_undone), &copy, later);
+        book.record_change(Some(&copy), &two_steps, later);
+        book.record_change(Some(&two_steps), &copy, later);
+        fs::write(&path, valid).unwrap();
+        book.reload();
+        assert!(book.unreadable.is_none() && book.waiting.is_empty());
+        assert_eq!(latest(&book), Some(copy.id), "Continue still stands");
+        assert_eq!(event_of(&book, copy.id).result, "Round 3");
+
+        // Unreadable once more. Continue is taken back, the run closes, and the shrine's run
+        // opens to be read, all before the repair. Each change waits its turn, so the fight
+        // goes back to its place, and the shrine is the fight that was played last.
+        let valid = unreadable(&mut book);
+        book.record_change(Some(&copy), &copy_undone, later);
+        book.record_change(None, &shrine_opened, session);
+        assert_eq!(book.waiting.len(), 2);
+        fs::write(&path, valid).unwrap();
+        book.reload();
+        assert!(book.waiting.is_empty());
+        assert_eq!(
+            latest(&book),
+            Some(shrine.id),
+            "the fight that was played last"
         );
         assert_eq!(event_of(&book, copy.id).result, "Lost, round 3");
     }
@@ -2335,12 +2388,15 @@ mod tests {
         book.reload();
         assert!(book.gone && book.unreadable.is_some());
         assert_eq!(book.events[0].id, rest);
-        book.record_run(&fact(RunState::Running), None, true);
+        book.record_change(None, &fact(RunState::Running), None);
         assert_eq!(book.events.len(), 1);
         assert!(!path.exists());
         book.save_again();
         assert!(!book.gone && book.unreadable.is_none());
         assert!(fs::read_to_string(&path).unwrap().contains(&rest));
+        // What the run said while the file was gone is recorded now.
+        assert_eq!(book.events.len(), 2);
+        assert_eq!(book.events[1].result, "Round 3");
     }
 
     #[test]

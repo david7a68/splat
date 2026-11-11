@@ -2621,6 +2621,14 @@ impl Run {
             if closing {
                 closed = self.request_close();
             }
+            // The End step opens. With no outcome typed yet, it starts from the outcome of the
+            // ending that Continue fight took away.
+            if ending
+                && self.outcome.is_empty()
+                && let Some(outcome) = self.outcome_before_continue()
+            {
+                self.outcome = outcome.to_owned();
+            }
             self.ending |= ending;
             self.focus_outcome |= ending;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
