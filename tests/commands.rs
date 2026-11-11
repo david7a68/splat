@@ -15,7 +15,7 @@ fn run(root: &std::path::Path, command: &str, flags: &[&str]) -> Output {
 }
 fn note(schema: u64, name: &str) -> String {
     format!(
-        "---\nsplat_schema: {schema}\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_world: {{type: npc}}\n---\n\n# {name}\n",
+        "---\nsplat_schema: {schema}\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_type: npc\n---\n\n# {name}\n",
         uuid::Uuid::new_v4()
     )
 }
