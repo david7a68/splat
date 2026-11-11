@@ -1064,6 +1064,7 @@ fn set_world_field(
     let updated = fields::patch(&text, name, value)?;
     write_note(&campaign.path, &entry.path, Some(&text), &updated)?;
     Ok(Change {
+        campaign: campaign.id,
         path: entry.path.clone(),
         before: text,
         after: updated,
@@ -1272,6 +1273,9 @@ struct Picker {
 
 #[derive(Clone)]
 pub(crate) struct Change {
+    /// The campaign whose folder holds the note. The result shows, and Undo acts, only there:
+    /// Lookup keeps its reader across a campaign change.
+    campaign: Uuid,
     path: String,
     before: String,
     after: String,
@@ -1333,7 +1337,15 @@ impl Change {
         &self.word
     }
 
+    /// Whether this change's result belongs on this campaign's note at `path`.
+    pub(crate) fn shows_on(&self, campaign: &Campaign, path: &str) -> bool {
+        self.campaign == campaign.id && self.path == path
+    }
+
     pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+        if campaign.id != self.campaign {
+            return Err("This change belongs to another campaign. Nothing was changed.".into());
+        }
         write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
     }
 }
@@ -1525,6 +1537,7 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
     write_note(&campaign.path, relative, Some(&before), &after)?;
     Ok((
         Change {
+            campaign: campaign.id,
             path: relative.into(),
             before,
             after,
@@ -2010,7 +2023,9 @@ impl Reader {
             return self.edit_form(ui, item, index, campaign);
         }
 
-        self.discarded_notice(ui, id);
+        if let Some(campaign) = campaign {
+            self.discarded_notice(ui, campaign, id);
+        }
         let file_line = !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private();
@@ -2147,6 +2162,7 @@ impl Reader {
                             );
                             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
                             Ok::<_, String>(Change {
+                                campaign: campaign.id,
                                 path: item.entry.path.clone(),
                                 before,
                                 after,
@@ -2176,7 +2192,7 @@ impl Reader {
                     }
                 }
                 if let Some(change) = &self.name_undo
-                    && change.path == item.entry.path
+                    && change.shows_on(campaign, &item.entry.path)
                     && design::undo_message(ui, CHANGED, &change.word, "Undo name change")
                 {
                     match change.undo(campaign) {
@@ -2201,7 +2217,7 @@ impl Reader {
             if edit::editable(item, index) {
                 self.kept_notice(ui, item);
                 if let Some(change) = &self.undo
-                    && change.path == item.entry.path
+                    && change.shows_on(campaign, &item.entry.path)
                     && change.kind == ChangeKind::Edit
                     && Self::change_notice(ui, &change.word, change.kind)
                 {
@@ -2590,6 +2606,7 @@ impl Reader {
             };
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
+                campaign: campaign.id,
                 path: item.entry.path.clone(),
                 before: before.clone(),
                 after: after.clone(),
@@ -3041,6 +3058,7 @@ impl Reader {
     fn row_notice(
         &self,
         ui: &egui::Ui,
+        campaign: &Campaign,
         item: &Item,
         kind: ChangeKind,
         value_width: f32,
@@ -3048,7 +3066,7 @@ impl Reader {
         self.undo
             .as_ref()
             .filter(|change| {
-                change.path == item.entry.path
+                change.shows_on(campaign, &item.entry.path)
                     && change.kind == kind
                     && Self::notice_fits(ui, value_width, &change.word, kind)
             })
@@ -3057,13 +3075,15 @@ impl Reader {
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
-    pub(crate) fn has_change_result(&self, path: &str) -> bool {
-        self.undo.as_ref().is_some_and(|change| change.path == path)
+    pub(crate) fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
+        self.undo
+            .as_ref()
+            .is_some_and(|change| change.shows_on(campaign, path))
             || self.kept.as_ref().is_some_and(|(kept, _)| kept == path)
             || self
                 .name_undo
                 .as_ref()
-                .is_some_and(|change| change.path == path)
+                .is_some_and(|change| change.shows_on(campaign, path))
     }
 
     pub fn clear_notice(&mut self) {
@@ -3117,7 +3137,7 @@ impl Reader {
             if key != "creature" && reader_field(&item.entry, key).is_none_or(Value::is_null) {
                 continue;
             }
-            let notice = self.row_notice(ui, item, ChangeKind::of_key(key), value_width);
+            let notice = self.row_notice(ui, campaign, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
                 let (changed, undo) = Self::relationship_row(
                     ui,
@@ -3168,7 +3188,7 @@ impl Reader {
             }
         }
         let groups = index.groups_of(&item.entry);
-        let notice = self.row_notice(ui, item, ChangeKind::PartOf, value_width);
+        let notice = self.row_notice(ui, campaign, item, ChangeKind::PartOf, value_width);
         // An unread list keeps its row: `not read`, with Change blocked by the reason.
         let unread = self.unread_groups(item.entry.id);
         if !groups.is_empty() || unread.is_some() {
@@ -3413,7 +3433,7 @@ impl Reader {
                 }
             }
             if let Some(change) = &self.undo
-                && change.path == item.entry.path
+                && change.shows_on(campaign, &item.entry.path)
                 && change.kind != ChangeKind::Edit
                 && Self::change_notice(ui, &change.word, change.kind)
             {
@@ -3450,7 +3470,7 @@ impl Reader {
                     .flags
                     .iter()
                     .any(|flag| flag.message.starts_with("Status "));
-                let notice = self.row_notice(ui, item, ChangeKind::Status, value_width);
+                let notice = self.row_notice(ui, campaign, item, ChangeKind::Status, value_width);
                 let (changed, undo) = Self::relationship_row(
                     ui,
                     "Status",
@@ -3518,7 +3538,7 @@ impl Reader {
         }
         if !self.compact
             && let Some(change) = &self.undo
-            && change.path == item.entry.path
+            && change.shows_on(campaign, &item.entry.path)
             // A change that names a row value shows beside its row when it fits, and here,
             // below the row block, when it does not. Every other result is a page result.
             && change.kind.has_row()
@@ -4505,12 +4525,29 @@ mod tests {
         let after = fields::patch(&before, "in", "[[Ashfall Keep]]".into()).unwrap();
         write_note(dir.path(), path, Some(&before), &after).unwrap();
         let change = Change {
+            campaign: campaign.id,
             path: path.into(),
             before: before.clone(),
             after: after.clone(),
             word: "Place changed.".into(),
             kind: ChangeKind::Place,
         };
+        // Lead ruling, round 24 review: a change belongs to its campaign. Another campaign with a
+        // note at the same path neither shows it nor has it undone, and keeps its bytes.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = sample_campaign(other_dir.path());
+        fs::create_dir_all(other_dir.path().join("NPCs")).unwrap();
+        fs::write(other_dir.path().join(path), &after).unwrap();
+        assert!(
+            !change.shows_on(&other, path) && change.shows_on(&campaign, path),
+            "owner-shows-on"
+        );
+        assert!(change.undo(&other).is_err(), "owner-undo-refused");
+        assert_eq!(
+            fs::read_to_string(other_dir.path().join(path)).unwrap(),
+            after,
+            "owner-other-bytes"
+        );
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), before);
         let external = format!("{after}\nWords from Obsidian.\n");

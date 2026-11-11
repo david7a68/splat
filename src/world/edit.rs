@@ -143,6 +143,9 @@ impl Fields {
 
 /// One entry's form. A draft with changes stays while the DM reads other entries.
 pub(super) struct EditDraft {
+    /// The campaign whose note this is. Its Undo discard and its lost-note warning show only
+    /// there: Lookup keeps its reader across a campaign change.
+    campaign: Uuid,
     name: String,
     path: String,
     /// The entry as the index read it, so a draft without changes can follow the file.
@@ -184,6 +187,7 @@ impl EditDraft {
         let on_disk = Entry::parse(&entry.path, &baseline)?;
         let start = Fields::of(&on_disk, &baseline);
         Ok(Self {
+            campaign: campaign.id,
             name: entry.name.clone(),
             path: entry.path.clone(),
             seen: (
@@ -318,6 +322,7 @@ impl EditDraft {
         }
         write_note(&campaign.path, &self.path, Some(&disk), &after)?;
         Ok(Saved::Written(Change {
+            campaign: campaign.id,
             path: self.path.clone(),
             before: disk,
             after,
@@ -544,6 +549,14 @@ impl EditDraft {
     }
 }
 
+/// The campaign this index was read for; nil for an index with none.
+fn index_campaign(index: &ContentIndex) -> Uuid {
+    index
+        .campaign
+        .as_ref()
+        .map_or(Uuid::nil(), |campaign| campaign.id)
+}
+
 impl Reader {
     /// Open the form for the entry on show.
     pub(super) fn begin_edit(&mut self, campaign: &Campaign, item: &Item) {
@@ -595,13 +608,13 @@ impl Reader {
 
     /// A draft whose note is gone, or the Undo for one, is on show.
     pub(super) fn has_lost_edits(&self, index: &ContentIndex) -> bool {
-        self.edits
-            .iter()
-            .any(|(id, draft)| index.position(*id).is_none() && draft.dirty())
-            || self
-                .discarded
-                .as_ref()
-                .is_some_and(|(id, _)| index.position(*id).is_none())
+        let here = index_campaign(index);
+        self.edits.iter().any(|(id, draft)| {
+            draft.campaign == here && index.position(*id).is_none() && draft.dirty()
+        }) || self
+            .discarded
+            .as_ref()
+            .is_some_and(|(id, draft)| draft.campaign == here && index.position(*id).is_none())
     }
 
     /// Drafts whose note was deleted or given a new identity outside Splat. They cannot open
@@ -611,7 +624,11 @@ impl Reader {
         let mut lost: Vec<_> = self
             .edits
             .iter()
-            .filter(|(id, draft)| index.position(**id).is_none() && draft.dirty())
+            .filter(|(id, draft)| {
+                draft.campaign == index_campaign(index)
+                    && index.position(**id).is_none()
+                    && draft.dirty()
+            })
             .map(|(id, draft)| (*id, draft.name.clone()))
             .collect();
         lost.sort_by(|a, b| a.1.cmp(&b.1));
@@ -657,6 +674,7 @@ impl Reader {
         }
         // The Undo for a lost draft sits where its warning sat, whatever note is open.
         if let Some((at, draft)) = &self.discarded
+            && draft.campaign == index_campaign(index)
             && index.position(*at).is_none()
             && design::draft_discarded(ui, &draft.name)
             && let Some((id, draft)) = self.discarded.take()
@@ -666,9 +684,10 @@ impl Reader {
     }
 
     /// Undo for a Discard that dropped changes, while the DM reads that entry again.
-    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, id: Uuid) {
+    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, campaign: &Campaign, id: Uuid) {
         if let Some((at, draft)) = &self.discarded
             && *at == id
+            && draft.campaign == campaign.id
             && design::draft_discarded(ui, &draft.name)
             && let Some((id, draft)) = self.discarded.take()
         {
@@ -1846,6 +1865,38 @@ mod tests {
         assert!(same("Night Market", "Night Market"));
         assert!(!same("Night Market", "night market"));
         assert!(!same("Zarel", "[[Zarel]]"));
+    }
+
+    #[test]
+    fn lead_review_a_discarded_draft_belongs_to_its_campaign() {
+        // Lookup keeps its reader across a campaign change. A draft let go in one campaign
+        // offers its Undo discard (and its lost-note warning) only there.
+        let campaign = |dir: &std::path::Path| Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let (home_dir, other_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (home, other) = (campaign(home_dir.path()), campaign(other_dir.path()));
+        let id = super::super::create_entry(&home, "Rook", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&home)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let mut draft = EditDraft::open(&home, entry).unwrap();
+        draft.now.status = "gone".into();
+        let mut reader = Reader {
+            discarded: Some((id, draft)),
+            ..Default::default()
+        };
+        // The note goes in its own campaign: the Undo is offered there.
+        fs::remove_file(home_dir.path().join(&entry.path)).unwrap();
+        let home_index = ContentIndex::load(&[], Some(&home)).unwrap();
+        assert!(reader.has_lost_edits(&home_index), "owner-home");
+        // Another campaign has no such note either, but the draft is not its own.
+        let other_index = ContentIndex::load(&[], Some(&other)).unwrap();
+        assert!(!reader.has_lost_edits(&other_index), "owner-other");
+        reader.discarded = None;
     }
 
     #[test]

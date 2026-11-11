@@ -596,7 +596,7 @@ impl WorldPage {
                             .reader
                             .name_undo
                             .as_ref()
-                            .is_some_and(|change| change.path == repair.path)
+                            .is_some_and(|change| change.shows_on(campaign, &repair.path))
                         {
                             self.reader.name_undo = None;
                         }
@@ -657,7 +657,7 @@ impl WorldPage {
                         .show(ui, |ui| {
                             // A later result on the repaired note replaces `Note repaired.`.
                             if self.repaired == Some(item.entry.id)
-                                && self.reader.has_change_result(&item.entry.path)
+                                && self.reader.has_change_result(campaign, &item.entry.path)
                             {
                                 self.repaired = None;
                             }

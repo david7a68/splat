@@ -723,7 +723,9 @@ and Lookup's link open its card again; Reroll on the card replaces it. Discard s
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
 it is a link that opens the NPC's card on World from any page.
 
-A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
+Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) belongs to
+the campaign that made it: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
+only in that campaign. A World result is one message form in one place: `message` (or the shared Undo message) below the file line, where
 `<file> is now a separate note.` sits, so the title never moves. `Note repaired.` is a success message there, and
 `<name> draft discarded.` sits there below the open note's file line. The edit form's save result (`Changes saved.`
 with `Undo changes`, or `Your changes are already in the note.`) sits there too, and a later result on the same note

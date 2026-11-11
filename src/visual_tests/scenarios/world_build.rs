@@ -927,6 +927,7 @@ pub fn broken(d: &mut Driver<'_>) {
         ),
     )
     .unwrap();
+    let quiet_before = fs::read_to_string(&quiet_note).unwrap();
     d.click(NAV_ENCOUNTERS);
     if d.has(SEARCH_LOOKUP) {
         look_up_again(d, "Repaired watchkeeper");
@@ -955,6 +956,14 @@ pub fn broken(d: &mut Driver<'_>) {
     switch_campaign(d, CAMPAIGN);
     d.settle();
     look_up_again(d, "Repaired watchkeeper");
+    d.wait_for_text("The watchkeeper is back.");
+    // Lead ruling: B's `Undo name change` belongs to Quiet Harbor. Emberfall's note now sits at
+    // the same relative path, and it does not offer B's Undo; it offers its own A.
+    d.observe(
+        "review-3-D-name-undo-owner",
+        !d.has("Undo name change") && d.has("Undo file rename"),
+        "Quiet Harbor's Undo name change does not show on Emberfall's note at the same path",
+    );
     d.click("Undo file rename");
     d.settle();
     d.observe(
@@ -963,6 +972,20 @@ pub fn broken(d: &mut Driver<'_>) {
             && !moved.exists()
             && fs::read_to_string(&quiet_note).ok().as_deref() == Some(quiet_after.as_str()),
         "Undo A back in Emberfall moves its file back; Quiet Harbor keeps B",
+    );
+    // B's Undo still works in its own campaign, and changes only its own note.
+    switch_campaign(d, QUIET_CAMPAIGN);
+    d.settle();
+    // New words, so Lookup searches Quiet Harbor's notes again.
+    look_up_again(d, "Repaired");
+    d.wait_for_text("Keeps the harbour light.");
+    d.click("Undo name change");
+    d.settle();
+    d.observe(
+        "review-3-D-name-undo-home",
+        fs::read_to_string(&quiet_note).ok().as_deref() == Some(quiet_before.as_str())
+            && fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str()),
+        "Undo name change in Quiet Harbor restores its note; Emberfall's note stays",
     );
 }
 
