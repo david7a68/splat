@@ -2080,18 +2080,7 @@ impl Lookup {
                         .iter()
                         .any(|item| item.title.eq_ignore_ascii_case(&query))
                 {
-                    let name = self
-                        .query
-                        .split_whitespace()
-                        .map(|word| {
-                            let mut chars = word.chars();
-                            chars.next().map_or_else(String::new, |first| {
-                                first.to_uppercase().collect::<String>()
-                                    + &chars.as_str().to_lowercase()
-                            })
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let name = typed_name(&self.query);
                     for (at, (word, kind)) in [("New NPC", "npc"), ("New location", "location")]
                         .into_iter()
                         .enumerate()
@@ -2283,6 +2272,22 @@ pub struct GeneratedCard {
     pub npc: crate::npc_generator::Generated,
     pub problems: Vec<crate::npc_generator::TableProblem>,
     pub sources: Vec<String>,
+}
+
+/// The name a New action gives the words the DM typed. It keeps every letter as typed, with
+/// one space between words. Only when the DM typed no capital at all does the first letter
+/// become one: `toll at the old mill` gives `Toll at the old mill`, and `McTavish` and
+/// `d’Arcy` stay as they are. The action's label, the note's file name and its saved name
+/// all come from this one name.
+fn typed_name(typed: &str) -> String {
+    let name = typed.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.chars().any(char::is_uppercase) {
+        return name;
+    }
+    let mut chars = name.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 /// The separator between a result row's name and the parts of its detail.
@@ -3461,6 +3466,38 @@ mod tests {
             index.world_groups("")[&(1, "Locations".to_owned())].len(),
             2
         );
+    }
+
+    #[test]
+    fn a_new_name_keeps_the_dms_letters() {
+        // iter-21-T-FT1: only the first letter becomes a capital, and only with no capital typed.
+        for (typed, name) in [
+            ("toll at the old mill", "Toll at the old mill"),
+            ("  toll   at the  old mill ", "Toll at the old mill"),
+            ("McTavish", "McTavish"),
+            ("old McTavish", "old McTavish"),
+            ("d’Arcy", "d’Arcy"),
+            ("d’arcy", "D’arcy"),
+            ("éowyn of rohan", "Éowyn of rohan"),
+            ("3 crows inn", "3 crows inn"),
+            ("   ", ""),
+        ] {
+            assert_eq!(typed_name(typed), name, "typed {typed:?}");
+        }
+        // The file name, the saved name and the heading are the name the action shows.
+        let (_dir, campaign) = campaign_with(&[]);
+        let name = typed_name("toll at the old mill");
+        let id = world::create_entry(&campaign, &name, "npc").unwrap();
+        let text = std::fs::read_to_string(campaign.path.join("NPCs/Toll at the old mill.md"))
+            .expect("the file is named as the action said");
+        let (entries, _) = splat::content::read_directory(&campaign.path).unwrap();
+        let entry = entries.iter().find(|entry| entry.id == id).unwrap();
+        assert_eq!(entry.name, "Toll at the old mill");
+        assert!(
+            text.contains("\nsplat_name: Toll at the old mill\n"),
+            "{text}"
+        );
+        assert!(text.contains("\n# Toll at the old mill\n"), "{text}");
     }
 
     #[test]
