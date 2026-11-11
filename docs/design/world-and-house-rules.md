@@ -339,9 +339,7 @@ event_types:
 whole file unreadable (`src/timeline.rs:380`), and this design never writes one. An unknown type shows its raw
 word on a working row.
 
-**The version.** Splat reads `timeline_version: 2` only. The version goes up when a file first holds a `type`. An old
-build then refuses the file with a clear message (`src/timeline.rs:381`). This is needed, because an old build
-would otherwise drop `type` on its next save.
+**The version.** Splat reads and writes `timeline_version: 2` only. A custom type does not change the version.
 
 **The page.** Custom types are under **More…** in the Add row, so the row stays short. They count as Major events
 in the filters, and search finds them by name. **More… → New event type** asks for a name and an icon, and it
