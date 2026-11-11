@@ -1,5 +1,6 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
+mod dock;
 mod loot;
 mod rolling;
 mod undo;
