@@ -1,9 +1,9 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-before	7	5	35	5	0	1	9	20
+before	7	5	36	5	0	1	9	21
 during	27	7	182	7	2	11	43	119
 after	6	3	15	3	4	0	1	7
-total	40	15	232	15	6	12	53	146
+total	40	15	233	15	6	12	53	147
 
 Tasks
 phase	task	transitions	interactions	overhead	path
@@ -12,7 +12,7 @@ before	Recall what happened last session, and where the story stands	0	2	2	Sessi
 before	Compare the party's passive Perception, to plan an ambush	1	1	1	Session > Party
 before	Build tonight's encounter	2	16	9	Party > Session > Encounters
 before	Make the boss your own: copy it, change it, and swap it in	0	5	0	Encounters
-before	Write the read-aloud text and tactics for the encounter	0	3	0	Encounters
+before	Write the read-aloud text and tactics for the encounter	0	4	0	Encounters
 before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
 during	Start recording	0	2	0	Session
 during	Read last session's recap aloud	0	2	2	Session

@@ -14,16 +14,16 @@ sections below refer to the first audit's run.
 and the Undo of the Fireball make the fixture ready. Each is a `Setup` row in `steps.tsv` and counts for
 nothing, so a set-up change cannot move a count.
 
-**Measured on `main`** at `77ec5920`, without pull request 232 (see "Not final yet" below):
+**Measured on `main`** at `8817e841`, without pull request 232 (see "Not final yet" below):
 
 | Phase | Tasks | Transitions before | Transitions now | Interactions before | Interactions now |
 |---|---:|---:|---:|---:|---:|
-| Before | 7 | 5 | 5 | 34 | 35 |
+| Before | 7 | 5 | 5 | 34 | 36 |
 | During | 27 | 7 | 7 | 180 | 182 |
 | After | 6 (was 7) | 1 | 3 | 17 | 15 |
-| Total | 40 (was 41) | **13** | **15** | **231** | **232** |
+| Total | 40 (was 41) | **13** | **15** | **231** | **233** |
 
-By kind, before and now: Nav 14 and 15, Sub 7 and 6, Panel 12 and 12, Find 49 and 53, Do 149 and 146.
+By kind, before and now: Nav 14 and 15, Sub 7 and 6, Panel 12 and 12, Find 49 and 53, Do 149 and 147.
 
 **Each difference from 13 and 231.** The old `steps.tsv` was measured on 2026-11-02 (#25). The script and
 the app changed after it, and the script was not run again.
@@ -35,13 +35,14 @@ the app changed after it, and the script was not run again.
 | The party travels for half a day | 1 | 2: `More Add actions`, `Add Travel` | Since #136 the strip keeps Fight, Group and Long rest in view, and Travel is in **More** at 1200x800 |
 | Record a short rest | 1 | 2 | The same, for Short rest |
 | Build tonight's encounter | 15 | 16 | `Duplicate` is a line of the row's menu: 2, was 1 |
+| Write the read-aloud text and tactics | 3 | 4 | Since #247 the `Read-aloud and notes` field starts below the editor's visible part at 1200x800, so the DM scrolls to it first. The driver counts one scroll into view as one interaction. G6 caught this move when #247 merged |
 | Make the boss your own | 6 | 5 | `Make it yours` is a line of the row's menu: 2, was 1. The HP field has focus, so the number is typed in 1, was 3 |
 | A fight you did not plan | 9 | 8 | `Close run` closes the empty run at once. `Close now` is no longer asked |
 | Say where the fight happened | 4, no transition | 4, **T T** | The `Details` tab went in #39. The place is now the `Where` field of the Timeline page: the row's `Timeline` link, type, then `Session` again |
 | Link the fight in the note | 2 | Removed | `Add to notes` is drawn only for an event with no run (`src/sessions/page.rs`, the plan row's action band). A played fight has a run, so the control does not exist and the act was blocked. No control links a played fight today; F7's `Add rewards` will write the link |
 | Process the recording | 4 | 4 | Its tab is named `Recordings, 1 recording` now. The count is the same |
 
-Sum: +1, +1, +1, +1, +1, −1, −1, 0 and −2 interactions give 232. The two transitions are the Timeline trip.
+Sum: +1, +1, +1, +1, +1, +1, −1, −1, 0 and −2 interactions give 233. The two transitions are the Timeline trip.
 One fact also changed with the app and not the count: "final HP reads in place" looked for a `FINAL HP`
 heading, which the opened row no longer has; it now looks for the HP lines and `Log`, and is true.
 

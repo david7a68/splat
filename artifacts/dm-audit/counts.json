@@ -1,5 +1,5 @@
 {
-  "about": "G6 reads this. Written by audit-freeze from the dm-audit scenario: 40 tasks, 15 page transitions, 232 interactions.",
+  "about": "G6 reads this. Written by audit-freeze from the dm-audit scenario: 40 tasks, 15 page transitions, 233 interactions.",
   "tasks": [
     {
       "phase": "before",
@@ -40,7 +40,7 @@
       "phase": "before",
       "task": "Write the read-aloud text and tactics for the encounter",
       "transitions": 0,
-      "interactions": 3,
+      "interactions": 4,
       "path": "Encounters"
     },
     {
