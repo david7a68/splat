@@ -222,7 +222,9 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
             Some(RosterFault {
                 name,
                 line,
-                problem: flag.message.clone(),
+                // A row fault names its line itself, so it needs the words without it. Rows are read
+                // from the file, never from a saved copy; `unread_notes` shows any other flag.
+                problem: flag.words()?,
             })
         })
         .collect()
@@ -249,12 +251,19 @@ fn unread_notes(
         .iter()
         .map(|flag| {
             let row = faults.iter().find(|fault| fault.line == flag.line);
+            // A flag read back from a saved copy has only its sentence, which names its line:
+            // it follows the file or the row, and no line is added.
+            let Some(words) = flag.words() else {
+                return match row {
+                    _ if faults.is_empty() => format!("{path}: {}", flag.message),
+                    Some(fault) => format!("{}: {}", fault.name, flag.message),
+                    None => flag.message.clone(),
+                };
+            };
             match row {
-                _ if faults.is_empty() => {
-                    format!("{path}, line {}: {}", flag.line, flag.message)
-                }
-                Some(fault) => row_fault_words(&fault.name, flag.line, &flag.message),
-                None => format!("Line {}: {}", flag.line, flag.message),
+                _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
+                Some(fault) => row_fault_words(&fault.name, flag.line, &words),
+                None => flag.message.clone(),
             }
         })
         .collect()
@@ -5011,7 +5020,7 @@ impl Encounters {
             // The warning names the line; the file's path and links start at the last
             // warning's words.
             for (at, flag) in rule_flags.iter().enumerate() {
-                let text = format!("Line {}: {}", flag.line, flag.message);
+                let text = flag.message.clone();
                 if at + 1 == rule_flags.len() {
                     design::message_with_actions(ui, Tone::Warning, &text, |ui| {
                         file_line(ui, &active.path, "Campaign.md");
@@ -5345,6 +5354,27 @@ mod tests {
             line,
             problem: String::new(),
         };
+        // A flag read back from a saved copy has only its sentence: it follows the file or the
+        // row, and no line is added, so each names its line once.
+        let saved = |line: usize, message: &str| -> splat::content::layout::Flag {
+            serde_json::from_value(serde_json::json!({"line": line, "message": message})).unwrap()
+        };
+        assert_eq!(
+            unread_notes(
+                "Encounters/Shrine.md",
+                &[saved(3, "Line 3: the date was not read.")],
+                &[]
+            ),
+            ["Encounters/Shrine.md: Line 3: the date was not read."]
+        );
+        assert_eq!(
+            unread_notes(
+                "Encounters/Shrine.md",
+                &[saved(20, "Line 20: the change was not read.")],
+                &[row("Ember Cultist", 20)]
+            ),
+            ["Ember Cultist: Line 20: the change was not read."]
+        );
         for (flags, rows, path, expected, sentence) in [
             (
                 vec![flag(3, "the date was not read.")],
@@ -5383,7 +5413,7 @@ mod tests {
             for row in &rows {
                 let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
                 let fault = RosterFault {
-                    problem: flag.message.clone(),
+                    problem: flag.words().unwrap(),
                     ..row.clone()
                 };
                 assert!(notes.contains(&fault.words()), "{}", fault.words());

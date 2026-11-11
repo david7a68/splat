@@ -4970,10 +4970,38 @@ mod tests {
         let grouping = Grouping::Explicit.label().replace('’', "'");
         run.apply(Command::Note(2, format!("Roll {grouping} next time.")))
             .unwrap();
+        // A flag saved by an older Splat holds its line in its own words; a new flag starts with
+        // it. Both come back as they were saved, each naming its line once.
+        let old_words = "Hit Points “about twenty” not read (line 19). Start with a number, such as 22 (4d8 + 4).";
+        let new_words = "Line 19: Hit Points “about twenty” was not read. Start with a number, such as 22 (4d8 + 4).";
+        Arc::make_mut(&mut run.state.participants[0].definition).flags = vec![
+            serde_json::from_value(serde_json::json!({"line": 19, "message": old_words})).unwrap(),
+            splat::content::layout::Flag::unread(
+                splat::content::layout::Field::HitPoints,
+                19,
+                "Hit Points",
+                "about twenty",
+                "Start with a number, such as 22 (4d8 + 4).",
+            ),
+        ];
         run.configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         let path = run.storage.as_ref().unwrap().path.clone();
         let mut reopened = Run::open(&path, campaign).unwrap();
+        let saved: Vec<_> = reopened.state.participants[0]
+            .definition
+            .flags
+            .iter()
+            .map(|flag| flag.message.as_str())
+            .collect();
+        assert_eq!(saved, [old_words, new_words]);
+        for words in saved {
+            assert_eq!(
+                words.to_lowercase().matches("line 19").count(),
+                1,
+                "{words}"
+            );
+        }
         assert_eq!(reopened.current(), run.current());
         assert_eq!(
             reopened.state.participants[0].hp,

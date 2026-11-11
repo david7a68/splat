@@ -698,7 +698,7 @@ mod tests {
             assert_eq!(flags.len(), 1);
             assert_eq!(
                 flags[0].message,
-                "Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event."
+                "Line 1: Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event."
             );
         }
         let text = render(
@@ -760,8 +760,8 @@ mod tests {
         let outside = text.replace("## Day 1:", "## Day 5:");
         let (events, flags) = parse(&outside);
         assert_eq!(
-            flags[0].message,
-            "“Day 5” is day 1 in order. Splat renumbers it when it saves."
+            flags[0].cause(),
+            Some("“Day 5” is day 1 in order. Splat renumbers it when it saves.")
         );
         let after = patch(&outside, &events, &sessions, true).unwrap();
         assert!(after.contains("## Day 1: Start"));
@@ -858,7 +858,8 @@ mod tests {
         let (events, flags) = parse(text);
         assert_eq!(events.len(), 2);
         assert!(flags.iter().any(|flag| flag.line == 8
-            && flag.message == "“Day 5” is day 2 in order. Splat renumbers it when it saves."));
+            && flag.message
+                == "Line 8: “Day 5” is day 2 in order. Splat renumbers it when it saves."));
         // Round 13 FD6: the row names the number the heading was written with.
         assert_eq!(flagged_days(text), vec![("t-two".to_owned(), 5)]);
         assert!(flagged_days(&text.replace("Day 5", "Day 2")).is_empty());
