@@ -720,18 +720,14 @@ impl Run {
         let armor = self.state.participants[row].armor_class;
         let mut words = Vec::new();
         if let Some(first) = &outcome.first {
-            // A natural 20 always hits and a natural 1 always misses. The natural words come
-            // first, so a narrow row drops them before the comparison.
+            // The total beside the AC, with no verdict: the DM rules on cover, Shield and the
+            // like. The natural words come first, so a narrow row drops them before the
+            // comparison.
             if let Some(natural) = first.natural_words() {
                 words.push(natural.to_owned());
             }
             words.push(match armor {
-                Some(armor) => {
-                    let hits = first.natural == Some(20)
-                        || (first.natural != Some(1) && first.total >= armor);
-                    let verb = if hits { "Hits" } else { "Misses" };
-                    format!("{verb} AC {armor} with {}", first.total)
-                }
+                Some(armor) => format!("{} vs AC {armor}", first.total),
                 None => format!("{} to hit", first.total),
             });
         }
@@ -1312,7 +1308,7 @@ mod tests {
         let armor = run.state.participants[target].armor_class.unwrap();
         assert_eq!(
             run.row_badge(target).unwrap(),
-            format!("Natural 20 · Hits AC {armor} with 24 · 20 damage"),
+            format!("Natural 20 · 24 vs AC {armor} · 20 damage"),
             "iter-19-R-ST2: the comparison stays beside the damage"
         );
         assert!(
@@ -1486,22 +1482,25 @@ mod tests {
     }
 
     #[test]
-    fn an_attack_says_whether_it_hits_the_rows_ac() {
+    fn an_attack_shows_its_total_against_the_rows_ac_with_no_verdict() {
         let mut run = live();
         let actor = run.current().unwrap();
         let target = (0..3).find(|row| *row != actor).unwrap();
         let armor = run.state.participants[target].armor_class.unwrap();
         run.roll_link(ask(attack(), actor));
-        // d20 + 4 one short of AC misses; meeting it hits; a natural 1 misses whatever.
-        for (face, verb) in [(armor - 5, "Misses"), (armor - 4, "Hits"), (1, "Misses")] {
+        // Below the AC, at it, and a natural 1: each the same plain comparison, and Amount
+        // gets the damage every time, for the DM to rule on.
+        for face in [armor - 5, armor - 4, 1] {
             run.state.random = Random::controlled([face as u32, 1, 1]);
             run.target(target, None);
             let badge = run.row_badge(target).unwrap();
             assert!(
-                badge.contains(&format!("{verb} AC {armor} with {}", face + 4))
-                    && badge.ends_with(" · 4 damage"),
+                badge.ends_with(&format!("{} vs AC {armor} · 4 damage", face + 4))
+                    && !badge.contains("Hits")
+                    && !badge.contains("Misses"),
                 "iter-19-R-ST2: {face}: {badge}"
             );
+            assert_eq!(run.amount, "4");
         }
     }
 

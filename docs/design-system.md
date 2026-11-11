@@ -779,7 +779,7 @@ below name and action, without an extra item gap, and extend to the menu slot. O
 member count, XP, Changed, members. Shorten members first, with full text on hover. Member counts and XP use
 one dot-separated line. Members and XP share one heading. Keep a member summary below search when there are
 members, also in compact editors. Member names and stats sit above Count, Edit and the menu; count stays at
-the left and actions together at the right. Changes stay on one line, such as `Changed · 2 to add by hand`,
+the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
 Save group with Add a creature first.
 
@@ -969,8 +969,8 @@ it. Enter applies the damage. Escape stops.`), led by the way the d20 rolls when
 Click a target…`). Then quiet actions on their own line, the first of each line with `line_start`, so its words start
 at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
 `Roll for them`. Each other row shows, in accent Small, under its state or after its second line, the chance to hit it
-while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the result against it (`Hits AC 13
-with 17 · 10 damage`). It takes the longest form that fits whole, dropping words before the result first; the
+while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the result against it, a plain comparison
+with no hit or miss verdict (`17 vs AC 13 · 10 damage`). It takes the longest form that fits whole, dropping words before the result first; the
 result's last two parts (the comparison and the damage) never drop, and are cut by words only where no place holds
 them. A save's creature targets show their roll in the AC cell. After `Roll damage`, each target says its own result,
 from the amount Enter gives it (`Saved · 1 damage (half)`, `Failed · 3 damage`), and keeps it after Enter. Outside a

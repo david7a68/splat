@@ -32,10 +32,10 @@ The glossary names the two kinds of roll:
    of its hit, `Dexterity Saving Throw: DC 14`. Structured data is not consistent
    enough (114 of the 336 built-in creatures have no `attack_bonus:` line). A
    run's attack and damage changes are added.
-4. **Record, do not rule.** A roll never changes HP; Enter does. A row says
-   whether the total meets the target's AC (`Hits AC 13 with 17`) and whether a
-   save meets its DC (`Saved`), which is arithmetic: Amount gets the damage
-   either way, and the DM rules on cover, a Shield spell and the like.
+4. **Record, do not rule.** A roll never changes HP; Enter does. There is no hit
+   or miss verdict; the chance to hit is arithmetic. A rolled attack puts its
+   total beside the target's AC, `17 vs AC 13 · 10 damage`, and Amount gets the
+   damage either way, so the DM rules on cover, a Shield spell and the like.
 5. **Players roll their own dice.** For a party member, a tile targets but does
    not roll; `Roll for them` rolls if the player wants. A save's character
    targets roll at the table, and the DM uses their half mark.
@@ -71,7 +71,7 @@ character has it.
    and `84% to hit · advantage`.
 2. Click the target's row (Shift or Ctrl for advantage or disadvantage). The
    attack and its damage roll; a natural 20 rolls critical damage. The row says
-   `Hits AC 13 with 17 · 10 damage` (or `Misses AC 13 with 11 · …`), the row
+   `17 vs AC 13 · 10 damage` (or `11 vs AC 13 · 10 damage`), the row
    becomes the dock's target, and Amount has 10. Enter applies it, as one named
    step of Undo.
 3. The tile stays armed: click the next target for a Multiattack. Escape, `Stop`

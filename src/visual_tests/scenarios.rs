@@ -13302,17 +13302,30 @@ pub mod run_rolls {
         d.click_row(TARGET);
         d.observe(
             "T16.2",
-            d.has_containing("AC 13 with ") && d.has_containing("Click a target"),
+            d.has_containing(" vs AC 13") && d.has_containing("Click a target"),
             "A click on a row rolls against it, and the action stays armed",
         );
-        // The attack's total and its comparison with AC stay in view beside the damage.
+        // The attack's total and the AC stay in view beside the damage, as a plain
+        // comparison with no hit or miss verdict.
         d.observe_both(
             "iter-19-R-ST2",
-            "The rolled row shows the attack against AC beside its damage",
+            "The rolled row paints `<total> vs AC 13 · <damage> damage`, and no Hits or Misses",
             |d| {
                 let shown = d.painted_in(egui::Rect::EVERYTHING);
-                (shown.contains("Hits AC 13 with ") || shown.contains("Misses AC 13 with "))
-                    && shown.contains(" damage")
+                let number_before = |text: &str| {
+                    let digits =
+                        text.len() - text.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+                    digits > 0
+                };
+                let compared = shown.match_indices(" vs AC 13 · ").any(|(at, found)| {
+                    let rest = &shown[at + found.len()..];
+                    let digits =
+                        rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+                    number_before(&shown[..at])
+                        && digits > 0
+                        && rest[digits..].starts_with(" damage")
+                });
+                compared && !shown.contains("Hits") && !shown.contains("Misses")
             },
         );
         d.state("attack-rolled", Sizes::All);
@@ -13375,7 +13388,7 @@ pub mod run_rolls {
         d.click("Roll with disadvantage");
         d.observe(
             "T16.9",
-            d.has_containing("AC 13 with "),
+            d.has_containing(" vs AC 13"),
             "A row's right-click menu rolls against it with disadvantage",
         );
         d.goal_within("T16.9", "roll against one target with disadvantage", 2);
@@ -13415,7 +13428,7 @@ pub mod run_rolls {
         d.click_starting("Yes · 2d6+2 slashing");
         d.observe(
             "T16.10",
-            d.has_containing("AC 13 with "),
+            d.has_containing(" vs AC 13"),
             "The chosen damage rolls against the row",
         );
         d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
