@@ -59,9 +59,9 @@ pub enum Seed {
     Groups,
     /// `Campaign`, plus plain world notes with links, headings and a roll table.
     World,
-    /// World, with explicit old-layout conversion files and one malformed property.
+    /// World, with creature, spell and item tables, and one malformed property.
     Formats,
-    /// An old Timeline for conversion, plus schema-2 lists with an invalid cell.
+    /// A Timeline, plus schema-2 lists with an invalid cell.
     ListFormats,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
@@ -160,37 +160,9 @@ fn seed_campaigns(
         write_format_notes(&active.path)?;
     }
 
-    seed_list_layouts(&active, &quiet, &unlinked, &module, scenario, seed)?;
+    seed_list_layouts(&active, &quiet, seed)?;
 
-    let mut modules = vec![module];
-    if seed == Seed::Formats {
-        let generated_root = root.join("modules/generated-book");
-        let id = stable_id("visual:generated-book");
-        write_note(
-            &generated_root,
-            "Package.md",
-            &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: package\nsplat_name: Generated Book\nsplat_namespace: generated_book\nsplat_generated: true\n---\n\n# Generated Book\n"
-            ),
-        )?;
-        write_note(
-            &generated_root,
-            "Creatures/Book Wolf.md",
-            &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: generated_book:creatures/book_wolf\nsplat_name: Book Wolf\nsplat_creature: {{size: medium, type: beast}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}}}\n---\n\n# Book Wolf\n\nA creature from an outside converter.\n",
-                stable_id("visual:book-wolf")
-            ),
-        )?;
-        old_layout(&generated_root, "Creatures/Book Wolf.md")?;
-        old_layout(&modules[0].path, "Creatures/Cinder Wolf.md")?;
-        old_layout(&active.path, "NPCs/Rook.md")?;
-        old_layout(&active.path, "Notes/Emberfall Rumours.md")?;
-        modules.push(Module {
-            id,
-            name: "Generated Book".into(),
-            path: generated_root,
-        });
-    }
+    let modules = vec![module];
     let data = UserData {
         version: 3,
         active_campaign_id: Some(active.id),
@@ -233,28 +205,6 @@ fn write_note(root: &Path, relative: &str, text: &str) -> Result<(), String> {
     let text = splat::content::formats::convert(relative, text)?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Entry::parse(relative, &text).map(|_| ())
-}
-
-/// Conversion scenarios alone keep selected old files on disk.
-fn old_layout(root: &Path, relative: &str) -> Result<(), String> {
-    let path = root.join(relative);
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let entry = Entry::parse(relative, &text)?;
-    let body = splat::content::stat_blocks::reading_body(&entry, &entry.body)
-        .split("\n> [!note]- Splat data")
-        .next()
-        .unwrap_or(&entry.body)
-        .to_owned();
-    let mut fields = (*entry.fields).clone();
-    fields.insert("splat_schema".into(), 1.into());
-    fs::write(
-        path,
-        format!(
-            "---\n{}---\n{body}",
-            serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-        ),
-    )
-    .map_err(|e| e.to_string())
 }
 
 fn write_module(root: &Path) -> Result<Module, String> {
@@ -526,8 +476,7 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
-    // Native creatures use the current template layout. Format scenarios cover
-    // legacy conversion; ordinary saves keep testing a stable editor.
+    // Native creatures use the current template layout, so ordinary saves test a stable editor.
     write_note(
         root,
         "Notes/Captain Varra.md",
@@ -1544,33 +1493,8 @@ fn cached_art_is_byte_identical_and_world_files_remain_independent() {
     );
 }
 
-/// Seed explicit conversion fixtures and normal schema-2 lists.
-fn seed_list_layouts(
-    active: &Campaign,
-    quiet: &Campaign,
-    unlinked: &Campaign,
-    _module: &Module,
-    _scenario: &str,
-    seed: Seed,
-) -> Result<(), String> {
-    // Conversion scenarios retain one old campaign for preview and Undo.
-    if seed == Seed::Formats {
-        let campaign = unlinked;
-        let path = campaign.path.join("Campaign.md");
-        let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let entry = Entry::parse("Campaign.md", &text)?;
-        let mut fields = (*entry.fields).clone();
-        fields.insert("splat_schema".into(), 1.into());
-        fs::write(
-            path,
-            format!(
-                "---\n{}---\n\n# {}\n",
-                serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?,
-                entry.name
-            ),
-        )
-        .map_err(|e| e.to_string())?;
-    }
+/// Seed version 2 timelines and schema-2 lists.
+fn seed_list_layouts(active: &Campaign, quiet: &Campaign, seed: Seed) -> Result<(), String> {
     // Quiet campaigns also use version 2 timelines.
     let quiet_folder = crate::sessions::open_folder(quiet)?;
     fs::write(
@@ -1580,7 +1504,15 @@ fn seed_list_layouts(
     .map_err(|e| e.to_string())?;
     if seed == Seed::ListFormats {
         let folder = crate::sessions::open_folder(active)?;
-        fs::write(folder.join(crate::timeline::FILE),"---\ntimeline_version: 1\ntimeline:\n- id: t-f3-day\n  kind: day\n  title: The crossing\n- id: t-f3-road\n  kind: travel\n  title: Old bridge\n  duration: 10 minutes\n  notes: The party argued about the toll.\n---\n\n# Timeline\n").map_err(|e|e.to_string())?;
+        let events: Vec<crate::timeline::Event> = serde_yaml_ng::from_str(
+            "- id: t-f3-day\n  kind: day\n  title: The crossing\n- id: t-f3-road\n  kind: travel\n  title: Old bridge\n  duration: 10 minutes\n  notes: The party argued about the toll.\n",
+        )
+        .map_err(|e| e.to_string())?;
+        fs::write(
+            folder.join(crate::timeline::FILE),
+            crate::timeline::formats::render(&events, &Default::default()),
+        )
+        .map_err(|e| e.to_string())?;
         let text = format!(
             "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Bridge guards\nsplat_side: enemies\n---\n\nThe guards demand a toll.\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Goblin](splat:dnd2024:creatures/goblin_warrior) | Scout | HP lots | Keep this row |\n| 2 | [Goblin](splat:dnd2024:creatures/goblin_warrior) | | | |\n",
             stable_id("visual:f3:guards")
