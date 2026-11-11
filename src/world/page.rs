@@ -1226,9 +1226,10 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         .show(ui);
     egui::Popup::menu(&response).show(|ui| {
         for (word, kind) in [
+            // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
             ("Note…", "note"),
-            ("NPC", "npc"),
-            ("Location", "location"),
+            ("NPC…", "npc"),
+            ("Location…", "location"),
             ("Generate NPC", "generate"),
         ] {
             if ui.button(word).clicked() {

@@ -2052,6 +2052,16 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
 }
 
 // Refuse traversal and symlinks, and preserve external edits before atomic replacement.
+/// The rule a note's path must keep, checked without the disk: relative, inside its folder.
+pub(crate) fn note_path_rule(relative: &str) -> Option<&'static str> {
+    let relative = Path::new(relative);
+    (relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_))))
+    .then_some("Use a relative note path within the package.")
+}
+
 pub(crate) fn note_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     if fs::symlink_metadata(root)
         .map_err(|error| {
@@ -2065,14 +2075,10 @@ pub(crate) fn note_path(root: &Path, relative: &str) -> Result<PathBuf, String> 
                 .into(),
         );
     }
-    let relative = Path::new(relative);
-    if relative.as_os_str().is_empty()
-        || relative
-            .components()
-            .any(|c| !matches!(c, std::path::Component::Normal(_)))
-    {
-        return Err("Use a relative note path within the package.".into());
+    if let Some(rule) = note_path_rule(relative) {
+        return Err(rule.into());
     }
+    let relative = Path::new(relative);
     let mut path = root.to_path_buf();
     for component in relative.components() {
         path.push(component);
