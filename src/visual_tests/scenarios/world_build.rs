@@ -668,6 +668,7 @@ pub fn broken(d: &mut Driver<'_>) {
             .is_some_and(|(name, painted, links)| *links && painted.contains(name.as_str())),
         format!("Beside Lookup at 960, the header's count is painted whole: {count:?}"),
     );
+    d.state("both-counts-beside-lookup", Sizes::Small);
     d.click("Close Lookup");
     // The warning note served the checks above, so the later Lookup step runs without it.
     fs::remove_file(root(d).join("NPCs/Lost Scout.md")).unwrap();

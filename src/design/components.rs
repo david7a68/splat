@@ -2033,8 +2033,23 @@ pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usiz
     clicked
 }
 
-/// An Undo message whose affected entries remain links on the message line.
+/// An Undo message whose affected entries remain links on the message line. Capped at
+/// `LIST_MEASURE` like every notice.
 pub fn undo_message_with_links(
+    ui: &mut Ui,
+    tone: Tone,
+    names: &[&str],
+    suffix: &str,
+    action: &str,
+) -> (bool, Option<usize>) {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        undo_message_with_links_inside(ui, tone, names, suffix, action)
+    })
+    .inner
+}
+
+fn undo_message_with_links_inside(
     ui: &mut Ui,
     tone: Tone,
     names: &[&str],
@@ -2368,8 +2383,23 @@ pub fn undo_message(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     undo_message_named(ui, tone, text, action, None)
 }
 
-/// `undo_message`, with an accessible name for the action when its words are not enough.
+/// `undo_message`, with an accessible name for the action when its words are not enough. Capped
+/// at `LIST_MEASURE` like every notice.
 pub fn undo_message_named(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+) -> bool {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        undo_message_inside(ui, tone, text, action, name)
+    })
+    .inner
+}
+
+fn undo_message_inside(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
@@ -3864,6 +3894,30 @@ mod tests {
             right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
             "the message spans {left}..{right}: words {words:?}, action {action:?}"
         );
+        // The same cap holds for the two Undo messages.
+        for links in [false, true] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(1800.0, 240.0))
+                .build_ui(move |ui| {
+                    if links {
+                        undo_message_with_links(ui, Tone::Success, &["Ashen Marches"], LONG, "Undo");
+                    } else {
+                        undo_message(ui, Tone::Success, LONG, "Undo");
+                    }
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts = painted_texts(&harness);
+            let right = texts
+                .iter()
+                .map(|(_, rect)| rect.right())
+                .fold(0.0, f32::max);
+            let left = texts.iter().map(|(_, rect)| rect.left()).fold(f32::MAX, f32::min);
+            assert!(
+                !texts.is_empty() && right - left <= LIST_MEASURE,
+                "links {links}: the Undo message spans {left}..{right}"
+            );
+        }
     }
 
     /// iter-25-A: `help` and a field's help wrap at `READER_MEASURE` in a wide pane.
