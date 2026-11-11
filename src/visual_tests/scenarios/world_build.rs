@@ -4492,6 +4492,15 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
     let b_message = format!("Links now say “{LAMP}”.");
     let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
+    // A wheel notch scrolls the part one line, so the Undo can stop half in view. Turn the wheel
+    // to the part's end, where the Undo is whole, before its press area is measured.
+    if let Some(part) = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.role == Role::GenericContainer && node.name.contains(&b_message))
+    {
+        d.scroll_at(part.rect.center(), 8);
+    }
     let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
