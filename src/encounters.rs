@@ -1104,6 +1104,34 @@ fn stat_line(text: &str) -> String {
 
 const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
 
+/// The tone of a roster row whose creature is not there, and of the message that states the same
+/// fault: a file that cannot be read is an error, a deleted package entry a warning.
+fn missing_creature_tone(unreadable: bool) -> Tone {
+    if unreadable {
+        Tone::Error
+    } else {
+        Tone::Warning
+    }
+}
+
+/// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
+fn missing_creature_mark(unreadable: bool) -> (&'static str, egui::Color32) {
+    match missing_creature_tone(unreadable) {
+        Tone::Error => (icons::ERROR, colors().result.error),
+        _ => (icons::WARN, colors().result.warning),
+    }
+}
+
+/// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
+/// the right edge of the column it is in.
+fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
+    egui::TextEdit::multiline(text)
+        .desired_rows(rows)
+        // The width holds the margins, so the frame ends at the column's right edge.
+        .desired_width(f32::INFINITY)
+        .margin(egui::vec2(design::S, design::S))
+}
+
 fn roster_name(
     slot: &Slot,
     definition: Option<&Entry>,
@@ -3623,8 +3651,9 @@ impl Encounters {
         }
         self.refresh_validation_error(false);
         if let Some(e) = &self.error {
+            // A deleted entry and an unreadable file are stated in the rows' tone too.
             let tone = if e.ends_with(REPLACE_DELETED_ENTRY) {
-                Tone::Warning
+                missing_creature_tone(false)
             } else {
                 Tone::Error
             };
@@ -4111,13 +4140,9 @@ impl Encounters {
                 Self::loot_field(ui, draft);
                 ui.add_space(design::M);
                 design::field(ui, "Read-aloud and notes", None, None, |ui| {
-                let output = egui::TextEdit::multiline(&mut draft.body)
+                let output = notes_field(&mut draft.body, 5)
                     .id(egui::Id::new(("encounter_notes", draft.id)))
                     .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
-                    // The width holds the margins, so the field ends at the roster's right edge.
-                    .desired_width(ui.available_width() - 2.0 * design::S)
-                    .desired_rows(5)
-                    .margin(egui::vec2(design::S, design::S))
                     .show(ui);
                 if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
                     crate::markdown_view::send_note_link(ui.ctx(), note, None);
@@ -4284,8 +4309,10 @@ impl Encounters {
                 let changed = definition.is_some_and(|entry| !(slot.overrides.is_empty()
                     || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
+                // The row states the fault in the tone of the message above the roster.
+                let (fault_icon, fault_color) = missing_creature_mark(unreadable.is_some());
                 let detail = if missing {
-                    format!("{side_icon} {side} · {} {}", icons::WARN, unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
+                    format!("{side_icon} {side} · {fault_icon} {}", unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -4337,9 +4364,9 @@ impl Encounters {
                                 .truncate(),
                             );
                             if missing {
-                                let split = detail.find(icons::WARN).unwrap_or(0);
+                                let split = detail.find(fault_icon).unwrap_or(0);
                                 let mut job = egui::text::LayoutJob::default();
-                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + icons::WARN.len()], colors().result.warning), (&detail[split + icons::WARN.len()..], colors().muted)] {
+                                for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + fault_icon.len()], fault_color), (&detail[split + fault_icon.len()..], colors().muted)] {
                                     job.append(text, 0.0, egui::TextFormat { font_id: Type::Small.font(ui), color, ..Default::default() });
                                 }
                                 ui.add(egui::Label::new(job).wrap());
@@ -5126,13 +5153,21 @@ mod tests {
             "Two repeated roster warnings must be checked"
         );
         for text in warnings {
+            let mut marked = 0;
             for section in &text.galley.job.sections {
                 let words = &text.galley.text()[section.byte_range.clone()];
+                if section.format.color == colors().muted {
+                    continue;
+                }
+                // iter-19-B-FD5: a file that cannot be read is an error in the row, as in the
+                // message above the roster.
                 assert!(
-                    section.format.color == colors().muted || words.trim() == icons::WARN,
-                    "iter7-B-FD8: warning colour is only for the icon: {words}"
+                    words.trim() == icons::ERROR && section.format.color == colors().result.error,
+                    "iter7-B-FD8: the fault colour is only for the icon: {words}"
                 );
+                marked += 1;
             }
+            assert_eq!(marked, 1, "iter-19-B-FD5: each row marks its fault once");
         }
         assert!(
             notes.width() <= design::LIST_MEASURE,
@@ -5221,7 +5256,7 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let fitted = changed_detail(ui, detail, "Changed · 3 to add by hand", 400.0);
+                let fitted = changed_detail(ui, detail, "Changed · 1 to add by hand", 400.0);
                 assert!(!fitted.contains("Ashen Marches"));
                 assert!(!fitted.contains('…'), "iter8-B-FT8: {fitted}");
                 assert!(fitted.contains("as Ember Cultist"));
@@ -5274,7 +5309,7 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let word = "Changed · 3 to add by hand";
+                let word = "Changed · 1 to add by hand";
                 for width in [280.0, 320.0, 356.0, 400.0] {
                     let fitted = changed_detail(ui, detail, word, width);
                     assert!(fitted.contains("as Ember Cultist"), "{fitted}");

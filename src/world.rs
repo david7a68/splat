@@ -985,6 +985,12 @@ fn create_at(
     Ok((id, relative))
 }
 
+/// What giving a note a type does, in the DM's words.
+pub(crate) const TYPE_HELP: &str = "Gives this note a type. Its text stays the same.";
+/// How Splat stores the type, for Technical details only.
+pub(crate) const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
+     at the top of the file.";
+
 /// Give a plain note an identity. Its body does not change.
 pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, String> {
     let relative = &item.entry.path;
@@ -1484,6 +1490,9 @@ pub struct Reader {
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
     group_error: bool,
+    /// The refused Part of write could not read the note at all (no permission, not text), so
+    /// no editor can open it either: its error has no `Edit in Obsidian` link.
+    group_error_unread_file: bool,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
     many_heading: Option<String>,
@@ -1608,6 +1617,7 @@ impl Reader {
             self.showing = Some(item.entry.id);
             self.group_fault = None;
             self.group_error = false;
+            self.group_error_unread_file = false;
             self.status = self
                 .status_drafts
                 .remove(&item.entry.id)
@@ -1769,7 +1779,9 @@ impl Reader {
         {
             ui.horizontal_wrapped(|ui| {
                 design::message(ui, Tone::Error, error);
+                // A file that Splat cannot read, no editor can open either.
                 if self.group_error
+                    && !self.group_error_unread_file
                     && let Some(campaign) = campaign
                     && design::link(ui, "Edit in Obsidian").clicked()
                 {
@@ -1792,7 +1804,9 @@ impl Reader {
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private();
         if file_line && let Some(campaign) = campaign {
-            file_actions(ui, campaign, &item.entry.path);
+            // A note that a Part of change found unreadable gets no editor link here either.
+            let editor = !(self.group_error && self.group_error_unread_file);
+            entry_file_actions(ui, &campaign.path, &item.entry.path, editor);
         }
         // Unread-value warnings wrap at the reader measure, the right edge of the rows below.
         design::reader::measure(ui, |ui| {
@@ -2081,14 +2095,9 @@ impl Reader {
         let mut chosen = None;
         ui.add_space(design::M);
         design::quiet_section(ui, "Give this note a type", |ui| {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "Adds a type to the file's front matter. The text does not change.",
-                    )
-                    .color(colors().muted),
-            );
+            // The help says what the choice does for the DM; how Splat stores it waits in
+            // Technical details at the end of the section.
+            ui.label(Type::Small.rich(ui, TYPE_HELP).color(colors().muted));
             ui.horizontal_wrapped(|ui| {
                 for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
                     .into_iter()
@@ -2117,6 +2126,12 @@ impl Reader {
             {
                 chosen = Some(other);
             }
+            design::quiet_section(ui, "Technical details", |ui| {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, TYPE_STORAGE).color(colors().muted))
+                        .wrap(),
+                );
+            });
         });
         match make_entry(campaign, item, &chosen?) {
             Ok(id) => Some(Go::Reload(id)),
@@ -2158,6 +2173,7 @@ impl Reader {
         {
             self.error = None;
             self.group_error = false;
+            self.group_error_unread_file = false;
         }
         // Draw each unread value once, below the file line.
         let (notices, entry) = GroupFault::flags(&item.entry, unread.as_ref());
@@ -2180,21 +2196,28 @@ impl Reader {
     ) -> Option<Go> {
         // A picker can outlive an outside edit. Re-read before deriving a replacement or Log.
         let fresh = if key == "part_of" {
+            // The last value says whether the file itself could not be read.
             let result = (|| {
                 let file = file_fault::read_note(&campaign.path, &item.entry.path)
-                    .map_err(|error| (error, None))?;
-                let entry = Entry::parse(&item.entry.path, &file).map_err(|error| (error, None))?;
+                    .map_err(|error| (error, None, true))?;
+                let entry =
+                    Entry::parse(&item.entry.path, &file).map_err(|error| (error, None, false))?;
                 if let Some(unread) = fields::unread_groups(&entry, &file) {
-                    return Err((unread.reason.clone(), Some((unread, Box::new(entry)))));
+                    return Err((
+                        unread.reason.clone(),
+                        Some((unread, Box::new(entry))),
+                        false,
+                    ));
                 }
                 Ok((file, entry))
             })();
             match result {
                 Ok(fresh) => Some(fresh),
-                Err((error, unread)) => {
+                Err((error, unread, unread_file)) => {
                     self.picker = None;
                     self.error = Some(error);
                     self.group_error = true;
+                    self.group_error_unread_file = unread_file;
                     // The file on disk has an unread list now. Show that state at once, and
                     // read the note again so its list row and the header count it too.
                     let (unread, entry) = unread?;
@@ -2286,6 +2309,7 @@ impl Reader {
             Ok(change) => {
                 self.error = None;
                 self.group_error = false;
+                self.group_error_unread_file = false;
                 self.undo = Some(change);
                 self.kept = None;
                 self.picker = None;

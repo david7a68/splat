@@ -1899,7 +1899,11 @@ impl Lookup {
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
             // Outside a message, a line-start action has no icon: its words start at the edge.
-            && Action::quiet(&design::count(matches.len(), "result", "results"))
+            // Its verb says that a press shows the hidden list; a bare count reads as a label.
+            && Action::quiet(&format!(
+                "Show {}",
+                design::count(matches.len(), "result", "results")
+            ))
                 .density(Density::Read)
                 .name("Show the results")
                 .line_start()

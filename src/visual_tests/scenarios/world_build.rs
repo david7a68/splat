@@ -444,10 +444,16 @@ pub fn broken(d: &mut Driver<'_>) {
         d.has_containing("Open the file in a text editor and save it as UTF-8 text, or restore it from a backup. Then choose Try again."),
         "The pane explains the text format and the recovery",
     );
+    // FD6: no editor can open a file that Splat cannot read as text, so its file line offers
+    // only Show file.
+    d.observe(
+        "iter-19-D-FD6-no-editor",
+        d.has("Show file") && !d.has("Edit in Obsidian"),
+        "The file line of a file that is not text offers Show file and no editor link",
+    );
     d.observe(
         "iter-18-D-AD1-file-line",
         d.has("Show file")
-            && d.has("Edit in Obsidian")
             && d.place_of("Show file")
                 .zip(d.place_of(headline))
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
@@ -551,6 +557,98 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has(headline) && d.has("Edit Repaired watchkeeper"),
         "Try again reads the folder again and opens the repaired note",
     );
+    // Must stay true: a note that is text again gets its editor link back.
+    d.observe(
+        "iter-19-D-FD6-text-keeps-editor",
+        d.has("Show file") && d.has("Edit in Obsidian"),
+        "A note read as text again offers Edit in Obsidian beside Show file",
+    );
+    // FD6, Part of: an open typed note that Splat can no longer read as text. The outside edit
+    // keeps the file's length and time, so nothing reloads. Part of reads the file again first;
+    // its error offers no editor link, and neither does the file line. (The visual suite runs
+    // as root in its namespace, so a permission change cannot make a file unreadable here.)
+    {
+        flat_entry(
+            d,
+            "Factions/Lantern Guild.md",
+            "Lantern Guild",
+            "splat_type: faction",
+            "Keeps the lamps.\n",
+        );
+        flat_entry(
+            d,
+            "Factions/Ash Court.md",
+            "Ash Court",
+            "splat_type: faction",
+            "Judges the ash.\n",
+        );
+        flat_entry(
+            d,
+            "NPCs/Mira Vell.md",
+            "Mira Vell",
+            "splat_type: npc\nsplat_part_of: ['[[Lantern Guild]]']\nsplat_status: alive",
+            "Trims the wicks.\n",
+        );
+        reload(d);
+        d.click_containing("Mira Vell · ");
+        d.expect("Change Part of");
+        d.expect("Edit in Obsidian");
+        let npc = root(d).join("NPCs/Mira Vell.md");
+        let text = fs::read(&npc).unwrap();
+        let time = fs::metadata(&npc).unwrap().modified().unwrap();
+        // Same length, same time: the reader cannot tell that the bytes changed.
+        let outside = |bytes: &[u8]| {
+            fs::write(&npc, bytes).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(&npc)
+                .unwrap()
+                .set_modified(time)
+                .unwrap();
+        };
+        let mut not_text = text.clone();
+        let wick = not_text.len() - 2;
+        not_text[wick] = 0xff;
+        outside(&not_text);
+        d.click("Change Part of");
+        d.type_into("Find a group", "Ash");
+        d.click("Ash Court");
+        let refused = "Splat cannot read NPCs/Mira Vell.md as text.";
+        d.observe(
+            "iter-19-D-FD6-part-of-unread",
+            d.has_containing(refused) && !d.has("Edit in Obsidian") && d.has("Show file"),
+            "A Part of change that cannot read the note says so and offers no editor link",
+        );
+        // Must stay true: once the file is text again, the same change saves, its error goes,
+        // and the editor link comes back.
+        outside(&text);
+        d.click("Change Part of");
+        d.type_into("Find a group", "Ash");
+        d.click("Ash Court");
+        d.observe(
+            "iter-19-D-FD6-part-of-recovers",
+            !d.has_containing(refused)
+                && d.has("Edit in Obsidian")
+                && fs::read_to_string(&npc).unwrap().contains("Ash Court"),
+            "With the file text again, the change saves and the editor link returns",
+        );
+        // Leave the page as the steps below expect it.
+        d.click("Undo group change");
+        for path in [
+            "NPCs/Mira Vell.md",
+            "Factions/Lantern Guild.md",
+            "Factions/Ash Court.md",
+        ] {
+            fs::remove_file(root(d).join(path)).unwrap();
+        }
+        // Folders this step made go too; a seed folder that still holds notes stays.
+        for folder in ["NPCs", "Factions"] {
+            let _ = fs::remove_dir(root(d).join(folder));
+        }
+        reload(d);
+        d.click_containing("Repaired watchkeeper");
+        d.expect("Edit Repaired watchkeeper");
+    }
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
@@ -756,7 +854,14 @@ pub fn facts(d: &mut Driver<'_>) {
     }
     // A plain note's type choices start at the section's text edge.
     d.click("Give this note a type");
-    let help = "Adds a type to the file's front matter.";
+    let help = crate::world::TYPE_HELP;
+    // SD2: the help says what the choice does, in the DM's words; storage waits in Technical
+    // details, closed.
+    d.observe(
+        "iter-19-D-SD2-help",
+        d.has_label(help) && !d.has_containing("front matter"),
+        "The type help states its purpose and names no storage format",
+    );
     action_at_text_edge(
         d,
         "iter-17-D-type-choice",
@@ -775,6 +880,22 @@ pub fn facts(d: &mut Driver<'_>) {
         |d| d.painted_left(help),
     );
     d.state("type-choices", Sizes::Default);
+    d.click("Technical details");
+    d.observe(
+        "iter-19-D-SD2-storage",
+        d.has_label(crate::world::TYPE_STORAGE),
+        "Technical details at the end of the type section says how Splat stores the type",
+    );
+    // Must stay true: the open details do not move the choices off the section's text edge.
+    action_at_text_edge(
+        d,
+        "iter-19-D-SD2-choice-edge",
+        "NPC",
+        "Resize World notes column",
+        &[DEFAULT],
+        |d| d.painted_left(help),
+    );
+    d.click("Technical details");
     d.replace_text_in("Another type", "");
     d.click("Give this note a type");
     // Must stay true: a typed note with values keeps its rows between the file line and its
@@ -2081,6 +2202,49 @@ fn result_below_file_line(
     )
 }
 
+/// FD5: one tone for one fault. The message above the roster has this tone's bar, and every
+/// roster row that states the fault marks it once, with this tone's icon and colour.
+fn fault_tone(
+    d: &Driver<'_>,
+    message: &str,
+    row_words: &str,
+    (icon, color): (&str, egui::Color32),
+) -> (bool, String) {
+    let bar = d
+        .painted_rect_in(message, egui::Rect::EVERYTHING)
+        .is_some_and(|words| d.has_tone_bar(words, color));
+    let mut rows = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        // A row's detail line starts with its side; the message has no ` · `.
+        if job.text.contains(row_words)
+            && job.text.contains(" · ")
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            rows.push(
+                job.sections
+                    .iter()
+                    .filter(|section| section.format.color != design::colors().muted)
+                    .map(|section| {
+                        (
+                            job.text[section.byte_range.clone()].trim().to_owned(),
+                            section.format.color,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+    });
+    let marked = rows.len() == 2
+        && rows
+            .iter()
+            .all(|marks| marks.len() == 1 && marks[0].0 == icon && marks[0].1 == color);
+    (
+        bar && marked,
+        format!("message {message:?} bar in {color:?}: {bar}; rows: {rows:?}"),
+    )
+}
+
 /// FD3: from the bottom of the painted file line to the top of the first prose line.
 fn prose_gap(d: &Driver<'_>, file: &str, prose: &str) -> Option<f32> {
     let pane = reader_pane(d);
@@ -2153,6 +2317,15 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
         "The compact NPC reader shows its stat block and place beside the run",
     );
+    // One match: the closed list's action says `Show 1 result`, whole at every captured size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let words = d.at_size(size, super::lookup_results_words);
+        d.observe(
+            "iter-19-D-show-1-result",
+            words.as_deref() == Some("Show 1 result"),
+            format!("At {size:?}, the one-result action says {words:?}"),
+        );
+    }
     d.state("npc-with-stat-block-and-place", Sizes::All);
     d.begin_task();
     d.click("Guard");
@@ -2324,6 +2497,60 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     }
 }
 
+/// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
+/// undo icon, sits on the message line after the words, or starts the next line with its words
+/// at the message words and its icon in the message's icon column, and its press area is clear.
+fn undo_follows_message(d: &mut Driver<'_>, id: &str, message: &str, undo: &str) {
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (words, icon, target, clear) = d.at_size(size, |d| {
+            let target = d.place_of(undo);
+            let mut words = None;
+            let mut icon = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if text.galley.job.text == message && clip.intersects(rect) {
+                    words = Some(rect);
+                }
+                if target.is_some_and(|target| target.contains(rect.center()))
+                    && text.galley.job.text == design::icons::UNDO
+                {
+                    icon = Some(rect);
+                }
+            });
+            let clear = target.map_or_else(
+                || Err(format!("{undo} is not in view")),
+                |target| super::press_area_clear(d, target, undo, None),
+            );
+            (
+                words,
+                icon,
+                target
+                    .and_then(|target| super::words_left_in(d, target).map(|left| (left, target))),
+                clear,
+            )
+        });
+        let placed = words
+            .zip(icon)
+            .zip(target)
+            .is_some_and(|((words, icon), (left, target))| {
+                if target.top() >= words.bottom() - 1.0 {
+                    (left - words.left()).abs() <= 1.0 && icon.right() <= words.left()
+                } else {
+                    (target.center().y - words.center().y).abs() <= design::XS
+                        && icon.left() > words.right()
+                        && left > icon.right()
+                }
+            });
+        d.observe(
+            id,
+            placed && clear.is_ok(),
+            format!(
+                "At {size:?}, {undo} {target:?} with its icon {icon:?} follows the message {message:?} {words:?}; press area: {clear:?}"
+            ),
+        );
+    }
+}
+
 /// A rename on disk keeps an identity-based package link working.
 pub fn package_rename(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
@@ -2371,6 +2598,12 @@ pub fn package_rename(d: &mut Driver<'_>) {
         },
     );
     d.state("linked-entry-renamed-on-disk", Sizes::All);
+    let warning_left = d
+        .painted_word_rect(
+            "The first heading says Ashfall, but the name is Watch Ashfall.",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
     let renamed_path = package.join("Spells/Watch Ashfall.md");
     assert!(
         !fs::read_to_string(&renamed_path)
@@ -2401,27 +2634,37 @@ pub fn package_rename(d: &mut Driver<'_>) {
                 .is_some_and(|(title, undo)| undo.top() > title.bottom())
         },
     );
-    d.observe_both(
-        "iter-16-E-FD7-undo-edge",
-        "Undo heading change is a line-start action outside a message: no icon, its words start at the reader text edge, and its target reaches S into the gutter",
-        |d| {
-            let Some(title) = reader_title(d, "Watch Ashfall") else {
-                return false;
-            };
-            let Some(undo) = d.place_of("Undo heading change") else {
-                return false;
-            };
-            d.painted_word_rect("Undo heading change", egui::Rect::EVERYTHING)
-                .is_some_and(|word| {
-                    (undo.left() - (title.left() - design::S)).abs() <= 1.0
-                        && (word.left() - title.left()).abs() <= 1.0
-                        && !d.painted_in(undo).contains(design::icons::UNDO)
-                })
-        },
+    // AD3: the fix's result is a message, and its Undo follows it with its icon. The message
+    // words start at the reader text edge, as the warning's did.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-heading",
+        "The first heading now says Watch Ashfall.",
+        "Undo heading change",
+    );
+    let result_left = d
+        .painted_word_rect(
+            "The first heading now says Watch Ashfall.",
+            egui::Rect::EVERYTHING,
+        )
+        .map(|words| words.left());
+    d.observe(
+        "iter-19-E-AD3-heading-edge",
+        result_left
+            .zip(warning_left)
+            .is_some_and(|(result, warning)| (result - warning).abs() <= 1.0),
+        format!(
+            "The heading result's words start at {result_left:?}, where the warning's words started ({warning_left:?})"
+        ),
     );
     d.state("renamed-entry-heading-fixed", Sizes::All);
     d.click("Undo heading change");
     d.wait_for_text("Use Watch Ashfall");
+    d.observe(
+        "iter-19-E-AD3-heading-undone",
+        !d.has_containing("The first heading now says"),
+        "After Undo heading change, its result message goes away and the warning comes back",
+    );
     assert!(
         fs::read_to_string(package.join("Spells/Watch Ashfall.md"))
             .unwrap()
@@ -2433,6 +2676,39 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
+    // AD3: a stat fix's result is a message, and its Undo follows it with its icon.
+    // The DM types a Hit Points line that disagrees with the stat block (22). The warning and
+    // the result use the DM's words, not the schema key.
+    let typed = format!("{draft}\nHit Points 24 (4d8 + 4)\n");
+    d.replace_text_in("Markdown editor", &typed);
+    d.wait_for_text("Use 24");
+    d.observe(
+        "iter-19-E-AD3-stat-words",
+        d.has(
+            "Hit Points line says 24, but the stat block says 22. The fight uses the stat block.",
+        ) && !d.has_containing("max_hp"),
+        "The stat warning names Hit Points and the stat block, not max_hp",
+    );
+    assert!(!d.has_containing("The stat block now says"));
+    d.click("Use 24");
+    d.wait_for_text("Undo stat change");
+    let fixed = d.editor_text().unwrap();
+    assert_ne!(fixed, typed, "Use 24 did not change the draft");
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-stat",
+        "The stat block now says Hit Points 24.",
+        "Undo stat change",
+    );
+    d.state("stat-fix-undo-message", Sizes::All);
+    d.click("Undo stat change");
+    d.wait_for_text("Use 24");
+    let restored = d.editor_text().unwrap();
+    d.observe(
+        "iter-19-E-AD3-stat-undone",
+        !d.has_containing("The stat block now says") && restored == typed,
+        "Undo stat change gives back the draft before the fix, and its result goes away",
+    );
     let renamed =
         crate::content_workspace::patch_fields(&draft, &[("splat_name", Some("Ash Wolf".into()))])
             .unwrap()
@@ -2443,15 +2719,39 @@ pub fn package_rename(d: &mut Driver<'_>) {
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
     d.state("renamed-creature-offers-link-update", Sizes::All);
+    let offer = d.painted_word_rect("Links still say Cinder Wolf.", egui::Rect::EVERYTHING);
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
     assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
+    // AD3: the update's result is a message, and its Undo follows it with its icon. The result
+    // takes the offer's place, so nothing below it moves.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-link",
+        "Links now say Ash Wolf.",
+        "Undo link update",
+    );
+    let result = d.painted_word_rect("Links now say Ash Wolf.", egui::Rect::EVERYTHING);
+    d.observe(
+        "iter-19-E-AD3-link-place",
+        !d.has("Update 1 link")
+            && offer.zip(result).is_some_and(|(offer, result)| {
+                (offer.top() - result.top()).abs() <= 1.0
+                    && (offer.left() - result.left()).abs() <= 1.0
+            }),
+        format!("The result {result:?} takes the offer's place {offer:?}, and the offer has gone"),
+    );
     d.state("renamed-creature-links-updated", Sizes::All);
     d.click("Undo link update");
     assert!(
         fs::read_to_string(&path)
             .unwrap()
             .contains("[[Cinder Wolf]]")
+    );
+    d.observe(
+        "iter-19-E-AD3-link-undone",
+        !d.has_containing("Links now say") && !d.has("Undo link update"),
+        "After Undo link update, its result message goes away",
     );
     d.state("renamed-creature-link-update-undone", Sizes::All);
 
@@ -3188,6 +3488,14 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.expect("Cinder Wolf");
     assert!(!d.app_mut().encounters.has_run());
     d.state("invalid-package-blocks-new-fight", Sizes::All);
+    // iter-19-B-FD5: the message and the two rows that state the same fault share its error tone.
+    let (one_tone, detail) = fault_tone(
+        d,
+        "Cinder Wolf.md cannot be read (line 4). Open in Library to fix it.",
+        "Cinder Wolf.md cannot be read (line 4)",
+        (design::icons::ERROR, design::colors().result.error),
+    );
+    d.observe("iter-19-B-FD5", one_tone, detail);
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
@@ -3254,6 +3562,14 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("Start another fight");
     assert!(!d.app_mut().encounters.has_run());
     d.state("deleted-package-blocks-new-fight", Sizes::All);
+    // iter-19-B-FD5 must stay true: a deleted entry stays a warning in the message and the rows.
+    let (warned, detail) = fault_tone(
+        d,
+        "2 Cinder Wolf rows have no creature.",
+        "Not found. Its package entry was deleted.",
+        (design::icons::WARN, design::colors().result.warning),
+    );
+    d.observe("iter-19-B-FD5-deleted", warned, detail);
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -4594,25 +4910,46 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {
-        let aligned = d.at_size(size, |d| {
+        // SD1 (round 19 ruling): the action below the message is a quiet `line_start` action
+        // without an icon or border. Its painted words, not its border, start at the message
+        // words, and its padding hangs `S` into the message's icon column.
+        let (action, words, message, frame, icon, clear) = d.at_size(size, |d| {
             d.expect("Use the copy's entries");
-            let action = d.place_of("Use the copy's entries").unwrap();
+            let action = d.place_of("Use the copy's entries");
+            let words = action.and_then(|action| super::words_left_in(d, action));
             let message = d
                 .nodes()
                 .into_iter()
                 .find(|n| {
                     n.role == Role::Label && n.name.starts_with("Ashen Reaches is registered")
                 })
-                .unwrap();
-            action.top() >= message.rect.bottom()
-                && (action.left() - message.rect.left()).abs() <= 1.0
-                && d.control_frame("Use the copy's entries")
-                    .is_some_and(|frame| frame.stroke.color == design::colors().field_border)
+                .map(|n| n.rect);
+            let frame = d
+                .control_frame("Use the copy's entries")
+                .map(|frame| frame.stroke.color);
+            let icon = action.is_some_and(|action| {
+                d.painted_in(action)
+                    .chars()
+                    .any(|c| ('\u{E000}'..='\u{F8FF}').contains(&c))
+            });
+            let clear = action.map_or_else(
+                || Err("Use the copy's entries is not in view".to_owned()),
+                |action| super::press_area_clear(d, action, "Use the copy's entries", None),
+            );
+            (action, words, message, frame, icon, clear)
         });
         d.observe(
-            "iter-6-D-FD4",
-            aligned,
-            format!("The copied-package action is bordered below the message at {size:?}"),
+            "iter-19-E-SD1",
+            action.zip(words).zip(message).is_some_and(|((action, words), message)| {
+                action.top() >= message.bottom()
+                    && (words - message.left()).abs() <= 1.0
+                    && (action.left() - (message.left() - design::S)).abs() <= 1.0
+            }) && frame != Some(design::colors().field_border)
+                && !icon
+                && clear.is_ok(),
+            format!(
+                "At {size:?}, Use the copy's entries {action:?} starts its words at {words:?}, the message words {message:?}; border {frame:?}; icon {icon}; press area: {clear:?}"
+            ),
         );
         // FD1: the Undo sits on the message line, after the words, so the message takes two
         // lines (message, then Use the copy's entries), not three.
@@ -4696,8 +5033,73 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("campaign-after-copy-registration", Sizes::All);
     go_library(d);
     d.expect("Use the copy's entries");
+    // The campaign's notes before the change, to find the encounter files that it writes.
+    fn notes_in(folder: &std::path::Path, out: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
+        for item in fs::read_dir(folder).unwrap().flatten() {
+            let path = item.path();
+            if path.is_dir() {
+                notes_in(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "md") {
+                out.push((path.clone(), fs::read(&path).unwrap()));
+            }
+        }
+    }
+    let campaign_folder = d.app_mut().campaigns.active_campaign().unwrap().path;
+    let mut notes_before = Vec::new();
+    notes_in(&campaign_folder, &mut notes_before);
     d.click("Use the copy's entries");
     d.wait_for_text("Undo source change");
+    // AD3: the result is a message, and its Undo follows it with its icon.
+    undo_follows_message(
+        d,
+        "iter-19-E-AD3-source",
+        "Encounters now use the copy's entries.",
+        "Undo source change",
+    );
+    d.state("copy-entries-used", Sizes::All);
+    // AD3, a result with another action: an outside change to an encounter that the change wrote
+    // blocks Undo source change with its reason, inside its message. Restoring the bytes and
+    // reloading brings it back, so the later steps see the usual state.
+    {
+        let reload_library = |d: &mut Driver<'_>| {
+            d.click("Packages");
+            d.click("Reload from disk");
+            d.wait_for_text("Undo source change");
+        };
+        let (changed, written) = notes_before
+            .iter()
+            .find_map(|(path, before)| {
+                let now = fs::read(path).unwrap();
+                (now != *before).then(|| (path.clone(), now))
+            })
+            .expect("Use the copy's entries wrote an encounter file");
+        assert!(
+            !d.is_disabled("Undo source change"),
+            "fixture: Undo source change starts available"
+        );
+        let mut outside = written.clone();
+        outside.extend_from_slice(b"\nAn outside note.\n");
+        fs::write(&changed, &outside).unwrap();
+        reload_library(d);
+        let blocked = d.is_disabled("Undo source change");
+        let reason = d.tooltip_contains("Undo source change", crate::content_workspace::UNDO_ENDED);
+        let kept = d.has("Encounters now use the copy's entries.");
+        d.observe(
+            "iter-19-E-AD3-source-blocked",
+            blocked && reason && kept && fs::read(&changed).unwrap() == outside,
+            format!(
+                "After an outside change to {}, Undo source change is blocked ({blocked}) and says why ({reason}); its message stays ({kept}); the file keeps the outside bytes",
+                changed.display()
+            ),
+        );
+        fs::write(&changed, &written).unwrap();
+        reload_library(d);
+        d.observe(
+            "iter-19-E-AD3-source-back",
+            !d.is_disabled("Undo source change"),
+            "With the written bytes back, a reload makes Undo source change available again",
+        );
+    }
     go_encounters(d);
     if d.has("Back to encounters") {
         d.click("Back to encounters");
