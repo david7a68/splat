@@ -162,6 +162,13 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
         .density(Density::Read)
         .line_start()
         .show(ui);
+    menu_choice_focus(ui, &response);
+    response.clicked()
+}
+
+/// A menu choice in the keys' focus model: the first choice takes the focus when the keys
+/// open the menu, and the choice that has it is recorded, so a close gives it back.
+fn menu_choice_focus(ui: &egui::Ui, response: &egui::Response) {
     if ui
         .ctx()
         .data_mut(|data| data.remove_temp::<bool>(focus_first_choice_id()))
@@ -176,7 +183,6 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
             data.insert_temp(menu_choice_focus_frame_id(), frame);
         });
     }
-    response.clicked()
 }
 
 /// The frame in which a menu choice last had the keyboard focus.
@@ -292,6 +298,18 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
     }
 }
 
+/// The keys opened `response`'s menu: it owns the menu until it closes, its first choice takes
+/// the focus, and `end_menu_frame` gives the focus back when the menu closes.
+fn opened_by_keys(response: &egui::Response) {
+    let frame = response.ctx.cumulative_frame_nr();
+    response.ctx.data_mut(|data| {
+        data.insert_temp(menu_keys_owner_id(), response.id);
+        data.insert_temp(menu_owner_seen_id(), frame);
+        data.remove::<egui::Id>(menu_focus_outside_id());
+        data.insert_temp(focus_first_choice_id(), true);
+    });
+}
+
 /// Whether a right-click menu opens or closes this frame. A right-click opens it; so do
 /// Shift+F10 on the focused control and a screen reader's `show context menu`, which put the
 /// focus on its first choice and give it back to the control when the menu closes. A plain
@@ -306,13 +324,7 @@ pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOp
         || (response.has_focus()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
     if by_keys {
-        let frame = ctx.cumulative_frame_nr();
-        ctx.data_mut(|data| {
-            data.insert_temp(menu_keys_owner_id(), response.id);
-            data.insert_temp(menu_owner_seen_id(), frame);
-            data.remove::<egui::Id>(menu_focus_outside_id());
-            data.insert_temp(focus_first_choice_id(), true);
-        });
+        opened_by_keys(response);
         return Some(egui::SetOpenCommand::Bool(true));
     }
     if response.secondary_clicked() {
@@ -1813,6 +1825,16 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
         "{}. Choose one to arm it.",
         design::count(chips.len() - from, "more action", "more actions")
     ));
+    // Enter or Space opens it as the keys open a run's menu: Escape or a choice gives the
+    // focus back to this button.
+    keep_menu_owner(&response);
+    let popup_id = egui::Popup::default_response_id(&response);
+    if response.clicked()
+        && !response.clicked_by(egui::PointerButton::Primary)
+        && !egui::Popup::is_id_open(&response.ctx, popup_id)
+    {
+        opened_by_keys(&response);
+    }
     let popup = egui::Popup::menu(&response);
     // As a row's menu: it ends at the button's right edge when it would cross the pane's
     // splitter (egui sizes a popup on the frame it opens, before it shows it).
@@ -1844,6 +1866,7 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
             };
             let response = ui.add(button);
             design::named(ui, &response, &label);
+            menu_choice_focus(ui, &response);
             if response.clicked() {
                 ask(
                     ui.ctx(),

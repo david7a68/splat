@@ -9745,6 +9745,36 @@ mod tests {
         );
         run.borrow_mut().undo();
         harness.run_steps(2);
+        // Every toggle state: each condition on, then off, and no toggle in any column moves.
+        let places = |harness: &egui_kittest::Harness<'_>| {
+            crate::combat_sync::CONDITIONS.map(|(_, name)| harness.get_by_label(name).rect().left())
+        };
+        let start = places(&harness);
+        for (_, name) in crate::combat_sync::CONDITIONS {
+            let was = run.borrow().state.participants[0].conditions.clone();
+            harness.get_by_label(name).click();
+            harness.run_steps(2);
+            assert_ne!(
+                run.borrow().state.participants[0].conditions,
+                was,
+                "iter-24-R-FJ1: {name} toggled"
+            );
+            assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} toggled");
+            // Exhaustion starts on at level 2; a second press would start it again at 1.
+            if name == "Exhaustion" {
+                run.borrow_mut().undo();
+            } else {
+                harness.get_by_label(name).click();
+            }
+            harness.run_steps(2);
+            assert_eq!(run.borrow().state.participants[0].conditions, was);
+            assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} back");
+        }
+        assert_eq!(
+            CONDITION_MEASURES.with(std::cell::Cell::get),
+            measured,
+            "iter-24-R-FI1-once: toggles measure nothing"
+        );
         harness.get_by_label("Increase Exhaustion level").click();
         harness.run_steps(2);
         assert_eq!(

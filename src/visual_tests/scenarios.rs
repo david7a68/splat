@@ -3851,6 +3851,34 @@ pub mod run_lookup {
                 !armed_before && d.has_containing("% to hit") && d.in_view(SPELL),
                 "Choosing Cinder Dart arms it, and Lookup stays open",
             );
+            // The keys: Enter opens the menu on its first choice, Escape closes it, and the
+            // focus is back on the button. Lookup and the armed action stay.
+            let reached = d.tab_to(more);
+            d.press(Key::Enter);
+            let first = d.focused_name();
+            d.press(Key::Escape);
+            let back = d.focused_name();
+            d.observe(
+                "iter-24-R-SI1-escape",
+                reached
+                    && first.as_deref() == Some(HIDDEN_ACTION)
+                    && back.as_deref() == Some(more.as_str())
+                    && !d.has(HIDDEN_ACTION)
+                    && d.has_containing("% to hit")
+                    && d.in_view(SPELL),
+                format!("Enter focuses {first:?}; Escape gives the focus to {back:?} and keeps the action armed"),
+            );
+            // A choice made with the keys gives the focus back to the button too.
+            d.press(Key::Enter);
+            d.press(Key::Enter);
+            let chosen = d.focused_name();
+            d.observe(
+                "iter-24-R-SI1-choice",
+                chosen.as_deref() == Some(more.as_str())
+                    && !d.has(HIDDEN_ACTION)
+                    && d.in_view(SPELL),
+                format!("After a choice by the keys, the focus is on {chosen:?}"),
+            );
         }
         // A click on a result leaves no field in focus. Typing must not run commands.
         let turn = current_participant(d);
