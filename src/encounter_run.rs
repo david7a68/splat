@@ -8835,7 +8835,7 @@ mod tests {
         assert_eq!(p.definition.name, "Ghost of the Mill");
         // After a restart, Undo still takes both of them out of the fight.
         assert_same_undo(&run, &reopened);
-        assert_eq!(reopened.undo_label(), "Undo: add Ghost of the Mill");
+        assert_eq!(reopened.undo_label(), "Undo: add 2 × Ghost of the Mill");
         reopened.undo();
         assert_eq!(reopened.state.participants.len(), before);
         assert_eq!(reopened.state.order.len(), before);
