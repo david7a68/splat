@@ -775,13 +775,15 @@ const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 /// The Undo step a long rest makes when it fills a saved Setup's HP.
 const REST_STEP: &str = "full HP after long rest";
+/// The log's words for full HP after a restoring rest, wherever the run learns of it.
+const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use the saved HP";
 /// The result of `Use the saved HP`, until the next step.
 pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
-const CLOSE_BLOCKED: &str =
+pub(crate) const CLOSE_BLOCKED: &str =
     "Wait for pending sync changes, resolve conflicts, or stop sync for them before closing.";
 /// What the one party action does when pressed.
 enum PartySync {
@@ -1059,11 +1061,20 @@ impl Run {
     /// HP came from the last fight, not from the sheets, and the log says so.
     pub fn note_carry(&mut self, carry: &Carry, sheets: SheetValues) {
         self.rest_order = carry.rest_order;
-        // A fight that cannot be read carries nothing, and the log must not say it did.
+        // A fight that cannot be read carries nothing, and the log must not say it did. A
+        // restoring rest with no fight since gives full HP, in the rest's own words; `Last:`
+        // uses the same lower-case step words as every other change.
         if !sheets.is_empty() {
-            self.state
-                .log
-                .push(format!("Party HP carried over from {}.", carry.from));
+            let (line, last) = if carry.full && carry.values.is_empty() {
+                (REST_LOG.to_owned(), REST_STEP.to_owned())
+            } else {
+                (
+                    format!("Party HP carried over from {}.", carry.from),
+                    format!("party HP carried over from {}", carry.from),
+                )
+            };
+            self.state.log.push(line);
+            self.state.last_change = Some(last);
         }
         self.carried = Some(CarriedHp {
             saved: false,
@@ -1101,9 +1112,7 @@ impl Run {
         self.history_labels.push(REST_STEP.into());
         self.history_from_sheet.push(false);
         self.state.last_change = Some(REST_STEP.into());
-        self.state
-            .log
-            .push("Party HP is full after the long rest.".into());
+        self.state.log.push(REST_LOG.into());
         self.carried = Some(CarriedHp {
             saved: true,
             from: "the long rest".into(),
@@ -4038,6 +4047,8 @@ pub struct FightSummary {
 }
 
 pub struct FightRow {
+    /// The participant's identity: a player's matches its party sheet.
+    pub id: Uuid,
     pub name: String,
     pub player: bool,
     pub hp: Option<i64>,
@@ -4055,6 +4066,7 @@ fn is_player(p: &Participant) -> bool {
 impl From<&Participant> for FightRow {
     fn from(p: &Participant) -> Self {
         Self {
+            id: p.definition.id,
             name: p.name.clone(),
             player: is_player(p),
             hp: p.hp,
@@ -6821,10 +6833,27 @@ mod tests {
         // A ruling is not what the sheet began with, so sync treats it as the DM's value.
         assert_eq!(hero.started.as_ref().and_then(|s| s.hp), Some(7));
 
-        let mut run = Run::new("Next".into(), vec![hero], String::new()).unwrap();
+        let mut run = Run::new("Next".into(), vec![hero.clone()], String::new()).unwrap();
         run.note_carry(&rested, vec![(0, Some(11), 0)]);
         assert!(run.carry_missing().unwrap().contains("the shrine"));
-        assert!(run.state.log.last().unwrap().contains("carried over"));
+        // iter-23-S FL3: full HP from a rest is not carried over, and `Last:` uses the rest's
+        // own lower-case step words.
+        assert_eq!(run.state.log.last().map(String::as_str), Some(REST_LOG));
+        assert_eq!(run.state.last_change.as_deref(), Some(REST_STEP));
+        let mut after_fight = Run::new("Later".into(), vec![hero], String::new()).unwrap();
+        after_fight.note_carry(&carry, vec![(0, Some(11), 0)]);
+        assert_eq!(
+            after_fight.state.last_change.as_deref(),
+            Some("party HP carried over from the bridge")
+        );
+        assert!(
+            after_fight
+                .state
+                .log
+                .last()
+                .unwrap()
+                .contains("carried over")
+        );
         let (from, back) = run.back_to_sheets().unwrap();
         assert_eq!(from, "the long rest");
         run.apply(back).unwrap();

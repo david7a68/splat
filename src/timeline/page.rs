@@ -181,7 +181,13 @@ pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestR
             action = Some(RestRulingAction::Set(!event.restores));
         }
     });
-    if undo && design::undo_message(ui, Tone::Info, "Long rest ruling changed.", "Undo ruling") {
+    // The result says the ruling now in force, and what it does to the next fight.
+    let words = if event.restores {
+        REST_RESTORES_WORDS
+    } else {
+        "The next fight starts from the HP the party has now."
+    };
+    if undo && design::undo_message(ui, Tone::Info, words, "Undo ruling") {
         action = Some(RestRulingAction::Undo);
     }
     action
@@ -203,8 +209,11 @@ fn timeline_removal_words(book: &Book, label: &str, mentions: usize) -> String {
     words
 }
 
+/// What a restoring rest does to the next fight. Adding a rest and marking it say the same.
+const REST_RESTORES_WORDS: &str = "Everyone starts the next fight at full.";
+
 pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> String {
-    let mut words = "Long rest added. Everyone starts the next fight at full.".to_owned();
+    let mut words = format!("Long rest added. {REST_RESTORES_WORDS}");
     for name in saved_fights {
         words.push_str(&format!(" {name} keeps its saved HP."));
     }
@@ -462,11 +471,14 @@ impl TimelinePage {
                 format!("Day {day} · {detail}")
             };
         }
+        // The ruling is a status, in its own colour, as on the plan row and in the detail.
+        let mut ruling = None;
         if event.kind == Kind::LongRest {
             if !detail.is_empty() {
                 detail.push_str(" · ");
             }
             let status = long_rest_status(event.restores);
+            ruling = Some((detail.len(), status.color));
             detail.push_str(&format!("{} {}", status.icon, status.word));
         }
         // A day heading written out of order keeps its Day icon and says what it was written as.
@@ -545,7 +557,7 @@ impl TimelinePage {
             }
             painter.galley(egui::pos2(x, top), galley, c.text);
             if !detail.is_empty() && !open {
-                let second = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
+                let second = second_line(ui, &detail, ruling, width);
                 painter.galley(
                     egui::pos2(x, top + lines - Type::Small.line()),
                     second,
@@ -690,13 +702,11 @@ impl TimelinePage {
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         self.list_messages(ui, book);
         if book.merged_outside {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "Timeline.md also changed outside Splat. Both changes are kept.",
-                    )
-                    .color(colors().muted),
+            // A result like the others in this column: an icon and a bar, not help text.
+            design::message(
+                ui,
+                Tone::Info,
+                "Timeline.md also changed outside Splat. Both changes are kept.",
             );
         }
         let flagged: std::collections::HashMap<String, u32> = book
@@ -1217,8 +1227,11 @@ impl TimelinePage {
             Some(&if book.events.is_empty() {
                 String::new()
             } else {
+                // The clock shows once a day sets it; before that, there is nothing to name.
+                let now = clock_now(&book.events)
+                    .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
                 format!(
-                    "{} · Now: {}",
+                    "{}{now}",
                     if self.filter != Filter::All
                         || !self.search.trim().is_empty()
                         || self.session.is_some()
@@ -1242,7 +1255,6 @@ impl TimelinePage {
                     } else {
                         design::count(book.events.len(), "event", "events")
                     },
-                    clock_now(&book.events).map_or_else(|| "not set".to_owned(), clock_words)
                 )
             }),
             |_| {},
@@ -1396,6 +1408,33 @@ pub fn check_long_rest_add(kinds: &'static [Kind]) {
     assert!(!super::party_state(&harness.state().events, session).rested);
 }
 
+/// A row's second line on one line, muted, with the rest ruling from `at` in its own colour.
+fn second_line(
+    ui: &egui::Ui,
+    detail: &str,
+    ruling: Option<(usize, egui::Color32)>,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let detail = detail.replace(['\n', '\r'], " ");
+    let (before, after, color) =
+        ruling.map_or((detail.as_str(), "", colors().muted), |(at, color)| {
+            let (before, after) = detail.split_at(at.min(detail.len()));
+            (before, after, color)
+        });
+    let mut job = egui::text::LayoutJob::default();
+    for (words, color) in [(before, colors().muted), (after, color)] {
+        job.append(
+            words,
+            0.0,
+            egui::TextFormat::simple(Type::Small.font(ui), color),
+        );
+    }
+    job.wrap.max_width = width.max(1.0);
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
 fn header_kind(event: &Event) -> String {
     if event.kind == Kind::Day || event.title.trim().is_empty() {
         event.kind.icon().to_owned()
@@ -1497,9 +1536,12 @@ mod tests {
         harness.get_by_label("Mark not at full").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);
+        // iter-23-S FL1: each direction says the ruling now in force.
+        harness.get_by_label("The next fight starts from the HP the party has now.");
         harness.get_by_label("Mark everyone at full").click();
         harness.run_steps(2);
         assert!(harness.state().events[0].restores);
+        harness.get_by_label(REST_RESTORES_WORDS);
         harness.get_by_label("Undo ruling").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);

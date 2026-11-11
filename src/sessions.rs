@@ -1210,6 +1210,14 @@ pub struct Draft {
     /// The words the DM chose to lose, and how, until the next edit.
     pub dropped: Option<Dropped>,
     last_edit: Option<Instant>,
+    /// Changes when the words or the file change. No two drafts share one.
+    revision: u64,
+}
+
+/// A revision no draft has had.
+fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// How a note's draft was lost. Its Undo names the same action.
@@ -1243,7 +1251,13 @@ impl Draft {
             restored: None,
             dropped: None,
             last_edit: None,
+            revision: next_revision(),
         })
+    }
+
+    /// Changes whenever the words or the file change, so a reader can skip an unchanged draft.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// A conflict or a failed save stays in view through more typing, until it is resolved.
@@ -1253,6 +1267,7 @@ impl Draft {
             self.state = DraftState::Unsaved;
         }
         self.last_edit = Some(Instant::now());
+        self.revision = next_revision();
     }
 
     /// Does this draft hold something the file does not?
@@ -1362,6 +1377,7 @@ impl Draft {
     pub fn save_moved(&mut self) {
         if let Some(path) = self.moved_to.take() {
             self.path = path;
+            self.revision = next_revision();
             self.state = DraftState::Unsaved;
             self.save();
         }
@@ -1376,6 +1392,7 @@ impl Draft {
             .map(body_of)
             .unwrap_or_default()
             .to_owned();
+        self.revision = next_revision();
         self.state = DraftState::Clean;
     }
 
