@@ -15926,9 +15926,26 @@ pub mod session_plan {
         d.click("Add Long rest");
         assert!(d.has("Long rest added to Session 2. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::All);
+        // iter-25-S family (FB2 rule): the plan keeps the scroll bar's lane, so the row menu
+        // keeps its x when the open rest and its result make the plan scroll at 960.
+        let menu_right = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("More actions for Long rest"))
+                .map(|node| node.rect.right())
+        };
+        let menu_before = d.at_size(SMALL, menu_right);
         d.click("Long rest");
         d.click("Mark not at full");
         d.expect("Undo ruling");
+        let menu_after = d.at_size(SMALL, menu_right);
+        d.observe(
+            "iter-25-S-plan-lane",
+            menu_before
+                .zip(menu_after)
+                .is_some_and(|(before, after)| (before - after).abs() < 1.0),
+            format!("The row menu keeps its x at 960: {menu_before:?} then {menu_after:?}"),
+        );
         // iter-23-S FL1: the result names the new ruling and its effect.
         d.observe(
             "iter-23-S-FL1-plan-off",

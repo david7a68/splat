@@ -4880,11 +4880,14 @@ impl Sessions {
             }
             return;
         }
+        // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's menu
+        // keeps its x when the list grows long enough to scroll.
+        let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
         egui::ScrollArea::vertical()
             .id_salt(("session_recordings", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.set_max_width(lane_width.min(ui.available_width()).min(design::LIST_MEASURE));
                 let recovery = self.recording_recovery_row();
                 let destination = recordings.iter().position(|recording| {
                     !recording.summary

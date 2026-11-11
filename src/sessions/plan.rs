@@ -656,9 +656,12 @@ impl Sessions {
         let ruling_undo = book.rest_undo_id().map(str::to_owned);
         let mut ruling = None;
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
+            // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's
+            // actions keep their x when the plan grows long enough to scroll.
+            let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
                 .auto_shrink([false, false]).show(ui, |ui| {
-                let width = ui.available_width() - design::M;
+                let width = lane_width.min(ui.available_width());
                 let action_width = [Action::primary("Start fight").icon(icons::RUN), Action::primary("Resume").icon(icons::RUN), Action::quiet("Add to notes"), Action::secondary("Arrivals").icon(icons::GROUP)]
                     .into_iter().map(|action| action.density(Density::Read).natural_width(ui)).fold(0.0, f32::max)
                     + Density::Read.control() + design::S;
