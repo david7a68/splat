@@ -3008,6 +3008,9 @@ impl Run {
             }
         }
         let indices: Vec<_> = affected.into_iter().collect();
+        // The newest `own_steps` steps are from this opening. One that a sheet removes is no
+        // longer there to take back, and what it changed stays changed.
+        let own_from = self.history.len().saturating_sub(self.own_steps);
         for (at, previous) in self.history.iter().enumerate() {
             let next = self.history.get(at + 1).unwrap_or(before);
             let touches = indices.iter().any(|index| {
@@ -3021,6 +3024,9 @@ impl Run {
             });
             if touches {
                 dropped.push(self.history_labels[at].clone());
+                if at >= own_from {
+                    self.own_steps -= 1;
+                }
                 continue;
             }
             let mut previous = previous.clone();
@@ -3071,8 +3077,6 @@ impl Run {
             self.dm_steps += 1;
             self.own_steps += 1;
         }
-        // A step that a sheet removed is no longer there to take back.
-        self.own_steps = self.own_steps.min(self.history.len());
     }
 
     /// The log keeps the complete change; the notice names each character's undo boundary.
@@ -4245,6 +4249,7 @@ impl Run {
         self.history.clear();
         self.history_labels.clear();
         self.history_from_sheet.clear();
+        self.own_steps = 0;
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
@@ -5855,6 +5860,27 @@ mod tests {
         assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
     }
     #[test]
+    fn a_step_that_a_sheet_removed_still_counts_as_play() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut reopened, _, max) = reopened_with_steps(dir.path());
+        first_sync(&mut reopened, max, 9);
+        assert_eq!(reopened.timeline_fact().steps, 0, "as it opened");
+        // Two steps of this opening. The sheet confirms the first, then replaces its value.
+        reopened.apply(Command::Damage(0, 2)).unwrap();
+        connected_tick(&mut reopened);
+        read_sheet(&mut reopened, max, 11);
+        reopened.apply(Command::Damage(1, 1)).unwrap();
+        read_sheet(&mut reopened, max, 14);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 14));
+        assert_eq!(reopened.timeline_fact().steps, 2);
+        // Undo of the step that is left, and then of a step from before the run opened: the
+        // run never reads as it opened, because the removed step's change stays.
+        reopened.undo();
+        assert_eq!(reopened.timeline_fact().steps, 1);
+        reopened.undo();
+        assert_eq!(reopened.timeline_fact().steps, 2);
+    }
+    #[test]
     fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {
         let dir = tempfile::tempdir().unwrap();
         let (mut reopened, name, max) = reopened_with_steps(dir.path());
@@ -7407,7 +7433,9 @@ mod tests {
         assert!(!reopened.undo_continues());
         let ended = serde_json::to_value(&reopened.state).unwrap();
         let turn = (reopened.state.cursor, reopened.state.round);
-        reopened.selected = 0;
+        // Another row is selected, as after a look at the final state.
+        reopened.selected = 2;
+        assert_ne!(reopened.state.order[reopened.state.cursor], 2);
         reopened.continue_fight();
         assert!(reopened.error.is_none(), "{:?}", reopened.error);
         assert_eq!(reopened.state.phase, Phase::Running);

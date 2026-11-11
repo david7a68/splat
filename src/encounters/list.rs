@@ -664,14 +664,12 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&s
             );
         });
         // The one way on from a fight that ended by mistake. Undo puts the ending back.
-        ui.horizontal(|ui| {
-            go_on = Action::secondary(crate::encounter_run::CONTINUE_FIGHT)
-                .icon(icons::RUN)
-                .density(Density::Read)
-                .blocked(blocked)
-                .show(ui)
-                .clicked();
-        });
+        go_on = Action::secondary(crate::encounter_run::CONTINUE_FIGHT)
+            .icon(icons::RUN)
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked();
         design::group_label(ui, "Final state");
         for row in &summary.rows {
             ui.horizontal_wrapped(|ui| {
