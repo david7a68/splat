@@ -198,7 +198,9 @@ action that loses something. Keep Delete and Remove in row menus.
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. Clean rows say `No
 changes`. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
 has one weight: its Save is primary while the draft has changes that it can save and no open run owns `Next turn`,
-and secondary otherwise. `Save changes` in World and `Save repaired note` in World and Campaign follow this. Unsaved,
+and secondary otherwise. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
+several Campaign repairs have changes, only the active one (edited or focused last; else the last changed one) has
+the primary Save; the others keep their drafts with a secondary Save. Unsaved,
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
