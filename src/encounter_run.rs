@@ -785,6 +785,8 @@ const MAX_FROM_SHEET: &str =
 const REST_STEP: &str = "full HP after long rest";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use the saved HP";
+/// The outcome of an ending whose outcome field was left empty.
+const NO_OUTCOME: &str = "Undecided";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
 const END_STEP: &str = "end encounter";
 /// The Undo step that takes an ending away.
@@ -1625,6 +1627,15 @@ impl Run {
     /// Take the ending away, as one named step that Undo puts back. Play goes on from the turn
     /// the fight ended on, and sync starts again by the rule for a resumed run.
     pub(crate) fn continue_fight(&mut self) {
+        // An ending that comes again starts from the outcome of the one that goes. With no
+        // outcome given, the field stays empty, which gives the same word again.
+        if let Phase::Ended { outcome } = &self.state.phase {
+            self.outcome = if outcome == NO_OUTCOME {
+                String::new()
+            } else {
+                outcome.clone()
+            };
+        }
         self.run_command(Command::Continue);
     }
     /// This run's own id, the same in every frame and every save.
@@ -5137,6 +5148,32 @@ mod tests {
         let campaign = stored(&mut run, dir.path());
         let reopened = close_and_reopen(&mut run, campaign);
         newest(&run, &reopened);
+
+        // Long text in a row's starting values, which no step changes: each state read from
+        // the file holds its own copy, and the budget counts it.
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = self::run();
+        run.state.participants[0]
+            .initial
+            .insert("notes".into(), "x".repeat(128 * 1024).into());
+        begin(&mut run);
+        for _ in 0..96 {
+            run.apply(Command::Next).unwrap();
+        }
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        newest(&run, &reopened);
+        let copies: usize = reopened
+            .history
+            .iter()
+            .map(|state| {
+                state.participants[0].initial["notes"]
+                    .as_str()
+                    .unwrap()
+                    .len()
+            })
+            .sum();
+        assert!(copies <= 4 * 1024 * 1024, "{copies} bytes of one value");
     }
     /// Rewrite the saved run's `undo` field, as another version of Splat would leave it.
     fn with_undo_field(path: &Path, change: impl FnOnce(&mut serde_json::Value)) {
@@ -5175,6 +5212,13 @@ mod tests {
         old.save().unwrap();
         let reopened = Run::open(&path, campaign).unwrap();
         assert_same_undo(&old, &reopened);
+        // A field that a later version adds to a step is passed over, and the steps are read.
+        with_undo_field(&path, |saved| {
+            saved["undo"]["steps"][0]["future_field"] = true.into();
+        });
+        let later = Run::open(&path, campaign).unwrap();
+        assert!(!later.undo_unread);
+        assert_same_undo(&old, &later);
         // Only a row of an Undo step may leave its definition out. A run's own row may not.
         with_undo_field(&path, |saved| {
             let row = saved["state"]["participants"][0].as_object_mut().unwrap();
@@ -5182,11 +5226,17 @@ mod tests {
         });
         assert!(Run::open(&path, campaign).is_err());
         assert!(fight_summary(&path, campaign).is_err());
+        // A file cut short does not open, and stays as it is.
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.truncate(bytes.len() - 10);
+        fs::write(&path, &bytes).unwrap();
+        assert!(Run::open(&path, campaign).is_err());
+        assert_eq!(fs::read(&path).unwrap(), bytes);
     }
     #[test]
     fn undo_steps_this_version_cannot_read_are_dropped_and_the_run_says_so_once() {
         type Break = fn(&mut serde_json::Value);
-        let breaks: [(&str, Break); 5] = [
+        let breaks: [(&str, Break); 6] = [
             ("another version", |saved| {
                 saved["undo"]["version"] = 2.into()
             }),
@@ -5201,6 +5251,13 @@ mod tests {
             }),
             ("a state that could not be saved", |saved| {
                 saved["undo"]["steps"][0]["cursor"] = 9.into();
+            }),
+            // A step changes a row, and never gives its place to another participant.
+            ("a step for a participant the run does not have", |saved| {
+                let steps = saved["undo"]["steps"].as_array_mut().unwrap();
+                let damage = steps.last_mut().unwrap();
+                assert_eq!(damage["rows"]["0"]["key"], "slot0");
+                damage["rows"]["0"]["key"] = "gone-participant".into();
             }),
         ];
         for (what, change) in breaks {
@@ -5582,6 +5639,23 @@ mod tests {
             run.syncs[&0].conflict_keys().is_empty() && !run.pending_sync(),
             "and sends nothing before its first read"
         );
+
+        // A sheet that changed after the ending. The first read after Continue fight takes
+        // its value, and Undo of Continue fight keeps it: the sheet's value is a fact, and
+        // not a step.
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, _, max) = matched_with_sheet(5);
+        run.keep_party_synced();
+        run.apply(Command::End("Won".into())).unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        reopened.continue_fight();
+        first_sync(&mut reopened, max, 9);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 9));
+        assert_eq!(reopened.undo_label(), "Undo: continue fight");
+        reopened.undo();
+        assert!(reopened.ended());
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 9));
     }
     #[test]
     fn a_read_only_sheet_leaves_the_runs_value_alone_at_a_first_read() {
@@ -7631,6 +7705,8 @@ mod tests {
         assert_eq!(serde_json::to_value(&closed.state).unwrap(), ended);
         assert_eq!(closed.undo_label(), "Undo: 2 loot rolls on gems");
         closed.continue_fight();
+        // The next ending starts from the outcome of the ending that went.
+        assert_eq!(closed.outcome, "Won");
         closed.apply(Command::End("Lost".into())).unwrap();
         assert_eq!(
             closed.state.phase,
@@ -7640,6 +7716,11 @@ mod tests {
         );
         assert!(closed.undo_continues());
         assert_eq!(closed.state.loot[&rolled].len(), 2);
+        // An ending with no outcome given leaves the field empty for the next one.
+        closed.undo();
+        closed.apply(Command::End(NO_OUTCOME.into())).unwrap();
+        closed.continue_fight();
+        assert_eq!(closed.outcome, "");
     }
 
     #[test]

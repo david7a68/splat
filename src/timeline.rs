@@ -1203,29 +1203,29 @@ impl Book {
     /// What a run says now. `played` means it changed while open, and it was not only opened.
     #[cfg(test)]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        self.record(fact, session, played, false);
+        self.record(fact, session, played);
     }
 
-    fn record(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool, taken_back: bool) {
+    fn record(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         // It stays in place for this, because what comes next must follow its order.
         let removed = self.removed.clone();
         let dm_edit = self.dirty && !self.run_write;
         self.apply_run(fact, session, played);
-        if taken_back {
-            self.unplay(fact.id);
-        }
         self.run_write = !dm_edit;
         self.removed = removed;
     }
 
     /// Every step since the run opened is taken back, so it was opened and not played. Its
-    /// fight goes back to its place in the order of play, and to its own session.
+    /// fight goes back to its place in the order of play, and to its own session. Only
+    /// `apply_run` calls this, when the event can be changed, so that what was remembered is
+    /// never used up while the file is unreadable.
     fn unplay(&mut self, run: Uuid) {
-        let Some((played, order, continued_in)) = self.before_play.take() else {
+        let Some((_, order, continued_in)) =
+            self.before_play.take_if(|(played, ..)| *played == run)
+        else {
             return;
         };
-        if played == run
-            && let Some(event) = self.events.iter_mut().find(|e| e.run == Some(run))
+        if let Some(event) = self.events.iter_mut().find(|e| e.run == Some(run))
             && (event.played_order != order || event.continued_in != continued_in)
         {
             event.played_order = order;
@@ -1275,16 +1275,23 @@ impl Book {
             Some(old) => fact.played_since(old),
             None => fact.steps > 0,
         };
-        let taken_back =
-            before.is_some_and(|old| old.id == fact.id && old.steps > 0 && fact.steps == 0);
-        self.record(fact, session, played, taken_back);
+        self.record(fact, session, played);
     }
 
+    /// The run's fact goes to its event now, or waits until the file can be read again.
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if self.unreadable.is_some() {
             self.pending_run = Some((fact.clone(), session, played));
             return;
         }
+        self.update_event(fact, session, played);
+        // The run is as it opened. If this opening moved its fight, the fight goes back.
+        if fact.steps == 0 {
+            self.unplay(fact.id);
+        }
+    }
+
+    fn update_event(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if !self.events.iter().any(|event| event.run == Some(fact.id))
             && let Some(original) = fact.copied_from
             && let Some(event) = self
@@ -2248,6 +2255,37 @@ mod tests {
         };
         book.record_change(Some(&copy), &copy_undone, later);
         assert_eq!(latest(&book), Some(shrine.id), "Undo in the copy");
+
+        // The fight is continued again and saved. Then an outside edit makes the Timeline
+        // unreadable, and Undo comes before the repair: the fight's old place must wait
+        // for the file with the run's update.
+        book.record_change(Some(&copy_undone), &copy, later);
+        assert_eq!(latest(&book), Some(copy.id));
+        book.save();
+        let path = temp.path().join(FILE);
+        let valid = fs::read(&path).unwrap();
+        fs::write(&path, "---\ntimeline_version: [broken\n---\n").unwrap();
+        book.reload();
+        assert!(book.unreadable.is_some());
+        book.record_change(Some(&copy), &copy_undone, later);
+        assert!(book.pending_run.is_some());
+        fs::write(&path, valid).unwrap();
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert!(book.unreadable.is_none() && book.pending_run.is_none());
+        assert_eq!(
+            latest(&book),
+            Some(shrine.id),
+            "Undo during a Timeline repair restores the order of play"
+        );
+        assert_eq!(event_of(&book, copy.id).result, "Lost, round 3");
+    }
+    fn event_of(book: &Book, run: Uuid) -> Event {
+        book.events
+            .iter()
+            .find(|event| event.run == Some(run))
+            .unwrap()
+            .clone()
     }
 
     #[test]

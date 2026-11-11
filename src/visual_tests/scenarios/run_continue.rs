@@ -395,6 +395,31 @@ pub fn run(d: &mut Driver<'_>) {
             undo_step(d)
         ),
     );
+    // The party searches the guard, so Continue fight is the way on again. The next ending
+    // starts with the outcome of the ending that went, selected: Enter keeps it.
+    d.click("Roll gems for Vault Guard");
+    d.click(CONTINUE);
+    end_encounter(d);
+    let offered = d.field_text("Outcome");
+    d.press(Key::Enter);
+    d.observe(
+        "T15.7",
+        offered.as_deref() == Some("Held the vault") && d.has("Outcome: Held the vault"),
+        format!("The outcome field starts with the old outcome, and Enter keeps it: {offered:?}"),
+    );
+    // Typing replaces it.
+    d.click_starting("Undo");
+    end_encounter(d);
+    d.type_text("Fled");
+    d.press(Key::Enter);
+    d.observe(
+        "T15.7",
+        d.has("Outcome: Fled"),
+        format!(
+            "Typing replaces the selected outcome: {}",
+            d.name_starting("Outcome: ")
+        ),
+    );
     close_run(d);
     go_encounters(d);
     d.observe(

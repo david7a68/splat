@@ -12,7 +12,7 @@ use splat::{
     execution::dice::Random,
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, LazyLock},
 };
 
@@ -37,11 +37,12 @@ const MEMORY_BYTES: usize = if cfg!(test) {
 /// The state before each step, oldest first, with each step's name and whether a sheet made it.
 pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>);
 
-/// The file's form. It is written from steps that are already text, and read as steps.
+/// The file's form. It is written from steps that are already text, and read as the newest
+/// steps, still as text.
 #[derive(Serialize, Deserialize)]
-struct Saved<T> {
+struct Saved<Steps> {
     version: u32,
-    steps: Vec<T>,
+    steps: Steps,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -236,23 +237,34 @@ impl Step {
         }
     }
 
-    /// The state before this step, given the state after it.
-    fn before(self, after: &State) -> Option<State> {
+    /// The state before this step, given the state after it, and what each of its rows weighs.
+    /// A step changes rows and never names a new one: each of its rows is a row the state
+    /// after it has, in the same place, with the same key. Anything else is not a step this
+    /// version wrote, and no definition is taken for it.
+    fn before(self, after: &State, after_weights: &[usize]) -> Option<(State, Vec<usize>)> {
         let mut rows = self.rows;
-        let participants = (0..self.count)
-            .map(|at| {
-                let kept = after.participants.get(at);
-                match rows.remove(&at) {
-                    Some(mut row) => {
-                        if is_same_definition(&row.definition) {
-                            row.definition = kept?.definition.clone();
-                        }
-                        Some(row)
+        let mut weights = Vec::new();
+        let mut participants = Vec::new();
+        for at in 0..self.count {
+            let kept = after.participants.get(at)?;
+            match rows.remove(&at) {
+                Some(mut row) => {
+                    if row.key != kept.key {
+                        return None;
                     }
-                    None => kept.cloned(),
+                    let own_definition = !is_same_definition(&row.definition);
+                    if !own_definition {
+                        row.definition = kept.definition.clone();
+                    }
+                    weights.push(row_weight(&row, own_definition));
+                    participants.push(row);
                 }
-            })
-            .collect::<Option<Vec<_>>>()?;
+                None => {
+                    weights.push(*after_weights.get(at)?);
+                    participants.push(kept.clone());
+                }
+            }
+        }
         let state = State {
             participants,
             order: self.order,
@@ -267,7 +279,7 @@ impl Step {
             cast: None,
         };
         // A row for a place the state does not have is not a step this version wrote.
-        (rows.is_empty() && super::valid_state(&state)).then_some(state)
+        (rows.is_empty() && super::valid_state(&state)).then_some((state, weights))
     }
 }
 
@@ -300,28 +312,71 @@ pub(super) fn save(
     .map_err(|e| e.to_string())
 }
 
+/// The newest steps of a file's list, each still as text. A file can list more steps than this
+/// version keeps. The older ones are passed over, and none of them is decoded.
+struct Newest<'a>(VecDeque<&'a RawValue>);
+
+impl<'de: 'a, 'a> Deserialize<'de> for Newest<'a> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Steps<'a>(std::marker::PhantomData<&'a ()>);
+        impl<'de: 'a, 'a> serde::de::Visitor<'de> for Steps<'a> {
+            type Value = Newest<'a>;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a list of Undo steps")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut list: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut newest = VecDeque::with_capacity(LIMIT);
+                while let Some(step) = list.next_element::<&'a RawValue>()? {
+                    if newest.len() == LIMIT {
+                        newest.pop_front();
+                    }
+                    newest.push_back(step);
+                }
+                Ok(Newest(newest))
+            }
+        }
+        deserializer.deserialize_seq(Steps(std::marker::PhantomData))
+    }
+}
+
 /// The steps from a run file. None when this version cannot read them: another version wrote
 /// them, or they do not fit the run's current state. A file can hold more than this version
 /// keeps, or states that would take too much memory: then the newest steps that fit are read.
+/// One step is decoded at a time, and only while its text and the state it gives fit.
 pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
-    let saved: Saved<Step> = serde_json::from_str(saved.get()).ok()?;
+    let saved: Saved<Newest<'_>> = serde_json::from_str(saved.get()).ok()?;
     if saved.version != VERSION {
         return None;
     }
     let mut history = (Vec::new(), Vec::new(), Vec::new());
-    let mut memory = 0;
+    let mut memory: usize = 0;
+    // The run owns its current rows and their definitions. A state read here is charged for
+    // its own copy of each row.
+    let mut weights: Vec<usize> = now
+        .participants
+        .iter()
+        .map(|row| row_weight(row, false))
+        .collect();
     // The newest step is next to the current state, so the states are rebuilt from the end.
-    for mut step in saved.steps.into_iter().rev().take(LIMIT) {
-        let after = history.0.last().unwrap_or(now);
-        // Each state is as large as the one after it, give or take one step.
-        memory += weight(after);
+    for text in saved.steps.0.iter().rev() {
+        if memory.saturating_add(text.get().len()) > MEMORY_BYTES {
+            break;
+        }
+        let mut step: Step = serde_json::from_str(text.get()).ok()?;
+        let label = std::mem::take(&mut step.label);
+        let from_sheet = step.from_sheet;
+        let (state, rows) = step.before(history.0.last().unwrap_or(now), &weights)?;
+        memory = memory.saturating_add(weight(&state, &rows));
         if memory > MEMORY_BYTES {
             break;
         }
-        history.1.push(std::mem::take(&mut step.label));
-        history.2.push(step.from_sheet);
-        let state = step.before(after)?;
         history.0.push(state);
+        history.1.push(label);
+        history.2.push(from_sheet);
+        weights = rows;
     }
     history.0.reverse();
     history.1.reverse();
@@ -329,13 +384,102 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     Some(history)
 }
 
-/// About how many bytes a state's text takes: its log, and the words of each row.
-fn weight(state: &State) -> usize {
-    let log: usize = state.log.iter().map(String::len).sum();
-    let rows: usize = state
-        .participants
+/// How many bytes a value takes as JSON: the measure of the text and numbers it owns.
+fn json_len<T: Serialize + ?Sized>(value: &T) -> usize {
+    struct Count(usize);
+    impl std::io::Write for Count {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count(0);
+    // A value that cannot be measured counts as too large to keep.
+    serde_json::to_writer(&mut count, value).map_or(usize::MAX, |()| count.0)
+}
+
+/// What one row of a kept state weighs. Every field is named, so that a new field is counted.
+/// A definition shared with the state after is one allocation, which that state has.
+fn row_weight(row: &Participant, own_definition: bool) -> usize {
+    let Participant {
+        key,
+        npc: _,
+        initiative_group,
+        initiative_mode: _,
+        name,
+        side,
+        definition,
+        initial,
+        max_hp: _,
+        hp: _,
+        temporary_hp: _,
+        armor_class: _,
+        initiative_bonus: _,
+        initiative: _,
+        shared_roll,
+        present: _,
+        conditions,
+        concentration: _,
+        successes: _,
+        failures: _,
+        notes,
+        combat_values,
+        started,
+        changes,
+        added_from,
+    } = row;
+    [
+        std::mem::size_of::<Participant>(),
+        key.len() + name.len() + side.len() + notes.len(),
+        json_len(initiative_group),
+        json_len(shared_roll),
+        json_len(conditions),
+        json_len(initial),
+        json_len(combat_values),
+        json_len(started),
+        json_len(changes),
+        json_len(added_from),
+        if own_definition {
+            json_len(definition)
+        } else {
+            0
+        },
+    ]
+    .into_iter()
+    .fold(0, usize::saturating_add)
+}
+
+/// What one kept state weighs: its rows, as `row_weight` counts them, and everything else it
+/// owns. This is the one count that the memory budget uses.
+fn weight(state: &State, rows: &[usize]) -> usize {
+    let State {
+        participants: _,
+        order,
+        cursor: _,
+        round: _,
+        phase,
+        log,
+        last_change,
+        random,
+        loot,
+        roll_results: _,
+        cast: _,
+    } = state;
+    let lines = log
         .iter()
-        .map(|row| row.notes.len() + row.name.len() + 256)
-        .sum();
-    log + rows
+        .map(|line| line.len() + std::mem::size_of::<String>());
+    rows.iter()
+        .copied()
+        .chain(lines)
+        .chain([
+            std::mem::size_of_val(order.as_slice()),
+            json_len(phase),
+            json_len(last_change),
+            json_len(random),
+            json_len(loot),
+        ])
+        .fold(0, usize::saturating_add)
 }

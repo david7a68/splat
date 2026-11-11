@@ -2489,6 +2489,16 @@ impl Run {
                     design::text_input(ui, "Outcome", &mut self.outcome, "Outcome, if any", 160.0);
                 if std::mem::take(&mut self.focus_outcome) {
                     field.request_focus();
+                    // An outcome that is already there is selected, so that Enter keeps it
+                    // and typing replaces it.
+                    let mut text =
+                        egui::TextEdit::load_state(ui.ctx(), field.id).unwrap_or_default();
+                    text.cursor
+                        .set_char_range(Some(egui::text::CCursorRange::two(
+                            egui::text::CCursor::new(0),
+                            egui::text::CCursor::new(self.outcome.chars().count()),
+                        )));
+                    text.store(ui.ctx(), field.id);
                 }
                 let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 if Action::destructive("End encounter")
@@ -2498,7 +2508,7 @@ impl Run {
                     || enter
                 {
                     let outcome = if self.outcome.trim().is_empty() {
-                        "Undecided".to_owned()
+                        super::NO_OUTCOME.to_owned()
                     } else {
                         self.outcome.trim().to_owned()
                     };

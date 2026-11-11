@@ -1113,7 +1113,9 @@ first (`Undo`, with the full action in hover and its accessible name). When the 
 title's line, as beside Lookup at 960x640, Close run stays on that line and Undo and Continue fight take a line of
 their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
-run is open. Neither is modal, and Undo names the step: `Undo: continue fight`.
+run is open. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
+footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
+with text, the text is selected, so that Enter keeps it and typing replaces it.
 
 A run whose saved Undo steps cannot be read says so once, as a warning `message` in the error line's place with a
 Dismiss button. It wraps beside Lookup and pushes the roster down by its lines. The Log keeps the line.

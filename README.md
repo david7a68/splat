@@ -936,7 +936,9 @@ A fight that ended by mistake can go on. In the ended view, **Undo: end encounte
 the ending is the newest step. After a loot roll, or when the file has no steps, **Continue fight** is beside
 **Close run**. A closed, ended run has **Continue fight** under **Read-only** when you open it in History; the
 session plan's **Whole run** leads there. Continue fight is one named step: play returns to the turn the fight ended
-on, the run's loot results stay, and **Undo: continue fight** puts the ending back with its outcome. Timeline, the
+on, the run's loot results stay, and **Undo: continue fight** puts the ending back with its outcome. When you
+choose **End encounter…** again, the outcome field starts with that outcome, selected: Enter keeps it, and typing
+replaces it. Timeline, the
 session plan and the Encounters lists follow the run each way. A fight that is opened and has every step taken back
 keeps its old place in the order of play, so the next fight still starts from the fight that was played last.
 With another run open, Continue fight is blocked and says **Close the open run first.**
