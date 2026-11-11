@@ -1523,9 +1523,11 @@ own map. A feature that needs a place stores the entry, and finds the pin with t
 - **Splat warns before it breaks a far end.** For this, the index holds one row for each far end that passes
   R12, in an item that passes R2 and R4: the far map, the pin name as [Names](#names) compares it, the map
   that holds the route, and the route's name. Before a rename or a removal of a pin, Splat looks for rows with that map and that pin
-  name. When it finds one or more, the action first says:
-  `{count} routes of other maps arrive at this pin: {maps}. They will need a new pin.` The DM confirms or
-  cancels. `{maps}` is the names of the maps that hold those routes, each once, in name order. A far end with
+  name. When it finds one or more, it shows this warning beside the rename field or the remove action, before
+  the DM acts:
+  `{count} routes of other maps arrive at this pin: {maps}. They will need a new pin.` The warning asks for
+  no answer and adds no step: the DM renames or removes as usual, and one Undo restores the name and with it
+  each far end. A confirmation is only for work that Undo cannot restore. `{maps}` is the names of the maps that hold those routes, each once, in name order. A far end with
   fault R12 is in no row, so Splat cannot warn for it. Splat does not warn for a rename to a name that equals
   the old name as Names compares names, because no far end breaks.
 
@@ -1537,7 +1539,7 @@ own map. A feature that needs a place stores the entry, and finds the pin with t
 | The image is replaced by a larger scan of the same picture | Nothing changes. Positions are fractions, and each measured distance is the same when the shape is the same |
 | The image is replaced by a picture with another crop or shape | Splat reports nothing. The pins are in the wrong places, and the DM places them again |
 | A second image file gets the same name | Fault I2. The map keeps the file that the Reader uses |
-| A pin is renamed in Splat | Splat changes the pin's `name`. In each item of `splat_map_routes` that is a mapping, also an item with R2 or R4, it changes each `from` and each `to` that is text and equals the old name as [Names](#names) compares names. It patches `splat_map_pins` and `splat_map_routes` in one write of the file, with one Undo. Splat refuses a new name that equals the name of another pin of the map, with `Another pin of this map is named “{name}”.` It warns first when a route of another map arrives at the pin, and it does not change that other file |
+| A pin is renamed in Splat | Splat changes the pin's `name`. In each item of `splat_map_routes` that is a mapping, also an item with R2 or R4, it changes each `from` and each `to` that equals the old name. It compares each end after the changes that the reader makes before the derive (a YAML number or boolean becomes text, as for D2), and as [Names](#names) compares names, so `from: 12` matches the pin `12`. It writes the new name as text in the YAML value that it keeps for the item. It patches `splat_map_pins` and `splat_map_routes` in one write of the file, with one Undo. Splat refuses a new name that equals the name of another pin of the map, with `Another pin of this map is named “{name}”.` It shows the warning beside the field when a route of another map arrives at the pin, and it does not change that other file |
 | A pin is renamed by hand | A route that still has the old name gets fault R7 |
 | A pin is removed | A route that names it gets fault R7, on this map or on another. In Splat, the removal says how many routes of this map use the pin, gives the warning above for routes of other maps, and removes nothing else |
 | A pin that a far end names is renamed or removed, in Splat or by hand | The route of the other map stays in its file. It gets fault R7 for its far end and gives no answer. `splat check` and the map's page report it. **Choose pin** picks a pin of the far map again |
@@ -1642,8 +1644,11 @@ fixture can hold a fault that the case names. Invariants 6, 19, 28, 29, 31, 34 a
     `"[[New Mill#Wheel|the wheel]]"`, and X5 is gone. Invalid result: the old link, or a link with no heading.
 35. **A rename of a pin changes its map's pins and routes in one write.** Valid test: in the Undercroft
     example, rename `E: The Pit` to `The Pit` in Splat. `splat_map_pins` and `splat_map_routes` change, the
-    route `Prison door` has `to: The Pit` and no fault, and one Undo gives back the file's bytes. Invalid
-    result: fault R7 after the rename, a change in another property or in the text, or two Undo steps.
+    route `Prison door` has `to: The Pit` and no fault, and one Undo gives back the file's bytes. Valid test
+    for an end that is not text: a map has the pins `"12"`, `"true"` and `B`, and the routes `from: 12, to: B`
+    and `from: true, to: B`. Rename `12` to `North` and `true` to `South`: the routes have `from: North` and
+    `from: South`, and no fault. Invalid result: fault R7 after the rename, an end left as `12` or `true`, a
+    change in another property or in the text, or two Undo steps.
 36. **A route to another map needs no scale order.** Valid: the `room` map `Curio shop` has the route
     `Bottle door` to a pin of the `city` map `Bottle City`. Invalid: the pin `Bottle` has
     `opens: "[[Bottle City]]"` (O4).
@@ -1659,10 +1664,12 @@ fixture can hold a fault that the case names. Invariants 6, 19, 28, 29, 31, 34 a
     `Bottle door`, the list from `Arrival` to `Bottle` has `Bottle door`, on `Curio shop`. Invalid result: an
     answer from `Arrival` to `Bottle` while `Bottle door` is one-way.
 40. **A rename of a far pin changes one file, and the route says so.** Valid test: rename `Arrival` to
-    `White square` in `Bottle City` in Splat. Splat first warns that one route of `Curio shop` arrives at the
-    pin. After the DM confirms, the file of `Curio shop` has the same bytes, the route `Bottle door` has fault
-    R7 and gives no answer, and **Choose pin** with `White square` removes the fault. Invalid result: a
-    changed byte in `Curio shop` before the repair, or an answer for `Bottle door`.
+    `White square` in `Bottle City` in Splat. While the DM types the new name, Splat shows the warning that one
+    route of `Curio shop` arrives at the pin, and asks for no answer. After the rename, the file of
+    `Curio shop` has the same bytes, the route `Bottle door` has fault
+    R7 and gives no answer, and **Choose pin** with `White square` removes the fault. One Undo of the rename,
+    in place of the repair, also removes the fault. Invalid result: a changed byte in `Curio shop` before the
+    repair, an answer for `Bottle door` while the fault stands, or a step that the DM must confirm.
 
 ## Later
 
