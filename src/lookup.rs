@@ -145,6 +145,9 @@ pub struct Item {
     /// The words of `lower`, and the different words of `lower_body`, for a search by words.
     name_words: Vec<String>,
     body_words: Vec<String>,
+    /// A world entry's whole file text as the index read it: a hash, so a check can tell
+    /// whether the file still holds the note on screen.
+    source_text: Option<u64>,
 }
 
 /// A line on one page that links to another page or names it. With no line, only the page
@@ -153,6 +156,14 @@ pub struct Item {
 pub struct Mention {
     pub source: usize,
     pub line: Option<usize>,
+}
+
+/// A hash of a file's whole text, for comparing a file with the one the index read.
+pub(crate) fn text_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn next_generation() -> u64 {
@@ -199,6 +210,36 @@ pub struct ContentIndex {
     loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
+    /// World notes whose name another World note also has, found once when the index loads, so
+    /// a result or a chooser names their folder without a search on each frame.
+    shared_world_names: HashSet<usize>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// `shown_name` calls on this (the UI) thread.
+    static SHOWN_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Runs of the shared-name search, by campaign folder. The index loads on another thread, and
+/// scenarios run side by side, so each counts under its own folder.
+#[cfg(test)]
+static SHARED_NAME_SEARCHES: std::sync::Mutex<BTreeMap<std::path::PathBuf, usize>> =
+    std::sync::Mutex::new(BTreeMap::new());
+
+/// How often `shown_name` ran on this thread, and how often the shared-name search ran for
+/// the campaign in this folder.
+#[cfg(test)]
+pub(crate) fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
+    crate::test_support::Counts {
+        reached: SHOWN_NAMES.with(std::cell::Cell::get),
+        work: SHARED_NAME_SEARCHES
+            .lock()
+            .unwrap()
+            .get(campaign)
+            .copied()
+            .unwrap_or(0),
+    }
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -241,6 +282,11 @@ impl Item {
 
     pub fn is_note(&self) -> bool {
         matches!(self.source, Source::Note(_))
+    }
+
+    /// The hash of this world entry's whole file text as the index read it (`text_hash`).
+    pub(crate) fn source_text(&self) -> Option<u64> {
+        self.source_text
     }
 
     pub fn is_world_note(&self) -> bool {
@@ -323,6 +369,7 @@ fn note_items(
         lines: Vec::new(),
         name_words: Vec::new(),
         body_words: Vec::new(),
+        source_text: None,
         entry,
     };
     // The reader already shows the name as the title.
@@ -450,6 +497,7 @@ impl ContentIndex {
                     },
                     name_words: Vec::new(),
                     body_words: Vec::new(),
+                    source_text: None,
                     entry: {
                         let mut entry = e.entry.clone();
                         if e.private
@@ -471,8 +519,29 @@ impl ContentIndex {
             let sessions = crate::sessions::folder(campaign)
                 .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER));
             let scan = world::scan(&campaign.path, &sessions);
+            // Each World entry's whole file text, as the folder reading saw it (byte order mark
+            // and line ends included), kept as a hash. It is kept only when that reading's entry
+            // is the one on screen, so a file that changed between the two readings has none.
+            let folder = splat::content::read_folder(&campaign.path)?;
+            let read: HashMap<&str, &splat::content::Entry> = folder
+                .entries
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry))
+                .collect();
             for item in &mut items {
                 if item.entry.kind == "world" {
+                    item.source_text = read
+                        .get(item.entry.path.as_str())
+                        .filter(|read| {
+                            read.name == item.entry.name
+                                && (std::ptr::eq::<serde_yaml_ng::Mapping>(
+                                    &*read.fields,
+                                    &*item.entry.fields,
+                                ) || *read.fields == *item.entry.fields)
+                                && read.body == item.entry.body
+                        })
+                        .and(folder.text(&item.entry.path))
+                        .map(text_hash);
                     item.entry.body = world::with_links(&item.entry.body, &scan.images);
                 }
             }
@@ -567,6 +636,7 @@ impl ContentIndex {
                 .collect();
         }
         index.items = items;
+        index.shared_world_names = index.find_shared_world_names();
         index.mentions = index.find_mentions();
         // Relations and history are read once, so a reader does no search on each frame.
         for at in index.world.clone() {
@@ -870,6 +940,54 @@ impl ContentIndex {
         match self.resolve_link(target, Some(id)) {
             Go::Many(choices) => choices,
             _ => Vec::new(),
+        }
+    }
+
+    /// The World notes whose name another World note in another file also has. It runs once
+    /// per index; the test count is kept here.
+    fn find_shared_world_names(&self) -> HashSet<usize> {
+        #[cfg(test)]
+        if let Some(campaign) = &self.campaign {
+            *SHARED_NAME_SEARCHES
+                .lock()
+                .unwrap()
+                .entry(campaign.path.clone())
+                .or_default() += 1;
+        }
+        let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+        for &at in &self.world {
+            let item = &self.items[at];
+            if item.is_private() {
+                by_name
+                    .entry(item.entry.name.as_str())
+                    .or_default()
+                    .push(at);
+            }
+        }
+        by_name
+            .into_values()
+            .filter(|found| {
+                found
+                    .iter()
+                    .any(|&at| self.items[at].entry.path != self.items[found[0]].entry.path)
+            })
+            .flatten()
+            .collect()
+    }
+
+    /// A World note's name as a result or a chooser shows it: with its folder when another World
+    /// note has the same name (`Watch House (Locations)`), so the two can be told apart. The
+    /// shared names are found when the index loads.
+    pub(crate) fn shown_name(&self, at: usize) -> String {
+        #[cfg(test)]
+        SHOWN_NAMES.with(|count| count.set(count.get() + 1));
+        let entry = &self.items[at].entry;
+        if !self.shared_world_names.contains(&at) {
+            return entry.name.clone();
+        }
+        match entry.path.rsplit_once('/') {
+            Some((folder, _)) => format!("{} ({folder})", entry.name),
+            None => format!("{} ({})", entry.name, entry.path),
         }
     }
 
@@ -1788,7 +1906,9 @@ impl Lookup {
                     .index
                     .as_ref()
                     .and_then(|index| self.current.and_then(|at| index.items.get(at)))
-                    && !current.is_note()
+                    // Every World note opens on World, plain notes too (FD4). A session note
+                    // has no World page.
+                    && (!current.is_note() || current.is_world_note())
                     && design::locked(
                         ui,
                         self.library_draft
@@ -1797,7 +1917,7 @@ impl Lookup {
                             design::icon_button(
                                 ui,
                                 icons::OPEN_OUT,
-                                if current.entry.kind == "world" {
+                                if current.entry.kind == "world" || current.is_world_note() {
                                     "Open in World"
                                 } else {
                                     "Open in Library"
@@ -1865,15 +1985,16 @@ impl Lookup {
         let broken = &index.broken_world;
         if !broken.is_empty() {
             ui.horizontal_wrapped(|ui| {
+                // A note that cannot be read is an error here too, as on World's header.
                 design::status(
                     ui,
                     design::Status {
-                        icon: icons::WARN,
+                        icon: icons::ERROR,
                         word: &format!(
                             "{} cannot be read",
                             design::count(broken.len(), "note", "notes")
                         ),
-                        color: colors().result.warning,
+                        color: colors().result.error,
                     },
                 );
                 if design::link(ui, "Show").clicked() {
@@ -1915,8 +2036,17 @@ impl Lookup {
         }
         let matches = &self.matches.as_ref().unwrap().1;
         let mut chosen = None;
+        // One result that is already open offers nothing to show (FI6).
+        let only_open = match matches.as_slice() {
+            [Hit::Entry(only)] => {
+                self.reading_written.is_none() && self.current == Some(index.target_of(*only).0)
+            }
+            [Hit::Written(only)] => self.reading_written == Some(*only),
+            _ => false,
+        };
         if !query.is_empty()
             && !matches.is_empty()
+            && !only_open
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
             // Outside a message, a line-start action has no icon: its words start at the edge.

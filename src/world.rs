@@ -42,7 +42,7 @@ use std::{
 use uuid::Uuid;
 
 /// The kind of a plain note's Lookup item. No file holds this kind.
-const NOTE_KIND: &str = "world_note";
+pub(crate) const NOTE_KIND: &str = "world_note";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Role {
@@ -512,12 +512,25 @@ fn missing_words(name: &str) -> String {
     format!("{} {name} · Not found", design::icons::WARN)
 }
 
+/// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
+/// name line above `Not found`.
+fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
+    let font = Type::Small.font(ui);
+    if stacked {
+        design::number_width(ui, &format!("{} {name}", design::icons::WARN), &font)
+            .max(design::number_width(ui, "Not found", &font))
+    } else {
+        design::number_width(ui, &missing_words(name), &font)
+    }
+}
+
 /// A link to a note that is not there: icon, name and ` · Not found`. When the row is too narrow,
-/// the name wraps and `Not found` takes its own line, whole.
-fn missing_link(ui: &mut egui::Ui, name: &str) {
+/// or its label stands above it (`stacked`, Lookup beside World), the name wraps by whole words
+/// and `Not found` takes its own line below it, whole.
+fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
     let words = missing_words(name);
     let warning = colors().result.warning;
-    if design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
+    if !stacked && design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
         ui.label(Type::Small.rich(ui, &words).color(warning));
     } else {
         ui.vertical(|ui| {
@@ -526,6 +539,15 @@ fn missing_link(ui: &mut egui::Ui, name: &str) {
             ui.label(Type::Small.rich(ui, state).color(warning));
         });
     }
+}
+
+/// A compact reader's missing link: its muted `Small` label, then `⚠ <name> · Not found` in the
+/// warning tone, as the place that waits for a choice reads.
+fn compact_missing(ui: &mut egui::Ui, label: &str, name: &str) {
+    ui.horizontal(|ui| {
+        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+        missing_link(ui, name, false);
+    });
 }
 
 /// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
@@ -1047,6 +1069,7 @@ fn set_world_field(
     let updated = fields::patch(&text, name, value)?;
     write_note(&campaign.path, &entry.path, Some(&text), &updated)?;
     Ok(Change {
+        campaign: campaign.id,
         path: entry.path.clone(),
         before: text,
         after: updated,
@@ -1136,7 +1159,33 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 }
 
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
-    ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
+    // When even `…/<file name>` does not fit beside the links, the path takes its own row and
+    // the links the row below, as in Library: the file name is never cut (FA4).
+    let budget = ui.available_width() - entry_file_links_width(ui, obsidian) - design::L;
+    let filename = relative.rsplit('/').next().unwrap_or(relative);
+    if design::number_width(ui, &format!("…/{filename}"), &Type::Small.font(ui)) > budget {
+        let path = root.join(relative);
+        let font = Type::Small.font(ui);
+        let shown = if design::number_width(ui, relative, &font) <= ui.available_width() {
+            relative.to_owned()
+        } else {
+            format!("…/{filename}")
+        };
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), Density::Read.control()),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                let response = ui.add(
+                    egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).wrap(),
+                );
+                design::named(ui, &response, &path.display().to_string());
+                response.on_hover_text(path.display().to_string());
+            },
+        );
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+    } else {
+        ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
+    }
 }
 
 pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
@@ -1229,6 +1278,9 @@ struct Picker {
 
 #[derive(Clone)]
 pub(crate) struct Change {
+    /// The campaign whose folder holds the note. The result shows, and Undo acts, only there:
+    /// Lookup keeps its reader across a campaign change.
+    campaign: Uuid,
     path: String,
     before: String,
     after: String,
@@ -1290,8 +1342,176 @@ impl Change {
         &self.word
     }
 
+    /// Whether this change's result belongs on this campaign's note at `path`.
+    pub(crate) fn shows_on(&self, campaign: &Campaign, path: &str) -> bool {
+        self.campaign == campaign.id && self.path == path
+    }
+
     pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+        if campaign.id != self.campaign {
+            return Err("This change belongs to another campaign. Nothing was changed.".into());
+        }
         write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
+    }
+}
+
+/// A note's file renamed to match its name (FD5). Undo moves it back. Neither move replaces a
+/// file, and each checks that the file still holds the text the DM saw.
+pub(crate) struct FileRename {
+    /// The campaign whose folder holds the file. Undo acts only there.
+    campaign: Uuid,
+    from: String,
+    to: String,
+    text: String,
+}
+
+impl FileRename {
+    /// `seen` is the file's text that produced the reader: the move refuses unless the file
+    /// still holds it.
+    fn apply(campaign: &Campaign, from: &str, to: &str, seen: &str) -> Result<Self, String> {
+        move_note(&campaign.path, from, to, seen, || {})?;
+        Ok(Self {
+            campaign: campaign.id,
+            from: from.into(),
+            to: to.into(),
+            text: seen.into(),
+        })
+    }
+
+    /// Whether this rename's result belongs on this campaign's note at `path`.
+    fn shows_on(&self, campaign: &Campaign, path: &str) -> bool {
+        self.campaign == campaign.id && self.to == path
+    }
+
+    fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+        if campaign.id != self.campaign {
+            return Err("This rename belongs to another campaign. Nothing was renamed.".into());
+        }
+        move_note(&campaign.path, &self.to, &self.from, &self.text, || {})
+    }
+
+    fn message(&self) -> String {
+        let file = self.to.rsplit('/').next().unwrap_or(&self.to);
+        format!("The file is now {file}.")
+    }
+}
+
+/// The file beside `path` for a note named `name`, when the name can be a file name.
+fn renamed_path(path: &str, name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.is_empty()
+        || name.starts_with('.')
+        || name.contains([
+            '/', '\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '[', ']',
+        ])
+    {
+        return None;
+    }
+    let to = match path.rsplit_once('/') {
+        Some((folder, _)) => format!("{folder}/{name}.md"),
+        None => format!("{name}.md"),
+    };
+    (to != path && crate::library::note_path_rule(&to).is_none()).then_some(to)
+}
+
+/// How a note file moves. `rename` never replaces a file; `link` makes a second name and fails
+/// when the target exists. Tests give other ones to stand in for a file system.
+struct Moves {
+    rename: fn(&Path, &Path) -> std::io::Result<()>,
+    link: fn(&Path, &Path) -> std::io::Result<()>,
+    remove: fn(&Path) -> std::io::Result<()>,
+}
+
+const SYSTEM_MOVES: Moves = Moves {
+    #[cfg(target_os = "linux")]
+    rename: |source, target| crate::sessions::rename_no_replace(source, target),
+    #[cfg(not(target_os = "linux"))]
+    rename: |source, target| std::fs::rename(source, target),
+    link: |source, target| std::fs::hard_link(source, target),
+    remove: |path| std::fs::remove_file(path),
+};
+
+/// The words when this folder's file system has no move that is safe for an existing file.
+const NO_SAFE_MOVE: &str = "Splat cannot rename files safely in this folder, so nothing was moved.";
+
+/// The words when a move left one file with two names and Splat could remove neither.
+fn two_names(from: &str, to: &str) -> String {
+    format!(
+        "{from} and {to} are now two names for one note, and Splat could remove neither. Delete {to} in your file manager to keep the note as it was."
+    )
+}
+
+/// The file system does not offer this kind of move (not a fault of these files).
+fn move_unsupported(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::Unsupported
+        || matches!(
+            error.raw_os_error(),
+            Some(libc::EINVAL | libc::ENOSYS | libc::EOPNOTSUPP)
+        )
+}
+
+/// Moves a note file within the campaign. It refuses when `from` no longer holds `expected` or
+/// a file is at `to`, so it never replaces or loses a file. The move itself never replaces a
+/// file either (`RENAME_NOREPLACE`), so a file that arrives at `to` after the check keeps its
+/// bytes. Where the file system does not offer that move, a hard link (which also refuses an
+/// existing target) and then the removal of the old name move it; where it offers neither, it
+/// refuses and nothing moves. `before_move` runs between the checks and the move, for tests.
+fn move_note(
+    root: &Path,
+    from: &str,
+    to: &str,
+    expected: &str,
+    before_move: impl FnOnce(),
+) -> Result<(), String> {
+    move_note_with(&SYSTEM_MOVES, root, from, to, expected, before_move)
+}
+
+fn move_note_with(
+    moves: &Moves,
+    root: &Path,
+    from: &str,
+    to: &str,
+    expected: &str,
+    before_move: impl FnOnce(),
+) -> Result<(), String> {
+    let source = crate::library::note_path(root, from)?;
+    let target = crate::library::note_path(root, to)?;
+    if file_fault::read_note(root, from)? != expected {
+        return Err(format!("{from} changed on disk. Nothing was renamed."));
+    }
+    let exists = || format!("{to} already exists. Nothing was renamed.");
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(exists());
+    }
+    before_move();
+    let failed = |error: std::io::Error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            exists()
+        } else {
+            file_fault::FileFault::write(from, &error).message()
+        }
+    };
+    match (moves.rename)(&source, &target) {
+        Ok(()) => Ok(()),
+        Err(error) if move_unsupported(&error) => match (moves.link)(&source, &target) {
+            // Both names now hold one file. The old name goes; if it cannot, the new one goes,
+            // so nothing moved; if neither can, the DM is told both names and what to do.
+            Ok(()) => match (moves.remove)(&source) {
+                Ok(()) => Ok(()),
+                Err(error) => match (moves.remove)(&target) {
+                    Ok(()) => Err(format!(
+                        "{} Nothing was renamed.",
+                        file_fault::FileFault::write(from, &error).headline()
+                    )),
+                    Err(_) => Err(two_names(from, to)),
+                },
+            },
+            Err(error) if move_unsupported(&error) || error.raw_os_error() == Some(libc::EPERM) => {
+                Err(NO_SAFE_MOVE.into())
+            }
+            Err(error) => Err(failed(error)),
+        },
+        Err(error) => Err(failed(error)),
     }
 }
 
@@ -1380,6 +1600,7 @@ pub(crate) fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Chang
     write_note(&campaign.path, relative, Some(&before), &after)?;
     Ok((
         Change {
+            campaign: campaign.id,
             path: relative.into(),
             before,
             after,
@@ -1519,6 +1740,8 @@ pub struct Reader {
     kept: Option<(String, String)>,
     identity_undo: Option<(Uuid, Change)>,
     name_undo: Option<Change>,
+    /// The last `Rename the file to …` on this page, until it is undone or another replaces it.
+    file_undo: Option<FileRename>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -1727,7 +1950,8 @@ impl Reader {
             .flatten()
             .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
         let id = item.entry.id;
-        let edit = campaign.filter(|_| edit::editable(item, index) && !self.editing(id));
+        let edit =
+            campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
         let kind_line = if self.compact
@@ -1796,7 +2020,7 @@ impl Reader {
             }
         });
         self.form_focused = false;
-        let editing = campaign.is_some() && self.editing(id);
+        let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if !editing && let Some(campaign) = campaign {
             self.refresh_group_fault(item, index.generation(), || {
                 note_path(&campaign.path, &item.entry.path)
@@ -1839,7 +2063,9 @@ impl Reader {
             return self.edit_form(ui, item, index, campaign);
         }
 
-        self.discarded_notice(ui, id);
+        if let Some(campaign) = campaign {
+            self.discarded_notice(ui, campaign, id);
+        }
         let file_line = !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private();
@@ -1882,12 +2108,80 @@ impl Reader {
                         "The file is {stem}.md, but the name is {}.",
                         item.entry.name
                     );
-                    if design::message_with_action(
-                        ui,
-                        Tone::Warning,
-                        &message,
-                        &format!("Rename the note to {stem}"),
-                    ) {
+                    // Two safe choices: the note takes the file's name, or the file takes the
+                    // note's name (FD5). An open edit form keeps its file, so the file keeps
+                    // its name while one is open.
+                    let file = renamed_path(&item.entry.path, &item.entry.name)
+                        .filter(|_| !self.editing(id, campaign));
+                    let (note, rename_file) =
+                        design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                            // A choice whose words do not fit the message's width says only
+                            // its verb; the warning above names the name, and the accessible
+                            // name keeps the whole choice.
+                            let room = ui.available_width();
+                            let choice = |full: String, short: &'static str| {
+                                let action = Action::secondary(&full).density(Density::Read);
+                                if action.natural_width(ui) <= room {
+                                    (full.clone(), full)
+                                } else {
+                                    (short.to_owned(), full)
+                                }
+                            };
+                            let (note_words, note_name) =
+                                choice(format!("Rename the note to {stem}"), "Rename the note");
+                            let file_words = file.as_ref().map(|to| {
+                                choice(
+                                    format!(
+                                        "Rename the file to {}",
+                                        to.rsplit('/').next().unwrap_or(to)
+                                    ),
+                                    "Rename the file",
+                                )
+                            });
+                            ui.horizontal_wrapped(|ui| {
+                                let note = Action::secondary(&note_words)
+                                    .name(&note_name)
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked();
+                                let rename_file =
+                                    file_words.as_ref().is_some_and(|(words, name)| {
+                                        // The layout's own gap after a control, with this, is `L`.
+                                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                        Action::secondary(words)
+                                            .name(name)
+                                            .density(Density::Read)
+                                            .show(ui)
+                                            .clicked()
+                                    });
+                                (note, rename_file)
+                            })
+                            .inner
+                        });
+                    if rename_file && let Some(to) = &file {
+                        // The whole file must still be the whole file the index read, which
+                        // produced the reader: a changed comment, line end or byte order mark
+                        // counts as a change. The move checks the same text again.
+                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
+                            .and_then(|text| {
+                                if item.source_text() == Some(crate::lookup::text_hash(&text)) {
+                                    FileRename::apply(campaign, &item.entry.path, to, &text)
+                                } else {
+                                    Err(format!(
+                                        "{} changed on disk. Nothing was renamed.",
+                                        item.entry.path
+                                    ))
+                                }
+                            });
+                        match result {
+                            Ok(rename) => {
+                                self.file_undo = Some(rename);
+                                return Some(Go::Reload(item.entry.id));
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    if note {
                         let result = (|| {
                             let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
                             let after = crate::content_workspace::patch_fields(
@@ -1901,6 +2195,7 @@ impl Reader {
                             );
                             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
                             Ok::<_, String>(Change {
+                                campaign: campaign.id,
                                 path: item.entry.path.clone(),
                                 before,
                                 after,
@@ -1917,8 +2212,20 @@ impl Reader {
                         }
                     }
                 }
+                if let Some(rename) = &self.file_undo
+                    && rename.shows_on(campaign, &item.entry.path)
+                    && design::undo_message(ui, CHANGED, &rename.message(), "Undo file rename")
+                {
+                    match rename.undo(campaign) {
+                        Ok(()) => {
+                            self.file_undo = None;
+                            return Some(Go::Reload(item.entry.id));
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
                 if let Some(change) = &self.name_undo
-                    && change.path == item.entry.path
+                    && change.shows_on(campaign, &item.entry.path)
                     && design::undo_message(ui, CHANGED, &change.word, "Undo name change")
                 {
                     match change.undo(campaign) {
@@ -1943,7 +2250,7 @@ impl Reader {
             if edit::editable(item, index) {
                 self.kept_notice(ui, item);
                 if let Some(change) = &self.undo
-                    && change.path == item.entry.path
+                    && change.shows_on(campaign, &item.entry.path)
                     && change.kind == ChangeKind::Edit
                     && Self::change_notice(ui, &change.word, change.kind)
                 {
@@ -2278,16 +2585,18 @@ impl Reader {
             "status" => "Status",
             _ => "Stat block",
         };
+        // Two notes with one name: the one a value opens is named with its folder, so the
+        // result tells the DM which file the change chose (AD2, FD3, SD2).
+        let one_name = |value: &Value| match edit::value_target(index, value) {
+            Some(at) => index.shown_name(at),
+            None => edit::value_name(index, value, label),
+        };
         let name = |value: &Value| match value.as_sequence() {
             Some(groups) if groups.is_empty() => "not set".into(),
             // Each value by the name the reader shows: the note its link opens, else the words
             // written in the file.
-            Some(groups) => groups
-                .iter()
-                .map(|group| edit::value_name(index, group, label))
-                .collect::<Vec<_>>()
-                .join(", "),
-            None => edit::value_name(index, value, label),
+            Some(groups) => groups.iter().map(one_name).collect::<Vec<_>>().join(", "),
+            None => one_name(value),
         };
         // Choosing what is already there changes nothing, and writes no Log line.
         let current = world_field(current_entry, key).filter(|value| !value.is_null());
@@ -2330,6 +2639,7 @@ impl Reader {
             };
             write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
             Ok::<_, String>(Change {
+                campaign: campaign.id,
                 path: item.entry.path.clone(),
                 before: before.clone(),
                 after: after.clone(),
@@ -2387,7 +2697,11 @@ impl Reader {
     }
 
     fn relationship_value_width(&self, ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
+        let stacked = Self::stacked(ui);
+        let cap = Self::relationship_width(ui);
         let mut values = Vec::new();
+        // Missing links, measured as `missing_link` draws them.
+        let mut missing = Vec::new();
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
@@ -2410,11 +2724,8 @@ impl Reader {
                     place_choices_words(&name, choices.len())
                 )
             } else if let Some(value) = reader_field(&item.entry, key) {
-                format!(
-                    "{} {} · Not found",
-                    design::icons::WARN,
-                    link_name(value, label)
-                )
+                missing.push(missing_width(ui, &link_name(value, label), stacked));
+                continue;
             } else if key == "creature" {
                 "not set".into()
             } else {
@@ -2425,19 +2736,31 @@ impl Reader {
             values.push((value, if linked { Type::Body } else { Type::Small }));
         }
         // Part of is measured as drawn: each group in its own type, a missing one with its
-        // icon and ` · Not found`, with the gaps between them.
+        // icon and ` · Not found`, with the gaps between them. The groups wrap within the
+        // column, so the widest of their drawn lines counts, not all of them on one line (FG5).
         let groups = index.groups_of(&item.entry);
-        let mut groups_width = 0.0_f32;
-        for (at, (name, target)) in groups.iter().enumerate() {
-            let (words, role) = match target {
-                Some(_) => (name.clone(), Type::Body),
-                None => (missing_words(name), Type::Small),
+        let gap = ui.spacing().item_spacing.x;
+        let (mut groups_width, mut line) = (0.0_f32, 0.0_f32);
+        for (name, target) in groups.iter() {
+            // A found group shows its note's name, not the words written in the file.
+            let width = match target {
+                Some(at) => {
+                    design::number_width(ui, &index.items[*at].entry.name, &Type::Body.font(ui))
+                }
+                None => missing_width(ui, name, stacked),
             };
-            if at > 0 {
-                groups_width += ui.spacing().item_spacing.x;
-            }
-            groups_width += design::number_width(ui, &words, &role.font(ui));
+            line = if line > 0.0 && line + gap + width > cap {
+                groups_width = groups_width.max(line);
+                width
+            } else if line > 0.0 {
+                line + gap + width
+            } else {
+                width
+            };
         }
+        // A pixel of room, so a line that fits by its measure does not wrap on rounding.
+        groups_width = groups_width.max(line) + if groups.is_empty() { 0.0 } else { 1.0 };
+        let groups_width = missing.into_iter().fold(groups_width, f32::max);
         if self.unread_groups(item.entry.id).is_some() {
             values.push(("not read".into(), Type::Small));
         }
@@ -2461,7 +2784,7 @@ impl Reader {
             .iter()
             .map(|(value, role)| design::number_width(ui, value, &role.font(ui)))
             .fold(groups_width, f32::max)
-            .min(Self::relationship_width(ui));
+            .min(cap);
         if !self.compact && !choices.is_empty() {
             // The choice action is wider than Change. Both keep the column the narrower room allows.
             width.min(
@@ -2534,9 +2857,11 @@ impl Reader {
                         ui.spacing_mut().item_spacing.x = design::L;
                         let name = format!("Always use {path}");
                         let action = Action::secondary("Always use this one").name(&name);
+                        // The link centres on the action's row, as a value row's link and
+                        // Change share one line (FG4).
                         ui.allocate_ui_with_layout(
                             egui::vec2(file_width, Density::Read.control()),
-                            egui::Layout::top_down(egui::Align::LEFT),
+                            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                             |ui| {
                                 ui.set_width(file_width);
                                 if design::wrapped_link(ui, path).clicked() {
@@ -2595,6 +2920,7 @@ impl Reader {
         if rows.is_empty() {
             return None;
         }
+        let stacked = Self::stacked(ui);
         let value = |ui: &mut egui::Ui, label: &str, name: &str, target: Option<usize>| match target
         {
             Some(at) => design::wrapped_link(ui, name)
@@ -2605,7 +2931,7 @@ impl Reader {
                 None
             }
             None => {
-                missing_link(ui, name);
+                missing_link(ui, name, stacked);
                 None
             }
         };
@@ -2630,7 +2956,7 @@ impl Reader {
                 let (words, role) = match target {
                     Some(_) => (name.clone(), Type::Body),
                     None if *label == "Status" => (name.clone(), Type::Small),
-                    None => (missing_words(name), Type::Small),
+                    None => return missing_width(ui, name, stacked),
                 };
                 design::number_width(ui, &words, &role.font(ui))
             })
@@ -2737,12 +3063,14 @@ impl Reader {
                 + Action::quiet("Change")
                     .density(Density::Scan)
                     .natural_width(ui)
+                // The `L` gap after Change, as `value_row` draws it.
+                + design::L
                 + design::number_width(ui, word, &Type::Body.font(ui))
                 + design::S
                 + design::HAIRLINE_WIDTH
-                // The icon of `CHANGED`, the tone of the notice.
+                // The icon of `CHANGED`, the tone of the notice, and the `XS` after it.
                 + design::number_width(ui, design::icons::SUCCESS, &Type::Body.font(ui))
-                - design::XS
+                + design::XS
                 + Action::quiet(kind.undo_label())
                     .icon(design::icons::UNDO)
                     .density(Density::Read)
@@ -2758,6 +3086,7 @@ impl Reader {
     fn row_notice(
         &self,
         ui: &egui::Ui,
+        campaign: &Campaign,
         item: &Item,
         kind: ChangeKind,
         value_width: f32,
@@ -2765,7 +3094,7 @@ impl Reader {
         self.undo
             .as_ref()
             .filter(|change| {
-                change.path == item.entry.path
+                change.shows_on(campaign, &item.entry.path)
                     && change.kind == kind
                     && Self::notice_fits(ui, value_width, &change.word, kind)
             })
@@ -2774,13 +3103,15 @@ impl Reader {
 
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
-    pub(crate) fn has_change_result(&self, path: &str) -> bool {
-        self.undo.as_ref().is_some_and(|change| change.path == path)
+    pub(crate) fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
+        self.undo
+            .as_ref()
+            .is_some_and(|change| change.shows_on(campaign, path))
             || self.kept.as_ref().is_some_and(|(kept, _)| kept == path)
             || self
                 .name_undo
                 .as_ref()
-                .is_some_and(|change| change.path == path)
+                .is_some_and(|change| change.shows_on(campaign, path))
     }
 
     pub fn clear_notice(&mut self) {
@@ -2821,6 +3152,7 @@ impl Reader {
     ) -> Option<Go> {
         let mut go = None;
         let value_width = self.relationship_value_width(ui, item, index);
+        let stacked = Self::stacked(ui);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
@@ -2833,7 +3165,7 @@ impl Reader {
             if key != "creature" && reader_field(&item.entry, key).is_none_or(Value::is_null) {
                 continue;
             }
-            let notice = self.row_notice(ui, item, ChangeKind::of_key(key), value_width);
+            let notice = self.row_notice(ui, campaign, item, ChangeKind::of_key(key), value_width);
             ui.push_id(key, |ui| {
                 let (changed, undo) = Self::relationship_row(
                     ui,
@@ -2855,7 +3187,7 @@ impl Reader {
                                 self.place_choices_open = !self.place_choices_open;
                             }
                         } else if let Some(value) = reader_field(&item.entry, key) {
-                            missing_link(ui, &link_name(value, label));
+                            missing_link(ui, &link_name(value, label), stacked);
                         } else {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
@@ -2884,7 +3216,7 @@ impl Reader {
             }
         }
         let groups = index.groups_of(&item.entry);
-        let notice = self.row_notice(ui, item, ChangeKind::PartOf, value_width);
+        let notice = self.row_notice(ui, campaign, item, ChangeKind::PartOf, value_width);
         // An unread list keeps its row: `not read`, with Change blocked by the reason.
         let unread = self.unread_groups(item.entry.id);
         if !groups.is_empty() || unread.is_some() {
@@ -2911,7 +3243,7 @@ impl Reader {
                                         go = Some(Go::Item(*at, None));
                                     }
                                 }
-                                None => missing_link(ui, name),
+                                None => missing_link(ui, name, stacked),
                             }
                         }
                     },
@@ -2992,7 +3324,7 @@ impl Reader {
         let mut cancel = false;
         for at in matches {
             let entry = &index.items[at].entry;
-            if design::link(ui, &entry.name).clicked() {
+            if design::link(ui, &index.shown_name(at)).clicked() {
                 chosen = if key == "part_of" {
                     let mut groups = groups.clone();
                     groups.push(index.link_to(at).into());
@@ -3094,20 +3426,13 @@ impl Reader {
                     }
                 });
             }
+            // A link fault reads as every compact value does (FD6): the muted label, then the
+            // value in the warning tone, `⚠ <name> · Not found`.
             if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: design::icons::WARN,
-                        word: &format!(
-                            "Stat block: {} · Not found",
-                            reader_field(&item.entry, "creature")
-                                .map(|v| link_name(v, "Stat block"))
-                                .unwrap_or_else(|| "Stat block".into())
-                        ),
-                        color: colors().result.warning,
-                    },
-                );
+                let name = reader_field(&item.entry, "creature")
+                    .map(|v| link_name(v, "Stat block"))
+                    .unwrap_or_else(|| "Stat block".into());
+                compact_missing(ui, "Stat block", &name);
             }
             let choices = index.place_choices(item.entry.id);
             if !choices.is_empty() {
@@ -3136,7 +3461,7 @@ impl Reader {
                 }
             }
             if let Some(change) = &self.undo
-                && change.path == item.entry.path
+                && change.shows_on(campaign, &item.entry.path)
                 && change.kind != ChangeKind::Edit
                 && Self::change_notice(ui, &change.word, change.kind)
             {
@@ -3146,18 +3471,7 @@ impl Reader {
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} In {} · Not found",
-                                design::icons::WARN,
-                                place.trim_matches(['[', ']'])
-                            ),
-                        )
-                        .color(colors().result.warning),
-                );
+                compact_missing(ui, "In", place.trim_matches(['[', ']']));
             }
             if go.is_some() {
                 return go;
@@ -3175,7 +3489,7 @@ impl Reader {
             {
                 let value = status(&item.entry);
                 let unread = status_unread(&item.entry);
-                let notice = self.row_notice(ui, item, ChangeKind::Status, value_width);
+                let notice = self.row_notice(ui, campaign, item, ChangeKind::Status, value_width);
                 let (changed, undo) = Self::relationship_row(
                     ui,
                     "Status",
@@ -3243,7 +3557,7 @@ impl Reader {
         }
         if !self.compact
             && let Some(change) = &self.undo
-            && change.path == item.entry.path
+            && change.shows_on(campaign, &item.entry.path)
             // A change that names a row value shows beside its row when it fits, and here,
             // below the row block, when it does not. Every other result is a page result.
             && change.kind.has_row()
@@ -3463,6 +3777,245 @@ mod tests {
     }
 
     use super::*;
+
+    /// Round 24 FD5: `Rename the file to <name>.md` and its Undo never replace or lose a file.
+    /// Bad inputs: a name that cannot be a file name, a file already at the target, a note
+    /// changed on disk since the DM saw it, the note moved away, and Undo after either side
+    /// changed.
+    #[test]
+    fn iter24_d_fd5_file_rename_is_guarded_and_undone() {
+        assert_eq!(
+            renamed_path("Notes/Broken.md", "Repaired watchkeeper").as_deref(),
+            Some("Notes/Repaired watchkeeper.md")
+        );
+        assert_eq!(
+            renamed_path("Broken.md", "Rook").as_deref(),
+            Some("Rook.md")
+        );
+        for name in ["", "  ", "A/B", "Who?", ".hidden", "[[Rook]]", "Broken"] {
+            assert_eq!(renamed_path("Notes/Broken.md", name), None, "{name:?}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Rename checks".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        std::fs::create_dir_all(root.join("Notes")).unwrap();
+        let text = "---\nsplat_schema: 2\nsplat_kind: world\nsplat_name: Rook\n---\n";
+        let from = root.join("Notes/Broken.md");
+        let to = root.join("Notes/Rook.md");
+        std::fs::write(&from, text).unwrap();
+        // A file already at the target keeps its bytes, and the note stays where it was.
+        std::fs::write(&to, "Another note.").unwrap();
+        let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", text);
+        assert!(refused.is_err(), "fd5-target-exists");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), "Another note.");
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text);
+        std::fs::remove_file(&to).unwrap();
+        // Review repair 2: a file that arrives at the target after the check, just before the
+        // move, keeps its bytes, and so does the note.
+        let raced = move_note(root, "Notes/Broken.md", "Notes/Rook.md", text, || {
+            std::fs::write(&to, "Arrived during the move.").unwrap()
+        });
+        assert!(raced.is_err(), "review-2-race-refused");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            "Arrived during the move.",
+            "review-2-race-target-bytes"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&from).unwrap(),
+            text,
+            "review-2-race-source-bytes"
+        );
+        std::fs::remove_file(&to).unwrap();
+        // Review re-check 3: a file system that does not offer RENAME_NOREPLACE (EINVAL). A hard
+        // link and the removal of the old name move the note instead.
+        let einval = |_: &Path, _: &Path| Err(std::io::Error::from_raw_os_error(libc::EINVAL));
+        let link_moves = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+            remove: |path| std::fs::remove_file(path),
+        };
+        move_note_with(
+            &link_moves,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        )
+        .expect("re-check-3-fallback");
+        assert!(!from.exists(), "re-check-3-fallback-moved");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            text,
+            "re-check-3-fallback-bytes"
+        );
+        move_note_with(
+            &link_moves,
+            root,
+            "Notes/Rook.md",
+            "Notes/Broken.md",
+            text,
+            || {},
+        )
+        .expect("re-check-3-fallback-back");
+        // The fallback never replaces a file that arrives during the move.
+        let raced = move_note_with(
+            &link_moves,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || std::fs::write(&to, "Arrived during the move.").unwrap(),
+        );
+        assert!(raced.is_err(), "re-check-3-fallback-race");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            "Arrived during the move."
+        );
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text);
+        std::fs::remove_file(&to).unwrap();
+        // Neither move is offered (hard links refused with EPERM, as on FAT): a plain refusal,
+        // and both names keep what they held.
+        let no_moves = Moves {
+            rename: einval,
+            link: |_, _| Err(std::io::Error::from_raw_os_error(libc::EPERM)),
+            remove: |path| std::fs::remove_file(path),
+        };
+        assert_eq!(
+            move_note_with(
+                &no_moves,
+                root,
+                "Notes/Broken.md",
+                "Notes/Rook.md",
+                text,
+                || {}
+            ),
+            Err(NO_SAFE_MOVE.to_owned()),
+            "re-check-3-refused"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&from).unwrap(),
+            text,
+            "re-check-3-source"
+        );
+        assert!(!to.exists(), "re-check-3-target");
+        // Re-check 2, repair 1: the link works, then the old name cannot be removed (a folder
+        // made read only). The new name goes again, so nothing moved, and the words say so.
+        let keep_old = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+            remove: |path| {
+                if path.ends_with("Broken.md") {
+                    Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+                } else {
+                    std::fs::remove_file(path)
+                }
+            },
+        };
+        let refused = move_note_with(
+            &keep_old,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        );
+        assert_eq!(
+            refused,
+            Err("Splat has no permission to save Notes/Broken.md. Nothing was renamed.".to_owned()),
+            "re-check-2-1-new-name-removed"
+        );
+        assert!(
+            std::fs::read_to_string(&from).unwrap() == text && !to.exists(),
+            "re-check-2-1-one-name"
+        );
+        // Neither name can be removed: both stay, and the words name both and the way out.
+        let keep_both = Moves {
+            rename: einval,
+            link: |source, target| std::fs::hard_link(source, target),
+            remove: |_| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+        };
+        let refused = move_note_with(
+            &keep_both,
+            root,
+            "Notes/Broken.md",
+            "Notes/Rook.md",
+            text,
+            || {},
+        );
+        assert_eq!(
+            refused,
+            Err(two_names("Notes/Broken.md", "Notes/Rook.md")),
+            "re-check-2-1-two-names"
+        );
+        assert!(
+            refused
+                .unwrap_err()
+                .contains("Delete Notes/Rook.md in your file manager"),
+            "re-check-2-1-way-out"
+        );
+        assert!(
+            std::fs::read_to_string(&from).unwrap() == text
+                && std::fs::read_to_string(&to).unwrap() == text,
+            "re-check-2-1-both-names"
+        );
+        std::fs::remove_file(&to).unwrap();
+        // The note changed on disk after the DM saw it.
+        let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", "Old text");
+        assert!(refused.is_err() && !to.exists(), "fd5-changed");
+        // The note moved away: nothing to rename.
+        assert!(
+            FileRename::apply(&campaign, "Notes/Gone.md", "Notes/Rook.md", text).is_err(),
+            "fd5-gone"
+        );
+        let rename =
+            FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", text).unwrap();
+        assert!(!from.exists(), "fd5-moved");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), text, "fd5-bytes");
+        assert_eq!(rename.message(), "The file is now Rook.md.");
+        // Review repair 3: the Undo belongs to its campaign. Another campaign with a note at the
+        // same relative path neither shows it nor moves anything.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = Campaign {
+            id: Uuid::new_v4(),
+            path: other_dir.path().into(),
+            ..campaign.clone()
+        };
+        std::fs::create_dir_all(other_dir.path().join("Notes")).unwrap();
+        std::fs::write(other_dir.path().join("Notes/Rook.md"), text).unwrap();
+        assert!(
+            !rename.shows_on(&other, "Notes/Rook.md")
+                && rename.shows_on(&campaign, "Notes/Rook.md"),
+            "review-3-owner"
+        );
+        assert!(rename.undo(&other).is_err(), "review-3-undo-refused");
+        assert!(
+            other_dir.path().join("Notes/Rook.md").exists()
+                && !other_dir.path().join("Notes/Broken.md").exists(),
+            "review-3-other-bytes"
+        );
+        // Undo refuses while a new file holds the old path, and keeps both.
+        std::fs::write(&from, "A new note.").unwrap();
+        assert!(rename.undo(&campaign).is_err(), "fd5-undo-target-exists");
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), "A new note.");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), text);
+        std::fs::remove_file(&from).unwrap();
+        // Undo refuses when the renamed file changed since.
+        std::fs::write(&to, format!("{text}\nAn outside edit.\n")).unwrap();
+        assert!(rename.undo(&campaign).is_err(), "fd5-undo-changed");
+        assert!(!from.exists());
+        std::fs::write(&to, text).unwrap();
+        rename.undo(&campaign).unwrap();
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text, "fd5-undo");
+        assert!(!to.exists(), "fd5-undo-moved");
+    }
 
     #[test]
     fn iter8_optional_links_warn_only_when_set_and_unresolved() {
@@ -4125,12 +4678,29 @@ mod tests {
         let after = fields::patch(&before, "in", "[[Ashfall Keep]]".into()).unwrap();
         write_note(dir.path(), path, Some(&before), &after).unwrap();
         let change = Change {
+            campaign: campaign.id,
             path: path.into(),
             before: before.clone(),
             after: after.clone(),
             word: "Place changed.".into(),
             kind: ChangeKind::Place,
         };
+        // Lead ruling, round 24 review: a change belongs to its campaign. Another campaign with a
+        // note at the same path neither shows it nor has it undone, and keeps its bytes.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = sample_campaign(other_dir.path());
+        fs::create_dir_all(other_dir.path().join("NPCs")).unwrap();
+        fs::write(other_dir.path().join(path), &after).unwrap();
+        assert!(
+            !change.shows_on(&other, path) && change.shows_on(&campaign, path),
+            "owner-shows-on"
+        );
+        assert!(change.undo(&other).is_err(), "owner-undo-refused");
+        assert_eq!(
+            fs::read_to_string(other_dir.path().join(path)).unwrap(),
+            after,
+            "owner-other-bytes"
+        );
         change.undo(&campaign).unwrap();
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), before);
         let external = format!("{after}\nWords from Obsidian.\n");
