@@ -1057,26 +1057,18 @@ impl CampaignContent {
                         .as_ref()
                         .is_some_and(|(p, _)| p == path);
                     let result = discarded.then(|| format!("{name} draft discarded."));
-                    let words = [result.as_deref(), repair.refusal.as_deref()]
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    let words = (!words.is_empty()).then_some(words);
-                    let width = ui.available_width();
-                    let undo = design::message_space(
-                        ui,
-                        &format!("campaign_repair_message {path}"),
-                        width,
-                        words.as_deref(),
-                        |ui| {
-                            let undo = discarded && design::draft_discarded(ui, name);
-                            if let Some(refusal) = &repair.refusal {
-                                design::message(ui, Tone::Error, refusal);
-                            }
-                            undo
-                        },
-                    );
+                    let id = format!("campaign_repair_message {path}");
+                    let mut space = design::MessageSpace::new(&id, ui.available_width());
+                    if let Some(words) = &result {
+                        // Its Undo is live while the result shows, so it comes first.
+                        space = space.result(words, true, |ui| design::draft_discarded(ui, name));
+                    }
+                    if let Some(refusal) = &repair.refusal {
+                        space = space.reason(refusal, |ui| {
+                            design::message(ui, Tone::Error, refusal);
+                        });
+                    }
+                    let undo = space.show(ui);
                     if undo == Some(true)
                         && let Some((_, text)) = self.discarded_repair.take()
                     {

@@ -1707,8 +1707,8 @@ Campaign add forms close on success; messages follow campaign rows below their h
 Cancel at the left and commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Below the save row, the
-form keeps the one message space, two text lines high whatever it holds: Save's error first, else the discard
-result. So neither moves the campaign rows below the form. Import opens below its
+form keeps the one message space, two text lines high whatever it holds: the discard result with its live Undo
+first, then Save's error. So neither moves the campaign rows below the form. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
 heading and the open row's Add action. Removal dialogs use the shared `dialog` and its top anchor, as every dialog does. Reload from disk names the local reload
 action.

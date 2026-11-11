@@ -1199,19 +1199,19 @@ impl Campaigns {
                     });
                 });
                 // Round 25 FG5: one message space below the save row, two lines high whatever it
-                // holds: Save's error first, else the discard result. So neither moves the rows
-                // below the form.
+                // holds: the discard result with its live Undo first, then Save's error. So
+                // neither moves the rows below the form.
                 const DISCARDED: &str = "Campaign details draft discarded.";
-                let error = self.error.as_deref();
-                let words = error.or(self.discarded_details.is_some().then_some(DISCARDED));
-                let undo = design::message_space(ui, "campaign_form_message", ui.available_width(), words, |ui| {
-                    if let Some(error) = error {
+                let mut space = design::MessageSpace::new("campaign_form_message", ui.available_width());
+                if self.discarded_details.is_some() {
+                    space = space.result(DISCARDED, true, |ui| design::draft_discarded(ui, "Campaign details"));
+                }
+                if let Some(error) = self.error.as_deref() {
+                    space = space.reason(error, move |ui| {
                         design::message(ui, Tone::Error, error);
-                        false
-                    } else {
-                        design::draft_discarded(ui, "Campaign details")
-                    }
-                });
+                    });
+                }
+                let undo = space.show(ui);
                 if undo == Some(true)
                     && let Some((name, path)) = self.discarded_details.take()
                 {
