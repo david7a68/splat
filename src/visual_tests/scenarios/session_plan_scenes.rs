@@ -133,7 +133,7 @@ pub fn run(d: &mut Driver<'_>) {
     // A scene that links one NPC has Start fight in its menu, beside Remove from tonight: 2.
     d.click(&format!("More actions for {VARRA}"));
     d.expect("Remove from tonight");
-    d.state("scene-menu-with-lookup", Sizes::All);
+    d.state("scene-menu-with-lookup", Sizes::Standard);
     d.begin_task();
     if !d.has(&format!("Start a fight with {VARRA}")) {
         d.click(&format!("More actions for {VARRA}"));
@@ -152,7 +152,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.type_text("40");
     d.press(Key::Enter);
     d.expect(&format!("Undo: add {VARRA}"));
-    d.audit_goal_within("T12.12", "start a fight with a planned NPC from her scene", 4);
+    d.audit_goal_within(
+        "T12.12",
+        "start a fight with a planned NPC from her scene",
+        4,
+    );
     close_run(d);
     d.click(NAV_SESSIONS);
     show_plan(d);
@@ -176,8 +180,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Scene added to tonight.");
     d.observe(
         "T12.10",
-        note(d).contains(&format!("- [[{SHRINE}]]\n- [ ] [[{KEEP}]]\n"))
-            && d.has("Plan a scene"),
+        note(d).contains(&format!("- [[{SHRINE}]]\n- [ ] [[{KEEP}]]\n")) && d.has("Plan a scene"),
         "A suggestion adds a scene that links it, and the field stays open",
     );
     d.state("scene-added", Sizes::All);

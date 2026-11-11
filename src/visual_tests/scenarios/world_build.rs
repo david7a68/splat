@@ -4017,7 +4017,11 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.begin_task();
     d.click(start);
     d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
-    d.audit_goal_within("T12.12", "start a fight that nobody planned from a reader", 1);
+    d.audit_goal_within(
+        "T12.12",
+        "start a fight that nobody planned from a reader",
+        1,
+    );
     let encounters = root(d).join("Encounters");
     let count = || fs::read_dir(&encounters).unwrap().count();
     let before = count();

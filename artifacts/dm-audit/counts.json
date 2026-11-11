@@ -241,6 +241,13 @@
     },
     {
       "phase": "during",
+      "task": "A fight that nobody planned, with a Bandit from the book, then talk",
+      "transitions": 2,
+      "interactions": 6,
+      "path": "Session > Run > Session"
+    },
+    {
+      "phase": "during",
       "task": "Stop recording",
       "transitions": 0,
       "interactions": 1,

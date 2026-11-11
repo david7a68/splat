@@ -535,6 +535,20 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
     a.act(Nav, "close the run again", close_run);
     a.fact(format!("closing it comes back to: {}", a.d.current_page()));
 
+    // F3 of the session-cycle design: the same fight from the book's Bandit in Lookup.
+    a.task("A fight that nobody planned, with a Bandit from the book, then talk");
+    a.act(Panel, "open Lookup", |d| d.press_ctrl(Key::K));
+    a.act(Find, "search: bandit", |d| d.type_text("bandit"));
+    a.act(Find, "open the Bandit", |d| d.click_starting("Bandit · "));
+    a.click(Nav, "Start a fight with Bandit");
+    a.fact(format!(
+        "the run of Fight with Bandit is open: {}",
+        a.d.has_containing("Fight with Bandit")
+    ));
+    a.act(Nav, "close the run again", close_run);
+    a.act(Panel, "close Lookup", |d| d.press(Key::Escape));
+    a.fact(format!("closing it comes back to: {}", a.d.current_page()));
+
     a.task("Stop recording");
     a.click(Do, "Stop recording");
 }

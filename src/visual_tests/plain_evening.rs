@@ -916,6 +916,10 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.act(d, "open the planned fight", |d| {
         d.click("Shrine of Cinders")
     });
+    // Row 14 of section 2.5: the plain note's old task lines are scenes above this fight. At
+    // 960x640 its opened row is below the plan's fold after the click at 1200x800, so that
+    // capture matches the Travel row's. The view's controls still differ, and G7 reads them.
+    d.expect_same("At 960x640 the opened fight is below the fold, under the plain note's scenes");
     ev.page(d, "session-tonight: planned fight open");
 
     ev.act(d, "open last session", |d| {

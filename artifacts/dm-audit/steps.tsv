@@ -213,6 +213,12 @@ during	The players start a fight you did not plan, and then talk their way out	F
 during	The players start a fight you did not plan, and then talk their way out	Do	add a Bandit	1	Encounters		false
 during	The players start a fight you did not plan, and then talk their way out	Nav	Start fight	1	Encounters	Run	false
 during	The players start a fight you did not plan, and then talk their way out	Nav	close the run again	1	Run	Session	false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Panel	open Lookup	1	Session		false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Find	search: bandit	1	Session		false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Find	open the Bandit	1	Session		false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Nav	Start a fight with Bandit	1	Session	Run	false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Nav	close the run again	1	Run	Session	false
+during	A fight that nobody planned, with a Bandit from the book, then talk	Panel	close Lookup	1	Session		false
 during	Stop recording	Do	Stop recording	1	Session		false
 after	Set-up	Setup	save, quit and open the app after the session	0	Session		false
 after	Set-up	Setup	the recording service has its keys	0	Session		false
