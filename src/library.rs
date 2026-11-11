@@ -6582,12 +6582,14 @@ impl Library {
                         .chain(results_shown.then(|| results.words()).as_deref())
                         .collect::<Vec<_>>()
                         .join(" ");
-                    if let Some(press) = design::fixed_part(ui, upper, "library_result_part", &name, |ui| {
-                        if let Some(words) = link_above {
-                            design::message(ui, Tone::Warning, words);
-                        }
-                        results_shown.then(|| show_results(ui, &results))
-                    }) {
+                    if let Some(press) =
+                        design::fixed_part(ui, upper, "library_result_part", &name, |ui| {
+                            if let Some(words) = link_above {
+                                design::message(ui, Tone::Warning, words);
+                            }
+                            results_shown.then(|| show_results(ui, &results))
+                        })
+                    {
                         pressed = press;
                     }
                 }

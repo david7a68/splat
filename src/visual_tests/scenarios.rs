@@ -3504,10 +3504,13 @@ pub mod settings {
                     let word = d.painted_rect_in("Connected", rail);
                     d.observe(
                         "iter-25-A-FG6",
-                        one_line.zip(icon).zip(word).is_some_and(|((one, icon), word)| {
-                            (one.left() - icon.left()).abs() <= 0.5
-                                && (one.right() - word.width() - word.left()).abs() <= 1.5
-                        }),
+                        one_line
+                            .zip(icon)
+                            .zip(word)
+                            .is_some_and(|((one, icon), word)| {
+                                (one.left() - icon.left()).abs() <= 0.5
+                                    && (one.right() - word.width() - word.left()).abs() <= 1.5
+                            }),
                         format!(
                             "The two-line rail status paints its icon at {icon:?} and its word at \
                              {word:?}; the one-line status paints {one_line:?}"

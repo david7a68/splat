@@ -3900,7 +3900,13 @@ mod tests {
                 .with_size(vec2(1800.0, 240.0))
                 .build_ui(move |ui| {
                     if links {
-                        undo_message_with_links(ui, Tone::Success, &["Ashen Marches"], LONG, "Undo");
+                        undo_message_with_links(
+                            ui,
+                            Tone::Success,
+                            &["Ashen Marches"],
+                            LONG,
+                            "Undo",
+                        );
                     } else {
                         undo_message(ui, Tone::Success, LONG, "Undo");
                     }
@@ -3912,7 +3918,10 @@ mod tests {
                 .iter()
                 .map(|(_, rect)| rect.right())
                 .fold(0.0, f32::max);
-            let left = texts.iter().map(|(_, rect)| rect.left()).fold(f32::MAX, f32::min);
+            let left = texts
+                .iter()
+                .map(|(_, rect)| rect.left())
+                .fold(f32::MAX, f32::min);
             assert!(
                 !texts.is_empty() && right - left <= LIST_MEASURE,
                 "links {links}: the Undo message spans {left}..{right}"
@@ -4007,7 +4016,7 @@ mod tests {
                 .and_then(|node| node.accesskit_node().label());
             (
                 top("Below the space").unwrap() - top("Above the space").unwrap(),
-                reason.and_then(|words| top(words)),
+                reason.and_then(&top),
                 result.and_then(|(words, _)| top(words)),
                 ran.get(),
                 name,
@@ -4034,10 +4043,16 @@ mod tests {
         assert_eq!(long.4.as_deref(), Some(LONG));
         // With a live Undo, the result comes first; without one, the reason does.
         let (reason, result) = (undo_first.1.unwrap(), undo_first.2.unwrap());
-        assert!(result < reason, "undo first: result {result}, reason {reason}");
+        assert!(
+            result < reason,
+            "undo first: result {result}, reason {reason}"
+        );
         assert_eq!(undo_first.4, Some(format!("{RESULT} {REASON}")));
         let (reason, result) = (reason_first.1.unwrap(), reason_first.2.unwrap());
-        assert!(reason < result, "reason first: reason {reason}, result {result}");
+        assert!(
+            reason < result,
+            "reason first: reason {reason}, result {result}"
+        );
         assert_eq!(reason_first.4, Some(format!("{REASON} {RESULT}")));
     }
 
@@ -4164,7 +4179,9 @@ mod tests {
         };
         let (icon, word, detail) = (x_of(icons::WARN), x_of("Connected"), x_of("Not remembered"));
         assert!(
-            (icon - icon_x).abs() <= 0.5 && (word - word_x).abs() <= 0.5 && (detail - word).abs() <= 0.5,
+            (icon - icon_x).abs() <= 0.5
+                && (word - word_x).abs() <= 0.5
+                && (detail - word).abs() <= 0.5,
             "one line: icon {icon_x}, word {word_x}; two lines: icon {icon}, word {word}, detail {detail}"
         );
     }

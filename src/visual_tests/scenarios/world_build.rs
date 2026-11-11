@@ -659,7 +659,13 @@ pub fn broken(d: &mut Driver<'_>) {
             .into_iter()
             .find(|node| node.name.ends_with(" notes") && node.rect.top() < 60.0);
         let links = d.has("1 note needs fixing") && d.has("2 notes cannot be read");
-        header.map(|node| (node.name.clone(), d.painted_in(node.rect.expand(1.0)), links))
+        header.map(|node| {
+            (
+                node.name.clone(),
+                d.painted_in(node.rect.expand(1.0)),
+                links,
+            )
+        })
     });
     d.observe(
         "iter-25-A-world-header-count",
