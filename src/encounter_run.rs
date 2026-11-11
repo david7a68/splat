@@ -539,7 +539,9 @@ pub(crate) struct Run {
     /// The last d20 rolled for a player, which their inspiration can reroll.
     reroll: Option<rolling::Reroll>,
     /// The armed save's rolled damage, until it is applied or the action ends.
-    save_total: Option<rolling::SaveDamage>,
+    save_total: Option<i64>,
+    /// The DM edited Amount since the run last put a save's damage there.
+    amount_typed: bool,
     /// Participants, by key, whose inspiration the run spent and whose sheet does not show it
     /// yet. Saved with the run.
     spent_inspiration: BTreeSet<String>,
@@ -867,6 +869,7 @@ impl Run {
             asking: None,
             reroll: None,
             save_total: None,
+            amount_typed: false,
             spent_inspiration: BTreeSet::new(),
             sheet_inspiration: BTreeMap::new(),
             storage: None,
@@ -1525,10 +1528,16 @@ impl Run {
         }
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
-        let amount = matches!(
-            command,
-            Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
-        );
+        // A batch applies an amount only if one of its commands does: exhaustion is a batch
+        // of conditions.
+        fn applies_amount(command: &Command) -> bool {
+            match command {
+                Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) => true,
+                Command::Several(commands) => commands.iter().any(applies_amount),
+                _ => false,
+            }
+        }
+        let amount = applies_amount(&command);
         self.apply_step(command)?;
         // Inspiration rerolls a die immediately after the roll, not after the next step that
         // the run takes. A save's damage that was applied is not put in Amount again; another
@@ -3552,6 +3561,7 @@ impl Run {
             asking: None,
             reroll: None,
             save_total: None,
+            amount_typed: false,
             spent_inspiration: saved.spent_inspiration,
             sheet_inspiration: BTreeMap::new(),
             selected: match saved.state.phase {

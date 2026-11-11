@@ -144,9 +144,9 @@ in the panel that still waits to be sent is spent with it.
   the d20 begins or ends a critical hit. A save's damage rolled for a player is
   one roll for all of its targets: each target's row offers its dice, and the
   targets and half marks stay. That roll stands only while the same save is
-  armed against the same targets; `Stop` or a change of targets ends it for
-  good. The next step of the run that succeeds (an applied amount, Next turn)
-  ends the chance to reroll.
+  armed against the same targets; `Stop`, a change of targets or a selection by
+  the keys ends it for good. The next step of the run that succeeds (an applied
+  amount, Next turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
   It pays for one roll: the armed action's next roll has no advantage from it.
@@ -166,9 +166,12 @@ in the panel that still waits to be sent is spent with it.
    is added or taken away, a save is rolled again, or the marks change, Amount
    is made again from it: Enter applies Amount as it is to one target, so one
    target that made its save has half in Amount. A save rolled again loses the
-   half mark of the save before it. An amount that the DM typed over the run's
-   own stays. Damage that a condition settled for the targets before is not
-   kept for new targets: Amount is cleared, and `Roll damage` rolls it again.
+   half mark of the save before it. An Amount that the DM edited since the roll
+   stays, the same digits typed again too; a new roll of the damage takes its
+   place. Damage that a condition settled for the targets before is not kept
+   for new targets: Amount is cleared, and `Roll damage` rolls it again. A
+   selection made outside the targeting, such as by the arrow keys, ends the
+   rolled damage; coming back to the same targets does not bring it back.
 
 ### A player's attack
 

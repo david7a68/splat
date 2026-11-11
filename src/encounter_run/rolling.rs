@@ -36,14 +36,6 @@ pub(super) struct Asking {
     pub choices: Vec<(String, Vec<DamagePart>)>,
 }
 
-/// An armed save's rolled damage, and the Amount the run made from it. An Amount that the DM
-/// typed over it is theirs, and the run does not replace it.
-#[derive(Clone, Debug)]
-pub(super) struct SaveDamage {
-    total: i64,
-    shown: String,
-}
-
 /// A question for the DM, and its choices of damage.
 type Question = (String, Vec<(String, Vec<DamagePart>)>);
 
@@ -865,14 +857,24 @@ impl Run {
             .is_some_and(|armed| !dice_text::conditions(damage_of(&armed.link)).is_empty());
         if !conditional {
             self.refresh_save_damage();
-        } else if let Some(save) = self.save_total.take() {
-            if self.amount == save.shown {
+        } else if self.save_total.take().is_some() {
+            if !self.amount_typed {
                 self.amount.clear();
             }
             for row in self.save_targets() {
                 self.badges.remove(&row);
             }
         }
+    }
+
+    /// A selection made outside the armed save's targeting, such as by the arrow keys. The
+    /// rolled damage and a roll kept for a reroll were for the targets before it, and coming
+    /// back to those targets does not bring them back.
+    pub(super) fn selection_left_save(&mut self) {
+        if self.reroll.as_ref().is_some_and(|kept| kept.save.is_some()) {
+            self.reroll = None;
+        }
+        self.save_total = None;
     }
 
     /// Roll a creature target's save, in place of one it rolled before. A player rolls their
@@ -1052,12 +1054,9 @@ impl Run {
     /// The armed save's rolled damage, in Amount and on each target's row.
     fn show_save_damage(&mut self, outcome: &Outcome) {
         if let Some(rolled) = &outcome.damage {
-            // A new roll takes the place of an amount from before.
-            self.amount.clear();
-            self.save_total = Some(SaveDamage {
-                total: rolled.total.max(0),
-                shown: String::new(),
-            });
+            // A new roll takes the place of an amount from before, typed or not.
+            self.amount_typed = false;
+            self.save_total = Some(rolled.total.max(0));
             self.refresh_save_damage();
         }
     }
@@ -1066,13 +1065,12 @@ impl Run {
     /// they are now. Enter applies Amount as it is to one target and by the half marks to
     /// several, so a change of targets, of a save or of a mark must not leave an older amount.
     fn refresh_save_damage(&mut self) {
-        let (Some(save), Some(RollLink::SaveDc { dc, half, .. })) = (
-            self.save_total.clone(),
+        let (Some(total), Some(RollLink::SaveDc { dc, half, .. })) = (
+            self.save_total,
             self.armed.as_ref().map(|armed| armed.link.clone()),
         ) else {
             return;
         };
-        let total = save.total;
         // One target shows no half mark, so its half goes straight into Amount.
         let lone_half = half
             && self.also.is_empty()
@@ -1081,15 +1079,10 @@ impl Run {
                     .saves
                     .get(&self.selected)
                     .is_some_and(|save| *save >= dc));
-        let amount = if lone_half { total / 2 } else { total }.to_string();
-        // An amount the DM typed over the run's own stays.
-        if self.amount.is_empty() || self.amount == save.shown {
-            self.amount.clone_from(&amount);
+        // An Amount that the DM edited since the roll is theirs, the same digits too.
+        if !self.amount_typed {
+            self.amount = if lone_half { total / 2 } else { total }.to_string();
             self.focus_amount = true;
-            self.save_total = Some(SaveDamage {
-                total,
-                shown: amount,
-            });
         }
         for row in self.save_targets() {
             self.badges.insert(row, format!("{total} damage"));
@@ -1638,10 +1631,89 @@ mod tests {
         assert!(run.apply(Command::Damage(99, 1)).is_err());
         run.target(others[0], None);
         assert_eq!(run.amount, "6");
-        // An amount that the DM typed over the run's own stays through a change.
+        // An amount that the DM typed over the run's own stays through a change: the same
+        // digits as the run's own too, which the DM cleared and typed again.
+        run.amount_typed = true;
+        run.target(others[0], None);
+        assert_eq!(run.amount, "6", "typed, so not made into 3");
         run.amount = "12".into();
         run.target(others[0], None);
         assert_eq!(run.amount, "12");
+        // A new roll of the damage takes the place of a typed amount.
+        run.state.random = Random::controlled([1, 1, 1]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "3");
+        // Exhaustion is a batch of conditions: it applies no amount, so the damage stays.
+        run.apply(Command::Several(vec![Command::Condition(
+            actor,
+            "Exhaustion 1".into(),
+        )]))
+        .unwrap();
+        run.target(others[0], None);
+        assert_eq!(run.amount, "1", "half of 3 for the one target left");
+    }
+
+    #[test]
+    fn a_selection_by_the_keyboard_ends_the_saves_damage_and_its_reroll() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        inspired_player(&mut run, actor);
+        let (armed, others) = armed_save(&mut run, actor);
+        run.target(others[1], None);
+        assert_eq!(run.save_targets(), vec![others[0]]);
+        run.state.random = Random::controlled([1, 2, 3, 6]);
+        run.save_damage(&armed).unwrap();
+        assert!(offers_reroll(&run, others[0]));
+        let die = run.reroll.as_ref().unwrap().outcome.dice()[0].1;
+        // The arrow keys select another row, then the first target again.
+        run.select(others[1]);
+        run.select(others[0]);
+        assert_eq!(
+            run.save_targets(),
+            vec![others[0]],
+            "the same targets as before"
+        );
+        assert!(!offers_reroll(&run, others[0]));
+        let lines = run.state.log.len();
+        run.row_choice(others[0], RowChoice::Reroll(die));
+        assert_eq!(run.state.log.len(), lines, "nothing rolls");
+        assert!(run.has_inspiration(actor), "nothing was spent");
+        // The damage is not put in Amount again for a row the keys selected.
+        run.row_choice(others[0], RowChoice::Roll(Mode::Normal, false));
+        assert_eq!(run.amount, "");
+    }
+
+    #[test]
+    fn a_selection_by_the_keyboard_does_not_keep_damage_a_condition_settled() {
+        let glare = "Death Glare. Wisdom Saving Throw: DC 11, one Frightened creature. Failure: If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage.";
+        let link = dice_text::find(glare, "Death Glare")
+            .into_iter()
+            .find_map(|span| matches!(span.link, RollLink::SaveDc { .. }).then_some(span.link))
+            .unwrap();
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let aboleth = std::sync::Arc::new(Entry::parse("Aboleth.md", source).unwrap());
+        for row in &others {
+            run.state.participants[*row].definition = aboleth.clone();
+        }
+        run.state.participants[others[0]].hp = Some(30);
+        run.state.participants[others[1]].hp = Some(20);
+        run.roll_link(ask(link, actor));
+        let armed = run.armed.clone().unwrap();
+        run.target(others[0], None);
+        run.state.random = Random::controlled([2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "9");
+        // The keys select the target that takes no damage; its save is rolled from its menu.
+        run.select(others[1]);
+        run.state.random = Random::controlled([10]);
+        run.row_choice(others[1], RowChoice::Roll(Mode::Normal, false));
+        assert!(run.saves.contains_key(&others[1]), "its save rolled");
+        assert_eq!(run.amount, "", "the 9 was for the target before");
     }
 
     #[test]
