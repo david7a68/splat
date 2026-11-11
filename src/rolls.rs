@@ -162,6 +162,13 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
         .density(Density::Read)
         .line_start()
         .show(ui);
+    menu_choice_focus(ui, &response);
+    response.clicked()
+}
+
+/// A menu choice in the keys' focus model: the first choice takes the focus when the keys
+/// open the menu, and the choice that has it is recorded, so a close gives it back.
+fn menu_choice_focus(ui: &egui::Ui, response: &egui::Response) {
     if ui
         .ctx()
         .data_mut(|data| data.remove_temp::<bool>(focus_first_choice_id()))
@@ -176,7 +183,6 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
             data.insert_temp(menu_choice_focus_frame_id(), frame);
         });
     }
-    response.clicked()
 }
 
 /// The frame in which a menu choice last had the keyboard focus.
@@ -292,6 +298,22 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
     }
 }
 
+/// `response` opened its menu: it owns the menu until it closes, and `end_menu_frame` gives
+/// the focus back when the menu closes. Opened by the keys, the first choice takes the focus.
+fn opened_menu(response: &egui::Response, by_keys: bool) {
+    let frame = response.ctx.cumulative_frame_nr();
+    response.ctx.data_mut(|data| {
+        data.insert_temp(menu_keys_owner_id(), response.id);
+        data.insert_temp(menu_owner_seen_id(), frame);
+        data.remove::<egui::Id>(menu_focus_outside_id());
+        if by_keys {
+            data.insert_temp(focus_first_choice_id(), true);
+        } else {
+            data.remove::<bool>(focus_first_choice_id());
+        }
+    });
+}
+
 /// Whether a right-click menu opens or closes this frame. A right-click opens it; so do
 /// Shift+F10 on the focused control and a screen reader's `show context menu`, which put the
 /// focus on its first choice and give it back to the control when the menu closes. A plain
@@ -306,13 +328,7 @@ pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOp
         || (response.has_focus()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
     if by_keys {
-        let frame = ctx.cumulative_frame_nr();
-        ctx.data_mut(|data| {
-            data.insert_temp(menu_keys_owner_id(), response.id);
-            data.insert_temp(menu_owner_seen_id(), frame);
-            data.remove::<egui::Id>(menu_focus_outside_id());
-            data.insert_temp(focus_first_choice_id(), true);
-        });
+        opened_menu(response, true);
         return Some(egui::SetOpenCommand::Bool(true));
     }
     if response.secondary_clicked() {
@@ -1789,24 +1805,81 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 .name(&label)
                 .density(Density::Read)
                 .selected(lit);
-            // A button shows whole or not at all. The actions with no room are counted, and
-            // Ctrl+number still arms them.
+            // A button shows whole or not at all. The actions with no room go in a menu at the
+            // line's end, by name and number, so the mouse can arm each one with Lookup open.
             let left = chips.len() - at;
-            let more = format!("+{left}");
-            let more_width = design::number_width(ui, &more, &Type::Small.font(ui)) + design::S;
+            let more = format!("{left} more");
+            let more_width = design::menu_button_width(ui, &more) + design::XS;
             let room = ui.available_width() - if left > 1 { more_width } else { 0.0 };
             if action.natural_width(ui) > room {
-                let hint = format!(
-                    "{}. Close Lookup to see them, or press Ctrl and an action’s number.",
-                    design::count(left, "more action", "more actions")
-                );
-                ui.label(Type::Small.rich(ui, more).color(colors().muted))
-                    .on_hover_text(hint);
+                more_actions(ui, &more, chips, at, changes);
                 break;
             }
             let response = action.show(ui);
             let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
             press(ui, &response, &chip.link);
+        }
+    });
+}
+
+/// The strip's actions from `from` on, which have no room on its line: a menu that lists each
+/// by name and its Ctrl number, and arms the one the DM chooses.
+fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, changes: (i64, i64)) {
+    let response = design::menu_button(ui, word, false).on_hover_text(format!(
+        "{}. Choose one to arm it.",
+        design::count(chips.len() - from, "more action", "more actions")
+    ));
+    // It owns its menu as a run's menu does: Escape or a choice gives the focus back to this
+    // button, whether a click or the keys opened it. Enter or Space also focus the first choice.
+    keep_menu_owner(&response);
+    let popup_id = egui::Popup::default_response_id(&response);
+    if response.clicked() && !egui::Popup::is_id_open(&response.ctx, popup_id) {
+        opened_menu(
+            &response,
+            !response.clicked_by(egui::PointerButton::Primary),
+        );
+    }
+    let popup = egui::Popup::menu(&response);
+    // As a row's menu: it ends at the button's right edge when it would cross the pane's
+    // splitter (egui sizes a popup on the frame it opens, before it shows it).
+    let width = popup.get_expected_size().map_or(0.0, |size| size.x);
+    let align = if response.rect.left() + width > ui.clip_rect().right() - design::S {
+        egui::RectAlign::BOTTOM_END
+    } else {
+        egui::RectAlign::BOTTOM_START
+    };
+    popup.align(align).show(|ui| {
+        for (place, chip) in chips.iter().enumerate().skip(from) {
+            let shown = with_changes(&chip.link, changes);
+            let label = Chip::new(shown.clone(), chip.text.clone())
+                .map_or_else(|| chip.label.clone(), |shown| shown.label);
+            let button = egui::Button::new(
+                Type::Body
+                    .rich(ui, format!("{} {label}", icon(&chip.link)))
+                    .color(colors().text),
+            );
+            // Ctrl+1 to Ctrl+9 arm the first nine actions.
+            let button = if place < 9 {
+                button.shortcut_text(
+                    Type::Small
+                        .rich(ui, format!("Ctrl+{}", place + 1))
+                        .color(colors().muted),
+                )
+            } else {
+                button
+            };
+            let response = ui.add(button);
+            design::named(ui, &response, &label);
+            menu_choice_focus(ui, &response);
+            if response.clicked() {
+                ask(
+                    ui.ctx(),
+                    chip.link.clone(),
+                    Mode::from_keys(ui, &chip.link),
+                    false,
+                );
+                ui.close();
+            }
         }
     });
 }
