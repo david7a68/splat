@@ -12182,7 +12182,7 @@ pub mod session_plan_groups {
         d.click(NAV_ENCOUNTERS);
         resume_run(d, RUN);
         open_arrivals(d);
-        d.expect("IN TONIGHT'S PLAN");
+        d.expect("IN TONIGHT’S PLAN");
         d.state("arrivals-tonight-first", Sizes::All);
         d.observe(
             "T14.6",
@@ -12211,7 +12211,7 @@ pub mod session_plan_groups {
         );
         d.state("plan-groups-fight-open", Sizes::All);
         d.click(&route);
-        d.expect("IN TONIGHT'S PLAN");
+        d.expect("IN TONIGHT’S PLAN");
         d.observe(
             "T14.6",
             d.has(&format!("Add {GROUP_RIVALS} to the initiative list")),
@@ -13395,7 +13395,7 @@ pub mod session_plan {
         d.state("party-from-tonight", Sizes::All);
         d.observe(
             "T12.2",
-            d.has_containing("from tonight's fights"),
+            d.has_containing("from tonight’s fights"),
             "Party says its HP is from tonight",
         );
         d.observe(
