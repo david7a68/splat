@@ -367,35 +367,28 @@ impl Repair {
             None
         };
         let reason = problem.as_deref().or(self.failure()).map(str::to_owned);
-        let words = [undo.map(|undo| undo.words(&name)), reason.clone()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" ");
-        let width = ui.available_width();
-        let pressed = super::a_shim::message_space(
-            ui,
-            "world_repair_message",
-            width,
-            (!words.is_empty()).then_some(words.as_str()),
-            |ui| {
+        let result = undo.map(|undo| undo.words(&name));
+        let mut space = super::a_shim::MessageSpace::new("world_repair_message", ui.available_width());
+        if let Some(reason) = &reason {
+            space = space.reason(reason, move |ui| {
+                design::message(ui, design::Tone::Error, reason);
+            });
+        }
+        if let (Some(undo), Some(words)) = (undo, &result) {
+            let name = &name;
+            space = space.result(words, true, move |ui| {
                 // The Undo row is a control high; with no gap after it, the reason that follows
                 // it stays in view in the two-line part.
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let pressed = match undo {
-                    Some(UndoResult::Discard) => design::draft_discarded(ui, &name),
-                    Some(UndoResult::Reload) => {
+                match undo {
+                    UndoResult::Discard => design::draft_discarded(ui, name),
+                    UndoResult::Reload => {
                         design::undo_message(ui, design::Tone::Info, RELOADED, "Undo reload")
                     }
-                    None => false,
-                };
-                if let Some(reason) = &reason {
-                    design::message(ui, design::Tone::Error, reason);
                 }
-                pressed
-            },
-        )
-        .unwrap_or(false);
+            });
+        }
+        let pressed = space.show(ui).unwrap_or(false);
         if pressed {
             let back = match undo {
                 Some(UndoResult::Discard) => self.discarded.take(),
