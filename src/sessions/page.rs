@@ -268,9 +268,11 @@ pub struct Sessions {
     removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
-    /// The removed event, and its session's note words when that note was first seen open.
-    /// A later edit of that note ends the removal's result and Undo.
-    removal_note: Option<(String, Option<String>)>,
+    /// What the removal's owner note looked like; a later edit of it ends the removal.
+    removal_note: Option<RemovalNote>,
+    /// How often the owner's note was looked for, which only a change may cause.
+    #[cfg(test)]
+    removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
@@ -1335,33 +1337,60 @@ fn megabytes(bytes: u64) -> String {
 impl Sessions {
     /// A removed event's result and Undo belong to the event's session. An edit of that
     /// session's note ends them, from any page; another note's edit does not. Book edits and
-    /// combat that begins in that session end them in the book itself.
+    /// combat that begins in that session end them in the book itself. This runs every frame,
+    /// so it looks at the notes and the words only when the removal or the draft changed.
     fn end_removal_on_note_edit(&mut self, book: &mut Book) {
-        let Some((removed, owner)) = book
-            .removed_event()
-            .map(|event| (event.id.clone(), event.session))
-        else {
+        let Some(removed) = book.removed_event() else {
             self.removal_note = None;
             return;
         };
+        let revision = self.draft.as_ref().map(Draft::revision);
+        let same_removal = self
+            .removal_note
+            .as_ref()
+            .is_some_and(|seen| seen.id == removed.id);
+        if same_removal
+            && self
+                .removal_note
+                .as_ref()
+                .is_some_and(|seen| seen.revision == revision)
+        {
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.removal_scans += 1;
+        }
+        let owner = removed.session;
+        let id = removed.id.clone();
         // The owner's words, while its note is the one open.
-        let words = self.draft.as_ref().and_then(|draft| {
-            let session = self
-                .notes
-                .iter()
-                .find(|note| note.path == draft.path)
-                .map(|note| note.id)?;
-            (Some(session) == owner).then(|| draft.body.clone())
+        let words = self.draft.as_ref().filter(|draft| {
+            owner.is_some()
+                && self
+                    .notes
+                    .iter()
+                    .any(|note| note.path == draft.path && Some(note.id) == owner)
         });
-        match &self.removal_note {
-            Some((id, Some(seen))) if *id == removed => {
-                if words.as_ref().is_some_and(|words| words != seen) {
-                    book.forget_removed();
-                    self.removal_note = None;
+        match self.removal_note.as_mut().filter(|_| same_removal) {
+            Some(seen) => {
+                match (&seen.words, words) {
+                    (Some(before), Some(draft)) if *before != draft.body => {
+                        book.forget_removed();
+                        self.removal_note = None;
+                        return;
+                    }
+                    (None, Some(draft)) => seen.words = Some(draft.body.clone()),
+                    _ => {}
                 }
+                seen.revision = revision;
             }
-            Some((id, None)) if *id == removed && words.is_none() => {}
-            _ => self.removal_note = Some((removed, words)),
+            None => {
+                self.removal_note = Some(RemovalNote {
+                    id,
+                    revision,
+                    words: words.map(|draft| draft.body.clone()),
+                });
+            }
         }
     }
 
@@ -7313,6 +7342,14 @@ impl Sessions {
     }
 }
 
+/// The removal's owner note as it was first seen open, and the draft revision last looked at.
+struct RemovalNote {
+    /// The removed event.
+    id: String,
+    revision: Option<u64>,
+    words: Option<String>,
+}
+
 /// Keep the note and group editor under stable IDs across the side-by-side breakpoint.
 /// Other panes keep their usual IDs.
 fn fixed_scope<R>(
@@ -7479,13 +7516,23 @@ mod tests {
         let words = removed_event_words(&book, Some(a), &days, "Bridge Ambush", &[]);
         assert_eq!(words, "Removed “Bridge Ambush” (Round 2 · Paused).");
         sessions.end_removal_on_note_edit(&mut book);
-        sessions
-            .draft
-            .as_mut()
-            .unwrap()
-            .body
-            .push_str("B’s words.\n");
+        // Unchanged polls do not look at the notes or the words again.
+        let scans = sessions.removal_scans;
+        for _ in 0..3 {
+            sessions.end_removal_on_note_edit(&mut book);
+        }
+        assert_eq!(sessions.removal_scans, scans, "unchanged polls do no work");
+        let draft = sessions.draft.as_mut().unwrap();
+        draft.body.push_str("B’s words.\n");
+        draft.edited();
         sessions.end_removal_on_note_edit(&mut book);
+        assert_eq!(
+            sessions.removal_scans,
+            scans + 1,
+            "an edit is looked at once"
+        );
+        sessions.end_removal_on_note_edit(&mut book);
+        assert_eq!(sessions.removal_scans, scans + 1);
         assert_eq!(
             book.removed(),
             Some("Bridge Ambush"),
@@ -7504,12 +7551,9 @@ mod tests {
             Some("Bridge Ambush"),
             "opening A is not an edit"
         );
-        sessions
-            .draft
-            .as_mut()
-            .unwrap()
-            .body
-            .push_str("[[Bridge Ambush]]\n");
+        let draft = sessions.draft.as_mut().unwrap();
+        draft.body.push_str("[[Bridge Ambush]]\n");
+        draft.edited();
         sessions.end_removal_on_note_edit(&mut book);
         assert!(book.removed().is_none(), "an edit to A ends it");
         assert!(book.undo_remove().is_none());

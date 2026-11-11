@@ -727,9 +727,7 @@ impl Book {
                             })
                             .collect();
                         self.saved_events.clone_from(&events);
-                        self.events = events;
-                        // A change from outside to the removal's own session ends it too.
-                        self.end_removal_if_its_session_changed();
+                        self.accept_events(events);
                     }
                     Err(error) => {
                         self.events.clear();
@@ -780,6 +778,13 @@ impl Book {
         self.dirty = true;
         self.last_edit = Some(Instant::now());
         self.dropped = None;
+    }
+
+    /// Events from the file, or merged with it, replace the ones in memory. A change there to
+    /// the removal's own session (its event back from outside, say) ends it, as an edit does.
+    fn accept_events(&mut self, events: Vec<Event>) {
+        self.events = events;
+        self.end_removal_if_its_session_changed();
     }
 
     /// A removal belongs to its event's session. An edit of that session's events ends its
@@ -951,7 +956,7 @@ impl Book {
         crate::sessions::sync_folder(parent)?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
-        self.events = events;
+        self.accept_events(events);
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
         self.dirty = false;
@@ -982,7 +987,7 @@ impl Book {
             {
                 Ok(_) => {
                     match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
-                        Ok(merged) => self.events = merged,
+                        Ok(merged) => self.accept_events(merged),
                         Err(error) => {
                             self.error = Some(error);
                             return;
@@ -1484,6 +1489,33 @@ mod tests {
         );
         assert!(saved.contains("Outside prose."));
         assert_eq!(book.events, events);
+        // iter-23-S FK2: A's event goes and is saved; B is edited; A's event comes back from
+        // outside; the save of B merges A back. B's edit stays, and A's notice and Undo end,
+        // because A's session changed.
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        book.session_links = BTreeMap::from([(a, "Session A".into()), (b, "Session B".into())]);
+        let a_event = book.add(Kind::Travel, Some(a));
+        let b_event = book.add(Kind::Travel, Some(b));
+        book.save();
+        let with_a = fs::read_to_string(&path).unwrap();
+        book.remove(&a_event);
+        book.save();
+        book.event_mut(&b_event).unwrap().title = "B road".into();
+        book.touch();
+        assert!(book.removed().is_some(), "B's edit keeps A's Undo");
+        fs::write(&path, &with_a).unwrap();
+        book.save();
+        assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
+        assert!(
+            book.events.iter().any(|event| event.id == a_event),
+            "A came back"
+        );
+        assert_eq!(
+            book.events.iter().find(|e| e.id == b_event).unwrap().title,
+            "B road"
+        );
+        assert!(book.removed().is_none(), "A's notice ends");
+        assert!(book.undo_remove().is_none(), "and its Undo");
     }
 
     #[test]
@@ -1518,6 +1550,46 @@ mod tests {
         book.overwrite();
         assert!(!book.conflict && !book.unsaved());
         assert_eq!(fs::read_to_string(&path).unwrap(), draft);
+        // iter-23-S FK2: Overwrite merges A's event back from outside too, so its notice and
+        // Undo end there, while the DM's own B edit wins.
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        book.session_links = BTreeMap::from([(a, "Session A".into()), (b, "Session B".into())]);
+        let a_event = book.add(Kind::Travel, Some(a));
+        let b_event = book.add(Kind::Travel, Some(b));
+        book.save();
+        let with_a = fs::read_to_string(&path).unwrap();
+        book.remove(&a_event);
+        book.save();
+        book.event_mut(&b_event).unwrap().title = "My B road".into();
+        book.touch();
+        let mut outside = parse(&with_a).unwrap();
+        outside.iter_mut().find(|e| e.id == b_event).unwrap().title = "Their B road".into();
+        fs::write(
+            &path,
+            formats::patch(&with_a, &outside, &book.session_links, false).unwrap(),
+        )
+        .unwrap();
+        book.save();
+        assert!(book.conflict, "the same B event changed on both sides");
+        assert!(book.removed().is_some());
+        // The merge itself ends A's notice, even when the write after it fails.
+        use std::os::unix::fs::PermissionsExt;
+        let open = fs::metadata(dir.path()).unwrap().permissions();
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        book.overwrite();
+        fs::set_permissions(dir.path(), open).unwrap();
+        assert!(book.error.is_some(), "the write after the merge failed");
+        assert!(
+            book.events.iter().any(|event| event.id == a_event),
+            "A came back"
+        );
+        assert!(book.removed().is_none() && book.undo_remove().is_none());
+        book.overwrite();
+        assert!(!book.conflict, "{:?}", book.error);
+        assert_eq!(
+            book.events.iter().find(|e| e.id == b_event).unwrap().title,
+            "My B road"
+        );
     }
 
     #[test]
