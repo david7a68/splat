@@ -199,6 +199,28 @@ pub enum Played {
     Session(Uuid),
 }
 
+/// One note a link update wrote: the draft before, the words after, and the whole file and
+/// session id it held right after the write. Undo writes only into that same file.
+struct LinkWrite {
+    before: Draft,
+    after: String,
+    bytes: String,
+    id: Option<Uuid>,
+}
+
+/// Tests: what runs after a link update writes a note.
+#[cfg(test)]
+type LinkWriteHook = Box<dyn FnMut(&Path)>;
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: runs after a link update writes a note, to change the next one under it.
+    static AFTER_LINK_WRITE: std::cell::RefCell<Option<LinkWriteHook>> =
+        std::cell::RefCell::new(None);
+    /// Tests: how many notes `note_bodies` read.
+    static NOTE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
@@ -235,7 +257,7 @@ pub struct Sessions {
     /// deletion's result owns it: its Undo, or the plan's next note or event edit, ends it.
     deleted_run: Option<(crate::encounter_run::DeletedRun, Option<u64>)>,
     row_notice: Option<(Option<Uuid>, usize)>,
-    updated_links: Option<Vec<(Draft, String)>>,
+    updated_links: Option<Vec<LinkWrite>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
     /// A link update that could not be put back whole: some notes hold the new links. Its Undo
@@ -2069,6 +2091,8 @@ impl Sessions {
         self.notes
             .iter()
             .filter_map(|note| {
+                #[cfg(test)]
+                NOTE_READS.with(|reads| reads.set(reads.get() + 1));
                 let body = self
                     .draft
                     .as_ref()
@@ -2086,15 +2110,17 @@ impl Sessions {
     }
 
     pub fn expire_event_link_undo(&mut self, on_timeline: bool, book: &Book) {
-        let changed = self
-            .link_undo_state
-            .as_ref()
-            .is_some_and(|state| state.notes != self.note_bodies() || state.events != book.events);
-        // A partial update keeps its Undo and its error until Undo or a new update ends it.
+        // A partial update keeps its result, its error and its Undo until Undo or a new update,
+        // and reads no note meanwhile: Undo checks its notes when the DM presses it.
         if self.link_partial && self.updated_links.is_some() {
             return;
         }
-        if !on_timeline || changed || self.draft.as_ref().is_some_and(Draft::needs_attention) {
+        let ends = !on_timeline || self.draft.as_ref().is_some_and(Draft::needs_attention);
+        let changed = !ends
+            && self.link_undo_state.as_ref().is_some_and(|state| {
+                state.events != book.events || state.notes != self.note_bodies()
+            });
+        if ends || changed {
             self.updated_links = None;
             self.link_undo_state = None;
             self.link_problem = None;
@@ -2125,92 +2151,144 @@ impl Sessions {
             self.updated_links = None;
             return;
         }
-        // Two phases (`write_batch`): every file is prepared before any is replaced, and a
-        // failed replace puts the others back.
+        // Each note is written by its own save, which checks the file once more right before
+        // writing. A failure part way is not rolled back: the result names every note already
+        // written, with the error, and Undo puts back exactly those.
         self.link_partial = false;
-        let items: Vec<super::BatchWrite> = changes
-            .iter()
-            .map(|(before, body)| super::BatchWrite {
-                path: before.path.clone(),
-                old: before.file_text().unwrap_or_default().to_owned(),
-                new: before.text_with_body(body),
-            })
-            .collect();
-        let changed: Vec<PathBuf> = match super::write_batch(&items) {
-            Ok(()) => items.iter().map(|item| item.path.clone()).collect(),
-            Err(super::BatchFailure::Unchanged(error)) => {
-                self.link_problem = Some(format!("No links changed. {error}"));
-                self.updated_links = None;
-                return;
-            }
-            Err(super::BatchFailure::Partial { changed, error }) => {
-                let names: Vec<String> = changed
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect();
-                self.link_problem = Some(format!(
-                    "Links changed only in {}. {error} Undo link update puts them back.",
-                    names.join(", ")
-                ));
-                self.link_partial = true;
-                changed
-            }
-        };
-        let mut undo = Vec::new();
-        for ((before, body), item) in changes.into_iter().zip(items) {
-            if !changed.contains(&item.path) {
-                continue;
-            }
+        let mut written = Vec::new();
+        let mut failed = None;
+        for (before, body) in changes {
             let mut next = before.clone();
-            next.written(body.clone(), item.new);
-            undo.push((before, body));
+            next.body = body;
+            next.edited();
+            next.save();
+            if next.unsaved() {
+                let name = next
+                    .path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                let why = match &next.state {
+                    DraftState::Failed(error) => error.clone(),
+                    _ => "It changed on disk.".to_owned(),
+                };
+                failed = Some(format!("{name} was not written. {why}"));
+                break;
+            }
+            let bytes = next.file_text().unwrap_or_default().to_owned();
+            written.push(LinkWrite {
+                id: super::note_identity(&next.path, &bytes),
+                before,
+                after: next.body.clone(),
+                bytes,
+            });
             if self
                 .draft
                 .as_ref()
                 .is_some_and(|draft| draft.path == next.path)
             {
-                self.draft = Some(next);
+                self.draft = Some(next.clone());
+            }
+            #[cfg(test)]
+            AFTER_LINK_WRITE.with(|hook| {
+                if let Some(hook) = hook.borrow_mut().as_mut() {
+                    hook(&next.path);
+                }
+            });
+        }
+        if let Some(failed) = failed {
+            if written.is_empty() {
+                self.link_problem = Some(format!("No links changed. {failed}"));
+            } else {
+                let names: Vec<String> = written
+                    .iter()
+                    .map(|write| {
+                        write
+                            .before
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                    .collect();
+                self.link_problem = Some(format!(
+                    "Links changed only in {}. {failed} Undo link update puts {} back.",
+                    names.join(", "),
+                    if names.len() == 1 { "it" } else { "them" }
+                ));
+                self.link_partial = true;
             }
         }
-        self.updated_links = (!undo.is_empty()).then_some(undo);
+        self.updated_links = (!written.is_empty()).then_some(written);
         self.last_time = None;
     }
 
     fn undo_event_link_notes(&mut self) {
         let mut remaining = Vec::new();
-        for (before, after) in self.updated_links.take().unwrap_or_default() {
+        let mut refused = Vec::new();
+        for write in self.updated_links.take().unwrap_or_default() {
+            // Undo writes only into the file it wrote: the same bytes and the same session.
+            let now = fs::read_to_string(&write.before.path).ok();
+            let same_file = now.as_deref() == Some(write.bytes.as_str())
+                && now
+                    .as_deref()
+                    .and_then(|text| super::note_identity(&write.before.path, text))
+                    == write.id;
             let current = self
                 .draft
                 .as_ref()
-                .filter(|draft| draft.path == before.path)
+                .filter(|draft| draft.path == write.before.path)
                 .cloned()
-                .or_else(|| Draft::open(&before.path).ok());
-            if let Some(mut current) =
-                current.filter(|draft| draft.body == after && !draft.needs_attention())
+                .or_else(|| Draft::open(&write.before.path).ok());
+            match current
+                .filter(|draft| same_file && draft.body == write.after && !draft.needs_attention())
             {
-                current.body = before.body.clone();
-                current.edited();
-                current.save();
-                if current.unsaved() {
-                    remaining.push((before.clone(), after));
+                Some(mut current) => {
+                    current.body = write.before.body.clone();
+                    current.edited();
+                    current.save();
+                    let undone = !current.unsaved();
+                    if self
+                        .draft
+                        .as_ref()
+                        .is_some_and(|draft| draft.path == current.path)
+                    {
+                        self.draft = Some(current);
+                    }
+                    if !undone {
+                        refused.push(write.before.path.clone());
+                        remaining.push(write);
+                    }
                 }
-                if self
-                    .draft
-                    .as_ref()
-                    .is_some_and(|draft| draft.path == current.path)
-                {
-                    self.draft = Some(current);
+                None => {
+                    refused.push(write.before.path.clone());
+                    remaining.push(write);
                 }
-            } else {
-                self.link_problem = Some("A note changed after its links were updated. Keep or resolve that edit before Undo.".into());
-                remaining.push((before, after));
             }
         }
-        self.updated_links = (!remaining.is_empty()).then_some(remaining);
-        if self.updated_links.is_none() && self.link_partial {
+        if refused.is_empty() {
+            if self.link_partial {
+                self.link_problem = None;
+            }
             self.link_partial = false;
-            self.link_problem = None;
+        } else {
+            let names: Vec<String> = refused
+                .iter()
+                .map(|path| {
+                    path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect();
+            self.link_problem = Some(format!(
+                "Undo did not change {}: it changed after its links were updated. Keep or resolve that edit first.",
+                names.join(", ")
+            ));
         }
+        self.updated_links = (!remaining.is_empty()).then_some(remaining);
         self.last_time = None;
     }
 
@@ -7045,61 +7123,103 @@ mod tests {
         assert_eq!(fs::read(&notes[0].path).unwrap(), original[0]);
         assert_eq!(fs::read_to_string(&notes[1].path).unwrap(), outside);
         assert!(sessions.updated_links.is_none() && sessions.link_problem.is_some());
-        // Re-check of PR 255: the second write fails after the preflight (its folder takes no
-        // new file). No note changes, and leaving Timeline (the expiry) finds nothing to lose.
+        // Re-check 2 of PR 255. Note A sits beside the others, note B in its own folder.
         use std::os::unix::fs::PermissionsExt;
-        fs::write(&notes[1].path, &original[1]).unwrap();
-        let locked = dir.path().join("Locked");
-        fs::create_dir(&locked).unwrap();
-        let second = locked.join(notes[1].path.file_name().unwrap());
-        fs::rename(&notes[1].path, &second).unwrap();
+        for (note, before) in notes.iter().zip(&original) {
+            fs::write(&note.path, before).unwrap();
+        }
+        let folder_b = dir.path().join("Folder B");
+        fs::create_dir(&folder_b).unwrap();
+        let note_a = notes[0].path.clone();
+        let note_b = folder_b.join(notes[1].path.file_name().unwrap());
+        fs::rename(&notes[1].path, &note_b).unwrap();
         let open = |path: &std::path::Path| {
             let draft = Draft::open(path).unwrap();
             let updated = updated_event_links(&draft.body, &book).0;
             (draft, updated)
         };
-        let changes = vec![open(&notes[0].path), open(&second)];
-        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).unwrap();
-        let mut sessions = Sessions::default();
-        sessions.update_event_link_notes(changes);
-        sessions.expire_event_link_undo(false, &book);
-        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
-        assert_eq!(fs::read(&notes[0].path).unwrap(), original[0]);
-        assert_eq!(fs::read(&second).unwrap(), original[1]);
-        assert!(sessions.updated_links.is_none());
-        // Both files are prepared, then the second replace fails: the first is put back.
-        use crate::sessions::{FAIL_RENAME_AT, FAIL_ROLLBACK};
-        FAIL_RENAME_AT.with(|fail| fail.set(Some(1)));
-        let mut sessions = Sessions::default();
-        sessions.update_event_link_notes(vec![open(&notes[0].path), open(&second)]);
-        FAIL_RENAME_AT.with(|fail| fail.set(None));
-        sessions.expire_event_link_undo(false, &book);
-        assert_eq!(fs::read(&notes[0].path).unwrap(), original[0]);
-        assert_eq!(fs::read(&second).unwrap(), original[1]);
-        assert!(sessions.updated_links.is_none());
-        // Putting it back fails too: the result names the changed note, and its Undo and error
-        // stay through the expiry until Undo puts the note back.
-        FAIL_RENAME_AT.with(|fail| fail.set(Some(1)));
-        FAIL_ROLLBACK.with(|fail| fail.set(true));
-        let mut sessions = Sessions::default();
-        sessions.update_event_link_notes(vec![open(&notes[0].path), open(&second)]);
-        FAIL_RENAME_AT.with(|fail| fail.set(None));
-        FAIL_ROLLBACK.with(|fail| fail.set(false));
-        assert!(
-            fs::read_to_string(&notes[0].path)
-                .unwrap()
-                .contains("|Rest at the mill]]")
+        let temporary_files = || -> Vec<String> {
+            [dir.path(), folder_b.as_path()]
+                .iter()
+                .flat_map(|folder| fs::read_dir(folder).unwrap().flatten())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with(".tmp"))
+                .collect()
+        };
+        // (a) After A is written, B is written outside. B is refused; A's result, error and
+        // Undo stay, also through the expiry.
+        let b_outside = format!(
+            "{}Written outside.\n",
+            String::from_utf8_lossy(&original[1])
         );
-        assert_eq!(fs::read(&second).unwrap(), original[1]);
+        let b_path = note_b.clone();
+        let b_text = b_outside.clone();
+        super::AFTER_LINK_WRITE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |written: &std::path::Path| {
+                if written.file_name() != b_path.file_name() {
+                    fs::write(&b_path, &b_text).unwrap();
+                }
+            }));
+        });
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        super::AFTER_LINK_WRITE.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(fs::read_to_string(&note_b).unwrap(), b_outside);
+        let a_written = fs::read_to_string(&note_a).unwrap();
+        assert!(a_written.contains("|Rest at the mill]]"));
         sessions.expire_event_link_undo(false, &book);
         assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
         let problem = sessions.link_problem.clone().unwrap_or_default();
-        assert!(
-            problem.contains(&notes[0].path.display().to_string()),
-            "{problem}"
-        );
+        let a_name = note_a.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(problem.contains(&a_name), "{problem}");
+        // (d) While that result is held, with the notes listed, a frame away from Timeline
+        // reads no note.
+        sessions.notes = list_notes(dir.path());
+        assert!(!sessions.notes.is_empty());
+        sessions.link_undo_state = Some(LinkUndoState {
+            notes: Vec::new(),
+            events: book.events.clone(),
+            title: "Rest at the mill".into(),
+        });
+        super::NOTE_READS.with(|reads| reads.set(0));
+        sessions.expire_event_link_undo(false, &book);
+        sessions.expire_event_link_undo(false, &book);
+        assert_eq!(super::NOTE_READS.with(std::cell::Cell::get), 0);
+        // (b) A is replaced by a note with another session id and the same words. Undo refuses
+        // it, names it, and leaves it byte for byte.
+        let replaced = a_written.replace(&notes[0].id.to_string(), &Uuid::new_v4().to_string());
+        assert_ne!(replaced, a_written);
+        fs::write(&note_a, &replaced).unwrap();
         sessions.undo_event_link_notes();
-        assert_eq!(fs::read(&notes[0].path).unwrap(), original[0]);
+        assert_eq!(fs::read_to_string(&note_a).unwrap(), replaced);
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(problem.contains(&a_name), "{problem}");
+        // (c) After A is written, B's folder takes no new file. B is not written, A's result
+        // stays, and no temporary file is left in either folder.
+        fs::write(&note_a, &original[0]).unwrap();
+        fs::write(&note_b, &original[1]).unwrap();
+        let locked = folder_b.clone();
+        super::AFTER_LINK_WRITE.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move |_: &std::path::Path| {
+                fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).unwrap();
+            }));
+        });
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        super::AFTER_LINK_WRITE.with(|hook| *hook.borrow_mut() = None);
+        let left = temporary_files();
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(left, Vec::<String>::new());
+        assert_eq!(fs::read(&note_b).unwrap(), original[1]);
+        assert!(
+            fs::read_to_string(&note_a)
+                .unwrap()
+                .contains("|Rest at the mill]]")
+        );
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(1));
+        // Undo of an unchanged A puts its bytes back and ends the result.
+        sessions.undo_event_link_notes();
+        assert_eq!(fs::read(&note_a).unwrap(), original[0]);
         assert!(sessions.updated_links.is_none() && sessions.link_problem.is_none());
     }
 
