@@ -203,10 +203,10 @@ has one weight: its Save is primary while the draft has changes that it can save
 and secondary otherwise. An unsaved draft owns the primary over its own page's other actions: while an encounter
 draft has changes, `Save encounter` is primary and `Resume` or `Start fight` is secondary until the draft is saved or
 discarded. While a run is open, its strip's `Next turn` stays the only primary, whatever the draft holds (round 22).
-A draft that Save refused does not own the primary until its fault is fixed. A Save that fails on the disk (a read-only
-or missing file) shows Save's reason in the state slot with the error icon until the next edit or a Save that writes;
-a repair the note was opened for stays until a Save writes. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
-several Campaign repairs have changes, only the active one (edited or focused last; else the last changed one) has
+A draft that Save refused does not own the primary until its fault is fixed. A repair that a note was opened for
+stays through a failed Save, until a Save writes. `Save changes` in World and `Save repaired note` in World and
+Campaign follow this. When
+several Campaign repairs have changes that Save would write, only the active one (edited or focused last; else the last changed one) has
 the primary Save; the others keep their drafts with a secondary Save. Unsaved,
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
@@ -220,10 +220,11 @@ A quiet action at the start of a line uses `line_start`: its words start at the 
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
-hangs its icon into the message's own icon column, so its words start at the message's words. A quiet
-message choice without an icon (`Use the copy in encounters` below a package's registration message, and
-`Build an encounter` below a copied campaign's) hangs its padding
-into that column instead, so its words also start at the message's words. In a
+hangs its icon into the message's own icon column, so its words start at the message's words. A
+choice without an icon on its own line below a result message (`message_choice_row`: `Use the copy in
+encounters` below a package's registration message, and `Build an encounter` below a copied campaign's) has
+the secondary border, as the same choice beside a plain result has. It sits below the result and its Undo,
+and its border starts at the message's words. On a result, only Undo is quiet. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
@@ -562,6 +563,16 @@ An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
 from the package save row. Below the repair's own save row, an `L` gap and the package list's one hairline
 separate it from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
+The reason above names the file, so the `REPAIR` heading has no path. A repair draft's save-row state comes from
+the draft as Save checks it, as in Library: while Save would refuse it, the state says Invalid and Save is blocked
+with the cause; Unsaved and a primary Save come only when Save would write it. Save's check without writing is the one World's repair uses (the path rule, YAML, identity,
+campaign ownership). Each repair keeps its answer and asks again only when its draft changes, so the page never
+reads the disk or parses a draft on an unchanged frame. A Save that fails on the disk (read only, missing, a write
+error) is an action-time failure: that repair's state slot says `Not saved.` with Save's reason until its next
+edit, its successful Save, a reload or another campaign. Another repair's edit, Save or failure leaves it. Each
+repair editor's accessible name holds its file (`Note text: Notes/Broken.md`), in Campaign and World. While a repair blocks the package
+save, its reason (`Fix Notes/Broken.md first.`) sits on its own line below `Save selections` at every width, so the
+first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
 open Lookup. Short package lists fit their rows. An off package with required entries shows None chosen, the
@@ -569,7 +580,9 @@ needed count, an indeterminate checkbox and encounters that use its creatures.
 
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
-that it uses default packages.
+that the DM can write a new one with the default packages (`Campaign.md is missing, and Splat has no copy. You can
+write a new one with the default packages.`). A missing or changed Campaign.md ends `Undo discard` of the package
+choices: the discarded draft belonged to the file as it was.
 
 ### Packages
 
@@ -588,9 +601,8 @@ Quiet Cancel follows the named Register action after an `L` gap. It closes the f
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
 original and the copy is registered but not used. When on, it says every entry is used, including future
 entries. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
-quiet `Undo package registration` sits on the message line, as every Undo after a message does, and quiet
-`Use the copy in encounters`, without an icon, sits on the next line as a `line_start` action: its words start at
-the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
+quiet `Undo package registration` sits on the message line, as every Undo after a message does, and bordered
+`Use the copy in encounters`, without an icon, sits on the next line: its border starts at the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
 copy.` keeps `Undo source change` on its
 message line; after an outside change that Undo is blocked with its reason.
 

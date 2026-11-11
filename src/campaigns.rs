@@ -35,6 +35,8 @@ pub struct Campaigns {
 
 /// The rail's campaign selector, with a name on two lines.
 const SELECTOR_HEIGHT: f32 = 44.0;
+/// A missing Campaign.md without a copy. The write is a choice the DM makes with the button.
+pub(crate) const NO_CAMPAIGN_COPY: &str = "Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.";
 
 impl Default for Campaigns {
     fn default() -> Self {
@@ -442,6 +444,7 @@ impl Campaigns {
         );
     }
 
+    /// The whole message for a missing Campaign.md, and the action that writes it.
     pub fn campaign_write_preview(&self, campaign: &Campaign) -> (String, &'static str) {
         if let Some((path, text)) = self.held_manifests.borrow().get(&campaign.id)
             && let Ok(entry) = splat::content::Entry::parse(path, text)
@@ -466,7 +469,7 @@ impl Campaigns {
             .join(", ");
             (
                 format!(
-                    "Splat still has the copy it last read: {}.",
+                    "Campaign.md is missing. Splat still has the copy it last read: {}.",
                     if counts.is_empty() {
                         "no package or rule selections"
                     } else {
@@ -476,11 +479,7 @@ impl Campaigns {
                 "Write Campaign.md again",
             )
         } else {
-            (
-                "Splat has no copy. This writes a new Campaign.md with the default packages."
-                    .into(),
-                "Write a new Campaign.md",
-            )
+            (NO_CAMPAIGN_COPY.into(), "Write a new Campaign.md")
         }
     }
 
@@ -1005,17 +1004,16 @@ impl Campaigns {
             if let Some(added) = self.added.clone() {
                 if self.campaign_copy.is_some() {
                     // The registration result and its Undo are one message. Build an encounter
-                    // is another choice: it starts below, at the message words, as Library's
-                    // choice after a package registration does.
+                    // is another choice: it starts below, at the message words, with the same
+                    // border as after a plain add. Only Undo is quiet.
                     if design::undo_message(ui, Tone::Success, &added, "Undo register campaign")
                         && let Err(error) = self.undo_campaign_copy()
                     {
                         self.error = Some(error);
                     }
                     let build = design::message_choice_row(ui, Tone::Success, |ui| {
-                        Action::quiet("Build an encounter")
+                        Action::secondary("Build an encounter")
                             .density(Density::Read)
-                            .line_start()
                             .show(ui)
                             .clicked()
                     });
@@ -1175,7 +1173,7 @@ impl Campaigns {
                             self.path = saved.path.to_string_lossy().into_owned();
                         }
                     } else if (!missing || editing || self.remote.is_some())
-                        && Action::quiet("Cancel").show(ui).clicked()
+                        && Action::quiet("Cancel").line_start().show(ui).clicked()
                     {
                         self.clear_form();
                     }
@@ -1496,11 +1494,7 @@ mod tests {
         let fresh = Campaigns::at(temp.path().join("new-settings.json"));
         assert_eq!(
             fresh.campaign_write_preview(&campaign),
-            (
-                "Splat has no copy. This writes a new Campaign.md with the default packages."
-                    .into(),
-                "Write a new Campaign.md"
-            )
+            (NO_CAMPAIGN_COPY.into(), "Write a new Campaign.md")
         );
         let write = campaigns.write_campaign_again(&campaign).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
