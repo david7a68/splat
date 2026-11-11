@@ -1156,6 +1156,12 @@ pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
     (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
 }
 
+/// The run folder is known not to be there. A folder that cannot be looked for (a parent
+/// without permission) is not "missing": it cannot be read.
+fn folder_missing(directory: &std::path::Path) -> bool {
+    matches!(directory.try_exists(), Ok(false))
+}
+
 fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
@@ -1766,6 +1772,8 @@ struct Snapshot {
     /// The run folder is not there and nothing names a run, so it may never have been made. The
     /// page turns this into `runs_unread` when it has seen this campaign's folder hold runs.
     runs_missing: Option<String>,
+    /// The issue `runs_unread` added, so a later read that succeeds takes exactly it away.
+    runs_error: Option<String>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
@@ -1959,7 +1967,7 @@ impl Snapshot {
             })
             .collect();
         templates.sort_by_key(|template| template.name.to_lowercase());
-        let mut issues: Vec<String> = catalogue
+        let issues: Vec<String> = catalogue
             .errors
             .iter()
             .chain(&closure.errors)
@@ -1967,28 +1975,17 @@ impl Snapshot {
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
         let directory = options.directory(campaign)?;
-        let mut runs_missing = None;
-        let (runs, runs_unread) = match crate::encounter_run::Run::list(&directory, campaign.id) {
-            Ok(runs) => (runs, false),
-            Err(error) => {
-                // A folder that was never made holds no runs yet. One the timeline names, or
-                // one that is there but cannot be read, is a fault the lists must not hide.
-                let folder = crate::sessions::folder(campaign).ok();
-                let timeline_names_runs = folder
-                    .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
-                    .is_some_and(|text| {
-                        text.lines()
-                            .any(|line| line.trim_start().starts_with("run:"))
-                    });
-                let unread = timeline_names_runs || directory.exists();
-                if unread {
-                    issues.push(error);
-                } else {
-                    runs_missing = Some(error);
-                }
-                (Vec::new(), unread)
-            }
-        };
+        let read = crate::encounter_run::Run::list(&directory, campaign.id);
+        // A folder the timeline names runs in is not one that was never made.
+        let missing = read.is_err()
+            && folder_missing(&directory)
+            && !crate::sessions::folder(campaign)
+                .ok()
+                .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
+                .is_some_and(|text| {
+                    text.lines()
+                        .any(|line| line.trim_start().starts_with("run:"))
+                });
         let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
         let run_creatures = Arc::new(
             creatures
@@ -2019,7 +2016,7 @@ impl Snapshot {
                 known_creature_names.insert(key.clone(), creature.name.clone());
             }
         }
-        Ok(Self {
+        let mut snapshot = Self {
             revision: Uuid::new_v4(),
             campaign_root: campaign.path.clone(),
             groups,
@@ -2028,14 +2025,50 @@ impl Snapshot {
             options: options.clone(),
             saved_options: options,
             campaign_text: document.text,
-            runs,
-            runs_unread,
-            runs_missing,
+            runs: Vec::new(),
+            runs_unread: false,
+            runs_missing: None,
+            runs_error: None,
             catalogue,
             creatures,
             templates,
             issues,
-        })
+        };
+        snapshot.take_run_list(read, missing);
+        Ok(snapshot)
+    }
+    /// AB1: the one classification of a run list read, for the first load, a reload and every
+    /// refresh. Runs that read replace the list. A folder known not to be there may never have
+    /// been made, so it is `runs_missing` until the page knows it held runs. Any other failure
+    /// (an unreadable folder or parent) is `runs_unread`, with its issue, until a read succeeds.
+    fn take_run_list(
+        &mut self,
+        read: Result<Vec<crate::encounter_run::SavedRunInfo>, String>,
+        missing: bool,
+    ) {
+        if let Some(old) = self.runs_error.take() {
+            self.issues.retain(|issue| *issue != old);
+        }
+        self.runs_missing = None;
+        self.runs_unread = false;
+        match read {
+            Ok(runs) => self.runs = runs,
+            Err(error) => {
+                self.runs.clear();
+                if missing {
+                    self.runs_missing = Some(error);
+                } else {
+                    self.runs_unread(error);
+                }
+            }
+        }
+    }
+    fn runs_unread(&mut self, error: String) {
+        self.runs_unread = true;
+        if !self.issues.contains(&error) {
+            self.issues.push(error.clone());
+        }
+        self.runs_error = Some(error);
     }
     /// The encounters a group can belong to, in the list's order.
     fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
@@ -3020,6 +3053,8 @@ impl Encounters {
                     snapshot.saved_options = old.saved_options;
                     snapshot.campaign_text = old.campaign_text;
                 }
+                // Every new snapshot, however it was read, says the same about the run folder.
+                self.note_run_folder(&mut snapshot);
                 self.snapshot = Some(snapshot);
             }
             Err(e) => self.error = Some(e),
@@ -3383,35 +3418,28 @@ impl Encounters {
             && campaign.is_some()
             && self.runs_known == campaign
         {
-            snapshot.runs_unread = true;
-            snapshot.issues.push(error);
+            snapshot.runs_unread(error);
         }
         if !snapshot.runs.is_empty() || snapshot.runs_unread {
             self.runs_known = campaign;
         }
     }
+    /// The synchronous refresh that Make it yours, a creature save and a group removal run,
+    /// for the scenarios.
+    #[cfg(test)]
+    pub(crate) fn refresh_now(&mut self, active: &Campaign, modules: &[Module]) {
+        self.reload_snapshot(active, modules);
+    }
     pub fn read_runs_again(&mut self, active: &Campaign) {
-        if let Some(s) = &mut self.snapshot {
-            match s
-                .saved_options
-                .directory(active)
-                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
-            {
-                Ok(runs) => {
-                    s.runs = runs;
-                    s.runs_unread = false;
-                    s.issues
-                        .retain(|issue| !issue.starts_with("Run folder not found"));
-                }
-                Err(error) => {
-                    s.runs.clear();
-                    s.runs_unread = true;
-                    if !s.issues.contains(&error) {
-                        s.issues.push(error);
-                    }
-                }
-            }
-        }
+        let Some(mut s) = self.snapshot.take() else {
+            return;
+        };
+        let directory = s.saved_options.directory(active);
+        let missing = directory.as_deref().is_ok_and(folder_missing);
+        let read = directory.and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        s.take_run_list(read, missing);
+        self.note_run_folder(&mut s);
+        self.snapshot = Some(s);
     }
     pub fn show(
         &mut self,

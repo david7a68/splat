@@ -525,9 +525,11 @@ impl GroupDraft {
                         self.source = text;
                     }
                 }
-            } else {
+            } else if !self.recovery.file_gone() {
                 *self = Self::open(root, &self.path)?;
             }
+            // A group whose file is gone has nothing to reopen: the encounter removes it and
+            // keeps it for Undo remove.
         }
         Ok(choice)
     }
@@ -578,6 +580,9 @@ pub(super) fn shown_name(block: &Mapping, name: String) -> String {
         .map_or(name, |changed| changed.trim().to_owned())
 }
 
+/// What the DM can do about a member whose creature this campaign cannot find.
+const MISSING_MEMBER_HELP: &str =
+    "Choose a replacement, check the packages it uses, or remove this member.";
 /// A group's own reason when it has no member fault to show.
 const NONE_CAN_JOIN: &str = "No members can join.";
 /// Why a member with a D&D Beyond sheet cannot join from a group.
@@ -1198,17 +1203,24 @@ pub(super) fn of_encounter(
         *removed_group = Some((index, gone, delete));
     }
     if let Some((_, removed, delete)) = removed_group.as_ref() {
-        let words = if *delete {
+        // FF7: a group removed with its draft after its file was gone says what was lost.
+        let gone = removed.file_gone();
+        let words = if gone {
+            super::disk::removed_with_draft(&removed.name)
+        } else if *delete {
             "Group deleted. Save deletes its file.".to_owned()
         } else {
             format!("{} moves to any encounter when you save.", removed.name)
         };
-        let undo = if *delete {
+        let undo = if gone {
+            "Undo remove"
+        } else if *delete {
             "Undo remove group"
         } else {
             "Undo move"
         };
-        if design::undo_message(ui, Tone::Success, &words, undo) {
+        let tone = if gone { Tone::Info } else { Tone::Success };
+        if design::undo_message(ui, tone, &words, undo) {
             let (index, removed, delete) = removed_group.take().expect("a removed group");
             if delete {
                 deleted_groups.retain(|group| group.path != removed.path);
@@ -1264,7 +1276,25 @@ fn belongs_to(
         // The choice ends where the name field ends, inside the column.
         let right = name_right.min(ui.max_rect().right());
         let width = (right - ui.cursor().left()).max(Density::Scan.control());
-        let combo = egui::ComboBox::from_id_salt("group_encounter")
+        // FB8: egui keeps a popup's first size, so a menu opened at one width stays that wide
+        // after a resize. The control is keyed by its whole-pixel width: a new width gets a new
+        // popup, sized from the control, and the open state and focus move to it.
+        let salt = ("group_encounter", width.round() as i32);
+        let last_id = ui.make_persistent_id("group_encounter_width");
+        if let Some(last) = ui.data(|data| data.get_temp::<i32>(last_id))
+            && last != salt.1
+        {
+            let old = ui.make_persistent_id(("group_encounter", last));
+            let new = ui.make_persistent_id(salt);
+            if egui::Popup::is_id_open(ui.ctx(), old.with("popup")) {
+                egui::Popup::open_id(ui.ctx(), new.with("popup"));
+            }
+            if ui.memory(|memory| memory.has_focus(old)) {
+                ui.memory_mut(|memory| memory.request_focus(new));
+            }
+        }
+        ui.data_mut(|data| data.insert_temp(last_id, salt.1));
+        let combo = egui::ComboBox::from_id_salt(salt)
             .icon(design::combo_icon)
             .width(width)
             .truncate()
@@ -2521,51 +2551,120 @@ fn members(
                 .and_then(|entry| {
                     let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
                     let mut detail = shown_detail(&member.overrides, entry, &side, creature);
-                    if member.overrides.contains_key("name") { detail.push_str(&format!(" · as {}", entry.name)); }
-                    Some((detail, shown_hp_missing(&member.overrides, entry, &side, creature)))
+                    if member.overrides.contains_key("name") {
+                        detail.push_str(&format!(" · as {}", entry.name));
+                    }
+                    Some((
+                        detail,
+                        shown_hp_missing(&member.overrides, entry, &side, creature),
+                    ))
                 })
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
-            let member_row = ui.label(Type::Strong.rich(ui, format!("{number}. {name}")).color(colors().text)).on_hover_text(&name).rect;
+            let member_row = ui
+                .label(
+                    Type::Strong
+                        .rich(ui, format!("{number}. {name}"))
+                        .color(colors().text),
+                )
+                .on_hover_text(&name)
+                .rect;
             if !detail.is_empty() {
-                let response = ui.add(egui::Label::new(super::detail_text(ui, &super::stat_line(&detail), hp_missing)).wrap());
+                let response = ui.add(
+                    egui::Label::new(super::detail_text(
+                        ui,
+                        &super::stat_line(&detail),
+                        hp_missing,
+                    ))
+                    .wrap(),
+                );
                 design::named(ui, &response, &detail);
             }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
-                let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
-                    .custom_formatter(|value, _| super::grouped(value as u64))
-                    .custom_parser(|text| text.replace(',', "").parse().ok()));
+                let count = ui.add(
+                    egui::DragValue::new(&mut member.count)
+                        .range(1..=MAX_COUNT)
+                        .custom_formatter(|value, _| super::grouped(value as u64))
+                        .custom_parser(|text| text.replace(',', "").parse().ok()),
+                );
                 design::named(ui, &count, &format!("How many of {name}"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     super::row_menu(ui, &name, |ui| {
-                        if super::menu_action(ui, "Move up", (index == 0).then_some("Already first.")) { raise = Some(index); }
-                        if super::menu_action(ui, "Move down", (index + 1 == total).then_some("Already last.")) { lower = Some(index); }
-                        if super::menu_action(ui, "Remove", None) { remove = Some(index); }
+                        if super::menu_action(
+                            ui,
+                            "Move up",
+                            (index == 0).then_some("Already first."),
+                        ) {
+                            raise = Some(index);
+                        }
+                        if super::menu_action(
+                            ui,
+                            "Move down",
+                            (index + 1 == total).then_some("Already last."),
+                        ) {
+                            lower = Some(index);
+                        }
+                        if super::menu_action(ui, "Remove", None) {
+                            remove = Some(index);
+                        }
                     });
-                    if Action::quiet(if entry.is_none() { "Replace…" } else { "Edit" }).density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
-                        *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
+                    if Action::quiet(if entry.is_none() {
+                        "Replace…"
+                    } else {
+                        "Edit"
+                    })
+                    .density(Density::Read)
+                    .name(&button)
+                    .selected(is_open)
+                    .show(ui)
+                    .clicked()
+                    {
+                        *expanded = if is_open {
+                            None
+                        } else {
+                            show_form_when_it_opens(ui);
+                            Some(key.clone())
+                        };
                     }
                 });
             });
             if entry.is_none() {
                 // The reference is on hover: it is what a repair needs, and not a word to read.
                 // The repair link is a notice action, so its words start at the warning text.
+                // FA1: the fault in the one member-fault form (no line: a draft's lines can
+                // move), then its help, then the repair at the words.
+                let changed = member
+                    .overrides
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|changed| !changed.is_empty());
+                let words = member_fault(
+                    changed.unwrap_or(&name),
+                    member.creature.link.is_some().then_some(name.as_str()),
+                    None,
+                    "not in this campaign’s packages",
+                );
                 let repair = ui.scope(|ui| {
-                    design::message_with_actions(
-                        ui,
-                        Tone::Warning,
-                        "This campaign cannot find this creature. Choose a replacement, check the packages it uses, or remove this member.",
-                        packages_repair,
-                    )
+                    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                        design::help(ui, MISSING_MEMBER_HELP);
+                        packages_repair(ui)
+                    })
                 });
                 repair.response.on_hover_text(member.creature.label());
                 if repair.inner {
-                    ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
+                    ui.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                    });
                 }
-                if is_open && let Some(creature) = super::choose_replacement_creature(ui, snapshot) {
-                    let chosen = snapshot.catalogue.resolve_ref(&creature).ok()
+                if is_open && let Some(creature) = super::choose_replacement_creature(ui, snapshot)
+                {
+                    let chosen = snapshot
+                        .catalogue
+                        .resolve_ref(&creature)
+                        .ok()
                         .and_then(|id| snapshot.catalogue.entries.get(&id))
                         .map_or_else(|| creature.label(), |entry| entry.entry.name.clone());
                     replaced = Some(Replaced {
@@ -2579,9 +2678,13 @@ fn members(
             }
             if let Some(entry) = entry {
                 if changes_link(ui, &member.overrides, entry, &side, is_open) {
-                    show_form_when_it_opens(ui); *expanded = Some(key.clone());
+                    show_form_when_it_opens(ui);
+                    *expanded = Some(key.clone());
                 }
-                if is_open && overrides_form(ui, &key, &mut member.overrides, entry, &side, None) { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
+                if is_open && overrides_form(ui, &key, &mut member.overrides, entry, &side, None) {
+                    *expanded = None;
+                    ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                }
             }
             design::rule(ui);
         });
@@ -2739,16 +2842,21 @@ fn unread_member(
     } else {
         "This member cannot join a fight until this row is fixed. Other members can join."
     };
-    // What the fault blocks, the file's path and its links start at the message words.
-    design::message_with_actions(
-        ui,
-        Tone::Warning,
-        &(member.flag.message.trim_end_matches('.').to_owned() + "."),
-        |ui| {
-            ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
-            super::file_line(ui, &snapshot.campaign_root, &draft.path);
-        },
+    // FA1: the fault in the one member-fault form, as the list, the plan and Arrivals say it;
+    // the help, what the fault blocks, the file's path and its links start at its words. A flag
+    // read back without its parts says its own sentence.
+    let words = member.flag.cause().map_or_else(
+        || member.flag.message.trim_end_matches('.').to_owned() + ".",
+        |cause| member_fault(&name, Some(&base_name), Some(member.flag.line), cause),
     );
+    let help = member.flag.help();
+    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+        if !help.is_empty() {
+            design::help(ui, help);
+        }
+        ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
+        super::file_line(ui, &snapshot.campaign_root, &draft.path);
+    });
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {
@@ -4001,6 +4109,55 @@ mod tests {
             Draft::open(dir.path(), &draft.path).unwrap().name,
             saved_name
         );
+
+        // FF7 (Astra review of PR 259): the group's file goes. `Remove group and lose draft`
+        // takes it out of this encounter's draft; an unrelated edit stays through Undo remove,
+        // which puts the group back with its draft. Nothing is written.
+        use egui_kittest::kittest::Queryable;
+        fs::remove_file(&note).unwrap();
+        draft.groups[0].recovery = Default::default();
+        assert!(draft.save(&campaign, &[]).is_err());
+        assert!(draft.groups[0].file_gone());
+        draft.groups_read = true;
+        let editor = Encounters {
+            draft: Some(draft),
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Default::default()
+        };
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            |ctx, editor: &mut Encounters| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    if !editor.encounter_disk_view(ui, &campaign, &[]) {
+                        let Encounters {
+                            draft, snapshot, ..
+                        } = editor;
+                        if let (Some(draft), Some(snapshot)) = (draft.as_mut(), snapshot.as_ref()) {
+                            of_encounter(ui, draft, snapshot, &mut false, &mut None);
+                        }
+                    }
+                });
+            },
+            editor,
+        );
+        harness.run_steps(2);
+        harness.get_by_label("Remove group and lose draft").click();
+        harness.run_steps(2);
+        let draft = harness.state().draft.as_ref().unwrap();
+        assert!(draft.groups.is_empty(), "the gone group left the draft");
+        assert!(harness.state().error.is_none());
+        harness.get_by_label("Changed removed. Its draft was discarded.");
+        harness.state_mut().draft.as_mut().unwrap().name = "Renamed again".into();
+        harness.run_steps(2);
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        let draft = harness.state().draft.as_ref().unwrap();
+        assert_eq!(draft.name, "Renamed again", "the unrelated edit stays");
+        assert_eq!(draft.groups.len(), 1);
+        assert_eq!(
+            draft.groups[0].name, "Changed",
+            "the group comes back with its draft"
+        );
+        assert!(!note.exists(), "nothing was written");
     }
 
     #[test]

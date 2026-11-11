@@ -401,14 +401,26 @@ impl super::Encounters {
             return false;
         };
         if draft.recovery.change.is_none() {
-            if let Some(group) = draft
+            if let Some(index) = draft
                 .groups
-                .iter_mut()
-                .find(|group| group.has_disk_change())
+                .iter()
+                .position(|group| group.has_disk_change())
             {
-                match group.disk_choice(ui, &campaign.path, snapshot) {
+                let gone = draft.groups[index].file_gone();
+                match draft.groups[index].disk_choice(ui, &campaign.path, snapshot) {
                     Ok(Some(true)) => self.save_draft(ui.ctx(), campaign, modules),
-                    Ok(Some(false)) => self.error = None,
+                    Ok(Some(false)) => {
+                        // FF7: the group's file is gone. It leaves this encounter's draft, and
+                        // Undo remove puts it back at its place with its draft.
+                        if gone {
+                            let group = draft.groups.remove(index);
+                            if draft.add_to.as_deref() == Some(group.path()) {
+                                draft.add_to = None;
+                            }
+                            draft.removed_group = Some((index, group, false));
+                        }
+                        self.error = None;
+                    }
                     Err(error) => self.error = Some(error),
                     _ => {}
                 }

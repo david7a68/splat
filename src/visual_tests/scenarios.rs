@@ -12203,7 +12203,7 @@ pub mod encounter_groups {
         d.expect("Unknown creature");
         let (found, invalid) = d.at_size(SMALL, |d| {
             (
-                d.in_view_containing("cannot find this creature"),
+                d.in_view_containing("Unknown creature: not in this campaign’s packages."),
                 d.in_view_containing("would become −28"),
             )
         });
@@ -12214,7 +12214,18 @@ pub mod encounter_groups {
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "cannot find this creature"),
+            tones_beside(d, "Unknown creature: not in this campaign’s packages."),
+        );
+        // FA1 (Astra review of PR 259): the editor names the missing member in the one form,
+        // and its help follows on a line of its own.
+        d.observe(
+            "iter-25-B-FA1-missing",
+            d.has("Unknown creature: not in this campaign’s packages.")
+                && d.has(
+                    "Choose a replacement, check the packages it uses, or remove this member.",
+                )
+                && !d.has_containing("This campaign cannot find this creature"),
+            "The group editor's missing member says the one member-fault form, then its help",
         );
         d.observe(
             "iter-22-B-FT1-editor",
@@ -12232,7 +12243,7 @@ pub mod encounter_groups {
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
-                    "This campaign cannot find this creature",
+                    "Unknown creature: not in this campaign’s packages.",
                     egui::Rect::EVERYTHING,
                 );
                 let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
@@ -13355,40 +13366,65 @@ pub mod encounter_owned_groups {
         d.click(&edit_group(GROUP_WATCH));
         d.expect("A run of any encounter offers this group.");
         d.open_combo_at(BELONGS_DROPDOWN);
-        // FB8: the open menu is as wide as its control at 960, 1200 and 1920, while it stays
-        // open across the sizes. Each choice sits the menu frame inside both control edges.
-        let frame = f32::from(d.app_style().spacing.menu_margin.left)
-            + d.app_style().visuals.window_stroke.width;
-        for size in [SMALL, DEFAULT, LARGE] {
-            let (control, choices) = d.at_size(size, |d| {
+        // FB8: the open menu's painted frame is as wide as its control at 960, 1200 and 1920,
+        // and back at 960, while it stays open through each resize.
+        const CONTROL: &str = "Belongs to: Any encounter";
+        for size in [SMALL, DEFAULT, LARGE, SMALL] {
+            let (control, frame) = d.at_size(size, |d| {
+                let choices = ["Any encounter", RUN_ARENA]
+                    .map(|name| d.place_of(name))
+                    .into_iter()
+                    .collect::<Option<Vec<_>>>()
+                    .map(|rects| {
+                        rects
+                            .into_iter()
+                            .fold(egui::Rect::NOTHING, |a, b| a.union(b))
+                    });
                 (
-                    d.place_of("Belongs to: Any encounter"),
-                    ["Any encounter", RUN_ARENA].map(|name| d.place_of(name)),
+                    d.place_of(CONTROL),
+                    choices.and_then(|choices| d.painted_frame_around(choices)),
                 )
             });
             d.observe(
                 "iter-25-B-FB8",
-                control.is_some_and(|control| {
-                    choices.iter().all(|choice| {
-                        choice.is_some_and(|choice| {
-                            let left = choice.left() - control.left();
-                            let right = control.right() - choice.right();
-                            (left - right).abs() <= 1.0 && right <= frame + 1.0
-                        })
-                    })
+                control.zip(frame).is_some_and(|(control, frame)| {
+                    (frame.left() - control.left()).abs() <= 1.0
+                        && (frame.right() - control.right()).abs() <= 1.0
                 }),
                 format!(
-                    "At {size:?} the Belongs to choices {choices:?} fill the control {control:?}"
+                    "At {size:?} the Belongs to menu frame {frame:?} spans the control {control:?}"
                 ),
             );
         }
-        // A proof aside: Escape closes it with nothing chosen, and it opens again.
+        // A proof aside (revision 17 menu checks): Escape closes it with nothing chosen and
+        // keeps focus on the control; Tab leaves and Shift+Tab comes back; the keyboard opens it
+        // again, and Escape closes it again. It is opened once more for the capture.
         d.aside(|d| {
             d.press(Key::Escape);
+            let closed = !d.has(RUN_ARENA) && d.has(CONTROL);
+            let after_escape = d.focused_name();
+            d.press(Key::Tab);
+            let after_tab = d.focused_name();
+            d.press_shift(Key::Tab);
+            let back = d.focused_name();
+            d.press(Key::Enter);
+            let opened = d.has(RUN_ARENA);
+            d.press(Key::Escape);
+            let closed_again = !d.has(RUN_ARENA);
+            let owner = d.focused_name();
             d.observe(
                 "iter-25-B-FB8-escape",
-                !d.has(RUN_ARENA) && d.has("Belongs to: Any encounter"),
-                "Escape closes the Belongs to menu and keeps Any encounter",
+                closed
+                    && after_escape.as_deref() == Some(CONTROL)
+                    && after_tab.is_some()
+                    && after_tab.as_deref() != Some(CONTROL)
+                    && back.as_deref() == Some(CONTROL)
+                    && opened
+                    && closed_again
+                    && owner.as_deref() == Some(CONTROL),
+                format!(
+                    "Escape {closed} (focus {after_escape:?}), Tab {after_tab:?}, back {back:?}, Enter opens {opened}, Escape closes {closed_again} (focus {owner:?})"
+                ),
             );
             d.open_combo_at(BELONGS_DROPDOWN);
         });

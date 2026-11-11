@@ -140,6 +140,21 @@ fn missing_folders(
 ) {
     let runs = d.app_mut().encounters.saved_runs();
     let run_folder = runs[0].path.parent().unwrap().to_owned();
+    // AB1: no step below may change a saved run's bytes.
+    let run_bytes = |folder: &std::path::Path| {
+        let mut files: Vec<_> = fs::read_dir(folder)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| (entry.file_name(), fs::read(entry.path()).ok()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        files
+    };
+    let bytes_before = run_bytes(&run_folder);
+    assert!(!bytes_before.is_empty());
     let moved = campaign.path.join("Moved runs");
     fs::rename(&run_folder, &moved).unwrap();
     d.click(NAV_ENCOUNTERS);
@@ -180,6 +195,15 @@ fn missing_folders(
         unread(d),
         "After a reload, the lists still say the run folder cannot be read",
     );
+    // The synchronous refresh (Make it yours, a creature save, a group removal) says the same.
+    let modules = d.app_mut().campaigns.modules().to_vec();
+    d.app_mut().encounters.refresh_now(campaign, &modules);
+    d.settle();
+    d.observe(
+        "iter-25-B-AB1-refresh",
+        unread(d),
+        "After a synchronous refresh, the lists still say the run folder cannot be read",
+    );
     fs::rename(&moved, &run_folder).unwrap();
     d.app_mut().encounters.read_runs_again(campaign);
     d.settle();
@@ -189,6 +213,39 @@ fn missing_folders(
             && !d.has(crate::encounters::ENDED_UNREAD)
             && d.has_containing(&runs[0].encounter),
         "When the folder is back, its runs show again",
+    );
+    // A run folder whose parent cannot be looked in is not a folder that was never made: the
+    // lists say it cannot be read, through a reload and a synchronous refresh.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let locked = campaign.path.join("Locked");
+        fs::create_dir_all(&locked).unwrap();
+        let inside = locked.join("Encounter Runs");
+        fs::rename(&run_folder, &inside).unwrap();
+        std::os::unix::fs::symlink(&inside, &run_folder).unwrap();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+        d.click("Reload from disk");
+        d.settle();
+        let reloaded = unread(d);
+        d.app_mut().encounters.refresh_now(campaign, &modules);
+        d.settle();
+        d.observe(
+            "iter-25-B-AB1-parent",
+            reloaded && unread(d),
+            "A run folder under a parent that cannot be read says so after a reload and a refresh",
+        );
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::remove_file(&run_folder).unwrap();
+        fs::rename(&inside, &run_folder).unwrap();
+        fs::remove_dir(&locked).unwrap();
+        d.app_mut().encounters.read_runs_again(campaign);
+        d.settle();
+    }
+    d.observe(
+        "iter-25-B-AB1-bytes",
+        run_bytes(&run_folder) == bytes_before && d.has_containing(&runs[0].encounter),
+        "Every saved run's bytes are unchanged, and the runs show again",
     );
     d.click(NAV_SESSIONS);
     fs::rename(folder, campaign.path.join("Moved sessions")).unwrap();

@@ -421,7 +421,15 @@ pub fn run(d: &mut Driver<'_>) {
     close_run(d);
     d.click(NAV_ENCOUNTERS);
     d.click("Edit group Bridge guards");
-    d.expect("Line 15: the change “HP lots” was not read. Use a number, such as HP +5.");
+    // FA1 (Astra review of PR 259): the editor says the member fault in the list's own words,
+    // and its help on a line of its own.
+    d.expect(SCOUT_FAULT);
+    d.expect("Use a number, such as HP +5.");
+    d.observe(
+        "iter-25-B-FA1-editor",
+        !d.has_containing("Line 15: the change"),
+        "The group editor's member fault is the one form, not the flag's own sentence",
+    );
     d.expect("Goblin Warrior");
     d.observe_both(
         "F3 member warning",
@@ -431,7 +439,7 @@ pub fn run(d: &mut Driver<'_>) {
             let find = |name: &str| nodes.iter().find(|node| node.name == name);
             let first = find("1. Scout");
             let next = find("2. Goblin Warrior");
-            let warning = find("Line 15: the change “HP lots” was not read. Use a number, such as HP +5.");
+            let warning = find(SCOUT_FAULT);
             let summary = find("CR 1/4 · HP 10 · AC 15 · as Goblin Warrior");
             first.zip(summary).zip(warning).zip(next).is_some_and(
                 |(((first, summary), warning), next)| {
@@ -461,7 +469,7 @@ pub fn run(d: &mut Driver<'_>) {
             let words = d
                 .nodes()
                 .into_iter()
-                .find(|node| node.name.starts_with("Line 15: the change") && node.in_view())
+                .find(|node| node.name == SCOUT_FAULT && node.in_view())
                 .map(|node| node.rect);
             let blocked = super::glyph_spans(d, "This member cannot join a fight", "This member");
             let blocked_at = words
@@ -469,7 +477,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .is_some_and(|(words, (left, _, _))| (left - words.left()).abs() <= 1.0);
             super::file_links_at_message_words(
                 d,
-                "Line 15: the change",
+                "Scout (as Goblin Warrior) · line",
                 &campaign.path.join("Encounter Groups/Bridge guards.md"),
                 "Encounter Groups/Bridge guards.md",
             )
