@@ -2340,20 +2340,26 @@ mod tests {
         // Another change of the words ends that Undo for good, also when the words come back.
         harness.get_by_label("Plan a scene").focus();
         harness.run_steps(1);
-        harness.get_by_label("Plan a scene").type_text("Cross at dawn");
+        harness
+            .get_by_label("Plan a scene")
+            .type_text("Cross at dawn");
         harness.run_steps(1);
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert!(harness.query_by_label("Undo scene").is_some());
         for state in ["Done", "Open"] {
-            harness.get_by_label(&format!("{state}: Pay the toll")).click();
+            harness
+                .get_by_label(&format!("{state}: Pay the toll"))
+                .click();
             harness.run_steps(2);
         }
         assert!(harness.query_by_label("Undo scene").is_none());
         // So does another session.
         harness.get_by_label("Plan a scene").focus();
         harness.run_steps(1);
-        harness.get_by_label("Plan a scene").type_text("Rest at the ford");
+        harness
+            .get_by_label("Plan a scene")
+            .type_text("Rest at the ford");
         harness.run_steps(1);
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
