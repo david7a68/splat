@@ -1548,6 +1548,8 @@ impl Run {
             self.undo();
         }
         let undo_label = self.describe(&command);
+        // A save's damage names each target's own result once it is applied.
+        let roll_results = self.save_results(&command);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
         let follow_turn = matches!(command, Command::Begin | Command::Next);
@@ -1796,6 +1798,7 @@ impl Run {
         self.dm_steps += 1;
         self.notice = None;
         self.history.push(std::mem::replace(&mut self.state, next));
+        self.badges.extend(roll_results);
         if began {
             self.panel = Panel::Reference;
         }

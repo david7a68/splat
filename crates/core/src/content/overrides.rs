@@ -27,7 +27,8 @@ const MAX_STAT: i64 = 1000;
 pub const MAX_NAME: usize = 120;
 
 /// Why the card shows these beside the stat block, and not in it.
-pub const BY_HAND: &str = "Attacks and speed are printed stat block text, so a run shows these changes and cannot apply them.";
+pub const BY_HAND: &str =
+    "Speed is printed stat block text, so a run shows this change and cannot apply it.";
 /// What a card says above a stat block, which keeps its printed numbers.
 pub const PRINTED: &str =
     "The stat block below is as printed. Its numbers do not include these changes.";
@@ -159,13 +160,15 @@ pub struct Resolved {
 }
 
 /// One line of a card: the creature's value and the changed one. `by_hand` marks what the
-/// run cannot apply, because it exists only as stat block text.
+/// run cannot apply, because it exists only as stat block text. `in_rolls` marks what Splat's
+/// rolls add, though the printed text keeps its numbers: an attack or a damage change.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     pub label: &'static str,
     pub base: String,
     pub changed: String,
     pub by_hand: bool,
+    pub in_rolls: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -472,6 +475,7 @@ impl Overrides {
                 base: base.name.clone(),
                 changed: name.trim().to_owned(),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if let Some(change) = self.max_hp {
@@ -480,6 +484,7 @@ impl Overrides {
                 base: shown(base.max_hp),
                 changed: shown_change(change, base.max_hp, plain),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if let Some(change) = self.armor_class {
@@ -488,6 +493,7 @@ impl Overrides {
                 base: shown(base.armor_class),
                 changed: shown_change(change, base.armor_class, plain),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if let Some(change) = self.initiative_bonus {
@@ -496,6 +502,7 @@ impl Overrides {
                 base: base.initiative_bonus.map_or_else(|| "?".to_owned(), signed),
                 changed: shown_change(change, base.initiative_bonus, signed),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if let Some(amount) = self.attack_bonus {
@@ -503,7 +510,8 @@ impl Overrides {
                 label: "Attack bonus",
                 base: "As printed".into(),
                 changed: format!("{} on each attack", signed(amount)),
-                by_hand: true,
+                by_hand: false,
+                in_rolls: true,
             });
         }
         if let Some(amount) = self.damage_bonus {
@@ -511,7 +519,8 @@ impl Overrides {
                 label: "Damage bonus",
                 base: "As printed".into(),
                 changed: format!("{} on each hit", signed(amount)),
-                by_hand: true,
+                by_hand: false,
+                in_rolls: true,
             });
         }
         if let Some(change) = self.speed {
@@ -521,6 +530,7 @@ impl Overrides {
                 base: base.speed.map_or_else(|| "?".to_owned(), feet),
                 changed: shown_change(change, base.speed, feet),
                 by_hand: true,
+                in_rolls: false,
             });
         }
         if let Some(side) = &self.side {
@@ -529,6 +539,7 @@ impl Overrides {
                 base: base.side.clone(),
                 changed: side.clone(),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if !self.conditions.is_empty() {
@@ -549,6 +560,7 @@ impl Overrides {
                     all.join(", ")
                 },
                 by_hand: false,
+                in_rolls: false,
             });
         }
         if let Some(note) = &self.note {
@@ -557,12 +569,14 @@ impl Overrides {
                 base: "None".into(),
                 changed: note.clone(),
                 by_hand: false,
+                in_rolls: false,
             });
         }
         rows
     }
 
-    /// What a table needs on the row, for what the run cannot apply itself.
+    /// What a table needs on the row: the changes the printed stat block does not show. Splat's
+    /// rolls add the attack and damage changes; speed stays for the DM.
     pub fn table_bonuses(&self, base: &Base) -> Vec<String> {
         let mut bonuses = Vec::new();
         if let Some(amount) = self.attack_bonus {
@@ -803,9 +817,9 @@ mod tests {
         assert_eq!(row("Maximum HP").changed, "20 (+10)");
         assert!(!row("Maximum HP").by_hand);
         assert_eq!(row("Attack bonus").changed, "+1 on each attack");
-        assert!(row("Attack bonus").by_hand);
+        assert!(!row("Attack bonus").by_hand && row("Attack bonus").in_rolls);
         assert_eq!(row("Speed").changed, "40 ft (+10)");
-        assert!(row("Speed").by_hand);
+        assert!(row("Speed").by_hand && !row("Speed").in_rolls);
         assert_eq!(row("Side").base, "enemies");
     }
 
