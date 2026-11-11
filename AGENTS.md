@@ -42,6 +42,6 @@ Past reviews found the same kinds of fault again and again. Check your own chang
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.
 - **Run what you touched.** A focused run covers the scenarios of every file you changed, also files outside
-  your task. The full `audit-gate` runs on merged source before merge. Add a new visual scenario at the end of
-  `SCENARIOS` in `src/visual_tests/mod.rs`: scenario ids and dice come from the place in the list, so a
-  scenario added in the middle breaks checks that are not related to it.
+  your task. The full `audit-gate` runs on merged source before merge. A visual scenario's ids and dice come
+  from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`), not from its place in `SCENARIOS`. Add
+  or move a scenario anywhere; renaming one gives it new ids and new dice.
