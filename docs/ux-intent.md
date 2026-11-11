@@ -603,6 +603,7 @@ reading the code, not from a test run.
 | T16.8 | A tile's right-click menu arms an attack with advantage in 2 | run-rolls | cost | New |
 | T16.9 | A row's right-click menu rolls against it with disadvantage in 2 | run-rolls | cost | New |
 | T16.10 | An attack whose damage depends on a condition asks, then rolls, in 3 | run-rolls | cost | New |
+| T16.11 | A row's menu rerolls one die of a player's roll with inspiration in 3 | run-rolls | cost | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

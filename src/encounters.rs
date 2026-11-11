@@ -25,8 +25,49 @@ use std::{
 };
 use uuid::Uuid;
 
-/// The last sentence of a deleted-entry roster fault; it marks the message as a warning.
+/// The last sentence of a deleted-entry roster fault.
 const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
+/// Where the party members that Add participants offers come from.
+const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.";
+/// Where an encounter that this editor cannot change is repaired.
+const REPAIR_IN_ENTRIES: &str = "Repair this encounter in Campaign → Campaign entries.";
+/// An encounter whose party rows the campaign fills, which this editor and the run cannot change.
+const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campaign's party. Edit those rows in Campaign → Campaign entries. This editor adds party members from the sheets Splat saved last.";
+
+/// Why an encounter cannot be saved or run, with the tone that its kind of fault takes. The tone is
+/// set where the fault is found, never read back from the words.
+#[derive(Clone, PartialEq)]
+struct Invalid {
+    text: String,
+    tone: Tone,
+}
+
+impl std::fmt::Debug for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text)
+    }
+}
+
+impl From<String> for Invalid {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            tone: Tone::Error,
+        }
+    }
+}
+
+impl From<&str> for Invalid {
+    fn from(text: &str) -> Self {
+        text.to_owned().into()
+    }
+}
+
+impl From<Invalid> for String {
+    fn from(invalid: Invalid) -> Self {
+        invalid.text
+    }
+}
 
 /// `Copy N` from a run's list label, or `None` for the original run.
 fn run_copy_word(label: &str) -> Option<String> {
@@ -561,13 +602,13 @@ impl Draft {
         self.removed_group = None;
         Ok(())
     }
-    fn validate(&self, snapshot: &Snapshot) -> Result<(), String> {
+    fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
         let entry = Entry::parse(&self.path, &self.source)?;
         if let Some(reason) = roster_fault_reason(
             &self.path,
             &roster_faults(&entry, &snapshot.known_creature_names),
         ) {
-            return Err(reason);
+            return Err(reason.into());
         }
         if self.name.trim().is_empty() {
             return Err("Enter an encounter name.".into());
@@ -584,21 +625,26 @@ impl Draft {
             let hostile = data
                 .get("hostile_to")
                 .and_then(Value::as_sequence)
-                .ok_or("Each side needs a hostile_to list.")?;
+                .ok_or("Each side needs a list of the sides it fights.")?;
             if hostile.iter().any(|s| !self.setup.sides.contains_key(s)) {
                 return Err("A hostile side is missing.".into());
             }
         }
-        for slot in &self.setup.roster {
+        for (index, slot) in self.setup.roster.iter().enumerate() {
+            let row = || roster_row(index, slot, snapshot);
             if slot.key.trim().is_empty() || !keys.insert(&slot.key) {
-                return Err("Roster keys must be unique and non-empty.".into());
+                return Err(format!(
+                    "{} shares its identity with another row, or has none. {REPAIR_IN_ENTRIES}",
+                    row()
+                )
+                .into());
             }
             if !self
                 .setup
                 .sides
                 .contains_key(Value::from(slot.side.clone()))
             {
-                return Err(format!("{}: side is missing.", slot.key));
+                return Err(format!("{}: its side is not in this encounter.", row()).into());
             }
             match (&slot.creature, &slot.party_slot) {
                 (Some(reference), None) => {
@@ -607,38 +653,51 @@ impl Draft {
                         let mut named = slot.clone();
                         named.overrides.remove("name");
                         let name = roster_name(&named, None, &snapshot.known_creature_names);
-                        snapshot.catalogue.unreadable_ref(reference)
-                            .map_or_else(|| if count > 1 {
+                        // The kind of fault sets the tone, here where the message is made.
+                        let unreadable = snapshot.catalogue.unreadable_ref(reference);
+                        Invalid {
+                            tone: missing_creature_tone(unreadable.is_some()),
+                            text: unreadable.map_or_else(|| if count > 1 {
                                 format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             } else {
                                 format!("{name} has no creature. Its package entry was deleted. {REPLACE_DELETED_ENTRY}")
                             },
-                                |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) })
+                                |note| if note.old_layout { note.word.clone() } else { format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" }) }),
+                        }
                     })?;
-                    if !snapshot.creatures.iter().any(|c| c.id == id) { return Err(format!("{}: creature is unavailable in campaign content.", slot.key)); }
-                    self.validate_overrides(slot, &snapshot.catalogue.entries[&id].entry)?;
+                    if !snapshot.creatures.iter().any(|c| c.id == id) {
+                        return Err(format!(
+                            "{}: this creature is unavailable in campaign content.",
+                            row()
+                        )
+                        .into());
+                    }
+                    self.validate_overrides(&row(), slot, &snapshot.catalogue.entries[&id].entry)?;
                 }
-                (None, Some(_)) => return Err("This encounter uses party bindings. Edit those slots in Campaign → Campaign entries; this editor currently adds local character copies.".into()),
-                _ => return Err("Each roster slot needs exactly one creature or party slot.".into()),
+                (None, Some(_)) => return Err(PARTY_FROM_CAMPAIGN.into()),
+                _ => {
+                    return Err(format!("{} needs one creature or one party member.", row()).into());
+                }
             }
-            for field in ["hp", "temporary_hp"] {
+            for (field, words) in [("hp", "HP"), ("temporary_hp", "Temporary HP")] {
                 if slot
                     .initial
                     .get(field)
                     .is_some_and(|v| v.as_u64().is_none())
                 {
                     return Err(format!(
-                        "{}: {field} must be a non-negative whole number.",
-                        slot.key
-                    ));
+                        "{}: its starting {words} must be a whole number, 0 or more.",
+                        row()
+                    )
+                    .into());
                 }
             }
         }
         Ok(())
     }
     /// A change to a stat must leave it valid for this slot's creature and starting state.
-    fn validate_overrides(&self, slot: &Slot, entry: &Entry) -> Result<(), String> {
-        let named = |error: String| format!("{} ({}): {error}", slot.key, entry.name);
+    fn validate_overrides(&self, row: &str, slot: &Slot, entry: &Entry) -> Result<(), String> {
+        let named = |error: String| format!("{row}: {error}");
         let overrides = Overrides::parse(&slot.overrides).map_err(&named)?;
         let resolved = overrides.resolve_for(entry, &slot.side).map_err(&named)?;
         if let Some(side) = &overrides.side
@@ -1147,6 +1206,22 @@ fn roster_name(
         })
         .unwrap_or_else(|| "Missing creature".into());
     groups::shown_name(&slot.overrides, name)
+}
+
+/// A roster row as the DM sees it in a message: its place in the roster and its shown name, never
+/// its stored key.
+fn roster_row(index: usize, slot: &Slot, snapshot: &Snapshot) -> String {
+    let definition = slot
+        .creature
+        .as_ref()
+        .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
+        .and_then(|id| snapshot.catalogue.entries.get(&id))
+        .map(|indexed| &indexed.entry);
+    format!(
+        "Row {} ({})",
+        index + 1,
+        roster_name(slot, definition, &snapshot.known_creature_names)
+    )
 }
 
 fn creature_result_row(
@@ -1698,7 +1773,9 @@ pub struct Encounters {
     draft: Option<Draft>,
     search: String,
     error: Option<String>,
-    validation_error: Option<String>,
+    /// The last failed check of the open draft, with its tone. It sets the message's tone only
+    /// while `error` shows its words.
+    validation_error: Option<Invalid>,
     validation_path: Option<String>,
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
@@ -1800,24 +1877,43 @@ impl Encounters {
             return;
         }
         if self.validation_error.is_none()
-            || (self.error.is_some() && self.error != self.validation_error)
+            || (self.error.is_some() && !self.shows_validation_error())
         {
             return;
         }
         let Some(snapshot) = &self.snapshot else {
             return;
         };
-        self.error = if group {
+        let invalid = if group {
             self.group_draft
                 .as_ref()
                 .and_then(|draft| draft.validate(snapshot, None).err())
+                .map(Invalid::from)
         } else {
             self.draft
                 .as_ref()
                 .and_then(|draft| draft.validate(snapshot).err())
         };
-        if self.error.is_some() {
-            self.validation_error = self.error.clone();
+        self.error = invalid.as_ref().map(|invalid| invalid.text.clone());
+        if invalid.is_some() {
+            self.validation_error = invalid;
+        }
+    }
+    /// Whether the shown message is the last failed check of the draft.
+    fn shows_validation_error(&self) -> bool {
+        self.validation_error
+            .as_ref()
+            .is_some_and(|invalid| self.error.as_deref() == Some(invalid.text.as_str()))
+    }
+    /// The shown message's tone comes from the kind of fault recorded with it. A message from any
+    /// other source is an error.
+    fn error_tone(&self) -> Tone {
+        if self.shows_validation_error() {
+            self.validation_error
+                .as_ref()
+                .map_or(Tone::Error, |invalid| invalid.tone)
+        } else {
+            Tone::Error
         }
     }
     #[cfg(test)]
@@ -2358,8 +2454,8 @@ impl Encounters {
             .as_ref()
             .and_then(|snapshot| draft.validate(snapshot).err())
         {
-            self.validation_error = Some(error.clone());
-            self.error = Some(error);
+            self.error = Some(error.text.clone());
+            self.validation_error = Some(error);
             return;
         }
         let outcome = draft.save(active, modules);
@@ -2395,7 +2491,7 @@ impl Encounters {
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.validate(snapshot).err())
-                    .filter(|validation| *validation == e);
+                    .filter(|validation| validation.text == e);
                 self.error = Some(e);
             }
         }
@@ -2684,11 +2780,9 @@ impl Encounters {
         let mut participants = Vec::new();
         // What each carried value would have been from the sheet, by place in the roster.
         let mut sheets = Vec::new();
-        for slot in &fresh.setup.roster {
-            let reference = slot
-                .creature
-                .as_ref()
-                .ok_or("Party-slot bindings are not supported by this runner yet.")?;
+        for (index, slot) in fresh.setup.roster.iter().enumerate() {
+            let row = || roster_row(index, slot, &snapshot);
+            let reference = slot.creature.as_ref().ok_or(PARTY_FROM_CAMPAIGN)?;
             let id = snapshot.catalogue.resolve_ref(reference)?;
             let mut entry = snapshot.catalogue.run_entry(id);
             if let Some(name) = snapshot.npc_name_for(&entry, &slot.overrides) {
@@ -2707,10 +2801,15 @@ impl Encounters {
             let present = match slot.extra.get("initial_presence").and_then(Value::as_str) {
                 None | Some("active") => true,
                 Some("absent" | "removed") => false,
-                Some(_) => return Err(format!("{}: invalid starting presence.", slot.key)),
+                Some(_) => {
+                    return Err(format!(
+                        "{}: Splat cannot tell if it starts in the fight.",
+                        row()
+                    ));
+                }
             };
-            let overrides = Overrides::parse(&slot.overrides)
-                .map_err(|error| format!("{}: {error}", slot.key))?;
+            let overrides =
+                Overrides::parse(&slot.overrides).map_err(|error| format!("{}: {error}", row()))?;
             let mut participant = crate::encounter_run::Participant::with_overrides(
                 slot.key.clone(),
                 slot.side.clone(),
@@ -3331,8 +3430,8 @@ impl Encounters {
             .zip(self.draft.as_ref())
             .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
         {
-            self.validation_error = Some(error.clone());
-            self.error = Some(error);
+            self.error = Some(error.text.clone());
+            self.validation_error = Some(error);
             return;
         }
         match self.start_run(active, modules) {
@@ -3347,7 +3446,7 @@ impl Encounters {
                     .as_ref()
                     .zip(self.draft.as_ref())
                     .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
-                    .filter(|validation| *validation == error);
+                    .filter(|validation| validation.text == error);
                 self.error = Some(error);
             }
         }
@@ -3653,12 +3752,7 @@ impl Encounters {
         self.refresh_validation_error(false);
         if let Some(e) = &self.error {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
-            let tone = if e.ends_with(REPLACE_DELETED_ENTRY) {
-                missing_creature_tone(false)
-            } else {
-                Tone::Error
-            };
-            design::message(ui, tone, e);
+            design::message(ui, self.error_tone(), e);
         }
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
@@ -3819,12 +3913,7 @@ impl Encounters {
         }
         if draft.add_to.is_none() {
             ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, "Party members use the saved local character copies.")
-                        .color(colors().muted),
-                )
-                .wrap(),
+                egui::Label::new(Type::Small.rich(ui, PARTY_SOURCE).color(colors().muted)).wrap(),
             );
         }
         groups::add_target(ui, draft, snapshot);
@@ -5389,12 +5478,16 @@ mod tests {
         draft.add(id, false);
         draft.add(id, false);
         let error = draft.validate(&snapshot).unwrap_err();
-        assert!(error.starts_with("2 Cinder Wolf rows have no creature."));
+        assert!(
+            error
+                .text
+                .starts_with("2 Cinder Wolf rows have no creature.")
+        );
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
             validation_path: Some(draft.path.clone()),
             draft: Some(draft),
-            error: Some(error.clone()),
+            error: Some(error.text.clone()),
             validation_error: Some(error),
             ..Default::default()
         };
@@ -6123,6 +6216,182 @@ mod tests {
         fs::write(&path, format!("{original}External edit\n")).unwrap();
         assert!(editor.start_run(&campaign, &[]).is_err());
     }
+    /// The missing-creature message takes its tone from the kind of fault, where `validate` finds it.
+    #[test]
+    fn a_missing_creature_message_takes_its_tone_from_the_fault_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let old = Snapshot::load(&active, &[]).unwrap();
+        let file = dir.path().join("Cinder Wolf.md");
+        let original = fs::read_to_string(&file).unwrap();
+        fs::remove_file(&file).unwrap();
+        let mut deleted = Snapshot::load(&active, &[]).unwrap();
+        deleted.keep_edited_settings(&old);
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        let invalid = draft.validate(&deleted).unwrap_err();
+        assert!(invalid.text.ends_with(REPLACE_DELETED_ENTRY), "{invalid:?}");
+        assert!(invalid.tone == Tone::Warning);
+        // The row says the same fault in the same tone.
+        assert!(invalid.tone == missing_creature_tone(false));
+        let mut encounters = Encounters {
+            snapshot: Some(deleted),
+            validation_path: Some(draft.path.clone()),
+            draft: Some(draft),
+            error: Some(invalid.text.clone()),
+            validation_error: Some(invalid.clone()),
+            ..Default::default()
+        };
+        assert!(encounters.error_tone() == Tone::Warning);
+        // Another message with the same last sentence is not that fault, so it is an error.
+        encounters.error = Some(format!("The file did not save. {REPLACE_DELETED_ENTRY}"));
+        assert!(encounters.error_tone() == Tone::Error);
+        encounters.validation_error = None;
+        assert!(encounters.error_tone() == Tone::Error);
+        // The fault ends when the row goes: no message stays behind.
+        encounters.error = Some(invalid.text.clone());
+        encounters.validation_error = Some(invalid);
+        let roster = encounters.draft.as_ref().unwrap().setup.roster.clone();
+        encounters.draft.as_mut().unwrap().setup.roster.clear();
+        encounters.refresh_validation_error(false);
+        assert!(encounters.error.is_none());
+        let mut draft = encounters.draft.take().unwrap();
+        draft.setup.roster = roster;
+        // A file that cannot be read is an error, in the message and in the row.
+        let broken = original.replace("splat_name: Cinder Wolf", "splat_name: [Cinder Wolf");
+        assert_ne!(broken, original);
+        fs::write(&file, broken).unwrap();
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let invalid = draft.validate(&snapshot).unwrap_err();
+        assert!(
+            snapshot
+                .catalogue
+                .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap())
+                .is_some(),
+            "{invalid:?}"
+        );
+        assert!(invalid.tone == Tone::Error, "{invalid:?}");
+        assert!(invalid.tone == missing_creature_tone(true));
+        encounters.snapshot = Some(snapshot);
+        encounters.draft = Some(draft);
+        encounters.error = Some(invalid.text.clone());
+        encounters.validation_error = Some(invalid);
+        assert!(encounters.error_tone() == Tone::Error);
+    }
+
+    /// FD7 family: an encounter's faults name the roster row as the DM sees it, never its key or a
+    /// stored field name.
+    #[test]
+    fn encounter_faults_name_the_row_not_its_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let new_draft = || {
+            let mut draft = Draft::new();
+            draft.name = "Bridge".into();
+            draft.add(id, false);
+            draft.add(id, false);
+            draft
+        };
+        let draft = new_draft();
+        assert!(draft.validate(&snapshot).is_ok());
+        assert!(draft.setup.roster[1].key.starts_with("actor_"));
+        let fault = |change: &dyn Fn(&mut Draft)| {
+            let mut draft = new_draft();
+            change(&mut draft);
+            let text = draft.validate(&snapshot).unwrap_err().text;
+            assert!(!text.contains("actor_"), "{text}");
+            text
+        };
+        assert_eq!(
+            fault(&|draft| draft.setup.roster[1].side = "nowhere".into()),
+            "Row 2 (Cinder Wolf): its side is not in this encounter."
+        );
+        assert_eq!(
+            fault(&|draft| {
+                draft.setup.roster[1]
+                    .initial
+                    .insert("hp".into(), Value::from(-3));
+            }),
+            "Row 2 (Cinder Wolf): its starting HP must be a whole number, 0 or more."
+        );
+        assert_eq!(
+            fault(&|draft| {
+                draft.setup.roster[1]
+                    .initial
+                    .insert("temporary_hp".into(), Value::from("lots"));
+            }),
+            "Row 2 (Cinder Wolf): its starting Temporary HP must be a whole number, 0 or more."
+        );
+        assert_eq!(
+            fault(&|draft| draft.setup.roster[1].key = draft.setup.roster[0].key.clone()),
+            format!(
+                "Row 2 (Cinder Wolf) shares its identity with another row, or has none. {REPAIR_IN_ENTRIES}"
+            )
+        );
+        assert_eq!(
+            fault(&|draft| draft.setup.roster[1].creature = None),
+            "Row 2 (Missing creature) needs one creature or one party member."
+        );
+        assert_eq!(
+            fault(&|draft| {
+                draft.setup.roster[1].creature = None;
+                draft.setup.roster[1].party_slot = Some("fighter".into());
+            }),
+            PARTY_FROM_CAMPAIGN
+        );
+        assert_eq!(
+            fault(&|draft| {
+                for (_, side) in draft.setup.sides.iter_mut() {
+                    side.as_mapping_mut().unwrap().remove("hostile_to");
+                }
+            }),
+            "Each side needs a list of the sides it fights."
+        );
+        assert_eq!(
+            fault(&|draft| {
+                draft.setup.roster[1]
+                    .overrides
+                    .insert("name".into(), Value::from("Ash"));
+                draft.setup.roster[1]
+                    .overrides
+                    .insert("side".into(), Value::from("nowhere"));
+            }),
+            "Row 2 (Ash): side nowhere is not a side of this encounter."
+        );
+        // A fault found when the fight starts names the row too.
+        let mut editor = Encounters {
+            active: Some(active.clone()),
+            draft: Some(draft),
+            ..Default::default()
+        };
+        editor.draft.as_mut().unwrap().setup.roster[1]
+            .extra
+            .insert("initial_presence".into(), Value::from("maybe"));
+        editor.draft.as_mut().unwrap().save(&active, &[]).unwrap();
+        let Err(error) = editor.start_run(&active, &[]) else {
+            panic!("a fight with an unknown starting presence started");
+        };
+        assert_eq!(
+            error,
+            "Row 2 (Cinder Wolf): Splat cannot tell if it starts in the fight."
+        );
+    }
+
+    #[test]
+    fn the_add_pane_says_where_party_members_come_from_in_plain_words() {
+        for code in ["local", "copies", "cop", "binding", "slot"] {
+            assert!(!PARTY_SOURCE.contains(code), "{PARTY_SOURCE}");
+            assert!(!PARTY_FROM_CAMPAIGN.contains(code), "{PARTY_FROM_CAMPAIGN}");
+        }
+        assert!(PARTY_FROM_CAMPAIGN.ends_with(&format!(
+            "This editor adds party members {}",
+            PARTY_SOURCE.strip_prefix("Party members come ").unwrap()
+        )));
+    }
+
     #[test]
     fn roster_faults_survive_a_row_with_missing_cells() {
         let dir = tempfile::tempdir().unwrap();
@@ -6405,6 +6674,7 @@ mod tests {
         d.save(&campaign, &[]).unwrap();
         let saved = d.baseline.clone().unwrap();
         let key = d.setup.roster[0].key.clone();
+        assert!(key.starts_with("actor_"));
         for (block, words) in [
             ("{hit_points: 3}", "unknown override"),
             ("{max_hp: {set: 0}}", "from 1 to"),
@@ -6414,8 +6684,11 @@ mod tests {
         ] {
             slot_override(&mut d, 0, block);
             let error = d.save(&campaign, &[]).unwrap_err();
+            // The row as the DM sees it, never its stored key.
             assert!(
-                error.contains(&key) && error.contains("Rival") && error.contains(words),
+                error.starts_with("Row 1 (Rival): ")
+                    && !error.contains(&key)
+                    && error.contains(words),
                 "{error}"
             );
         }

@@ -128,16 +128,57 @@ impl Dice {
     /// A critical hit rolls each term's dice twice over, and keeps twice as many.
     pub fn roll(&self, random: &mut Random, critical: bool) -> Result<Roll, String> {
         let times = if critical { 2 } else { 1 };
-        let mut dice = Vec::new();
+        let mut faces = Vec::new();
+        for term in &self.terms {
+            for _ in 0..term.count * times {
+                faces.push(i64::from(random.die(term.sides)?));
+            }
+        }
+        self.settle(&faces, critical)
+    }
+
+    /// Roll the die at `at` of a made roll again; the new die stands. The keeps and the total
+    /// are made again, so a new die can count where a dropped one did not.
+    pub fn reroll(
+        &self,
+        faces: &[i64],
+        at: usize,
+        random: &mut Random,
+        critical: bool,
+    ) -> Result<Roll, String> {
+        let times = if critical { 2 } else { 1 };
+        let mut first = 0;
+        let term = self
+            .terms
+            .iter()
+            .find(|term| {
+                first += (term.count * times) as usize;
+                at < first
+            })
+            .ok_or("There is no such die to reroll.")?;
+        let mut faces = faces.to_vec();
+        if at >= faces.len() {
+            return Err("There is no such die to reroll.".into());
+        }
+        faces[at] = i64::from(random.die(term.sides)?);
+        self.settle(&faces, critical)
+    }
+
+    /// The keeps and the total of these faces, one for each die in order. A face's sign does
+    /// not count: a taken-away die is negative in a `Roll`.
+    pub fn settle(&self, faces: &[i64], critical: bool) -> Result<Roll, String> {
+        let times = if critical { 2 } else { 1 };
+        let mut dice: Vec<i64> = faces.iter().map(|face| face.abs()).collect();
         let mut dropped = Vec::new();
         let mut total = self.constant;
+        let mut first = 0;
         for term in &self.terms {
-            let first = dice.len();
             let count = term.count * times;
-            for _ in 0..count {
-                dice.push(i64::from(random.die(term.sides)?));
+            let end = first + count as usize;
+            if end > dice.len() {
+                return Err("Too few dice for this expression.".into());
             }
-            let mut order: Vec<usize> = (first..dice.len()).collect();
+            let mut order: Vec<usize> = (first..end).collect();
             // Stable: of equal faces, the first rolled is the one kept.
             match term.keep {
                 Some(Keep::Highest(_)) => order.sort_by_key(|&at| std::cmp::Reverse(dice[at])),
@@ -152,10 +193,14 @@ impl Dice {
                     .checked_add(dice[at] * term.sign)
                     .ok_or("Roll overflow")?;
             }
-            for face in dice.iter_mut().skip(first) {
+            for face in &mut dice[first..end] {
                 *face *= term.sign;
             }
             dropped.extend(left_out);
+            first = end;
+        }
+        if first != dice.len() {
+            return Err("Too many dice for this expression.".into());
         }
         Ok(Roll {
             dice,
@@ -235,6 +280,42 @@ mod tests {
             .unwrap();
         assert_eq!(roll.total, 10);
         assert_eq!(roll.dice, vec![2, 5]);
+    }
+    #[test]
+    fn a_reroll_replaces_one_die_and_makes_the_keeps_again() {
+        let dice = Dice::parse("2d20kh1 + 4").unwrap();
+        let roll = dice.roll(&mut Random::controlled([6, 13]), false).unwrap();
+        // The dropped 6 becomes an 18, which now counts.
+        let again = dice
+            .reroll(&roll.dice, 0, &mut Random::controlled([18]), false)
+            .unwrap();
+        assert_eq!(
+            (again.dice, again.total, again.dropped),
+            (vec![18, 13], 22, vec![1])
+        );
+        // Each die keeps its own size, and a critical roll has each die twice.
+        let mixed = Dice::parse("1d8 + 1d4 + 2").unwrap();
+        let roll = mixed
+            .roll(&mut Random::controlled([8, 7, 1, 2]), true)
+            .unwrap();
+        assert_eq!(roll.total, 20);
+        let again = mixed
+            .reroll(&roll.dice, 2, &mut Random::controlled([4]), true)
+            .unwrap();
+        assert_eq!((again.dice, again.total), (vec![8, 7, 4, 2], 23));
+        assert!(
+            mixed
+                .reroll(&roll.dice, 4, &mut Random::controlled([4]), true)
+                .is_err()
+        );
+        // A taken-away die stays taken away.
+        let minus = Dice::parse("1d8 - 1d4").unwrap();
+        let roll = minus.roll(&mut Random::controlled([5, 3]), false).unwrap();
+        assert_eq!((roll.dice.clone(), roll.total), (vec![5, -3], 2));
+        let again = minus
+            .reroll(&roll.dice, 1, &mut Random::controlled([1]), false)
+            .unwrap();
+        assert_eq!((again.dice, again.total), (vec![5, -1], 4));
     }
     #[test]
     fn keep_highest_and_lowest_drop_the_other_d20() {

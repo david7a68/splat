@@ -156,7 +156,7 @@ pub(super) fn list_row(
                                 .truncate(),
                         )
                         .on_hover_text(name);
-                        let visible_detail = design::words_that_fit(
+                        let visible_detail = fit_detail(
                             ui,
                             detail,
                             &Type::Small.font(ui),
@@ -206,6 +206,28 @@ pub(super) fn list_row(
             },
         );
     });
+}
+
+/// A row's second line in `width`. A paused run's last change gives up its words first, by whole
+/// words, so that the save time after it stays whole. With no room for one of its words, the last
+/// change goes. Hover keeps the full line.
+fn fit_detail(ui: &egui::Ui, detail: &str, font: &egui::FontId, width: f32) -> String {
+    let parts = detail.split(" · ").collect::<Vec<_>>();
+    let last = parts
+        .iter()
+        .position(|part| part.starts_with(crate::encounter_run::LAST_CHANGE));
+    let Some(at) = last.filter(|_| design::number_width(ui, detail, font) > width) else {
+        return design::words_that_fit(ui, detail, font, width);
+    };
+    let mut others = parts.clone();
+    others.remove(at);
+    let room = width - design::number_width(ui, &format!("{} · ", others.join(" · ")), font);
+    let change = design::words_that_fit(ui, parts[at], font, room);
+    let has_words = change.trim_end_matches('…').trim() != crate::encounter_run::LAST_CHANGE.trim();
+    if has_words && design::number_width(ui, &change, font) <= room {
+        others.insert(at, &change);
+    }
+    design::words_that_fit(ui, &others.join(" · "), font, width)
 }
 
 /// Read the state from old and current run labels without exposing round zero.
@@ -745,5 +767,54 @@ mod iter_2_c_tests {
         );
         assert_eq!(detail.matches("Saved ").count(), 1);
         assert!(!detail.contains("2026-01-01"));
+    }
+
+    /// FT2: a paused copy's line gives up its last change before its save time.
+    #[test]
+    fn a_paused_copy_shortens_its_last_change_and_keeps_its_save_time() {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let _ = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| check(ui));
+        });
+        fn check(ui: &egui::Ui) {
+            let font = Type::Small.font(ui);
+            let width = |text: &str| design::number_width(ui, text, &font);
+            assert!(width("Last: 1") > 0.0, "the test measures text");
+            let detail = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel Dunmoor (6 HP left) · 2026-01-01 03:00";
+            // It fits: nothing changes.
+            assert_eq!(fit_detail(ui, detail, &font, width(detail)), detail);
+            // Room for some of the last change: it loses whole words, and the time stays whole.
+            let shortened = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel… · 2026-01-01 03:00";
+            let fitted = fit_detail(ui, detail, &font, width(shortened));
+            assert!(fitted.ends_with(" · 2026-01-01 03:00"), "{fitted}");
+            assert!(fitted.contains(" · Last: 1 damage to Kestrel…"), "{fitted}");
+            assert!(width(&fitted) <= width(shortened));
+            // Room for no word of it: the last change goes, and the time stays whole.
+            let without = "Copy 2 · Closed last · Round 2 · Paused · 2026-01-01 03:00";
+            let fitted = fit_detail(
+                ui,
+                detail,
+                &font,
+                width(without) + width(" · Last: …") / 2.0,
+            );
+            assert_eq!(fitted, without);
+            // A line with a warning keeps that part whole too.
+            let changed = "Changed on disk · Round 2 · Paused · Last: 3 damage to Kestrel Dunmoor (8 HP left) · 2026-01-01 03:00";
+            let fitted = fit_detail(ui, changed, &font, width(changed) - 1.0);
+            assert!(
+                fitted.starts_with("Changed on disk · Round 2 · Paused · Last: 3"),
+                "{fitted}"
+            );
+            assert!(fitted.ends_with(" · 2026-01-01 03:00"), "{fitted}");
+            // A line without a last change still shortens from its end.
+            let history = "Victory · Round 4 · 2026-01-01 03:00";
+            let fitted = fit_detail(ui, history, &font, width("Victory · Round 4 · 2026-01-01"));
+            assert_eq!(
+                fitted,
+                design::words_that_fit(ui, history, &font, width("Victory · Round 4 · 2026-01-01"))
+            );
+            assert!(fitted.ends_with('…'));
+        }
     }
 }
