@@ -128,24 +128,17 @@ const MISSING_CAMPAIGN: &str = "Campaign.md is missing";
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PageResult {
     CampaignWrite,
-    Recovered,
+    /// A missing package's folder found again, by the package.
+    Recovered(Uuid),
     Discarded,
-    ManifestWrite,
+    /// A package manifest written again, by the package.
+    ManifestWrite(Uuid),
     Removed,
     Saved,
     Applied,
 }
 
 impl PageResult {
-    const ALL: [PageResult; 7] = [
-        PageResult::CampaignWrite,
-        PageResult::Recovered,
-        PageResult::Discarded,
-        PageResult::ManifestWrite,
-        PageResult::Removed,
-        PageResult::Saved,
-        PageResult::Applied,
-    ];
     fn has_undo(self) -> bool {
         !matches!(self, PageResult::Saved | PageResult::Applied)
     }
@@ -195,13 +188,17 @@ pub struct CampaignContent {
     pub open_run_settings: bool,
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
-    recovered: Option<(Module, Option<Module>)>,
+    /// Each found package folder and the registration it replaced, by the package: one result
+    /// and one Undo per package.
+    recovered: Vec<(Uuid, (Module, Option<Module>))>,
     error: Option<String>,
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     removed_package: Option<RemovedPackage>,
-    manifest_write: Option<crate::content_workspace::ManifestWrite>,
+    /// Each package manifest written again, with its package's name, by the package: one result
+    /// and one Undo per package.
+    manifest_writes: Vec<(Uuid, String, crate::content_workspace::ManifestWrite)>,
     campaign_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
     /// How often a frame checked a repair draft again. Only an edit, Discard or Undo discard does.
@@ -663,7 +660,8 @@ impl CampaignContent {
     }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(&campaign);
-        crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.manifest_write);
+        // A write whose file changed since is stale: its Undo would only refuse.
+        self.manifest_writes.retain(|(_, _, write)| write.on_disk());
         crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.campaign_write);
         self.refresh_pending = false;
         self.reconcile.checked_at = None;
@@ -920,9 +918,11 @@ impl CampaignContent {
     fn live_results(&self, active: &Campaign) -> Vec<PageResult> {
         let live = |kind: &PageResult| match kind {
             PageResult::CampaignWrite => self.campaign_write.is_some(),
-            PageResult::Recovered => self.recovered.is_some(),
+            PageResult::Recovered(package) => self.recovered.iter().any(|(id, _)| id == package),
             PageResult::Discarded => self.discarded_selections.is_some(),
-            PageResult::ManifestWrite => self.manifest_write.is_some(),
+            PageResult::ManifestWrite(package) => {
+                self.manifest_writes.iter().any(|(id, _, _)| id == package)
+            }
             PageResult::Removed => self
                 .removed_package
                 .as_ref()
@@ -931,11 +931,20 @@ impl CampaignContent {
             PageResult::Applied => self.reconcile.message.is_some(),
         };
         let mut results: Vec<_> = self.result_order.iter().copied().filter(live).collect();
-        results.extend(
-            PageResult::ALL
-                .into_iter()
-                .filter(|kind| live(kind) && !self.result_order.contains(kind)),
-        );
+        let every = [PageResult::CampaignWrite, PageResult::Discarded]
+            .into_iter()
+            .chain(
+                self.recovered
+                    .iter()
+                    .map(|(id, _)| PageResult::Recovered(*id)),
+            )
+            .chain(
+                self.manifest_writes
+                    .iter()
+                    .map(|(id, _, _)| PageResult::ManifestWrite(*id)),
+            )
+            .chain([PageResult::Removed, PageResult::Saved, PageResult::Applied]);
+        results.extend(every.filter(|kind| live(kind) && !self.result_order.contains(kind)));
         // Stable: the order within each group stays newest first.
         results.sort_by_key(|kind| !kind.has_undo());
         results
@@ -955,18 +964,20 @@ impl CampaignContent {
     fn words_of(&self, kind: PageResult) -> String {
         match kind {
             PageResult::CampaignWrite => "Campaign.md was written again.".into(),
-            PageResult::Recovered => self
+            PageResult::Recovered(package) => self
                 .recovered
-                .as_ref()
-                .map(|(module, _)| {
+                .iter()
+                .find(|(id, _)| *id == package)
+                .map(|(_, (module, _))| {
                     format!("{} found in {}/.", module.name, folder_words(&module.path))
                 })
                 .unwrap_or_default(),
             PageResult::Discarded => "Campaign packages draft discarded.".into(),
-            PageResult::ManifestWrite => self
-                .manifest_write
-                .as_ref()
-                .map(|write| write.message())
+            PageResult::ManifestWrite(package) => self
+                .manifest_writes
+                .iter()
+                .find(|(id, _, _)| *id == package)
+                .map(|(_, name, write)| format!("{name}: {}", write.message()))
                 .unwrap_or_default(),
             PageResult::Removed => self
                 .removed_package
@@ -1009,23 +1020,27 @@ impl CampaignContent {
                 "Campaign.md was written again.",
                 "Undo write Campaign.md",
             )),
-            PageResult::Recovered => undo(design::undo_message(
+            PageResult::Recovered(_) => undo(design::undo_message(
                 ui,
                 Tone::Success,
                 &self.words_of(kind),
                 "Undo folder recovery",
             )),
             PageResult::Discarded => undo(design::draft_discarded(ui, "Campaign packages")),
-            PageResult::ManifestWrite => self.manifest_write.as_ref().and_then(|write| {
-                undo(crate::library::kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    &write.message(),
-                    &format!("Undo write {}", write.path()),
-                    locked,
-                    false,
-                ))
-            }),
+            PageResult::ManifestWrite(package) => self
+                .manifest_writes
+                .iter()
+                .find(|(id, _, _)| *id == package)
+                .and_then(|(_, _, write)| {
+                    undo(crate::library::kept_undo_message(
+                        ui,
+                        Tone::Success,
+                        &self.words_of(kind),
+                        &format!("Undo write {}", write.path()),
+                        locked,
+                        false,
+                    ))
+                }),
             PageResult::Removed => self.removed_package.as_ref().and_then(|removed| {
                 if removed.users.is_empty() {
                     undo(design::undo_message(
@@ -1086,8 +1101,9 @@ impl CampaignContent {
                     }
                 }
             }
-            PageResult::Recovered => {
-                if let Some((module, previous)) = self.recovered.take() {
+            PageResult::Recovered(package) => {
+                if let Some(at) = self.recovered.iter().position(|(id, _)| *id == package) {
+                    let (_, (module, previous)) = self.recovered.remove(at);
                     if let Some(previous) = previous {
                         self.found_package = Some(previous);
                     } else {
@@ -1102,11 +1118,16 @@ impl CampaignContent {
                     snapshot.document.selections = selections;
                 }
             }
-            PageResult::ManifestWrite => {
-                if let Some(write) = &self.manifest_write {
+            PageResult::ManifestWrite(package) => {
+                // This package's write only; the others keep theirs.
+                if let Some((_, _, write)) = self
+                    .manifest_writes
+                    .iter()
+                    .find(|(id, _, _)| *id == package)
+                {
                     match write.undo() {
                         Ok(_) => {
-                            self.manifest_write = None;
+                            self.manifest_writes.retain(|(id, _, _)| *id != package);
                             self.refresh_pending = true;
                         }
                         Err(error) => self.error = Some(error),
@@ -1730,8 +1751,10 @@ impl CampaignContent {
                 if pressed {
                     match crate::content_workspace::ManifestWrite::write_as(module, path, exists) {
                         Ok(write) => {
-                            new_result!(self, PageResult::ManifestWrite);
-                            self.manifest_write = Some(write);
+                            new_result!(self, PageResult::ManifestWrite(module.id));
+                            self.manifest_writes.retain(|(id, _, _)| *id != module.id);
+                            self.manifest_writes
+                                .push((module.id, module.name.clone(), write));
                             self.refresh_pending = true;
                         }
                         Err(error) => self.error = Some(error),
@@ -2029,8 +2052,10 @@ impl CampaignContent {
                                 .show(ui)
                                 .clicked()
                         {
-                            new_result!(self, PageResult::Recovered);
-                            self.recovered = Some((module.clone(), registered.clone()));
+                            new_result!(self, PageResult::Recovered(module.id));
+                            self.recovered.retain(|(id, _)| *id != module.id);
+                            self.recovered
+                                .push((module.id, (module.clone(), registered.clone())));
                             self.found_package = Some(module.clone());
                         }
                         if unregistered
@@ -2048,8 +2073,10 @@ impl CampaignContent {
                                 &known.path,
                             ) {
                                 Ok(module) => {
-                                    new_result!(self, PageResult::Recovered);
-                                    self.recovered = Some((module.clone(), registered.clone()));
+                                    new_result!(self, PageResult::Recovered(module.id));
+                                    self.recovered.retain(|(id, _)| *id != module.id);
+                                    self.recovered
+                                        .push((module.id, (module.clone(), registered.clone())));
                                     self.found_package = Some(module);
                                 }
                                 Err(error) => self.error = Some(error),
@@ -2076,8 +2103,10 @@ impl CampaignContent {
                                 &folder,
                             ) {
                                 Ok(module) => {
-                                    new_result!(self, PageResult::Recovered);
-                                    self.recovered = Some((module.clone(), registered.clone()));
+                                    new_result!(self, PageResult::Recovered(module.id));
+                                    self.recovered.retain(|(id, _)| *id != module.id);
+                                    self.recovered
+                                        .push((module.id, (module.clone(), registered.clone())));
                                     self.found_package = Some(module);
                                 }
                                 Err(error) => self.error = Some(error),

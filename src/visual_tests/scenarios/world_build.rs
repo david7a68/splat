@@ -5115,6 +5115,83 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.wait_for_text("Campaign selections saved.");
     d.click_starting("Needed by your entries");
     assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+    // Round 25 review: two packages' manifests, A then B. Each keeps its own result and Undo,
+    // newest first; Undo A brings back A's exact bytes and leaves B repaired.
+    let b_folder = d.root.join("modules/ember-reach");
+    fs::create_dir_all(&b_folder).unwrap();
+    let b_path = b_folder.join("Package.md");
+    let b_valid = crate::library::note_text("Ember Reach", "package", Some("ember_reach"));
+    fs::write(&b_path, &b_valid).unwrap();
+    let b_module = crate::library::local_module(&b_folder).unwrap();
+    let b_id = b_module.id;
+    d.app_mut().campaigns.register_module(b_module).unwrap();
+    let b_broken = b_valid.replace("splat_kind: package", "splat_kind: [");
+    fs::write(&b_path, &b_broken).unwrap();
+    d.click("Reload from disk");
+    d.wait_for_text("Ember Reach: Package.md cannot be read");
+    d.click_below(
+        "Ashen Marches: Package.md cannot be read",
+        "Replace with a basic Package.md",
+    );
+    d.wait_for_text("Undo write Package.md");
+    d.click_below(
+        "Ember Reach: Package.md cannot be read",
+        "Replace with a basic Package.md",
+    );
+    d.settle();
+    let b_written = fs::read_to_string(&b_path).unwrap();
+    let a_written = fs::read_to_string(&path).unwrap() != broken;
+    let undos = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Undo write Package.md")
+        .count();
+    // Newest first: B's result, then A's, in the one part's name.
+    let part = d
+        .nodes()
+        .into_iter()
+        .find(|node| {
+            node.name
+                .contains("Ember Reach: Package.md was written again.")
+                && node
+                    .name
+                    .contains("Ashen Marches: Package.md was written again.")
+        })
+        .map(|node| node.name)
+        .unwrap_or_default();
+    let newest_first = part
+        .find("Ember Reach: Package.md was written again.")
+        .zip(part.find("Ashen Marches: Package.md was written again."))
+        .is_some_and(|(b, a)| b < a);
+    d.click_below(
+        "Ashen Marches: Package.md was written again.",
+        "Undo write Package.md",
+    );
+    d.settle();
+    let a_back = fs::read_to_string(&path).unwrap() == broken;
+    let b_kept = fs::read_to_string(&b_path).unwrap() == b_written;
+    let b_undo = d.has_containing("Ember Reach: Package.md was written again.")
+        && !d.has_containing("Ashen Marches: Package.md was written again.");
+    d.observe(
+        "iter-25-C-undo-per-package",
+        b_written != b_broken && a_written && undos == 2 && newest_first && a_back && b_kept && b_undo,
+        format!(
+            "B written {}, A written {a_written}, Undo buttons {undos}, newest first {newest_first} in {part:?}; after Undo A: A's bytes back {a_back}, B kept {b_kept}, only B's result {b_undo}",
+            b_written != b_broken
+        ),
+    );
+    // Back to one package, with A broken, as the steps below expect.
+    d.click_below(
+        "Ember Reach: Package.md was written again.",
+        "Undo write Package.md",
+    );
+    d.settle();
+    d.app_mut().campaigns.unregister_module(b_id).unwrap();
+    fs::remove_dir_all(&b_folder).unwrap();
+    d.click("Reload from disk");
+    d.wait_for_text("Package.md cannot be read (line 4)");
+    assert!(!d.has_containing("Ember Reach"));
+    assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
