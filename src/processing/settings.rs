@@ -456,18 +456,20 @@ impl ProcessingSettings {
             });
             // Where a field's help goes. A key error replaces the line with its message.
             if self.field(slot).error.is_none() {
-                ui.horizontal(|ui| {
-                    ui.set_min_height(Type::Small.line());
-                    if let Some(reason) = reason {
-                        design::blocked_reason(ui, Some(reason));
-                    } else if saved && fits {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("{} Saved on this computer.", icons::OK))
-                                .color(colors().document.saved),
-                        );
-                    }
-                });
+                if let Some(reason) = reason {
+                    design::blocked_reason(ui, Some(reason));
+                } else if saved && fits {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("{} Saved on this computer.", icons::OK))
+                            .color(colors().document.saved),
+                    );
+                } else {
+                    // The line stays, so the reason coming and going moves nothing.
+                    let font = Type::Small.font(ui);
+                    let height = ui.fonts_mut(|fonts| fonts.row_height(&font));
+                    ui.allocate_space(egui::vec2(0.0, height));
+                }
             }
         });
         if (saved || held) && !fits {

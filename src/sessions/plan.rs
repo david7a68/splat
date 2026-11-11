@@ -491,7 +491,7 @@ impl Sessions {
             ui.set_min_height(*height);
             design::undo_message(
                 ui,
-                Tone::Info,
+                Tone::Success,
                 &format!("Removed “{name}” from tonight."),
                 "Undo remove",
             )

@@ -88,6 +88,22 @@ fn check_choices_at_text(
     }
 }
 
+/// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
+/// line, with no words of its own on screen.
+fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
+    let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+    let icon = d.place_of("Dismiss this error");
+    d.observe(
+        id,
+        text.zip(icon).is_some_and(|(text, icon)| {
+            icon.left() >= text.right() - 0.5
+                && icon.top() <= text.top() + crate::design::S
+                && icon.right() <= text.left() + crate::design::LIST_MEASURE + 0.5
+        }) && !d.visible_text("Dismiss this error"),
+        format!("The dismiss icon {icon:?} ends the first line of \"{words}\" {text:?}"),
+    );
+}
+
 /// Where each painted copy of these words starts on screen, after stepping back `back`
 /// characters (to the icon before them). Only copies inside their pane's clip count.
 fn painted_starts(d: &Driver<'_>, words: &str, back: usize) -> Vec<Pos2> {
@@ -10280,14 +10296,24 @@ pub mod session_recording {
                 d,
                 "iter-15-C-FD5",
                 "Processing “Session 1: Failed processing” failed",
-                &[
-                    "Continue processing",
-                    "Open the session",
-                    "Dismiss this error",
-                ],
-                Some("Dismiss this error"),
+                &["Continue processing", "Open the session"],
+                None,
                 &[size],
             );
+            check_dismiss_at_message_end(
+                d,
+                "iter-25-S-FM4-dismiss",
+                "Processing “Session 1: Failed processing” failed",
+            );
+            // iter-25-S FM4, AM1: the banner's other choices have the secondary border.
+            for name in ["Open the session"] {
+                let frame = d.control_frame(name);
+                d.observe(
+                    "iter-25-S-FM4",
+                    frame.as_ref().is_some_and(|frame| frame.stroke.width > 0.0),
+                    format!("{name} is a bordered secondary choice: {frame:?}"),
+                );
+            }
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
@@ -10487,14 +10513,8 @@ pub mod session_recording {
         d.expect("Dismiss this error");
         assert!(!d.has("Open the session") && !d.has("Record again"));
         let size = d.window_size();
-        check_choices_at_text(
-            d,
-            "iter-15-C-FD5-dismiss-alone",
-            "stream error 42",
-            &["Dismiss this error"],
-            None,
-            &[size],
-        );
+        let _ = size;
+        check_dismiss_at_message_end(d, "iter-15-C-FD5-dismiss-alone", "stream error 42");
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -10924,6 +10944,15 @@ pub mod session_recording {
             &["Start recording", "Not now"],
             None,
             &[DEFAULT],
+        );
+        // iter-25-S FK2, SK1, AL2: Not now is a bordered secondary choice, as in Process again.
+        let not_now = d.control_frame("Not now");
+        d.observe(
+            "iter-25-S-FK2",
+            not_now
+                .as_ref()
+                .is_some_and(|frame| frame.stroke.width > 0.0),
+            format!("Not now has the secondary border: {not_now:?}"),
         );
         d.state("record-consent", Sizes::Default);
         d.observe(
@@ -11714,6 +11743,15 @@ pub mod session_recording {
             d.has_containing("Recording stopped"),
             "A recording that stops by itself stays in the rail on other pages",
         );
+        // iter-25-S AM1: Record again and Open the session are bordered; dismiss is the icon.
+        for name in ["Record again", "Open the session"] {
+            let frame = d.control_frame(name);
+            d.observe(
+                "iter-25-S-AM1",
+                frame.as_ref().is_some_and(|frame| frame.stroke.width > 0.0),
+                format!("{name} in the banner has a border: {frame:?}"),
+            );
+        }
         d.state("recording-stopped-elsewhere", Sizes::Default);
         d.expect("Choose an input");
         d.observe(
@@ -14367,6 +14405,12 @@ pub mod session_plan_groups {
             "Remove group keeps its message and Undo in view after capture resize",
         );
         d.observe(
+            "iter-25-S-success-group-removed",
+            d.place_of(&format!("Removed “{GROUP_RIVALS}” from tonight."))
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            "Removing a group from the plan uses the tone a removed fight uses",
+        );
+        d.observe(
             "P17",
             !d.has(&format!("Edit group {GROUP_RIVALS}")),
             "The row menu removes a group from this plan",
@@ -15194,6 +15238,13 @@ pub mod session_plan {
         d.click(&format!("More actions for {SECOND}"));
         d.click("Remove from tonight");
         d.expect(&format!("Removed “{SECOND}” from tonight."));
+        // iter-25-S family: a removal is a finished change, in the success tone.
+        d.observe(
+            "iter-25-S-success-fight-removed",
+            d.place_of(&format!("Removed “{SECOND}” from tonight."))
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            "Removing a planned fight says so in the success tone",
+        );
         d.state("planned-fight-removed", Sizes::All);
         d.click("Undo remove");
         d.expect(&format!("Start fight: {SECOND}"));
