@@ -1148,8 +1148,9 @@ fn creature_result_row(
                 .on_hover_text("Read this entry in Lookup")
                 .clicked();
             if let Some(reason) = &c.unavailable {
-                // A status is an icon, a word and a colour, like the other warnings here.
-                design::status(
+                // A status is an icon, a word and a colour, like the other warnings here. It
+                // wraps, because a warning must not be cut to an ellipsis at 960.
+                design::wrapped_status(
                     ui,
                     design::Status {
                         icon: icons::WARN,
