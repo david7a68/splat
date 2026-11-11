@@ -304,6 +304,16 @@ fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
 pub(crate) struct Piece {
     pub label: String,
     pub faces: Vec<(i64, bool)>,
+    /// The dice rolled, such as `2d20kh1` or `2d6+2`, so that one die can roll again.
+    pub dice: String,
+}
+
+/// One die of an outcome: in its damage or its first roll, in which piece, at which place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Die {
+    pub damage: bool,
+    pub piece: usize,
+    pub face: usize,
 }
 
 /// A made roll, with what the action line and the Log say about it.
@@ -491,6 +501,7 @@ pub(crate) fn roll(
             pieces.push(Piece {
                 label: "d20".into(),
                 faces,
+                dice: dice.to_owned(),
             });
             let flat = bonus + change;
             let natural = kept.filter(|_| matches!(what, D20::Attack | D20::DeathSave));
@@ -511,6 +522,7 @@ pub(crate) fn roll(
                 pieces.push(Piece {
                     label: part_text(part),
                     faces: rolled.dice.iter().map(|face| (*face, false)).collect(),
+                    dice: part.dice.clone(),
                 });
             }
             let mut expression = parts_text(parts);
@@ -527,6 +539,7 @@ pub(crate) fn roll(
             pieces.push(Piece {
                 label: dice.clone(),
                 faces: faces(&rolled),
+                dice: dice.clone(),
             });
             (dice.clone(), 0, rolled.total, None, None)
         }
@@ -584,6 +597,7 @@ pub(crate) fn roll_with(
             rolled.pieces.push(Piece {
                 label: format!("{extra} bonus"),
                 faces: faces(&bonus),
+                dice: extra.to_owned(),
             });
         }
     }
@@ -765,70 +779,107 @@ fn damage_roll(
     roll(who, &link, mode, change, random).map(Some)
 }
 
-/// Reroll an outcome's d20 with inspiration. A new die takes the place of the one that
-/// counted, and the keep is made again; the new roll stands. On an attack the damage rolls
-/// again only when a critical hit begins or ends. Returns the outcome, the old die and the new.
-pub(crate) fn reroll_d20(
+impl Outcome {
+    /// The dice that inspiration can roll again, with words for each: `3 on the d20`,
+    /// `1 on 2d6+2 slashing`. Equal faces of one piece are one choice, lowest first.
+    pub fn dice(&self) -> Vec<(String, Die)> {
+        let mut all = Vec::new();
+        for (damage, rolled) in [(false, &self.first), (true, &self.damage)] {
+            for (piece, part) in rolled
+                .iter()
+                .flat_map(|rolled| rolled.pieces.iter().enumerate())
+            {
+                let mut faces: Vec<(i64, usize)> = part
+                    .faces
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (face, _))| (face.abs(), at))
+                    .collect();
+                faces.sort();
+                faces.dedup_by_key(|(face, _)| *face);
+                let name = if part.label == "d20" {
+                    "the d20"
+                } else {
+                    part.label.as_str()
+                };
+                all.extend(faces.into_iter().map(|(value, face)| {
+                    (
+                        format!("{value} on {name}"),
+                        Die {
+                            damage,
+                            piece,
+                            face,
+                        },
+                    )
+                }));
+            }
+        }
+        all
+    }
+}
+
+/// Roll one die of an outcome again; the new die stands, and its keeps and totals are made
+/// again. When an attack's d20 begins or ends a critical hit, its damage rolls again too.
+/// Returns the outcome, the old face and the new.
+pub(crate) fn reroll(
     who: &str,
     outcome: &Outcome,
+    die: Die,
     changes: (i64, i64),
     random: &mut Random,
 ) -> Result<(Outcome, i64, i64), String> {
-    let mut first = outcome.first.clone().ok_or("There is no d20 to reroll.")?;
-    let piece = first
-        .pieces
-        .iter_mut()
-        .find(|piece| piece.label == "d20")
-        .ok_or("There is no d20 to reroll.")?;
-    let kept = piece
-        .faces
-        .iter()
-        .position(|(_, dropped)| !dropped)
-        .ok_or("There is no d20 to reroll.")?;
-    let old = piece.faces[kept].0;
-    let new = Dice::parse("1d20")?.roll(random, false)?.total;
-    piece.faces[kept].0 = new;
-    let faces: Vec<i64> = piece.faces.iter().map(|(face, _)| *face).collect();
-    let pick = match first.mode {
-        Mode::Disadvantage => faces.iter().enumerate().min_by_key(|(_, face)| **face),
-        _ => faces.iter().enumerate().max_by_key(|(_, face)| **face),
+    const NONE: &str = "There is no such die to reroll.";
+    let mut outcome = outcome.clone();
+    let rolled = if die.damage {
+        outcome.damage.as_mut()
+    } else {
+        outcome.first.as_mut()
     }
-    .map_or(kept, |(at, _)| at);
-    for (at, face) in piece.faces.iter_mut().enumerate() {
-        face.1 = at != pick;
+    .ok_or(NONE)?;
+    let critical = rolled.mode == Mode::Critical && matches!(rolled.link, RollLink::Damage { .. });
+    let piece = rolled.pieces.get_mut(die.piece).ok_or(NONE)?;
+    let before: Vec<i64> = piece.faces.iter().map(|(face, _)| *face).collect();
+    let dice = Dice::parse(&piece.dice)?;
+    let old = dice.settle(&before, critical)?;
+    let new = dice.reroll(&before, die.face, random, critical)?;
+    piece.faces = faces(&new);
+    let change = new.total - old.total;
+    rolled.total += change;
+    if let Some(kind) = rolled.by_kind.get_mut(die.piece) {
+        kind.0 += change;
     }
-    let counted = faces[pick];
-    first.total = counted + first.flat;
-    let was_critical = first.natural == Some(20);
-    if first.natural.is_some() {
-        first.natural = Some(counted);
-    }
-    let critical = first.natural == Some(20);
-    let damage = match &outcome.link {
+    let (was, now) = (old.dice[die.face].abs(), new.dice[die.face].abs());
+    // The d20 that counts can be another one now.
+    let flips = if !die.damage && rolled.natural.is_some() {
+        let counted = piece
+            .faces
+            .iter()
+            .find(|(_, dropped)| !dropped)
+            .map(|(face, _)| *face);
+        let flips = (rolled.natural == Some(20)) != (counted == Some(20));
+        rolled.natural = counted;
+        flips.then_some(counted == Some(20))
+    } else {
+        None
+    };
+    if let (
+        Some(critical),
         RollLink::D20 {
             what: D20::Attack,
             label,
             damage,
             ..
-        } if was_critical != critical => {
-            let mode = if critical {
-                Mode::Critical
-            } else {
-                Mode::Normal
-            };
-            damage_roll(who, label, damage, mode, changes.1, random)?
-        }
-        _ => outcome.damage.clone(),
-    };
-    Ok((
-        Outcome {
-            link: outcome.link.clone(),
-            first: Some(first),
-            damage,
         },
-        old,
-        new,
-    ))
+    ) = (flips, &outcome.link)
+    {
+        let mode = if critical {
+            Mode::Critical
+        } else {
+            Mode::Normal
+        };
+        outcome.damage = damage_roll(who, label, damage, mode, changes.1, random)?;
+    }
+    Ok((outcome, was, now))
 }
 
 /// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a

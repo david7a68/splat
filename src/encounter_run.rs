@@ -1490,6 +1490,8 @@ impl Run {
         }
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
+        // Inspiration rerolls a die immediately after the roll, not after the next step.
+        self.reroll = None;
         if matches!(command, Command::Begin) {
             self.roster_stamp = None;
             self.refresh_roster_faults();

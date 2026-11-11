@@ -38,7 +38,7 @@ pub(super) struct Asking {
 /// A question for the DM, and its choices of damage.
 type Question = (String, Vec<(String, Vec<DamagePart>)>);
 
-/// The last d20 the run rolled for a player, which their inspiration can reroll.
+/// The last roll the run made for a player, of which their inspiration can reroll one die.
 #[derive(Clone, Debug)]
 pub(super) struct Reroll {
     pub actor: usize,
@@ -54,8 +54,8 @@ pub(super) enum RowChoice {
     Roll(Mode, bool),
     /// The damage of this choice, for the asking row.
     Damage(usize),
-    /// Reroll the row's d20 with inspiration.
-    Reroll,
+    /// Reroll this die of the row's result with inspiration.
+    Reroll(rolls::Die),
     /// Close the question without rolling.
     Cancel,
 }
@@ -92,6 +92,9 @@ fn parts_words(parts: &[DamagePart]) -> String {
     }
     rolls::parts_text(parts)
 }
+
+/// The most dice a row's menu offers to reroll. A roll of many dice lists its lowest.
+const REROLL_CHOICES: usize = 8;
 
 /// The height of the action bar above the dock while Lookup or Notes hide the panel.
 pub(super) const STRIP_HEIGHT: f32 = 28.0;
@@ -279,11 +282,9 @@ impl Run {
         self.settle_spent_inspiration();
     }
 
-    /// Keep a player's d20 roll for a reroll, by a rule that rerolls after the roll.
+    /// Keep a roll made for a player for a reroll, by a rule that rerolls after the roll.
     fn keep_for_reroll(&mut self, actor: usize, shown: usize, outcome: Outcome) {
         self.reroll = (self.inspiration == Some(Inspiration::Reroll)
-            && outcome.first.is_some()
-            && matches!(outcome.link, RollLink::D20 { .. })
             && self.has_inspiration(actor))
         .then_some(Reroll {
             actor,
@@ -292,8 +293,8 @@ impl Run {
         });
     }
 
-    /// Reroll the kept d20 with inspiration. The new roll stands.
-    fn reroll_with_inspiration(&mut self) -> Result<(), String> {
+    /// Reroll one die of the kept roll with inspiration. The new die stands.
+    fn reroll_with_inspiration(&mut self, die: rolls::Die) -> Result<(), String> {
         let Some(kept) = self.reroll.take() else {
             return Ok(());
         };
@@ -303,24 +304,22 @@ impl Run {
         let who = self.state.participants[kept.actor].name.clone();
         let changes = self.changes(kept.actor);
         let (outcome, ..) = self.record(
-            |random| rolls::reroll_d20(&who, &kept.outcome, changes, random),
+            |random| rolls::reroll(&who, &kept.outcome, die, changes, random),
             |(outcome, old, new): &(Outcome, i64, i64)| {
                 let mut lines = vec![format!(
-                    "{who} expends inspiration to reroll the d20: {old} becomes {new}."
+                    "{who} expends inspiration to reroll a die: {old} becomes {new}."
                 )];
-                lines.extend(outcome.lines());
+                // Only what the new die changed is said again.
+                let changed = |new: &Option<Rolled>, old: &Option<Rolled>| {
+                    new.as_ref().filter(|_| new != old).map(Rolled::line)
+                };
+                lines.extend(changed(&outcome.first, &kept.outcome.first));
+                lines.extend(changed(&outcome.damage, &kept.outcome.damage));
                 lines
             },
         )?;
         self.spend_inspiration(kept.actor);
-        if matches!(
-            outcome.link,
-            RollLink::D20 {
-                what: D20::Attack,
-                ..
-            }
-        ) && kept.shown != kept.actor
-        {
+        if kept.shown != kept.actor {
             self.show_attack(kept.shown, &outcome);
         } else if let Some(first) = &outcome.first {
             self.badges.insert(kept.shown, first.headline());
@@ -417,7 +416,7 @@ impl Run {
                 self.asking = None;
                 Ok(())
             }
-            RowChoice::Reroll => self.reroll_with_inspiration(),
+            RowChoice::Reroll(die) => self.reroll_with_inspiration(die),
             RowChoice::Damage(index) => match self.asking.take() {
                 Some(asking) if asking.row == row => self.answer(asking, index),
                 _ => Ok(()),
@@ -475,16 +474,17 @@ impl Run {
             }
             return chosen;
         }
-        let mut items: Vec<(String, RowChoice)> = Vec::new();
-        let mut heading = None;
+        // Each section is a heading and its choices.
+        let mut sections: Vec<(String, Vec<(String, RowChoice)>)> = Vec::new();
         if let Some(armed) = self.armed.as_ref().filter(|armed| armed.actor != row) {
             let name = &self.state.participants[row].name;
-            heading = Some(match &armed.link {
+            let heading = match &armed.link {
                 RollLink::SaveDc { label, ability, .. } => {
                     format!("{name}'s {ability} save against {label}")
                 }
                 link => format!("{} against {name}", rolls::link_label(link)),
-            });
+            };
+            let mut items = Vec::new();
             match &armed.link {
                 RollLink::SaveDc { .. } if !self.player(row) => {
                     for (words, mode, _) in rolls::mode_choices("Roll its save", false) {
@@ -504,18 +504,26 @@ impl Run {
                 }
                 _ => {}
             }
+            if !items.is_empty() {
+                sections.push((heading, items));
+            }
         }
-        if self
+        if let Some(kept) = self
             .reroll
             .as_ref()
-            .is_some_and(|kept| kept.shown == row && self.has_inspiration(kept.actor))
+            .filter(|kept| kept.shown == row && self.has_inspiration(kept.actor))
         {
-            items.push((
-                "Reroll the d20 with inspiration".to_owned(),
-                RowChoice::Reroll,
+            sections.push((
+                "Inspiration: reroll one die".to_owned(),
+                kept.outcome
+                    .dice()
+                    .into_iter()
+                    .take(REROLL_CHOICES)
+                    .map(|(words, die)| (words, RowChoice::Reroll(die)))
+                    .collect(),
             ));
         }
-        if items.is_empty() {
+        if sections.is_empty() {
             return None;
         }
         // Under the row, so the row it is about stays in view.
@@ -527,17 +535,17 @@ impl Run {
             None
         };
         egui::Popup::menu(response).open_memory(open).show(|ui| {
-            if let Some(heading) = heading.filter(|_| items.len() > 1) {
+            for (heading, items) in &sections {
                 ui.label(
                     crate::design::Type::Small
                         .rich(ui, heading)
                         .color(crate::design::colors().muted),
                 );
-            }
-            for (words, choice) in &items {
-                if rolls::menu_item(ui, words) {
-                    chosen = Some(choice.clone());
-                    ui.close();
+                for (words, choice) in items {
+                    if rolls::menu_item(ui, words) {
+                        chosen = Some(choice.clone());
+                        ui.close();
+                    }
                 }
             }
         });
@@ -1175,17 +1183,77 @@ mod tests {
             run.badges.get(&0).map(String::as_str),
             Some("5 Strength check")
         );
-        assert!(run.reroll.as_ref().is_some_and(|kept| kept.shown == 0));
-        run.row_choice(0, RowChoice::Reroll);
+        let kept = run.reroll.clone().unwrap();
+        assert_eq!(kept.shown, 0);
+        let dice = kept.outcome.dice();
+        assert_eq!(dice.len(), 1);
+        assert_eq!(dice[0].0, "3 on the d20");
+        run.row_choice(0, RowChoice::Reroll(dice[0].1));
         assert!(log_has(
             &run,
-            "expends inspiration to reroll the d20: 3 becomes 17."
+            "expends inspiration to reroll a die: 3 becomes 17."
         ));
         assert_eq!(
             run.badges.get(&0).map(String::as_str),
             Some("19 Strength check")
         );
         assert!(!run.has_inspiration(0), "it is spent");
+        assert!(run.reroll.is_none());
+    }
+
+    #[test]
+    fn a_rule_of_reroll_rerolls_any_die_of_a_roll_made_for_a_player() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        let target = (0..3).find(|row| *row != actor).unwrap();
+        inspired_player(&mut run, actor);
+        run.roll_link(ask(attack(), actor));
+        // A player's tile only targets; `Roll for them` rolls: d20 11, damage 1 and 5.
+        run.target(target, None);
+        assert!(run.reroll.is_none());
+        run.state.random = Random::controlled([11, 1, 5, 6]);
+        run.row_choice(target, RowChoice::Roll(Mode::Normal, false));
+        assert_eq!(run.amount, "8");
+        let words: Vec<String> = run
+            .reroll
+            .as_ref()
+            .unwrap()
+            .outcome
+            .dice()
+            .into_iter()
+            .map(|(words, _)| words)
+            .collect();
+        assert_eq!(
+            words,
+            [
+                "11 on the d20",
+                "1 on 2d6+2 piercing",
+                "5 on 2d6+2 piercing"
+            ]
+        );
+        let lines = run.state.log.len();
+        let die = run.reroll.as_ref().unwrap().outcome.dice()[1].1;
+        run.row_choice(target, RowChoice::Reroll(die));
+        assert!(log_has(&run, "reroll a die: 1 becomes 6."));
+        assert_eq!(
+            run.state.log.len(),
+            lines + 2,
+            "only the damage is said again"
+        );
+        assert_eq!(run.amount, "13", "the new damage is in Amount");
+        assert!(run.row_badge(target).unwrap().ends_with("13 damage"));
+        assert!(!run.has_inspiration(actor));
+    }
+
+    #[test]
+    fn the_next_step_ends_the_chance_to_reroll() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        inspired_player(&mut run, 0);
+        run.roll_link(ask(check(), 0));
+        assert!(run.reroll.is_some());
+        run.apply(Command::Next).unwrap();
         assert!(run.reroll.is_none());
     }
 
