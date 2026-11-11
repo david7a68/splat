@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     design::{self, Action, Density, Tone, Type, colors, reader as style},
-    library::{note_path, write_note},
+    library::write_note,
     lookup::{ContentIndex, Item},
     persistence::Campaign,
     sessions,
@@ -13,7 +13,6 @@ use crate::{
 use eframe::egui;
 use serde_yaml_ng::Value;
 use splat::content::{Entry, Fields as EntryFields, layout::Flag};
-use std::fs;
 use uuid::Uuid;
 
 const SAVED: &str = "Changes saved.";
@@ -174,8 +173,7 @@ enum Conflict {
 
 impl EditDraft {
     fn open(campaign: &Campaign, entry: &Entry) -> Result<Self, String> {
-        let baseline = fs::read_to_string(note_path(&campaign.path, &entry.path)?)
-            .map_err(|e| e.to_string())?;
+        let baseline = super::file_fault::read_note(&campaign.path, &entry.path)?;
         let on_disk = Entry::parse(&entry.path, &baseline)?;
         let start = Fields::of(&on_disk, &baseline);
         Ok(Self {
@@ -226,8 +224,7 @@ impl EditDraft {
         index: &ContentIndex,
         log_as: Option<&str>,
     ) -> Result<Saved, String> {
-        let disk = fs::read_to_string(note_path(&campaign.path, &self.path)?)
-            .map_err(|e| e.to_string())?;
+        let disk = super::file_fault::read_note(&campaign.path, &self.path)?;
         if disk != self.baseline {
             let theirs = Fields::read(&self.path, &disk);
             self.disk = Some((disk, theirs));
@@ -982,6 +979,7 @@ impl Saved {
 mod tests {
     use super::*;
     use crate::content_workspace::EntryRef;
+    use std::fs;
 
     #[test]
     fn the_title_line_and_front_matter_stay_out_of_the_text() {

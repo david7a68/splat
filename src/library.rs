@@ -1642,7 +1642,9 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
 // Refuse traversal and symlinks, and preserve external edits before atomic replacement.
 pub(crate) fn note_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     if fs::symlink_metadata(root)
-        .map_err(|e| e.to_string())?
+        .map_err(|error| {
+            crate::world::file_fault::FileFault::read(&root.display().to_string(), &error).message()
+        })?
         .file_type()
         .is_symlink()
     {
@@ -1685,7 +1687,7 @@ pub(crate) fn write_note(
     let current = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(crate::world::file_fault::FileFault::read(relative, &e).message()),
     };
     if baseline.is_none() && current.is_some() {
         return Err("A note with this name already exists. Choose another name.".into());
@@ -1693,19 +1695,21 @@ pub(crate) fn write_note(
     if current.as_deref() != baseline {
         return Err(NOTE_CHANGED.into());
     }
+    // The system's words name no file; the DM reads which note and how to recover.
+    let failed = crate::world::file_fault::write_error(relative);
     if baseline.is_none() {
-        fs::create_dir_all(path.parent().ok_or("Missing parent folder")?)
-            .map_err(|e| e.to_string())?;
+        fs::create_dir_all(path.parent().ok_or("Missing parent folder")?).map_err(&failed)?;
     }
     let mut temp = tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent folder")?)
-        .map_err(|e| e.to_string())?;
+        .map_err(&failed)?;
     temp.write_all(text.as_bytes())
         .and_then(|_| temp.as_file().sync_all())
-        .map_err(|e| e.to_string())?;
+        .map_err(&failed)?;
     if baseline.is_some() {
-        temp.persist(&path).map_err(|e| e.to_string())?;
+        temp.persist(&path).map_err(|error| failed(error.error))?;
     } else {
-        temp.persist_noclobber(&path).map_err(|e| e.to_string())?;
+        temp.persist_noclobber(&path)
+            .map_err(|error| failed(error.error))?;
     }
     Ok(entry)
 }

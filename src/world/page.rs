@@ -1,5 +1,5 @@
 //! The World page: what is true in this world. One list of notes and entries, and the Reader.
-use super::{Nav, Reader};
+use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
     design::{self, Type, colors, icons},
     lookup::{ContentIndex, WorldGroups},
@@ -17,11 +17,14 @@ const CHECK_ROWS: usize = 40;
 /// is found by this constant.
 pub const UNSAVED_NPC: &str = "Unsaved NPC";
 
-/// A repair cause must stay whole even when Lookup narrows the list.
+/// A repair cause must stay whole even when Lookup narrows the list. So must the path: a long
+/// one wraps, because a cut path cannot tell two files in one folder apart.
 fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egui::Response {
     let width = (ui.available_width() - design::S * 2.0).max(design::XXL);
     let font = if selected { Type::Strong } else { Type::Body };
-    let title = design::one_line(ui, path, font.font(ui), colors().text, width);
+    let title = ui
+        .painter()
+        .layout(path.to_owned(), font.font(ui), colors().text, width);
     let detail = ui.painter().layout(
         cause.to_owned(),
         Type::Small.font(ui),
@@ -44,6 +47,30 @@ fn broken_row(ui: &mut egui::Ui, selected: bool, path: &str, cause: &str) -> egu
             );
         },
     )
+}
+
+/// What the page's error slot holds.
+#[derive(Clone)]
+enum PageError {
+    Words(String),
+    /// A note that the system will not read, so its repair could not open.
+    Unread(Unread),
+}
+
+/// The pane names the file, the recovery and, in Technical details, the system's words.
+#[derive(Clone)]
+struct Unread {
+    fault: FileFault,
+    /// The index load the pane was last shown under, to tell a later load apart.
+    seen: Option<u64>,
+    /// Try again asked for a new load; when it comes, the note opens again.
+    again: bool,
+}
+
+impl From<String> for PageError {
+    fn from(words: String) -> Self {
+        Self::Words(words)
+    }
 }
 
 /// A generated NPC with the table facts its card shows.
@@ -85,7 +112,7 @@ pub struct WorldPage {
     discarded_npc: Option<Held>,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
-    error: Option<String>,
+    error: Option<PageError>,
     repaired: Option<Uuid>,
     /// Lookup's link found this page holding an unsaved NPC, so Lookup kept its own.
     lookup_kept: bool,
@@ -95,7 +122,15 @@ pub struct WorldPage {
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
     /// Repair causes are read and parsed only when the index generation changes.
-    broken_details: std::collections::BTreeMap<String, String>,
+    broken_details: std::collections::BTreeMap<String, BrokenDetail>,
+}
+
+/// One unreadable note's row words.
+struct BrokenDetail {
+    /// The row's second line.
+    cause: String,
+    /// The whole sentence, on hover.
+    hover: String,
 }
 
 impl WorldPage {
@@ -103,7 +138,7 @@ impl WorldPage {
     fn refresh_checks(
         &mut self,
         index: &ContentIndex,
-        mut read: impl FnMut(&str) -> Option<String>,
+        mut read: impl FnMut(&str) -> Option<Result<String, FileFault>>,
     ) {
         if self
             .checks
@@ -117,9 +152,20 @@ impl WorldPage {
             .broken_world
             .iter()
             .map(|(path, problem)| {
-                let detail = read(path)
-                    .and_then(|text| crate::campaign_content::repair_problem(path, &text).0)
-                    .unwrap_or_else(|| problem.clone());
+                let detail = match read(path) {
+                    // The system's words stay out of the list; the repair pane keeps them.
+                    Some(Err(fault)) => BrokenDetail {
+                        cause: fault.cause().to_owned(),
+                        hover: fault.headline(),
+                    },
+                    text => BrokenDetail {
+                        cause: text
+                            .and_then(Result::ok)
+                            .and_then(|text| crate::campaign_content::repair_problem(path, &text).0)
+                            .unwrap_or_else(|| problem.clone()),
+                        hover: problem.clone(),
+                    },
+                };
                 (path.clone(), detail)
             })
             .collect();
@@ -250,7 +296,17 @@ impl WorldPage {
                 self.new_kind = None;
                 self.leave_card();
             }
-            Err(error) => self.error = Some(error),
+            Err(super::repair::OpenError::Words(error)) => self.error = Some(error.into()),
+            Err(super::repair::OpenError::Unread(fault)) => {
+                // The pane is about this file now, as an opened repair would be.
+                self.error = Some(PageError::Unread(Unread {
+                    fault,
+                    seen: None,
+                    again: false,
+                }));
+                self.new_kind = None;
+                self.leave_card();
+            }
         }
     }
 
@@ -370,7 +426,9 @@ impl WorldPage {
         self.refresh_checks(index, |path| {
             crate::library::note_path(&campaign.path, path)
                 .ok()
-                .and_then(|path| std::fs::read_to_string(path).ok())
+                .map(|file| {
+                    std::fs::read_to_string(file).map_err(|error| FileFault::read(path, &error))
+                })
         });
         let groups = index.world_groups(&self.search.trim().to_lowercase());
         if broken == 0
@@ -434,19 +492,23 @@ impl WorldPage {
                             ui.add_space(design::XS);
                             design::group_heading(ui, "Cannot be read", broken.len());
                             for (path, problem) in broken {
+                                let detail = self.broken_details.get(path);
+                                let open = self.repair.as_ref().is_some_and(|r| r.path == *path)
+                                    || matches!(
+                                        &self.error,
+                                        Some(PageError::Unread(unread)) if unread.fault.path == *path
+                                    );
                                 let response = broken_row(
                                     ui,
-                                    self.repair.as_ref().is_some_and(|r| r.path == *path),
+                                    open,
                                     path,
                                     if crate::formats_ui::is_old(problem) {
                                         "Old layout"
                                     } else {
-                                        self.broken_details
-                                            .get(path)
-                                            .map_or(problem.as_str(), String::as_str)
+                                        detail.map_or(problem.as_str(), |detail| &detail.cause)
                                     },
                                 )
-                                .on_hover_text(problem);
+                                .on_hover_text(detail.map_or(problem.as_str(), |detail| &detail.hover));
                                 if response.clicked() {
                                     self.open_repair(campaign, path);
                                 }
@@ -503,6 +565,10 @@ impl WorldPage {
                         self.repair = None;
                         self.reload = true;
                     }
+                    return;
+                }
+                if matches!(self.error, Some(PageError::Unread(..))) {
+                    self.unread_pane(ui, index, campaign);
                     return;
                 }
                 if self.new_kind.is_some() || self.card_shown() || self.error.is_some() {
@@ -610,7 +676,7 @@ impl WorldPage {
                 self.generator_sources = tables.sources;
                 self.generator_problems = tables.problems;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.into()),
         }
     }
 
@@ -661,6 +727,73 @@ impl WorldPage {
             self.generator_problems = problems;
             self.generator_sources = sources;
             self.show_held();
+        }
+    }
+
+    /// A note that the system will not read. The pane names the file and how to recover it;
+    /// the system's words wait in Technical details. Nothing here writes the file.
+    fn unread_pane(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
+        let Some(PageError::Unread(unread)) = &mut self.error else {
+            return;
+        };
+        // A later load that no longer lists the file (fixed, moved or deleted outside Splat)
+        // ends the pane, and a fixed note opens in the reader. After Try again, a file the load
+        // still lists opens again: in the source editor, or here with its new fault.
+        let generation = index.generation();
+        if unread.seen.is_some_and(|seen| seen != generation) {
+            let listed = index
+                .broken_world
+                .iter()
+                .any(|(path, _)| *path == unread.fault.path);
+            if !listed || unread.again {
+                let path = std::mem::take(&mut unread.fault.path);
+                self.error = None;
+                if listed {
+                    self.open_repair(campaign, &path);
+                } else if let Some(item) = index.items.iter().find(|item| item.entry.path == path) {
+                    self.open_note(item.entry.id);
+                }
+                return;
+            }
+        }
+        unread.seen = Some(generation);
+        let fault = unread.fault.clone();
+        design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
+        super::file_actions(ui, campaign, &fault.path);
+        let (again, cancel) =
+            design::message_with_actions(ui, design::Tone::Error, &fault.headline(), |ui| {
+                ui.add(
+                    egui::Label::new(
+                        Type::Body
+                            .rich(ui, format!("{} Then choose Try again.", fault.recovery()))
+                            .color(colors().text),
+                    )
+                    .wrap(),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    // Both choices start at the message text, as every message's choices do.
+                    let again = super::starts_line(ui, design::Action::quiet("Try again"), true)
+                        .show(ui)
+                        .clicked();
+                    let cancel = super::starts_line(ui, design::Action::quiet("Cancel"), false)
+                        .show(ui)
+                        .clicked();
+                    (again, cancel)
+                })
+                .inner
+            });
+        ui.add_space(design::S);
+        design::quiet_section(ui, "Technical details", |ui| {
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, &fault.system).color(colors().muted)).wrap(),
+            );
+        });
+        if cancel {
+            self.error = None;
+        } else if again && let Some(PageError::Unread(unread)) = &mut self.error {
+            // Read the folder again first, so the list's cause is current too.
+            unread.again = true;
+            self.reload = true;
         }
     }
 
@@ -785,10 +918,10 @@ impl WorldPage {
                 self.error = None;
                 self.reload = true;
             }
-            Some(Err(error)) => self.error = Some(error),
+            Some(Err(error)) => self.error = Some(error.into()),
             None => {}
         }
-        if let Some(error) = self.error.clone() {
+        if let Some(PageError::Words(error)) = self.error.clone() {
             if self.new_kind.is_none() && !self.card_shown() {
                 // Cancel starts at the message text, as every message's choices do.
                 let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
@@ -1448,6 +1581,31 @@ mod tests {
     }
 
     #[test]
+    fn iter18_d_an_unreadable_row_states_a_short_cause_not_the_system_words() {
+        let mut index = ContentIndex::load(&[], None).unwrap();
+        index.broken_world.push((
+            "Notes/Broken.md".into(),
+            "stream did not contain valid UTF-8".into(),
+        ));
+        let mut page = WorldPage::default();
+        page.refresh_checks(&index, |path| {
+            Some(Err(FileFault::read(
+                path,
+                &std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8",
+                ),
+            )))
+        });
+        let detail = &page.broken_details["Notes/Broken.md"];
+        assert_eq!(detail.cause, "Text format cannot be read", "AD2-row-cause");
+        assert_eq!(
+            detail.hover, "Splat cannot read Notes/Broken.md as text.",
+            "AD2-row-hover"
+        );
+    }
+
+    #[test]
     fn repair_details_read_once_per_index_and_follow_recovery() {
         let mut first = ContentIndex::load(&[], None).unwrap();
         first
@@ -1457,7 +1615,7 @@ mod tests {
         let mut reads = 0;
         let mut read = |_: &str| {
             reads += 1;
-            Some("---\nsplat_schema: 2\nsplat_id: [\n---\n".into())
+            Some(Ok("---\nsplat_schema: 2\nsplat_id: [\n---\n".into()))
         };
         page.refresh_checks(&first, &mut read);
         page.refresh_checks(&first, &mut read);
@@ -1465,7 +1623,11 @@ mod tests {
             reads, 1,
             "FD9-cache: the unchanged second render does no file read or repair parse"
         );
-        assert!(page.broken_details["Broken.md"].contains("Line 3 opens a list"));
+        assert!(
+            page.broken_details["Broken.md"]
+                .cause
+                .contains("Line 3 opens a list")
+        );
 
         // A changed index re-reads the note. Failure to read it uses its current indexed error.
         let mut unreadable = ContentIndex::load(&[], None).unwrap();
@@ -1474,7 +1636,7 @@ mod tests {
             .push(("Broken.md".into(), "The file cannot be opened".into()));
         page.refresh_checks(&unreadable, |_| None);
         assert_eq!(
-            page.broken_details["Broken.md"],
+            page.broken_details["Broken.md"].cause,
             "The file cannot be opened"
         );
 
@@ -1497,9 +1659,9 @@ mod tests {
             index
                 .broken_world
                 .push(("Broken.md".into(), "Indexed cause".into()));
-            page.refresh_checks(&index, |_| Some(format!("---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Rook\nsplat_type: lore\n---\n{body}")));
+            page.refresh_checks(&index, |_| Some(Ok(format!("---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Rook\nsplat_type: lore\n---\n{body}"))));
             assert_eq!(
-                page.broken_details["Broken.md"], "Indexed cause",
+                page.broken_details["Broken.md"].cause, "Indexed cause",
                 "FD9-input: readable body syntax does not invent a front matter cause"
             );
         }
