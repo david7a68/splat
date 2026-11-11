@@ -176,14 +176,19 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   Use `d.expect_same("reason")` only for an intended small visual change, after its
   behaviour assertion. The repeated-capture check still runs on later captures.
   Captures and frame comparisons finish pending note and Timeline saves first.
-- `dm-audit` (G6) plays the measured evening of `artifacts/dm-audit/` and fails when a task's
-  page transitions, interactions or path differ from `artifacts/dm-audit/counts.json`.
-  `plain-evening` (G7) plays the frozen plain campaign and fails on any difference from
-  `src/visual_tests/plain_evening/reference.json`: a control's or text's rectangle in a view
-  that `SCREENS` names, the words or file writes of an act, or a campaign file's bytes, unless a
-  row of `plain_evening/allowed.json` names exactly that difference. A missing view always fails.
-  `devenv shell -- audit-freeze [label]` writes the counts and the reference again from this
-  source. A feature pull request never runs it (`AGENTS.md`).
+- `dm-audit` (G6) plays the measured evening of `artifacts/dm-audit/` in every gate and fails when a
+  task's page transitions, interactions or path differ from `artifacts/dm-audit/counts.json`. A
+  change that makes a task cost more or less on purpose runs `devenv shell -- audit-freeze counts`
+  and says why in the pull request; a new task goes in with `devenv shell -- audit-freeze add`.
+- `plain-evening` (G7) always runs and captures, but compares with
+  `src/visual_tests/plain_evening/reference.json` only with the switch `SPLAT_FROZEN=1`, as in
+  `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`: any change of the user interface fails it
+  by design. The pull requests of the session-cycle build plan use the switch, and so can anyone
+  who wants the proof. The reference is written by `devenv shell -- audit-freeze reference` on an
+  unchanged commit of `main`, which it records in `frozen_at`; a feature adds its views with
+  `devenv shell -- audit-freeze add` and rows in `plain_evening/allowed.json`.
+  `devenv shell -- audit-freeze verify` writes the reference into a scratch folder at the current
+  commit and fails unless the tree's reference is byte for byte the same.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.

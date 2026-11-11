@@ -5,10 +5,15 @@
 The script `src/visual_tests/dm_audit.rs` runs as the scenario `dm-audit` in every visual run, and it is
 G6: it plays the evening and fails when a task's page transitions, interactions or path differ from
 `counts.json`, when a frozen task is missing, when a task is new or out of order, or when a counted act finds
-no control. `devenv shell -- audit-freeze [label]` plays it again and writes `steps.tsv`, `summary.tsv` and
-`counts.json`. A feature pull request never runs it: it adds its acts as **new** tasks, and only a pull
-request whose stated task is to freeze again changes these files (`AGENTS.md`). The scenario takes no
-captures, so the capture names in the sections below refer to the first audit's run.
+no control.
+
+**G6 runs in every gate.** When a change makes a task cost more or fewer acts on purpose, its author runs
+`devenv shell -- audit-freeze counts`, which writes `steps.tsv`, `summary.tsv` and `counts.json` from this
+source, and says in the pull request why the task costs more or less. A feature that adds acts of its own adds
+them as **new** tasks and runs `devenv shell -- audit-freeze add`: that writes one row for each new task and
+leaves every frozen row as it is; it refuses, and writes nothing, when a frozen task's transitions,
+interactions or path differ, or when a frozen task is missing or out of order. The scenario takes no captures,
+so the capture names in the sections below refer to the first audit's run.
 
 **Set-up is apart, and it is only what a DM does not do in the session.** Each is a `Setup` row in
 `steps.tsv` and counts for nothing:
@@ -72,8 +77,10 @@ participants in one fight. Its runs have IDs made from their campaign and name, 
 on every run of the test.
 
 The scenario `plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`). `SCREENS`
-in that file fixes its 96 views in code; a missing or extra view always fails, and no row of `allowed.json`
-can excuse one:
+and `HOVERS` in that file fix its 140 views in code; a missing or extra view always fails, and no row of
+`allowed.json` can excuse one. After every act the screen must equal a view that G7 records, or the act is in
+`PASSING` with its reason (setting the stage, one `Next turn` of twelve, the editor scrolled to its loot row);
+so a form or panel that the evening opens between two views cannot go unseen:
 
 - **Pages, at 1200x800 and 960x640 with Lookup closed and open:** tonight's plan; its Travel row open; its
   planned fight open; last session with its played fight open; the ended view of the fight that was played
@@ -84,7 +91,15 @@ can excuse one:
   `Road Encounters`, and the package creature `Cinder Wolf`.
 - **Open menus, at both sizes:** the Add strip's **More**, a Travel row's menu, a planned fight's menu, an
   encounter row's menu, and the loot editor's table menu. Each view must hold the menu's own items.
-- **Hover texts, at both sizes:** the **Last time** link, a roster row's condition words, and the Undo label.
+- **Screens as they stand, at both sizes:** the page the app opens on; last session before and after each
+  played fight opens; Encounters after each ended run closes; a roster row selected; Encounters after the
+  run closes; the Session page under the readers; the World page's list; the new-session form, empty and
+  with its title; the new note written, and saved.
+- **Hovers, at both sizes (`HOVERS`, each with its reason):** the **Last time** link, a planned fight, a Travel
+  row's menu button, a played fight's long title, `Continue fight`, the older fight's reason, an encounter
+  row's menu button, a roster row's condition words, the dock's **Conditions**, the Undo label, a reader's
+  `Edit`, and a package creature's art. A control with no hover today is recorded too, so a hover it gains
+  is a difference.
 
 For each view G7 records every named control in view and every painted text, with its rectangle, and the
 part a person sees when that is less. Every input of the evening is an **act** (113 of them): for each, the
@@ -99,14 +114,30 @@ path label loses the same folder. Each file that the evening changed is kept who
 G7 fails on any difference that a row of `plain_evening/allowed.json` does not name whole: its row of
 section 2.5, the screen, the view, the control, text, act or file, and the rectangles, words or lines. A row
 that matches nothing fails, a row cannot name a view, and the check fails when the reference or the
-evening's record is empty or missing. `audit-freeze` writes the reference again only on `main` and refuses
-while `allowed.json` has a row.
+evening's record is empty or missing.
+
+**G7 compares only with `SPLAT_FROZEN=1`.** Any change of the user interface fails it by design, so the
+default gate runs the scenario and its captures and skips the comparison; the pull requests of the
+session-cycle build plan run `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`. The reference is true only
+for the commit of `main` it was written on, which it records in `frozen_at`, and the failure's first line
+names it. Such a pull request carries one commit that is the output of `devenv shell -- audit-freeze reference`
+on an unchanged commit of `main` (the command refuses other changes in the tree), and makes it again after each
+merge of `main`. A feature adds a view of its own surface to `SCREENS` (a hover to `HOVERS`) and the acts that
+reach it, one row in `allowed.json` for each difference it makes to an old record, and runs
+`devenv shell -- audit-freeze add`: that inserts the new views and acts in their places and leaves every old
+record as it is, so `git diff --diff-algorithm=patience` of the reference shows added lines only; it refuses,
+and writes nothing, while any other difference has no row. A reviewer checks out the commit in `frozen_at`,
+copies in the pull request's frozen files, and runs `devenv shell -- audit-freeze verify`: it writes the
+reference into a scratch folder and fails unless the tree's files are byte for byte the same.
 
 **What G7 does not hold.** Content scrolled out of view: a feature whose change is below the fold adds a
 screen that shows it. A control's behaviour, colour or imagery. A key binding with no visible control: its
 feature tests it. Pages the plain evening does not visit, such as Settings. A same-bytes rewrite of
 `Sessions/.splat-session-paths.json`, which the app makes on a one-second poll of real time; a change of its
-bytes is recorded.
+bytes is recorded. A file created outside the campaign folder, a file created and deleted inside one act, a
+change of permissions with the same bytes, one extra frame of delay, and a corrupt-and-restore of
+`.splat-session-paths.json` inside one act. The `why` of an allowed row: the tool does not check it, so a
+reviewer reads the whole `difference`.
 
 ### The reader's title, measured
 

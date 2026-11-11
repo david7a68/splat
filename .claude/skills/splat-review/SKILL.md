@@ -32,9 +32,9 @@ you can show. Read source at the reviewed commit, list the author's claims, and 
   words on screen go back together with A's data.
 - **A rule fixed for one caller is not fixed.** Grep the shared helper and local copies of it. Look also at
   every other screen that shows the same thing: a list row and its pane, a preview and the live view.
-- **A regenerated reference passes everything.** A feature PR that changes `plain_evening/reference.json`,
-  `plain_evening/files/` or `artifacts/dm-audit/counts.json` is a BLOCK unless its stated task is to freeze
-  again and it says why; a feature adds rows to `allowed.json` and new tasks to the evening.
+- **Frozen files.** A changed row of `artifacts/dm-audit/counts.json` needs the PR's reason. For G7, run
+  `devenv shell -- audit-freeze verify` at the commit of `main` that `reference.json` names in `frozen_at`, with
+  the PR's frozen files copied in; a frozen file that differs is a BLOCK. Read each row of `allowed.json` whole.
 - **Layout rules reviewers keep finding broken:** every target at least 24 px and clear of splitters; a quiet
   action that starts a line uses `line_start`; choices after a message start at its text, safe first, with
   exactly 16 px (`L`) before a destructive one; tokens only; nothing that grows with the content runs every

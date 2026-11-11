@@ -6,11 +6,12 @@
 //! transitions, interactions or path differ from `artifacts/dm-audit/counts.json`, when a task
 //! is missing, new or out of order, or when a counted act finds no control.
 //!
-//! A feature adds its acts as new tasks of the evening, then runs `devenv shell -- audit-freeze
-//! add`. That writes a row for each new task and leaves every frozen row as it is; it refuses,
-//! and writes nothing, when a frozen task's transitions, interactions or path differ, or when a
-//! frozen task is missing or out of order. Only a pull request whose stated task is to freeze
-//! again runs `audit-freeze` with no `add`, which writes every row from this run.
+//! G6 runs in every gate. A change that makes a task cost more or fewer acts fails it; when that
+//! is meant, its author runs `devenv shell -- audit-freeze counts`, which writes every row from
+//! this run, and says in the pull request why. A feature that adds its own acts adds them as new
+//! tasks and runs `devenv shell -- audit-freeze add`: that writes a row for each new task and
+//! leaves every frozen row as it is; it refuses, and writes nothing, when a frozen task's
+//! transitions, interactions or path differ, or when a frozen task is missing or out of order.
 //!
 //! Set-up acts make the fixture ready. They are listed in `steps.tsv` as `Setup` and never
 //! counted, so a set-up change cannot move a count.
@@ -35,6 +36,8 @@ use std::{
 const WRITE: &str = "SPLAT_DM_AUDIT_WRITE";
 /// The one way a feature adds its tasks.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
+/// How an author records counts that change on purpose.
+const COUNTS_COMMAND: &str = "devenv shell -- audit-freeze counts";
 /// What a new task's line says, so that `add` knows the lines it may write.
 const NEW_TASK: &str = "a new task, not in counts.json";
 
@@ -753,23 +756,28 @@ fn blocked(rows: &[Row]) -> Vec<String> {
 
 /// What differs between the frozen counts and this evening's, one line each.
 fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Vec<String> {
-    let name = |task: &TaskCount| format!("{} / {}", task.phase, task.task);
+    let name =
+        |task: &TaskCount| format!("the task \"{}\" ({} the session)", task.task, task.phase);
     let mut out = blocked(rows);
     for old in frozen {
         match measured
             .iter()
             .find(|new| new.phase == old.phase && new.task == old.task)
         {
-            None => out.push(format!("{}: frozen, but not played", name(old))),
+            None => out.push(format!(
+                "{} is in counts.json, but the evening no longer plays it",
+                name(old)
+            )),
             Some(new) if new != old => out.push(format!(
-                "{}: transitions {} -> {}, interactions {} -> {}, path [{}] -> [{}]",
+                "{} now takes {} interactions and {} page changes, through {}. counts.json says {} \
+                 interactions and {} page changes, through {}",
                 name(old),
-                old.transitions,
-                new.transitions,
-                old.interactions,
                 new.interactions,
-                old.path,
-                new.path
+                new.transitions,
+                new.path,
+                old.interactions,
+                old.transitions,
+                old.path
             )),
             Some(_) => {}
         }
@@ -780,7 +788,7 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
             .any(|old| old.phase == new.phase && old.task == new.task)
         {
             out.push(format!(
-                "{}: {NEW_TASK} ({} transitions, {} interactions). A feature adds it with `{ADD_COMMAND}`",
+                "{} is {NEW_TASK} ({} page changes, {} interactions). Add its row with `{ADD_COMMAND}`",
                 name(new),
                 new.transitions,
                 new.interactions
@@ -841,9 +849,12 @@ pub fn run(d: &mut Driver<'_>) {
             blocked.join("\n")
         );
         let about = match mode {
-            "all" => "G6 reads this. audit-freeze writes it on main. A feature adds its new tasks \
-                      with `devenv shell -- audit-freeze add`, which leaves every row here as it is."
-                .to_owned(),
+            "all" => {
+                "G6 reads this in every gate. `devenv shell -- audit-freeze counts` writes it; a \
+                      feature adds its new tasks with `devenv shell -- audit-freeze add`, which \
+                      leaves every row here as it is."
+                    .to_owned()
+            }
             "add" => {
                 let frozen = read_frozen();
                 let refused: Vec<String> = differences(&frozen.tasks, &measured, &record.rows)
@@ -879,9 +890,12 @@ pub fn run(d: &mut Driver<'_>) {
     let found = differences(&frozen.tasks, &measured, &record.rows);
     assert!(
         found.is_empty(),
-        "G6: {} differences from the frozen evening. First: {}\nAll:\n{}",
-        found.len(),
+        "G6: the audit's evening (artifacts/dm-audit/) does not cost what counts.json says. {}.\n\
+         If this change is meant, run `{COUNTS_COMMAND}` and say in the pull request why the task \
+         costs more or less. If it is not meant, your change made the task cost more or less: \
+         artifacts/dm-audit/steps.tsv lists each act of the task.\nAll {} differences:\n{}",
         found[0],
+        found.len(),
         found.join("\n")
     );
     let (transitions, interactions) = total(&measured);

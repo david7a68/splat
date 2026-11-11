@@ -20,13 +20,22 @@
 //! Any other difference fails unless one row of `plain_evening/allowed.json` names exactly that
 //! difference, with its row of section 2.5. A row that matches nothing fails.
 //!
-//! A feature adds a view of its own surface to `SCREENS` (and, where it needs one, the acts that
-//! reach it), adds rows to `allowed.json` for each difference it makes to an old record, and
-//! runs `devenv shell -- audit-freeze add`. That writes the new views and acts into the reference
-//! in their places and leaves every old record as it is; it refuses, and writes nothing, while
-//! any other difference has no row. Only a pull request whose stated task is to freeze again runs
-//! `audit-freeze` with no `add`: that writes the whole reference, its files and
-//! `artifacts/dm-audit/titles.tsv`, and refuses while `allowed.json` has a row.
+//! **G7 compares only with `SPLAT_FROZEN=1`.** Any change of the user interface fails it by
+//! design, so the default gate runs the scenario and its captures and skips the comparison. The
+//! pull requests of the session-cycle build plan run the gate with the switch:
+//!
+//! - `devenv shell -- audit-freeze reference` writes the reference, its files and
+//!   `artifacts/dm-audit/titles.tsv` on an unchanged commit of `main`, and records that commit in
+//!   `frozen_at`. A pull request carries that output as one commit of its own, and makes it again
+//!   after each merge of `main`. It refuses a tree with other changes, and while `allowed.json`
+//!   has a row.
+//! - `devenv shell -- audit-freeze add` is how a feature adds a view of its own surface (to
+//!   `SCREENS` or `HOVERS`) and the acts that reach it: it inserts the new views and acts in their
+//!   places and leaves every old record as it is. It refuses, and writes nothing, while any other
+//!   difference has no row in `allowed.json`.
+//! - `devenv shell -- audit-freeze verify` writes the reference into a scratch folder and fails
+//!   unless the tree's reference is byte for byte the same: a reviewer runs it at the commit that
+//!   `frozen_at` names, with the pull request's frozen files copied in.
 use super::{
     driver::{Driver, Sizes},
     fixture::{
@@ -49,6 +58,12 @@ use std::{
 
 /// `all` writes the reference from this run; `add` adds new views and acts only.
 const WRITE: &str = "SPLAT_PLAIN_EVENING_WRITE";
+/// G7 compares with the reference only when this is `1`.
+const FROZEN: &str = "SPLAT_FROZEN";
+/// The commit of `main` a reference is written on, which `audit-freeze reference` passes.
+const FROZEN_AT: &str = "SPLAT_FROZEN_AT";
+/// Where `audit-freeze verify` writes its reference, in place of the tree.
+const OUT: &str = "SPLAT_PLAIN_EVENING_OUT";
 /// The one way a feature adds its views and acts.
 const ADD_COMMAND: &str = "devenv shell -- audit-freeze add";
 const SCENARIO: &str = "plain-evening";
@@ -296,6 +311,8 @@ struct Act {
 #[derive(Serialize, Deserialize, Default)]
 struct Reference {
     about: String,
+    /// The commit of `main` this reference was written on.
+    frozen_at: String,
     views: Vec<View>,
     acts: Vec<Act>,
     /// Each file at the start, by the SHA-256 of its bytes.
@@ -1312,6 +1329,7 @@ fn differences(reference: &Reference, ev: &Evening, start: &Bytes, end: &Bytes) 
 fn reference_text(reference: &Reference) -> String {
     let mut out = String::from("{\n");
     let _ = writeln!(out, "\"about\": {},", json(&reference.about));
+    let _ = writeln!(out, "\"frozen_at\": {},", json(&reference.frozen_at));
     out.push_str("\"views\": [\n");
     for (index, view) in reference.views.iter().enumerate() {
         let _ = writeln!(
@@ -1392,8 +1410,21 @@ fn view_faults(what: &str, views: &[View]) -> Vec<String> {
     faults
 }
 
-fn write_reference(ev: Evening, start: &Bytes, end: &Bytes) {
-    let files = folder().join("files");
+/// The reference, its files and `titles.tsv` go to the tree, or to `out` for `verify`.
+fn write_reference(
+    ev: Evening,
+    start: &Bytes,
+    end: &Bytes,
+    frozen_at: String,
+    out: Option<PathBuf>,
+) {
+    let reference_folder = out.clone().unwrap_or_else(folder);
+    let titles_path = out.map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit/titles.tsv"),
+        |out| out.join("titles.tsv"),
+    );
+    fs::create_dir_all(&reference_folder).expect("create the reference folder");
+    let files = reference_folder.join("files");
     let _ = fs::remove_dir_all(&files);
     let mut at_end = BTreeMap::new();
     for (path, bytes) in end {
@@ -1408,9 +1439,12 @@ fn write_reference(ev: Evening, start: &Bytes, end: &Bytes) {
         }
     }
     let reference = Reference {
-        about: "G7 reads this. Written by audit-freeze from the plain-evening scenario on main. \
-                A feature pull request never writes it again: it adds rows to allowed.json."
-            .into(),
+        about:
+            "G7 reads this with SPLAT_FROZEN=1. `devenv shell -- audit-freeze reference` writes it \
+                on the commit of main in frozen_at; a feature adds its views with \
+                `devenv shell -- audit-freeze add`."
+                .into(),
+        frozen_at,
         views: ev.views,
         acts: ev.acts,
         files_at_start: start
@@ -1419,19 +1453,18 @@ fn write_reference(ev: Evening, start: &Bytes, end: &Bytes) {
             .collect(),
         files_at_end: at_end,
     };
-    fs::write(folder().join("reference.json"), reference_text(&reference))
-        .expect("write the reference");
+    fs::write(
+        reference_folder.join("reference.json"),
+        reference_text(&reference),
+    )
+    .expect("write the reference");
     let mut titles = String::from(
         "reader\twindow\ttitle\tentry\tfont size\ttitle width\ttitle left\tart\tEdit\tscroll bar\tinside\troom after\n",
     );
     for line in &ev.titles {
         let _ = writeln!(titles, "{line}");
     }
-    fs::write(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit/titles.tsv"),
-        titles,
-    )
-    .expect("write titles.tsv");
+    fs::write(titles_path, titles).expect("write titles.tsv");
 }
 
 /// The reference with this evening's new views and new acts in their places. Every record
@@ -1496,11 +1529,28 @@ pub fn run(d: &mut Driver<'_>) {
             allowed.rows.is_empty(),
             "G7: allowed.json has rows. They describe changes from this reference, so write it only on main with no rows"
         );
-        write_reference(ev, &start, &end);
+        let frozen_at = std::env::var(FROZEN_AT).unwrap_or_else(|_| {
+            panic!("G7: {FROZEN_AT} names no commit: write the reference with `devenv shell -- audit-freeze reference`")
+        });
+        write_reference(
+            ev,
+            &start,
+            &end,
+            frozen_at,
+            std::env::var_os(OUT).map(PathBuf::from),
+        );
         println!("plain-evening: wrote the reference");
         return;
     }
     let adding = mode.as_deref() == Some("add");
+    if !adding && std::env::var(FROZEN).as_deref() != Ok("1") {
+        // Off by default: every change of the user interface would fail it.
+        d.not_measured(
+            "G7",
+            "the plain reference is compared only with SPLAT_FROZEN=1, which the session-cycle build plan's pull requests use",
+        );
+        return;
+    }
     let reference: Reference = read(&folder().join("reference.json"));
     // A view that SCREENS names and the reference lacks is a feature's new view: `add` writes it.
     for fault in view_faults("the reference", &reference.views) {
@@ -1572,7 +1622,11 @@ pub fn run(d: &mut Driver<'_>) {
     }
     assert!(
         faults.is_empty(),
-        "G7: {} differences from the plain reference. First: {}\nAll:\n{}",
+        "G7 (reference frozen at main {}): {} differences from the plain reference. First: {}\n\
+         If the reference is older than this branch's base, write it again at the base with \
+         `devenv shell -- audit-freeze reference` as one commit. A feature's own change needs a row \
+         in allowed.json; its new view, `devenv shell -- audit-freeze add`.\nAll:\n{}",
+        reference.frozen_at,
         faults.len(),
         faults[0],
         faults.join("\n")
@@ -1581,10 +1635,11 @@ pub fn run(d: &mut Driver<'_>) {
         "G7",
         true,
         format!(
-            "{} views, {} acts and {} files match the reference, with {} allowed rows",
+            "{} views, {} acts and {} files match the reference frozen at main {}, with {} allowed rows",
             ev.views.len(),
             ev.acts.len(),
             end.len(),
+            reference.frozen_at,
             allowed.rows.len()
         ),
     );
