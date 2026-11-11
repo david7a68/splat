@@ -3569,7 +3569,8 @@ pub fn package_about(d: &mut Driver<'_>) {
     let editor_below_read = |d: &mut Driver<'_>| {
         [SMALL, DEFAULT, LARGE].map(|size| {
             d.at_size(size, |d| {
-                Some(d.place_of("Markdown editor")?.top() - d.place_of("Read")?.bottom())
+                // The editor's frame: its accessible rect follows its scrolled text.
+                Some(d.input_frame("Markdown editor")?.0.top() - d.place_of("Read")?.bottom())
             })
         })
     };
@@ -3691,25 +3692,23 @@ pub fn package_about(d: &mut Driver<'_>) {
     );
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
-    // Astra re-check: a Save reason that wraps (a read-only file, at 960) scrolls inside its
-    // two-line slot; before it, with it and after Discard the editor keeps its place.
-    let changed = format!("{written}\nA note for the watch.\n");
-    d.replace_editor_text(&changed);
+    // Astra re-check: a Save reason that wraps (a long unknown kind) scrolls inside its two-line
+    // slot; before it, with it and after Discard the editor keeps its place.
     let unsaved = (kept(d), editor_below_read(d));
-    let mut read_only = fs::metadata(&path).unwrap().permissions();
-    read_only.set_readonly(true);
-    fs::set_permissions(&path, read_only.clone()).unwrap();
-    d.click("Save");
-    d.wait_for_text("Not saved");
+    let long_kind = written.replacen(
+        "splat_kind: package",
+        "splat_kind: package of the watch that keeps the ember gate beyond the long ash road",
+        1,
+    );
+    assert_ne!(long_kind, written, "fixture: the manifest names its kind");
+    d.replace_editor_text(&long_kind);
+    d.wait_for_text("Invalid");
     let reason = d
         .nodes()
         .into_iter()
-        .find(|node| node.name.contains("read only") || node.name.contains("no permission"))
+        .find(|node| node.name.contains("ember gate beyond the long ash road"))
         .map(|node| node.name);
     let failed = (kept(d), editor_below_read(d));
-    #[allow(clippy::permissions_set_readonly_false)]
-    read_only.set_readonly(false);
-    fs::set_permissions(&path, read_only).unwrap();
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     let after = (kept(d), editor_below_read(d));
