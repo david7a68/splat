@@ -205,14 +205,14 @@ reason after Unsaved and Discard in the save row. Reserve its height so the firs
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
-and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (Lookup's `Show N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. A quiet
 message choice without an icon (`Use the copy's entries` below the registration message) hangs its padding
 into that column instead, so its words also start at the message's words. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
-`Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
+`Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
 (`Copy text`, `Cancel`) start at the text edge above them. UI text that names a thing uses curly quotation marks
 (`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes.
@@ -431,7 +431,9 @@ only when different from the campaign's main source. Shorten metadata only, by w
 keep the whole row. The kind and other parts before a fault go first, then parts after it. The file, which tells
 duplicate rows apart, stays whole while the fault shortens to whole words and then to its warning mark; only then is
 the file cut. No cut is inside a word, and a cut ends with `…`, never on a separator. Results never scroll sideways.
-Clicking a result or scrolling into its reader closes the list. `Show all N` is quiet and lists every match in place,
+Clicking a result or scrolling into its reader closes the list. While the list is closed, the quiet `Show 1 result`
+or `Show N results` opens it again. An action that shows hidden items starts with a verb; a bare count reads as a
+label. Its accessible name stays `Show the results`. `Show all N` is quiet and lists every match in place,
 in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
 return to five. Clear sits beside nonempty search only. Back, Open in Library and the close
 icon share the title line. Creation actions follow results with the proposed name, only without an exact
@@ -587,10 +589,12 @@ until the next note or plan edit.
 
 ## World
 
-Readers show the relative path, Edit in Obsidian and Show file for every note. Duplicate readers keep
+Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. Duplicate readers keep
 the path on this file line only; search results keep paths to distinguish names. A duplicate Lookup row
 puts the path right after the name, so the part that differs is cut last. Plain notes use
-one-line rows. Typed names that match show each filename on the second line. Copied typed notes remain
+one-line rows. A plain note's `Give this note a type` section says what the choice does for the DM: `Gives this note a
+type. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
+text states the purpose in the DM's words; file formats and field names go to Technical details. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
 readable body says `Nothing written yet.` only. The file line keeps the one `Edit in Obsidian` link.
@@ -689,7 +693,9 @@ keep the remembered note without selected fill.
 Broken notes stay under Cannot be read. Each row's second line states the cause; a long path wraps and is never cut. The group uses the same gap as folder headings. They use the Campaign repair source editor. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
-permission) cannot open in the source editor. Its pane keeps the title and file line, leads with an error that names
+permission) cannot open in the source editor. Its pane keeps the title and a file line with only `Show file`: no
+editor link, because no editor can open the file either. When a change such as Part of finds an open note that can no
+longer be read, its error and the note's file line also offer no editor link until the file reads again. It leads with an error that names
 the file (`Splat cannot read Notes/Broken.md as text.`), then gives the recovery in plain words with Try again and
 Cancel at the message text. Technical details below holds the system's words. Its row's cause is short
 (`Text format cannot be read`). Try again reads the folder again: a fixed note opens in the reader, a note that is
