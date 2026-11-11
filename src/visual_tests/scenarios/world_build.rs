@@ -4234,9 +4234,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         .path
         .join("Encounters/Bridge Ambush.md");
     let on_disk = fs::read(&bridge).unwrap();
-    let invalid = d.visible_text("Invalid")
-        && !d.visible_text("Unsaved")
-        && d.is_disabled(SAVE_ENCOUNTER);
+    let invalid =
+        d.visible_text("Invalid") && !d.visible_text("Unsaved") && d.is_disabled(SAVE_ENCOUNTER);
     d.press_ctrl(Key::S);
     d.observe(
         "iter-24-B-FC1",

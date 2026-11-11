@@ -2165,9 +2165,7 @@ impl ReadOnly {
     pub(crate) fn reason(self) -> &'static str {
         match self {
             Self::File => "This file is read only. Make it writable, then Save again.",
-            Self::Folder => {
-                "The campaign folder is read only. Make it writable, then Save again."
-            }
+            Self::Folder => "The campaign folder is read only. Make it writable, then Save again.",
         }
     }
 }
@@ -10508,7 +10506,10 @@ mod tests {
         // iter-24-B FL1, lookalike outside the rule: a folder inside the campaign refused the
         // write, not the file or the campaign folder, so the owner line stays Editable.
         assert_eq!(
-            library.save_failure.as_ref().and_then(|failure| failure.read_only),
+            library
+                .save_failure
+                .as_ref()
+                .and_then(|failure| failure.read_only),
             None,
             "FL1-folder-inside-not-read-only"
         );
@@ -10634,7 +10635,10 @@ mod tests {
         let painted = sd1_painted(&mut library);
         fs::set_permissions(&path, file_permissions).unwrap();
         assert_eq!(
-            library.save_failure.as_ref().and_then(|failure| failure.read_only),
+            library
+                .save_failure
+                .as_ref()
+                .and_then(|failure| failure.read_only),
             Some(ReadOnly::File),
             "FL1-kind"
         );
@@ -10644,7 +10648,11 @@ mod tests {
                 && painted.contains("This file is read only. Make it writable, then Save again."),
             "FL1-read-only-owner-line\n{painted}"
         );
-        assert_eq!(fs::read_to_string(&path).unwrap(), accepted, "FL1-not-written");
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            accepted,
+            "FL1-not-written"
+        );
         sd1_type(&mut library, "More.");
         let painted = sd1_painted(&mut library);
         assert!(

@@ -3381,35 +3381,37 @@ impl Encounters {
                 .layout(egui::Layout::top_down(egui::Align::LEFT)),
         );
         {
-        let ui = &mut header;
-        design::page_header(ui, "Encounters", Some(&context), |ui| {
-            if !empty {
-                new = Action::secondary("New encounter")
-                    .icon(icons::ADD)
-                    .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
+            let ui = &mut header;
+            design::page_header(ui, "Encounters", Some(&context), |ui| {
+                if !empty {
+                    new = Action::secondary("New encounter")
+                        .icon(icons::ADD)
+                        .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
+                        .show(ui)
+                        .clicked();
+                    new_group = Action::quiet("New group")
+                        .icon(icons::ADD)
+                        .blocked(
+                            group_blocked.or(loading.then_some("Still reading this campaign.")),
+                        )
+                        .hint("A reusable set of creatures to add to a running encounter")
+                        .show(ui)
+                        .clicked();
+                }
+                // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
+                reload = Action::quiet("Reload from disk")
+                    .icon(icons::REFRESH)
+                    .blocked(
+                        group_blocked
+                            .or(loading.then_some("Still reading this campaign."))
+                            .or(settings_changed.then_some(
+                                "Save or discard the changes in Campaign, Rules and runs first.",
+                            )),
+                    )
+                    .hint("Read encounters and runs from disk again")
                     .show(ui)
                     .clicked();
-                new_group = Action::quiet("New group")
-                    .icon(icons::ADD)
-                    .blocked(group_blocked.or(loading.then_some("Still reading this campaign.")))
-                    .hint("A reusable set of creatures to add to a running encounter")
-                    .show(ui)
-                    .clicked();
-            }
-            // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
-            reload = Action::quiet("Reload from disk")
-                .icon(icons::REFRESH)
-                .blocked(
-                    group_blocked
-                        .or(loading.then_some("Still reading this campaign."))
-                        .or(settings_changed.then_some(
-                            "Save or discard the changes in Campaign, Rules and runs first.",
-                        )),
-                )
-                .hint("Read encounters and runs from disk again")
-                .show(ui)
-                .clicked();
-        });
+            });
         }
         let used = header.min_rect();
         ui.advance_cursor_after_rect(used.with_min_x(room.min.x));
@@ -6657,7 +6659,11 @@ mod tests {
         let stats = editor.run.as_ref().unwrap().participant_stats(0);
         editor.draft.as_mut().unwrap().body = "The bridge groans.".into();
         editor.save_draft(&egui::Context::default(), &campaign, &[]);
-        assert!(fs::read_to_string(&path).unwrap().contains("The bridge groans."));
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("The bridge groans.")
+        );
         let run = editor.run.as_ref().unwrap();
         assert_eq!(run.prep().0, "The bridge groans.");
         assert_eq!(run.participant_stats(0), stats);

@@ -2004,7 +2004,11 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
-            let empty = draft.setup.members.is_empty().then_some("Add a creature first");
+            let empty = draft
+                .setup
+                .members
+                .is_empty()
+                .then_some("Add a creature first");
             let button = if dirty && !has_run {
                 Action::primary("Save group")
             } else {
@@ -2019,8 +2023,7 @@ impl Encounters {
             });
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
-            let mut room =
-                block_right - ui.cursor().left() - button.natural_width(ui) - gap;
+            let mut room = block_right - ui.cursor().left() - button.natural_width(ui) - gap;
             let mut fits = |reason: Option<&'static str>| {
                 reason.filter(|reason| {
                     let width = design::number_width(ui, reason, &font) + gap;
@@ -2269,8 +2272,7 @@ fn members_pane(
     // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
     // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
     let width = (ui.available_width() - ui.spacing().scroll.allocated_width())
-        .min(design::LIST_MEASURE)
-        .max(0.0);
+        .clamp(0.0, design::LIST_MEASURE);
     egui::ScrollArea::vertical()
         .id_salt("group_editor")
         .auto_shrink([false, false])

@@ -499,7 +499,9 @@ pub fn run(d: &mut Driver<'_>) {
         d.observe(
             "iter-24-B-FB6",
             edges.is_some_and(|edges| edges.iter().all(|x| (x - edges[0]).abs() <= 1.0)),
-            format!("At {size:?}, Display name, Note, Other effect's Add and Loot end at {edges:?}"),
+            format!(
+                "At {size:?}, Display name, Note, Other effect's Add and Loot end at {edges:?}"
+            ),
         );
     }
     // FD2: the unread value is a warning message, and its example starts at its words.

@@ -222,7 +222,10 @@ impl RunGroup {
         {
             // FJ5: `Changed` keeps its muted pencil wherever a group's summary shows, as in
             // Arrivals. The no-break space keeps the two on one line.
-            summary.push_str(&format!(" · {}\u{a0}Changed", crate::design::icons::CHANGED));
+            summary.push_str(&format!(
+                " · {}\u{a0}Changed",
+                crate::design::icons::CHANGED
+            ));
         }
         if self
             .members

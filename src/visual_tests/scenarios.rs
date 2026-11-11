@@ -2606,7 +2606,9 @@ pub mod encounter_build {
                     .zip(*party)
                     .is_some_and(|(encounters, party)| (encounters - party).abs() < 0.5)
             }),
-            format!("Encounters title x {encounters:?}, Party title x {party:?} at 960, 1200, 1920"),
+            format!(
+                "Encounters title x {encounters:?}, Party title x {party:?} at 960, 1200, 1920"
+            ),
         );
         d.observe(
             "iter-24-B-FE4-gutter",
@@ -2615,7 +2617,9 @@ pub mod encounter_build {
                     (content - title - (crate::design::L - crate::design::M)).abs() < 0.5
                 })
             }),
-            format!("Title x {encounters:?}, list heading x {content:?}: the list keeps its gutter"),
+            format!(
+                "Title x {encounters:?}, list heading x {content:?}: the list keeps its gutter"
+            ),
         );
         // T5.3 measures the whole build, so it starts from the cold start.
         d.begin_task();
@@ -2760,7 +2764,12 @@ pub mod encounter_build {
         let mut sentence = None;
         d.each_painted_text(|text, _| {
             let words = &text.galley.job.text;
-            let size = text.galley.job.sections.first().map(|s| s.format.font_id.size);
+            let size = text
+                .galley
+                .job
+                .sections
+                .first()
+                .map(|s| s.format.font_id.size);
             if words == "Check the spelling, or check" || words == "Campaign → Packages" {
                 sizes.push((words.clone(), size));
                 if words.starts_with("Check") {
@@ -2784,7 +2793,9 @@ pub mod encounter_build {
         d.observe(
             "iter-24-B-FB4",
             sizes.len() == 2
-                && sizes.iter().all(|(_, size)| size.is_some() && *size == sizes[0].1)
+                && sizes
+                    .iter()
+                    .all(|(_, size)| size.is_some() && *size == sizes[0].1)
                 && stop.is_some_and(|(x, size)| {
                     size == sizes[0].1 && link.is_some_and(|link| x >= link.left())
                 })
@@ -12171,7 +12182,10 @@ pub mod encounter_history {
                     "Lists this encounter under Ready to run",
                     egui::Rect::EVERYTHING,
                 )?;
-                Some(help.top() >= option.bottom() - 0.5 && help.top() < option.bottom() + crate::design::L)
+                Some(
+                    help.top() >= option.bottom() - 0.5
+                        && help.top() < option.bottom() + crate::design::L,
+                )
             });
             d.observe(
                 "iter-24-B-FI7",
@@ -15470,7 +15484,9 @@ pub mod package_to_table {
         // and its Save is not blocked.
         d.observe(
             "iter-24-B-FC1-ready",
-            d.visible_text("Unsaved") && !d.visible_text("Invalid") && !d.is_disabled(SAVE_ENCOUNTER),
+            d.visible_text("Unsaved")
+                && !d.visible_text("Invalid")
+                && !d.is_disabled(SAVE_ENCOUNTER),
             "A draft that Save accepts says Unsaved, with Save open",
         );
         // FD1: one fault, one tone. The search result and the roster row paint `HP not set`,
