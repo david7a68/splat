@@ -60,6 +60,23 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
     });
 }
 
+/// One detail row of a stat block (Speed, Senses, Languages, …). Every line has the link pitch
+/// (`XL`), as the lines of a row with dice links do, so all detail rows of a stat block have one
+/// pitch and no row looks grouped with another. The extra height goes below the words.
+pub fn stat_detail(ui: &mut Ui, label: &str, value: &str, color: egui::Color32) {
+    detail_row(ui, label, |ui| {
+        ui.add(
+            egui::Label::new(
+                Type::Stat
+                    .rich(ui, value)
+                    .color(color)
+                    .line_height(Some(XL)),
+            )
+            .wrap(),
+        );
+    });
+}
+
 /// A reference row whose value has dice links. A linked line is taller than a stat line, and
 /// the label sits on the baseline of the value's first line, as in every other row.
 pub fn linked_detail(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
