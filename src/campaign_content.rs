@@ -103,8 +103,10 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
     })
 }
 
-/// Why `Save repaired note` would refuse this draft, checked as Save checks it: the YAML fault,
-/// or an identity that settings own. None when Save would write it.
+/// Why `Save repaired note` would refuse this draft: Save's own check of the text, run before
+/// it writes (the YAML fault, or an identity that settings own). The state word, the message
+/// and Save's availability come from it. None when Save would write the text; the file itself
+/// (read only, changed on disk) is checked when Save writes.
 fn repair_refusal(path: &str, draft: &str, campaign: Uuid) -> Option<String> {
     // The save row asks on every frame; the parse is remembered as `repair_problem`'s is.
     static REFUSALS: splat::memo::Memo<Option<String>> = splat::memo::Memo::new(64);
@@ -720,8 +722,10 @@ impl CampaignContent {
             })
             .flatten();
         for (path, baseline, draft) in &mut self.repairs {
-            let (problem, error_line) = repair_problem(path, draft);
-            let problem = problem
+            // The message, the state word and Save all ask Save's own question of the draft.
+            let (_, error_line) = repair_problem(path, draft);
+            let refusal = repair_refusal(path, draft, active.id);
+            let problem = refusal
                 .as_deref()
                 .unwrap_or("The repair has not been saved");
             let id = egui::Id::new(("repair_open", path.as_str()));
@@ -756,7 +760,6 @@ impl CampaignContent {
                         let dirty = draft != baseline;
                         // The Library rule: the draft is checked as Save checks it. While Save
                         // would refuse it, the state says Invalid and Save names the cause.
-                        let refusal = repair_refusal(path, draft, active.id);
                         let c = colors();
                         design::save_row_state(
                             ui,

@@ -1858,6 +1858,32 @@ pub mod campaign_content {
             },
         );
         d.state("repair-dirty", Sizes::All);
+        // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
+        // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
+        // nothing.
+        let on_disk = std::fs::read(d.root.join(BROKEN_NOTE)).unwrap();
+        let owned = crate::library::note_text("Broken", "package", Some("broken"));
+        assert!(splat::content::Entry::parse("Notes/Broken.md", &owned).is_ok());
+        d.replace_text_in("Note text", &owned);
+        d.press_ctrl(Key::S);
+        d.settle();
+        const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+        d.observe(
+            "iter-23-C-FA3-refused",
+            d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.visible_text(OWNERSHIP)
+                && d.is_disabled("Save repaired note")
+                && super::session_recording::accent_filled(d).is_empty()
+                && std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk,
+            format!(
+                "A parsed draft that Save refuses: Invalid {}, reason {}, Save blocked {}, file unchanged {}",
+                d.visible_text("Invalid"),
+                d.visible_text(OWNERSHIP),
+                d.is_disabled("Save repaired note"),
+                std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk
+            ),
+        );
         // A draft that Save would write says Unsaved, and its Save is the one primary action.
         let valid = crate::library::note_text("Broken", "rule", None);
         d.replace_text_in("Note text", &valid);
