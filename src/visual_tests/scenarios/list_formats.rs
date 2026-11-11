@@ -632,6 +632,50 @@ pub fn run(d: &mut Driver<'_>) {
         },
     );
     d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
+    // Round 22 FD1 edge: with two flags, one file line follows the last flag, at its words.
+    let one_flag = fs::read_to_string(&path).unwrap();
+    fs::write(
+        &path,
+        format!("{one_flag}\n## Day 9: Later\n%% splat id=t-iter22-extra %%\n"),
+    )
+    .unwrap();
+    d.app_mut().timeline.reload();
+    d.wait_for_text("“Day 9” is day 2 in order.");
+    for size in [SMALL, DEFAULT] {
+        let placed = d.at_size(size, |d| {
+            let last = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("“Day 9” is day 2 in order."))
+                .and_then(|node| {
+                    node.name
+                        .split_once(": ")
+                        .map(|(line, _)| format!("{line}: "))
+                })
+                .ok_or("the second flag is not shown".to_owned())?;
+            let files = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == path.display().to_string())
+                .count();
+            super::file_links_at_message_words(d, &last, &path, crate::timeline::FILE).and_then(
+                |()| {
+                    (files == 1 && d.visible_text("Line 9: “Day 5”"))
+                        .then_some(())
+                        .ok_or(format!("{files} file lines"))
+                },
+            )
+        });
+        d.observe(
+            "iter-22-C-FD1-two-flags",
+            placed.is_ok(),
+            format!("At {size:?}, two Timeline flags and their file line: {placed:?}"),
+        );
+    }
+    fs::write(&path, &one_flag).unwrap();
+    d.app_mut().timeline.reload();
+    d.settle();
+    assert!(!d.visible_text("“Day 9”"));
     d.app_mut().timeline.touch();
     d.app_mut().timeline.save();
     d.settle();
