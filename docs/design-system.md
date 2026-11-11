@@ -688,9 +688,9 @@ chosen`). Its use checkbox starts
 off when the original is used. Keep the warning above the `Register a copy` Label title and fields.
 The named Register action is primary when the name is ready and no run is open, as `Create package` is.
 Quiet Cancel follows it after an `L` gap. It closes the form without writing
-and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
-original and the copy is registered but not used. When on, it says every entry is used, including future
-entries. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
+and keeps the name and the campaign choice for reopening. When the choice is off, help says the campaign keeps
+the original and the copy is registered but not chosen. When on, it says every entry is used, including future
+entries. Help under a field or section is `design::help`: `Small` muted words at `READER_MEASURE`. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
 quiet `Undo package registration` sits on the message line, as every Undo after a message does, and bordered
 `Use the copy in encounters`, without an icon, sits on the next line: its border starts at the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
 copy.` keeps `Undo source change` on its

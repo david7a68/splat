@@ -2514,7 +2514,8 @@ pub(crate) fn use_checkbox(ui: &mut egui::Ui, not_used: &mut bool, help: &str) {
     let mut enabled = !*not_used;
     ui.checkbox(&mut enabled, "Choose for this campaign");
     *not_used = !enabled;
-    ui.label(Type::Small.rich(ui, help).color(colors().muted));
+    // Help keeps the reader measure (round 25 family).
+    design::help(ui, help);
 }
 
 fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
@@ -5231,9 +5232,9 @@ impl Library {
                                 let help = if enabled {
                                     "Uses every entry in this package, including future entries."
                                 } else {
-                                    "This campaign keeps the original. The copy is registered but not used."
+                                    "This campaign keeps the original. The copy is registered but not chosen."
                                 };
-                                ui.label(Type::Small.rich(ui, help).color(colors().muted));
+                                design::help(ui, help);
                             }
                         }
                         let label = if self.copy_name_open && self.copy_name.trim().is_empty() {

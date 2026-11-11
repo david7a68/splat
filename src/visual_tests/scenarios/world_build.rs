@@ -7131,7 +7131,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("copied-package-needs-a-name", Sizes::All);
     d.replace_text_in("New package name", "Ashen Reaches");
     d.expect("REGISTER A COPY");
-    d.expect("This campaign keeps the original. The copy is registered but not used.");
+    d.expect("This campaign keeps the original. The copy is registered but not chosen.");
     d.expect("Cancel");
     d.observe_both(
         "iter-4-D-FD2",
@@ -7160,7 +7160,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("copied-package-new-name", Sizes::All);
     d.click("Choose for this campaign");
     d.expect("Uses every entry in this package, including future entries.");
-    assert!(!d.has("This campaign keeps the original. The copy is registered but not used."));
+    assert!(!d.has("This campaign keeps the original. The copy is registered but not chosen."));
     d.state("copied-package-use-enabled", Sizes::All);
     d.click("Cancel");
     d.expect("Register as a new package");
@@ -7175,7 +7175,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("Register Ashen Reaches");
     d.expect("Uses every entry in this package, including future entries.");
     d.click("Choose for this campaign");
-    d.expect("This campaign keeps the original. The copy is registered but not used.");
+    d.expect("This campaign keeps the original. The copy is registered but not chosen.");
     // Round 24 FC4: the search field's place below the page header, before any result.
     let columns_top = |d: &mut Driver<'_>| {
         [SMALL, DEFAULT, LARGE].map(|size| {
