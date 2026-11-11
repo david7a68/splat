@@ -4372,14 +4372,26 @@ pub mod run_long_names {
             d.click("Stat block");
         }
         d.wait_for_text("Read the new version");
-        check_line_start(
-            d,
-            "iter-17-B-read-new",
-            "Read the new version",
-            "Cinder Wolf.md has changed.",
-            &[SMALL, DEFAULT, LARGE],
-            None,
-        );
+        // iter-25-R AJ1: the notice's action is a bordered secondary button, and its border
+        // starts at the notice's words.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (button, frame, words) = d.at_size(size, |d| {
+                let button = d.place_of("Read the new version");
+                (
+                    button,
+                    button.and_then(|button| d.control_frame_at(button)),
+                    d.painted_rect_in("Cinder Wolf.md has changed.", egui::Rect::EVERYTHING),
+                )
+            });
+            d.observe(
+                "iter-25-R-AJ1",
+                matches!((button, &frame, words), (Some(button), Some(frame), Some(words))
+                    if frame.stroke.width > 0.0
+                        && (button.left() - words.left()).abs() <= 1.0
+                        && button.top() >= words.bottom() - 0.5),
+                format!("At {size:?}, Read the new version {button:?} is bordered ({:?}) under the words {words:?}", frame.map(|f| f.stroke)),
+            );
+        }
         // iter-20-R-ST1: the notice says what the card shows, subject first.
         d.observe(
             "iter-20-R-ST1",
@@ -6539,8 +6551,24 @@ pub mod run_edge_states {
         );
         d.goal("record a long effect");
         d.begin_task();
+        // iter-25-R FH1: Conc keeps its frame's room when off, so turning it on moves neither its
+        // own words nor Absent beside it.
+        let dock = |d: &Driver<'_>| {
+            (
+                d.place_of("Concentrating")
+                    .map(|rect| (rect.left(), rect.width())),
+                d.place_of("Absent").map(|rect| rect.left()),
+            )
+        };
+        let conc_off = dock(d);
         d.click("Concentrating");
         d.expect(&format!("Undo: start concentration for {TARGET}"));
+        let conc_on = dock(d);
+        d.observe(
+            "iter-25-R-FH1",
+            conc_off.0.is_some() && conc_off.1.is_some() && conc_off == conc_on,
+            format!("Conc and Absent keep their places: off {conc_off:?}, on {conc_on:?}"),
+        );
         d.state_prepared("start-concentration-undo", Sizes::All, |d| {
             undo_keeps_its_word(d, &format!("Undo: start concentration for {TARGET}"));
         });
@@ -12077,6 +12105,36 @@ pub mod encounter_groups {
                 "Other effects: label {label}, Blessed colour {color:?}, placeholder {placeholder}"
             ),
         );
+        // iter-25-R FH2, FJ2: an effect's row menu ends at the form's right edge, where the
+        // Other effect field's Add ends, and sits on the effect's line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (menu, add, word) = d.at_size(size, |d| {
+                let field = d.place_of("Other effect");
+                let add = field.and_then(|field| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name == "Add")
+                        .map(|node| node.rect)
+                        .find(|rect| (rect.center().y - field.center().y).abs() < 1.0)
+                });
+                let menu = d.place_of("More actions for Blessed");
+                let word = menu.and_then(|menu| {
+                    let row = egui::Rect::from_min_max(
+                        egui::pos2(0.0, menu.top() - crate::design::L),
+                        egui::pos2(menu.left(), menu.bottom() + crate::design::L),
+                    );
+                    d.painted_word_rect("Blessed", row)
+                });
+                (menu, add, word)
+            });
+            d.observe(
+                "iter-25-R-FH2",
+                matches!((menu, add, word), (Some(menu), Some(add), Some(word))
+                    if (menu.right() - add.right()).abs() <= 1.0
+                        && (menu.center().y - word.center().y).abs() <= 1.0),
+                format!("At {size:?}, Blessed's menu {menu:?} ends with Add {add:?} on the word's line {word:?}"),
+            );
+        }
         // AI1: Starting conditions uses the run's grid: aligned columns at most `L` apart.
         let columns = d.at_size(LARGE, |d| {
             d.place_of("STARTING CONDITIONS")

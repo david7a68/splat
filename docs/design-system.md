@@ -1177,7 +1177,8 @@ The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, sele
 Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
 background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
 `LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name after an `L`
-gap, not at the roster's far edge. Fit whole words, retain a distinguishing last word or copy number or
+gap, not at the roster's far edge. The selected name keeps `Heading`; it uses `Small` only when that shows the name
+whole. Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
 
@@ -1215,8 +1216,8 @@ as `in Splat’s rolls`, the tiles show the numbers rolled, and nothing tells th
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
 Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
 the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
-was deleted, cannot be read or is not in the campaign), then `Read the new version`, whose words start at the
-sentence's. The sentence is the changed-on-disk state: the warning icon in `document.external`, then words in the
+was deleted, cannot be read or is not in the campaign), then `Read the new version`, a bordered secondary button whose
+border starts at the sentence's words. The sentence is the changed-on-disk state: the warning icon in `document.external`, then words in the
 text colour, so it is not read as part of the stat block. Under that notice a character's
 card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
 current values.`

@@ -1800,8 +1800,9 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         .filter(|c| !official(c))
         .cloned()
         .collect();
+    let width = other_effect_width(ui);
     if let Some(at) =
-        crate::encounter_run::view::other_effects_list(ui, custom.iter().map(String::as_str))
+        crate::encounter_run::view::other_effects_list(ui, custom.iter().map(String::as_str), width)
     {
         conditions.retain(|c| c != &custom[at]);
     }
@@ -1809,7 +1810,6 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    let width = other_effect_width(ui);
     if crate::encounter_run::view::other_effect_field(ui, &mut text, width) {
         if !conditions.iter().any(|c| same_condition(c, text.trim())) {
             conditions.push(text.trim().to_owned());

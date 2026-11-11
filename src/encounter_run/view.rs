@@ -50,10 +50,13 @@ const NAME_ROOM: f32 = 8.0;
 const NAME_LINES: usize = 3;
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
-/// Returns the position in `effects` of the one the DM removed.
+/// Returns the position in `effects` of the one the DM removed. `field` is the width of the
+/// `Other effect…` field below: each row ends where that field's Add ends, so the form has one
+/// right edge (FH2).
 pub(crate) fn other_effects_list<'a>(
     ui: &mut egui::Ui,
     effects: impl IntoIterator<Item = &'a str>,
+    field: f32,
 ) -> Option<usize> {
     let effects: Vec<_> = effects.into_iter().collect();
     if effects.is_empty() {
@@ -61,28 +64,32 @@ pub(crate) fn other_effects_list<'a>(
     }
     let mut removed = None;
     design::group_label(ui, "Other effects");
+    let row = (field + ui.spacing().item_spacing.x + other_effect_add().natural_width(ui))
+        .min(ui.available_width());
     for (at, effect) in effects.into_iter().enumerate() {
-        ui.horizontal(|ui| {
-            let menu_width = Density::Read.control() + design::S;
-            ui.allocate_ui(
-                vec2((ui.available_width() - menu_width).max(design::L), 0.0),
-                |ui| {
-                    ui.add(
-                        egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap(),
-                    );
-                },
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                design::row_menu(ui, effect, |ui| {
-                    if ui.button("Remove").clicked() {
-                        removed = Some(at);
-                        ui.close();
-                    }
-                });
+        // The menu first, at the row's right edge, then the words in the rest of the row, both
+        // centred on the row's line (FH2: an empty-height slot put the words below the menu).
+        let size = vec2(row, Density::Read.control());
+        ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
+            ui.set_max_width(row);
+            design::row_menu(ui, effect, |ui| {
+                if ui.button("Remove").clicked() {
+                    removed = Some(at);
+                    ui.close();
+                }
+            });
+            ui.add_space(design::S);
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(egui::Label::new(Type::Body.rich(ui, effect).color(colors().text)).wrap());
             });
         });
     }
     removed
+}
+
+/// The other-effect field's Add, measured by `other_effects_list` for the form's right edge.
+fn other_effect_add() -> Action<'static> {
+    Action::secondary("Add").density(Density::Read)
 }
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words.
@@ -90,8 +97,7 @@ pub(crate) fn other_effect_field(ui: &mut egui::Ui, text: &mut String, width: f3
     ui.horizontal(|ui| {
         let response = design::text_input(ui, "Other effect", text, "Other effect…", width);
         let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-        (Action::secondary("Add")
-            .density(Density::Read)
+        (other_effect_add()
             .blocked_if(text.trim().is_empty(), "Type an effect first.")
             .show(ui)
             .clicked()
@@ -117,10 +123,15 @@ pub(crate) fn toggle(
     )
     .selected(selected)
     .min_size(vec2(0.0, density.control()));
+    // FH1, FI3: an off toggle keeps the frame's padding, with nothing painted, so turning it
+    // on moves no word and no neighbour.
     let button = if selected {
         button.fill(colors().selected)
     } else {
-        button.frame(false)
+        button
+            .frame(true)
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::NONE)
     };
     let response = ui.add(button);
     design::named(ui, &response, name);
@@ -150,8 +161,8 @@ fn vital_columns(ui: &mut egui::Ui, columns: &[(&str, String)]) {
     );
 }
 
-/// The width `toggle` takes: its words, and the frame's padding when it is selected.
-fn toggle_width(ui: &egui::Ui, label: &str, icon: &str, selected: bool) -> f32 {
+/// The width `toggle` takes, on or off: its words and the frame's padding.
+fn toggle_width(ui: &egui::Ui, label: &str, icon: &str) -> f32 {
     #[cfg(test)]
     CONDITION_MEASURES.with(|count| count.set(count.get() + 1));
     let words = egui::WidgetText::from(Type::Body.rich(ui, format!("{icon} {label}")))
@@ -169,12 +180,7 @@ fn toggle_width(ui: &egui::Ui, label: &str, icon: &str, selected: bool) -> f32 {
         .expansion
         .max(v.hovered.expansion)
         .max(v.active.expansion);
-    words
-        + if selected {
-            2.0 * (ui.spacing().button_padding.x + expansion)
-        } else {
-            0.0
-        }
+    words + 2.0 * (ui.spacing().button_padding.x + expansion)
 }
 
 #[cfg(test)]
@@ -197,7 +203,7 @@ fn condition_column_widths(ui: &egui::Ui, columns: usize) -> Vec<f32> {
     }
     let mut widths = vec![0.0_f32; columns];
     for (at, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
-        let width = toggle_width(ui, name, icons::OK, true);
+        let width = toggle_width(ui, name, icons::OK);
         widths[at % columns] = widths[at % columns].max(width);
     }
     ui.data_mut(|data| data.insert_temp(key, widths.clone()));
@@ -2284,10 +2290,10 @@ impl Run {
                 // The selected name, `L`, then its controls: one block after the creature.
                 let (presence, hint) = presence_action(p.present);
                 let gap = ui.spacing().item_spacing.x;
-                let controls = toggle_width(ui, presence, icons::ABSENT, !p.present)
+                let controls = toggle_width(ui, presence, icons::ABSENT)
                     + gap
                     + design::S
-                    + toggle_width(ui, "Conc", icons::CONCENTRATING, p.concentration)
+                    + toggle_width(ui, "Conc", icons::CONCENTRATING)
                     + gap
                     + if death_saves {
                         Action::quiet("Death saves")
@@ -2312,14 +2318,7 @@ impl Run {
                             .on_hover_text(line);
                     }
                     let room = ui.available_width() - controls - design::L;
-                    // Beside the actions at the minimum window it gives up size, not letters.
-                    let role = if design::number_width(ui, &p.name, &Type::Heading.font(ui)) < room
-                    {
-                        Type::Heading
-                    } else {
-                        Type::Small
-                    };
-                    let shown = dock_name(ui, &p.name, &role.font(ui), room);
+                    let (role, shown) = dock_name_shown(ui, &p.name, room);
                     let response = ui
                         .label(role.rich(ui, shown).color(c.text))
                         .on_hover_text(&p.name);
@@ -2617,12 +2616,14 @@ impl Run {
                     .enumerate()
                     .filter(|(_, c)| !official(c))
                     .collect();
-                if let Some(at) =
-                    other_effects_list(ui, custom.iter().map(|(_, condition)| condition.as_str()))
-                {
+                let width = (ui.available_width() - 80.0).max(100.0);
+                if let Some(at) = other_effects_list(
+                    ui,
+                    custom.iter().map(|(_, condition)| condition.as_str()),
+                    width,
+                ) {
                     command = Some(Command::RemoveCondition(index, custom[at].0));
                 }
-                let width = (ui.available_width() - 80.0).max(100.0);
                 if other_effect_field(ui, &mut self.condition, width) {
                     // Typed as a level, it is still the one Exhaustion a creature has.
                     let typed = self.condition.trim();
@@ -4364,9 +4365,11 @@ impl Run {
                 if let Some(at) = at {
                     let read = ui
                         .horizontal(|ui| {
+                            // AJ1: a message action without an icon has the secondary border,
+                            // and its border starts at the notice's words.
                             ui.add_space(inset);
-                            Action::quiet("Read the new version")
-                                .line_start()
+                            Action::secondary("Read the new version")
+                                .density(Density::Read)
                                 .show(ui)
                                 .clicked()
                         })
@@ -6586,6 +6589,22 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
             }
         }
         words.pop();
+    }
+}
+
+/// The dock's selected name and its type. FJ5: it keeps `Heading`, as every other name there
+/// does, and gives up whole words by `dock_name`. `Small` only when that shows the name whole,
+/// so a smaller name never also loses letters.
+fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> (Type, String) {
+    if design::number_width(ui, name, &Type::Heading.font(ui)) <= room {
+        (Type::Heading, name.to_owned())
+    } else if design::number_width(ui, name, &Type::Small.font(ui)) <= room {
+        (Type::Small, name.to_owned())
+    } else {
+        (
+            Type::Heading,
+            dock_name(ui, name, &Type::Heading.font(ui), room),
+        )
     }
 }
 
@@ -9935,8 +9954,29 @@ mod tests {
             crate::combat_sync::CONDITIONS.map(|(_, name)| harness.get_by_label(name).rect().left())
         };
         let start = places(&harness);
+        // iter-25-R FI3: a toggle's words start at one x, on or off, and it takes one width.
+        let words = |harness: &egui_kittest::Harness<'_>, name: &str| {
+            let rect = harness.get_by_label(name).rect();
+            let left = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.text().ends_with(name)
+                            && rect.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                    {
+                        Some(text.pos.x + text.galley.rect.left())
+                    }
+                    _ => None,
+                });
+            (left.expect("the toggle paints its words"), rect.width())
+        };
         for (_, name) in crate::combat_sync::CONDITIONS {
             let was = run.borrow().state.participants[0].conditions.clone();
+            // Exhaustion's level stepper takes its words' place, so it has no on form here.
+            let plain = name != "Exhaustion";
+            let off = plain.then(|| words(&harness, name));
             harness.get_by_label(name).click();
             harness.run_steps(2);
             assert_ne!(
@@ -9945,6 +9985,13 @@ mod tests {
                 "iter-24-R-FJ1: {name} toggled"
             );
             assert_eq!(places(&harness), start, "iter-24-R-FJ1: {name} toggled");
+            if let Some(off) = off {
+                let on = words(&harness, name);
+                assert!(
+                    (on.0 - off.0).abs() <= 1.0 && (on.1 - off.1).abs() < 0.5,
+                    "iter-25-R-FI3: {name} words and width off {off:?}, on {on:?}"
+                );
+            }
             // Exhaustion starts on at level 2; a second press would start it again at 1.
             if name == "Exhaustion" {
                 run.borrow_mut().undo();
@@ -10504,6 +10551,17 @@ mod tests {
                     );
                     assert!(design::number_width(ui, &fitted, &font) <= 70.0, "{fitted}");
                 }
+                // iter-25-R FJ5: a name that Small shows whole may use Small; one that must lose
+                // words keeps Heading, so it never loses both size and letters.
+                let heading = Type::Heading.font(ui);
+                let whole = design::number_width(ui, long, &heading);
+                let small = design::number_width(ui, long, &font);
+                let at = |room: f32| dock_name_shown(ui, long, room);
+                assert!(matches!(at(whole), (Type::Heading, shown) if shown == long));
+                assert!(matches!(at(small), (Type::Small, shown) if shown == long));
+                let (role, shown) = at(small - 1.0);
+                assert!(role == Type::Heading && shown.ends_with('…'), "{shown}");
+                assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);
             });
         });
         harness.run_steps(2);
