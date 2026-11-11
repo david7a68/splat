@@ -156,6 +156,11 @@ pub struct ProcessingSettings {
     /// A failed save to the keyring keeps the key for this run of the app only.
     held_speech_key: Option<Zeroizing<String>>,
     held_llm_key: Option<Zeroizing<String>>,
+    /// The DM chose a service last frame: bring the notice and an empty field that blocks
+    /// processing into view once. It ends on the next frame, whether or not it scrolls.
+    reveal_problem: bool,
+    /// Where this frame drew the first field reason that blocks processing.
+    reason_rect: Option<egui::Rect>,
 }
 
 impl Default for ProcessingSettings {
@@ -178,6 +183,8 @@ impl Default for ProcessingSettings {
             replies: None,
             held_speech_key: None,
             held_llm_key: None,
+            reveal_problem: false,
+            reason_rect: None,
         }
     }
 }
@@ -484,7 +491,7 @@ impl ProcessingSettings {
         } else if saved && fits {
             ui.label(
                 Type::Small
-                    .rich(ui, format!("{} Saved in the desktop keyring.", icons::OK))
+                    .rich(ui, format!("{} Saved on this computer.", icons::OK))
                     .color(colors().document.saved),
             );
         }
@@ -508,7 +515,6 @@ impl ProcessingSettings {
     }
 
     fn input_section(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         let heading = ui
             .scope(|ui| design::group_heading(ui, "Recording", 0))
             .response;
@@ -517,11 +523,7 @@ impl ProcessingSettings {
         }
         match &self.probe {
             None => {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Looking for a recorder…")
-                        .color(c.muted),
-                );
+                help(ui, "Looking for a recorder…");
             }
             Some(Probe { tool: None, .. }) => {
                 design::message(
@@ -534,16 +536,12 @@ impl ProcessingSettings {
                 tool: Some(tool),
                 inputs,
             }) => {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "Records with {}, as 16 kHz mono WAV in the campaign folder.",
-                                tool.name()
-                            ),
-                        )
-                        .color(c.muted),
+                help(
+                    ui,
+                    &format!(
+                        "Records with {}, as 16 kHz mono WAV in the campaign folder.",
+                        tool.name()
+                    ),
                 );
                 if tool.can_choose_input() {
                     let inputs = inputs.clone();
@@ -601,13 +599,20 @@ impl ProcessingSettings {
         }
     }
 
+    /// A value that blocks processing says so below its own field, in the notice's tone, so the
+    /// DM need not scroll away from the field to learn why. Reasons follow the config's order.
+    fn field_reason(&mut self, ui: &mut egui::Ui, blocks: bool, words: &str) {
+        if blocks {
+            let rect = design::message(ui, Tone::Info, words).rect;
+            self.reason_rect.get_or_insert(rect);
+        }
+    }
+
     fn speech_section(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         design::group_heading(ui, "Speech service", 0);
-        ui.label(
-            Type::Small
-                .rich(ui, "Turns your recording into text. Choose a speech service and enter its API key.")
-                .color(c.muted),
+        help(
+            ui,
+            "Turns your recording into text. Choose a speech service and enter its API key.",
         );
         let current = SPEECH_CHOICES
             .iter()
@@ -638,15 +643,13 @@ impl ProcessingSettings {
             self.config.speech_url = url.to_owned();
             self.config.speech_model = model.to_owned();
             self.persist();
+            self.reveal_problem = true;
+            ui.ctx().request_repaint();
         }
         if current == OTHER_SERVICE {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "The custom service must support the OpenAI audio/transcriptions API.",
-                    )
-                    .color(c.muted),
+            help(
+                ui,
+                "The custom service must support the OpenAI audio/transcriptions API.",
             );
         }
         let mut changed = false;
@@ -654,6 +657,8 @@ impl ProcessingSettings {
             design::small_text_field(ui, "Address", &mut self.config.speech_url, None, None);
         design::named(ui, &response, "Speech address");
         changed |= response.changed();
+        let empty = self.config.speech_url.trim().is_empty();
+        self.field_reason(ui, empty, "Enter the address.");
         let response = design::small_text_field(
             ui,
             "Model",
@@ -663,6 +668,8 @@ impl ProcessingSettings {
         );
         design::named(ui, &response, "Speech model");
         changed |= response.changed();
+        let empty = self.config.speech_model.trim().is_empty();
+        self.field_reason(ui, empty, "Enter the model’s name.");
         if changed {
             self.persist();
         }
@@ -670,15 +677,10 @@ impl ProcessingSettings {
     }
 
     fn llm_section(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
         design::group_heading(ui, "Transcript and summary", 0);
-        ui.label(
-            Type::Small
-                .rich(
-                    ui,
-                    "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
-                )
-                .color(c.muted),
+        help(
+            ui,
+            "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
         );
         let current = LLM_CHOICES
             .iter()
@@ -705,21 +707,25 @@ impl ProcessingSettings {
                         chosen = Some((Provider::OpenAiCompatible, "", ""));
                     }
                 });
-            design::named(ui, &inner.response, "LLM service");
+            design::named(ui, &inner.response, "Transcript and summary service");
         });
         if let Some((provider, url, model)) = chosen {
             self.config.provider = provider;
             self.config.llm_url = url.to_owned();
             self.config.llm_model = model.to_owned();
             self.persist();
+            self.reveal_problem = true;
+            ui.ctx().request_repaint();
         }
         let mut changed = false;
         let codex = self.config.provider == Provider::CodexCli;
         if !codex {
             let response =
                 design::small_text_field(ui, "Address", &mut self.config.llm_url, None, None);
-            design::named(ui, &response, "LLM address");
+            design::named(ui, &response, "Transcript and summary address");
             changed |= response.changed();
+            let empty = self.config.llm_url.trim().is_empty();
+            self.field_reason(ui, empty, "Enter the address.");
         }
         let response = design::small_text_field(
             ui,
@@ -728,24 +734,26 @@ impl ProcessingSettings {
             Some("The name your service gives it."),
             None,
         );
-        design::named(ui, &response, "LLM model");
+        design::named(ui, &response, "Transcript and summary model");
         changed |= response.changed();
+        let empty = self.config.llm_model.trim().is_empty();
+        self.field_reason(ui, empty, "Enter the model’s name.");
         if changed {
             self.persist();
         }
         if codex {
             let words = if self.codex_found {
-                "Uses your Codex sign-in, in a read-only sandbox. It needs no key here. Codex cannot take audio; the speech service turns it into text first."
+                "Uses your Codex sign-in. It cannot change your campaign files. No API key is needed here. Codex cannot take audio; the speech service turns it into text first."
             } else {
                 "The codex command was not found on this computer."
             };
-            ui.label(Type::Small.rich(ui, words).color(c.muted));
+            help(ui, words);
         } else {
-            self.key_row(ui, KeySlot::Llm, "LLM API key");
+            self.key_row(ui, KeySlot::Llm, "Transcript and summary API key");
         }
         let mut changed = false;
         // Technical, and a stray key here changes every later job.
-        design::quiet_section(ui, "Instructions to the LLM", |ui| {
+        design::quiet_section(ui, "Transcript and summary instructions", |ui| {
             for (label, help, prompt, default) in [
                 (
                     "First pass: clean and mark",
@@ -760,7 +768,7 @@ impl ProcessingSettings {
                     super::default_review_prompt(),
                 ),
             ] {
-                design::small_field(ui, label, Some(help), None, |ui| {
+                design::small_field(ui, label, None, None, |ui| {
                     let response = ui.add(
                         egui::TextEdit::multiline(prompt)
                             .desired_width(
@@ -771,6 +779,8 @@ impl ProcessingSettings {
                     );
                     design::named(ui, &response, label);
                     changed |= response.changed();
+                    // The field's own help, at the reader measure like the rest of this tab.
+                    self::help(ui, help);
                 });
                 if *prompt != default
                     && Action::quiet("Reset")
@@ -789,13 +799,14 @@ impl ProcessingSettings {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
-        ui.label(
-            Type::Small
-                .rich(ui, "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.")
-                .color(c.muted),
+        help(
+            ui,
+            "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.",
         );
         ui.add_space(design::S);
+        let reveal = std::mem::take(&mut self.reveal_problem);
+        self.reason_rect = None;
+        let mut notice = None;
         if let Some(error) = &self.load_error {
             design::message(ui, Tone::Warning, error);
         }
@@ -816,10 +827,13 @@ impl ProcessingSettings {
             } else {
                 problem.replace(" in Settings", "")
             };
-            design::message(
-                ui,
-                Tone::Info,
-                &format!("You cannot process yet. {problem}"),
+            notice = Some(
+                design::message(
+                    ui,
+                    Tone::Info,
+                    &format!("You cannot process yet. {problem}"),
+                )
+                .rect,
             );
         }
         ui.add_space(design::L);
@@ -828,5 +842,19 @@ impl ProcessingSettings {
         ui.push_id("speech_settings", |ui| self.speech_section(ui));
         ui.add_space(design::L);
         ui.push_id("llm_settings", |ui| self.llm_section(ui));
+        // After the DM chooses a service that leaves a field empty, the notice shows whole, with
+        // that field's reason below it when both fit. A key problem has its reason at the key
+        // row beside the choice, so the view stays where the DM is.
+        if reveal && let (Some(notice), Some(reason)) = (notice, self.reason_rect) {
+            ui.scroll_to_rect(notice.union(reason), None);
+        }
     }
+}
+
+/// Help on the Recording tab keeps the reader measure, as Account help does.
+fn help(ui: &mut egui::Ui, words: &str) {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+    });
 }

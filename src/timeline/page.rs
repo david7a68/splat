@@ -212,10 +212,17 @@ fn timeline_removal_words(book: &Book, label: &str, mentions: usize) -> String {
 /// What a restoring rest does to the next fight. Adding a rest and marking it say the same.
 const REST_RESTORES_WORDS: &str = "Everyone starts the next fight at full.";
 
-pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> String {
-    let mut words = format!("Long rest added. {REST_RESTORES_WORDS}");
-    for name in saved_fights {
-        words.push_str(&format!(" {name} keeps its saved HP."));
+/// The result of every Add: the event, then the session it went to when the DM added it inside
+/// one (`Session 1`). A rest that restores HP then says what that does to the next fight, and
+/// which saved fights keep their HP.
+pub fn added_message(label: &str, session: Option<&str>, restores: Option<Vec<String>>) -> String {
+    let to = session.map_or_else(String::new, |session| format!(" to {session}"));
+    let mut words = format!("{label} added{to}.");
+    if let Some(saved_fights) = restores {
+        words.push_str(&format!(" {REST_RESTORES_WORDS}"));
+        for name in saved_fights {
+            words.push_str(&format!(" {name} keeps its saved HP."));
+        }
     }
     words
 }
@@ -681,16 +688,13 @@ impl TimelinePage {
                 .position(|event| event.id == id)
                 .map_or_else(String::new, |at| book.events[at].label(days[at]));
             let event = book.events.iter().find(|event| event.id == id);
-            let words = if let Some(event) =
-                event.filter(|event| event.kind == Kind::LongRest && event.restores)
-            {
-                long_rest_added_message(
+            let restores = event
+                .filter(|event| event.kind == Kind::LongRest && event.restores)
+                .map(|event| {
                     super::fights_that_keep_hp(&book.events, event.session, &self.saved_runs)
-                        .into_iter(),
-                )
-            } else {
-                format!("{label} added.")
-            };
+                });
+            // Timeline lists every session, so its result names only the event.
+            let words = added_message(&label, None, restores);
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.undo_add(&id);
                 self.just_added = None;

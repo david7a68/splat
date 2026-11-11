@@ -639,7 +639,7 @@ impl Splat {
                 "Unsaved changes",
                 "Keep editing",
                 "Discard and close",
-                "Return and save, or close and lose these changes.",
+                "Save and close, keep editing, or close and lose these changes.",
             )
         };
         let title = if items.len() == background {
