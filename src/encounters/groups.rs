@@ -588,7 +588,8 @@ const NONE_CAN_JOIN: &str = "No members can join.";
 /// Why a member with a D&D Beyond sheet cannot join from a group.
 const LINKED_CAUSE: &str = "it has a D&D Beyond sheet, so it joins from the roster";
 /// Why a member with no maximum HP cannot join. Its Edit button sets one.
-const NO_MAX_HP_CAUSE: &str = "it has no maximum HP. Set it with this member’s Edit button";
+pub(crate) const NO_MAX_HP_CAUSE: &str =
+    "it has no maximum HP. Set it with this member’s Edit button";
 
 /// One member's fault, in the one form every view uses (FA1, FC5): `<shown name> (as <base>) ·
 /// line N: <cause>.` The Encounters list, the group editor, the session plan, Save's check and
@@ -1887,8 +1888,9 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         .filter(|c| !official(c))
         .cloned()
         .collect();
+    let width = other_effect_width(ui);
     if let Some(at) =
-        crate::encounter_run::view::other_effects_list(ui, custom.iter().map(String::as_str))
+        crate::encounter_run::view::other_effects_list(ui, custom.iter().map(String::as_str), width)
     {
         conditions.retain(|c| c != &custom[at]);
     }
@@ -1896,7 +1898,6 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    let width = other_effect_width(ui);
     if crate::encounter_run::view::other_effect_field(ui, &mut text, width) {
         if !conditions.iter().any(|c| same_condition(c, text.trim())) {
             conditions.push(text.trim().to_owned());

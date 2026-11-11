@@ -236,7 +236,7 @@ impl Run {
     }
 
     /// Roll these lines as one step.
-    fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
+    pub(super) fn roll_loot(&mut self, picks: &[(Holder, usize)]) {
         match self.loot_rolls(picks) {
             Ok(rolls) if !rolls.is_empty() => self.run_command(Command::Loot(rolls)),
             Ok(_) => {}
@@ -384,9 +384,8 @@ impl Run {
             holders.into_iter().partition(|holder| holder.open);
         let left = self.unrolled(&open).len();
         let mut picks: Vec<(Holder, usize)> = Vec::new();
-        let copied_id = egui::Id::new(("loot_copied", self.id));
-        let copied =
-            ui.data(|data| data.get_temp::<usize>(copied_id)) == Some(self.state.log.len());
+        // The copy owns its result: Undo and any new step end it, whatever the Log's length.
+        let copied = self.loot_copied == Some(self.revision);
         ui.horizontal(|ui| {
             design::group_label(ui, "Loot");
             if left > 0 {
@@ -413,10 +412,7 @@ impl Run {
                         .cloned()
                         .collect();
                     ui.ctx().copy_text(self.loot_markdown(&copied));
-                    ui.data_mut(|data| data.insert_temp(copied_id, self.state.log.len()));
-                }
-                if copied {
-                    ui.label(Type::Small.rich(ui, "Loot copied.").color(c.muted));
+                    self.loot_copied = Some(self.revision);
                 }
                 if left > 1
                     && Action::secondary(&format!("Roll all {left}"))
@@ -430,6 +426,11 @@ impl Run {
                         .into_iter()
                         .map(|(holder, at)| (holder.clone(), at))
                         .collect();
+                }
+                // A result never moves what the DM works on: it goes after Roll all, in the
+                // room on its left, so neither button moves when it shows.
+                if copied {
+                    ui.label(Type::Small.rich(ui, "Loot copied.").color(c.muted));
                 }
             });
         });
