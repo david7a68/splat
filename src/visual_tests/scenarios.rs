@@ -1764,6 +1764,38 @@ pub mod campaign_content {
                 super::session_recording::accent_filled(d)
             ),
         );
+        // Round 23 FA9: the message names the file; the REPAIR heading does not repeat it. The
+        // editor's accessible name holds the path.
+        let mut named = 0;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains("Notes/Broken.md")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                named += 1;
+            }
+        });
+        d.observe(
+            "iter-23-C-FA9",
+            named == 2
+                && d.has(&crate::world::repair::editor_name("Notes/Broken.md"))
+                && d.visible_text("REPAIR"),
+            format!("Notes/Broken.md is painted {named} times: the Save reason and the message"),
+        );
+        // Round 23 FA3: the unchanged draft is the invalid file, so Save would refuse it. Only
+        // the package save row still says No changes.
+        let mut clean = 0;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains("No changes")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                clean += 1;
+            }
+        });
+        d.observe(
+            "iter-23-C-FA3-clean",
+            d.visible_text("Invalid") && clean == 1 && d.is_disabled("Save repaired note"),
+            format!("An unchanged invalid repair says Invalid, and Save is blocked; No changes is painted {clean} times"),
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1776,19 +1808,37 @@ pub mod campaign_content {
                 .is_some_and(|text| text.contains("splat_id")),
             "The repair is reachable without leaving the page",
         );
-        let before = [(960.0, 640.0), (1200.0, 800.0)]
-            .map(|size| d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top()));
+        let editor_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
+                .map(|node| node.rect.top())
+        };
+        let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| {
+            d.at_size(size, |d| {
+                (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
+            })
+        });
         let draft = d
             .editor_text()
             .unwrap()
             .replacen("splat_id: [", "splat_id: [ ", 1);
         d.replace_text_in("Note text", &draft);
-        for (size, y) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
-            let after = d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top());
+        for (size, (y, editor)) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+            let (after, editor_after) = d.at_size(size, |d| {
+                (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
+            });
             d.observe(
                 "i19-U1-repair",
                 after == y,
                 "The first repair edit does not move the selection save row.",
+            );
+            // Round 23 FA1: `Fix Notes/Broken.md first.` keeps its own line below Save, so the
+            // first key moves neither the error nor the editor.
+            d.observe(
+                "iter-23-C-FA1",
+                editor.is_some() && editor_after == editor,
+                format!("At {size:?}, the repair editor top {editor:?} → {editor_after:?}"),
             );
         }
         d.observe_both(
@@ -1796,18 +1846,101 @@ pub mod campaign_content {
             "A repair draft states the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
+        // Round 23 FA3: the changed draft still fails as Save would fail it. It says Invalid with
+        // its cause, Save is blocked, and nothing on the screen is primary.
+        d.observe_both(
+            "iter-23-C-FA3-dirty",
+            "A changed draft that Save refuses says Invalid, blocks Save and has no primary",
+            |d| {
+                d.visible_text("Invalid")
+                    && !d.visible_text("Unsaved")
+                    && d.visible_text("Line 3 opens a list")
+                    && d.is_disabled("Save repaired note")
+                    && super::session_recording::accent_filled(d).is_empty()
+            },
+        );
+        d.state("repair-dirty", Sizes::All);
+        // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
+        // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
+        // nothing.
+        let on_disk = std::fs::read(d.root.join(BROKEN_NOTE)).unwrap();
+        let owned = crate::library::note_text("Broken", "package", Some("broken"));
+        assert!(splat::content::Entry::parse("Notes/Broken.md", &owned).is_ok());
+        d.replace_text_in("Note text", &owned);
+        d.press_ctrl(Key::S);
+        d.settle();
+        const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+        d.observe(
+            "iter-23-C-FA3-refused",
+            d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.visible_text(OWNERSHIP)
+                && d.is_disabled("Save repaired note")
+                && super::session_recording::accent_filled(d).is_empty()
+                && std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk,
+            format!(
+                "A parsed draft that Save refuses: Invalid {}, reason {}, Save blocked {}, file unchanged {}",
+                d.visible_text("Invalid"),
+                d.visible_text(OWNERSHIP),
+                d.is_disabled("Save repaired note"),
+                std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk
+            ),
+        );
+        // A draft that Save would write says Unsaved, and its Save is the one primary action.
+        let valid = crate::library::note_text("Broken", "rule", None);
+        d.replace_text_in("Note text", &valid);
+        d.observe(
+            "iter-23-C-FA3-valid",
+            d.visible_text("Unsaved")
+                && !d.visible_text("Invalid")
+                && !d.is_disabled("Save repaired note"),
+            "A draft that Save would write says Unsaved, and Save is open",
+        );
         // Round 22 FD3: a changed repair's save is the one primary action, as `Save changes` is.
         d.observe_both(
             "iter-22-C-FD3-campaign",
             "Save repaired note is the only accent-filled action while the draft has changes",
             |d| super::session_recording::accent_filled(d) == ["Save repaired note"],
         );
-        d.state("repair-dirty", Sizes::All);
+        // Lead ruling on round 23 FA3: Save that fails on the disk (here a read-only file) is
+        // an action-time failure. The state slot names Save's reason, not Unsaved, until the
+        // next edit of that draft.
+        let file = d.root.join(BROKEN_NOTE);
+        let set_read_only = |read_only: bool| {
+            let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&file, permissions).unwrap();
+        };
+        set_read_only(true);
+        d.click("Save repaired note");
+        d.settle();
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        let unchanged = std::fs::read(&file).unwrap() == on_disk;
+        d.observe(
+            "iter-23-C-FA3-disk",
+            d.visible_text(READ_ONLY) && !d.visible_text("Unsaved") && unchanged,
+            format!(
+                "After a read-only Save: reason shown {}, Unsaved shown {}, file unchanged {unchanged}",
+                d.visible_text(READ_ONLY),
+                d.visible_text("Unsaved")
+            ),
+        );
+        d.state("repair-save-failed", Sizes::Default);
+        // The next edit ends it: the draft is a new one that Save has not tried.
+        d.replace_text_in("Note text", &format!("{valid}\nOne more line.\n"));
+        d.observe(
+            "iter-23-C-FA3-disk-ends",
+            d.visible_text("Unsaved") && !d.visible_text(READ_ONLY),
+            "An edit of the draft ends the failed Save's reason",
+        );
+        set_read_only(false);
         d.click("Discard");
         two_changed_repairs_have_one_primary(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
         let before = std::fs::read_to_string(&manifest).unwrap();
+        const PACKAGES_DISCARDED: &str = "Campaign packages draft discarded.";
+        let discarded_before = d.visible_text(PACKAGES_DISCARDED);
         std::fs::remove_file(&manifest).unwrap();
         d.click(RELOAD);
         d.wait_for_text("Write Campaign.md again");
@@ -1817,6 +1950,16 @@ pub mod campaign_content {
         d.click("Write Campaign.md again");
         d.wait_for_text("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
+        // Round 23 FA8: the discarded package draft belonged to the file that went missing. Its
+        // Undo does not come back with the written file.
+        d.observe(
+            "iter-23-C-FA8",
+            discarded_before && !d.visible_text(PACKAGES_DISCARDED) && !d.has("Undo discard"),
+            format!(
+                "Undo discard shown before the file went: {discarded_before}; after the write: {}",
+                d.visible_text(PACKAGES_DISCARDED)
+            ),
+        );
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
@@ -1833,7 +1976,8 @@ pub mod campaign_content {
         d.restart();
         go_campaign(d);
         d.wait_for_text("Write a new Campaign.md");
-        d.expect("Splat has no copy. This writes a new Campaign.md with the default packages.");
+        // Round 23 FB5: the sentence offers the write; it does not say Splat is writing now.
+        d.expect("Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.");
         d.state("missing-campaign-manifest-without-copy", Sizes::All);
         d.click("Write a new Campaign.md");
         d.wait_for_text("Undo write Campaign.md");
@@ -1877,8 +2021,10 @@ pub mod campaign_content {
             2,
             "Both repairs are open"
         );
-        let first = format!("{broken}\nFirst draft.\n");
-        let second = format!("{broken}\nSecond draft.\n");
+        // Only a draft that Save would write holds the primary (round 23 FA3), so both drafts
+        // are valid notes. Their names, near the top of each editor, tell them apart.
+        let first = crate::library::note_text("First draft.", "rule", None);
+        let second = crate::library::note_text("Second draft.", "rule", None);
         // Edit the upper repair, close it, edit the lower one, then open the upper one again.
         d.replace_text_in("Note text", &first);
         d.click("Close repair");
@@ -1926,9 +2072,117 @@ pub mod campaign_content {
         d.click_starting("Run · ");
         close_run(d);
         go_campaign(d);
+
+        // Round 23 review: each repair editor names its file, so a DM who tabs between the
+        // two hears which is which. No repair editor is named only `Note text`.
+        let (a_editor, b_editor) = (
+            crate::world::repair::editor_name("Notes/Broken.md"),
+            crate::world::repair::editor_name("Notes/Cracked.md"),
+        );
+        let bare = d
+            .nodes()
+            .iter()
+            .filter(|node| node.name == "Note text")
+            .count();
+        d.observe(
+            "iter-23-C-FA9-names",
+            d.has(&a_editor) && d.has(&b_editor) && bare == 0,
+            format!(
+                "Editors named {a_editor:?}: {}, {b_editor:?}: {}; named only Note text: {bare}",
+                d.has(&a_editor),
+                d.has(&b_editor)
+            ),
+        );
+
+        // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
+        // edit, B's Save and B's own failed Save; B's state is its own.
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
+        let top_of = |d: &Driver<'_>, words: &str| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.contains(words) && node.role != egui::accesskit::Role::TextRun
+                })
+                .map(|node| node.rect.top())
+                .collect::<Vec<_>>()
+        };
+        // A's cause sits above B's message; B's state sits below it.
+        let a_owns = |d: &Driver<'_>| {
+            let message = top_of(d, B_MESSAGE);
+            let cause = top_of(d, READ_ONLY);
+            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+        };
+        let b_state = |d: &Driver<'_>, word: &str| {
+            let message = top_of(d, B_MESSAGE);
+            message.len() == 1 && top_of(d, word).iter().any(|top| *top > message[0])
+        };
+        let a_file = d.root.join(BROKEN_NOTE);
+        let b_file = d.root.join(SECOND);
+        let set_read_only = |file: &std::path::Path, read_only: bool| {
+            let mut permissions = std::fs::metadata(file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(file, permissions).unwrap();
+        };
+        set_read_only(&a_file, true);
+        d.click_first("Save repaired note");
+        d.settle();
+        let a_before = a_owns(d);
+        // Round 23 review: an unchanged frame does not check the drafts again.
+        let checks = d.app_mut().campaign_content.repair_checks();
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        let unchanged = d.app_mut().campaign_content.repair_checks();
+        d.replace_text_in(&b_editor, &format!("{second}\nB edit.\n"));
+        let edited = d.app_mut().campaign_content.repair_checks();
+        d.observe(
+            "iter-23-C-check-once",
+            unchanged == checks && edited > unchanged,
+            format!(
+                "Draft checks: {checks} before, {unchanged} after unchanged frames at two sizes, {edited} after an edit"
+            ),
+        );
+        d.observe(
+            "iter-23-C-own-failure-edit",
+            a_before && a_owns(d) && b_state(d, "Unsaved"),
+            format!(
+                "A failed first: {a_before}; after B's edit, A's cause {} and B Unsaved {}",
+                a_owns(d),
+                b_state(d, "Unsaved")
+            ),
+        );
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        let b_written = std::fs::read_to_string(&b_file)
+            .unwrap()
+            .contains("B edit.");
+        d.observe(
+            "iter-23-C-own-failure-save",
+            b_written && a_owns(d) && b_state(d, "No changes"),
+            format!(
+                "After B's Save: B written {b_written}, A's cause {}, B No changes {}",
+                a_owns(d),
+                b_state(d, "No changes")
+            ),
+        );
+        d.replace_text_in(&b_editor, &format!("{second}\nB again.\n"));
+        std::fs::remove_file(&b_file).unwrap();
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        d.observe(
+            "iter-23-C-own-failure-fail",
+            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            format!(
+                "After B's Save fails: A's cause {}, B's own cause {}",
+                a_owns(d),
+                b_state(d, CHANGED_ON_DISK)
+            ),
+        );
+        set_read_only(&a_file, false);
         d.click("Discard");
         d.click("Discard");
-        std::fs::remove_file(d.root.join(SECOND)).unwrap();
+        let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
         assert!(!d.visible_text("Notes/Cracked.md"));
@@ -1952,7 +2206,7 @@ pub mod party {
     const OVERVIEW: &str = "Overview";
     const SOURCE: &str = "Technical details";
     const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Level 6 Fighter"];
-    const NO_CHARACTERS: &str = "No local characters yet";
+    const NO_CHARACTERS: &str = "No characters yet";
     const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2887,6 +3141,37 @@ pub mod settings {
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
+        // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
+        // show together, at the 960 size where the error pushed Connect out of view.
+        let fully = |d: &Driver<'_>, name: &str, exact: bool| {
+            d.nodes().iter().any(|node| {
+                (if exact {
+                    node.name == name
+                } else {
+                    node.name.contains(name)
+                }) && node.fully_in_view()
+            })
+        };
+        d.observe(
+            "iter-23-C-SF1",
+            fully(d, OFFLINE_ERROR, false)
+                && fully(d, COOKIE_FIELD, true)
+                && fully(d, CONNECT, true),
+            format!(
+                "After a failed Connect at 960x640: error {}, cookie {}, Connect {}",
+                fully(d, OFFLINE_ERROR, false),
+                fully(d, COOKIE_FIELD, true),
+                fully(d, CONNECT, true)
+            ),
+        );
+        // Round 23 FM4: the trust text uses the DM's words, not the code's.
+        d.observe(
+            "iter-23-C-FM4-form",
+            d.has_containing("With the box ticked, Splat signs in again when it starts.")
+                && !d.has_containing("access token")
+                && !d.has_containing("keyring"),
+            "The connect form says what the remember box does, without token or keyring words",
+        );
         d.state("connect-failed", Sizes::All);
         d.goal("try to connect without a network");
         // The cookie stays for a retry. There is nothing saved, so nothing to disconnect.
@@ -2912,7 +3197,17 @@ pub mod settings {
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 // Also supplies signed-in's shared Settings image at the wide size.
-                Account::Connected => d.state("account-connected", Sizes::All),
+                Account::Connected => {
+                    d.observe(
+                        "iter-23-C-FM4-connected",
+                        d.visible_text("Splat stays signed in while it is open.")
+                            && d.visible_text("Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.")
+                            && !d.has_containing("access token")
+                            && !d.has_containing("local credentials"),
+                        "Connected account help says what the DM keeps, once, in plain words",
+                    );
+                    d.state("account-connected", Sizes::All);
+                }
                 Account::KeyringWarning => {
                     d.state("account-keyring-warning", Sizes::Default);
                     d.observe_both(
@@ -6577,6 +6872,23 @@ pub mod signed_in {
             "An added remote campaign has a status; an available campaign has an Add action",
         );
         d.click("Add Salt Road from D&D Beyond");
+        // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
+        let (cancel, labels) = d.at_size(DEFAULT, |d| {
+            (
+                d.place_of("Cancel")
+                    .and_then(|cancel| words_left_in(d, cancel)),
+                [d.painted_left("Campaign name"), d.painted_left("Folder")],
+            )
+        });
+        d.observe(
+            "iter-23-C-AM2",
+            cancel.is_some_and(|cancel| {
+                labels
+                    .iter()
+                    .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
+            }),
+            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
+        );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
             "T10.3",
