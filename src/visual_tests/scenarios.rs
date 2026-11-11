@@ -10339,15 +10339,13 @@ pub mod session_recording {
                 "iter-25-S-FM4-dismiss",
                 "Processing “Session 1: Failed processing” failed",
             );
-            // iter-25-S FM4, AM1: the banner's other choices have the secondary border.
-            for name in ["Open the session"] {
-                let frame = d.control_frame(name);
-                d.observe(
-                    "iter-25-S-FM4",
-                    frame.as_ref().is_some_and(|frame| frame.stroke.width > 0.0),
-                    format!("{name} is a bordered secondary choice: {frame:?}"),
-                );
-            }
+            // iter-25-S FM4, AM1: the banner's other choice has the secondary border.
+            let frame = d.control_frame("Open the session");
+            d.observe(
+                "iter-25-S-FM4",
+                frame.as_ref().is_some_and(|frame| frame.stroke.width > 0.0),
+                format!("Open the session is a bordered secondary choice: {frame:?}"),
+            );
         });
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
         let folder = crate::sessions::folder(&campaign).unwrap();
@@ -15369,9 +15367,8 @@ pub mod session_plan {
         // iter-25-S family: deleting a saved run is a finished change, in the success tone.
         d.observe(
             "iter-25-S-success-run-deleted",
-            d.place_of(&format!("Deleted the saved run of {FIRST}.")).is_some_and(|words| {
-                d.has_tone_bar(words, crate::design::colors().result.success)
-            }),
+            d.place_of(&format!("Deleted the saved run of {FIRST}."))
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "The deleted run's result has the success tone",
         );
         // Review of PR 245: Undo delete run ends only the deletion's result. The run comes back,
