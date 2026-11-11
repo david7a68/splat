@@ -2129,6 +2129,14 @@ impl<'a> Driver<'a> {
         result
     }
 
+    /// `at_size` for a step that acts (keys, wheel), then back to the base size.
+    pub fn act_at_size<T>(&mut self, size: (f32, f32), act: impl FnOnce(&mut Self) -> T) -> T {
+        self.resize(size, 1.0);
+        let result = act(self);
+        self.resize(self.base, 1.0);
+        result
+    }
+
     fn recording(&self) -> bool {
         self.video.is_some() && self.window == SMALL && self.density == 1.0
     }

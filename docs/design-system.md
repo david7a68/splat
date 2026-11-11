@@ -424,8 +424,8 @@ saving throw leaves an empty cell. Bad cells warn with their file line; valid va
 and run panel. Rejected vitals keep their original text and warning in the vitals area. Unknown rows remain
 readable. Stat warnings name the field, bad value, line and repair. List rows and the file warning count
 include flagged stat cells. The editor warns when prose AC or HP disagrees with the table, in the DM's words
-(`Hit Points line says 24; stat block says 22.`), and offers `Use <value>` with Undo. The words stay short, so the
-action fits beside them in Edit Markdown's two-line message space.
+(`Hit Points line says 24; stat block says 22. The fight uses 22.`), and offers `Use <value>` with Undo. In Edit
+Markdown's two-line message space a warning that wraps scrolls there, with its action.
 
 Spells and items show facts once, with no empty rows or machine lines. Spells use Casting Time,
 Range, Components, Duration in book order; Concentration and Ritual appear in those values only when true.

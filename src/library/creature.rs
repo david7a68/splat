@@ -83,9 +83,11 @@ pub(super) fn vital_checks(entry: &Entry) -> Vec<(&'static str, &'static str, i6
                     key,
                     label,
                     printed,
-                    // Short, so `Use <value>` fits beside it in Edit Markdown's two-line message
-                    // space at 960 (round 25 SC2).
-                    format!("{label} line says {printed}; stat block says {value}."),
+                    // The consequence stays: the fight uses the stat block's value. A longer
+                    // warning wraps in Edit Markdown's message space and scrolls there.
+                    format!(
+                        "{label} line says {printed}; stat block says {value}. The fight uses {value}."
+                    ),
                 )
             })
         })
@@ -883,7 +885,7 @@ mod tests {
         let checks = vital_checks(&entry);
         assert_eq!(checks.len(), 2);
         assert_eq!(checks[0].1, "Hit Points");
-        assert_eq!(checks[0].3, "Hit Points line says 45; stat block says 1.");
+        assert_eq!(checks[0].3, "Hit Points line says 45; stat block says 1. The fight uses 1.");
         let changed = use_vital(&text, &entry, "max_hp", 45).unwrap();
         let entry = Entry::parse("Guard.md", &changed).unwrap();
         assert_eq!(stat(&entry, "max_hp"), Some(45));

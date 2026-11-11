@@ -2933,6 +2933,77 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     (tabbed, key_scrolled, wheel_scrolled, ring_clear)
 }
 
+/// Wheel the message space that holds `words` until `control` is fully in view, at the current size.
+fn reveal_in_space(d: &mut Driver<'_>, words: &str, control: &str) {
+    let in_view = |d: &Driver<'_>| {
+        d.nodes()
+            .iter()
+            .any(|node| node.name == control && node.fully_in_view())
+    };
+    let Some(space) = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.role == Role::GenericContainer && node.name.contains(words))
+    else {
+        return;
+    };
+    for _ in 0..8 {
+        if in_view(d) {
+            return;
+        }
+        d.scroll_at(space.rect.center(), 1);
+    }
+}
+
+/// Astra review of round 25: a message in the one message space below the save row is drawn and
+/// reachable, not only in the space's accessible name. At 960, 1200 and 1920, from the space's top:
+/// Tab to the space and step down with the arrow key until `words` are painted (and `undo`, when
+/// given, is fully in view); then, from the top again, the wheel over the space does the same.
+/// Returns whether the keyboard and the pointer each reached it, at each size.
+pub(super) fn space_reaches(
+    d: &mut Driver<'_>,
+    words: &str,
+    undo: Option<&str>,
+) -> [(bool, bool); 3] {
+    let shown = |d: &Driver<'_>| {
+        d.visible_text(words)
+            && undo.is_none_or(|undo| {
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == undo && node.fully_in_view())
+            })
+    };
+    let reach = |d: &mut Driver<'_>, step: &dyn Fn(&mut Driver<'_>)| {
+        for _ in 0..12 {
+            if shown(d) {
+                return true;
+            }
+            step(d);
+        }
+        shown(d)
+    };
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.act_at_size(size, |d| {
+            let Some(space) = d.nodes().into_iter().find(|node| {
+                node.role == Role::GenericContainer && node.name.contains(words)
+            }) else {
+                return (false, false);
+            };
+            let keyboard = d.tab_to(&space.name) && {
+                d.press(egui::Key::PageUp);
+                reach(d, &|d| d.press(egui::Key::ArrowDown))
+            };
+            d.press(egui::Key::PageUp);
+            let pointer = {
+                d.scroll_up_at(space.rect.center(), 3);
+                reach(d, &|d| d.scroll_at(space.rect.center(), 1))
+            };
+            d.scroll_up_at(space.rect.center(), 3);
+            (keyboard, pointer)
+        })
+    })
+}
+
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
 /// 960, 1200 and 1920. A result in the reader's result place moves none of them.
 pub(super) fn reader_frame(d: &mut Driver<'_>, title: &str) -> Vec<Option<(f32, f32, f32)>> {
@@ -3718,14 +3789,25 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // the result use the DM's words, not the schema key.
     let typed = format!("{draft}\nHit Points 24 (4d8 + 4)\n");
     d.replace_text_in("Markdown editor", &typed);
-    d.wait_for_text("Use 24");
+    d.settle();
+    d.expect("Use 24");
     let warning_tops = editor_frame_tops(d);
+    // Astra review of round 25: the warning keeps its consequence, the value the fight uses, and
+    // the wrapped warning and `Use 24` are drawn and reached in the message space at each size.
+    let stat_reached = space_reaches(d, "The fight uses 22.", Some("Use 24"))
+        .iter()
+        .all(|(keyboard, pointer)| *keyboard && *pointer);
     d.observe(
         "iter-19-E-AD3-stat-words",
-        d.has("Hit Points line says 24; stat block says 22.") && !d.has_containing("max_hp"),
-        "The stat warning names Hit Points and the stat block, not max_hp",
+        d.has("Hit Points line says 24; stat block says 22. The fight uses 22.")
+            && stat_reached
+            && !d.has_containing("max_hp"),
+        "The stat warning names Hit Points and the stat block, not max_hp, and says the fight uses 22",
     );
     assert!(!d.has_containing("The stat block now says"));
+    // The warning wraps at 960, so `Use 24` is below the first two lines: the wheel over the
+    // message space brings it into view, as a DM would scroll there.
+    reveal_in_space(d, "Hit Points line says 24", "Use 24");
     d.click("Use 24");
     d.wait_for_text("Undo stat change");
     let fixed = d.editor_text().unwrap();
@@ -3776,7 +3858,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "A reason hides the stat result; the result comes back with its own draft",
     );
     d.click("Undo stat change");
-    d.wait_for_text("Use 24");
+    d.settle();
+    d.expect("Use 24");
     let restored = d.editor_text().unwrap();
     d.observe(
         "iter-19-E-AD3-stat-undone",
@@ -4476,7 +4559,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.wait_for_text("Invalid");
     // Round 25 lead ruling: two results with a live Undo (Discard's and the write's) share the
     // one two-line space, newest first; the older one stays in it, reachable by scroll.
-    let kept = |d: &Driver<'_>| d.has_containing("Module.md was written again.");
+    // Astra review: kept means drawn and reachable, by keyboard and by pointer, with its Undo, at
+    // 960, 1200 and 1920; the space's accessible name alone does not count.
+    let kept = |d: &mut Driver<'_>| {
+        space_reaches(d, "Module.md was written again.", Some("Undo write Module.md"))
+            .iter()
+            .all(|(keyboard, pointer)| *keyboard && *pointer)
+    };
     let refused = (kept(d), editor_below_read(d));
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
@@ -5631,12 +5720,47 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("Undo remove");
     d.state("deleted-draft-let-go", Sizes::All);
     let let_go_count = files_to_fix(d);
+    // Astra review of round 25: an unrelated choice B between Remove (A) and Undo remove. B
+    // writes the campaign file and refreshes the Library; A's Undo belongs to A's file and stays.
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let wraith = entries.iter().find(|e| e.name == "Ash Wraith").unwrap().id;
+    let wraith_chosen = |d: &mut Driver<'_>| {
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        crate::content_workspace::CampaignDocument::load(&campaign)
+            .unwrap()
+            .selections
+            .iter()
+            .any(|selection| match &selection.selection {
+                crate::content_workspace::Selection::Selected { entries } => {
+                    entries.iter().any(|entry| entry.id == Some(wraith))
+                }
+                _ => false,
+            })
+    };
+    let b_before = wraith_chosen(d);
+    go_encounters(d);
+    open_saved_encounter(d, "Bridge Ambush");
+    d.type_into(FIND_CREATURE, "Ash Wraith");
+    d.wait_for_text("Ash Wraith is in Ashen Marches, which this campaign does not use.");
+    d.click("Use it");
+    d.settle();
+    let b_after = wraith_chosen(d);
+    go_library(d);
+    d.wait_for_text("Undo remove");
     d.click("Undo remove");
     d.expect("Remove entry and lose draft");
     d.expect("A draft to let go.");
     // Round 23 FD1: Undo remove gives back the entry's campaign use and the header count with
     // the draft, as one step.
     let restored_count = files_to_fix(d);
+    let b_kept = wraith_chosen(d);
+    d.observe(
+        "iter-25-L-undo-remove-after-b",
+        !b_before && b_after && b_kept && d.has("Remove entry and lose draft"),
+        format!(
+            "B (Ash Wraith) chosen between Remove and Undo remove: before {b_before}, after {b_after}, after Undo {b_kept}; Undo remove still gives back A's draft"
+        ),
+    );
     d.observe(
         "iter-23-L-FD1",
         gone_used

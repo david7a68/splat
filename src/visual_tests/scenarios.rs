@@ -14492,6 +14492,15 @@ pub mod session_plan_groups {
         let named = row
             .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
         let caret = d.editor_caret_line();
+        // Astra review of round 25: a message kept in the one message space is drawn and reached
+        // by keyboard and by pointer at 960, 1200 and 1920, not only in the space's name.
+        let reaches = |d: &mut Driver<'_>, words: Option<&str>| {
+            words.is_some_and(|words| {
+                super::world_build::space_reaches(d, words, None)
+                    .iter()
+                    .all(|(keyboard, pointer)| *keyboard && *pointer)
+            })
+        };
         // Round 25 FH6: the row counts two broken links; the editor names both lines. The
         // member row has the repair's words, and the example row its own warning.
         let example = named_ids
@@ -14668,10 +14677,8 @@ pub mod session_plan_groups {
             ),
         );
         let failed = (
-            // The guidance stays in the message space, after the reason.
-            named
-                .as_deref()
-                .is_some_and(|named| d.has_containing(named)),
+            // The guidance stays in the message space, after the reason: drawn and reachable.
+            reaches(d, named.as_deref()),
             d.editor_text()
                 .is_some_and(|text| text.contains("Arrive at dusk.")),
             std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
@@ -14716,9 +14723,10 @@ pub mod session_plan_groups {
         // Round 25 lead ruling: Discard's result carries a live Undo, so it leads the one
         // message space and the guidance follows it there (reachable by scroll at 960). Presence
         // in the space is the owner's check; `visible_text` would test the order instead.
+        let back = reaches(d, named.as_deref());
         d.observe(
             "iter-23-B-FK1-lifetime",
-            gone && named.as_deref().is_some_and(|named| d.has_containing(named)),
+            gone && back,
             format!(
                 "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
             ),
@@ -14737,7 +14745,7 @@ pub mod session_plan_groups {
                 d.has_containing(GUIDANCE),
             )
         };
-        let shown_before_back = d.has_containing(GUIDANCE);
+        let shown_before_back = reaches(d, Some(GUIDANCE));
         // A link opens another entry and records Lost Patrol on the trail; Back returns to it.
         d.click("Read");
         d.click("Rival Team (opens Rival Team)");
@@ -14748,7 +14756,7 @@ pub mod session_plan_groups {
         d.expect("Repair Lost Patrol");
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
-        let shown_before_list = d.has_containing(GUIDANCE);
+        let shown_before_list = reaches(d, Some(GUIDANCE));
         d.click_starting("Rival Team ·");
         d.click_starting("Lost Patrol ·");
         let after_list = open_with_editor(d);

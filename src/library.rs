@@ -2948,14 +2948,16 @@ thread_local! {
     static BROKEN_LINE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// The file lines of a draft that hold a link to no entry, as the row's `N broken links` counts
-/// them: one line number per broken link, outside the front matter and code fences. Every scan
-/// goes through here, and the test count is kept here.
-fn broken_link_lines(
+/// Edit Markdown's warning for each link to no entry in a draft, as the row's `N broken links`
+/// counts them (`Line 17: this link names no entry.`), outside the front matter and code fences.
+/// `skip` is the line the link Campaign sent the DM to fix, which has its own words. The whole
+/// preparation (the scan and the words) goes through here, and the test count is kept here.
+fn broken_link_warnings(
     draft: &str,
     entry: &Entry,
     index: &crate::lookup::ContentIndex,
-) -> Vec<usize> {
+    skip: Option<usize>,
+) -> Vec<String> {
     #[cfg(test)]
     BROKEN_LINE_SCANS.with(|count| count.set(count.get() + 1));
     let mut lines = Vec::new();
@@ -2979,20 +2981,22 @@ fn broken_link_lines(
             continue;
         }
         for target in crate::world::links_in(line) {
-            if index.link_is_missing(&target, entry.id) {
-                lines.push(at + 1);
+            if index.link_is_missing(&target, entry.id) && skip != Some(at + 1) {
+                lines.push(format!("Line {}: this link names no entry.", at + 1));
             }
         }
     }
     lines
 }
 
-/// The broken-link lines of one parsed draft against one link index. A new draft (a new parse)
-/// or a new index finds them again; an unchanged frame does not.
+/// The broken-link warnings of one parsed draft against one link index, with the line Campaign's
+/// link has. A new draft (a new parse), a new index or another such line prepares them again; an
+/// unchanged frame prepares nothing and borrows them.
 type BrokenLines = (
     ParsedDraft,
     std::sync::Arc<crate::lookup::ContentIndex>,
-    Vec<usize>,
+    Option<usize>,
+    Vec<String>,
 );
 
 #[derive(Default)]
@@ -3744,8 +3748,39 @@ impl Library {
                 }
             }
         }
-        self.discarded = None;
-        self.discarded_note = None;
+        // Discard's and Remove's Undo belong to one file. A refresh ends them only when it is
+        // about that file: the refreshed folder is its owner's, and the file on disk is no longer
+        // what the Undo was made against (another write, or the deleted file is back). A write to
+        // an unrelated entry, such as choosing a creature for the campaign, keeps them.
+        let changed_here = |owner: &Owner, path: &str, expected: Option<&str>| {
+            owner.root() == Some(root)
+                && read_disk(root, path)
+                    .map_or(true, |text| text.as_deref() != expected)
+        };
+        let gone_changed = self
+            .discarded_note
+            .as_ref()
+            .is_some_and(|LetGo { note, .. }| changed_here(&note.owner, &note.path, None));
+        if gone_changed {
+            self.discarded_note = None;
+        }
+        let discard_changed = self.discarded.as_ref().is_some_and(|(owner, path, _)| {
+            let loaded = self.loaded.as_ref().and_then(|loaded| {
+                loaded
+                    .notes
+                    .iter()
+                    .find(|note| note.owner.id() == *owner && &note.path == path)
+            });
+            match (loaded, &self.discarded_note) {
+                (Some(note), _) => changed_here(&note.owner, path, Some(&note.text)),
+                (None, Some(LetGo { note, .. })) if &note.path == path => false,
+                // Its file is neither loaded nor removed by this Library: nothing owns it.
+                (None, _) => true,
+            }
+        });
+        if discard_changed || gone_changed {
+            self.discarded = None;
+        }
         self.stale = true;
     }
     fn invalidate(&mut self) {
@@ -6820,27 +6855,25 @@ impl Library {
                     "reader_link_index",
                 ))
             });
+            // Borrowed out of the cache for this frame and put back after the space is drawn.
+            let mut broken_taken = false;
             let broken = match (&index, parsed) {
                 (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
-                    let fresh = self.broken_lines.as_ref().is_some_and(|(seen, known, _)| {
+                    let skip = missing_link.as_ref().map(|(at, _)| *at);
+                    let fresh = self.broken_lines.as_ref().is_some_and(|(seen, known, at, _)| {
                         std::sync::Arc::ptr_eq(seen, &parsed_draft)
                             && std::sync::Arc::ptr_eq(known, index)
+                            && *at == skip
                     });
                     if !fresh {
-                        let lines = broken_link_lines(&self.draft, entry, index);
-                        self.broken_lines = Some((parsed_draft.clone(), index.clone(), lines));
+                        let warnings = broken_link_warnings(&self.draft, entry, index, skip);
+                        self.broken_lines =
+                            Some((parsed_draft.clone(), index.clone(), skip, warnings));
                     }
+                    broken_taken = true;
                     self.broken_lines
-                        .as_ref()
-                        .map_or_else(Vec::new, |(_, _, lines)| {
-                            lines
-                                .iter()
-                                .filter(|&&line| {
-                                    missing_link.as_ref().map(|(at, _)| *at) != Some(line)
-                                })
-                                .map(|line| format!("Line {line}: this link names no entry."))
-                                .collect()
-                        })
+                        .as_mut()
+                        .map_or_else(Vec::new, |(_, _, _, warnings)| std::mem::take(warnings))
                 }
                 _ => Vec::new(),
             };
@@ -6952,6 +6985,9 @@ impl Library {
             }
             let (discard_undo, heading_undo, vital_undo, shown) =
                 space.show(ui).unwrap_or_default();
+            if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
+                *warnings = broken;
+            }
             if let Some(shown) = shown {
                 pressed = shown;
             }
