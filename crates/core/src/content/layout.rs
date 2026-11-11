@@ -27,6 +27,10 @@ pub struct Flag {
     /// How to write the value, for the editor. Not saved.
     #[serde(skip)]
     help: String,
+    /// The sentence with a long unread value cut to its start and end. None when the value is
+    /// short enough to show whole. Not saved.
+    #[serde(skip)]
+    short: Option<String>,
 }
 
 /// Two flags are the same fault when they say the same words about the same line. The cause and
@@ -134,20 +138,35 @@ impl Flag {
             kind,
             cause: fault.cause,
             help: fault.help,
+            short: None,
         }
     }
 
     /// `<value> “<text>” was not read.` with its help, the one form for a value the note cannot
     /// use.
     pub fn unread(field: Field, line: usize, label: &str, text: &str, help: &str) -> Self {
-        Self::fault(
+        let mut flag = Self::fault(
             FlagKind::Unread(field),
             line,
             Fault::new(
                 format!("{label} {} was not read.", super::formats::quoted(text)),
                 help.to_owned(),
             ),
-        )
+        );
+        flag.short = super::formats::quoted_short(text).map(|short| {
+            format!(
+                "Line {line}: {}",
+                words(&format!("{label} {short} was not read."), help)
+            )
+        });
+        flag
+    }
+
+    /// The sentence a warning shows: `message`, with an unread value longer than
+    /// [`super::formats::SHORT_VALUE`] characters cut to its start and end around `…`. The line
+    /// number already says where to look; `message` keeps the value whole for a hover.
+    pub fn short_message(&self) -> &str {
+        self.short.as_deref().unwrap_or(&self.message)
     }
 
     /// What is wrong, without the line or the help. None for a flag read back from a saved run:
