@@ -44,6 +44,10 @@ during	Note what the party decides	Panel	go to the note	1	Session		false
 during	Note what the party decides	Do	type the note	1	Session		false
 during	The party travels for half a day: record it	Find	More Add actions	1	Session		false
 during	The party travels for half a day: record it	Do	Add Travel	1	Session		false
+during	Set-up	Setup	the campaign has a marked road table	0	Session		false
+during	Check the road for encounters	Find	More actions for Travel	1	Session		false
+during	Check the road for encounters	Do	Roll for encounters	1	Session		false
+during	Check the road for encounters	Do	Roll for This journey	1	Session		false
 during	Ambush: read the read-aloud text and start the fight	Nav	Start fight: Ashfall Crossing	1	Session	Run	false
 during	Ambush: read the read-aloud text and start the fight	Do	Roll NPC initiative	1	Run		false
 during	Ambush: read the read-aloud text and start the fight	Do	type Brannoch Vale's initiative	1	Run		false
