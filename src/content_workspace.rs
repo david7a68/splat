@@ -316,6 +316,21 @@ pub(crate) fn holds(root: &Path, path: &str, text: &str) -> bool {
         .is_some_and(|bytes| bytes == text.as_bytes())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Runs once, between the check that every file still holds what was read and the first
+    /// write: a test changes a file on disk at the last moment here.
+    static BEFORE_WRITE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Test hook: `hook` runs once inside the next `ContentEdits` write, after its files are checked
+/// and directly before it writes.
+#[cfg(test)]
+pub(crate) fn before_next_write(hook: impl FnOnce() + 'static) {
+    BEFORE_WRITE.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
 /// A repair keeps the registered identity and never overwrites a later disk edit.
 pub(crate) struct ContentEdits {
     files: Vec<(PathBuf, String, String, String)>,
@@ -356,11 +371,26 @@ impl ContentEdits {
         Self::write(files)
     }
     pub fn write(files: Vec<(PathBuf, String, String, String)>) -> Result<Self, String> {
+        Self::write_checked(files, || Ok(()))
+    }
+    /// Writes the files after `check`, which runs once every file is known to still hold what
+    /// was read, directly before the first write. A refusal from `check` writes nothing.
+    pub fn write_checked(
+        files: Vec<(PathBuf, String, String, String)>,
+        check: impl FnOnce() -> Result<(), String>,
+    ) -> Result<Self, String> {
         let edits = Self { files };
-        edits.apply(false)?;
+        edits.apply_checked(false, check)?;
         Ok(edits)
     }
     fn apply(&self, undo: bool) -> Result<(), String> {
+        self.apply_checked(undo, || Ok(()))
+    }
+    fn apply_checked(
+        &self,
+        undo: bool,
+        check: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(), String> {
         for (root, path, before, after) in &self.files {
             let expected = if undo { after } else { before };
             if fs::read_to_string(note_path(root, path)?).map_err(|e| e.to_string())? != *expected {
@@ -369,6 +399,13 @@ impl ContentEdits {
                 ));
             }
         }
+        #[cfg(test)]
+        BEFORE_WRITE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
+        check()?;
         for (written, (root, path, before, after)) in self.files.iter().enumerate() {
             let (from, to) = if undo {
                 (after, before)

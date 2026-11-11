@@ -307,18 +307,32 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                     let room = table_room(ui).filter(|width| *width > ui.available_width());
                     let draw_table = |ui: &mut egui::Ui| {
                         let mut widths = column_widths(ui, &rows, &columns, &display);
-                        if rolls.is_some() && !widths.is_empty() {
-                            // Reserve the roll mark so it never wraps above the row label.
-                            for row in rows.iter().skip(1) {
+                        // A rollable table keeps a slot for the roll mark before every row's
+                        // range, so the rolled row's range stays at the x of the others. The
+                        // first column is sized with the slot.
+                        let mark = (rolls.is_some() && !widths.is_empty()).then(|| {
+                            ui.painter()
+                                .layout_no_wrap(
+                                    format!("{} ", design::icons::DICE),
+                                    Type::Stat.font(ui),
+                                    colors().text,
+                                )
+                                .size()
+                                .x
+                                .ceil()
+                        });
+                        if let Some(slot) = mark {
+                            for (at, row) in rows.iter().enumerate() {
                                 let label =
                                     display(row.get(columns[0]).map(String::as_str).unwrap_or(""));
-                                let marked = format!("{} {label}", design::icons::DICE);
+                                let role = if at == 0 { Type::StatLabel } else { Type::Stat };
                                 let width = ui
                                     .painter()
-                                    .layout_no_wrap(marked, Type::Stat.font(ui), colors().text)
+                                    .layout_no_wrap(label, role.font(ui), colors().text)
                                     .size()
                                     .x
                                     .ceil()
+                                    + slot
                                     + design::XS;
                                 widths[0] = widths[0].max(width);
                             }
@@ -326,7 +340,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, short_links
                         let matched = rolls
                             .as_ref()
                             .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
-                        reader_table(ui, &rows, &columns, &widths, &display, matched);
+                        reader_table(ui, &rows, &columns, &widths, &display, matched, mark);
                     };
                     match room {
                         Some(width) => {
@@ -716,10 +730,20 @@ fn reader_table(
     widths: &[f32],
     display: &dyn Fn(&str) -> String,
     matched: Option<usize>,
+    mark: Option<f32>,
 ) {
     if widths.is_empty() {
         return;
     }
+    // The roll mark's slot before the first column's words, and the mark itself.
+    let slot = mark.unwrap_or(0.0);
+    let dice = mark.map(|_| {
+        ui.painter().layout_no_wrap(
+            design::icons::DICE.to_owned(),
+            Type::Stat.font(ui),
+            colors().text,
+        )
+    });
     let cells: Vec<Vec<_>> = rows
         .iter()
         .enumerate()
@@ -728,17 +752,19 @@ fn reader_table(
                 .iter()
                 .enumerate()
                 .map(|(position, column)| {
-                    let mut text = display(cells.get(*column).map(String::as_str).unwrap_or(""));
-                    if matched == Some(row) && position == 0 {
-                        text = format!("{} {text}", design::icons::DICE);
-                    }
+                    let text = display(cells.get(*column).map(String::as_str).unwrap_or(""));
                     let role = if row == 0 {
                         Type::StatLabel
                     } else {
                         Type::Stat
                     };
+                    let width = if position == 0 {
+                        widths[0] - slot
+                    } else {
+                        widths[position]
+                    };
                     ui.painter()
-                        .layout(text, role.font(ui), colors().text, widths[position])
+                        .layout(text, role.font(ui), colors().text, width)
                 })
                 .collect()
         })
@@ -787,7 +813,16 @@ fn reader_table(
             egui::vec2(widths[0], height),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
-                table_part(ui, &cells, widths, &heights, 0..1, matched, cut);
+                table_part(
+                    ui,
+                    &cells,
+                    widths,
+                    &heights,
+                    0..1,
+                    matched,
+                    cut,
+                    mark_at(slot, &dice),
+                );
             },
         );
         if widths.len() > 1 {
@@ -796,7 +831,16 @@ fn reader_table(
                 ui.set_width(moving_width);
                 moving_origin = ui.cursor().min;
                 ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                    table_part(ui, &cells, widths, &heights, 1..widths.len(), matched, cut);
+                    table_part(
+                        ui,
+                        &cells,
+                        widths,
+                        &heights,
+                        1..widths.len(),
+                        matched,
+                        cut,
+                        None,
+                    );
                     if lane > 0.0 {
                         ui.add_space(lane);
                     }
@@ -838,11 +882,6 @@ fn reader_table(
     });
     let painter = ui.painter().with_clip_rect(outer_clip);
     let rows_end = cut.map_or(top + height, |(lane_top, _)| (top + height).min(lane_top));
-    painter.vline(
-        left + widths[0],
-        top..=rows_end,
-        egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
-    );
     if let Some((lane_top, _)) = cut {
         painter.hline(
             left..=(left + width).min(moving_clip.right()),
@@ -871,7 +910,7 @@ fn reader_table(
         );
         painter.rect_filled(fixed, egui::CornerRadius::ZERO, colors().page);
         painter.galley(
-            fixed.min + egui::vec2(0.0, design::XS),
+            fixed.min + egui::vec2(slot, design::XS),
             header[0].clone(),
             colors().text,
         );
@@ -898,8 +937,25 @@ fn reader_table(
             egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
         );
     }
+    // The first column's rule shows only while the other columns scroll under it, and runs
+    // through the header too. A table that fits has no column rules.
+    if scrolls {
+        painter.vline(
+            left + widths[0],
+            top..=rows_end,
+            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
+    }
 }
 
+/// The first column's roll mark slot: its width and the mark, for a rollable table.
+type MarkSlot<'a> = Option<(f32, &'a std::sync::Arc<egui::Galley>)>;
+
+fn mark_at(slot: f32, dice: &Option<std::sync::Arc<egui::Galley>>) -> MarkSlot<'_> {
+    dice.as_ref().map(|dice| (slot, dice))
+}
+
+#[expect(clippy::too_many_arguments)]
 fn table_part(
     ui: &mut egui::Ui,
     cells: &[Vec<std::sync::Arc<egui::Galley>>],
@@ -908,6 +964,7 @@ fn table_part(
     columns: std::ops::Range<usize>,
     matched: Option<usize>,
     cut: Option<(f32, f32)>,
+    mark: MarkSlot<'_>,
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
     // Under the scroll bar's lane (`cut`: its top, and the reader's visible bottom) a row is out
@@ -932,6 +989,17 @@ fn table_part(
             painter.rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
         }
         let mut x = rect.left();
+        // The rolled row's mark sits in the slot; every row's range starts after it.
+        if let Some((slot, dice)) = mark {
+            if matched == Some(row) {
+                painter.galley(
+                    egui::pos2(x, rect.top() + design::XS),
+                    dice.clone(),
+                    colors().text,
+                );
+            }
+            x += slot;
+        }
         for column in columns.clone() {
             let cell = egui::Rect::from_min_size(
                 egui::pos2(x, rect.top() + design::XS),

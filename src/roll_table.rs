@@ -165,7 +165,7 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
         let first = row.first().map_or("", String::as_str);
         let Some((min, max)) = parse_range(first) else {
             return Err(format!(
-                "The first column must be a number or a range such as 2–5, not “{first}”."
+                "The first column must be a number or a range such as 2-5, not “{first}”."
             ));
         };
         parsed.push(RollRow {
@@ -342,7 +342,7 @@ mod tests {
         let words = [row("d6", "Result"), row("2 to 5", "a")];
         assert_eq!(
             table_rows("1d6", &words).unwrap_err(),
-            "The first column must be a number or a range such as 2–5, not “2 to 5”."
+            "The first column must be a number or a range such as 2-5, not “2 to 5”."
         );
     }
 
