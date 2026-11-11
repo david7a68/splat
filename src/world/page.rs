@@ -611,24 +611,27 @@ impl WorldPage {
                     }
                     return;
                 };
-                egui::ScrollArea::vertical()
-                    .id_salt(("world_reader", item.entry.id))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        // A later result on the repaired note replaces `Note repaired.`.
-                        if self.repaired == Some(item.entry.id)
-                            && self.reader.has_change_result(&item.entry.path)
-                        {
-                            self.repaired = None;
-                        }
-                        self.reader.page_result = self.result(Some(item.entry.id));
-                        let read = self.reader.read(ui, item, index, Some(campaign));
-                        self.reader.page_result = None;
-                        if std::mem::take(&mut self.reader.page_result_undo) {
-                            self.undo_discard();
-                        }
-                        nav = nav.take().or(read);
-                    });
+                // As in Library, a wide table may use the pane; prose keeps its measure.
+                crate::markdown_view::with_wide_tables(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt(("world_reader", item.entry.id))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            // A later result on the repaired note replaces `Note repaired.`.
+                            if self.repaired == Some(item.entry.id)
+                                && self.reader.has_change_result(&item.entry.path)
+                            {
+                                self.repaired = None;
+                            }
+                            self.reader.page_result = self.result(Some(item.entry.id));
+                            let read = self.reader.read(ui, item, index, Some(campaign));
+                            self.reader.page_result = None;
+                            if std::mem::take(&mut self.reader.page_result_undo) {
+                                self.undo_discard();
+                            }
+                            nav = nav.take().or(read);
+                        });
+                });
             });
         if let Some(kind) = create.take() {
             self.begin_new(kind, Some(index));

@@ -1501,6 +1501,34 @@ pub mod reader_tables {
         d.click("Save");
         d.click("Read");
         d.state("wide-table-in-library", Sizes::All);
+        // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
+        // sideways scroll; the prose after it keeps the measure.
+        let wide = d.at_size(LARGE, |d| {
+            let read = d.place_of("Read")?;
+            let last = d.place_of("Ninth-slot")?;
+            let prose = d.painted_rect_in(
+                "The table leaves this note readable.",
+                egui::Rect::EVERYTHING,
+            )?;
+            Some((
+                read.left(),
+                last.right(),
+                prose.right(),
+                d.has_containing("More columns"),
+            ))
+        });
+        d.observe(
+            "iter-23-L-AE1",
+            wide.is_some_and(|(left, last, prose, hint)| {
+                !hint
+                    && last > left + crate::design::READER_MEASURE
+                    && last <= LARGE.0
+                    && prose <= left + crate::design::READER_MEASURE + 1.0
+            }),
+            format!(
+                "At 1920 the whole table shows past the prose measure, inside the pane, with no scroll hint; the prose keeps its measure (reader left, last cell right, prose right, hint): {wide:?}"
+            ),
+        );
         let table = d.place_of("Memorize Spell").expect("feature cell");
         d.scroll_at(table.center(), 1);
         d.observe(
@@ -1520,7 +1548,9 @@ pub mod reader_tables {
             d.visible_text("Ninth-slot"),
             "The table keeps its sideways position when resized to 1200x800",
         );
-        d.state("last-column-in-library", Sizes::All);
+        // At 1920 the whole table shows without a sideways scroll (round 23 AE1), so only the
+        // sizes where it scrolls have a last-column state.
+        d.state("last-column-in-library", Sizes::Standard);
         d.set_base(SMALL);
 
         go_encounters(d);
@@ -6105,7 +6135,29 @@ pub mod library_scope {
         let before = d.app_mut().active_campaign_name();
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.expect(USES);
-        d.state("scope-menu", Sizes::Default);
+        // Round 23 AC1: the menu is checked against the splitter beside its column at 960 and
+        // 1200, and every choice ends at the control's right edge, `S` before that splitter.
+        d.state("scope-menu", Sizes::Standard);
+        for size in [SMALL, DEFAULT] {
+            let (control, choices) = d.at_size(size, |d| {
+                (
+                    d.place_of(&format!("What the Library shows: {USES}")),
+                    [USES, EVERYTHING, MODULE, "Campaign entries"]
+                        .map(|name| d.place_of(name).map(|rect| (name, rect))),
+                )
+            });
+            d.observe(
+                "iter-23-L-AC1",
+                control.is_some_and(|control| {
+                    choices.iter().all(|choice| {
+                        choice.is_some_and(|(_, rect)| rect.right() <= control.right() + 0.5)
+                    })
+                }),
+                format!(
+                    "At {size:?} every scope choice {choices:?} ends inside the scope control {control:?}"
+                ),
+            );
+        }
         d.click(EVERYTHING);
         d.observe(
             "Library scope search",
@@ -6159,6 +6211,26 @@ pub mod library_scope {
             format!(
                 "The reader title is the same distance below Read for every owner (960, 1200, 1920): built-in {built_in:?}, campaign {campaign:?}, package About {about:?}"
             ),
+        );
+        // Round 23 FC5, FD9: the empty search names its scope, and quiet `Search Everything`
+        // keeps the words and shows the matches in Everything.
+        d.observe(
+            "iter-23-L-FC5-words",
+            d.field_text("Search the Library").as_deref() == Some("fireball")
+                && d.has(&format!(
+                    "No entries match in {MODULE}. Try fewer words, or search Everything."
+                ))
+                && d.in_view(crate::library::SEARCH_EVERYTHING),
+            "The empty search names the package scope and offers Search Everything",
+        );
+        d.click(crate::library::SEARCH_EVERYTHING);
+        d.expect("Fireball · Spell · Level 3");
+        d.observe(
+            "iter-23-L-FC5",
+            d.field_text("Search the Library").as_deref() == Some("fireball")
+                && d.has(&format!("What the Library shows: {EVERYTHING}"))
+                && !d.has_containing("No entries match"),
+            "Search Everything keeps the words, sets the scope to Everything and lists the matches",
         );
     }
 
@@ -13918,6 +13990,20 @@ pub mod remove_package_in_use {
                 "iter-6-C-FD3",
                 d.has_message_bar(first, crate::design::colors().result.warning),
                 "The linked missing-creatures warning keeps the shared warning bar and icon",
+            );
+            // Round 23 FF4: the warning icon centres on the first line, whose words are the
+            // links'. A link's press area is centred on its words.
+            let band = egui::Rect::from_min_max(
+                egui::pos2(first.left() - crate::design::XXL, first.top() - crate::design::S),
+                egui::pos2(first.left(), first.bottom() + crate::design::S),
+            );
+            let icon = d.painted_word_rect(crate::design::icons::WARN, band);
+            d.observe(
+                "iter-23-L-FF4",
+                icon.is_some_and(|icon| (icon.center().y - first.center().y).abs() <= 1.0),
+                format!(
+                    "The warning icon {icon:?} centres on the first line of the message, beside {first:?}"
+                ),
             );
         });
         d.click("Undo package removal");

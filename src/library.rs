@@ -538,6 +538,39 @@ fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> 
     }
 }
 
+/// The reader's kind line from its list line. The owner line names the package, so the kind line
+/// does not. Where two packages share that name, the list adds the folder, and only the folder
+/// stays: `Creature · CR 1 · ashen-marches/`.
+fn reader_kind_line(owner: &Owner, listed: &str) -> String {
+    let Owner::Package(module) = owner else {
+        return listed.to_owned();
+    };
+    let name = format!(" · {}", module.name);
+    let folder = format!(" · {}/", owner.folder());
+    match listed.strip_suffix(&format!("{name}{folder}")) {
+        Some(head) => format!("{head}{folder}"),
+        None => listed.strip_suffix(&name).unwrap_or(listed).to_owned(),
+    }
+}
+
+/// The scope's name, as its menu says it.
+fn scope_name(campaigns: &Campaigns, scope: Scope) -> String {
+    match scope {
+        Scope::Uses => "Can use".to_owned(),
+        Scope::All => "Everything".to_owned(),
+        Scope::Builtin => BUILTIN_NAME.to_owned(),
+        Scope::Package(id) => campaigns
+            .modules()
+            .iter()
+            .find(|m| m.id == id)
+            .map_or_else(|| "A package".to_owned(), |m| m.name.clone()),
+        Scope::Campaign => "Campaign entries".to_owned(),
+    }
+}
+
+/// The action after an empty search or filter that keeps the words in the widest scope.
+pub(crate) const SEARCH_EVERYTHING: &str = "Search Everything";
+
 fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
     let font = Type::Strong.font(ui);
     let fitted = design::words_that_fit(ui, selected, &font, budget);
@@ -606,7 +639,8 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
         "{head}{}",
         design::words_that_fit(ui, name, &font.font(ui), name_room)
     );
-    let galley = design::one_line(ui, &shown, font.font(ui), color, room);
+    // The warning mark has its own tone, as on an entry row.
+    let galley = marked_line(ui, &shown, font.font(ui), color, room);
     let shortened = shown != label || galley.elided;
     let height = (galley.size().y + design::XS * 2.0).max(Density::Read.row());
     let response = design::row(ui, height, selected, label, |ui, rect| {
@@ -1086,6 +1120,8 @@ impl Loaded {
             }
         }
         self.diagnostics = diagnostics;
+        // A row marks each file the header counts, so the rows follow the new problems.
+        self.subtitles.take();
     }
 
     /// Paths that more than one note has, each with the owner names there. Built once per change
@@ -1144,7 +1180,9 @@ impl Loaded {
 
     /// How many files the header counts: each file once, by owner and path, for a problem, a
     /// broken link or both.
-    fn files_to_fix(&self, broken: &[(usize, usize)]) -> usize {
+    /// `extra` is a file the loaded notes do not know is faulty yet: an open draft's file that
+    /// stopped reading.
+    fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileKey>) -> usize {
         self.diagnostics
             .iter()
             .map(|d| (d.file.0, d.file.1.as_str()))
@@ -1152,6 +1190,7 @@ impl Loaded {
                 let note = &self.notes[at];
                 (note.owner.id(), note.path.as_str())
             }))
+            .chain(extra.map(|(owner, path)| (*owner, path.as_str())))
             .collect::<std::collections::HashSet<_>>()
             .len()
     }
@@ -1272,6 +1311,21 @@ impl Loaded {
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
                     format!("{} Same entry in two files · {line}", icons::WARN)
+                } else if note
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| presentation::heading_fix(&note.text, entry).is_some())
+                {
+                    format!("{} {HEADING_DIFFERS} · {line}", icons::WARN)
+                } else if note.entry.as_ref().is_some_and(|entry| {
+                    // A table fault marks its row where the row is drawn.
+                    crate::roll_table::fault_count(&entry.body) == 0
+                }) && !note.is_manifest()
+                    && !line.contains(icons::WARN)
+                    && self.has_problem(note)
+                {
+                    // Every other fault the header counts in this file marks its row too.
+                    format!("{} {NEEDS_FIXING} · {line}", icons::WARN)
                 } else {
                     line
                 };
@@ -1381,27 +1435,274 @@ impl view::Links for Loaded {
     }
 }
 
-/// The result after a copied package is registered: two sentences, the second says whether the
-/// open campaign uses it.
-fn package_registered(name: &str, used: bool) -> String {
-    format!(
-        "{name} is registered. This campaign {} it.",
-        if used { "uses" } else { "does not use" }
-    )
+/// The result after a copied package is registered. It says what the registration did, not what
+/// the campaign uses now: a later source change can make encounters use the copy.
+fn package_registered(name: &str, chosen: bool) -> String {
+    if chosen {
+        format!("{name} is registered, with every entry chosen for this campaign.")
+    } else {
+        format!("{name} is registered, with no entries chosen for this campaign.")
+    }
+}
+
+/// A draft that `Let it go` dropped after its file left the disk, for one step of undo, and
+/// whether this campaign used its entry then.
+struct LetGo {
+    note: Note,
+    used: bool,
+}
+
+/// `Show folder`: opens a folder in the system's file manager.
+fn show_folder(ui: &mut egui::Ui, folder: &Path) {
+    if design::link(ui, "Show folder").clicked() {
+        open_folder(ui, folder);
+    }
+}
+
+fn open_folder(ui: &egui::Ui, folder: &Path) {
+    {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+            "file://{}",
+            folder
+                .to_string_lossy()
+                .bytes()
+                .map(|byte| {
+                    if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+                        (byte as char).to_string()
+                    } else {
+                        format!("%{byte:02X}")
+                    }
+                })
+                .collect::<String>()
+        )));
+    }
+}
+
+/// The file line of a draft whose file has gone from disk: the path it had, then `Show folder`
+/// for the nearest folder that is still there. No link offers the missing file.
+fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
+    let path = root.join(relative);
+    let room = (ui.available_width()
+        - design::number_width(ui, "Show folder", &Type::Body.font(ui))
+        - design::L)
+        .max(0.0);
+    let font = Type::Small.font(ui);
+    let filename = relative.rsplit('/').next().unwrap_or(relative);
+    let shown = if design::number_width(ui, relative, &font) <= room || filename == relative {
+        relative.to_owned()
+    } else {
+        format!("…/{filename}")
+    };
+    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+    design::named(ui, &response, &path.display().to_string());
+    response.on_hover_text(path.display().to_string());
+    // The folder is looked for on the press, not every frame.
+    if design::link(ui, "Show folder").clicked() {
+        let folder = path
+            .ancestors()
+            .skip(1)
+            .find(|folder| folder.is_dir())
+            .unwrap_or(root);
+        open_folder(ui, folder);
+    }
+}
+
+/// The kept results of the open entry's pane, in the order they show. With an entry open, Read
+/// draws them in the reader's warnings place, after the title; Edit Markdown draws them above the
+/// editor. With no entry open, they sit above the empty reader.
+#[derive(Default)]
+struct ReaderResults {
+    /// Every entry in this package is now used here.
+    package_use: bool,
+    /// A manifest write's result and its Undo's words.
+    manifest: Option<(String, String)>,
+    /// A folder's separate-entries result.
+    identities: Option<String>,
+    /// One file's separate-entry result.
+    identity: Option<String>,
+    /// The name of the entry whose draft Read just discarded.
+    discarded: Option<String>,
+    /// Why Undo of a file change waits: an open draft. Its reason shows in the save row.
+    locked: Option<&'static str>,
+}
+
+/// Which result's Undo was pressed this frame.
+#[derive(Default)]
+struct ResultPress {
+    package_use: bool,
+    manifest: bool,
+    identities: bool,
+    identity: bool,
+    discarded: bool,
+}
+
+fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
+    let mut pressed = ResultPress::default();
+    if results.package_use {
+        pressed.package_use =
+            design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package use");
+    }
+    if let Some((words, action)) = &results.manifest {
+        pressed.manifest =
+            kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
+    }
+    if let Some(words) = &results.identities {
+        pressed.identities = kept_undo_message(
+            ui,
+            Tone::Success,
+            words,
+            "Undo separate entries",
+            results.locked,
+            false,
+        );
+    }
+    if let Some(words) = &results.identity {
+        pressed.identity = kept_undo_message(
+            ui,
+            Tone::Success,
+            words,
+            crate::world::SEPARATE_ENTRY_UNDO,
+            results.locked,
+            false,
+        );
+    }
+    if let Some(name) = &results.discarded {
+        pressed.discarded = design::draft_discarded(ui, name);
+    }
+    pressed
+}
+
+/// The result of `Use every entry`.
+pub(crate) const PACKAGE_USE_RESULT: &str = "Every entry in this package is now used here.";
+
+/// A kept result and its Undo, as `design::undo_message` draws them. When Undo is blocked, only
+/// Undo greys: the result's words keep the text colour, because the change still happened. With
+/// `say_why`, the reason follows in `Small` muted words at the message words. Without it, the
+/// reason is already on screen (a draft's reason in its save row) and on Undo's hover.
+pub(crate) fn kept_undo_message(
+    ui: &mut egui::Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    blocked: Option<&str>,
+    say_why: bool,
+) -> bool {
+    let Some(reason) = blocked else {
+        return design::undo_message(ui, tone, text, action);
+    };
+    let button = Action::quiet(action)
+        .icon(icons::UNDO)
+        .density(Density::Read)
+        .blocked(Some(reason));
+    let button_width = button.natural_width(ui);
+    // `design::message`'s icon for this tone.
+    let icon = match tone {
+        Tone::Info => icons::INFO,
+        Tone::Success => icons::SUCCESS,
+        Tone::Warning => icons::WARN,
+        Tone::Error => icons::ERROR,
+    };
+    let icon_width = design::number_width(ui, icon, &Type::Body.font(ui));
+    // The same geometry as `undo_message`, so blocking Undo moves nothing on its line.
+    let inset = design::S + 1.0 + icon_width + design::XS + ui.spacing().item_spacing.x;
+    let text_width = design::number_width(ui, text, &Type::Body.font(ui)) + inset;
+    let gap = ui.spacing().item_spacing.x;
+    if ui.available_width() < text_width + gap + button_width {
+        design::message(ui, tone, text);
+        ui.horizontal(|ui| {
+            ui.add_space((inset - gap).max(0.0));
+            button.line_start().show(ui);
+        });
+    } else {
+        ui.horizontal_top(|ui| {
+            let width = (ui.available_width() - button_width - gap).max(0.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                    design::message(ui, tone, text)
+                },
+            );
+            button.show(ui);
+        });
+    }
+    // The reason starts at the message words, on its own line, in both layouts.
+    if say_why {
+        design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
+    }
+    false
 }
 
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
+/// A row's short cause for a first heading that does not say the entry's name.
+const HEADING_DIFFERS: &str = "First heading differs";
+/// A row's short cause for any other problem the header counts in its file.
+const NEEDS_FIXING: &str = "Needs fixing";
+
+/// A list row's line without the fault it leads with (`⚠ First heading differs · `). The reader
+/// states that fault in its own warning, so its kind line does not.
+fn row_line_without_fault(line: &str) -> String {
+    for cause in [HEADING_DIFFERS, NEEDS_FIXING] {
+        if let Some(rest) = line.strip_prefix(&format!("{} {cause} · ", icons::WARN)) {
+            return rest.to_owned();
+        }
+    }
+    line.to_owned()
+}
+
+/// One line of row words in which each warning or error mark has its own tone, as a status
+/// is an icon, a word and a colour. The line ends with `…` where it does not fit.
+pub(crate) fn marked_line(
+    ui: &egui::Ui,
+    text: &str,
+    font: egui::FontId,
+    words: egui::Color32,
+    max_width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    let format = |color| egui::TextFormat {
+        font_id: font.clone(),
+        color,
+        ..Default::default()
+    };
+    let text = text.replace(['\n', '\r'], " ");
+    let mut rest = text.as_str();
+    while !rest.is_empty() {
+        let next = [
+            (icons::WARN, c.result.warning),
+            (icons::ERROR, c.result.error),
+        ]
+        .into_iter()
+        .filter_map(|(mark, color)| rest.find(mark).map(|at| (at, mark, color)))
+        .min_by_key(|(at, _, _)| *at);
+        match next {
+            Some((at, mark, color)) => {
+                if at > 0 {
+                    job.append(&rest[..at], 0.0, format(words));
+                }
+                job.append(mark, 0.0, format(color));
+                rest = &rest[at + mark.len()..];
+            }
+            None => {
+                job.append(rest, 0.0, format(words));
+                rest = "";
+            }
+        }
+    }
+    job.wrap.max_width = max_width.max(1.0);
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
 
 // Fixed height keeps the virtual scroll position independent of label length.
 fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
     let width = ui.available_width() - design::S * 2.0;
-    let title = design::words_that_fit(
-        ui,
-        name,
-        &if selected { Type::Strong } else { Type::Body }.font(ui),
-        width,
-    );
+    let font = if selected { Type::Strong } else { Type::Body };
+    let title = design::words_that_fit(ui, name, &font.font(ui), width);
     let visible_subtitle = subtitle
         .rsplit_once(" · ")
         .filter(|(_, folder)| folder.ends_with('/'))
@@ -1412,7 +1713,28 @@ fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> e
         &Type::Small.font(ui),
         width,
     );
-    let response = design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, &title, &detail);
+    // `design::two_line_row`, with the row's warning mark in its own tone.
+    let response = design::row(
+        ui,
+        ENTRY_ROW_HEIGHT,
+        selected,
+        &format!("{title} · {detail}"),
+        |ui, rect| {
+            let c = colors();
+            let width = rect.width() - 2.0 * design::S;
+            let galley = design::one_line(ui, &title, font.font(ui), c.text, width);
+            let total = galley.size().y + Type::Small.line();
+            let top = rect.center().y - total / 2.0;
+            ui.painter()
+                .galley(egui::pos2(rect.left() + design::S, top), galley, c.text);
+            let detail = marked_line(ui, &detail, Type::Small.font(ui), c.muted, width);
+            ui.painter().galley(
+                egui::pos2(rect.left() + design::S, top + total - Type::Small.line()),
+                detail,
+                c.muted,
+            );
+        },
+    );
     design::named(ui, &response, &format!("{name} · {subtitle}"));
     response
 }
@@ -2101,7 +2423,7 @@ pub struct Library {
     /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
     /// The note's owner and path, and the discarded words.
     discarded: Option<(Option<Uuid>, String, String)>,
-    discarded_note: Option<Note>,
+    discarded_note: Option<LetGo>,
     identity_undo: Option<IdentityUndo>,
     identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
@@ -2544,6 +2866,13 @@ impl Library {
         let Some(change) = self.disk_change.take() else {
             return;
         };
+        // Whether this campaign uses the entry now, for Undo let go to give back.
+        let used = self.loaded.as_ref().is_some_and(|loaded| {
+            loaded
+                .notes
+                .get(index)
+                .is_some_and(|note| loaded.in_scope(note, Scope::Uses))
+        });
         let Some(note) = self.loaded.as_mut().and_then(|l| l.notes.get_mut(index)) else {
             return;
         };
@@ -2583,13 +2912,16 @@ impl Library {
                 self.draft = text;
             }
             None => {
-                self.discarded_note = Some(Note {
-                    path: note.path.clone(),
-                    text: note.text.clone(),
-                    entry: note.entry.clone(),
-                    error: note.error.clone(),
-                    fault: note.fault.clone(),
-                    owner: note.owner.clone(),
+                self.discarded_note = Some(LetGo {
+                    note: Note {
+                        path: note.path.clone(),
+                        text: note.text.clone(),
+                        entry: note.entry.clone(),
+                        error: note.error.clone(),
+                        fault: note.fault.clone(),
+                        owner: note.owner.clone(),
+                    },
+                    used,
                 });
                 self.draft = note.text.clone();
                 self.stale = true;
@@ -2944,6 +3276,26 @@ impl Library {
         });
         let draft_reason = self.draft_reason();
         let mut open_broken = None;
+        // An open draft's file that stopped reading has no reload yet: the header counts it now,
+        // as a reload would, and names its short cause.
+        let stopped_reading = self
+            .disk_change
+            .as_ref()
+            .and_then(|change| change.fault.as_ref())
+            .zip(
+                self.selected
+                    .and_then(|at| self.loaded.as_ref()?.notes.get(at)),
+            )
+            .map(|(fault, note)| {
+                (
+                    Loaded::file_key(note),
+                    format!(
+                        "{}: {}",
+                        self.loaded.as_ref().unwrap().file_label(note),
+                        fault.cause()
+                    ),
+                )
+            });
         design::page_header(
             ui,
             "Library",
@@ -2990,10 +3342,13 @@ impl Library {
                     .map(|(loaded, index)| loaded.broken_link_notes(index))
                     .unwrap_or_default();
                 if let Some(loaded) = &self.loaded
-                    && (!loaded.diagnostics.is_empty() || !broken.is_empty())
+                    && (!loaded.diagnostics.is_empty()
+                        || !broken.is_empty()
+                        || stopped_reading.is_some())
                 {
                     let word = design::count(
-                        loaded.files_to_fix(&broken),
+                        loaded
+                            .files_to_fix(&broken, stopped_reading.as_ref().map(|(file, _)| file)),
                         "file needs fixing",
                         "files need fixing",
                     );
@@ -3010,12 +3365,15 @@ impl Library {
                         egui::ScrollArea::vertical()
                             .max_height(design::XXL * 6.0)
                             .show(ui, |ui| {
-                                for message in &loaded.diagnostics {
+                                for message in loaded
+                                    .diagnostics
+                                    .iter()
+                                    .map(|message| message.text.as_str())
+                                    .chain(stopped_reading.as_ref().map(|(_, text)| text.as_str()))
+                                {
                                     ui.add(
                                         egui::Label::new(
-                                            Type::Small
-                                                .rich(ui, &message.text)
-                                                .color(colors().muted),
+                                            Type::Small.rich(ui, message).color(colors().muted),
                                         )
                                         .wrap(),
                                     );
@@ -3123,7 +3481,8 @@ impl Library {
                 && design::message_with_action(
                     ui,
                     Tone::Info,
-                    &format!("Links still say {old}."),
+                    // The offer names both names, so the DM can check the words before the write.
+                    &format!("Change links from “{old}” to “{new}”."),
                     &format!("Update {}", design::count(count, "link", "links")),
                 )
             {
@@ -3144,7 +3503,7 @@ impl Library {
             && design::undo_message(
                 ui,
                 Tone::Success,
-                &format!("Links now say {new}."),
+                &format!("Links now say “{new}”."),
                 "Undo link update",
             )
         {
@@ -3183,12 +3542,16 @@ impl Library {
         let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
             let words = package_registered(&copy.module.name, self.copy_campaign_before.is_some());
             // The Undo sits on the message line, as every Undo after a message does. After an
-            // outside change it stays there, blocked, and says why.
-            let undo = design::locked(
+            // outside change it stays there, blocked, and the reason follows at the message words.
+            // The result still happened, so its words keep the text colour.
+            let undo = kept_undo_message(
                 ui,
+                Tone::Success,
+                &words,
+                "Undo package registration",
                 self.registration_changed
                     .then_some(crate::content_workspace::UNDO_ENDED),
-                |ui| design::undo_message(ui, Tone::Success, &words, "Undo package registration"),
+                true,
             );
             // The other choice starts below, at the message words.
             let use_copy = campaigns.active_campaign().is_some()
@@ -3225,13 +3588,16 @@ impl Library {
             }
         }
         // The result is a message, so its Undo keeps its icon on the message line. After an
-        // outside change it stays there, blocked, and says why.
+        // outside change it stays there, blocked, and the reason follows at the message words.
         if let Some(edits) = &self.copied_rosters
-            && design::locked(
+            && kept_undo_message(
                 ui,
+                Tone::Success,
+                USE_COPY_RESULT,
+                "Undo source change",
                 self.rosters_changed
                     .then_some(crate::content_workspace::UNDO_ENDED),
-                |ui| design::undo_message(ui, Tone::Success, USE_COPY_RESULT, "Undo source change"),
+                true,
             )
         {
             match edits.undo() {
@@ -3571,6 +3937,7 @@ impl Library {
                 + ui.spacing().item_spacing.x;
         let list_width = (ui.available_width() * 0.38).clamp(min_list_width, 420.0);
         let mut peek = None;
+        let mut search_everything = false;
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
         let hide_list =
             self.disk_change.is_some() || (ui.available_width() < 480.0 && (dirty || self.source));
@@ -3676,18 +4043,42 @@ impl Library {
                         if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); self.new_folder = "Creatures".into(); }
                     } else {
                     let filtered = !self.filter.is_empty() && (searching || self.section == Section::Creatures);
-                    let text = if filtered {
-                        "No creatures match these filters. Remove a filter, or try Everything."
+                    // Where a wider scope can find more, the sentence names this scope, and quiet
+                    // `Search Everything` below it keeps the words and the filters.
+                    let wider = (filtered || searching) && scope != Scope::All;
+                    let text = if filtered && wider {
+                        format!("No creatures match these filters in {}. Remove a filter, or search Everything.", scope_name(campaigns, scope))
+                    } else if filtered {
+                        "No creatures match these filters. Remove a filter.".to_owned()
                     } else if scope == Scope::Campaign && !searching {
-                        "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry."
+                        "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry.".to_owned()
+                    } else if searching && wider {
+                        format!("No entries match in {}. Try fewer words, or search Everything.", scope_name(campaigns, scope))
                     } else if searching {
-                        "No entries found in this scope. Try fewer words, or Everything."
+                        "No entries match. Try fewer words.".to_owned()
                     } else {
-                        "No entries in this section."
+                        "No entries in this section.".to_owned()
                     };
-                    ui.add(
-                        egui::Label::new(Type::Body.rich(ui, text).color(colors().muted)).wrap(),
-                    );
+                    // At the rows' text edge, so the action's hanging padding stays clear of the
+                    // splitter at the column's left edge.
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..Default::default()
+                        })
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::Label::new(Type::Body.rich(ui, &text).color(colors().muted))
+                                    .wrap(),
+                            );
+                            if wider {
+                                search_everything = Action::quiet(SEARCH_EVERYTHING)
+                                    .density(Density::Read)
+                                    .line_start()
+                                    .show(ui)
+                                    .clicked();
+                            }
+                        });
                     }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
@@ -3751,6 +4142,11 @@ impl Library {
         if peek.is_some() {
             self.peek = peek;
         }
+        if search_everything {
+            // The same words and filters, in the widest scope.
+            self.scope = Scope::All;
+            self.section = Section::All;
+        }
         if let Some(i) = select {
             self.selected = Some(i);
             self.draft = self.loaded.as_ref().unwrap().notes[i].text.clone();
@@ -3793,19 +4189,7 @@ impl Library {
         _search: &mut String,
     ) {
         let active = campaigns.active_campaign();
-        let label = |scope: Scope| -> String {
-            match scope {
-                Scope::Uses => "Can use".to_owned(),
-                Scope::All => "Everything".to_owned(),
-                Scope::Builtin => BUILTIN_NAME.to_owned(),
-                Scope::Package(id) => campaigns
-                    .modules()
-                    .iter()
-                    .find(|m| m.id == id)
-                    .map_or_else(|| "A package".to_owned(), |m| m.name.clone()),
-                Scope::Campaign => "Campaign entries".to_owned(),
-            }
-        };
+        let label = |scope: Scope| scope_name(campaigns, scope);
         let mut scope = if active.is_none() && matches!(*current, Scope::Uses | Scope::Campaign) {
             Scope::All
         } else {
@@ -3830,13 +4214,23 @@ impl Library {
             } else {
                 selected
             };
+            // Wrapped names make the menu taller, so it may use the window's height below the
+            // control before it scrolls.
+            let height = (ui.ctx().content_rect().bottom()
+                - ui.next_widget_position().y
+                - design::XXL * 2.0)
+                .max(design::XXL * 4.0);
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
+                .height(height)
                 .wrap()
                 .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
-                    ui.set_min_width(260.0);
+                    // The popup is as wide as the control, so it stays in the scope's column,
+                    // clear of the splitter beside it. A long package name wraps.
+                    ui.set_max_width(ui.available_width());
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     if active.is_some() {
                         ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
                     }
@@ -4640,14 +5034,17 @@ impl Library {
     fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
         let spare = ui.available_width() - view::WIDE_READER;
         if spare <= 0.0 || self.disk_change.is_some() {
-            self.editor_pane(ui, subtitle, campaigns);
+            self.editor_pane(ui, subtitle, campaigns, None);
             return;
         }
+        // The reader's lines keep their widest measure. Its body may still reach the pane's
+        // edge, for a wide table.
+        let pane_right = ui.max_rect().right();
         ui.horizontal_top(|ui| {
             let size = egui::vec2(view::WIDE_READER, ui.available_height());
             ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_max_width(view::WIDE_READER);
-                self.editor_pane(ui, subtitle, campaigns);
+                self.editor_pane(ui, subtitle, campaigns, Some(pane_right));
             });
         });
     }
@@ -4791,18 +5188,11 @@ impl Library {
         }
     }
 
-    fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str, campaigns: &Campaigns) {
-        if self.selection_undo.as_ref().is_some_and(|undo| {
-            campaigns
-                .active_campaign()
-                .is_some_and(|c| c.id == undo.campaign.id)
-        }) && design::undo_message(
-            ui,
-            Tone::Success,
-            "Every entry in this package is now used here.",
-            "Undo package use",
-        ) {
-            let undo = self.selection_undo.take().unwrap();
+    /// Undo package use and Undo write: the results that this pane keeps for its package.
+    fn apply_package_results(&mut self, pressed: &ResultPress) {
+        if pressed.package_use
+            && let Some(undo) = self.selection_undo.take()
+        {
             let result = crate::content_workspace::CampaignDocument::load(&undo.campaign).and_then(|mut document| {
                 if document.selections != undo.after { return Err("Campaign choices changed. Keep them and edit the package choices in Campaign.".into()); }
                 document.selections = undo.before;
@@ -4816,15 +5206,8 @@ impl Library {
                 Err(error) => self.error = Some(error),
             }
         }
-        if let Some(write) = &self.manifest_write
-            && design::locked(ui, self.draft_reason(), |ui| {
-                design::undo_message(
-                    ui,
-                    Tone::Success,
-                    &write.message(),
-                    &format!("Undo write {}", write.path()),
-                )
-            })
+        if pressed.manifest
+            && let Some(write) = &self.manifest_write
         {
             match write.undo() {
                 Ok(root) => {
@@ -4834,6 +5217,35 @@ impl Library {
                 }
                 Err(error) => self.error = Some(error),
             }
+        }
+    }
+
+    /// `pane_right` is the pane's right edge, where the reader's body may end.
+    fn editor_pane(
+        &mut self,
+        ui: &mut egui::Ui,
+        subtitle: &str,
+        campaigns: &Campaigns,
+        pane_right: Option<f32>,
+    ) {
+        // The pane's kept results. With an entry open they sit in the reader's warnings place,
+        // after the title, so a result never moves the tabs, the file line or the title.
+        let mut results = ReaderResults {
+            package_use: self.selection_undo.as_ref().is_some_and(|undo| {
+                campaigns
+                    .active_campaign()
+                    .is_some_and(|c| c.id == undo.campaign.id)
+            }),
+            manifest: self
+                .manifest_write
+                .as_ref()
+                .map(|write| (write.message(), format!("Undo write {}", write.path()))),
+            locked: self.draft_reason(),
+            ..Default::default()
+        };
+        if self.selected.is_none() {
+            let pressed = show_results(ui, &results);
+            self.apply_package_results(&pressed);
         }
         let recovery = self
             .selected
@@ -4849,7 +5261,7 @@ impl Library {
                 }
                 _ => None,
             });
-        let gone_notice = self.discarded_note.as_ref().map(|note| {
+        let gone_notice = self.discarded_note.as_ref().map(|LetGo { note, .. }| {
             let names = self
                 .loaded
                 .as_ref()
@@ -4874,12 +5286,18 @@ impl Library {
                 "Undo let go",
             )
             && let Some((_, _, draft)) = self.discarded.take()
-            && let Some(note) = self.discarded_note.take()
+            && let Some(LetGo { note, used }) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
         {
+            // The reload after Let it go left the entry out of what this campaign uses and
+            // counted the entries that need it. Undo gives back both with the draft.
+            if used && let (Some(uses), Some(entry)) = (loaded.uses.as_mut(), note.entry.as_ref()) {
+                uses.insert(entry.id);
+            }
             self.selected = Some(loaded.notes.len());
             loaded.notes.push(note);
             loaded.invalidate();
+            loaded.refresh_diagnostics();
             self.draft = draft;
             self.source = true;
             self.disk_change = Some(DiskChange {
@@ -4939,7 +5357,7 @@ impl Library {
                         .duplicate_ids()
                         .contains(&entry.id)
                 })
-                .map_or_else(|| subtitle.to_owned(), presentation::subtitle),
+                .map_or_else(|| row_line_without_fault(subtitle), presentation::subtitle),
             reading
                 .as_ref()
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
@@ -4979,8 +5397,6 @@ impl Library {
         }
         let mut new_identity = None;
         let mut new_identities = None;
-        let mut undo_identities = false;
-        let mut undo_identity = false;
         // Only a side-by-side comparison of draft and disk text takes the full width. A deleted
         // file's lone draft keeps the source editor's measure.
         let editor_width = if self
@@ -4999,9 +5415,18 @@ impl Library {
                 && !conflict
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let d = colors().document;
+        // The file stopped reading under the draft: its owner line says so, as for a file that
+        // never read.
+        let stopped_reading = self
+            .disk_change
+            .as_ref()
+            .is_some_and(|change| change.fault.is_some());
         let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
         let package_word = match &note.owner {
+            Owner::Package(module) if stopped_reading => {
+                format!("{} · Cannot be read", module.name)
+            }
             Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
                 "No campaign open".into()
             }
@@ -5273,23 +5698,17 @@ impl Library {
                     .as_ref()
                     .is_some_and(|change| change.fault.is_some());
             let obsidian = obsidian_for(root, &note.owner) && !unread;
+            // The draft's file has gone from disk: no link can show it, so the line offers its
+            // folder, as a deleted manifest's does.
+            let file_gone_now = self.disk_change.as_ref().is_some_and(|change| {
+                change.text.is_none() && change.moved_to.is_none() && change.fault.is_none()
+            });
+            let deleted_manifest = recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
             let file_line = |ui: &mut egui::Ui| {
-                if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
-                    if design::link(ui, "Show folder").clicked() {
-                        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                            "file://{}",
-                            root.to_string_lossy()
-                                .bytes()
-                                .map(|byte| {
-                                    if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
-                                        (byte as char).to_string()
-                                    } else {
-                                        format!("%{byte:02X}")
-                                    }
-                                })
-                                .collect::<String>()
-                        )));
-                    }
+                if deleted_manifest {
+                    show_folder(ui, root);
+                } else if file_gone_now {
+                    gone_file_parts(ui, root, shown_path);
                 } else if let Some(from) = &moved_from {
                     let width = (ui.available_width()
                         - design::number_width(ui, from, &Type::Small.font(ui))
@@ -5309,7 +5728,9 @@ impl Library {
             };
             let owner_word = match &note.owner {
                 Owner::Package(_) => package_word.as_str(),
-                Owner::Campaign(_) if note.error.is_some() => "Campaign · Cannot be read",
+                Owner::Campaign(_) if note.error.is_some() || stopped_reading => {
+                    "Campaign · Cannot be read"
+                }
                 _ => "Campaign · Editable",
             };
             let file_below = ui.available_width()
@@ -5321,6 +5742,33 @@ impl Library {
                     } else {
                         0.0
                     };
+            // The path shortens from the front and keeps its file name whole
+            // (`…/Cinder Wolf copy.md`). When even that does not fit after the owner words and
+            // their action, the path takes its own Read row: it is measured where it would start.
+            let filename = Path::new(shown_path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let shortest_path = if filename == *shown_path {
+                filename.to_string()
+            } else {
+                format!("…/{filename}")
+            };
+            let path_room = if deleted_manifest {
+                design::number_width(ui, "Show folder", &Type::Body.font(ui))
+            } else {
+                design::number_width(ui, &shortest_path, &Type::Small.font(ui))
+                    + design::L
+                    + moved_from.as_ref().map_or(0.0, |from| {
+                        design::number_width(ui, from, &Type::Small.font(ui)) + design::S
+                    })
+                    + if file_gone_now {
+                        design::number_width(ui, "Show folder", &Type::Body.font(ui))
+                    } else {
+                        crate::world::entry_file_links_width(ui, obsidian)
+                    }
+            };
+            let mut path_below = false;
             let owner_line = |ui: &mut egui::Ui| {
                 design::status(
                     ui,
@@ -5355,11 +5803,15 @@ impl Library {
                     self.use_entry = Some((module.id, entry.id));
                 }
                 if !file_below {
-                    file_line(ui);
+                    if ui.available_width() >= path_room {
+                        file_line(ui);
+                    } else {
+                        path_below = true;
+                    }
                 }
             };
             file_line_row(ui, file_below, owner_line);
-            if file_below {
+            if file_below || path_below {
                 file_line_row(ui, false, file_line);
             }
         } else {
@@ -5385,25 +5837,22 @@ impl Library {
                 &mut new_identities,
             );
         }
-        if let Some((_, words)) = &self.identities_undo {
-            design::locked(ui, draft_reason, |ui| {
-                undo_identities =
-                    design::undo_message(ui, Tone::Success, words, "Undo separate entries");
-            });
-        }
-        if let Some(undo) = &self.identity_undo {
-            let filename = Path::new(&undo.path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy();
-            design::locked(ui, draft_reason, |ui| {
-                undo_identity = design::undo_message(
-                    ui,
-                    Tone::Success,
-                    &crate::world::separate_entry_result(&filename),
-                    crate::world::SEPARATE_ENTRY_UNDO,
-                );
-            });
+        results.identities = self
+            .identities_undo
+            .as_ref()
+            .map(|(_, words)| words.clone());
+        results.identity = self.identity_undo.as_ref().map(|undo| {
+            crate::world::separate_entry_result(
+                &Path::new(&undo.path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy(),
+            )
+        });
+        // Edit Markdown keeps the results above the editor, as it keeps the warnings there.
+        let mut pressed = ResultPress::default();
+        if !choices_in_reader {
+            pressed = show_results(ui, &results);
         }
         let mut repair_pressed = false;
         let mut read_again = false;
@@ -5493,12 +5942,15 @@ impl Library {
         if self.draft != note.text {
             self.discarded = None;
         }
-        if !save_row
-            && discard_is_for(self.discarded.as_ref(), note)
-            && design::draft_discarded(ui, note.name())
-            && let Some((_, _, text)) = self.discarded.take()
-        {
-            self.draft = text;
+        // In Read, the discard result sits with the reader's other results, after the title.
+        if !save_row && discard_is_for(self.discarded.as_ref(), note) {
+            if choices_in_reader {
+                results.discarded = Some(note.name().to_owned());
+            } else if design::draft_discarded(ui, note.name())
+                && let Some((_, _, text)) = self.discarded.take()
+            {
+                self.draft = text;
+            }
         }
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
@@ -5744,87 +6196,177 @@ impl Library {
                         });
                 });
         } else {
-            egui::ScrollArea::vertical()
-            .id_salt(("entry_body", note.owner.id(), &note.path))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if let Some(change) = &mut self.disk_change {
-                    if let Some(text) = &change.text {
-                        // The side-by-side comparison is the one state that takes the full width.
-                        ui.set_max_width(editor_width);
-                        design::grouped_draft_comparison(ui, &self.draft, text, (&note.path, text), true);
-                    } else {
-                        design::group_heading(ui, "Your draft", 0);
-                        let mut draft = self.draft.as_str();
-                        let response = ui.add(egui::TextEdit::multiline(&mut draft).font(egui::TextStyle::Monospace).margin(egui::vec2(design::S, design::S)).desired_width(editor_width - 2.0 * design::S).interactive(false));
-                        design::named(ui, &response, "Your draft");
-                    }
-                    return;
-                }
-                    // A failed parse must never render YAML properties as book prose.
-                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
-                    ui.push_id(&note.path, |ui| {
-                        reader_style::measure(ui, |ui| {
-                            ui.add_space(design::XS);
-                            let reading_subtitle = match &note.owner {
-                                Owner::Package(module) => reading_subtitle.strip_suffix(&format!(" · {}", module.name)).unwrap_or(&reading_subtitle),
-                                _ => &reading_subtitle,
-                            };
-                            let subtitle = reading_subtitle;
-                            let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
-                            let subtitle = if note.error.is_some() {
-                                match note.unreadable_kind() {
-                                    Section::Unreadable | Section::Other => "",
-                                    Section::PackageDetails => "Package",
-                                    kind => kind.label().trim_end_matches('s'),
-                                }
-                            } else if subtitle == "Campaign" { note.section().label().trim_end_matches('s') } else { subtitle };
-                            view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
-                            if let Some(fault) = &fault {
-                                read_again = fault_notice(ui, fault);
-                            }
-                            // A read fault has no repair problem: there is no text to repair.
-                            if let Some(problem) = &repair_problem {
-                                repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, false);
-                            }
-                            if choices_in_reader {
-                                heading_pressed = heading.show(ui);
-                            }
-                            if choices_in_reader && !duplicate_indices.is_empty() {
-                                duplicate_choices(ui, self.loaded.as_ref().unwrap(), note, &duplicate_indices, draft_reason, &mut new_identity, &mut new_identities);
-                            }
-                        });
-                        open_link = view::show_with_related(
-                            ui,
-                            note.name(),
-                            parsed.as_ref().ok(),
-                            body,
-                            &view::Origin {
-                                path: &note.path,
-                                owner: &note.owner.label(),
-                                builtin: note.owner == Owner::Builtin,
-                            },
-                            self.loaded.as_ref().unwrap(),
-                            // The Library draws no value block above the entry.
-                            false,
-                            |ui| {
-                                if let Owner::Package(package) = &note.owner
-                                    && let Some(entry) = &note.entry
-                                    && let Some(index) = ui.ctx().data(|data| data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))) {
-                                    for at in index.campaign_dependencies(entry) {
-                                        let dependency = &index.items[at].entry;
-                                        if design::locked(ui, draft_reason, |ui| design::message_with_action(ui, Tone::Warning, &format!("{} is in this campaign only.", dependency.name), &format!("Copy {} to {}", dependency.name, package.name))) {
-                                            copy_dependency = Some(dependency.id);
+            // The body takes the whole pane, so a wide table can use it; prose keeps its
+            // measure. A draft's comparison keeps the pane it had.
+            let right = pane_right
+                .filter(|_| self.disk_change.is_none())
+                .unwrap_or(ui.max_rect().right())
+                .max(ui.max_rect().right());
+            // It starts `S` left of the text, with an `S` margin, so a quiet `line_start` action
+            // that hangs its icon left of the message words (an Undo below its result) is not
+            // clipped at the pane's edge. The text stays where it was.
+            let body = egui::Rect::from_min_max(
+                egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
+                egui::pos2(right, ui.max_rect().bottom()),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                crate::markdown_view::with_wide_tables(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt(("entry_body", note.owner.id(), &note.path))
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            egui::Frame::new()
+                                .inner_margin(egui::Margin {
+                                    left: design::S as i8,
+                                    ..Default::default()
+                                })
+                                .show(ui, |ui| {
+                                    if let Some(change) = &mut self.disk_change {
+                                        if let Some(text) = &change.text {
+                                            // The side-by-side comparison is the one state that takes the full width.
+                                            ui.set_max_width(editor_width);
+                                            design::grouped_draft_comparison(
+                                                ui,
+                                                &self.draft,
+                                                text,
+                                                (&note.path, text),
+                                                true,
+                                            );
+                                        } else {
+                                            design::group_heading(ui, "Your draft", 0);
+                                            let mut draft = self.draft.as_str();
+                                            let response = ui.add(
+                                                egui::TextEdit::multiline(&mut draft)
+                                                    .font(egui::TextStyle::Monospace)
+                                                    .margin(egui::vec2(design::S, design::S))
+                                                    .desired_width(editor_width - 2.0 * design::S)
+                                                    .interactive(false),
+                                            );
+                                            design::named(ui, &response, "Your draft");
                                         }
+                                        return;
                                     }
-                                }
-                                if self.dependency_undo.as_ref().is_some_and(|change| change.path == note.path) {
-                                    undo_dependency = design::undo_message(ui, Tone::Success, "Dependency copied and linked.", "Undo dependency copy");
-                                }
-                                None
-                            },
-                        );
-                    });
+                                    // A failed parse must never render YAML properties as book prose.
+                                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
+                                    ui.push_id(&note.path, |ui| {
+                                        reader_style::measure(ui, |ui| {
+                                            ui.add_space(design::XS);
+                                            let reading_subtitle =
+                                                reader_kind_line(&note.owner, &reading_subtitle);
+                                            let subtitle = reading_subtitle.as_str();
+                                            let subtitle = subtitle
+                                                .strip_suffix(" · Campaign")
+                                                .unwrap_or(subtitle);
+                                            let subtitle = if note.error.is_some() {
+                                                match note.unreadable_kind() {
+                                                    Section::Unreadable | Section::Other => "",
+                                                    Section::PackageDetails => "Package",
+                                                    kind => kind.label().trim_end_matches('s'),
+                                                }
+                                            } else if subtitle == "Campaign" {
+                                                note.section().label().trim_end_matches('s')
+                                            } else {
+                                                subtitle
+                                            };
+                                            view::title_with_art(
+                                                ui,
+                                                title,
+                                                subtitle,
+                                                parsed.as_ref().ok(),
+                                            );
+                                            if let Some(fault) = &fault {
+                                                read_again = fault_notice(ui, fault);
+                                            }
+                                            // A read fault has no repair problem: there is no text to repair.
+                                            if let Some(problem) = &repair_problem {
+                                                repair_pressed = repair_notice(
+                                                    ui,
+                                                    problem,
+                                                    recovery.as_ref(),
+                                                    draft_reason,
+                                                    false,
+                                                );
+                                            }
+                                            if choices_in_reader {
+                                                heading_pressed = heading.show(ui);
+                                                // A result takes the warnings' place, so the title never moves.
+                                                pressed = show_results(ui, &results);
+                                            }
+                                            if choices_in_reader && !duplicate_indices.is_empty() {
+                                                duplicate_choices(
+                                                    ui,
+                                                    self.loaded.as_ref().unwrap(),
+                                                    note,
+                                                    &duplicate_indices,
+                                                    draft_reason,
+                                                    &mut new_identity,
+                                                    &mut new_identities,
+                                                );
+                                            }
+                                        });
+                                        open_link = view::show_with_related(
+                                            ui,
+                                            note.name(),
+                                            parsed.as_ref().ok(),
+                                            body,
+                                            &view::Origin {
+                                                path: &note.path,
+                                                owner: &note.owner.label(),
+                                                builtin: note.owner == Owner::Builtin,
+                                            },
+                                            self.loaded.as_ref().unwrap(),
+                                            // The Library draws no value block above the entry.
+                                            false,
+                                            |ui| {
+                                                if let Owner::Package(package) = &note.owner
+                                                    && let Some(entry) = &note.entry
+                                                    && let Some(index) = ui.ctx().data(|data| {
+                                                        data.get_temp::<std::sync::Arc<
+                                                            crate::lookup::ContentIndex,
+                                                        >>(
+                                                            egui::Id::new("reader_link_index")
+                                                        )
+                                                    })
+                                                {
+                                                    for at in index.campaign_dependencies(entry) {
+                                                        let dependency = &index.items[at].entry;
+                                                        if design::locked(ui, draft_reason, |ui| {
+                                                            design::message_with_action(
+                                                                ui,
+                                                                Tone::Warning,
+                                                                &format!(
+                                                                    "{} is in this campaign only.",
+                                                                    dependency.name
+                                                                ),
+                                                                &format!(
+                                                                    "Copy {} to {}",
+                                                                    dependency.name, package.name
+                                                                ),
+                                                            )
+                                                        }) {
+                                                            copy_dependency = Some(dependency.id);
+                                                        }
+                                                    }
+                                                }
+                                                if self
+                                                    .dependency_undo
+                                                    .as_ref()
+                                                    .is_some_and(|change| change.path == note.path)
+                                                {
+                                                    undo_dependency = design::undo_message(
+                                                        ui,
+                                                        Tone::Success,
+                                                        "Dependency copied and linked.",
+                                                        "Undo dependency copy",
+                                                    );
+                                                }
+                                                None
+                                            },
+                                        );
+                                    });
+                                });
+                        });
+                });
             });
         }
         save |= heading.apply(
@@ -5833,6 +6375,13 @@ impl Library {
             &mut self.draft,
             &mut self.heading_undo,
         );
+        let undo_identities = pressed.identities;
+        let undo_identity = pressed.identity;
+        if pressed.discarded
+            && let Some((_, _, text)) = self.discarded.take()
+        {
+            self.draft = text;
+        }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
                 match crate::content_workspace::ManifestWrite::write_as(&module, &path, exists) {
@@ -6076,6 +6625,8 @@ impl Library {
                 self.reveal_row = true;
             }
         }
+        // One press a frame, so no early return above skips one of these.
+        self.apply_package_results(&pressed);
         if let Some(step) = step {
             if dirty {
                 self.peek = self.trail.peek(step).and_then(|target| {
@@ -6434,7 +6985,7 @@ mod tests {
                 .any(|text| text.starts_with("Both.md: Hit Points"))
         );
         // Two Watch files and Both.md: three, not two (by path) and not five (by problem).
-        assert_eq!(loaded.files_to_fix(&broken), 3);
+        assert_eq!(loaded.files_to_fix(&broken, None), 3);
 
         let mut library = Library {
             loaded: Some(loaded),
@@ -6480,7 +7031,7 @@ mod tests {
                 "Ember Coast · Rules/Watch.md"
             ]
         );
-        assert_eq!(loaded.files_to_fix(&broken), 4);
+        assert_eq!(loaded.files_to_fix(&broken, None), 4);
 
         // Two packages with the same name that both fail to load are two problems, and their
         // messages name the folders.
@@ -6493,7 +7044,7 @@ mod tests {
         }
         let loaded = load_all(&gone, None).unwrap();
         assert_eq!(
-            loaded.files_to_fix(&[]),
+            loaded.files_to_fix(&[], None),
             2,
             "{:?}",
             loaded.diagnostic_texts()
@@ -6537,7 +7088,7 @@ mod tests {
         let manifest = loaded.notes.iter().find(|n| n.is_manifest()).unwrap();
         // The header counts it, and the manifest still reads: only the counted problem warns.
         assert!(manifest.error.is_none());
-        assert_eq!(loaded.files_to_fix(&[]), 1);
+        assert_eq!(loaded.files_to_fix(&[], None), 1);
         assert_eq!(about(&loaded), format!("{} About Emberfall", icons::WARN));
     }
 
@@ -7489,6 +8040,28 @@ mod tests {
             reader_subtitle(&package, "Rule", Some("Bard · Level 3".into())),
             "Class feature · Bard · Level 3 · Ashen Marches"
         );
+        // Round 23 FE8: the kind line under the owner line leaves the package name out. Where
+        // two packages share the name, the folder alone tells them apart.
+        assert_eq!(
+            reader_kind_line(&package, "Creature · CR 1 · Ashen Marches"),
+            "Creature · CR 1"
+        );
+        assert_eq!(
+            reader_kind_line(&package, "Creature · CR 1 · Ashen Marches · ashen/"),
+            "Creature · CR 1 · ashen/"
+        );
+        // Lookalike: another owner's line keeps every part.
+        let campaign = Owner::Campaign(Campaign {
+            id: Uuid::new_v4(),
+            name: "Ashen Marches".into(),
+            path: "ashen".into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        });
+        assert_eq!(
+            reader_kind_line(&campaign, "Creature · CR 1 · Ashen Marches · ashen/"),
+            "Creature · CR 1 · Ashen Marches · ashen/"
+        );
     }
 
     /// Run explicitly to measure the complete library UI while scrolling the built-in package.
@@ -8416,7 +8989,7 @@ mod tests {
                     },
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            library.editor_pane(ui, "Cannot be read", &Campaigns::default());
+                            library.editor_pane(ui, "Cannot be read", &Campaigns::default(), None);
                         });
                     },
                 );
@@ -8773,14 +9346,14 @@ mod tests {
             ..Default::default()
         };
         library.register_copy(&mut app.campaigns).unwrap();
-        // FD6: the result is two sentences, and says that this campaign uses the copy.
+        // Round 23 AD1: the result says what the registration chose, not the campaign's use now.
         assert_eq!(
             package_registered(
                 &library.package_copy.as_ref().unwrap().module.name,
                 library.copy_campaign_before.is_some()
             ),
-            "Reaches is registered. This campaign uses it.",
-            "iter21-E-FD6-uses"
+            "Reaches is registered, with every entry chosen for this campaign.",
+            "iter-23-L-AD1-chosen"
         );
         library.forget_changed_undos();
         assert!(!library.registration_changed);
