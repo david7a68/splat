@@ -484,7 +484,9 @@ come from the draft as it is now, checked as Save checks it. So does every other
 (`Unsaved`) means Save would accept the draft, and a draft that parses but that Save refuses (another UUID,
 kind or key) says Invalid with Save's reason, and Save and Ctrl+S are blocked with it. These checks never read the disk.
 A Save that fails on the disk (a read-only file or folder, a write error) is an action-time failure: the state
-slot says `Not saved` with the error icon, and Save's own reason sits where a refusal's reason does. It belongs to
+slot says `Not saved` with the error icon, and Save's own reason sits where a refusal's reason does. A read-only
+file or campaign folder names the next step (`This file is read only. Make it writable, then Save again.`), and the
+owner line says `Read only` with the lock icon for as long as that failure lasts. It belongs to
 that draft: the next edit, another entry or a Save that succeeds ends it. Each reason Save would refuse it (a YAML fault,
 a UUID or key that another entry uses) is the error, with Invalid. Once Save would write it, the error goes and
 the state says Unsaved. The owner line and the row keep Cannot be read until Save. A fault that is not in the text (another identity, a
@@ -851,7 +853,8 @@ Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, R
 HISTORY in that order. Groups and History start closed when they have rows. Each row reserves right-edge slots
 for its main action, quiet Edit and row menu. The menu holds deletion and starting another run. An encounter
 with an unfinished run appears in In progress; when it ends, it returns to Ready. Keep in Ready during a run
-leaves a blocked Start fight and a reason to resume from In progress. The header counts all Ready rows,
+leaves a blocked Start fight and a reason to resume from In progress. In the editor, a muted line below the option
+says what it does. The header counts all Ready rows,
 including these repeatable fights. Ready rows name creatures; an empty roster blocks Start with Add
 participants first. The open-run block appears once under READY TO RUN. Its Ready action says Go back to the
 run.
@@ -911,7 +914,11 @@ Its note says where party members come from in the DM's words: `Party members co
 saved last.`
 Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
 
-The editor header keeps Save and Start on line one; the name field gives up width. An unfinished encounter
+The editor header keeps Save and Start on line one; the name field gives up width. While Save would refuse a
+changed draft (a roster row with no creature, or the refusal of the last Save while it still holds), the save row
+says `Invalid` and Save and Ctrl+S are blocked with the cause; otherwise a changed draft says `Unsaved`. Save encounter
+also gives the open fight from that encounter its new read-aloud text and notes for Prep; its roster and combat
+state stay, and other changes wait for the next fight. An unfinished encounter
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
@@ -924,7 +931,10 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 ### Groups and changes
 
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
-content and anchored left. The group name field and Belongs to end at one edge: the column's edge, or
+content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
+action moves when a long list starts to scroll. The group editor's header is one block that ends at that column's
+edge: the name on line one, then the save row with the state and Discard at its start and Save group at the
+column's edge. A reason without room on the save row takes its own line below it. The group name field and Belongs to end at one edge: the column's edge, or
 `FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
 encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
 actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
@@ -938,6 +948,9 @@ members, also in compact editors. Member names and stats sit above Count, Edit a
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
 Save group with Add a creature first.
+
+A change form (group member or roster slot) has one right edge: Display name, Note, the Other effect field with its
+Add, and the Loot field end at one x. `Roll on a table` follows the Loot field.
 
 Groups has one level of headings: For any encounter, each encounter, then Encounter deleted. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
@@ -1010,7 +1023,8 @@ Names that need more than two lines use `RUN_COMPACT.name` and wrap in the share
 columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
 that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
 the whole name. Pictures align with the first name line. The fight panel and the Encounters page keep an `L`
-left gutter, so a quiet action at their text edge never reaches a splitter. A scroll area there lets that
+left gutter, so a quiet action at their text edge never reaches a splitter. The Encounters page header is outside
+that gutter: its title starts at the shared page edge, as every page title does. A scroll area there lets that
 action's press area reach `S` into the gutter.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then

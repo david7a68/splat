@@ -1504,7 +1504,7 @@ impl CampaignContent {
                                     }
                                     design::quiet_section(ui, "Technical details", |ui| {
                                         ui.label(
-                                            Type::Small.rich(ui, &issue.reference).color(c.muted),
+                                            Type::Small.rich(ui, issue.technical()).color(c.muted),
                                         );
                                     });
                                 });

@@ -2608,7 +2608,55 @@ pub mod encounter_build {
         "8. Cultist",
     ];
 
+    /// A page's title: the painted text with exactly these words in the largest type.
+    fn page_title_left(d: &Driver<'_>, title: &str) -> Option<f32> {
+        let mut found: Option<(f32, f32)> = None;
+        d.each_painted_text(|text, clip| {
+            let height = text.galley.size().y;
+            if text.galley.job.text == title
+                && clip.intersects(text.visual_bounding_rect())
+                && found.is_none_or(|(tallest, _)| height > tallest)
+            {
+                found = Some((height, text.pos.x));
+            }
+        });
+        found.map(|(_, left)| left)
+    }
+
     pub fn run(d: &mut Driver<'_>) {
+        // iter-24-B FE4: the Encounters title starts at the shared page edge, as Party's does,
+        // at every size. Measured before T5.3's task begins, so its cost is unchanged.
+        d.expect(READY_TO_RUN);
+        let sizes = [SMALL, DEFAULT, LARGE];
+        let encounters = sizes.map(|size| d.at_size(size, |d| page_title_left(d, NAV_ENCOUNTERS)));
+        // Must stay true: the content below the header keeps the page's `L` gutter.
+        let content = sizes.map(|size| d.at_size(size, |d| d.painted_left(READY_TO_RUN)));
+        d.click(NAV_PARTY);
+        d.expect("Party");
+        let party = sizes.map(|size| d.at_size(size, |d| page_title_left(d, NAV_PARTY)));
+        go_encounters(d);
+        d.observe(
+            "iter-24-B-FE4",
+            encounters.iter().zip(&party).all(|(encounters, party)| {
+                encounters
+                    .zip(*party)
+                    .is_some_and(|(encounters, party)| (encounters - party).abs() < 0.5)
+            }),
+            format!(
+                "Encounters title x {encounters:?}, Party title x {party:?} at 960, 1200, 1920"
+            ),
+        );
+        d.observe(
+            "iter-24-B-FE4-gutter",
+            encounters.iter().zip(&content).all(|(title, content)| {
+                title.zip(*content).is_some_and(|(title, content)| {
+                    (content - title - (crate::design::L - crate::design::M)).abs() < 0.5
+                })
+            }),
+            format!(
+                "Title x {encounters:?}, list heading x {content:?}: the list keeps its gutter"
+            ),
+        );
         // T5.3 measures the whole build, so it starts from the cold start.
         d.begin_task();
         d.expect(READY_TO_RUN);
@@ -2746,6 +2794,50 @@ pub mod encounter_build {
         d.replace_text_in(FIND_CREATURE, NO_SUCH_CREATURE);
         d.expect("Campaign → Packages");
         d.state("no-search-results", Sizes::All);
+        // iter-24-B FB4: one sentence in one size: the words, the link and its full stop.
+        let mut sizes = Vec::new();
+        let mut stops = Vec::new();
+        let mut sentence = None;
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            let size = text
+                .galley
+                .job
+                .sections
+                .first()
+                .map(|s| s.format.font_id.size);
+            if words == "Check the spelling, or check" || words == "Campaign → Packages" {
+                sizes.push((words.clone(), size));
+                if words.starts_with("Check") {
+                    sentence = Some(text.pos.y);
+                }
+            }
+            if words == "." {
+                stops.push((text.pos, size));
+            }
+        });
+        let link = d.place_of("Campaign → Packages");
+        // The full stop on the link's line, after its last word.
+        let stop = link.and_then(|link| {
+            stops
+                .iter()
+                .find(|(pos, _)| {
+                    pos.x >= link.left() && pos.y >= link.top() - 1.0 && pos.y < link.bottom()
+                })
+                .map(|(pos, size)| (pos.x, *size))
+        });
+        d.observe(
+            "iter-24-B-FB4",
+            sizes.len() == 2
+                && sizes
+                    .iter()
+                    .all(|(_, size)| size.is_some() && *size == sizes[0].1)
+                && stop.is_some_and(|(x, size)| {
+                    size == sizes[0].1 && link.is_some_and(|link| x >= link.left())
+                })
+                && sentence.is_some(),
+            format!("Sizes {sizes:?}, full stop {stop:?}, link {link:?}"),
+        );
         d.observe(
             "T5.1",
             d.visible_text("No creatures match"),
@@ -12080,6 +12172,26 @@ pub mod encounter_groups {
                 format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
             );
         }
+        // iter-24-B AK1, AB2: Save group ends at the members column's right edge (the member
+        // menu's), on the save row with Unsaved and Discard, not across the Add creatures pane.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (save, column, unsaved) = d.at_size(size, |d| {
+                (
+                    d.place_of(SAVE_GROUP),
+                    d.place_of("More actions for Cinder Wolf"),
+                    d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
+                )
+            });
+            d.observe(
+                "iter-24-B-AK1",
+                save.zip(column).zip(unsaved).is_some_and(|((save, column), unsaved)| {
+                    (save.right() - column.right()).abs() <= 0.5
+                        && save.top() < unsaved.bottom()
+                        && unsaved.top() < save.bottom()
+                }),
+                format!("At {size:?}: Save group {save:?}, column's menu {column:?}, Unsaved {unsaved:?}"),
+            );
+        }
         d.state("group-member-removed-with-undo", Sizes::All);
         d.click("Undo remove member");
         d.expect(CHANGES);
@@ -12102,6 +12214,31 @@ pub mod encounter_groups {
         d.click("Replace Unknown creature");
         d.type_into("Replacement creature", "Ember");
         d.expect("Use Ember Cultist");
+        // iter-24-B FH3: at one width, a tall window shows the whole members column and a short
+        // one gives it a scroll bar; the name field, Belongs to and every member menu keep x.
+        let (before, fits) = d.at_size((DEFAULT.0, 2000.0), |d| {
+            (member_column_xs(d, GROUP_LOST), !members_scroll_bar(d))
+        });
+        let (after, scrolls) = d.at_size((DEFAULT.0, SMALL.1), |d| {
+            (member_column_xs(d, GROUP_LOST), members_scroll_bar(d))
+        });
+        let same: Vec<_> = before
+            .iter()
+            .filter_map(|(name, x)| {
+                after
+                    .iter()
+                    .find(|(other, _)| other == name)
+                    .map(|(_, y)| (name.clone(), *x, *y))
+            })
+            .collect();
+        d.observe(
+            "iter-24-B-FH3",
+            fits && scrolls
+                && same.len() >= 3
+                && same.iter().any(|(name, ..)| name.starts_with("More actions for "))
+                && same.iter().all(|(_, x, y)| (x - y).abs() <= 0.5),
+            format!("Fits before {fits}, scrolls after {scrolls}; right edges before and after: {same:?}"),
+        );
         d.state("group-member-replacement-search", Sizes::Default);
         d.click("Use Ember Cultist");
         d.expect("Changes for Ember Cultist");
@@ -12600,6 +12737,25 @@ pub mod encounter_history {
             "New encounter stays editable while starting a fight is blocked",
         );
         d.state("draft-during-run", Sizes::All);
+        // iter-24-B FI7: Keep in Ready says what it changes, below the option, at each size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let placed = d.at_size(size, |d| {
+                let option = d.place_of("Keep in Ready during a run")?;
+                let help = d.painted_rect_in(
+                    "Lists this encounter under Ready to run",
+                    egui::Rect::EVERYTHING,
+                )?;
+                Some(
+                    help.top() >= option.bottom() - 0.5
+                        && help.top() < option.bottom() + crate::design::L,
+                )
+            });
+            d.observe(
+                "iter-24-B-FI7",
+                placed == Some(true),
+                format!("At {size:?}, the option's help sits below it: {placed:?}"),
+            );
+        }
     }
 }
 
@@ -12615,6 +12771,47 @@ fn group_field_edges(d: &Driver<'_>, group: &str) -> Option<(f32, f32, f32)> {
         .right();
     let notes = d.place_of(&format!("Group notes for {group}"))?.right();
     Some((name, belongs, notes))
+}
+
+/// iter-24-B FH3: the right edges in a group editor that must not move when its members list
+/// gains a scroll bar: the name field, `Belongs to` and each member's menu, by name.
+fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
+    let mut xs: Vec<(String, f32)> = d
+        .place_of(&format!("Group name: {group}"))
+        .map(|name| ("Group name".to_owned(), name.right()))
+        .into_iter()
+        .collect();
+    xs.extend(
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.name.starts_with("More actions for ") || node.name.starts_with("Belongs to: ")
+            })
+            .map(|node| (node.name, node.rect.right())),
+    );
+    xs
+}
+
+/// Egui's scroll bar beside a group editor's members column: an unnamed thin node with no
+/// role, just right of the member menus.
+fn members_scroll_bar(d: &Driver<'_>) -> bool {
+    let nodes = d.nodes();
+    let Some(column) = nodes
+        .iter()
+        .filter(|node| node.name.starts_with("More actions for "))
+        .map(|node| node.rect.right())
+        .reduce(f32::max)
+    else {
+        return false;
+    };
+    nodes.iter().any(|node| {
+        node.role == egui::accesskit::Role::Unknown
+            && node.name.is_empty()
+            && node.rect.width() <= crate::design::M
+            && node.rect.height() >= crate::design::XXL
+            && node.rect.left() >= column - 0.5
+            && node.rect.left() <= column + crate::design::XL
+    })
 }
 
 /// The name field and `Belongs to` share one right edge, and it is the column's edge.
@@ -13830,19 +14027,35 @@ pub mod session_plan_groups {
             );
         }
         // Must stay true: when the compact editor shows only Add creatures, the name keeps no
-        // column edge from the wider layout; it runs on to the room Save group leaves.
+        // column edge from the wider layout; it runs on to the edge Save group ends at, on the
+        // save row below it (iter-24-B AK1). That edge is the compact pane's own: the search
+        // field's right edge, which no stored column edge sets (iter-24-B review).
         let gap = d.at_size(SMALL, |d| {
             let compact = d.has("Back to the plan") && !d.has("Group notes for Ash Pack");
             let gap = d
                 .place_of("Group name: Ash Pack")
                 .zip(d.place_of("Save group"))
-                .map(|(name, save)| save.left() - name.right());
+                .zip(d.place_of(FIND_CREATURE))
+                .map(|((name, save), search)| {
+                    (
+                        save.right() - name.right(),
+                        save.top() - name.bottom(),
+                        save.right() - search.right(),
+                    )
+                });
             (compact, gap)
         });
         d.observe(
             "iter-19-B-FT9-compact",
-            gap.0 && gap.1.is_some_and(|gap| gap <= crate::design::XL),
-            format!("The compact name field ends just before Save group: {gap:?}"),
+            gap.0
+                && gap.1.is_some_and(|(edge, below, pane)| {
+                    (0.0..=crate::design::XL).contains(&edge)
+                        && below >= -0.5
+                        && pane.abs() <= 1.0
+                }),
+            format!(
+                "The compact name field ends near Save group's edge, above it, and Save ends at the pane's edge (Save minus name, Save top minus name bottom, Save minus search): {gap:?}"
+            ),
         );
         let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
         d.observe(
@@ -13999,6 +14212,13 @@ pub mod session_plan_groups {
             "One warning names the draft session and one link opens it",
         );
         d.state("plan-group-in-another-session", Sizes::Default);
+        // iter-24-B FJ5: the plan's group summary draws the pencil before Changed, as Arrivals.
+        let pencil = format!("{}\u{a0}Changed", crate::design::icons::CHANGED);
+        d.observe(
+            "iter-24-B-FJ5",
+            d.visible_text(&pencil),
+            "A changed group's plan row has the pencil before Changed",
+        );
         let stays_out = !d.has("Save group");
         d.click("Return to the session being played");
         d.click("Save group");
@@ -14072,6 +14292,12 @@ pub mod session_plan_groups {
         d.click("Technical details");
         d.expect(&missing_id);
         d.state("missing-member-technical-details", Sizes::All);
+        // iter-24-B FJ6: the bare id has a label that says what it is.
+        d.observe(
+            "iter-24-B-FJ6",
+            d.visible_text(&format!("Missing creature id: {missing_id}")),
+            "Technical details names the missing creature's id",
+        );
         // Lookalikes before the member row: the notes mention the missing id in words, and an
         // example table links it in another section.
         let lost = d
@@ -14200,6 +14426,13 @@ pub mod session_plan_groups {
         std::fs::set_permissions(&lost, read_only).unwrap();
         d.press_ctrl(Key::S);
         d.state("missing-member-save-failed", Sizes::Default);
+        // iter-24-B FL1, AL1: Save found the file read only, so the owner line says so, and
+        // Save's reason says what to do next.
+        let read_only_shown = (
+            d.visible_text("Campaign · Read only"),
+            d.visible_text("Campaign · Editable"),
+            d.visible_text("This file is read only. Make it writable, then Save again."),
+        );
         // The editor's visible part: its accessible rect is its scrolled text.
         let editor_shown = |d: &Driver<'_>| {
             d.nodes()
@@ -14260,6 +14493,19 @@ pub mod session_plan_groups {
         d.press(Key::Home);
         d.press_shift(Key::End);
         d.type_text("| 1 | [[Goblin Warrior]] |  |  |  |");
+        // The next edit ends the failed Save, and the owner line with it.
+        let editable_again = (
+            d.visible_text("Campaign · Read only"),
+            d.visible_text("Campaign · Editable"),
+            d.visible_text("This file is read only."),
+        );
+        d.observe(
+            "iter-24-B-FL1",
+            read_only_shown == (true, false, true) && editable_again == (false, true, false),
+            format!(
+                "After the failed Save (Read only, Editable, next step): {read_only_shown:?}; after the next edit: {editable_again:?}"
+            ),
+        );
         let replaced = lines(d);
         let gone = replaced.len() == 2
             && replaced.iter().all(|(_, member)| !member)
@@ -15874,6 +16120,24 @@ pub mod npc_in_encounter {
         d.expect("Back to run");
         d.expect("Rook's ambush");
         d.state("edit-encounter-from-prep", Sizes::All);
+        // iter-24-B AB1, FB1: the step Prep names works. Notes saved in the encounter reach this
+        // open fight's Prep, and the fight keeps its setup (the NPC's initiative field).
+        const NOTES: &str = "Rook waits under the bridge.";
+        d.type_into("Read-aloud and notes", NOTES);
+        d.click(SAVE_ENCOUNTER);
+        d.wait_for_text("Saved");
+        d.click("Back to run");
+        d.expect("Initiative for Rook Ambry");
+        fight_tab(d, "Prep");
+        d.expect(NOTES);
+        d.observe(
+            "iter-24-B-AB1",
+            d.visible_text(NOTES)
+                && !d.visible_text("No prep notes yet")
+                && d.has("Initiative for Rook Ambry"),
+            "Saved notes show in the open fight's Prep, and its setup stays",
+        );
+        d.state("prep-after-encounter-save", Sizes::Default);
     }
 }
 
@@ -15908,6 +16172,15 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        // iter-24-B FC1, must stay true: a changed draft Save would write still says Unsaved,
+        // and its Save is not blocked.
+        d.observe(
+            "iter-24-B-FC1-ready",
+            d.visible_text("Unsaved")
+                && !d.visible_text("Invalid")
+                && !d.is_disabled(SAVE_ENCOUNTER),
+            "A draft that Save accepts says Unsaved, with Save open",
+        );
         // FD1: one fault, one tone. The search result and the roster row paint `HP not set`,
         // icon and words, in the warning colour and nothing else.
         for size in [SMALL, DEFAULT, LARGE] {

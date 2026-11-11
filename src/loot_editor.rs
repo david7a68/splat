@@ -608,7 +608,7 @@ fn add_row(
     }
 }
 
-const ROLL_MENU: &str = "Roll on a table";
+pub(crate) const ROLL_MENU: &str = "Roll on a table";
 
 /// The count typed after `Roll`, such as 2 in `Roll 2× ge`.
 fn typed_count(typed: &str) -> Option<u32> {
