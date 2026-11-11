@@ -235,9 +235,11 @@ full path.
 
 ## Keeping a draft
 
-Conversion and draft comparisons align unchanged lines before drawing. Blank rows mark actual additions
+Draft comparisons align unchanged lines before drawing. Blank rows mark actual additions
 and deletions. Highlights and line counts use these aligned rows. Adjacent changed rows form one group.
 `Next difference` moves to the start of the next group, wraps to the first, and stays hidden for one group.
+Encounter and group conflict comparisons use disk layout and include outside properties and prose that
+Overwrite keeps.
 
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
 discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library shows the
@@ -340,13 +342,13 @@ readable. Stat warnings name the field, bad value, line and repair. List rows an
 include flagged stat cells. The editor warns when prose AC or HP disagrees with the table and offers `Use
 <value>` with Undo.
 
-Converted spells and items show facts once, with no empty rows or machine lines. Spells use Casting Time,
+Spells and items show facts once, with no empty rows or machine lines. Spells use Casting Time,
 Range, Components, Duration in book order; Concentration and Ritual appear in those values only when true.
 Magic items use book case and put attunement in their identity line. Creature types use book case and keep
 tags. CR supplies missing XP and PB; explicit mismatches warn by line, except lair values. Ability modifiers
-and passive initiative follow their score or bonus. Conversion keeps printed creature headers in a folded
-record quote outside the reading view. Run copy notices compare model and readable words, so conversion alone
-does not report changed creatures. Copied creature fields use template book order, one flow line per stat.
+and passive initiative follow their score or bonus. Printed creature headers stay in a folded
+record quote outside the reading view. Run copy notices compare model and readable words, so a rewrite of the
+same values alone does not report changed creatures. Copied creature fields use template book order, one flow line per stat.
 Copies write schema-2 stat tables and keep prose. Creature templates use inline stat values and omit HP and AC
 until the author sets them.
 
@@ -442,8 +444,9 @@ the unchanged copy. Keep room for Copy both and Cancel, with no outer scroll han
 
 ## Files and recovery
 
-Splat reads schema 2 and Timeline version 2 only. Do not load old files. Say `<path> uses the old layout.
-Splat no longer reads it.` Reading and polling write nothing; ordinary saves have no layout notice. Malformed
+Splat reads schema 2 and Timeline version 2 only. A file with another version is an unreadable file: name its
+path and the reason, as for any unreadable file. Reading and polling write nothing. `splat check` reports
+schema-2 flags and unreadable files by path and line, and opens no window. Malformed
 flat properties stay on disk; a line warning keeps the note available. Campaign packages use tasks; a toggle
 changes one character. Rule choices, group members and saved rosters use tables. Bad cells name their line and
 stay on disk. Encounter and group notes forms show DM prose with managed tables outside the form. New files
@@ -470,31 +473,6 @@ title. `Undo heading change` takes the same place as a `line_start` quiet action
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.
-
-### Convert files
-
-Library keeps its old-layout count in the header, including generated packages. Old-layout files offer
-`Convert files…`, never Repair. Campaign combines them into one count line. An unused old file does not block
-Save selections; name a required old file in the save row. Campaign keeps one Convert files action beside
-the combined warning. An open run blocks conversion. Lookup states `Close the run to convert these files.`
-on its old-layout warning and hides the conversion action; other old-layout links show the reason on hover.
-
-Convert files groups files and its picker by owner. Initially only the campaign is checked. Generated
-packages start unchecked but can be selected; warn that their converter overwrites these files on its
-next run. Counts include checked owners only. The modal shows before and after text, counts by kind in
-words and skipped files. Omit the kinds line when it has no text. Short previews fit aligned rows, including missing-line hatching; long
-previews give the source panes about 60% of window height, ending on whole rows above the reserved horizontal scroll bar. Headings sit above
-that space. Leave room for the action line at small window sizes. Source lines do not wrap. Mark changes from aligned rows,
-scroll both panes together and open at the first difference. Use the same change-group navigation as
-draft comparisons. Encounter and group conflict comparisons use disk layout and include outside
-properties and prose that Overwrite keeps.
-
-Writes check their baseline. Keep skipped files and next steps visible; count changed and skipped files, with
-warning tone for any skip. Each skipped file offers Convert files… beside it. While FILES SKIPPED names
-the open file, its reader keeps the `uses the old layout` sentence without its own Convert files…, so one
-button serves one file. Keep `Undo convert` when
-reopening preview, until another conversion is applied. Headless `splat convert` uses the same checks; `splat
-check` reports schema-2 flags and unreadable files by path and line.
 
 ## Campaign
 
