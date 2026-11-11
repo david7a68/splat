@@ -169,6 +169,12 @@ struct Reference {
     files_at_end: BTreeMap<String, String>,
 }
 
+/// Each campaign file by its path, as G7 compares it.
+type Bytes = BTreeMap<String, Vec<u8>>;
+
+/// One part of an act, as `compare_acts` lists it.
+type ActPart = (&'static str, fn(&Act) -> &Vec<String>);
+
 /// One difference from the reference. An allowed row holds one of these, whole.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 struct Difference {
@@ -365,7 +371,7 @@ impl Files {
         out
     }
 
-    fn all(&self) -> BTreeMap<String, Vec<u8>> {
+    fn all(&self) -> Bytes {
         self.paths()
             .into_iter()
             .map(|path| (self.name(&path), self.bytes(&path)))
@@ -642,13 +648,7 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
 
 /// The plain evening: today's controls only, and no act that a feature adds. Returns the
 /// record and the files at the start and the end.
-fn play(
-    d: &mut Driver<'_>,
-) -> (
-    Evening,
-    BTreeMap<String, Vec<u8>>,
-    BTreeMap<String, Vec<u8>>,
-) {
+fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     d.set_base(WIDE);
     let mut ev = Evening {
         files: Files {
@@ -940,12 +940,7 @@ fn file_difference(when: &str, change: &str, path: &str, detail: String) -> Diff
     }
 }
 
-fn compare_files(
-    reference: &Reference,
-    start: &BTreeMap<String, Vec<u8>>,
-    end: &BTreeMap<String, Vec<u8>>,
-    out: &mut Vec<Difference>,
-) {
+fn compare_files(reference: &Reference, start: &Bytes, end: &Bytes, out: &mut Vec<Difference>) {
     for (path, digest) in &reference.files_at_start {
         match start.get(path) {
             None => out.push(file_difference("start", "gone", path, String::new())),
@@ -1016,7 +1011,7 @@ fn compare_acts(old: &[Act], new: &[Act], out: &mut Vec<Difference>) {
         if a.map(|act| &act.act) != b.map(|act| &act.act) {
             detail.push(format!("the act was {:?}, now {:?}", name(a), name(b)));
         }
-        let parts: [(&str, fn(&Act) -> &Vec<String>); 3] = [
+        let parts: [ActPart; 3] = [
             ("appeared", |act| &act.appeared),
             ("went", |act| &act.gone),
             ("files", |act| &act.files),
@@ -1042,12 +1037,7 @@ fn compare_acts(old: &[Act], new: &[Act], out: &mut Vec<Difference>) {
     }
 }
 
-fn differences(
-    reference: &Reference,
-    ev: &Evening,
-    start: &BTreeMap<String, Vec<u8>>,
-    end: &BTreeMap<String, Vec<u8>>,
-) -> Vec<Difference> {
+fn differences(reference: &Reference, ev: &Evening, start: &Bytes, end: &Bytes) -> Vec<Difference> {
     let mut out = Vec::new();
     for old in &reference.views {
         if let Some(new) = ev
@@ -1159,11 +1149,7 @@ fn view_faults(what: &str, views: &[View]) -> Vec<String> {
     faults
 }
 
-fn write_reference(
-    ev: Evening,
-    start: &BTreeMap<String, Vec<u8>>,
-    end: &BTreeMap<String, Vec<u8>>,
-) {
+fn write_reference(ev: Evening, start: &Bytes, end: &Bytes) {
     let files = folder().join("files");
     let _ = fs::remove_dir_all(&files);
     let mut at_end = BTreeMap::new();
