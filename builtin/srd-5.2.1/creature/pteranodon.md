@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b0cdb5d3-9e4b-5994-bc15-7912c89962c3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pteranodon"
-splat_name: "Pteranodon"
+splat_id: b0cdb5d3-9e4b-5994-bc15-7912c89962c3
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pteranodon
+splat_name: Pteranodon
 splat_pages:
 - 359
 ---

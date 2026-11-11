@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "23afcddd-e256-54f8-904a-ae54056ac01e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/plesiosaurus"
-splat_name: "Plesiosaurus"
+splat_id: 23afcddd-e256-54f8-904a-ae54056ac01e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/plesiosaurus
+splat_name: Plesiosaurus
 splat_pages:
 - 358
 - 359

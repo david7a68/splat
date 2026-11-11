@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "425b9bfc-f4d8-5aea-bace-819fe8bad655"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/proficiency"
-splat_name: "Proficiency"
+splat_id: 425b9bfc-f4d8-5aea-bace-819fe8bad655
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/proficiency
+splat_name: Proficiency
 splat_pages:
 - 186
 ---

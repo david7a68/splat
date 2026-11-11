@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4a4deaa1-4035-5875-846f-cf5dab562336"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/temporary_hit_points"
-splat_name: "Temporary Hit Points"
+splat_id: 4a4deaa1-4035-5875-846f-cf5dab562336
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/temporary_hit_points
+splat_name: Temporary Hit Points
 splat_pages:
 - 190
 ---

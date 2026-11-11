@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a2fff91f-a819-5963-9db6-1d68a2149901"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mirage_arcane"
-splat_name: "Mirage Arcane"
+splat_id: a2fff91f-a819-5963-9db6-1d68a2149901
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mirage_arcane
+splat_name: Mirage Arcane
 splat_pages:
 - 149
 - 150

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b824cb56-61f8-535f-8e7d-bf3292391dcf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pit_fiend"
-splat_name: "Pit Fiend"
+splat_id: b824cb56-61f8-535f-8e7d-bf3292391dcf
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pit_fiend
+splat_name: Pit Fiend
 splat_pages:
 - 314
 - 315

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2eaa8004-972d-539e-bf20-b1e1aca09248"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/iron_golem"
-splat_name: "Iron Golem"
+splat_id: 2eaa8004-972d-539e-bf20-b1e1aca09248
+splat_kind: reference
+splat_key: dnd2024:reference/creature/iron_golem
+splat_name: Iron Golem
 splat_pages:
 - 302
 ---

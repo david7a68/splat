@@ -1,4 +1,4 @@
-//! A bounded execution proof for schema-1 attacks, saves, healing and consumables.
+//! A bounded execution proof for attacks, saves, healing and consumables.
 //! No package code is executed. Unsupported fields fail compilation.
 pub mod builtin;
 pub mod dice;

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "84c361b5-3820-53fc-bd2f-d5269f307039"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/poisoned_condition"
-splat_name: "Poisoned [Condition]"
+splat_id: 84c361b5-3820-53fc-bd2f-d5269f307039
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/poisoned_condition
+splat_name: Poisoned [Condition]
 splat_pages:
 - 186
 ---

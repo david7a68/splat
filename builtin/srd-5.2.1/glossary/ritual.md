@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6df403ff-ef3b-5cd9-b013-ecff9f7b1e85"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/ritual"
-splat_name: "Ritual"
+splat_id: 6df403ff-ef3b-5cd9-b013-ecff9f7b1e85
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/ritual
+splat_name: Ritual
 splat_pages:
 - 187
 ---

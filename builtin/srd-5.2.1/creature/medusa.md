@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e0fe738f-6ebf-56bd-b0ba-523d31f9b133"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/medusa"
-splat_name: "Medusa"
+splat_id: e0fe738f-6ebf-56bd-b0ba-523d31f9b133
+splat_kind: reference
+splat_key: dnd2024:reference/creature/medusa
+splat_name: Medusa
 splat_pages:
 - 306
 - 307

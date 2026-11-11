@@ -60,7 +60,7 @@ fn add_option(rules: &mut Rules<'_>, option_id: &str, spec: &OptionRule) -> Resu
     let mut parameters = spec.parameters.clone();
     rules.remap(&mut parameters)?;
     let mut fields = json!({
-        "splat_schema": 1, "splat_id": id, "splat_kind": "rule", "splat_name": spec.name,
+        "splat_id": id, "splat_kind": "rule", "splat_name": spec.name,
         "splat_rule": {"mechanic": implementation, "implementation": implementation, "parameters": parameters},
         "splat_requires_mechanics": [implementation],
         "splat_contracts": [{"id": implementation,

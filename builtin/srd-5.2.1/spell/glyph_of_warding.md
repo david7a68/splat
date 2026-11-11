@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c14683cd-cfa4-5264-a550-f16c15e7701e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/glyph_of_warding"
-splat_name: "Glyph of Warding"
+splat_id: c14683cd-cfa4-5264-a550-f16c15e7701e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/glyph_of_warding
+splat_name: Glyph of Warding
 splat_pages:
 - 136
 - 137

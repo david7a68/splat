@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2755c197-813a-5dde-9bdd-d889323f68f9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hippogriff"
-splat_name: "Hippogriff"
+splat_id: 2755c197-813a-5dde-9bdd-d889323f68f9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hippogriff
+splat_name: Hippogriff
 splat_pages:
 - 298
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "36577ec2-dfce-5424-88f6-259b96857ffa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mule"
-splat_name: "Mule"
+splat_id: 36577ec2-dfce-5424-88f6-259b96857ffa
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mule
+splat_name: Mule
 splat_pages:
 - 357
 ---

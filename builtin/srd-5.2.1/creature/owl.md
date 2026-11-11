@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1c75278e-574e-5a00-b246-a14498ca8133"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/owl"
-splat_name: "Owl"
+splat_id: 1c75278e-574e-5a00-b246-a14498ca8133
+splat_kind: reference
+splat_key: dnd2024:reference/creature/owl
+splat_name: Owl
 splat_pages:
 - 358
 ---

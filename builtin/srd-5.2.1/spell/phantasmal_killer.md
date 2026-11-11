@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e6d98308-a80f-5ddb-8f3b-dce17e89cd79"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/phantasmal_killer"
-splat_name: "Phantasmal Killer"
+splat_id: e6d98308-a80f-5ddb-8f3b-dce17e89cd79
+splat_kind: reference
+splat_key: dnd2024:reference/spell/phantasmal_killer
+splat_name: Phantasmal Killer
 splat_pages:
 - 152
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b2736c4-b9ec-5caf-93f8-eaa69bce588d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/polymorph"
-splat_name: "Polymorph"
+splat_id: 9b2736c4-b9ec-5caf-93f8-eaa69bce588d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/polymorph
+splat_name: Polymorph
 splat_pages:
 - 153
 - 154

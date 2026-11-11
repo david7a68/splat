@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bb225568-5bcc-5132-bd0e-40f84691cc85"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/spider"
-splat_name: "Spider"
+splat_id: bb225568-5bcc-5132-bd0e-40f84691cc85
+splat_kind: reference
+splat_key: dnd2024:reference/creature/spider
+splat_name: Spider
 splat_pages:
 - 361
 ---

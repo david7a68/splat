@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "93047be0-c678-5a87-afc8-a0459fda53a7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ankylosaurus"
-splat_name: "Ankylosaurus"
+splat_id: 93047be0-c678-5a87-afc8-a0459fda53a7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ankylosaurus
+splat_name: Ankylosaurus
 splat_pages:
 - 344
 ---

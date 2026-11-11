@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1efc972f-b913-55fe-897d-31cd3266d61f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/burrow_speed"
-splat_name: "Burrow Speed"
+splat_id: 1efc972f-b913-55fe-897d-31cd3266d61f
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/burrow_speed
+splat_name: Burrow Speed
 splat_pages:
 - 178
 ---

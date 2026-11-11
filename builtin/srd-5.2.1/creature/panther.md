@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9662a4fd-d121-5b06-9b96-18b9e5e81f1f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/panther"
-splat_name: "Panther"
+splat_id: 9662a4fd-d121-5b06-9b96-18b9e5e81f1f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/panther
+splat_name: Panther
 splat_pages:
 - 358
 ---

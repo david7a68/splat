@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0ee7bdb1-db7f-525f-beed-236bcfa1448d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/symbol"
-splat_name: "Symbol"
+splat_id: 0ee7bdb1-db7f-525f-beed-236bcfa1448d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/symbol
+splat_name: Symbol
 splat_pages:
 - 167
 ---

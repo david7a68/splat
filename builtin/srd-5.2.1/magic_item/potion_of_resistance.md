@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bcaa7738-6c4a-58b1-9272-ccb1dfd6bfc1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_resistance"
-splat_name: "Potion of Resistance"
+splat_id: bcaa7738-6c4a-58b1-9272-ccb1dfd6bfc1
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_resistance
+splat_name: Potion of Resistance
 splat_pages:
 - 236
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "80253cf2-0b82-52af-ade9-62be79dc10c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/long_jump"
-splat_name: "Long Jump"
+splat_id: 80253cf2-0b82-52af-ade9-62be79dc10c9
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/long_jump
+splat_name: Long Jump
 splat_pages:
 - 184
 - 185

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c44efeb1-fe2f-5280-abfd-a45e9b3b80c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bracers_of_archery"
-splat_name: "Bracers of Archery"
+splat_id: c44efeb1-fe2f-5280-abfd-a45e9b3b80c9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bracers_of_archery
+splat_name: Bracers of Archery
 splat_pages:
 - 214
 ---

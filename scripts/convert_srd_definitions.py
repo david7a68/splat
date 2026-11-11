@@ -436,7 +436,7 @@ def generate(lines, require_complete=True):
             if field in source:conversion[field]=source[field]
         cited=[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}]
         if habitat:cited.append({'title':MONSTER_MANUAL,'locator':f"p. {habitat['page']}, Habitat"})
-        front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
+        front={'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
                'splat_origin':{'key':origin},'splat_sources':cited,
                **fields}
         if key in readings:

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "12e13105-faf0-5770-bc7a-9211de51990f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/paralyzed_condition"
-splat_name: "Paralyzed [Condition]"
+splat_id: 12e13105-faf0-5770-bc7a-9211de51990f
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/paralyzed_condition
+splat_name: Paralyzed [Condition]
 splat_pages:
 - 186
 ---

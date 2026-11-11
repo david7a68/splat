@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e995b4ce-30a8-5029-ac44-3adc958f5488"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/teleport"
-splat_name: "Teleport"
+splat_id: e995b4ce-30a8-5029-ac44-3adc958f5488
+splat_kind: reference
+splat_key: dnd2024:reference/spell/teleport
+splat_name: Teleport
 splat_pages:
 - 168
 ---

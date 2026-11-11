@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f0711cf8-de43-5f02-8f86-df8cc79c68a5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sunbeam"
-splat_name: "Sunbeam"
+splat_id: f0711cf8-de43-5f02-8f86-df8cc79c68a5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sunbeam
+splat_name: Sunbeam
 splat_pages:
 - 166
 ---

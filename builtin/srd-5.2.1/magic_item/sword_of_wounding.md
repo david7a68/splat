@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e2c26062-2c35-5c5f-84d2-0bf1f9e96a50"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sword_of_wounding"
-splat_name: "Sword of Wounding"
+splat_id: e2c26062-2c35-5c5f-84d2-0bf1f9e96a50
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sword_of_wounding
+splat_name: Sword of Wounding
 splat_pages:
 - 248
 ---

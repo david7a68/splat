@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d034c183-9ee4-505f-9af0-289473314bcc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wall_of_force"
-splat_name: "Wall of Force"
+splat_id: d034c183-9ee4-505f-9af0-289473314bcc
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wall_of_force
+splat_name: Wall of Force
 splat_pages:
 - 172
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7f38a41d-b47e-556a-8b33-6a19cbeb1e2b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_telekinesis"
-splat_name: "Ring of Telekinesis"
+splat_id: 7f38a41d-b47e-556a-8b33-6a19cbeb1e2b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_telekinesis
+splat_name: Ring of Telekinesis
 splat_pages:
 - 239
 ---

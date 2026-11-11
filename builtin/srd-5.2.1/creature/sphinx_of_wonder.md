@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d7d4d00d-3745-5e2a-ba50-def84b0fcc53"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sphinx_of_wonder"
-splat_name: "Sphinx of Wonder"
+splat_id: d7d4d00d-3745-5e2a-ba50-def84b0fcc53
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sphinx_of_wonder
+splat_name: Sphinx of Wonder
 splat_pages:
 - 327
 ---

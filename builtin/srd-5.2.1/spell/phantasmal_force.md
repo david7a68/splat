@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2430e11f-7272-50cf-8d0f-adcf64b260f4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/phantasmal_force"
-splat_name: "Phantasmal Force"
+splat_id: 2430e11f-7272-50cf-8d0f-adcf64b260f4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/phantasmal_force
+splat_name: Phantasmal Force
 splat_pages:
 - 151
 - 152

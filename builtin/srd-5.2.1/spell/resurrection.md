@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f9e93205-9a61-51af-8416-742b228d9d11"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/resurrection"
-splat_name: "Resurrection"
+splat_id: f9e93205-9a61-51af-8416-742b228d9d11
+splat_kind: reference
+splat_key: dnd2024:reference/spell/resurrection
+splat_name: Resurrection
 splat_pages:
 - 158
 - 159

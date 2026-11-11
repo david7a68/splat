@@ -60,6 +60,22 @@ fn cache_roundtrip_and_roster_scope_preserve_latest_records() {
     assert_eq!(records[0].source.computed, original.source.computed);
     assert_eq!(records[0].initial.hp, 17);
     assert!(cache.load_all(Uuid::new_v4(), "456").unwrap().is_empty());
+    // Splat does not read a record from an earlier version. One beside a current record does
+    // not hide it, and the next save replaces one in its place.
+    let path = cache.path(local, "456", "123").unwrap();
+    let mut earlier = serde_json::to_value(&original).unwrap();
+    earlier["version"] = (VERSION - 1).into();
+    earlier["definition"]["splat_schema"] = 1.into();
+    let earlier = serde_json::to_vec(&earlier).unwrap();
+    std::fs::write(path.with_file_name("124.json"), &earlier).unwrap();
+    cache
+        .save_roster(local, "456", &["123".into(), "124".into()])
+        .unwrap();
+    assert_eq!(cache.load_all(local, "456").unwrap().len(), 1);
+    std::fs::write(&path, &earlier).unwrap();
+    assert!(cache.load_all(local, "456").unwrap().is_empty());
+    cache.save(local, &original).unwrap();
+    assert_eq!(cache.load_all(local, "456").unwrap()[0].version, VERSION);
     cache.save_roster(local, "456", &[]).unwrap();
     assert!(cache.load_all(local, "456").unwrap().is_empty());
     assert!(cache.path(local, "../secret", "123").is_err());
@@ -77,7 +93,22 @@ fn failed_validation_does_not_replace_cache() {
     assert_eq!(std::fs::read(&path).unwrap(), old);
     std::fs::write(&path, b"future schema").unwrap();
     assert!(cache.save(local, &sample()).is_err());
-    assert_eq!(std::fs::read(path).unwrap(), b"future schema");
+    assert_eq!(std::fs::read(&path).unwrap(), b"future schema");
+    // A current record that fails its checks is kept as well.
+    let mut damaged = serde_json::to_value(sample()).unwrap();
+    damaged["initial"]["hp"] = 999.into();
+    let damaged = serde_json::to_vec(&damaged).unwrap();
+    std::fs::write(&path, &damaged).unwrap();
+    assert!(cache.save(local, &sample()).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), damaged);
+    // A record from a later Splat is kept too, and it stops the roster from loading.
+    let mut later = serde_json::to_value(sample()).unwrap();
+    later["version"] = (VERSION + 1).into();
+    let later = serde_json::to_vec(&later).unwrap();
+    std::fs::write(&path, &later).unwrap();
+    assert!(cache.save(local, &sample()).is_err());
+    assert!(cache.load_all(local, "456").is_err());
+    assert_eq!(std::fs::read(path).unwrap(), later);
 }
 #[test]
 fn missing_totals_or_wrong_membership_are_errors() {

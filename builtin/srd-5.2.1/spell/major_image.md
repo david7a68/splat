@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f5a52a73-9e77-539d-9c94-43187694e748"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/major_image"
-splat_name: "Major Image"
+splat_id: f5a52a73-9e77-539d-9c94-43187694e748
+splat_kind: reference
+splat_key: dnd2024:reference/spell/major_image
+splat_name: Major Image
 splat_pages:
 - 147
 ---

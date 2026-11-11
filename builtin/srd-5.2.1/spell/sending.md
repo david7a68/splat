@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d16f9c24-7af7-51b9-a4ad-2a3c703d3a79"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sending"
-splat_name: "Sending"
+splat_id: d16f9c24-7af7-51b9-a4ad-2a3c703d3a79
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sending
+splat_name: Sending
 splat_pages:
 - 161
 ---

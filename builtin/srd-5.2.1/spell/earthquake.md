@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6620e676-fc73-5508-9df2-ebae52832d2f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/earthquake"
-splat_name: "Earthquake"
+splat_id: 6620e676-fc73-5508-9df2-ebae52832d2f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/earthquake
+splat_name: Earthquake
 splat_pages:
 - 127
 ---

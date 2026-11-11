@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "96342c5d-0400-5efd-b9f4-cadccca1ba01"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/protection_from_energy"
-splat_name: "Protection from Energy"
+splat_id: 96342c5d-0400-5efd-b9f4-cadccca1ba01
+splat_kind: reference
+splat_key: dnd2024:reference/spell/protection_from_energy
+splat_name: Protection from Energy
 splat_pages:
 - 157
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "320ab4c8-3c5b-53cd-8419-aa2f795ec176"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/feather_token"
-splat_name: "Feather Token"
+splat_id: 320ab4c8-3c5b-53cd-8419-aa2f795ec176
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/feather_token
+splat_name: Feather Token
 splat_pages:
 - 221
 ---

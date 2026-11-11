@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5a727644-b896-5d50-8aa3-c5c839a2035d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/stirge"
-splat_name: "Stirge"
+splat_id: 5a727644-b896-5d50-8aa3-c5c839a2035d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/stirge
+splat_name: Stirge
 splat_pages:
 - 329
 - 330

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d4e42459-b1f5-542d-b509-0697767a8d96"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/power_word_heal"
-splat_name: "Power Word Heal"
+splat_id: d4e42459-b1f5-542d-b509-0697767a8d96
+splat_kind: reference
+splat_key: dnd2024:reference/spell/power_word_heal
+splat_name: Power Word Heal
 splat_pages:
 - 154
 ---

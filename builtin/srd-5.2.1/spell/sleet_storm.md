@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f907b131-070d-5dbb-89a7-75b82c054eca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sleet_storm"
-splat_name: "Sleet Storm"
+splat_id: f907b131-070d-5dbb-89a7-75b82c054eca
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sleet_storm
+splat_name: Sleet Storm
 splat_pages:
 - 163
 ---

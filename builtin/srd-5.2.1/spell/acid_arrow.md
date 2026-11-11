@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d84481ca-0a94-5154-b0c2-6119c78d0a95"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/acid_arrow"
-splat_name: "Acid Arrow"
+splat_id: d84481ca-0a94-5154-b0c2-6119c78d0a95
+splat_kind: reference
+splat_key: dnd2024:reference/spell/acid_arrow
+splat_name: Acid Arrow
 splat_pages:
 - 107
 ---

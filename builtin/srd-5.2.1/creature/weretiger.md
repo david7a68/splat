@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "038ece1a-9cfe-522f-9d23-95d309151c83"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/weretiger"
-splat_name: "Weretiger"
+splat_id: 038ece1a-9cfe-522f-9d23-95d309151c83
+splat_kind: reference
+splat_key: dnd2024:reference/creature/weretiger
+splat_name: Weretiger
 splat_pages:
 - 339
 ---

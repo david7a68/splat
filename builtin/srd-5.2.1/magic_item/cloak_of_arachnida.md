@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "56aae222-3aa7-53b1-962b-80d97a9e987a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_arachnida"
-splat_name: "Cloak of Arachnida"
+splat_id: 56aae222-3aa7-53b1-962b-80d97a9e987a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_arachnida
+splat_name: Cloak of Arachnida
 splat_pages:
 - 215
 ---

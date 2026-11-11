@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f0b18a5d-3331-5769-8573-cda7d3cbbbff"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dust_of_dryness"
-splat_name: "Dust of Dryness"
+splat_id: f0b18a5d-3331-5769-8573-cda7d3cbbbff
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dust_of_dryness
+splat_name: Dust of Dryness
 splat_pages:
 - 219
 ---

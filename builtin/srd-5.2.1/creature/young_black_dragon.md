@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5f76444e-8f77-570d-b550-19652dfebaa2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_black_dragon"
-splat_name: "Young Black Dragon"
+splat_id: 5f76444e-8f77-570d-b550-19652dfebaa2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_black_dragon
+splat_name: Young Black Dragon
 splat_pages:
 - 264
 ---

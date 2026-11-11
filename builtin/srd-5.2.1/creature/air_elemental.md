@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b969e905-1ad3-5a0d-afd2-dd88574e441b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/air_elemental"
-splat_name: "Air Elemental"
+splat_id: b969e905-1ad3-5a0d-afd2-dd88574e441b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/air_elemental
+splat_name: Air Elemental
 splat_pages:
 - 258
 - 259

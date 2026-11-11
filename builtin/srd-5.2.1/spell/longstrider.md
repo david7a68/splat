@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b32ce4b0-3238-5c31-9cbb-3d4afbd5f47d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/longstrider"
-splat_name: "Longstrider"
+splat_id: b32ce4b0-3238-5c31-9cbb-3d4afbd5f47d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/longstrider
+splat_name: Longstrider
 splat_pages:
 - 145
 ---

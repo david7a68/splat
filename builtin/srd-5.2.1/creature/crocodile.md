@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "027343c6-7607-563a-ad55-228b9b49b41c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/crocodile"
-splat_name: "Crocodile"
+splat_id: 027343c6-7607-563a-ad55-228b9b49b41c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/crocodile
+splat_name: Crocodile
 splat_pages:
 - 347
 ---

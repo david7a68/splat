@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "10a6342b-134d-5ed9-bea1-6b9fcf4f9093"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/true_polymorph"
-splat_name: "True Polymorph"
+splat_id: 10a6342b-134d-5ed9-bea1-6b9fcf4f9093
+splat_kind: reference
+splat_key: dnd2024:reference/spell/true_polymorph
+splat_name: True Polymorph
 splat_pages:
 - 170
 ---

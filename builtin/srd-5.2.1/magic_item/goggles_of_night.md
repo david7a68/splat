@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f112b9f0-4cb7-5354-a98e-e615071e22e4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/goggles_of_night"
-splat_name: "Goggles of Night"
+splat_id: f112b9f0-4cb7-5354-a98e-e615071e22e4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/goggles_of_night
+splat_name: Goggles of Night
 splat_pages:
 - 224
 ---

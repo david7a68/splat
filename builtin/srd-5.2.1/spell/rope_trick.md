@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "47d87bf5-207c-5b59-b036-25bd430bcdec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/rope_trick"
-splat_name: "Rope Trick"
+splat_id: 47d87bf5-207c-5b59-b036-25bd430bcdec
+splat_kind: reference
+splat_key: dnd2024:reference/spell/rope_trick
+splat_name: Rope Trick
 splat_pages:
 - 159
 ---

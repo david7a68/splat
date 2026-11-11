@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9c769fb1-67aa-5df7-8e4e-8d3ed1a5cf5f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/talisman_of_pure_good"
-splat_name: "Talisman of Pure Good"
+splat_id: 9c769fb1-67aa-5df7-8e4e-8d3ed1a5cf5f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/talisman_of_pure_good
+splat_name: Talisman of Pure Good
 splat_pages:
 - 248
 - 249

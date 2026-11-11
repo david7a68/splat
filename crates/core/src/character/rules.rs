@@ -185,12 +185,14 @@ fn empty_report() -> Import {
         rule_fingerprint: None,
     }
 }
-pub(super) fn rendered(fields: Value, body: &str) -> Result<String, String> {
-    Ok(format!(
-        "---\n{}---\n\n{}\n",
-        serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?,
-        body.trim_start_matches('\n').trim_end_matches('\n'),
-    ))
+/// Write a note from the importer's JSON model, with one blank line around its body.
+pub(super) fn written(path: &str, fields: &Value, body: &str) -> Result<String, String> {
+    let serde_yaml_ng::Value::Mapping(fields) =
+        serde_yaml_ng::to_value(fields).map_err(|e| e.to_string())?
+    else {
+        return Err("Note fields must be a mapping".into());
+    };
+    crate::content::formats::write(path, &fields, &format!("\n{body}\n"))
 }
 pub(super) fn source_body(entry: &Entry) -> String {
     let body = if crate::content::stat_blocks::owns(
@@ -207,20 +209,11 @@ pub(super) fn source_body(entry: &Entry) -> String {
         .to_owned()
 }
 
-fn note(path: String, mut fields: Value, body: &str) -> Result<ContentNote, String> {
-    fields["splat_schema"] = 1.into();
-    let body = body
-        .split("\n> [!note]- Splat data")
-        .next()
-        .unwrap_or(body)
-        .to_owned();
-    let text = format!(
-        "---\n{}---\n\n{body}\n",
-        serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-    );
+fn note(path: String, fields: Value, body: &str) -> Result<ContentNote, String> {
+    let body = body.split("\n> [!note]- Splat data").next().unwrap_or(body);
     Ok(ContentNote {
-        relative_path: path.clone(),
-        markdown: crate::content::formats::convert(&path, &text)?,
+        markdown: written(&path, &fields, body)?,
+        relative_path: path,
         sources: Vec::new(),
     })
 }
@@ -364,7 +357,7 @@ impl<'a> Rules<'a> {
         }
         let id = reference_id(self.record, "rule", &canonical);
         self.identities.insert(canonical, id);
-        let mut fields = json!({"splat_schema":1,"splat_id":id,"splat_name":spec.name,"splat_kind":"rule","splat_import":empty_report()});
+        let mut fields = json!({"splat_id":id,"splat_name":spec.name,"splat_kind":"rule","splat_import":empty_report()});
         self.apply(identity, source, &mut fields)?;
         self.identities.insert(identity.into(), id);
         self.notes.insert(

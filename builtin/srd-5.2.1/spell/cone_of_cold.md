@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "55bae643-a395-5d74-9f76-5ad73e32c1b4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/cone_of_cold"
-splat_name: "Cone of Cold"
+splat_id: 55bae643-a395-5d74-9f76-5ad73e32c1b4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/cone_of_cold
+splat_name: Cone of Cold
 splat_pages:
 - 117
 ---

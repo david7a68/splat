@@ -134,17 +134,26 @@ standalone containers remain open.
 
 Use
 `splat_kind: container` and `splat_item` to reference its underlying item
-definition. Its tables define starting contents:
+definition. The reference is in the folded Splat data callout. Marked inventory
+tables in the body define starting contents; this example has none:
 
-```yaml
-splat_schema: 1
+````markdown
+---
+splat_schema: 2
 splat_id: 96d4c5ca-6a2d-42a4-8cf7-9083f03f7bb2
 splat_kind: container
-splat_key: "my_homebrew:containers/supply_pack"
+splat_key: my_homebrew:containers/supply_pack
 splat_name: Supply Pack
-splat_item:
-  key: "dnd2024:items/backpack"
-```
+---
+
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_item -->
+> 
+> ```yaml
+> key: dnd2024:items/backpack
+> ```
+````
 
 Allow an inventory row's `Item` reference to target either an item
 definition or a container setup. In the latter case the row receives a container

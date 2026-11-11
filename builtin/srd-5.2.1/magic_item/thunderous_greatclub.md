@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ac5c091-140e-556c-8a81-21eca6f020f3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/thunderous_greatclub"
-splat_name: "Thunderous Greatclub"
+splat_id: 1ac5c091-140e-556c-8a81-21eca6f020f3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/thunderous_greatclub
+splat_name: Thunderous Greatclub
 splat_pages:
 - 249
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4cb3e4a6-4bf6-52a5-893c-92503f5a6745"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/legend_lore"
-splat_name: "Legend Lore"
+splat_id: 4cb3e4a6-4bf6-52a5-893c-92503f5a6745
+splat_kind: reference
+splat_key: dnd2024:reference/spell/legend_lore
+splat_name: Legend Lore
 splat_pages:
 - 144
 ---

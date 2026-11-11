@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ab8553ac-4367-5ef5-b964-5cb7cc316721"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/crystal_ball_of_telepathy"
-splat_name: "Crystal Ball of Telepathy"
+splat_id: ab8553ac-4367-5ef5-b964-5cb7cc316721
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/crystal_ball_of_telepathy
+splat_name: Crystal Ball of Telepathy
 splat_pages:
 - 216
 ---

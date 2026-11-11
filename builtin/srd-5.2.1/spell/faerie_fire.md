@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "36e9624f-77ac-5359-8cd6-56f4928bd504"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/faerie_fire"
-splat_name: "Faerie Fire"
+splat_id: 36e9624f-77ac-5359-8cd6-56f4928bd504
+splat_kind: reference
+splat_key: dnd2024:reference/spell/faerie_fire
+splat_name: Faerie Fire
 splat_pages:
 - 129
 ---

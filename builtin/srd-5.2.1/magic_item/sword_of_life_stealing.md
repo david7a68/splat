@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "55bf9000-96f4-5f2f-ad4e-62a80ac79a35"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sword_of_life_stealing"
-splat_name: "Sword of Life Stealing"
+splat_id: 55bf9000-96f4-5f2f-ad4e-62a80ac79a35
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sword_of_life_stealing
+splat_name: Sword of Life Stealing
 splat_pages:
 - 248
 ---

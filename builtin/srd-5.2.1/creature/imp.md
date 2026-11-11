@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6bd0df7f-6619-5a2e-ab01-169dcef28f1f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/imp"
-splat_name: "Imp"
+splat_id: 6bd0df7f-6619-5a2e-ab01-169dcef28f1f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/imp
+splat_name: Imp
 splat_pages:
 - 300
 - 301

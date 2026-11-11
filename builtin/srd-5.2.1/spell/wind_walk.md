@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "238dbe00-8ab9-513e-a307-f4945e7328c8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wind_walk"
-splat_name: "Wind Walk"
+splat_id: 238dbe00-8ab9-513e-a307-f4945e7328c8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wind_walk
+splat_name: Wind Walk
 splat_pages:
 - 174
 ---

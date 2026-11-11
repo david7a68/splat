@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "33250cb1-bbe6-5c0d-a65d-20da94ddd5f2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/guard_captain"
-splat_name: "Guard Captain"
+splat_id: 33250cb1-bbe6-5c0d-a65d-20da94ddd5f2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/guard_captain
+splat_name: Guard Captain
 splat_pages:
 - 296
 ---

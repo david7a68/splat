@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1d08d2db-991f-5a09-96b5-f759846a8e08"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/darkmantle"
-splat_name: "Darkmantle"
+splat_id: 1d08d2db-991f-5a09-96b5-f759846a8e08
+splat_kind: reference
+splat_key: dnd2024:reference/creature/darkmantle
+splat_name: Darkmantle
 splat_pages:
 - 278
 - 279

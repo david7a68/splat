@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "edf47083-3f15-58a0-bed3-e5edc9e077da"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_blue_dragon"
-splat_name: "Young Blue Dragon"
+splat_id: edf47083-3f15-58a0-bed3-e5edc9e077da
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_blue_dragon
+splat_name: Young Blue Dragon
 splat_pages:
 - 266
 ---

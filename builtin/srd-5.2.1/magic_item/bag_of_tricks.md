@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e85c8a66-1d18-548d-9815-d247d15afcc0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bag_of_tricks"
-splat_name: "Bag of Tricks"
+splat_id: e85c8a66-1d18-548d-9815-d247d15afcc0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bag_of_tricks
+splat_name: Bag of Tricks
 splat_pages:
 - 212
 ---

@@ -1,100 +1,146 @@
 # Example: the Heralds of the End Tournament
 
 This is the acceptance test for part 3 of [World and house rules](../world-and-house-rules.md). It is a design
-example and is not implemented, so nothing has validated it. To use it, copy the frontmatter below to the top of the
-vault's `Tournament.md`.
+example. Trackers are not implemented, so nothing has validated the members. To use it, put the properties below at
+the top of the vault's `Tournament.md` and the Splat data callout at its end. The note's own text stays between them.
 
 Times, bells and rewards come from `Undercroft.md` and `Tournament.md`. Those notes are early drafts, so tune the
 numbers there and here together.
 
-```yaml
+````markdown
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: <a new UUID>
 splat_kind: rule
 splat_name: Tournament
-splat_rule:
-  mechanic: heralds:tournament
-  mode: augment
-  implementation: splat:house_rules
-  parameters: {}
-splat_members:
-  trackers:
-    race_clock:
-      name: Elapsed race time
-      start: 0
-      goal: 120
-      pin: true
-      quick:
-        - {label: Enter room, add: 10}
-        - {label: Cistern or Sands, add: 20}
-        - {label: Reach Kitchens seal, add: 10}
-        - {label: Alcove rest, add: 10}
-        - {label: Fight minute, add: 1}
-        - label: Collect soul
-          changes: [{add: 10}, {tracker: souls, add: 1}]
-      marks:
-        - at: 20
-          say: Bell. A Brown Bear enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
-          tables: [rival_track, wander_early]
-        - at: 40
-          say: Bell. The Cistern floods. Announce the standings. Roll each rival. Check d6 for wandering.
-          tables: [rival_track, wander_middle]
-        - at: 60
-          say: Bell. The Sands turn to mire. A Dire Wolf enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
-          tables: [rival_track, wander_middle]
-        - at: 80
-          say: Bell. The Prison floods, and anyone caged drowns. Announce the standings. Roll each rival. Check d6 for wandering.
-          tables: [rival_track, wander_late]
-        - at: 100
-          say: Bell. The Pit overflows. Steam fills the Kitchens. An Owlbear enters the Ring. Announce the standings. Roll each rival. Check d6 for wandering.
-          tables: [rival_track, wander_late]
-        - at: 120
-          say: Everything floods. Any team still inside is out of the race.
-    favor:
-      name: Crowd Favor
-      start: 0
-      min: 0
-      pin: true
-      quick:
-        - {label: Crowd loves it, add: 1}
-        - {label: Throw a gift, add: -1, table: gifts}
-    souls:
-      name: Souls in the jar
-      start: 0
-      min: 0
-      pin: true
-    seals:
-      name: Seals
-      per: [Party, Old Guard, Keyring, Convicts]
-      start: 0
-      min: 0
-      pin: true
-      quick:
-        - {label: Take seal, add: 1}
-        - {label: Lose seal, add: -1}
-      marks:
-        - {at: 1, say: First seal. The party reaches level 2. A rival uses its 1-2 seals group.}
-        - {at: 3, say: Third seal. The party reaches level 3. A rival uses its 3 seals group.}
-    members:
-      name: Team members left
-      per: [Old Guard, Keyring, Convicts]
-      start: 3
-      min: 0
-      quick:
-        - {label: Lose member, add: -1}
-    activation:
-      name: Practice Ring activation
-      start: 0
-      goal: 30
-      pin: true
-      quick:
-        - {label: Touch controls, add: 1d6}
-        - {label: Missed twice or Ring reset, set: 0}
-      marks:
-        - {at: 30, say: Warning round. It opens on the operator's next turn. Fire on the surge line.}
 ---
-```
+
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_members -->
+> 
+> ```yaml
+> trackers:
+>   race_clock:
+>     name: Elapsed race time
+>     start: 0
+>     goal: 120
+>     pin: true
+>     quick:
+>     - label: Enter room
+>       add: 10
+>     - label: Cistern or Sands
+>       add: 20
+>     - label: Reach Kitchens seal
+>       add: 10
+>     - label: Alcove rest
+>       add: 10
+>     - label: Fight minute
+>       add: 1
+>     - label: Collect soul
+>       changes:
+>       - add: 10
+>       - tracker: souls
+>         add: 1
+>     marks:
+>     - at: 20
+>       say: Bell. A Brown Bear enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
+>       tables:
+>       - rival_track
+>       - wander_early
+>     - at: 40
+>       say: Bell. The Cistern floods. Announce the standings. Roll each rival. Check d6 for wandering.
+>       tables:
+>       - rival_track
+>       - wander_middle
+>     - at: 60
+>       say: Bell. The Sands turn to mire. A Dire Wolf enters the Pit. Announce the standings. Roll each rival. Check d6 for wandering.
+>       tables:
+>       - rival_track
+>       - wander_middle
+>     - at: 80
+>       say: Bell. The Prison floods, and anyone caged drowns. Announce the standings. Roll each rival. Check d6 for wandering.
+>       tables:
+>       - rival_track
+>       - wander_late
+>     - at: 100
+>       say: Bell. The Pit overflows. Steam fills the Kitchens. An Owlbear enters the Ring. Announce the standings. Roll each rival. Check d6 for wandering.
+>       tables:
+>       - rival_track
+>       - wander_late
+>     - at: 120
+>       say: Everything floods. Any team still inside is out of the race.
+>   favor:
+>     name: Crowd Favor
+>     start: 0
+>     min: 0
+>     pin: true
+>     quick:
+>     - label: Crowd loves it
+>       add: 1
+>     - label: Throw a gift
+>       add: -1
+>       table: gifts
+>   souls:
+>     name: Souls in the jar
+>     start: 0
+>     min: 0
+>     pin: true
+>   seals:
+>     name: Seals
+>     per:
+>     - Party
+>     - Old Guard
+>     - Keyring
+>     - Convicts
+>     start: 0
+>     min: 0
+>     pin: true
+>     quick:
+>     - label: Take seal
+>       add: 1
+>     - label: Lose seal
+>       add: -1
+>     marks:
+>     - at: 1
+>       say: First seal. The party reaches level 2. A rival uses its 1-2 seals group.
+>     - at: 3
+>       say: Third seal. The party reaches level 3. A rival uses its 3 seals group.
+>   members:
+>     name: Team members left
+>     per:
+>     - Old Guard
+>     - Keyring
+>     - Convicts
+>     start: 3
+>     min: 0
+>     quick:
+>     - label: Lose member
+>       add: -1
+>   activation:
+>     name: Practice Ring activation
+>     start: 0
+>     goal: 30
+>     pin: true
+>     quick:
+>     - label: Touch controls
+>       add: 1d6
+>     - label: Missed twice or Ring reset
+>       set: 0
+>     marks:
+>     - at: 30
+>       say: Warning round. It opens on the operator's next turn. Fire on the surge line.
+> ```
+> 
+> <!-- splat:yaml path=splat_rule -->
+> 
+> ```yaml
+> mechanic: heralds:tournament
+> mode: augment
+> implementation: splat:house_rules
+> parameters: {}
+> ```
+````
 
 ## Markers for `Undercroft Tables.md`
 

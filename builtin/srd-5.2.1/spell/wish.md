@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "879d305e-3e86-50b6-971c-aa5334c8fd06"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wish"
-splat_name: "Wish"
+splat_id: 879d305e-3e86-50b6-971c-aa5334c8fd06
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wish
+splat_name: Wish
 splat_pages:
 - 175
 ---

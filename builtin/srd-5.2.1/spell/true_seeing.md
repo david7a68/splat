@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "870e51b8-4597-5cf1-a8ad-351305817910"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/true_seeing"
-splat_name: "True Seeing"
+splat_id: 870e51b8-4597-5cf1-a8ad-351305817910
+splat_kind: reference
+splat_key: dnd2024:reference/spell/true_seeing
+splat_name: True Seeing
 splat_pages:
 - 171
 ---

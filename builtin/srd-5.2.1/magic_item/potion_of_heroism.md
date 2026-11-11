@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1833b026-dcb4-5545-9d92-e8acdded7cff"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_heroism"
-splat_name: "Potion of Heroism"
+splat_id: 1833b026-dcb4-5545-9d92-e8acdded7cff
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_heroism
+splat_name: Potion of Heroism
 splat_pages:
 - 236
 ---

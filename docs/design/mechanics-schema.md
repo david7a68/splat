@@ -1,6 +1,6 @@
 # Mechanics schema
 
-Status: completed candidate field contract for schema 1, under the user's
+Status: completed candidate field contract for the note model, under the user's
 delegation of schema choices. This is documentation, not an engine or Rust
 implementation. It extends [the draft](schema-draft.md); rule behavior follows
 [Action resolution](action-resolution.md). [State](state-schema.md) and

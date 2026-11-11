@@ -625,16 +625,9 @@ fn resolve_group(
                 .and_then(Value::as_str);
             let name = missing_member_name(member.overrides.name.as_deref(), link);
             let fault_name = &name;
-            warnings.push(
-                if let Some(note) = catalogue
-                    .old_layout_ref(&member.creature)
-                    .and_then(|id| catalogue.unreadable.get(&id))
-                {
-                    note.word.clone()
-                } else {
-                    format!("{what}, {fault_name}: not in this campaign's packages.")
-                },
-            );
+            warnings.push(format!(
+                "{what}, {fault_name}: not in this campaign's packages."
+            ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
             continue;
@@ -680,21 +673,6 @@ fn resolve_group(
         });
     }
     for member in unread {
-        let reference = member
-            .creature
-            .clone()
-            .and_then(|value| serde_yaml_ng::from_value::<EntryRef>(value).ok());
-        if let Some(note) = reference
-            .as_ref()
-            .and_then(|reference| catalogue.unreadable_ref(reference))
-            .filter(|note| note.old_layout)
-        {
-            warnings.push(note.word.clone());
-            let count = member.count.unwrap_or(1);
-            unavailable = unavailable.saturating_add(count);
-            unavailable_members.push((member.before, count, member.label.clone()));
-            continue;
-        }
         let name = member
             .creature
             .clone()
@@ -725,15 +703,11 @@ fn resolve_group(
     }
     let problem = members.is_empty().then(|| {
         let mut problems = warnings.clone();
-        // Edit cannot fix a group whose only fault is the old layout; Convert files can.
         problems.push(
-            if warnings
-                .iter()
-                .any(|word| !word.contains("uses the old layout."))
-            {
-                "No members can join. Edit group to fix them."
-            } else {
+            if warnings.is_empty() {
                 "No members can join."
+            } else {
+                "No members can join. Edit group to fix them."
             }
             .into(),
         );
@@ -2383,9 +2357,6 @@ fn members(
                 let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
                 design::named(ui, &response, &detail);
             }
-            if let Some(note) = snapshot.catalogue.unreadable_ref(&member.creature).filter(|note| note.old_layout) {
-                crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
-            }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                 let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT)
@@ -2497,14 +2468,6 @@ fn unread_member(
         .creature
         .clone()
         .and_then(|value| serde_yaml_ng::from_value(value).ok());
-    if let Some(note) = reference
-        .as_ref()
-        .and_then(|reference| snapshot.catalogue.unreadable_ref(reference))
-        .filter(|note| note.old_layout)
-    {
-        crate::formats_ui::old_notice(ui, &note.word, vec![note.path.clone()]);
-        return;
-    }
     let entry = reference
         .as_ref()
         .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok())
@@ -2739,9 +2702,7 @@ mod tests {
             root,
             &format!("{name}.md"),
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{cr_text: '1/4 (XP 50; PB +2)'}}\nsplat_stats:\n  max_hp: {{value: 10}}\n  armor_class: {{value: 15}}\n  initiative: {{value: 2}}\n  speed: {{value: 30}}\n---\n"
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{cr_text: '1/4 (XP 50; PB +2)'}}\nsplat_stats:\n  max_hp: {{value: 10}}\n  armor_class: {{value: 15}}\n  initiative: {{value: 2}}\n  speed: {{value: 30}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -2999,10 +2960,7 @@ mod tests {
             dir.path(),
             "Patrol encounter.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n---\n",
-                Uuid::new_v4()
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let ctx = egui::Context::default();
@@ -3039,10 +2997,7 @@ mod tests {
             dir.path(),
             "Ford.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Ford\nsplat_encounter: {{roster: []}}\n---\n",
-                Uuid::new_v4()
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter\nsplat_name: Ford\nsplat_encounter: {{roster: []}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         second.name = "ford".into();
@@ -3061,9 +3016,7 @@ mod tests {
                 dir.path(),
                 &format!("{name}.md"),
                 None,
-                &splat::content::formats::convert("Fixture.md", &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter: {{roster: []}}\n---\n"
-                )).expect("schema-2 fixture"),
+                &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter: {{roster: []}}\n"), "").expect("schema-2 fixture"),
             )
             .unwrap();
             id
@@ -3099,9 +3052,7 @@ mod tests {
             dir.path(),
             "Bridge.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {owner}\nsplat_kind: encounter\nsplat_name: Bridge\nsplat_encounter: {{roster: []}}\n---\n"
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {owner}\nsplat_kind: encounter\nsplat_name: Bridge\nsplat_encounter: {{roster: []}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let ctx = egui::Context::default();
@@ -3166,7 +3117,7 @@ mod tests {
             dir.path(),
             "Hero.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond, character_id: '1'}}\n---\n")).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond, character_id: '1'}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
@@ -3403,10 +3354,7 @@ mod tests {
             dir.path(),
             "Stray.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n---\n",
-                Uuid::new_v4()
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
@@ -3437,9 +3385,7 @@ mod tests {
         ] {
             let dir = tempfile::tempdir().unwrap();
             let campaign = campaign(dir.path());
-            write_note(dir.path(), "Stray.md", None, &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'missing:goblin_boss'{extra}}}\n    count: 2\n---\n", Uuid::new_v4()
-            )).expect("schema-2 fixture")).unwrap();
+            write_note(dir.path(), "Stray.md", None, &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'missing:goblin_boss'{extra}}}\n    count: 2\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
             let group = &snapshot.groups[0];
             let problem = group.problem.as_ref().unwrap();
@@ -3456,9 +3402,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let id = Uuid::new_v4();
-        write_note(dir.path(), "Stray.md", None, &splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n    overrides: {{name: Captain Varra}}\n---\n", Uuid::new_v4()
-        )).expect("schema-2 fixture")).unwrap();
+        write_note(dir.path(), "Stray.md", None, &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter_group\nsplat_name: Stray\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {id}}}\n    overrides: {{name: Captain Varra}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let group = &snapshot.groups[0];
         assert!(
@@ -3482,9 +3426,7 @@ mod tests {
             root,
             &format!("{name}.md"),
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster: []\n  sides: {{}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 1, resolution_events: 1}}\n---\n"
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster: []\n  sides: {{}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 1, resolution_events: 1}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -3594,10 +3536,7 @@ mod tests {
             dir.path(),
             "Linked.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Linked\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {arena}, link: '[[Arena]]'}}\n  members:\n  - creature: {{id: {scout}}}\n---\n",
-                Uuid::new_v4()
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: encounter_group\nsplat_name: Linked\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {arena}, link: '[[Arena]]'}}\n  members:\n  - creature: {{id: {scout}}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let mut draft = GroupDraft::open(dir.path(), "Linked.md").unwrap();
@@ -3812,8 +3751,7 @@ mod tests {
             comparison,
             external.replace("splat_name: Scouts", "splat_name: Dawn scouts")
         );
-        let overwrite = splat::content::formats::convert_resolved(
-            &harness.state().group_draft.as_ref().unwrap().path,
+        let overwrite = splat::content::list_formats::write_references(
             &comparison,
             snapshot
                 .catalogue
@@ -3888,10 +3826,7 @@ mod tests {
         let entry = |creature: &str, body: &str| {
             Entry::parse(
                 "c.md",
-                &splat::content::formats::convert("Fixture.md", &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {creature}\n---\n\n{body}\n",
-                    Uuid::new_v4()
-                )).expect("schema-2 fixture"),
+                &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {creature}\n", Uuid::new_v4()), &format!("\n{body}\n")).expect("schema-2 fixture"),
             )
             .unwrap()
         };
@@ -3933,7 +3868,7 @@ mod tests {
             dir.path(),
             "Blank.md",
             None,
-            &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Blank\nsplat_creature: {{}}\n---\n")).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: Blank\nsplat_creature: {{}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let mut draft = GroupDraft::new();

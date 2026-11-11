@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "198a78e8-ccb6-5af1-96d8-71c716d37215"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/knight"
-splat_name: "Knight"
+splat_id: 198a78e8-ccb6-5af1-96d8-71c716d37215
+splat_kind: reference
+splat_key: dnd2024:reference/creature/knight
+splat_name: Knight
 splat_pages:
 - 302
 ---

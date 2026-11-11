@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "56e857f2-2883-5bb4-a163-fec00b87e335"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/rat"
-splat_name: "Rat"
+splat_id: 56e857f2-2883-5bb4-a163-fec00b87e335
+splat_kind: reference
+splat_key: dnd2024:reference/creature/rat
+splat_name: Rat
 splat_pages:
 - 359
 ---

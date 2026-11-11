@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fa02664c-e501-55ef-b4cc-2ab0b578ec2c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/dead"
-splat_name: "Dead"
+splat_id: fa02664c-e501-55ef-b4cc-2ab0b578ec2c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/dead
+splat_name: Dead
 splat_pages:
 - 180
 ---

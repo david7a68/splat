@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ccef1e64-4be5-5db2-a9c2-59565db8db5b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/monster"
-splat_name: "Monster"
+splat_id: ccef1e64-4be5-5db2-a9c2-59565db8db5b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/monster
+splat_name: Monster
 splat_pages:
 - 185
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "52f2a3db-2e6c-5705-a757-f4cc28034a6c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/healing_word"
-splat_name: "Healing Word"
+splat_id: 52f2a3db-2e6c-5705-a757-f4cc28034a6c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/healing_word
+splat_name: Healing Word
 splat_pages:
 - 139
 ---

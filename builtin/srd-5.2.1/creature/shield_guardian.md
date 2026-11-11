@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7d1d54d3-dbae-5265-a998-0bd9fb5ef230"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/shield_guardian"
-splat_name: "Shield Guardian"
+splat_id: 7d1d54d3-dbae-5265-a998-0bd9fb5ef230
+splat_kind: reference
+splat_key: dnd2024:reference/creature/shield_guardian
+splat_name: Shield Guardian
 splat_pages:
 - 323
 ---

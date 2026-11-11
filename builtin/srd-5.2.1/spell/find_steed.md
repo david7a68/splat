@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "686a9c39-bcc7-544f-a475-d567be165784"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/find_steed"
-splat_name: "Find Steed"
+splat_id: 686a9c39-bcc7-544f-a475-d567be165784
+splat_kind: reference
+splat_key: dnd2024:reference/spell/find_steed
+splat_name: Find Steed
 splat_pages:
 - 130
 - 131

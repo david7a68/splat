@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e8d3a0a3-131f-5ab4-9b95-7c2d191a1284"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_silver_dragon"
-splat_name: "Adult Silver Dragon"
+splat_id: e8d3a0a3-131f-5ab4-9b95-7c2d191a1284
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_silver_dragon
+splat_name: Adult Silver Dragon
 splat_pages:
 - 324
 - 325

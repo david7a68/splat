@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "844c5de4-7ea2-58c3-8cf5-a6860930ef30"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/locate_creature"
-splat_name: "Locate Creature"
+splat_id: 844c5de4-7ea2-58c3-8cf5-a6860930ef30
+splat_kind: reference
+splat_key: dnd2024:reference/spell/locate_creature
+splat_name: Locate Creature
 splat_pages:
 - 145
 ---

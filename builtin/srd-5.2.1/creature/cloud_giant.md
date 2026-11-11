@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c921f77f-e226-5f76-b034-1a48bb19b15d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cloud_giant"
-splat_name: "Cloud Giant"
+splat_id: c921f77f-e226-5f76-b034-1a48bb19b15d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cloud_giant
+splat_name: Cloud Giant
 splat_pages:
 - 275
 ---

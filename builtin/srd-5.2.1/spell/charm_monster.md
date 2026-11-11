@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e577c6f3-4105-59ad-be42-c80d76c46a74"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/charm_monster"
-splat_name: "Charm Monster"
+splat_id: e577c6f3-4105-59ad-be42-c80d76c46a74
+splat_kind: reference
+splat_key: dnd2024:reference/spell/charm_monster
+splat_name: Charm Monster
 splat_pages:
 - 114
 - 115

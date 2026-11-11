@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b15d6707-96e0-58bd-b174-10a245979aed"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/incubus"
-splat_name: "Incubus"
+splat_id: b15d6707-96e0-58bd-b174-10a245979aed
+splat_kind: reference
+splat_key: dnd2024:reference/creature/incubus
+splat_name: Incubus
 splat_pages:
 - 301
 ---

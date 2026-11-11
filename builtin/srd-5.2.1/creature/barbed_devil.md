@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ffc45c05-8329-5e8d-aae1-43e977805832"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/barbed_devil"
-splat_name: "Barbed Devil"
+splat_id: ffc45c05-8329-5e8d-aae1-43e977805832
+splat_kind: reference
+splat_key: dnd2024:reference/creature/barbed_devil
+splat_name: Barbed Devil
 splat_pages:
 - 262
 ---

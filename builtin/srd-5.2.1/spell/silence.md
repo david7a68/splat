@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e8b4bf81-7e17-5573-9f60-c85fb42d8a62"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/silence"
-splat_name: "Silence"
+splat_id: e8b4bf81-7e17-5573-9f60-c85fb42d8a62
+splat_kind: reference
+splat_key: dnd2024:reference/spell/silence
+splat_name: Silence
 splat_pages:
 - 162
 ---

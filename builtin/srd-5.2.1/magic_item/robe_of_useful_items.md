@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "dccd1c58-f448-5c18-b1be-9a0b94c5792f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/robe_of_useful_items"
-splat_name: "Robe of Useful Items"
+splat_id: dccd1c58-f448-5c18-b1be-9a0b94c5792f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/robe_of_useful_items
+splat_name: Robe of Useful Items
 splat_pages:
 - 240
 - 241

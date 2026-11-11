@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bdae0e1d-f6d7-54a1-b276-b464108caec7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/secret_chest"
-splat_name: "Secret Chest"
+splat_id: bdae0e1d-f6d7-54a1-b276-b464108caec7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/secret_chest
+splat_name: Secret Chest
 splat_pages:
 - 160
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "23535f37-3c65-575e-8248-1479669ea00c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_shark"
-splat_name: "Giant Shark"
+splat_id: 23535f37-3c65-575e-8248-1479669ea00c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_shark
+splat_name: Giant Shark
 splat_pages:
 - 353
 ---

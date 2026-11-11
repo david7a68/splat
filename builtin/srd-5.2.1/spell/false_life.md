@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b5fcfbcb-ab38-5aa2-92e9-6078e7186649"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/false_life"
-splat_name: "False Life"
+splat_id: b5fcfbcb-ab38-5aa2-92e9-6078e7186649
+splat_kind: reference
+splat_key: dnd2024:reference/spell/false_life
+splat_name: False Life
 splat_pages:
 - 129
 ---

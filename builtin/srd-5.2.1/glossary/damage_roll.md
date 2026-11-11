@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ddec5622-0256-581d-afe1-da55f208b7e8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/damage_roll"
-splat_name: "Damage Roll"
+splat_id: ddec5622-0256-581d-afe1-da55f208b7e8
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/damage_roll
+splat_name: Damage Roll
 splat_pages:
 - 180
 ---

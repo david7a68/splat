@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3abd324a-7d86-5dd0-8bc7-740bcbf32040"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/robe_of_eyes"
-splat_name: "Robe of Eyes"
+splat_id: 3abd324a-7d86-5dd0-8bc7-740bcbf32040
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/robe_of_eyes
+splat_name: Robe of Eyes
 splat_pages:
 - 240
 ---

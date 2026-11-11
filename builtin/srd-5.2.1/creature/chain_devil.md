@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5b74353a-6182-5f60-aae5-cd900bb95382"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/chain_devil"
-splat_name: "Chain Devil"
+splat_id: 5b74353a-6182-5f60-aae5-cd900bb95382
+splat_kind: reference
+splat_key: dnd2024:reference/creature/chain_devil
+splat_name: Chain Devil
 splat_pages:
 - 272
 - 273

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "29869cee-3512-5f5e-a0f1-11d4909deec3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sphere_of_annihilation"
-splat_name: "Sphere of Annihilation"
+splat_id: 29869cee-3512-5f5e-a0f1-11d4909deec3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sphere_of_annihilation
+splat_name: Sphere of Annihilation
 splat_pages:
 - 244
 - 245

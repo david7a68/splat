@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "73f78149-9fbb-5d6e-b1d8-c3972ba43558"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/occupied_space"
-splat_name: "Occupied Space"
+splat_id: 73f78149-9fbb-5d6e-b1d8-c3972ba43558
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/occupied_space
+splat_name: Occupied Space
 splat_pages:
 - 185
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a394cba9-8051-5cde-a52b-2d9b1c182cf4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/pipes_of_haunting"
-splat_name: "Pipes of Haunting"
+splat_id: a394cba9-8051-5cde-a52b-2d9b1c182cf4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/pipes_of_haunting
+splat_name: Pipes of Haunting
 splat_pages:
 - 234
 ---

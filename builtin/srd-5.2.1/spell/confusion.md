@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "21007234-4b71-5ec9-9d51-fb301fdf677c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/confusion"
-splat_name: "Confusion"
+splat_id: 21007234-4b71-5ec9-9d51-fb301fdf677c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/confusion
+splat_name: Confusion
 splat_pages:
 - 117
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ead3f48b-7875-566f-aff2-5120ba9085bb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magnificent_mansion"
-splat_name: "Magnificent Mansion"
+splat_id: ead3f48b-7875-566f-aff2-5120ba9085bb
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magnificent_mansion
+splat_name: Magnificent Mansion
 splat_pages:
 - 147
 ---

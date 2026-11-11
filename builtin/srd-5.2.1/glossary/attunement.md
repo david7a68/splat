@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "01766414-8567-57d8-a56a-8cbfd0c80dab"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/attunement"
-splat_name: "Attunement"
+splat_id: 01766414-8567-57d8-a56a-8cbfd0c80dab
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/attunement
+splat_name: Attunement
 splat_pages:
 - 177
 ---

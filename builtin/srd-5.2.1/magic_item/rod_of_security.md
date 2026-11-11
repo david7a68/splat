@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7516fc9e-2a21-5488-8094-28d0432c0611"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_security"
-splat_name: "Rod of Security"
+splat_id: 7516fc9e-2a21-5488-8094-28d0432c0611
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_security
+splat_name: Rod of Security
 splat_pages:
 - 242
 ---

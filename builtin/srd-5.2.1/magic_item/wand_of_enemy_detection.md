@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0b1358e0-48fa-58a6-a3c3-d6bac434e9a7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_enemy_detection"
-splat_name: "Wand of Enemy Detection"
+splat_id: 0b1358e0-48fa-58a6-a3c3-d6bac434e9a7
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_enemy_detection
+splat_name: Wand of Enemy Detection
 splat_pages:
 - 250
 ---

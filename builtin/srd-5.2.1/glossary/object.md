@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6b466f8-6adb-599c-ba4d-036fe7f276ec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/object"
-splat_name: "Object"
+splat_id: b6b466f8-6adb-599c-ba4d-036fe7f276ec
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/object
+splat_name: Object
 splat_pages:
 - 185
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "03eb7732-22f4-5224-936c-140d87d79d61"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_feather_falling"
-splat_name: "Ring of Feather Falling"
+splat_id: 03eb7732-22f4-5224-936c-140d87d79d61
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_feather_falling
+splat_name: Ring of Feather Falling
 splat_pages:
 - 238
 ---

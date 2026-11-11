@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d636ec59-d7cd-5c07-ab1a-2a4f711d69c1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/revivify"
-splat_name: "Revivify"
+splat_id: d636ec59-d7cd-5c07-ab1a-2a4f711d69c1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/revivify
+splat_name: Revivify
 splat_pages:
 - 159
 ---

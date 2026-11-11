@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9c9a4e97-e27b-5d88-aa18-7599074d15dd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_gold_dragon"
-splat_name: "Adult Gold Dragon"
+splat_id: 9c9a4e97-e27b-5d88-aa18-7599074d15dd
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_gold_dragon
+splat_name: Adult Gold Dragon
 splat_pages:
 - 291
 - 292

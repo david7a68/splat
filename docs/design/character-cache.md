@@ -8,7 +8,7 @@ Simulation execution remains separate work.
 
 `character::EntitySnapshot` holds these parts:
 
-- `definition`: schema-1 `splat_kind: creature`, stable `splat_id`, name,
+- `definition`: note-model `splat_kind: creature`, stable `splat_id`, name,
   `splat_creature`, `splat_stats`, `splat_health`, and `splat_resources`.
   Creature, Stat, Health, and Pool reuse the engine's existing types.
 - `initial`: current HP, temporary HP, death saves, conditions, inspiration,
@@ -71,7 +71,10 @@ $XDG_DATA_HOME/splat/characters/<local-campaign-uuid>/<remote-campaign-id>/<char
 
 On Linux, the default root is `~/.local/share/splat/characters`. Each JSON file is
 a versioned snapshot envelope containing the shared creature definition and its
-current state, details, and source records. The app also writes a campaign Markdown copy as described below. Neither form
+current state, details, and source records. The envelope's `version` is 2. Splat does
+not read a record with a lower version, and does not check the rest of it: it leaves the
+file alone, shows no sheet for it, and the next sync writes a current record over it. A record with a higher version, or one
+that Splat cannot parse, is kept and never replaced. The app also writes a campaign Markdown copy as described below. Neither form
 introduces a second authoritative inventory table.
 A `roster-index` records the most recently fetched membership; removed members
 remain on disk but no longer appear when that roster is loaded offline.
@@ -115,7 +118,7 @@ See [API research](../research/dndbeyond-api.md) for transport and event evidenc
 
 Cache loads and successful sheet reads publish `Characters/D&D Beyond/<creature UUID>.md`
 in the configured campaign folder. Filenames stay stable across character renames.
-The frontmatter uses the existing creature definition, `splat_initial`, and
+The note's model uses the existing creature definition, `splat_initial`, and
 `splat_external`. The body includes readable attacks, features, spells and authoritative inventory
 tables. Separate item and spell notes supply referenced definitions. Typed
 `splat_character` and `splat_import` fields retain sheet details and conversion
@@ -125,7 +128,13 @@ publication behavior.
 
 Each file has a checksum for generated content and a Personal notes section.
 Refreshes preserve everything after the checksum. A file that fails its checksum, or an
-unmanaged file, blocks replacement and produces a visible warning. A file that only
+unmanaged file, blocks replacement and produces a visible warning. A copy that Splat cannot
+read follows the same checksum, and its properties say which note it is. When they name the note
+that the refresh writes there and the generated text is unchanged, the refresh writes it again.
+Any other file that Splat cannot read counts as edited, whatever its checksum. An unchanged former
+copy that Splat cannot read, without personal notes, goes to its archive. One case stops **Force read** too: a file
+that Splat cannot read and that mentions the character, when its properties do not name the
+character. Move it aside or repair it. A file that only
 changed during a save is not a conflict: the save reads it again. This covers two Splat
 writers at the same time. To resume updates, move the edited file aside or use
 **Force read** on the warning. Force read fetches the character again, keeps each edited

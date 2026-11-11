@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "35b603d6-d17f-5531-a09d-4631fa948098"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/oil_of_etherealness"
-splat_name: "Oil of Etherealness"
+splat_id: 35b603d6-d17f-5531-a09d-4631fa948098
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/oil_of_etherealness
+splat_name: Oil of Etherealness
 splat_pages:
 - 233
 ---

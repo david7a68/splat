@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a8bb662b-60de-5e80-adea-53670f389ffa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/alignment"
-splat_name: "Alignment"
+splat_id: a8bb662b-60de-5e80-adea-53670f389ffa
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/alignment
+splat_name: Alignment
 splat_pages:
 - 176
 ---

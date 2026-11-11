@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f5a5bc22-085d-5a83-a4f0-ba52ff7f0b0e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/enthrall"
-splat_name: "Enthrall"
+splat_id: f5a5bc22-085d-5a83-a4f0-ba52ff7f0b0e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/enthrall
+splat_name: Enthrall
 splat_pages:
 - 128
 ---

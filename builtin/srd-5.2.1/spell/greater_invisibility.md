@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c76b9ec9-5c44-5b56-a54f-2165f7eb0616"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/greater_invisibility"
-splat_name: "Greater Invisibility"
+splat_id: c76b9ec9-5c44-5b56-a54f-2165f7eb0616
+splat_kind: reference
+splat_key: dnd2024:reference/spell/greater_invisibility
+splat_name: Greater Invisibility
 splat_pages:
 - 137
 ---

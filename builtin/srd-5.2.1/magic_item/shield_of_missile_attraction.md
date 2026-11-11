@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b9aa240-b01e-5779-8938-17c616e335fe"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/shield_of_missile_attraction"
-splat_name: "Shield of Missile Attraction"
+splat_id: 9b9aa240-b01e-5779-8938-17c616e335fe
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/shield_of_missile_attraction
+splat_name: Shield of Missile Attraction
 splat_pages:
 - 243
 ---

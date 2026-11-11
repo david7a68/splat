@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2cf8b6c3-32a2-58b2-8e0c-47aafe54e165"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/astral_projection"
-splat_name: "Astral Projection"
+splat_id: 2cf8b6c3-32a2-58b2-8e0c-47aafe54e165
+splat_kind: reference
+splat_key: dnd2024:reference/spell/astral_projection
+splat_name: Astral Projection
 splat_pages:
 - 111
 ---

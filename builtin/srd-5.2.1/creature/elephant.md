@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "29f3498b-db2d-5f5a-946f-dce34d155f6d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/elephant"
-splat_name: "Elephant"
+splat_id: 29f3498b-db2d-5f5a-946f-dce34d155f6d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/elephant
+splat_name: Elephant
 splat_pages:
 - 348
 ---

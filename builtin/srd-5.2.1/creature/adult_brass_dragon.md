@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "843c156d-8d97-516e-894b-b39b9cce6089"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_brass_dragon"
-splat_name: "Adult Brass Dragon"
+splat_id: 843c156d-8d97-516e-894b-b39b9cce6089
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_brass_dragon
+splat_name: Adult Brass Dragon
 splat_pages:
 - 268
 - 269

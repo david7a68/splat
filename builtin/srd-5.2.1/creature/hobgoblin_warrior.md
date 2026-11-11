@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "23eb9573-2d6a-5d7b-8b4e-77e3543f16f4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hobgoblin_warrior"
-splat_name: "Hobgoblin Warrior"
+splat_id: 23eb9573-2d6a-5d7b-8b4e-77e3543f16f4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hobgoblin_warrior
+splat_name: Hobgoblin Warrior
 splat_pages:
 - 298
 - 299

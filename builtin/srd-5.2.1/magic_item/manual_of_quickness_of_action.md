@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ec31eced-824e-50ac-9ad0-69a528b96af5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/manual_of_quickness_of_action"
-splat_name: "Manual of Quickness of Action"
+splat_id: ec31eced-824e-50ac-9ad0-69a528b96af5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/manual_of_quickness_of_action
+splat_name: Manual of Quickness of Action
 splat_pages:
 - 230
 ---

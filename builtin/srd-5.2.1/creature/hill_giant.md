@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c38a25c9-33fc-554a-a95b-1c4ac00f8420"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hill_giant"
-splat_name: "Hill Giant"
+splat_id: c38a25c9-33fc-554a-a95b-1c4ac00f8420
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hill_giant
+splat_name: Hill Giant
 splat_pages:
 - 298
 ---

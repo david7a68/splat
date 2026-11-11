@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f79d1867-7ed2-53ce-8027-b6a7b321d078"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/goodberry"
-splat_name: "Goodberry"
+splat_id: f79d1867-7ed2-53ce-8027-b6a7b321d078
+splat_kind: reference
+splat_key: dnd2024:reference/spell/goodberry
+splat_name: Goodberry
 splat_pages:
 - 137
 ---

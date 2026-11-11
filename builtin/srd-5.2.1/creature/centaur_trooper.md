@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60bb5a9c-c9aa-5ad5-ae67-0c930afb383a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/centaur_trooper"
-splat_name: "Centaur Trooper"
+splat_id: 60bb5a9c-c9aa-5ad5-ae67-0c930afb383a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/centaur_trooper
+splat_name: Centaur Trooper
 splat_pages:
 - 272
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "318ee818-ffbe-555e-80dc-1c1d8e7cc711"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hydra"
-splat_name: "Hydra"
+splat_id: 318ee818-ffbe-555e-80dc-1c1d8e7cc711
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hydra
+splat_name: Hydra
 splat_pages:
 - 300
 ---

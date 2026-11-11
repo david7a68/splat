@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "26418b8e-70ab-5f07-ab30-c4606c5d481a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/produce_flame"
-splat_name: "Produce Flame"
+splat_id: 26418b8e-70ab-5f07-ab30-c4606c5d481a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/produce_flame
+splat_name: Produce Flame
 splat_pages:
 - 156
 ---

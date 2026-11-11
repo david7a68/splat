@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6f52cf70-bcf4-504c-ba9f-2f961dd2c2d0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/disadvantage"
-splat_name: "Disadvantage"
+splat_id: 6f52cf70-bcf4-504c-ba9f-2f961dd2c2d0
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/disadvantage
+splat_name: Disadvantage
 splat_pages:
 - 181
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6a9e3659-1ef4-5f64-a764-2f148941680c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/cloudkill"
-splat_name: "Cloudkill"
+splat_id: 6a9e3659-1ef4-5f64-a764-2f148941680c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/cloudkill
+splat_name: Cloudkill
 splat_pages:
 - 116
 ---

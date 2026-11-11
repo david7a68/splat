@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "473d1f01-2c07-5ba8-b424-1f26ebff7317"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/demon_armor"
-splat_name: "Demon Armor"
+splat_id: 473d1f01-2c07-5ba8-b424-1f26ebff7317
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/demon_armor
+splat_name: Demon Armor
 splat_pages:
 - 218
 ---

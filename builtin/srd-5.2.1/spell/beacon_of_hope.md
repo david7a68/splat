@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b2d8d60-52f2-5f43-af08-0b9153004e96"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/beacon_of_hope"
-splat_name: "Beacon of Hope"
+splat_id: 9b2d8d60-52f2-5f43-af08-0b9153004e96
+splat_kind: reference
+splat_key: dnd2024:reference/spell/beacon_of_hope
+splat_name: Beacon of Hope
 splat_pages:
 - 112
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2b5b6b88-cca6-5394-bc4d-b9b34825cbc3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fire_storm"
-splat_name: "Fire Storm"
+splat_id: 2b5b6b88-cca6-5394-bc4d-b9b34825cbc3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fire_storm
+splat_name: Fire Storm
 splat_pages:
 - 132
 ---

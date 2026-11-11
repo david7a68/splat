@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "88a4b284-e518-596d-89ad-1adc09e2f9aa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/awaken"
-splat_name: "Awaken"
+splat_id: 88a4b284-e518-596d-89ad-1adc09e2f9aa
+splat_kind: reference
+splat_key: dnd2024:reference/spell/awaken
+splat_name: Awaken
 splat_pages:
 - 111
 - 112

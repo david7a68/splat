@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7bc48b2e-320b-55c6-8c8a-27b15b43d5c1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/earth_elemental"
-splat_name: "Earth Elemental"
+splat_id: 7bc48b2e-320b-55c6-8c8a-27b15b43d5c1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/earth_elemental
+splat_name: Earth Elemental
 splat_pages:
 - 282
 - 283

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "db292de3-c1dd-52ae-a01e-a75a78d2097f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bandit_captain"
-splat_name: "Bandit Captain"
+splat_id: db292de3-c1dd-52ae-a01e-a75a78d2097f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bandit_captain
+splat_name: Bandit Captain
 splat_pages:
 - 261
 - 262

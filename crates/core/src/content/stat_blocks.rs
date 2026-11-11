@@ -163,9 +163,9 @@ fn numeric(fields: &Mapping, key: &str) -> Option<i64> {
     val(fields, "splat_stats", key)?.get("value")?.as_i64()
 }
 
-/// Remove obsolete marked data blocks and the headings they leave empty.
-/// Used before the legacy marker reader too, so stale YAML cannot mask table data.
-pub fn without_legacy(text: &str, kind: &str) -> String {
+/// Remove marked data blocks for the stat roots, and the headings they leave empty.
+/// The stat table owns these values, so stale marked data cannot mask it.
+pub(super) fn without_marked_stats(text: &str, kind: &str) -> String {
     // Only a marker naming one of these roots changes the text. Most notes have none,
     // and two full Markdown parses would find nothing.
     if !roots(kind).iter().any(|root| {
@@ -319,7 +319,7 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
                 .map_or(1, |i| i + 1);
             flags.push(Flag {
                 line,
-                message: "Old data ignored".into(),
+                message: "Unused data ignored".into(),
             });
         }
         parsed.insert((*root).into(), Value::Mapping(Mapping::new()));
@@ -1356,7 +1356,7 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
     out
 }
 
-// Presence hints preserve optional fields in legacy models, without storing a
+// Presence hints preserve optional fields of the model, without storing a
 // second value. A new non-default value always comes from its visible cell.
 const OPTIONAL_PATHS: &[&str] = &[
     "splat_creature/armor_class_text",
@@ -1423,8 +1423,11 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
     }
 }
 
-/// Convert only table-owned data; preserve all other mechanics in an end fence.
-pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, Value)>), String> {
+/// The stat section for the table-owned data, and all other mechanics for an end fence.
+pub(super) fn section_and_extras(
+    fields: &Mapping,
+    kind: &str,
+) -> Result<(String, Vec<(String, Value)>), String> {
     let mut rendered = render(fields, kind);
     let mut shapes = Vec::new();
     if literal_type(fields) {
@@ -1532,7 +1535,7 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
         reject_owned(&mut checked, root, &mut invalid);
         if !invalid.is_empty() {
             return Err(format!(
-                "Review unsupported {root} values before converting: {}",
+                "Review unsupported {root} values before writing: {}",
                 invalid
                     .iter()
                     .map(|f| f.message.as_str())
@@ -1601,7 +1604,7 @@ fn reject_owned(extra: &mut Mapping, root: &str, flags: &mut Vec<Flag>) {
                 if !map.get(*part).is_some_and(empty_value) && map.remove(*part).is_some() {
                     flags.push(Flag {
                         line: 1,
-                        message: format!("Old data ignored: {root}/{key}/{part}"),
+                        message: format!("Unused data ignored: {root}/{key}/{part}"),
                     });
                 }
             }
@@ -1611,7 +1614,7 @@ fn reject_owned(extra: &mut Mapping, root: &str, flags: &mut Vec<Flag>) {
         } else if extra.remove(key).is_some() {
             flags.push(Flag {
                 line: 1,
-                message: format!("Old data ignored: {root}/{key}"),
+                message: format!("Unused data ignored: {root}/{key}"),
             });
         }
     }
@@ -1771,8 +1774,8 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
             }
         }
     }
-    let (_, old_extras) = conversion(&entry.fields, kind)?;
-    let (_, new_extras) = conversion(&expected, kind)?;
+    let (_, old_extras) = section_and_extras(&entry.fields, kind)?;
+    let (_, new_extras) = section_and_extras(&expected, kind)?;
     for root in roots(kind) {
         let key = format!("{root}_extras");
         let empty = Value::Mapping(Mapping::new());
@@ -1942,10 +1945,7 @@ fn set_cell(
 
 /// Rejected vitals are display text only. The model still has no numeric value.
 pub fn invalid_vital(entry: &Entry, key: &str) -> Option<String> {
-    if entry.kind != "creature"
-        || entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2)
-        || numeric(&entry.fields, key).is_some()
-    {
+    if entry.kind != "creature" || numeric(&entry.fields, key).is_some() {
         return None;
     }
     let names: &[&str] = match key {
@@ -1991,13 +1991,11 @@ pub fn comparison_body(entry: &Entry) -> String {
     for root in roots(&entry.kind) {
         body = body.replace(&format!("path={root}_extras "), &format!("path={root} "));
     }
-    body = without_legacy(&body, &entry.kind);
+    body = without_marked_stats(&body, &entry.kind);
     if entry.kind == "creature" {
         body = fold_printed_stats(&body);
     }
-    let mut comparable = entry.clone();
-    comparable.fields.insert("splat_schema".into(), 2.into());
-    reading_body(&comparable, &body)
+    reading_body(entry, &body)
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -2006,9 +2004,6 @@ pub fn comparison_body(entry: &Entry) -> String {
 /// Omit model-backed rows and rejected vitals shown in the reader's stat area.
 /// Unknown rows remain visible as text.
 pub fn reading_body(entry: &Entry, body: &str) -> String {
-    if entry.fields.get("splat_schema").and_then(Value::as_u64) != Some(2) {
-        return body.into();
-    }
     let clean_body = without_printed_record(body);
     let body = clean_body.as_str();
     let kind = entry.kind.as_str();

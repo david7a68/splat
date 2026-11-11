@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cd5a5071-6d47-5669-b689-998505762b06"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/warhorse_skeleton"
-splat_name: "Warhorse Skeleton"
+splat_id: cd5a5071-6d47-5669-b689-998505762b06
+splat_kind: reference
+splat_key: dnd2024:reference/creature/warhorse_skeleton
+splat_name: Warhorse Skeleton
 splat_pages:
 - 326
 ---

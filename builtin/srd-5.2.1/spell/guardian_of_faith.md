@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9d38e236-a884-5573-83bf-9c36335bdc2d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/guardian_of_faith"
-splat_name: "Guardian of Faith"
+splat_id: 9d38e236-a884-5573-83bf-9c36335bdc2d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/guardian_of_faith
+splat_name: Guardian of Faith
 splat_pages:
 - 137
 ---

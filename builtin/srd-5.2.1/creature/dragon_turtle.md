@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bec2edb8-b036-5c85-9a28-df632feff6bd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/dragon_turtle"
-splat_name: "Dragon Turtle"
+splat_id: bec2edb8-b036-5c85-9a28-df632feff6bd
+splat_kind: reference
+splat_key: dnd2024:reference/creature/dragon_turtle
+splat_name: Dragon Turtle
 splat_pages:
 - 281
 ---

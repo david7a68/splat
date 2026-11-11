@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e020afe3-cf5b-5330-a9da-416dc61e7cca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/tome_of_clear_thought"
-splat_name: "Tome of Clear Thought"
+splat_id: e020afe3-cf5b-5330-a9da-416dc61e7cca
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/tome_of_clear_thought
+splat_name: Tome of Clear Thought
 splat_pages:
 - 249
 ---

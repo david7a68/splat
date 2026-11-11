@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "81451f11-8a9a-504f-807a-15f3a7f3e3bb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/killer_whale"
-splat_name: "Killer Whale"
+splat_id: 81451f11-8a9a-504f-807a-15f3a7f3e3bb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/killer_whale
+splat_name: Killer Whale
 splat_pages:
 - 356
 ---

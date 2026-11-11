@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5ccc834d-a489-582e-8364-5a9cd1b1aaf7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/arcanist_s_magic_aura"
-splat_name: "Arcanist’s Magic Aura"
+splat_id: 5ccc834d-a489-582e-8364-5a9cd1b1aaf7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/arcanist_s_magic_aura
+splat_name: Arcanist’s Magic Aura
 splat_pages:
 - 110
 - 111

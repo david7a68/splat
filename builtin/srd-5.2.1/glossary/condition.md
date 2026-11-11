@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "afb00b23-f986-5cf0-a41d-58dd318d1f2b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/condition"
-splat_name: "Condition"
+splat_id: afb00b23-f986-5cf0-a41d-58dd318d1f2b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/condition
+splat_name: Condition
 splat_pages:
 - 179
 ---

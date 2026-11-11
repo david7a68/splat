@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d2ccb01d-8e7d-5ea8-8b45-136db68c6a6b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/flying"
-splat_name: "Flying"
+splat_id: d2ccb01d-8e7d-5ea8-8b45-136db68c6a6b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/flying
+splat_name: Flying
 splat_pages:
 - 182
 ---

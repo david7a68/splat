@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fc8c930d-1454-5e92-ad2c-568997a439a0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/guard"
-splat_name: "Guard"
+splat_id: fc8c930d-1454-5e92-ad2c-568997a439a0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/guard
+splat_name: Guard
 splat_pages:
 - 296
 ---

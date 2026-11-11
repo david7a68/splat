@@ -1466,8 +1466,8 @@ mod tests {
         let campaign = campaigns.active_campaign().unwrap();
         let path = campaign.path.join("Campaign.md");
         let text = std::fs::read_to_string(&path).unwrap().replace(
-            "splat_schema: 1",
-            "splat_schema: 1\nsplat_session_storage: {directory: My sessions}\ntags: [keep]",
+            "splat_schema: 2",
+            "splat_schema: 2\nsplat_session_folder: My sessions\ntags: [keep]",
         );
         std::fs::write(&path, &text).unwrap();
         campaigns.reload();
@@ -1556,8 +1556,8 @@ mod tests {
         let campaign = campaigns.active_campaign().unwrap();
         let file = folder.join("Campaign.md");
         let text = std::fs::read_to_string(&file).unwrap().replace(
-            "splat_schema: 1",
-            "splat_schema: 1\nsplat_run_storage: {directory: Sessions/Combat}",
+            "splat_schema: 2",
+            "splat_schema: 2\nsplat_run_folder: Sessions/Combat",
         ) + "\nMy notes.\n";
         std::fs::write(&file, &text).unwrap();
         let mut reopened = Campaigns::at(temp.path().join("other-settings.json"));

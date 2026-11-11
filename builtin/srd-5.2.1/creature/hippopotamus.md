@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d5a5023e-edb9-59fc-9e64-dae4b5f1a817"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hippopotamus"
-splat_name: "Hippopotamus"
+splat_id: d5a5023e-edb9-59fc-9e64-dae4b5f1a817
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hippopotamus
+splat_name: Hippopotamus
 splat_pages:
 - 355
 - 356

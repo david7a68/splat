@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "48faddf1-952e-5d76-93b8-62d8def85d64"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/kobold_warrior"
-splat_name: "Kobold Warrior"
+splat_id: 48faddf1-952e-5d76-93b8-62d8def85d64
+splat_kind: reference
+splat_key: dnd2024:reference/creature/kobold_warrior
+splat_name: Kobold Warrior
 splat_pages:
 - 302
 ---

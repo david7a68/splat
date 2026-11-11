@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b8340e0b-3e0f-57e7-bf07-174f8c8269b2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mind_spike"
-splat_name: "Mind Spike"
+splat_id: b8340e0b-3e0f-57e7-bf07-174f8c8269b2
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mind_spike
+splat_name: Mind Spike
 splat_pages:
 - 149
 ---

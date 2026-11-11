@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "26858ffc-6565-5736-8afd-f84d76eaa9c5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/control_water"
-splat_name: "Control Water"
+splat_id: 26858ffc-6565-5736-8afd-f84d76eaa9c5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/control_water
+splat_name: Control Water
 splat_pages:
 - 119
 - 120

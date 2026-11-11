@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8c880710-5480-5333-88a2-bd62eacb3b84"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/grick"
-splat_name: "Grick"
+splat_id: 8c880710-5480-5333-88a2-bd62eacb3b84
+splat_kind: reference
+splat_key: dnd2024:reference/creature/grick
+splat_name: Grick
 splat_pages:
 - 295
 ---

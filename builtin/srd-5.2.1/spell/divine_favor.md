@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c1599261-6901-530d-9b17-f364621b8a63"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/divine_favor"
-splat_name: "Divine Favor"
+splat_id: c1599261-6901-530d-9b17-f364621b8a63
+splat_kind: reference
+splat_key: dnd2024:reference/spell/divine_favor
+splat_name: Divine Favor
 splat_pages:
 - 125
 ---

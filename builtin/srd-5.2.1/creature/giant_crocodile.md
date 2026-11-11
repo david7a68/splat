@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d48ee5ba-770d-593b-aa5a-5b11ad4aa6e4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_crocodile"
-splat_name: "Giant Crocodile"
+splat_id: d48ee5ba-770d-593b-aa5a-5b11ad4aa6e4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_crocodile
+splat_name: Giant Crocodile
 splat_pages:
 - 350
 ---

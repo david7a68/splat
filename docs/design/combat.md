@@ -331,7 +331,7 @@ application to individual mechanics remain to be specified.
 
 ### Local and reusable actions
 
-A creature can define its own actions in its YAML frontmatter. A creature's
+A creature can define its own actions in its own note. A creature's
 attack or reaction does not need a separate note. Reusable definitions, such as
 spells, can be separate entries referenced by multiple creatures.
 

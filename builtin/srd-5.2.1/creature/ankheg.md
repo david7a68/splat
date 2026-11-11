@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1f3e52c6-3e74-545f-9a7f-83be2fff79ae"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ankheg"
-splat_name: "Ankheg"
+splat_id: 1f3e52c6-3e74-545f-9a7f-83be2fff79ae
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ankheg
+splat_name: Ankheg
 splat_pages:
 - 259
 ---

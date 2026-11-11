@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0dff17d9-1cf3-5728-b470-b788a9518faf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/lion"
-splat_name: "Lion"
+splat_id: 0dff17d9-1cf3-5728-b470-b788a9518faf
+splat_kind: reference
+splat_key: dnd2024:reference/creature/lion
+splat_name: Lion
 splat_pages:
 - 356
 - 357

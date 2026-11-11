@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6452d376-6f70-5eb5-bc30-1b776093e261"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/planetar"
-splat_name: "Planetar"
+splat_id: 6452d376-6f70-5eb5-bc30-1b776093e261
+splat_kind: reference
+splat_key: dnd2024:reference/creature/planetar
+splat_name: Planetar
 splat_pages:
 - 315
 ---

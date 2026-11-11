@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "81a60552-6b61-55e5-88b6-411c1570f9a8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/imprisonment"
-splat_name: "Imprisonment"
+splat_id: 81a60552-6b61-55e5-88b6-411c1570f9a8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/imprisonment
+splat_name: Imprisonment
 splat_pages:
 - 142
 ---

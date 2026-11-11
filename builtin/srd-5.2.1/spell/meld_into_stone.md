@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e43bf131-9277-5dc6-95e8-9001fcfe4fc7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/meld_into_stone"
-splat_name: "Meld into Stone"
+splat_id: e43bf131-9277-5dc6-95e8-9001fcfe4fc7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/meld_into_stone
+splat_name: Meld into Stone
 splat_pages:
 - 148
 ---

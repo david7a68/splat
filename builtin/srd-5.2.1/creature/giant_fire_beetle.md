@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "40fa0628-196f-57ff-ba69-66032d97fefb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_fire_beetle"
-splat_name: "Giant Fire Beetle"
+splat_id: 40fa0628-196f-57ff-ba69-66032d97fefb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_fire_beetle
+splat_name: Giant Fire Beetle
 splat_pages:
 - 351
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "063b50ce-40ad-5dd1-b944-15380bd65504"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/pass_without_trace"
-splat_name: "Pass without Trace"
+splat_id: 063b50ce-40ad-5dd1-b944-15380bd65504
+splat_kind: reference
+splat_key: dnd2024:reference/spell/pass_without_trace
+splat_name: Pass without Trace
 splat_pages:
 - 151
 ---

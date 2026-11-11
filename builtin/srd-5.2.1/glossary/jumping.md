@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "21fa646b-b318-5f5a-9c9d-a2bb4eb256aa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/jumping"
-splat_name: "Jumping"
+splat_id: 21fa646b-b318-5f5a-9c9d-a2bb4eb256aa
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/jumping
+splat_name: Jumping
 splat_pages:
 - 184
 ---

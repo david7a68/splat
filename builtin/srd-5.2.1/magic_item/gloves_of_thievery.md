@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "747264d7-82b1-5703-aea0-450d967c968b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gloves_of_thievery"
-splat_name: "Gloves of Thievery"
+splat_id: 747264d7-82b1-5703-aea0-450d967c968b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gloves_of_thievery
+splat_name: Gloves of Thievery
 splat_pages:
 - 224
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "861accec-2201-5d25-9a23-06338636aa40"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_mind_reading"
-splat_name: "Potion of Mind Reading"
+splat_id: 861accec-2201-5d25-9a23-06338636aa40
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_mind_reading
+splat_name: Potion of Mind Reading
 splat_pages:
 - 236
 ---

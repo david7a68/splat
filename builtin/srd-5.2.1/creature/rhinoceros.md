@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f52ca5dc-a67e-5fc1-bcec-43f1db6485f5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/rhinoceros"
-splat_name: "Rhinoceros"
+splat_id: f52ca5dc-a67e-5fc1-bcec-43f1db6485f5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/rhinoceros
+splat_name: Rhinoceros
 splat_pages:
 - 360
 ---

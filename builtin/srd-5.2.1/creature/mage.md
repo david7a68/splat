@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "40a404d8-199a-5cbe-bb04-9f63120f8cee"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mage"
-splat_name: "Mage"
+splat_id: 40a404d8-199a-5cbe-bb04-9f63120f8cee
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mage
+splat_name: Mage
 splat_pages:
 - 305
 ---

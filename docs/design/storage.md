@@ -31,13 +31,13 @@ This document builds on [Packages and campaign content](packages.md) and
 
 ## Agreed storage boundaries
 
-Content uses Obsidian-flavoured Markdown with YAML frontmatter. YAML holds
-authoritative stats and executable mechanics. Inventory is an explicit
-exception: marked Markdown tables hold its authoritative list, including item
+Content uses Obsidian-flavoured Markdown with flat YAML properties. Readable
+tables in the body hold the authoritative stats. Marked YAML blocks in the body
+hold executable mechanics; Splat writes them in a folded Splat data callout.
+Marked Markdown tables hold the authoritative inventory list, including item
 references, quantities, and equipment state. The Markdown body also holds
-descriptive prose, notes, examples, and inline controls. Nested YAML is
-acceptable, including the need to use Source mode for structures that Obsidian's
-Properties editor cannot edit.
+descriptive prose, notes, examples, and inline controls. This replaces the
+earlier decision to keep nested YAML in the properties.
 
 Item definitions retain their mechanics in YAML. Do not duplicate the inventory
 table as a second YAML list. Simulations copy the starting inventory into
@@ -114,8 +114,8 @@ present yet is ignored, until the next start, so a sync in progress causes no er
 All top-level properties managed by Splat use the `splat_` prefix, keeping them
 separate from ordinary Obsidian properties such as `tags` and `aliases`.
 The common fields are `splat_schema`, `splat_id`, `splat_kind`, and `splat_name`.
-Complex data uses nested YAML only where it needs structure, under prefixed
-properties such as `splat_actions`.
+Structured fields such as `splat_actions` keep the prefix in the note model. On
+disk they are in the body, in a readable table or a marked YAML block.
 
 This supersedes the earlier single `splat:` wrapper. Do not maintain two
 authoritative copies of the same field. The prefix rule applies to top-level
@@ -178,15 +178,18 @@ filename or Johnny.Decimal folder. No part of it is resolved as a disk path.
 
 Keep stable entry UUIDs and allow an optional `splat_key` for human-authored
 references. An index resolves the key to the corresponding entry. Existing
-`id` references remain available. The following illustrates the agreed fields:
+`id` references remain available. The following illustrates the agreed fields.
+The first block is the properties of a rule note:
 
 ```yaml
-splat_schema: 1
+splat_schema: 2
 splat_id: a9c6c5c5-b0ef-4b8d-9d56-4432ab140c8d
 splat_kind: rule
 splat_name: Grouped Initiative
 splat_key: "my_homebrew:rules/grouped_initiative"
 ```
+
+The second block is a campaign's rule choice in the note model:
 
 ```yaml
 splat_rule_choices:
@@ -195,8 +198,9 @@ splat_rule_choices:
 ```
 
 The mapping's left side names the mechanic being configured; its right side
-selects a concrete rule entry. A resource key is also separate from a stacking
-key: distinct entries may deliberately share stacking behavior.
+selects a concrete rule entry. On disk, the campaign manifest holds these
+choices in its `Rule choices` table. A resource key is also separate from a
+stacking key: distinct entries may deliberately share stacking behavior.
 
 Each package or campaign has its own namespace. A resource key must identify
 one entry in its resolution scope. Duplicate keys produce a clear conflict;
@@ -289,7 +293,7 @@ the agreed flat `splat_` prefix:
 ```markdown
 ---
 tags: [homebrew]
-splat_schema: 1
+splat_schema: 2
 splat_id: 6b02d7d9-19a7-4a18-a5ee-8bb9f00a04bd
 splat_kind: creature
 splat_name: Guard
@@ -299,8 +303,8 @@ A guard who protects allies.
 ```
 
 This illustrates the shared header only. It has no combat definition and is
-not presented as a simulation-ready creature. Per-kind fields follow in later
-examples.
+not presented as a simulation-ready creature. A complete creature note also has
+a `Stat block` section; see [the creature example](creature-example.md).
 
 ### Reference fields
 
@@ -361,7 +365,9 @@ splat_packages:
 These illustrative UUIDs identify a core package, a homebrew package, and its
 Guard entry respectively. They do not refer to existing registered content.
 `all` automatically includes later additions; `selected` records only the
-explicit entries. This encodes previously agreed selection behavior.
+explicit entries. This encodes previously agreed selection behavior. The YAML
+shows the note model. On disk, the manifest holds a `Packages` task list: one
+task for each package, and an `Only:` line below a task for `selected` entries.
 
 ### Rule choice fields
 
@@ -377,7 +383,9 @@ splat_rule_choices:
 Here the illustrative rule entry supplies the chosen initiative method. The
 mechanic key identifies what is being chosen; the UUID identifies the exact
 rule definition. Display-name changes do not change either identity. Precise
-mechanic-key conventions and rule-entry schemas remain to be specified.
+mechanic-key conventions and rule-entry schemas remain to be specified. The
+YAML shows the note model. On disk, the manifest holds a `Rule choices` table
+with `Rule` and `Choice` columns, and a comment in the Choice cell keeps the id.
 
 ## Design tree
 
@@ -389,8 +397,9 @@ mechanic-key conventions and rule-entry schemas remain to be specified.
 - Register packages from any folder, retaining paths in app settings and using
   package UUIDs in campaigns: agreed.
 - Campaign manifest notes carry package selections and rule choices: agreed.
-- Use flat `splat_` properties for all top-level Splat fields, with nested YAML
-  where the data needs structure: agreed; supersedes the single-block wrapper.
+- Use flat `splat_` properties for the common Splat fields, with structured
+  fields in the body: agreed; supersedes the single-block wrapper and nested
+  YAML properties.
 - Preserve existing note content and formatting where possible; detect
   conflicting external edits before saving: agreed.
 - Duplicate UUIDs are reported for explicit resolution rather than silently

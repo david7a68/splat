@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3121d89a-ced3-5efa-9c02-0ee1fd6aac51"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/prismatic_wall"
-splat_name: "Prismatic Wall"
+splat_id: 3121d89a-ced3-5efa-9c02-0ee1fd6aac51
+splat_kind: reference
+splat_key: dnd2024:reference/spell/prismatic_wall
+splat_name: Prismatic Wall
 splat_pages:
 - 155
 ---

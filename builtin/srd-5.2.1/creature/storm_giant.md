@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0ba85990-47a7-567a-a2b4-1d8a2a98dbe2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/storm_giant"
-splat_name: "Storm Giant"
+splat_id: 0ba85990-47a7-567a-a2b4-1d8a2a98dbe2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/storm_giant
+splat_name: Storm Giant
 splat_pages:
 - 330
 - 331

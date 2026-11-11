@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b080dc7c-ac3c-5b82-bbbd-753a92b45663"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dust_of_sneezing_and_choking"
-splat_name: "Dust of Sneezing and Choking"
+splat_id: b080dc7c-ac3c-5b82-bbbd-753a92b45663
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dust_of_sneezing_and_choking
+splat_name: Dust of Sneezing and Choking
 splat_pages:
 - 219
 ---

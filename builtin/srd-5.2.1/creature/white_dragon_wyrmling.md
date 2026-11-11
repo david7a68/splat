@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7f153736-c3a2-5e40-9a60-ac4b73285797"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/white_dragon_wyrmling"
-splat_name: "White Dragon Wyrmling"
+splat_id: 7f153736-c3a2-5e40-9a60-ac4b73285797
+splat_kind: reference
+splat_key: dnd2024:reference/creature/white_dragon_wyrmling
+splat_name: White Dragon Wyrmling
 splat_pages:
 - 339
 - 340

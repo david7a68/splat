@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b9b43452-0a66-51ad-9571-33343326b197"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/manual_of_gainful_exercise"
-splat_name: "Manual of Gainful Exercise"
+splat_id: b9b43452-0a66-51ad-9571-33343326b197
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/manual_of_gainful_exercise
+splat_name: Manual of Gainful Exercise
 splat_pages:
 - 229
 ---
