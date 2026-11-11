@@ -2,6 +2,7 @@
 mod ad_hoc;
 mod dock;
 mod loot;
+mod notice;
 mod rolling;
 mod undo;
 pub(crate) mod view;
