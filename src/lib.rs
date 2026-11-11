@@ -534,10 +534,10 @@ impl Splat {
         let names = self.encounters.pending_sync_names();
         if !names.is_empty() {
             items.push((
-                // Closing keeps Undo: the saved run holds its history (PR 232).
                 format!(
                     "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync.{}",
                     names.join(", "),
+                    // A close keeps Undo (it is saved with the run), so only these are lost.
                     if self.encounters.run().is_some_and(|run| !run.unsent_only_here_names().is_empty()) { " Unsent spell slots and limited uses are lost." } else { "" }
                 ),
                 Page::Run,
