@@ -8230,11 +8230,7 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let font = Type::Small.font(ui);
                 for width in [90.0, 150.0, 180.0, 400.0] {
-                    for status in [
-                        "Changed",
-                        "Added in round 2 · Changed",
-                        "Added in setup",
-                    ] {
+                    for status in ["Changed", "Added in round 2 · Changed", "Added in setup"] {
                         // iter-23 SA1: a status part that cannot fit the slot whole goes to a
                         // line of its own above the row; it never breaks inside a word here.
                         let Some(summary) =
