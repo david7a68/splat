@@ -673,6 +673,93 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
     parse_note(&note.path, &patched).ok_or_else(|| "The note could not be read back.".to_owned())
 }
 
+/// One file of a batch: its path, the bytes it holds now, and the bytes it gets.
+pub struct BatchWrite {
+    pub path: PathBuf,
+    pub old: String,
+    pub new: String,
+}
+
+/// Why a batch did not write. `Unchanged`: every file keeps its old bytes. `Partial`: putting
+/// back failed, and these files hold the new bytes.
+#[derive(Debug, PartialEq)]
+pub enum BatchFailure {
+    Unchanged(String),
+    Partial {
+        changed: Vec<PathBuf>,
+        error: String,
+    },
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: the rename of this item fails, after every temporary file is written.
+    pub static FAIL_RENAME_AT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    /// Tests: putting a renamed file back fails too.
+    pub static FAIL_ROLLBACK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Write several files as one change. First every new text goes to a temporary file beside
+/// its target; a failure there changes nothing. Then each is renamed into place; if a rename
+/// fails, the files already renamed get their old bytes back. Only when that also fails does
+/// the result name the files that hold the new bytes.
+pub fn write_batch(items: &[BatchWrite]) -> Result<(), BatchFailure> {
+    let mut temps = Vec::with_capacity(items.len());
+    for item in items {
+        let temp = item
+            .path
+            .parent()
+            .ok_or_else(|| "Invalid location.".to_owned())
+            .and_then(|parent| {
+                let mut temp =
+                    tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+                temp.write_all(item.new.as_bytes())
+                    .and_then(|()| temp.as_file().sync_all())
+                    .map_err(|e| e.to_string())?;
+                Ok(temp)
+            })
+            .map_err(BatchFailure::Unchanged)?;
+        temps.push(temp);
+    }
+    for (at, temp) in temps.into_iter().enumerate() {
+        #[cfg(test)]
+        let forced = FAIL_RENAME_AT.with(|fail| fail.get() == Some(at));
+        #[cfg(not(test))]
+        let forced = false;
+        let renamed = if forced {
+            Err("The file could not be replaced.".to_owned())
+        } else {
+            temp.persist(&items[at].path)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        };
+        if let Err(error) = renamed {
+            let changed: Vec<PathBuf> = items[..at]
+                .iter()
+                .filter(|item| {
+                    #[cfg(test)]
+                    if FAIL_ROLLBACK.with(std::cell::Cell::get) {
+                        return true;
+                    }
+                    replace_file(&item.path, &item.old).is_err()
+                })
+                .map(|item| item.path.clone())
+                .collect();
+            return Err(if changed.is_empty() {
+                BatchFailure::Unchanged(error)
+            } else {
+                BatchFailure::Partial { changed, error }
+            });
+        }
+    }
+    for item in items {
+        if let Some(parent) = item.path.parent() {
+            let _ = sync_folder(parent);
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid location.")?;
     let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
@@ -1287,6 +1374,25 @@ impl Draft {
             self.state = DraftState::Unsaved;
         }
         self.last_edit = Some(Instant::now());
+        self.revision = next_revision();
+    }
+
+    /// The file's whole text with these words in place of the draft's, for a batch write.
+    pub fn text_with_body(&self, body: &str) -> String {
+        format!("{}{body}", self.prefix)
+    }
+
+    /// The text this draft was read from or last wrote.
+    pub fn file_text(&self) -> Option<&str> {
+        self.baseline.as_deref()
+    }
+
+    /// A batch wrote these words: the draft now matches its file.
+    pub fn written(&mut self, body: String, text: String) {
+        self.body = body;
+        self.baseline = Some(text);
+        self.state = DraftState::Saved;
+        self.dropped = None;
         self.revision = next_revision();
     }
 

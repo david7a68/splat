@@ -1561,7 +1561,9 @@ to it and uses warning tone when any do. Each item's save state tracks its own e
 delay, Saved when unchanged, Unsaved with reason when blocked. Rests show default duration as a faint
 placeholder, with Starts and Ends beside duration help. Rename never changes notes automatically. The offer is the Library's, from one function:
 `Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo,
-and checks every note first: if one is changed on disk or needs a choice, no note is written; custom
+and checks every note first: if one is changed on disk or needs a choice, no note is written. It prepares every
+file before it replaces any, and a failed replace puts the others back; if that fails too, the warning names each
+note that holds the new links, and Undo link update and the warning stay until Undo or a new update; custom
 aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
 
