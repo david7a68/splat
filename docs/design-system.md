@@ -443,7 +443,11 @@ When two owners have the same path, the message and link name the owner first (`
 Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
-the caret on the line to fix and scrolls that line into view. Repair reloads campaign use at once. Validation
+the caret on the line to fix and scrolls that line into view. A repair draft's error and its save-row state
+come from the draft as it is now, checked as Save checks it. Each reason Save would refuse it (a YAML fault,
+a UUID or key that another entry uses) is the error, with Invalid. Once Save would write it, the error goes and
+the state says Unsaved. The owner line and the row keep Cannot be read until Save. A fault that is not in the text (another identity, a
+deleted manifest, a file that is not text) stays until the file changes. Repair reloads campaign use at once. Validation
 messages also update after encounter or group edits.
 Other readable files stay available.
 
