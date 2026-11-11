@@ -2140,23 +2140,98 @@ pub fn message_space_height() -> f32 {
     MESSAGE_SPACE_LINES * Type::Body.line()
 }
 
-/// The one message space below a save row: a `width` by two-line part at the cursor, whatever it
-/// holds. The caller picks one message: the reason when there is one, else the result. `message`
-/// is its whole text, the part's accessible name; with `None`, the space stays empty and `add`
-/// does not run. Longer words wrap and scroll inside the part (see `fixed_part`), so no message
-/// moves what is below the space. Returns what `add` returns.
+/// One message in a `MessageSpace`: its whole words, the part's accessible name, and how to
+/// draw it.
+type SpaceMessage<'a, R> = (&'a str, Box<dyn FnOnce(&mut Ui) -> R + 'a>);
+
+/// The one message space below a save row: a `width` by `MESSAGE_SPACE_LINES` part at the
+/// cursor, whatever it holds, so no message moves what is below it. It holds Save's reason and
+/// the latest result in one part, in one order: a result that carries a live Undo comes first,
+/// then the reason; otherwise the reason comes first, then the result. With neither, the space
+/// stays empty. Longer words wrap and scroll inside the part (see `fixed_part`), whose accessible
+/// name is every message's words in that order.
+///
+/// ```ignore
+/// let pressed = design::MessageSpace::new("library_message", width)
+///     .reason(problem, |ui| { design::message(ui, Tone::Error, problem); })
+///     .result(&words, true, |ui| design::draft_discarded(ui, name))
+///     .show(ui);
+/// ```
 // Library, World repair and Campaign repair adopt it this round (iter-25 packages L, D and C).
 #[allow(dead_code)]
-pub fn message_space<R>(
-    ui: &mut Ui,
-    id: &str,
+pub struct MessageSpace<'a, R> {
+    id: &'a str,
     width: f32,
-    message: Option<&str>,
-    add: impl FnOnce(&mut Ui) -> R,
-) -> Option<R> {
-    let (rect, _) =
-        ui.allocate_exact_size(vec2(width, message_space_height()), Sense::hover());
-    message.map(|name| fixed_part(ui, rect, id, name, add))
+    reason: Option<SpaceMessage<'a, ()>>,
+    result: Option<(SpaceMessage<'a, R>, bool)>,
+}
+
+#[allow(dead_code)]
+impl<'a, R> MessageSpace<'a, R> {
+    /// An empty space `width` wide. `id` keeps the part's scroll and focus.
+    pub fn new(id: &'a str, width: f32) -> Self {
+        Self {
+            id,
+            width,
+            reason: None,
+            result: None,
+        }
+    }
+
+    /// Why Save or the draft waits: a refusal, a parse error, a failed write or guidance.
+    pub fn reason(mut self, words: &'a str, add: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.reason = Some((words, Box::new(add)));
+        self
+    }
+
+    /// The latest result. `has_undo` is true while its Undo is live; then it comes before the
+    /// reason, so a reason that does not clear never hides the way back.
+    pub fn result(
+        mut self,
+        words: &'a str,
+        has_undo: bool,
+        add: impl FnOnce(&mut Ui) -> R + 'a,
+    ) -> Self {
+        self.result = Some(((words, Box::new(add)), has_undo));
+        self
+    }
+
+    /// Reserve the space and draw what it holds. Returns what the result's `add` returned, when
+    /// there is a result.
+    pub fn show(self, ui: &mut Ui) -> Option<R> {
+        let (rect, _) =
+            ui.allocate_exact_size(vec2(self.width, message_space_height()), Sense::hover());
+        let undo_first = self.result.as_ref().is_some_and(|(_, has_undo)| *has_undo);
+        let (reason, result) = (self.reason, self.result.map(|(result, _)| result));
+        if reason.is_none() && result.is_none() {
+            return None;
+        }
+        let reason_words = reason.as_ref().map(|(words, _)| *words);
+        let result_words = result.as_ref().map(|(words, _)| *words);
+        let name = if undo_first {
+            [result_words, reason_words]
+        } else {
+            [reason_words, result_words]
+        }
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+        fixed_part(ui, rect, self.id, &name, |ui| {
+            if undo_first {
+                let out = result.map(|(_, add)| add(ui));
+                if let Some((_, add)) = reason {
+                    add(ui);
+                }
+                out
+            } else {
+                if let Some((_, add)) = reason {
+                    add(ui);
+                }
+                result.map(|(_, add)| add(ui))
+            }
+        })
+    }
 }
 
 /// One fixed part of a reserved space: a fixed rect whatever it holds. Longer words wrap and
@@ -3822,23 +3897,40 @@ mod tests {
     }
 
     /// iter-25-A contract: the message space is two body lines high whether it is empty, holds
-    /// one line or holds more than fits, so what follows it never moves. Empty, it draws nothing;
-    /// holding a message, it is one focusable part named with the whole message.
+    /// one line, holds more than fits or holds a reason and a result, so what follows it never
+    /// moves. Empty, it draws nothing. A result with a live Undo comes before the reason; without
+    /// one, the reason comes first. The part is one focusable group named with every message in
+    /// the order drawn.
     #[test]
     fn iter25_a_message_space_keeps_what_follows_still() {
         const LONG: &str = "Line 4 opens a list with [ that never closes. Close the list with ], \
             or remove the [ at the start of the line. Then save the entry again to check it.";
-        let below = |message: Option<&'static str>| {
+        const REASON: &str = "Splat cannot read Notes/Broken.md as text.";
+        const RESULT: &str = "Broken draft discarded.";
+        // (reason, result and its has_undo) → (gap from above to below, tops of the reason and
+        // the result, whether the result's add ran, the part's name)
+        type Seen = (f32, Option<f32>, Option<f32>, bool, Option<String>);
+        let space = |reason: Option<&'static str>, result: Option<(&'static str, bool)>| -> Seen {
             let ran = std::rc::Rc::new(std::cell::Cell::new(false));
             let seen = ran.clone();
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(330.0, 400.0))
                 .build_ui(move |ui| {
                     ui.label("Above the space");
-                    message_space(ui, "test_space", 330.0, message, |ui| {
-                        seen.set(true);
-                        message_fn(ui, message.unwrap_or_default());
-                    });
+                    let mut space = MessageSpace::new("test_space", 330.0);
+                    if let Some(words) = reason {
+                        space = space.reason(words, move |ui| {
+                            message(ui, Tone::Error, words);
+                        });
+                    }
+                    if let Some((words, has_undo)) = result {
+                        let seen = seen.clone();
+                        space = space.result(words, has_undo, move |ui| {
+                            seen.set(true);
+                            message(ui, Tone::Info, words);
+                        });
+                    }
+                    space.show(ui);
                     ui.label("Below the space");
                 });
             super::super::theme::install(&harness.ctx);
@@ -3849,36 +3941,50 @@ mod tests {
                     .iter()
                     .find(|(text, _)| text == words)
                     .map(|(_, rect)| rect.top())
-                    .unwrap_or_else(|| panic!("{words} is painted: {texts:?}"))
             };
-            use egui_kittest::kittest::{NodeT, Queryable};
-            let named = message.is_some_and(|name| {
-                harness
-                    .query_all_by_label(name)
-                    .any(|node| node.accesskit_node().role() == egui::accesskit::Role::GenericContainer)
-            });
+            use egui_kittest::kittest::NodeT;
+            let name = harness
+                .root()
+                .children_recursive()
+                .find(|node| {
+                    node.accesskit_node().role() == egui::accesskit::Role::GenericContainer
+                        && node.accesskit_node().label().is_some()
+                })
+                .and_then(|node| node.accesskit_node().label());
             (
-                top("Below the space") - top("Above the space"),
+                top("Below the space").unwrap() - top("Above the space").unwrap(),
+                reason.and_then(|words| top(words)),
+                result.and_then(|(words, _)| top(words)),
                 ran.get(),
-                named,
+                name,
             )
         };
-        fn message_fn(ui: &mut Ui, words: &str) {
-            message(ui, Tone::Error, words);
-        }
-        let empty = below(None);
-        let short = below(Some("Typed 4 on 1d6: Fog"));
-        let long = below(Some(LONG));
-        assert!(!empty.1 && short.1 && long.1, "add runs only with a message");
-        assert!(short.2 && long.2, "the part is named with its whole message");
+        let empty = space(None, None);
+        let short = space(None, Some(("Typed 4 on 1d6: Fog", false)));
+        let long = space(Some(LONG), None);
+        let undo_first = space(Some(REASON), Some((RESULT, true)));
+        let reason_first = space(Some(REASON), Some((RESULT, false)));
         assert!(
-            (empty.0 - short.0).abs() < 0.5 && (empty.0 - long.0).abs() < 0.5,
-            "below the space: empty {}, short {}, long {}",
-            empty.0,
-            short.0,
-            long.0
+            !empty.3 && empty.4.is_none() && short.3 && undo_first.3 && reason_first.3,
+            "the result's add runs only with a result; an empty space has no part"
         );
+        for seen in [&short, &long, &undo_first, &reason_first] {
+            assert!(
+                (empty.0 - seen.0).abs() < 0.5,
+                "below the space: empty {}, now {}",
+                empty.0,
+                seen.0
+            );
+        }
         assert!(empty.0 >= message_space_height(), "{}", empty.0);
+        assert_eq!(long.4.as_deref(), Some(LONG));
+        // With a live Undo, the result comes first; without one, the reason does.
+        let (reason, result) = (undo_first.1.unwrap(), undo_first.2.unwrap());
+        assert!(result < reason, "undo first: result {result}, reason {reason}");
+        assert_eq!(undo_first.4, Some(format!("{RESULT} {REASON}")));
+        let (reason, result) = (reason_first.1.unwrap(), reason_first.2.unwrap());
+        assert!(reason < result, "reason first: reason {reason}, result {result}");
+        assert_eq!(reason_first.4, Some(format!("{REASON} {RESULT}")));
     }
 
     /// iter-25-A (carried, World at 960 beside Lookup): the header's count stays whole; a status
