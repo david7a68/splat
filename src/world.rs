@@ -1761,10 +1761,7 @@ fn status_unread(entry: &Entry) -> bool {
 /// A value the reader could not read, as the shared reader says it (`src/library/view.rs`):
 /// the sentence with a long value cut, then whole.
 fn flag_words(flag: &splat::content::layout::Flag) -> (String, String) {
-    (
-        copy_words(flag.short_message()),
-        copy_words(&flag.message),
-    )
+    (copy_words(flag.short_message()), copy_words(&flag.message))
 }
 
 #[cfg(test)]

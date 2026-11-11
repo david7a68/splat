@@ -300,7 +300,9 @@ pub fn broken(d: &mut Driver<'_>) {
         d.observe(
             "iter-25-D-FD1-part-ring",
             ring.iter().all(|clear| *clear),
-            format!("{state}: the focus ring keeps clear of the scroll bar at 960, 1200, 1920: {ring:?}"),
+            format!(
+                "{state}: the focus ring keeps clear of the scroll bar at 960, 1200, 1920: {ring:?}"
+            ),
         );
         // Back to the part's top, so its Undo is in view again.
         d.press(Key::PageUp);
