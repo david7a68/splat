@@ -3319,11 +3319,15 @@ struct SavedRun {
     undo: Option<Box<serde_json::value::RawValue>>,
 }
 impl SavedRun {
-    /// A run file's text as a run of this campaign.
-    fn parse(bytes: &[u8], campaign: Uuid) -> Result<Self, String> {
+    /// A run file's text as a run: of this campaign, or of any campaign when a folder is
+    /// checked with no campaign open. Every reader of a run file comes through here.
+    fn parse(bytes: &[u8], campaign: Option<Uuid>) -> Result<Self, String> {
         let saved: Self =
             serde_json::from_slice(bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
-        if saved.version != 1 || saved.campaign != campaign {
+        if campaign.is_none() && saved.version != 1 {
+            return Err("Unsupported run version.".into());
+        }
+        if saved.version != 1 || campaign.is_some_and(|campaign| saved.campaign != campaign) {
             return Err("Unsupported run version or wrong campaign.".into());
         }
         // Only a row of an Undo step may leave its definition out.
@@ -3745,7 +3749,7 @@ impl Run {
         if bytes.len() > 64 * 1024 * 1024 {
             return Err("Saved run exceeds the size limit.".into());
         }
-        let mut saved = SavedRun::parse(&bytes, campaign)?;
+        let mut saved = SavedRun::parse(&bytes, Some(campaign))?;
         if saved.id.is_nil() {
             return Err("Unsupported run version or wrong campaign.".into());
         }
@@ -4202,12 +4206,7 @@ impl From<&Participant> for FightRow {
 
 /// Check the same saved-run model as normal loading, without opening a campaign.
 pub(crate) fn check_saved_text(text: &str) -> Result<(), String> {
-    let saved: SavedRun =
-        serde_json::from_str(text).map_err(|e| format!("Invalid saved run: {e}"))?;
-    if saved.version != 1 {
-        return Err("Unsupported run version.".into());
-    }
-    Ok(())
+    SavedRun::parse(text.as_bytes(), None).map(drop)
 }
 
 /// A saved run's file, within the size limit.
@@ -4216,7 +4215,7 @@ fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
         return Err("Saved run exceeds the size limit.".into());
     }
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
-    SavedRun::parse(&bytes, campaign)
+    SavedRun::parse(&bytes, Some(campaign))
 }
 
 /// How the players stood when this run was last saved.

@@ -412,13 +412,15 @@ pub fn run(d: &mut Driver<'_>) {
     end_encounter(d);
     d.type_text("Fled");
     d.press(Key::Enter);
+    let outcome = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Outcome: "))
+        .map_or_else(String::new, |node| node.name);
     d.observe(
         "T15.7",
-        d.has("Outcome: Fled"),
-        format!(
-            "Typing replaces the selected outcome: {}",
-            d.name_starting("Outcome: ")
-        ),
+        outcome == "Outcome: Fled",
+        format!("Typing replaces the selected outcome: {outcome}"),
     );
     close_run(d);
     go_encounters(d);
