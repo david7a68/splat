@@ -8,7 +8,7 @@ Simulation execution remains separate work.
 
 `character::EntitySnapshot` holds these parts:
 
-- `definition`: schema-1 `splat_kind: creature`, stable `splat_id`, name,
+- `definition`: note-model `splat_kind: creature`, stable `splat_id`, name,
   `splat_creature`, `splat_stats`, `splat_health`, and `splat_resources`.
   Creature, Stat, Health, and Pool reuse the engine's existing types.
 - `initial`: current HP, temporary HP, death saves, conditions, inspiration,
@@ -115,7 +115,7 @@ See [API research](../research/dndbeyond-api.md) for transport and event evidenc
 
 Cache loads and successful sheet reads publish `Characters/D&D Beyond/<creature UUID>.md`
 in the configured campaign folder. Filenames stay stable across character renames.
-The frontmatter uses the existing creature definition, `splat_initial`, and
+The note's model uses the existing creature definition, `splat_initial`, and
 `splat_external`. The body includes readable attacks, features, spells and authoritative inventory
 tables. Separate item and spell notes supply referenced definitions. Typed
 `splat_character` and `splat_import` fields retain sheet details and conversion

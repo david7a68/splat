@@ -812,7 +812,7 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
         {
             let id = words(&package["package"], "id");
             if id.is_empty() {
-                return Err("Package needs an id before conversion".into());
+                return Err("Package needs an id".into());
             }
             let name = package.get("name").and_then(Value::as_str).unwrap_or(id);
             body.push_str(&format!("- [x] {} ^{id}\n", cell(name)));

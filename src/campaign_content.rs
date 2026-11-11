@@ -2042,7 +2042,7 @@ mod tests {
 
     #[test]
     fn an_unclosed_list_names_and_marks_its_opening_line() {
-        let text = "---\nsplat_schema: 1\nsplat_kind: [\n---\n";
+        let text = "---\nsplat_schema: 2\nsplat_kind: [\n---\n";
         let (problem, line) = repair_problem("Notes/Broken.md", text);
         assert_eq!(line, Some(3));
         assert_eq!(

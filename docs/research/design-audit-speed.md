@@ -1446,7 +1446,7 @@ the suite's own many scenario threads and are not a separate contention measurem
 
 `snapshot_notice` compared each run creature with the current catalogue on every
 frame. It normalized both Markdown bodies before comparing the model, even when
-the source bodies were identical. Normalization strips legacy/printed stat
+the source bodies were identical. Normalization strips marked and printed stat
 blocks, reads the stat tables and joins whitespace. Temporary aggregate timers
 in a full original-source repeat measured:
 

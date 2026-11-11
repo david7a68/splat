@@ -1,6 +1,6 @@
 # Imported character content
 
-Imported characters are ordinary schema-1 creature entries. Matching SRD items,
+Imported characters are ordinary creature entries. Matching SRD items,
 spells, and features use the shared catalogue's canonical UUID references. Other
 definitions follow their [import route](#routes-and-the-campaign-package). The catalogue,
 content editor, dependency traversal, and encounter roster use the same reader
@@ -71,8 +71,8 @@ stays in the cache. Sheet text in the Markdown body is escaped: each line's
 first ASCII punctuation mark gets a backslash, leading spaces go, and `<!--`
 becomes `&lt;!--`. So no sheet text can start a heading, code fence, HTML block,
 quote, list or table, or hide or end the generated part. One-line values such
-as names and gap reasons also lose their line breaks. The frontmatter keeps the
-text exactly as written.
+as names and gap reasons also lose their line breaks. The note's Splat data keeps
+the text exactly as written.
 
 A weapon attack with sufficient data also produces `splat_actions` with normal
 activation, targets, rolls and attack steps. Its source-matched rule bindings specify
@@ -133,7 +133,7 @@ The IDs are `feature:ID`, `action:ID`, `item:KEY`, and `spell:ID`, the same iden
 holds. An ID says where a definition's text lives. It does not prove what the rule does:
 rule data stays in the registry, pinned to the source text. So a note with many traits takes
 only the IDs. A note that holds one item or spell also takes that definition's rule data and
-missing facts in its frontmatter. Its existing values and words stay, and each save adds them
+missing facts in its own fields. Its existing values and words stay, and each save adds them
 again if a regenerated package lost them.
 
 A definition with no route takes one when a sheet is saved:

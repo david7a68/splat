@@ -488,10 +488,14 @@ mod tests {
     }
 
     fn note(flags: Vec<splat::content::layout::Flag>) -> Entry {
-        let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: world\nsplat_name: Watch House\nsplat_world:\n  type: location\n---\n\n# Watch House\n\nKeep this prose.\n";
-        let converted = splat::content::formats::convert("World.md", old).unwrap();
+        let written = splat::content::formats::fixture(
+            "World.md",
+            "splat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: world\nsplat_name: Watch House\nsplat_world:\n  type: location\n",
+            "\n# Watch House\n\nKeep this prose.\n",
+        )
+        .unwrap();
         let mut entry =
-            Entry::parse("Places/Watch House.md", &converted).expect("fixture: a world note");
+            Entry::parse("Places/Watch House.md", &written).expect("fixture: a world note");
         entry.flags = flags;
         entry
     }

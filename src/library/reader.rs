@@ -492,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn converted_spell_and_item_readers_hide_tables_and_machine_lines() {
+    fn written_spell_and_item_readers_hide_tables_and_machine_lines() {
         for (kind, fields) in [
             (
                 "item",
@@ -512,11 +512,8 @@ mod tests {
                 "splat_item: {category: wondrous_item, rarity: uncommon}",
             ),
         ] {
-            let old = splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{fields}\n---\n\n# Rook\n\nKeep this effect.\n"
-            )).expect("schema-2 fixture");
-            let converted = splat::content::formats::convert("Rook.md", &old).unwrap();
-            let entry = Entry::parse("Rook.md", &converted).unwrap();
+            let written = splat::content::formats::fixture("Fixture.md", &format!("splat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{fields}\n"), "\n# Rook\n\nKeep this effect.\n").expect("schema-2 fixture");
+            let entry = Entry::parse("Rook.md", &written).unwrap();
             let ctx = egui::Context::default();
             crate::design::theme::install(&ctx);
             let output = ctx.run(Default::default(), |ctx| {

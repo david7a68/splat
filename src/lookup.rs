@@ -3010,9 +3010,14 @@ mod tests {
     }
 
     fn entry_note(id: Uuid, name: &str, world: &str) -> String {
-        splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
-        )).expect("schema-2 fixture")
+        splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n"
+            ),
+            "",
+        )
+        .expect("schema-2 fixture")
     }
 
     #[test]

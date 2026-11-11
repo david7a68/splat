@@ -319,7 +319,7 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
                 .map_or(1, |i| i + 1);
             flags.push(Flag {
                 line,
-                message: "Old data ignored".into(),
+                message: "Unused data ignored".into(),
             });
         }
         parsed.insert((*root).into(), Value::Mapping(Mapping::new()));
@@ -1356,7 +1356,7 @@ pub fn render(fields: &Mapping, kind: &str) -> String {
     out
 }
 
-// Presence hints preserve optional fields in legacy models, without storing a
+// Presence hints preserve optional fields of the model, without storing a
 // second value. A new non-default value always comes from its visible cell.
 const OPTIONAL_PATHS: &[&str] = &[
     "splat_creature/armor_class_text",
@@ -1423,8 +1423,11 @@ fn remove_optional(fields: &mut Mapping, path: &str) {
     }
 }
 
-/// Convert only table-owned data; preserve all other mechanics in an end fence.
-pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, Value)>), String> {
+/// The stat section for the table-owned data, and all other mechanics for an end fence.
+pub fn section_and_extras(
+    fields: &Mapping,
+    kind: &str,
+) -> Result<(String, Vec<(String, Value)>), String> {
     let mut rendered = render(fields, kind);
     let mut shapes = Vec::new();
     if literal_type(fields) {
@@ -1532,7 +1535,7 @@ pub fn conversion(fields: &Mapping, kind: &str) -> Result<(String, Vec<(String, 
         reject_owned(&mut checked, root, &mut invalid);
         if !invalid.is_empty() {
             return Err(format!(
-                "Review unsupported {root} values before converting: {}",
+                "Review unsupported {root} values before writing: {}",
                 invalid
                     .iter()
                     .map(|f| f.message.as_str())
@@ -1601,7 +1604,7 @@ fn reject_owned(extra: &mut Mapping, root: &str, flags: &mut Vec<Flag>) {
                 if !map.get(*part).is_some_and(empty_value) && map.remove(*part).is_some() {
                     flags.push(Flag {
                         line: 1,
-                        message: format!("Old data ignored: {root}/{key}/{part}"),
+                        message: format!("Unused data ignored: {root}/{key}/{part}"),
                     });
                 }
             }
@@ -1611,7 +1614,7 @@ fn reject_owned(extra: &mut Mapping, root: &str, flags: &mut Vec<Flag>) {
         } else if extra.remove(key).is_some() {
             flags.push(Flag {
                 line: 1,
-                message: format!("Old data ignored: {root}/{key}"),
+                message: format!("Unused data ignored: {root}/{key}"),
             });
         }
     }
@@ -1771,8 +1774,8 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
             }
         }
     }
-    let (_, old_extras) = conversion(&entry.fields, kind)?;
-    let (_, new_extras) = conversion(&expected, kind)?;
+    let (_, old_extras) = section_and_extras(&entry.fields, kind)?;
+    let (_, new_extras) = section_and_extras(&expected, kind)?;
     for root in roots(kind) {
         let key = format!("{root}_extras");
         let empty = Value::Mapping(Mapping::new());

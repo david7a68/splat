@@ -6132,14 +6132,8 @@ mod tests {
         };
         write(&ashen, "Rules/Watch.md", "rule", "", "See [[Gone Page]].\n");
         // The same path in another package: an item that needs a key no package has.
-        let item = splat::content::formats::convert(
-            "Rules/Watch.md",
-            &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: ember:items/watch\n\
-                 splat_name: Watch\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: nowhere:items/gone\n---\n\nSee [[Gone Page]].\n",
-                Uuid::new_v4()
-            ),
-        )
+        let item = splat::content::formats::fixture("Rules/Watch.md", &format!("splat_id: {}\nsplat_kind: item\nsplat_key: ember:items/watch\n\
+                 splat_name: Watch\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: nowhere:items/gone\n", Uuid::new_v4()), "\nSee [[Gone Page]].\n")
         .expect("schema-2 fixture");
         fs::create_dir_all(ember.path.join("Rules")).unwrap();
         fs::write(ember.path.join("Rules/Watch.md"), item).unwrap();
@@ -8815,11 +8809,16 @@ mod tests {
     /// Writes a package whose one item needs `needs`.
     fn package_needing(root: &Path, name: &str, namespace: &str, needs: &str) -> Module {
         let module = create_module(&root.join(name), name, namespace).unwrap();
-        let note = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: {namespace}:items/own\n\
-             splat_name: Own\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: {needs}\n---\n",
-            Uuid::new_v4()
-        )).expect("schema-2 fixture");
+        let note = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: item\nsplat_key: {namespace}:items/own\n\
+             splat_name: Own\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: {needs}\n",
+                Uuid::new_v4()
+            ),
+            "",
+        )
+        .expect("schema-2 fixture");
         fs::write(module.path.join("Own.md"), note).unwrap();
         module
     }

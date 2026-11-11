@@ -2762,10 +2762,15 @@ mod tests {
         let id = Entry::parse("Wolf.md", &text).unwrap().id;
         fs::write(temp.path().join("Wolf.md"), text).unwrap();
         let manifest = temp.path().join("Package.md");
-        let before = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n",
-            module.id
-        )).expect("schema-2 fixture");
+        let before = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n",
+                module.id
+            ),
+            "",
+        )
+        .expect("schema-2 fixture");
         fs::write(&manifest, "---\nsplat_id: [\n---\n").unwrap();
         for deleted in [false, true] {
             if deleted {
@@ -2812,7 +2817,19 @@ mod tests {
             name: "Test".into(),
             path: temp.path().into(),
         };
-        fs::write(module.path.join("Package.md"), splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).expect("schema-2 fixture")).unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n",
+                    module.id
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
+        )
+        .unwrap();
         let id = Uuid::new_v4();
         let text = format!(
             "---\nsplat_schema: 2\nsplat_id: '{id}' # keep identity\nsplat_kind: [\nsplat_key: test:creatures/wolf\n---\n"
@@ -2918,7 +2935,6 @@ mod tests {
             )],
         )
         .unwrap();
-        let source = content::formats::convert("Rook.md", &source).unwrap();
         let source_id = note_id(&source).unwrap();
         fs::write(dir.path().join("Rook.md"), &source).unwrap();
         let cat = Catalogue::load(&[], Some(&campaign)).unwrap();
@@ -3064,11 +3080,10 @@ mod tests {
     #[test]
     fn reconnecting_a_related_entry_preserves_prose_and_unrelated_fields() {
         let old = entry("Captain Varra", "creature");
-        let original = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\ncustom: 'keep the quotes'\n---\n\nCaptain Varra keeps her name here.\n",
-            Uuid::new_v4(),
-            old.id
-        )).expect("schema-2 fixture");
+        let original = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\n", Uuid::new_v4(), old.id), "\nCaptain Varra keeps her name here.\n").expect("schema-2 fixture");
+        // A property that a person typed keeps its quotes; the writer would drop them.
+        let original = original.replacen("---\n\n", "custom: 'keep the quotes'\n---\n\n", 1);
+        assert!(original.contains("custom: 'keep the quotes'\n---\n"));
         let new_id = Uuid::new_v4();
         let changed = redirect_reference(&original, &old, new_id).unwrap();
         assert!(changed.contains(&new_id.to_string()));
@@ -3457,9 +3472,7 @@ mod tests {
         fs::create_dir(folder).unwrap();
         fs::write(
             folder.join("Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n---\n"
-            )).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -3565,18 +3578,25 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(
             root.path().join("Campaign.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(
             root.path().join("Campaign Package/Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let rule = Uuid::new_v4();
         fs::write(
             folder.join("Rule.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n"
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
         )
         .unwrap();
         let discovered = CampaignDocument::discover(root.path()).unwrap().unwrap();
@@ -3603,13 +3623,20 @@ mod tests {
         );
         fs::write(
             folder.join("Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n"
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
         )
         .unwrap();
         let item = |id: Uuid, name: &str, extra: &str| {
             fs::write(
                 folder.join(format!("{name}.md")),
-                splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}---\n")).expect("schema-2 fixture"),
+                splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}"), "").expect("schema-2 fixture"),
             )
             .unwrap();
         };
@@ -3622,7 +3649,7 @@ mod tests {
         item(other, "Other", "splat_dndbeyond_ids:\n- item:other\n");
         fs::write(
             campaign_root.join("Campaign.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n---\n", Uuid::new_v4())).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let modules = [Module {

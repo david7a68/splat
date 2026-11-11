@@ -61,11 +61,14 @@ fn keyboard_follows_the_second_link(d: &mut Driver<'_>, place: &str, capture: &s
 fn write_notes<const N: usize>(d: &mut Driver<'_>, notes: [(String, &str, &str, &str); N]) {
     for (path, name, kind, body) in notes {
         let id = splat::character::stable_id(&path);
-        let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\n\
-             splat_world:\n  type: {kind}\n---\n\n# {name}\n\n{body}\n"
-        );
-        let text = splat::content::formats::convert("World.md", &text).unwrap();
+        let text = splat::content::formats::fixture(
+            "World.md",
+            &format!(
+                "splat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n"
+            ),
+            &format!("\n# {name}\n\n{body}\n"),
+        )
+        .unwrap();
         fs::write(root(d).join(path), text).unwrap();
     }
     d.app_mut().lookup.refresh();

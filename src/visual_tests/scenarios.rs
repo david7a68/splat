@@ -2243,7 +2243,7 @@ pub mod encounter_run {
         d.type_text(KEYBOARD_LOOKUP);
         let search = d.has("Bless");
         d.observe(
-            "i19 converted spell",
+            "i19 written spell",
             !d.visible_text("%% splat") && !d.visible_text("Field"),
             "Lookup hides machine lines and empty field rows",
         );
@@ -7976,11 +7976,14 @@ pub mod session_notes {
         const LINK: &str = "Wren (opens Wren)";
         const NOTE_TEXT: &str = "Wren runs the ferry at dusk.";
         let id = splat::character::stable_id("Wren.md");
-        let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Wren\n\
-             splat_world:\n  type: npc\n---\n\n# Wren\n\n{NOTE_TEXT}\n"
-        );
-        let text = splat::content::formats::convert("World.md", &text).unwrap();
+        let text = splat::content::formats::fixture(
+            "World.md",
+            &format!(
+                "splat_id: {id}\nsplat_kind: world\nsplat_name: Wren\nsplat_world:\n  type: npc\n"
+            ),
+            &format!("\n# Wren\n\n{NOTE_TEXT}\n"),
+        )
+        .unwrap();
         std::fs::write(d.root.join("campaigns/emberfall/Wren.md"), text).unwrap();
         d.app_mut().lookup.refresh();
         d.settle();
@@ -12677,10 +12680,7 @@ pub mod npc_in_encounter {
             .unwrap()
             .entry
             .id;
-        let text = splat::content::formats::convert("Rook.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n---\n",
-            uuid::Uuid::new_v4()
-        )).unwrap();
+        let text = splat::content::formats::fixture("Rook.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n", uuid::Uuid::new_v4()), "").unwrap();
         std::fs::create_dir_all(campaign.path.join("NPCs")).unwrap();
         crate::library::write_note(&campaign.path, "NPCs/Rook Ambry.md", None, &text).unwrap();
         go_encounters(d);

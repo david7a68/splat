@@ -199,22 +199,32 @@ fn module_entry_id(name: &str) -> uuid::Uuid {
     stable_id(&format!("visual:module:{name}"))
 }
 
+/// Write a note's text as it is. The text must read as a note.
 fn write_note(root: &Path, relative: &str, text: &str) -> Result<(), String> {
     let path = root.join(relative);
     fs::create_dir_all(path.parent().ok_or("Missing folder")?).map_err(|e| e.to_string())?;
-    let text = splat::content::formats::convert(relative, text)?;
-    fs::write(path, &text).map_err(|e| e.to_string())?;
-    Entry::parse(relative, &text).map(|_| ())
+    fs::write(path, text).map_err(|e| e.to_string())?;
+    Entry::parse(relative, text).map(|_| ())
+}
+
+/// Write a note from its model: `fields` as YAML, and the `body` below the properties.
+fn write_model(root: &Path, relative: &str, fields: &str, body: &str) -> Result<(), String> {
+    write_note(
+        root,
+        relative,
+        &splat::content::formats::fixture(relative, fields, body)?,
+    )
 }
 
 fn write_module(root: &Path) -> Result<Module, String> {
     let id = stable_id("visual:module");
-    write_note(
+    write_model(
         root,
         "Module.md",
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: package\nsplat_name: {MODULE}\nsplat_namespace: ashen_marches\n---\n\n# {MODULE}\n\nHomebrew creatures, spells and hazards for a burned frontier.\n"
+            "splat_id: {id}\nsplat_kind: package\nsplat_name: {MODULE}\nsplat_namespace: ashen_marches\n"
         ),
+        &format!("\n# {MODULE}\n\nHomebrew creatures, spells and hazards for a burned frontier.\n"),
     )?;
     let creature = |slug: &str,
                     name: &str,
@@ -228,35 +238,49 @@ fn write_module(root: &Path) -> Result<Module, String> {
         } else {
             ""
         };
-        format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}, cr_text: '1 (XP 200; PB +2)', movement_text: '30 ft.', hit_points_text: '{hp} (4d8 + 4)'}}\nsplat_stats:\n  speed: {{value: 30, unit: ft}}\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n---\n\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
-            module_entry_id(slug),
-            10 + init,
+        (
+            format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}, cr_text: '1 (XP 200; PB +2)', movement_text: '30 ft.', hit_points_text: '{hp} (4d8 + 4)'}}\nsplat_stats:\n  speed: {{value: 30, unit: ft}}\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n",
+                module_entry_id(slug)
+            ),
+            format!(
+                "\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
+                10 + init
+            ),
         )
     };
     let note = |slug: &str, kind: &str, name: &str, body: &str| {
-        format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: {kind}\nsplat_key: ashen_marches:{kind}/{slug}\nsplat_name: {name}\nsplat_{kind}: {{}}\n---\n\n# {name}\n\n{body}\n",
-            module_entry_id(slug),
+        (
+            format!(
+                "splat_id: {}\nsplat_kind: {kind}\nsplat_key: ashen_marches:{kind}/{slug}\nsplat_name: {name}\nsplat_{kind}: {{}}\n",
+                module_entry_id(slug)
+            ),
+            format!("\n# {name}\n\n{body}\n"),
         )
     };
-    for (path, text) in [
+    for (path, (fields, body)) in [
         (
             "Creatures/Cinder Wolf.md",
             // A full attribute table, so its checks and saves roll.
-            creature(
-                "cinder_wolf",
-                "Cinder Wolf",
-                22,
-                13,
-                2,
-                "beast",
-                "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage plus 3 (1d6) Fire damage.",
-            )
-            .replace(
-                "  initiative: {value: 2}\n",
-                "  initiative: {value: 2}\n  strength: {value: 13}\n  dexterity: {value: 15}\n  constitution: {value: 14}\n  intelligence: {value: 3}\n  wisdom: {value: 12}\n  charisma: {value: 6}\n",
-            ),
+            {
+                let (fields, body) = creature(
+                    "cinder_wolf",
+                    "Cinder Wolf",
+                    22,
+                    13,
+                    2,
+                    "beast",
+                    "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage plus 3 (1d6) Fire damage.",
+                );
+                (
+                    fields
+                        .replace(
+                        "  initiative: {value: 2}\n",
+                        "  initiative: {value: 2}\n  strength: {value: 13}\n  dexterity: {value: 15}\n  constitution: {value: 14}\n  intelligence: {value: 3}\n  wisdom: {value: 12}\n  charisma: {value: 6}\n",
+                    ),
+                    body,
+                )
+            },
         ),
         (
             "Creatures/Ember Cultist.md",
@@ -310,7 +334,7 @@ fn write_module(root: &Path) -> Result<Module, String> {
             ),
         ),
     ] {
-        write_note(root, path, &text)?;
+        write_model(root, path, &fields, &body)?;
     }
     write_art(root)?;
     Ok(Module {
@@ -410,11 +434,14 @@ fn write_world_notes(root: &Path) -> Result<(), String> {
 }
 
 fn write_format_notes(root: &Path) -> Result<(), String> {
-    let old = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {{size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}, initiative: {{value: 2}}, speed: {{value: 40, unit: ft}}, strength: {{value: 12}}, dexterity: {{value: 15}}}}\n---\n\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n",
-        stable_id("slate-wolf")
-    );
-    let new = splat::content::formats::convert("Creatures/Slate Wolf.md", &old)?;
+    let new = splat::content::formats::fixture(
+        "Creatures/Slate Wolf.md",
+        &format!(
+            "splat_id: {}\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {{size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}}\nsplat_stats: {{max_hp: {{value: 22}}, armor_class: {{value: 13}}, initiative: {{value: 2}}, speed: {{value: 40, unit: ft}}, strength: {{value: 12}}, dexterity: {{value: 15}}}}\n",
+            stable_id("slate-wolf")
+        ),
+        "\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n",
+    )?;
     write_note(root, "Creatures/Slate Wolf.md", &new)?;
     let bad = new
         .replace(
@@ -427,74 +454,80 @@ fn write_format_notes(root: &Path) -> Result<(), String> {
             "| Hit Points | about twenty |",
         );
     write_note(root, "Creatures/Flagged Wolf.md", &bad)?;
-    let spell = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: spell\nsplat_name: Flagged Spark\nsplat_spell: {{level: 1, range_text: Self}}\n---\n\n# Flagged Spark\n\nKeep the spark effect.\n",
-        stable_id("flagged-spark")
-    );
-    let spell = splat::content::formats::convert("Spells/Flagged Spark.md", &spell)?
+    let spell = splat::content::formats::fixture(
+        "Spells/Flagged Spark.md",
+        &format!("splat_id: {}\nsplat_kind: spell\nsplat_name: Flagged Spark\nsplat_spell: {{level: 1, range_text: Self}}\n", stable_id("flagged-spark")),
+        "\n# Flagged Spark\n\nKeep the spark effect.\n",
+    )?
         .replace("| Level | 1 |", "| Level | many |");
     write_note(root, "Spells/Flagged Spark.md", &spell)?;
-    let item = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_name: Bound Charm\nsplat_item: {{category: wondrous_item, rarity: uncommon, equipment: {{attunement: required}}}}\n---\n\n# Bound Charm\n\nKeep the charm effect.\n",
-        stable_id("bound-charm")
-    );
-    write_note(
+    write_model(
         root,
         "Items/Bound Charm.md",
-        &splat::content::formats::convert("Items/Bound Charm.md", &item)?,
+        &format!(
+            "splat_id: {}\nsplat_kind: item\nsplat_name: Bound Charm\nsplat_item: {{category: wondrous_item, rarity: uncommon, equipment: {{attunement: required}}}}\n",
+            stable_id("bound-charm")
+        ),
+        "\n# Bound Charm\n\nKeep the charm effect.\n",
     )?;
-    for (path, schema, name, data) in [
+    // The writer lays out the first note. The other two are typed by hand, one with a bad value.
+    for (path, typed, name, data) in [
         (
             "NPCs/Rook.md",
-            1,
+            false,
             "Rook",
             "splat_world: {type: npc, status: alive, aliases: [The Veteran]}",
         ),
         (
             "Locations/Undercroft.md",
-            2,
+            true,
             "Undercroft",
             "splat_type: location\naliases: [The Cellar]",
         ),
         (
             "NPCs/Malformed.md",
-            2,
+            true,
             "Malformed",
             "splat_type: npc\nsplat_status: [alive]",
         ),
     ] {
-        write_note(
-            root,
-            path,
-            &format!(
-                "---\nsplat_schema: {schema}\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\n{data}\n---\n\n# {name}\n\nA note for tonight.\n",
-                stable_id(path)
-            ),
-        )?;
+        let fields = format!(
+            "splat_id: {}\nsplat_kind: world\nsplat_name: {name}\n{data}\n",
+            stable_id(path)
+        );
+        let body = format!("\n# {name}\n\nA note for tonight.\n");
+        if typed {
+            write_note(
+                root,
+                path,
+                &format!("---\nsplat_schema: 2\n{fields}---\n{body}"),
+            )?;
+        } else {
+            write_model(root, path, &fields, &body)?;
+        }
     }
     Ok(())
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
     // Native creatures use the current template layout, so ordinary saves test a stable editor.
-    write_note(
+    write_model(
         root,
         "Notes/Captain Varra.md",
-        &splat::content::formats::convert(
-            "Notes/Captain Varra.md",
-            &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n---\n\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
-                stable_id("visual:note:varra"),
-            ),
-        )?,
+        &format!(
+            "splat_id: {}\nsplat_kind: creature\nsplat_name: Captain Varra\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 52}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\n",
+            stable_id("visual:note:varra")
+        ),
+        "\n# Captain Varra\n\nThe last commander of the Emberfall watch. She trusts the party until they side with the cult.\n\n## Actions\n\nLongsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n",
     )?;
-    write_note(
+    write_model(
         root,
         "Notes/Emberfall Rumours.md",
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Emberfall Rumours\nsplat_rule: {{}}\n---\n\n# Emberfall Rumours\n\n- The bridge toll collectors have not been paid in a month.\n- Someone lights signal fires on the old shrine at night.\n- Wolves with burning eyes follow the ash line south.\n",
-            stable_id("visual:note:rumours"),
+            "splat_id: {}\nsplat_kind: rule\nsplat_name: Emberfall Rumours\nsplat_rule: {{}}\n",
+            stable_id("visual:note:rumours")
         ),
+        "\n# Emberfall Rumours\n\n- The bridge toll collectors have not been paid in a month.\n- Someone lights signal fires on the old shrine at night.\n- Wolves with burning eyes follow the ash line south.\n",
     )
 }
 
@@ -562,14 +595,15 @@ fn write_encounters(root: &Path, party: &[EntitySnapshot]) -> Result<(), String>
             "The cultists retreat once the signal fire goes out.",
         ),
     ] {
-        write_note(
+        write_model(
             root,
             file,
             &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n{heroes}{}  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\n{note}\n",
+                "splat_id: {}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n{heroes}{}  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
                 stable_id(&format!("visual:encounter:{name}")),
-                enemies.concat(),
+                enemies.concat()
             ),
+            &format!("\n{note}\n"),
         )?;
     }
     Ok(())
@@ -594,13 +628,14 @@ fn write_owned_groups(root: &Path) -> Result<(), String> {
             format!("{{id: {}}}", module_entry_id("cinder_wolf")),
         ),
     ] {
-        write_note(
+        write_model(
             root,
             &format!("Encounter Groups/{name}.md"),
             &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {name}\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {encounter}}}\n  members:\n  - creature: {creature}\n    count: 2\n---\n",
-                stable_id(&format!("visual:group:{name}")),
+                "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {name}\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {encounter}}}\n  members:\n  - creature: {creature}\n    count: 2\n",
+                stable_id(&format!("visual:group:{name}"))
             ),
+            "",
         )?;
     }
     Ok(())
@@ -614,44 +649,48 @@ fn write_groups(
 ) -> Result<(), String> {
     const RIVAL_CHANGES: &str = "{name: Rival Captain, max_hp: {add: 10}, armor_class: {set: 15}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}, conditions: [Blessed], note: Gained a seal in the last round}";
     let root = &campaign.path;
-    write_note(
+    write_model(
         root,
         &format!("Encounter Groups/{GROUP_RIVALS}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_RIVALS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {}}}\n    count: 1\n    overrides: {RIVAL_CHANGES}\n  - creature: {{id: {}}}\n    count: 2\n---\n\nThey come through the east gate at the horn.\n",
+            "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_RIVALS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {}}}\n    count: 1\n    overrides: {RIVAL_CHANGES}\n  - creature: {{id: {}}}\n    count: 2\n",
             stable_id("visual:group:rivals"),
             module_entry_id("ember_cultist"),
-            module_entry_id("cinder_wolf"),
+            module_entry_id("cinder_wolf")
         ),
+        "\nThey come through the east gate at the horn.\n",
     )?;
-    write_note(
+    write_model(
         root,
         &format!("Encounter Groups/{GROUP_GOBLINS}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_GOBLINS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    count: 3\n---\n",
-            stable_id("visual:group:goblins"),
+            "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_GOBLINS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    count: 3\n",
+            stable_id("visual:group:goblins")
         ),
+        "",
     )?;
     // A group that cannot be added: a creature gone, and a change this one cannot take.
-    write_note(
+    write_model(
         root,
         &format!("Encounter Groups/{GROUP_LOST}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n---\n",
+            "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n",
             stable_id("visual:group:lost"),
             stable_id("visual:group:lost:creature"),
-            module_entry_id("cinder_wolf"),
+            module_entry_id("cinder_wolf")
         ),
+        "",
     )?;
     // A creature whose text gives no XP, which must not count as none.
-    write_note(
+    write_model(
         root,
         &format!("Encounter Groups/{GROUP_WATCH}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_WATCH}\nsplat_encounter_group:\n  side: party\n  members:\n  - creature: {{id: {}}}\n---\n",
+            "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_WATCH}\nsplat_encounter_group:\n  side: party\n  members:\n  - creature: {{id: {}}}\n",
             stable_id("visual:group:watch"),
-            stable_id("visual:note:varra"),
+            stable_id("visual:note:varra")
         ),
+        "",
     )?;
     let heroes: String = party
         .iter()
@@ -670,13 +709,14 @@ fn write_groups(
         "enemies",
         "gm",
     );
-    write_note(
+    write_model(
         root,
         &format!("Encounters/{RUN_ARENA}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: {RUN_ARENA}\nsplat_encounter:\n  roster:\n{heroes}{rival}    overrides: {RIVAL_CHANGES}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThe last fight of the season.\n",
-            stable_id("visual:encounter:arena"),
+            "splat_id: {}\nsplat_kind: encounter\nsplat_name: {RUN_ARENA}\nsplat_encounter:\n  roster:\n{heroes}{rival}    overrides: {RIVAL_CHANGES}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n",
+            stable_id("visual:encounter:arena")
         ),
+        "\nThe last fight of the season.\n",
     )?;
     let mut participants = Vec::new();
     for (index, hero) in party.iter().enumerate() {
@@ -834,12 +874,13 @@ fn write_run(
 fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
     let id = stable_id(&format!("visual:encounter:{RUN_PAST}"));
     let root = &campaign.path;
-    write_note(
+    write_model(
         root,
         &format!("Encounters/{RUN_PAST}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {RUN_PAST}\nsplat_encounter:\n  roster: []\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThey held the ford.\n"
+            "splat_id: {id}\nsplat_kind: encounter\nsplat_name: {RUN_PAST}\nsplat_encounter:\n  roster: []\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n"
         ),
+        "\nThey held the ford.\n",
     )?;
     let file = "Creatures/Cinder Wolf.md";
     let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;

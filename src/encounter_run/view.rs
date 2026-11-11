@@ -8009,16 +8009,15 @@ mod tests {
     }
 
     #[test]
-    fn run_copy_ignores_conversion_but_reports_hp_and_source_removal() {
+    fn run_copy_ignores_an_unchanged_source_but_reports_hp_and_source_removal() {
         let source =
             splat::content::definitions::source_file("definitions/creatures/wolf.md").unwrap();
         let mut snapshot = Entry::parse("Wolf.md", source).unwrap();
-        let converted = splat::content::formats::convert("Wolf.md", source).unwrap();
-        let current = Entry::parse("Wolf.md", &converted).unwrap();
+        let current = Entry::parse("Wolf.md", source).unwrap();
         assert!(snapshot_notice(&snapshot, Some(&current), false).is_none());
         let changed = Entry::parse(
             "Wolf.md",
-            &converted.replace("| Hit Points | 11", "| Hit Points | 12"),
+            &source.replace("| Hit Points | 11", "| Hit Points | 12"),
         )
         .unwrap();
         assert!(
@@ -8268,7 +8267,7 @@ mod tests {
 
     #[test]
     fn iter_11_b_a_sheet_step_gives_up_its_source_before_its_target() {
-        let entry = Entry::parse("vale.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Brannoch Vale\nsplat_creature: {{type: humanoid}}\nsplat_stats: {{max_hp: {{value: 62}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        let entry = Entry::parse("vale.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Brannoch Vale\nsplat_creature: {{type: humanoid}}\nsplat_stats: {{max_hp: {{value: 62}}}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
         let p =
             Participant::new("vale".into(), "party".into(), entry, &Mapping::new(), true).unwrap();
         let ctx = egui::Context::default();
@@ -8328,7 +8327,7 @@ mod tests {
 
     #[test]
     fn iter_2_b_undo_keeps_actions_directions_amounts_and_copy_numbers() {
-        let entry = Entry::parse("wolf.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        let entry = Entry::parse("wolf.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Cinder Wolf 3\nsplat_creature: {{type: beast}}\nsplat_stats: {{max_hp: {{value: 33}}}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
         let p = Participant::new(
             "wolf".into(),
             "enemies".into(),
@@ -9498,7 +9497,7 @@ mod tests {
 
     #[test]
     fn wrapped_row_details_stay_above_the_rule_at_every_scale() {
-        let entry = Entry::parse("captain.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Rival Captain\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 12}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        let entry = Entry::parse("captain.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Rival Captain\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 12}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
         let overrides = Overrides::parse(
             &serde_yaml_ng::from_str(
                 "{attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}}",

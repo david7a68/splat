@@ -45,7 +45,7 @@ mod table_mapping;
 #[cfg(test)]
 mod formats_tests;
 #[cfg(test)]
-mod retirement_tests;
+mod schema_tests;
 #[cfg(test)]
 mod tests;
 
@@ -209,6 +209,61 @@ fn reference(value: &str) -> Result<Reference, String> {
     }
 }
 
+/// What every note must name. The reader and the writer check it the same way.
+struct Identity {
+    id: Uuid,
+    name: String,
+    kind: String,
+    key: Option<String>,
+}
+
+fn identity(fields: &Mapping) -> Result<Identity, String> {
+    let id = Uuid::parse_str(string(fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
+    let name = string(fields, "splat_name")?.to_owned();
+    if name.trim().is_empty() {
+        return Err("Empty splat_name".into());
+    }
+    let kind = string(fields, "splat_kind")?.to_owned();
+    if ![
+        "package",
+        "campaign",
+        "creature",
+        "item",
+        "spell",
+        "effect",
+        "container",
+        "encounter",
+        "encounter_group",
+        "world",
+        "sequence",
+        "rule",
+        "rule_group",
+        "strategy",
+        "seed",
+        "reference",
+    ]
+    .contains(&kind.as_str())
+    {
+        return Err(format!("Unknown kind {kind}"));
+    }
+    let key = match field(fields, "splat_key") {
+        Some(v) => {
+            let k = v.as_str().ok_or("splat_key must be a string")?;
+            if !resource_key(k) {
+                return Err("Invalid splat_key".into());
+            }
+            Some(k.into())
+        }
+        None => None,
+    };
+    Ok(Identity {
+        id,
+        name,
+        kind,
+        key,
+    })
+}
+
 impl Entry {
     pub fn parse(path: &str, text: &str) -> Result<Self, String> {
         let text = text
@@ -231,45 +286,12 @@ impl Entry {
             Some(2) => {}
             _ => return Err("Unsupported content schema; expected 2".into()),
         }
-        let id =
-            Uuid::parse_str(string(&fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
-        let name = string(&fields, "splat_name")?.to_owned();
-        if name.trim().is_empty() {
-            return Err("Empty splat_name".into());
-        }
-        let kind = string(&fields, "splat_kind")?.to_owned();
-        if ![
-            "package",
-            "campaign",
-            "creature",
-            "item",
-            "spell",
-            "effect",
-            "container",
-            "encounter",
-            "encounter_group",
-            "world",
-            "sequence",
-            "rule",
-            "rule_group",
-            "strategy",
-            "seed",
-            "reference",
-        ]
-        .contains(&kind.as_str())
-        {
-            return Err(format!("Unknown kind {kind}"));
-        }
-        let key = match field(&fields, "splat_key") {
-            Some(v) => {
-                let k = v.as_str().ok_or("splat_key must be a string")?;
-                if !resource_key(k) {
-                    return Err("Invalid splat_key".into());
-                }
-                Some(k.into())
-            }
-            None => None,
-        };
+        let Identity {
+            id,
+            name,
+            kind,
+            key,
+        } = identity(&fields)?;
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
         let tables = stat_blocks::owns(
             &kind,

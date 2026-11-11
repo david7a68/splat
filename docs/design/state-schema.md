@@ -4,7 +4,7 @@
 > supersedes earlier memory-only restrictions for D&D Beyond character records.
 > Encounter run state and encounter integration remain separate future work.
 
-Status: candidate schema 1 contract, documentation only. This completes runtime
+Status: candidate note-model contract, documentation only. This completes runtime
 record shapes and authored policies alongside [Mechanics](mechanics-schema.md).
 Runtime records described here stay in memory; they are not new saved files.
 

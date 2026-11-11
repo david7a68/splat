@@ -2,54 +2,21 @@
 use super::layout::Document;
 use super::stat_blocks::identity_value;
 use super::{
-    Entry, Mapping, Value, character, definitions, field, formats, inventory, markdown,
-    resource_key, stat_blocks, string,
+    Entry, Identity, Mapping, Value, character, definitions, field, formats, identity, inventory,
+    markdown, stat_blocks,
 };
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use uuid::Uuid;
 
 /// `body` is the note text below its properties.
 pub(super) fn entry(path: &str, body: &str, fields: &Mapping) -> Result<Entry, String> {
     let mut fields = fields.clone();
     fields.remove("splat_schema");
-    let id = Uuid::parse_str(string(&fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
-    let name = string(&fields, "splat_name")?.to_owned();
-    if name.trim().is_empty() {
-        return Err("Empty splat_name".into());
-    }
-    let kind = string(&fields, "splat_kind")?.to_owned();
-    if ![
-        "package",
-        "campaign",
-        "creature",
-        "item",
-        "spell",
-        "effect",
-        "container",
-        "encounter",
-        "encounter_group",
-        "world",
-        "sequence",
-        "rule",
-        "rule_group",
-        "strategy",
-        "seed",
-        "reference",
-    ]
-    .contains(&kind.as_str())
-    {
-        return Err(format!("Unknown kind {kind}"));
-    }
-    let key = match field(&fields, "splat_key") {
-        Some(v) => {
-            let k = v.as_str().ok_or("splat_key must be a string")?;
-            if !resource_key(k) {
-                return Err("Invalid splat_key".into());
-            }
-            Some(k.into())
-        }
-        None => None,
-    };
+    let Identity {
+        id,
+        name,
+        kind,
+        key,
+    } = identity(&fields)?;
     markdown::read(body, &mut fields)?;
     if kind == "creature" && !fields.contains_key("splat_character") {
         read_identity(body, &mut fields);

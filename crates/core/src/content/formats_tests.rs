@@ -409,28 +409,6 @@ fn fmt_f1_model_edits_keep_flat_references_and_end_fences() {
 }
 
 #[test]
-fn fmt_f1_world_write_resolves_ids_to_readable_links_once() {
-    let target = note("world", "splat_world: {type: location}", "# Undercroft\n")
-        .replace("splat_name: Rook", "splat_name: Undercroft")
-        .entry("Locations/Undercroft.md");
-    let old = note(
-        "world",
-        &format!("splat_world: {{type: npc, in: {{id: {}}}}}", target.id),
-        "# Rook\n",
-    );
-    let after =
-        formats::convert_resolved("Rook.md", &old.write("Rook.md").unwrap(), [&target]).unwrap();
-    assert!(after.contains("[[Locations/Undercroft|Undercroft]]"));
-    assert_eq!(
-        after,
-        formats::convert_resolved("Rook.md", &after, [&target]).unwrap()
-    );
-    let parsed = Entry::parse("Rook.md", &after).unwrap();
-    let raw = parsed.fields["splat_world"]["in"].as_str().unwrap();
-    assert_eq!(formats::resolve_readable(raw, [&target]), Ok(target.id));
-}
-
-#[test]
 fn fmt_f1_line_editor_checks_the_complete_model() {
     let text = "status: alive\nother: keep\n";
     let parse = |text: &str| serde_yaml_ng::from_str(text).map_err(|e| e.to_string());
@@ -684,7 +662,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
         "Hit Points “about twenty” not read (line 21). Start with a number, such as 22 (4d8 + 4).",
         "Duplicate Hit Points",
         "Save needs",
-        "Old data ignored",
+        "Unused data ignored",
     ] {
         assert!(
             entry.flags.iter().any(|f| f.message.contains(words)),
@@ -1181,7 +1159,7 @@ fn i19_write_keeps_explicit_challenge_mismatch_and_flags_it() {
 }
 
 #[test]
-fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
+fn i19_x5_visible_rule_choice_wins_over_its_saved_id() {
     let old_id = "00000000-0000-0000-0000-000000000002";
     let target = note("rule", "splat_rule: {}", "")
         .replace("splat_name: Rook", "splat_name: Individual initiative")
@@ -1197,9 +1175,6 @@ fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
             entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
             Value::from(target.id.to_string())
         );
-        let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
-        assert!(saved.contains(&format!("id={} %%", target.id)));
-        assert!(!saved.contains(&format!("| {old_id} %%")));
     }
 }
 
@@ -1228,7 +1203,7 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
 }
 
 #[test]
-fn i20_x29_renamed_rule_uses_id_and_writes_current_name() {
+fn i20_x29_renamed_rule_is_found_by_its_id() {
     let target = note("rule", "splat_rule: {}", "")
         .replace("splat_name: Rook", "splat_name: Side initiative")
         .entry("Rules/Side.md");
@@ -1242,8 +1217,6 @@ fn i20_x29_renamed_rule_uses_id_and_writes_current_name() {
         entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
         Value::from(target.id.to_string())
     );
-    let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
-    assert!(saved.contains("| Combat initiative | Side initiative %%"));
 }
 
 #[test]
@@ -1283,54 +1256,6 @@ fn i19_world_properties_accept_case_and_explain_bad_values() {
                 .contains("Status “[alive]” not read (line 7). Use a short word, such as alive.")
         );
     }
-}
-
-#[test]
-fn i19_readable_stat_block_and_vault_requirement_survive_save() {
-    let creature = note(
-        "creature",
-        "splat_key: dnd2024:creatures/bandit_captain\nsplat_creature: {}",
-        "",
-    )
-    .replace("splat_name: Rook", "splat_name: Bandit Captain")
-    .entry("Creatures/captain.md");
-    let required = note("rule", "splat_rule: {}\nsplat_key: srd:rules/other", "")
-        .replace("splat_name: Rook", "splat_name: Other")
-        .replace(
-            "00000000-0000-0000-0000-000000000001",
-            "00000000-0000-0000-0000-000000000002",
-        )
-        .entry("Rules/Other.md");
-    let old = note(
-        "world",
-        &format!(
-            "splat_world: {{type: npc, creature: {{key: dnd2024:creatures/bandit_captain}}}}\nsplat_requires: [{{id: {}}}]",
-            required.id
-        ),
-        "",
-    );
-    let saved = formats::convert_resolved(
-        "World.md",
-        &old.write("World.md").unwrap(),
-        [&creature, &required],
-    )
-    .unwrap();
-    assert!(saved.contains("splat_stat_block: Bandit Captain"));
-    assert!(saved.contains("[[Rules/Other|Other]]"));
-    assert_eq!(
-        saved,
-        formats::convert_resolved("World.md", &saved, [&creature, &required]).unwrap()
-    );
-    let mut duplicate = creature.clone();
-    duplicate.id = uuid::Uuid::new_v4();
-    duplicate.key = Some("other:creatures/captain".into());
-    let saved = formats::convert_resolved(
-        "World.md",
-        &old.write("World.md").unwrap(),
-        [&creature, &duplicate, &required],
-    )
-    .unwrap();
-    assert!(saved.contains("splat_stat_block: dnd2024:creatures/bandit_captain"));
 }
 
 #[test]
@@ -1474,7 +1399,7 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
                 entry.fields[key][rows][0]["creature"]["key"],
                 Value::from("dnd2024:creatures/goblin_warrior")
             );
-            let saved = formats::convert_resolved("List.md", &text, [&target]).unwrap();
+            let saved = super::list_formats::write_references(&text, [&target]).unwrap();
             assert!(
                 saved.contains("[Goblin Warrior](splat:dnd2024:creatures/goblin_warrior)"),
                 "{saved}"
@@ -1545,11 +1470,11 @@ fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
     .replace("splat_name: Rook", "splat_name: Goblin Warrior")
     .entry("goblin_warrior.md");
     let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [goblin warrior](splat:dnd2024:creatures/goblin_warrior) | | | |\n").text();
-    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    let saved = super::list_formats::write_references(&text, [&target]).unwrap();
     assert_eq!(saved, text.replace("[goblin warrior]", "[Goblin Warrior]"));
     let alias = text.replace("[goblin warrior]", "[Gate guards]");
     assert_eq!(
-        formats::convert_resolved("Group.md", &alias, [&target]).unwrap(),
+        super::list_formats::write_references(&alias, [&target]).unwrap(),
         alias
     );
     let campaign = note(
@@ -1559,7 +1484,7 @@ fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
     )
     .text();
     assert_eq!(
-        formats::convert_resolved("Campaign.md", &campaign, [&target]).unwrap(),
+        super::list_formats::write_references(&campaign, [&target]).unwrap(),
         campaign.replace("[goblin warrior]", "[Goblin Warrior]")
     );
 }
@@ -1676,7 +1601,7 @@ fn i20_x22_visible_vault_link_wins_over_backup_id_in_roster_group_and_only() {
         let mut entry = Entry::parse("List.md", &text).unwrap();
         super::list_formats::resolve(&mut entry, &targets, &text);
         assert_eq!(reference(&entry)["id"], Value::from(second_id), "{kind}");
-        let saved = formats::convert_resolved("List.md", &text, targets.iter()).unwrap();
+        let saved = super::list_formats::write_references(&text, targets.iter()).unwrap();
         assert!(saved.contains(&format!("id={second_id}")), "{saved}");
         let missing = text.replace("Characters/Second", "Characters/Moved");
         let mut entry = Entry::parse("List.md", &missing).unwrap();
@@ -1786,7 +1711,7 @@ fn i20_x22_named_package_alias_also_refreshes_the_backup_id() {
     .replace("00000000-0000-0000-0000-000000000001", id)
     .entry("Guard.md");
     let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Door watch](splat:core:creatures/guard) %% splat id=00000000-0000-0000-0000-000000000002 %% | | | |\n").text();
-    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    let saved = super::list_formats::write_references(&text, [&target]).unwrap();
     assert!(
         saved.contains(&format!(
             "[Door watch](splat:core:creatures/guard) %% splat id={id} %%"
@@ -1938,7 +1863,9 @@ fn write_missing_reference_keeps_identity() {
         ),
         "# Rook\n",
     );
-    let written = formats::convert_resolved("Rook.md", &old.write("Rook.md").unwrap(), []).unwrap();
+    let written =
+        super::list_formats::write_references(&old.write("Rook.md").unwrap(), [] as [&Entry; 0])
+            .unwrap();
     assert_eq!(model(&old), model(&written));
     assert!(written.contains(id));
 }
@@ -1957,7 +1884,7 @@ fn write_composite_type_with_independent_tags_round_trips() {
 }
 
 #[test]
-fn write_requirement_does_not_choose_an_ambiguous_package_path() {
+fn readable_link_to_a_path_that_two_notes_share_is_refused_and_a_key_still_resolves() {
     let target = note(
         "package",
         "splat_namespace: rook\nsplat_key: rook:package/core",
@@ -1967,21 +1894,14 @@ fn write_requirement_does_not_choose_an_ambiguous_package_path() {
     let other = note("package", "splat_namespace: other", "# Other\n")
         .replace("000000000001", "000000000002")
         .entry("Package.md");
-    let old = note(
-        "package",
-        "splat_namespace: third\nsplat_requires: [{key: 'rook:package/core'}]",
-        "# Rook\n",
-    );
     let entries = [target, other];
-    let written =
-        formats::convert_resolved("Third.md", &old.write("Third.md").unwrap(), &entries).unwrap();
-    // The written requirement still names the one package it meant.
-    let properties: Mapping =
-        serde_yaml_ng::from_str(written.split("---\n").nth(1).unwrap()).unwrap();
     assert_eq!(
-        formats::resolve_readable(properties["splat_requires"][0].as_str().unwrap(), &entries),
-        Ok(entries[0].id),
-        "{written}"
+        formats::resolve_readable("[[Package]]", &entries),
+        Err("Requirement [[Package]] matches 2 entries; use a link".into())
+    );
+    assert_eq!(
+        formats::resolve_readable("rook:package/core", &entries),
+        Ok(entries[0].id)
     );
 }
 

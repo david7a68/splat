@@ -4298,7 +4298,7 @@ mod tests {
     }
     use crate::combat_sync::SyncState;
     fn creature() -> Entry {
-        Entry::parse("monster.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n---\n\n## Actions\nSpear attack.\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap()
+        Entry::parse("monster.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n", Uuid::new_v4()), "\n## Actions\nSpear attack.\n").expect("schema-2 fixture")).unwrap()
     }
     pub(super) fn run() -> Run {
         let entry = creature();
@@ -6616,9 +6616,7 @@ mod tests {
         let id = Uuid::new_v4();
         let entry = Entry::parse(
             "Hero.md",
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{size: medium}}\nsplat_external: {{provider: test}}\nsplat_stats:\n  max_hp: {{value: 41}}\nsplat_initial:\n  hp: 11\n---\n"
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{size: medium}}\nsplat_external: {{provider: test}}\nsplat_stats:\n  max_hp: {{value: 41}}\nsplat_initial:\n  hp: 11\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let mut hero =
@@ -6664,9 +6662,7 @@ mod tests {
         let id = Uuid::new_v4();
         let entry = Entry::parse(
             "Wolf.md",
-            &splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium}}\nsplat_stats:\n  max_hp: {{value: 11}}\n---\n"
-            )).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium}}\nsplat_stats:\n  max_hp: {{value: 11}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let mut wolf = Participant::new(
@@ -7059,7 +7055,7 @@ mod tests {
         Overrides::parse(&serde_yaml_ng::from_str(text).unwrap()).unwrap()
     }
     fn beast() -> Entry {
-        Entry::parse("beast.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap()
+        Entry::parse("beast.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap()
     }
     #[test]
     fn group_summary_counts_members_and_changes() {
@@ -7886,7 +7882,7 @@ mod tests {
         let mut empty = (*guard_group("Empty", 1)).clone();
         empty.members.clear();
         check(&mut run, Arc::new(empty), Some(4), "no members");
-        let unknown = Entry::parse("u.md", &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Unknown\nsplat_creature: {{}}\n---\n", Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        let unknown = Entry::parse("u.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Unknown\nsplat_creature: {{}}\n", Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
         check(
             &mut run,
             group_of(

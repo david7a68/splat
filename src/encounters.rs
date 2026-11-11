@@ -1694,7 +1694,6 @@ pub struct Encounters {
     discarded_group: Option<GroupDraft>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
-    /// The shared conversion notice and Undo for a creature saved here.
 
     /// The open encounter came from the Session page, and goes back there.
     pub from_session: bool,
@@ -4782,11 +4781,7 @@ mod tests {
         use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
-        let text = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Watchkeeper\nsplat_world:\n  type: npc\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n---\n",
-            Uuid::new_v4(),
-            Uuid::new_v4()
-        )).unwrap();
+        let text = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Watchkeeper\nsplat_world:\n  type: npc\n  creature: {{id: {}, link: '[[Watchkeeper Guard]]'}}\n", Uuid::new_v4(), Uuid::new_v4()), "").unwrap();
         fs::create_dir_all(dir.path().join("NPCs")).unwrap();
         fs::write(dir.path().join("NPCs/Watchkeeper.md"), text).unwrap();
         let snapshot = Snapshot::load(&active, &[]).unwrap();
@@ -4947,10 +4942,15 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
-        let original = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {{type: npc}}\n---\n",
-            Uuid::new_v4()
-        )).expect("schema-2 fixture");
+        let original = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {{type: npc}}\n",
+                Uuid::new_v4()
+            ),
+            "",
+        )
+        .expect("schema-2 fixture");
         fs::write(dir.path().join("Rook.md"), &original).unwrap();
         fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
         let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
@@ -5559,10 +5559,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
         let stat = creature(dir.path(), "Guard", false);
-        let text = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n---\n",
-            Uuid::new_v4()
-        )).expect("schema-2 fixture");
+        let text = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n", Uuid::new_v4()), "").expect("schema-2 fixture");
         let npc = write_note(dir.path(), "Rook.md", None, &text).unwrap().id;
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         assert!(
@@ -5601,10 +5598,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         let stat = creature(dir.path(), "Guard", false);
-        let text = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n---\n",
-            Uuid::new_v4()
-        )).unwrap();
+        let text = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {stat}}}\n", Uuid::new_v4()), "").unwrap();
         write_note(dir.path(), "Rook.md", None, &text).unwrap();
         let overrides = yaml("{name: Rook Ambry}").as_mapping().unwrap().clone();
         for copies in 0..=2 {
@@ -5904,8 +5898,7 @@ mod tests {
             comparison,
             external.replace("splat_name: New encounter", "splat_name: Dawn")
         );
-        let overwrite = splat::content::formats::convert_resolved(
-            &harness.state().draft.as_ref().unwrap().path,
+        let overwrite = splat::content::list_formats::write_references(
             &comparison,
             snapshot
                 .catalogue
@@ -6129,7 +6122,7 @@ mod tests {
             .unwrap();
         let mut flagged = saved.clone();
         flagged.replace_range(table.rows[1][3].range.clone(), "HP lots");
-        // Legacy fixtures can expose a UUID in the link. The warning still names the creature.
+        // A link can show a UUID. The warning still names the creature.
         flagged.replace_range(table.rows[1][1].range.clone(), &format!("[[{wolf}]]"));
         fs::write(dir.path().join(&path), &flagged).unwrap();
         let permissions = fs::metadata(dir.path().join(&path)).unwrap().permissions();
@@ -6295,7 +6288,7 @@ mod tests {
             root,
             &format!("{name}.md"),
             None,
-            &splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: 13}}\n  initiative: {{value: 1}}\n---\n")).expect("schema-2 fixture"),
+            &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: 13}}\n  initiative: {{value: 1}}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         id

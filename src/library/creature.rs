@@ -878,10 +878,7 @@ mod tests {
     fn creature_identity_uses_book_case_and_keeps_tags() {
         let source =
             splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
-        let entry = Entry::parse("Aboleth.md", source).unwrap();
-        assert_eq!(stat_identity(&entry), "Large · Aberration · Lawful Evil");
-        let converted = splat::content::formats::convert("Aboleth.md", source).unwrap();
-        let mut entry = Entry::parse("Aboleth.md", &converted).unwrap();
+        let mut entry = Entry::parse("Aboleth.md", source).unwrap();
         assert_eq!(stat_identity(&entry), "Large · Aberration · Lawful Evil");
         entry.fields.get_mut("splat_creature").unwrap()["type"] = "dragon".into();
         entry.fields.get_mut("splat_creature").unwrap()["tags_text"] = "(Chromatic)".into();
@@ -1015,8 +1012,12 @@ mod tests {
 
     #[test]
     fn a_hand_written_creature_reads_as_a_stat_block_with_only_what_it_has() {
-        let text = "---\nsplat_schema: 1\nsplat_id: 8f4a2f8e-41f0-4c4a-9d4c-0a7a1a1b2c3d\nsplat_kind: creature\nsplat_name: Varra\nsplat_creature: {size: medium}\nsplat_stats:\n  max_hp: {value: 52}\n  armor_class: {value: 16}\n---\n\n# Varra\n\n## Actions\n\nLongsword. Melee Attack Roll: +5.\n";
-        let text = splat::content::formats::convert("Notes/Varra.md", text).unwrap();
+        let text = splat::content::formats::fixture(
+            "Notes/Varra.md",
+            "splat_id: 8f4a2f8e-41f0-4c4a-9d4c-0a7a1a1b2c3d\nsplat_kind: creature\nsplat_name: Varra\nsplat_creature: {size: medium}\nsplat_stats:\n  max_hp: {value: 52}\n  armor_class: {value: 16}\n",
+            "\n# Varra\n\n## Actions\n\nLongsword. Melee Attack Roll: +5.\n",
+        )
+        .unwrap();
         let entry = Entry::parse("Notes/Varra.md", &text).unwrap();
         assert!(has_stats(&entry));
         assert_eq!(
