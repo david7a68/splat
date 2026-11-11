@@ -112,12 +112,6 @@ impl EntitySnapshot {
             if !text.contains(&self.definition.splat_id.to_string()) {
                 continue;
             }
-            // An old-layout copy of this sheet is still its file: a refresh rewrites it.
-            let identity = format!("\nsplat_id: {}\n", self.definition.splat_id);
-            if error.message == crate::content::OLD_LAYOUT && text.contains(&identity) {
-                paths.push(path);
-                continue;
-            }
             return Err(format!("{}: {}", path.display(), error.message).into());
         }
         match paths.len() {
@@ -251,8 +245,6 @@ impl EntitySnapshot {
             if edited && on_edits == OnEdits::Stop {
                 return Err(conflict(&path));
             }
-            // The checksum, not the layout, decides: an old-layout copy is generated text like
-            // any other, so a refresh rewrites it and Replace archives its edits first.
             let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
             let text = stamped(&markdown, notes);
             staged.push(Note {
@@ -712,46 +704,36 @@ mod tests {
     }
 
     #[test]
-    fn old_layout_copy_is_refreshed_or_replaced_like_any_copy() {
-        // A generated copy holds no DM data outside its notes, so its layout never blocks a
-        // refresh. Edits still stop an ordinary refresh, and Replace archives them first.
+    fn schema_one_copy_is_unreadable_and_a_refresh_keeps_it() {
+        // Splat reads only schema 2. A copy it cannot read is the DM's file: a refresh or
+        // Replace names it and changes nothing.
         let root = tempfile::tempdir().unwrap();
         let mut record = super::super::tests::sample();
         let creature = record.save_campaign_copy(root.path()).unwrap();
-        let old = |generated: &str, intact: bool| {
-            let hash = if intact {
-                checksum(generated)
-            } else {
-                "0".repeat(64)
-            };
-            format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}Kept note.\n")
-        };
         let generated = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Old copy\n---\n\nOld sheet.\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Copy\n---\n\nSheet.\n",
             record.definition.splat_id
         );
-
-        fs::write(&creature, old(&generated, true)).unwrap();
+        let unreadable = format!(
+            "{generated}{MARKER}{} -->\n{PERSONAL_NOTES}Kept note.\n",
+            checksum(&generated)
+        );
+        fs::write(&creature, &unreadable).unwrap();
         record.definition.splat_name = "Refreshed".into();
-        record.save_campaign_copy(root.path()).unwrap();
-        let refreshed = fs::read_to_string(&creature).unwrap();
-        assert!(refreshed.contains("splat_schema: 2") && refreshed.contains("Refreshed"));
-        assert!(refreshed.ends_with("Kept note.\n"));
-
-        let edited = old(&generated, false);
-        fs::write(&creature, &edited).unwrap();
+        let expected = format!(
+            "{}: Unsupported content schema; expected 2",
+            creature.display()
+        );
         assert_eq!(
             record.save_campaign_copy(root.path()),
-            Err(CampaignCopyError::Conflict(creature.clone()))
+            Err(expected.clone().into())
         );
-        let archive = creature.with_extension("md.splat-archive");
         assert_eq!(
-            record.overwrite_campaign_copy(root.path()).unwrap(),
-            std::slice::from_ref(&archive)
+            record.overwrite_campaign_copy(root.path()),
+            Err(expected.into())
         );
-        assert_eq!(fs::read_to_string(&archive).unwrap(), edited);
-        let replaced = fs::read_to_string(&creature).unwrap();
-        assert!(replaced.contains("splat_schema: 2") && replaced.ends_with("Kept note.\n"));
+        assert_eq!(fs::read_to_string(&creature).unwrap(), unreadable);
+        assert!(!creature.with_extension("md.splat-archive").exists());
     }
 
     #[test]

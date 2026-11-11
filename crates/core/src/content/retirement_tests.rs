@@ -1,7 +1,9 @@
 use super::{Entry, legacy};
 
+const UNSUPPORTED: &str = "Unsupported content schema; expected 2";
+
 #[test]
-fn all_old_note_kinds_are_flagged_and_not_loaded() {
+fn schema_one_notes_of_every_kind_are_unreadable() {
     let root = tempfile::tempdir().unwrap();
     let kinds = [
         "package",
@@ -23,16 +25,19 @@ fn all_old_note_kinds_are_flagged_and_not_loaded() {
     ];
     for kind in kinds {
         let text = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: Old\n---\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: {kind}\nsplat_name: Rook\n---\n",
             uuid::Uuid::new_v4()
         );
-        assert_eq!(Entry::parse(kind, &text).unwrap_err(), legacy::OLD_LAYOUT);
+        assert_eq!(Entry::parse(kind, &text).unwrap_err(), UNSUPPORTED);
         std::fs::write(root.path().join(format!("{kind}.md")), text).unwrap();
     }
-    let character = include_str!("../../../../tests/fixtures/conversion/character.old.md");
+    let character = format!(
+        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Rook\nsplat_character: {{}}\n---\n",
+        uuid::Uuid::new_v4()
+    );
     assert_eq!(
-        Entry::parse("Character.md", character).unwrap_err(),
-        legacy::OLD_LAYOUT
+        Entry::parse("Character.md", &character).unwrap_err(),
+        UNSUPPORTED
     );
     std::fs::write(root.path().join("Character.md"), character).unwrap();
     let (entries, errors) = super::read_directory(root.path()).unwrap();
@@ -41,7 +46,21 @@ fn all_old_note_kinds_are_flagged_and_not_loaded() {
     assert!(
         errors
             .iter()
-            .all(|e| e.path.ends_with(".md") && e.message == legacy::OLD_LAYOUT)
+            .all(|e| e.path.ends_with(".md") && e.message == UNSUPPORTED)
+    );
+}
+
+#[test]
+fn a_saved_copy_with_schema_one_is_unreadable() {
+    let text = "---\nsplat_schema: 2\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: world\nsplat_name: Rook\nsplat_world: {type: npc}\n---\n";
+    let mut copy = serde_json::to_value(Entry::parse("Rook.md", text).unwrap()).unwrap();
+    assert!(serde_json::from_value::<Entry>(copy.clone()).is_ok());
+    copy["fields"]["splat_schema"] = 1.into();
+    assert_eq!(
+        serde_json::from_value::<Entry>(copy)
+            .unwrap_err()
+            .to_string(),
+        UNSUPPORTED
     );
 }
 
