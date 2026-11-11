@@ -5864,6 +5864,16 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "The replacement says what changed, with Undo replacement beside it",
         |d| d.has_containing("2 Cinder Wolf rows replaced with Guard."),
     );
+    // FC4: a finished change is a success message, with the success bar.
+    let replaced = d.painted_rect_in(
+        "2 Cinder Wolf rows replaced with Guard.",
+        egui::Rect::EVERYTHING,
+    );
+    d.observe(
+        "iter-25-B-FC4",
+        replaced.is_some_and(|words| d.has_tone_bar(words, design::colors().result.success)),
+        format!("The replacement result {replaced:?} has the success bar"),
+    );
     for size in [SMALL, DEFAULT, LARGE] {
         let (icon, clear) = d.at_size(size, |d| {
             let target = d.place_of("Undo replacement");
