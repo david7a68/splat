@@ -3410,6 +3410,19 @@ impl Run {
     pub fn came_from(&mut self, encounter: Uuid) {
         self.source = Some(encounter);
     }
+    /// Damage and a condition on one participant, as the DM gives them in the run.
+    #[cfg(test)]
+    pub(crate) fn hurt_for_test(&mut self, index: usize, amount: i64, condition: &str) {
+        self.apply(Command::Damage(index, amount)).unwrap();
+        self.apply(Command::Condition(index, condition.into()))
+            .unwrap();
+    }
+    /// One participant's HP and conditions.
+    #[cfg(test)]
+    pub(crate) fn combat_state_for_test(&self, index: usize) -> (Option<i64>, Vec<String>) {
+        let participant = &self.state.participants[index];
+        (participant.hp, participant.conditions.clone())
+    }
     /// The encounter this run came from, if it says.
     pub(crate) fn source(&self) -> Option<Uuid> {
         self.source

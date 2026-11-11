@@ -1845,7 +1845,11 @@ impl Encounters {
         let Some(draft) = self.group_draft.as_mut() else {
             return;
         };
-        self.validation_path = Some(draft.path.clone());
+        let path = draft.path.clone();
+        self.watch_refusals(path);
+        let Some(draft) = self.group_draft.as_mut() else {
+            return;
+        };
         if let Some(error) = self
             .snapshot
             .as_ref()
@@ -2093,7 +2097,7 @@ impl Encounters {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
         self.discard_undo(ui);
-        self.refresh_validation_error(true);
+        self.refresh_validation_error(true, super::edit_input(ui.ctx()));
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -2986,13 +2990,14 @@ mod tests {
         let mut encounters = Encounters {
             validation_path: Some(group.path.clone()),
             validation_error: Some(error.clone().into()),
+            refusal_watch: true,
             error: Some(error),
             snapshot: Some(snapshot),
             group_draft: Some(group),
             ..Default::default()
         };
         encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
-        encounters.refresh_validation_error(true);
+        encounters.refresh_validation_error(true, true);
         assert!(encounters.error.is_none());
         encounters
             .group_draft
@@ -3001,7 +3006,7 @@ mod tests {
             .setup
             .members
             .clear();
-        encounters.refresh_validation_error(true);
+        encounters.refresh_validation_error(true, true);
         assert_eq!(
             encounters.error.as_deref(),
             Some("This group is empty. Add at least one creature.")

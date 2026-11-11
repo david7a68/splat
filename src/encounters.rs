@@ -690,6 +690,8 @@ impl Draft {
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
+        #[cfg(test)]
+        VALIDATIONS.with(|count| count.set(count.get() + 1));
         let entry = Entry::parse(&self.path, &self.source)?;
         if let Some(reason) = roster_fault_reason(
             &self.path,
@@ -1964,6 +1966,19 @@ pub struct Encounters {
     /// while `error` shows its words.
     validation_error: Option<Invalid>,
     validation_path: Option<String>,
+    /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
+    /// when that draft or the campaign changes. It ends with another draft.
+    refusal_watch: bool,
+    /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
+    /// because a click's change lands late in its frame.
+    edit_epoch: u64,
+    edited_last_frame: bool,
+    /// The snapshot revision, edit epoch and draft kind of the last check. An unchanged frame
+    /// with the same key does not check the draft again.
+    validated: Option<(Uuid, u64, bool)>,
+    /// How often frames reached that key's guard.
+    #[cfg(test)]
+    validation_reached: usize,
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
@@ -2049,6 +2064,34 @@ const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a f
 const LOOT_FIELD: &str = "Loot";
 const ENCOUNTER_LOOT_HELP: &str =
     "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
+#[cfg(test)]
+thread_local! {
+    /// How often this thread ran an encounter draft's full check.
+    static VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether this frame has an input that can change a draft: a key, text, a press, a wheel, a
+/// held pointer (a drag), a dropped file or an accessibility action. Hover alone cannot.
+fn edit_input(ctx: &egui::Context) -> bool {
+    ctx.input(|i| {
+        i.pointer.any_down()
+            || !i.raw.dropped_files.is_empty()
+            || i.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key { .. }
+                        | egui::Event::Text(_)
+                        | egui::Event::Paste(_)
+                        | egui::Event::Cut
+                        | egui::Event::Ime(_)
+                        | egui::Event::PointerButton { .. }
+                        | egui::Event::MouseWheel { .. }
+                        | egui::Event::AccessKitActionRequest(_)
+                )
+            })
+    })
+}
+
 /// The page's own gutter beyond the shell's `M`: the content keeps `L`, the header does not.
 const PAGE_GUTTER: f32 = design::L - design::M;
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
@@ -2058,7 +2101,14 @@ impl Encounters {
     pub fn refocus_draft(&mut self) {
         self.focus_name = true;
     }
-    fn refresh_validation_error(&mut self, group: bool) {
+    /// Check a refused draft again, only when it or the campaign may have changed. `edited` says
+    /// whether this frame had an editing input. A check that passes clears the stored refusal;
+    /// the watch stays, so an Undo that brings the fault back shows its reason again.
+    fn refresh_validation_error(&mut self, group: bool, edited: bool) {
+        let edited_before = std::mem::replace(&mut self.edited_last_frame, edited);
+        if edited || edited_before {
+            self.edit_epoch += 1;
+        }
         let path = if group {
             self.group_draft.as_ref().map(GroupDraft::path)
         } else {
@@ -2066,16 +2116,25 @@ impl Encounters {
         };
         if path != self.validation_path.as_deref() {
             self.validation_error = None;
+            self.refusal_watch = false;
+            self.validated = None;
             return;
         }
-        if self.validation_error.is_none()
-            || (self.error.is_some() && !self.shows_validation_error())
-        {
+        if !self.refusal_watch || (self.error.is_some() && !self.shows_validation_error()) {
             return;
         }
         let Some(snapshot) = &self.snapshot else {
             return;
         };
+        #[cfg(test)]
+        {
+            self.validation_reached += 1;
+        }
+        let key = (snapshot.revision, self.edit_epoch, group);
+        if self.validated == Some(key) {
+            return;
+        }
+        self.validated = Some(key);
         let invalid = if group {
             self.group_draft
                 .as_ref()
@@ -2087,9 +2146,13 @@ impl Encounters {
                 .and_then(|draft| draft.validate(snapshot).err())
         };
         self.error = invalid.as_ref().map(|invalid| invalid.text.clone());
-        if invalid.is_some() {
-            self.validation_error = invalid;
-        }
+        self.validation_error = invalid;
+    }
+    /// Save or a start checks this draft now: watch it, and check it again on the next frame.
+    fn watch_refusals(&mut self, path: String) {
+        self.validation_path = Some(path);
+        self.refusal_watch = true;
+        self.validated = None;
     }
     /// Whether the shown message is the last failed check of the draft.
     fn shows_validation_error(&self) -> bool {
@@ -2641,7 +2704,11 @@ impl Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
-        self.validation_path = Some(draft.path.clone());
+        let path = draft.path.clone();
+        self.watch_refusals(path);
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
         if let Some(error) = self
             .snapshot
             .as_ref()
@@ -3225,6 +3292,39 @@ impl Encounters {
         }
     }
 
+    /// `Discard changes` in the encounter editor: the saved encounter comes back, and the draft
+    /// waits for one step of undo.
+    fn discard_draft(&mut self, active: &Campaign) {
+        self.clear_notice();
+        self.creature = None;
+        self.plan_on_save = false;
+        let draft = self.draft.take().expect("the editor has a draft");
+        // A new draft has nothing to go back to, so it is no longer the session's.
+        if draft.baseline.is_none() {
+            self.from_session = false;
+        }
+        if draft.baseline.is_some() {
+            match Draft::open(&active.path, &draft.path) {
+                Ok(d) => self.draft = Some(d),
+                Err(e) => self.error = Some(e),
+            }
+        }
+        // Its refusal was the discarded draft's: the words go with it. The watch stays for its
+        // path, so the saved encounter (or the draft that Undo brings back) is checked again.
+        if self.shows_validation_error() {
+            self.error = None;
+        }
+        self.validation_error = None;
+        self.validated = None;
+        self.discarded = Some(draft);
+        self.discarded_group = None;
+    }
+    /// The undo of `discard_draft`.
+    fn undo_discard(&mut self) {
+        self.draft = self.discarded.take();
+        self.message = None;
+        self.error = None;
+    }
     /// One step back from `Discard changes`. Undo is the guard, so no dialog is needed.
     fn discard_undo(&mut self, ui: &mut egui::Ui) {
         // A creature's changes and a group's are not this encounter's, and leave its undo alone.
@@ -3236,9 +3336,7 @@ impl Encounters {
         if self.encounter_undo_ready()
             && design::draft_discarded(ui, &self.discarded.as_ref().unwrap().name)
         {
-            self.draft = self.discarded.take();
-            self.message = None;
-            self.error = None;
+            self.undo_discard();
         }
         if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
@@ -3632,7 +3730,9 @@ impl Encounters {
     }
 
     fn open_run(&mut self, active: &Campaign, modules: &[Module]) {
-        self.validation_path = self.draft.as_ref().map(|draft| draft.path.clone());
+        if let Some(path) = self.draft.as_ref().map(|draft| draft.path.clone()) {
+            self.watch_refusals(path);
+        }
         if let Some(error) = self
             .snapshot
             .as_ref()
@@ -3926,22 +4026,7 @@ impl Encounters {
             return;
         }
         if discard {
-            self.clear_notice();
-            self.creature = None;
-            self.plan_on_save = false;
-            let draft = self.draft.take().expect("the editor has a draft");
-            // A new draft has nothing to go back to, so it is no longer the session's.
-            if draft.baseline.is_none() {
-                self.from_session = false;
-            }
-            if draft.baseline.is_some() {
-                match Draft::open(&active.path, &draft.path) {
-                    Ok(d) => self.draft = Some(d),
-                    Err(e) => self.error = Some(e),
-                }
-            }
-            self.discarded = Some(draft);
-            self.discarded_group = None;
+            self.discard_draft(active);
             return;
         }
         if save {
@@ -3975,7 +4060,7 @@ impl Encounters {
         {
             self.error = Some(e);
         }
-        self.refresh_validation_error(false);
+        self.refresh_validation_error(false, edit_input(ui.ctx()));
         if let Some(e) = &self.error {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             design::message(ui, self.error_tone(), e);
@@ -5939,10 +6024,11 @@ mod tests {
             draft: Some(draft),
             error: Some(error.text.clone()),
             validation_error: Some(error),
+            refusal_watch: true,
             ..Default::default()
         };
         encounters.draft.as_mut().unwrap().setup.roster.pop();
-        encounters.refresh_validation_error(false);
+        encounters.refresh_validation_error(false, true);
         assert!(
             encounters
                 .error
@@ -5952,16 +6038,129 @@ mod tests {
         );
         let missing = encounters.draft.as_ref().unwrap().setup.roster.clone();
         encounters.draft.as_mut().unwrap().setup.roster.clear();
-        encounters.refresh_validation_error(false);
+        encounters.refresh_validation_error(false, true);
         assert!(encounters.error.is_none());
         encounters.draft.as_mut().unwrap().setup.roster = missing;
-        encounters.refresh_validation_error(false);
+        encounters.refresh_validation_error(false, true);
         assert!(
             encounters
                 .error
                 .as_ref()
                 .unwrap()
                 .starts_with("Cinder Wolf has no creature.")
+        );
+
+        // Round 24 review: drawn frames check the refused draft again only when it or the
+        // campaign changes: not on unchanged frames or a resize; once after an edit, Discard and
+        // Undo. The work is counted inside `Draft::validate`.
+        use crate::test_support::{CachedWork, Counts};
+        let settings = dir.path().join("settings.json");
+        let mut store = crate::persistence::Store::at(settings.clone());
+        let mut data = store.load().unwrap();
+        data.active_campaign_id = Some(active.id);
+        data.campaigns.push(active.clone());
+        store.save(&data).unwrap();
+        let campaigns = Campaigns::at(settings);
+        encounters.active = Some(active.clone());
+        let ctx = egui::Context::default();
+        let frame = |encounters: &mut Encounters, size: egui::Vec2, events: Vec<egui::Event>| {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        encounters.show(
+                            ui,
+                            &campaigns,
+                            &Party::default(),
+                            &Story {
+                                events: &[],
+                                sessions: &[],
+                            },
+                        );
+                    });
+                },
+            );
+        };
+        let key = || {
+            vec![egui::Event::Key {
+                key: egui::Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }]
+        };
+        let shows = |encounters: &Encounters, words: &str| {
+            encounters
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with(words))
+        };
+        let (wide, narrow) = (egui::vec2(1200.0, 800.0), egui::vec2(960.0, 640.0));
+        let check = CachedWork::start("Encounter refusal check", &mut encounters, |e| Counts {
+            reached: e.validation_reached,
+            work: VALIDATIONS.with(std::cell::Cell::get),
+        });
+        frame(&mut encounters, wide, Vec::new());
+        let shown = shows(&encounters, "Cinder Wolf has no creature.");
+        check
+            .warm(&mut encounters, shown, 1)
+            .expect("refusal-check-warm");
+        check
+            .steady(&mut encounters, |encounters| {
+                for size in [wide, wide, wide, narrow, wide] {
+                    frame(encounters, size, Vec::new());
+                }
+                shows(encounters, "Cinder Wolf has no creature.")
+            })
+            .expect("refusal-check-steady");
+        // An edit: the second row comes back, and the reason counts both.
+        let row = encounters.draft.as_ref().unwrap().setup.roster[0].clone();
+        check
+            .refresh(&mut encounters, 1, |encounters| {
+                encounters.draft.as_mut().unwrap().setup.roster.push(row);
+                frame(encounters, wide, key());
+                frame(encounters, wide, Vec::new());
+                shows(encounters, "2 Cinder Wolf rows have no creature.")
+            })
+            .expect("refusal-check-edit");
+        // Discard: a new draft has no saved encounter to go back to, so its refusal goes with it.
+        check
+            .refresh(&mut encounters, 0, |encounters| {
+                encounters.discard_draft(&active);
+                frame(encounters, wide, key());
+                frame(encounters, wide, Vec::new());
+                encounters.draft.is_none() && encounters.error.is_none()
+            })
+            .expect("refusal-check-discard");
+        // Undo: the draft comes back and its reason with it.
+        check
+            .refresh(&mut encounters, 1, |encounters| {
+                encounters.undo_discard();
+                frame(encounters, wide, key());
+                frame(encounters, wide, Vec::new());
+                shows(encounters, "2 Cinder Wolf rows have no creature.")
+            })
+            .expect("refusal-check-undo");
+        check
+            .steady(&mut encounters, |encounters| {
+                for size in [wide, narrow, wide] {
+                    frame(encounters, size, Vec::new());
+                }
+                shows(encounters, "2 Cinder Wolf rows have no creature.")
+            })
+            .expect("refusal-check-steady-after-undo");
+        // A check that passes clears the stored refusal.
+        encounters.draft.as_mut().unwrap().setup.roster.clear();
+        frame(&mut encounters, wide, key());
+        frame(&mut encounters, wide, Vec::new());
+        assert!(
+            encounters.error.is_none() && encounters.validation_error.is_none(),
+            "refusal-cleared-on-pass"
         );
     }
 
@@ -6655,18 +6854,23 @@ mod tests {
             character
         );
         // iter-24-B AB1, FB1: Save encounter writes the notes to the encounter and, in the same
-        // step, to the open run's Prep; the run's participants stay.
-        let stats = editor.run.as_ref().unwrap().participant_stats(0);
+        // step, to the open run's Prep. The run's combat state (damage, a condition) and its
+        // setup details stay, and the encounter keeps its roster.
+        editor.run.as_mut().unwrap().hurt_for_test(0, 3, "Prone");
+        let run = editor.run.as_ref().unwrap();
+        let (stats, combat) = (run.participant_stats(0), run.combat_state_for_test(0));
+        let technical = run.prep().1.map(str::to_owned);
+        assert!(combat.0.is_some() && combat.1.contains(&"Prone".to_owned()));
+        assert_ne!(run.prep().0, "The bridge groans.");
         editor.draft.as_mut().unwrap().body = "The bridge groans.".into();
         editor.save_draft(&egui::Context::default(), &campaign, &[]);
-        assert!(
-            fs::read_to_string(&path)
-                .unwrap()
-                .contains("The bridge groans.")
-        );
+        let saved = fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("The bridge groans.") && saved.contains("Hero"));
         let run = editor.run.as_ref().unwrap();
         assert_eq!(run.prep().0, "The bridge groans.");
+        assert_eq!(run.prep().1.map(str::to_owned), technical);
         assert_eq!(run.participant_stats(0), stats);
+        assert_eq!(run.combat_state_for_test(0), combat);
         editor.run = None;
         assert!(!editor.dirty());
         fs::write(&path, format!("{original}External edit\n")).unwrap();
@@ -6697,6 +6901,7 @@ mod tests {
             draft: Some(draft),
             error: Some(invalid.text.clone()),
             validation_error: Some(invalid.clone()),
+            refusal_watch: true,
             ..Default::default()
         };
         assert!(encounters.error_tone() == Tone::Warning);
@@ -6710,7 +6915,7 @@ mod tests {
         encounters.validation_error = Some(invalid);
         let roster = encounters.draft.as_ref().unwrap().setup.roster.clone();
         encounters.draft.as_mut().unwrap().setup.roster.clear();
-        encounters.refresh_validation_error(false);
+        encounters.refresh_validation_error(false, true);
         assert!(encounters.error.is_none());
         let mut draft = encounters.draft.take().unwrap();
         draft.setup.roster = roster;

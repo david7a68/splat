@@ -13405,22 +13405,34 @@ pub mod session_plan_groups {
         }
         // Must stay true: when the compact editor shows only Add creatures, the name keeps no
         // column edge from the wider layout; it runs on to the edge Save group ends at, on the
-        // save row below it (iter-24-B AK1).
+        // save row below it (iter-24-B AK1). That edge is the compact pane's own: the search
+        // field's right edge, which no stored column edge sets (iter-24-B review).
         let gap = d.at_size(SMALL, |d| {
             let compact = d.has("Back to the plan") && !d.has("Group notes for Ash Pack");
             let gap = d
                 .place_of("Group name: Ash Pack")
                 .zip(d.place_of("Save group"))
-                .map(|(name, save)| (save.right() - name.right(), save.top() - name.bottom()));
+                .zip(d.place_of(FIND_CREATURE))
+                .map(|((name, save), search)| {
+                    (
+                        save.right() - name.right(),
+                        save.top() - name.bottom(),
+                        save.right() - search.right(),
+                    )
+                });
             (compact, gap)
         });
         d.observe(
             "iter-19-B-FT9-compact",
             gap.0
-                && gap.1.is_some_and(|(edge, below)| {
-                    (0.0..=crate::design::XL).contains(&edge) && below >= -0.5
+                && gap.1.is_some_and(|(edge, below, pane)| {
+                    (0.0..=crate::design::XL).contains(&edge)
+                        && below >= -0.5
+                        && pane.abs() <= 1.0
                 }),
-            format!("The compact name field ends near Save group's edge, above it: {gap:?}"),
+            format!(
+                "The compact name field ends near Save group's edge, above it, and Save ends at the pane's edge (Save minus name, Save top minus name bottom, Save minus search): {gap:?}"
+            ),
         );
         let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
         d.observe(
