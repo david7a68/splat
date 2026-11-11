@@ -667,10 +667,12 @@ impl Reader {
                             // The gap starts at Copy text's target, which `line_start` draws `S`
                             // left of its place in the row.
                             ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
-                            let discard = Action::quiet("Discard draft")
+                            // A message action without an icon has the secondary border.
+                            if Action::secondary("Discard draft")
                                 .density(Density::Read)
-                                .name(&discard_name);
-                            if super::starts_line(ui, discard, false).show(ui).clicked()
+                                .name(&discard_name)
+                                .show(ui)
+                                .clicked()
                                 && let Some(draft) = self.edits.remove(&id)
                             {
                                 self.discarded = Some((id, draft));
@@ -894,7 +896,12 @@ impl Reader {
             // The warning keeps the form's right edge.
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                super::unread_groups_message(ui, campaign, &draft.path, reason);
+                let whole = draft
+                    .start
+                    .groups_unread
+                    .as_ref()
+                    .map_or(reason.as_str(), |unread| unread.whole.as_str());
+                super::unread_groups_message(ui, campaign, &draft.path, reason, whole);
             });
         }
         if self
@@ -1250,7 +1257,10 @@ mod tests {
         assert!(super::super::status_unread(&entry));
         let (notices, _) = super::super::GroupFault::flags(&entry, Some(&unread));
         assert_eq!(
-            notices,
+            notices
+                .iter()
+                .map(|(shown, _)| shown.as_str())
+                .collect::<Vec<_>>(),
             ["Other words"],
             "only Status; Part of is the unread list"
         );
@@ -1336,13 +1346,22 @@ mod tests {
     }
 
     /// The Part of reason for `unread_group_note`: the object on line 9, and how to write a group.
+    /// The object is longer than 40 characters, so the reason quotes its first and last 12
+    /// characters around `…` (round 25 FD4).
     fn unread_reason(file: &str) -> String {
-        let value = file
-            .lines()
-            .find_map(|line| line.strip_prefix("- {id:"))
-            .unwrap();
+        let value: Vec<char> = format!(
+            "{{id:{}",
+            file.lines()
+                .find_map(|line| line.strip_prefix("- {id:"))
+                .unwrap()
+        )
+        .chars()
+        .collect();
+        assert!(value.len() > 40, "the fixture's value is long");
+        let start: String = value[..12].iter().collect();
+        let end: String = value[value.len() - 12..].iter().collect();
         format!(
-            "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
+            "Line 9: Part of “{start}…{end}” was not read. Write each group as a link, such as [[Arena Guild]]."
         )
     }
 

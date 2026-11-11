@@ -269,8 +269,19 @@ pub fn roll_control(
         };
         ui.data_mut(|data| data.insert_temp(request_id(), roll));
     }
+    // One line under the Roll row is kept for the result, empty until the first roll, so a roll
+    // moves nothing below the table. A result longer than the line ends in `…`; its hover and
+    // its accessible name keep it whole, and the table marks the rolled row.
+    let line = Type::Body.line();
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), line), egui::Sense::hover());
     if let Some(result) = &state.result {
-        ui.label(Type::Body.rich(ui, result).color(colors().text));
+        let mut slot = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        slot.add(egui::Label::new(Type::Body.rich(&slot, result).color(colors().text)).truncate());
     }
     ui.data_mut(|data| data.insert_temp(id, state));
 }

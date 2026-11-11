@@ -2047,4 +2047,31 @@ fn unread_values_use_curly_quotes_on_one_line() {
         formats::quoted("say \"hi\"”\tnow\nthen"),
         "“say \"hi\"” now then”"
     );
+    // Round 25 FD4: a value of up to 40 characters is quoted whole; a longer one keeps its first
+    // and last 12 characters around `…`. The flag's sentence keeps the value whole.
+    let forty = "a".repeat(40);
+    assert_eq!(formats::quoted_short(&forty), None);
+    let long = "{id: 32f6c87d-35d7-bb90-0000-000000000005, link: '[[Lost Guild|the lost]]'}";
+    assert_eq!(
+        formats::quoted_short(&format!("{forty}b")).as_deref(),
+        Some("“aaaaaaaaaaaa…aaaaaaaaaaab”")
+    );
+    assert_eq!(
+        formats::quoted_short(long).as_deref(),
+        Some("“{id: 32f6c87…the lost]]'}”")
+    );
+    let flag = super::layout::Flag::unread(
+        super::layout::Field::PartOf,
+        9,
+        "Part of",
+        long,
+        "Write each group as a link.",
+    );
+    assert_eq!(
+        flag.short_message(),
+        "Line 9: Part of “{id: 32f6c87…the lost]]'}” was not read. Write each group as a link."
+    );
+    assert!(flag.message.contains(long), "{}", flag.message);
+    let short = super::layout::Flag::unread(super::layout::Field::Status, 3, "Status", "[a]", "");
+    assert_eq!(short.short_message(), short.message);
 }

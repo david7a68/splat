@@ -819,11 +819,15 @@ impl WorldPage {
                     );
                 });
                 ui.horizontal_wrapped(|ui| {
-                    // Both choices start at the message text, as every message's choices do.
-                    let again = super::starts_line(ui, design::Action::quiet("Try again"), true)
+                    // Message actions without an icon have the secondary border, which starts
+                    // at the message text. `L` between them: the layout's own gap is part of it.
+                    let again = design::Action::secondary("Try again")
+                        .density(design::Density::Read)
                         .show(ui)
                         .clicked();
-                    let cancel = super::starts_line(ui, design::Action::quiet("Cancel"), false)
+                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    let cancel = design::Action::secondary("Cancel")
+                        .density(design::Density::Read)
                         .show(ui)
                         .clicked();
                     (again, cancel)
@@ -974,10 +978,11 @@ impl WorldPage {
         }
         if let Some(PageError::Words(error)) = self.error.clone() {
             if self.new_kind.is_none() && !self.card_shown() {
-                // Cancel starts at the message text, as every message's choices do.
+                // Cancel starts at the message text, as every message's choices do. A message
+                // action without an icon has the secondary border (round 25 family).
                 let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
-                    design::Action::quiet("Cancel")
-                        .line_start()
+                    design::Action::secondary("Cancel")
+                        .density(design::Density::Read)
                         .show(ui)
                         .clicked()
                 });

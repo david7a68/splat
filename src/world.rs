@@ -2,6 +2,7 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
+pub(crate) mod a_shim;
 mod checks;
 pub(crate) mod edit;
 mod fields;
@@ -508,35 +509,66 @@ fn merge_groups(
     groups
 }
 
-fn missing_words(name: &str) -> String {
-    format!("{} {name} · Not found", design::icons::WARN)
+/// The name part of a missing link: the warning icon and the name, in `Body` as a set link is.
+fn missing_name(name: &str) -> String {
+    format!("{} {name}", design::icons::WARN)
 }
+
+/// The state part of a missing link, in `Small` after the name.
+const NOT_FOUND: &str = " · Not found";
 
 /// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
 /// name line above `Not found`.
 fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
-    let font = Type::Small.font(ui);
+    let name = design::number_width(ui, &missing_name(name), &Type::Body.font(ui));
+    let small = Type::Small.font(ui);
     if stacked {
-        design::number_width(ui, &format!("{} {name}", design::icons::WARN), &font)
-            .max(design::number_width(ui, "Not found", &font))
+        name.max(design::number_width(
+            ui,
+            NOT_FOUND.trim_start_matches(" · "),
+            &small,
+        ))
     } else {
-        design::number_width(ui, &missing_words(name), &font)
+        name + design::number_width(ui, NOT_FOUND, &small)
     }
 }
 
-/// A link to a note that is not there: icon, name and ` · Not found`. When the row is too narrow,
-/// or its label stands above it (`stacked`, Lookup beside World), the name wraps by whole words
-/// and `Not found` takes its own line below it, whole.
+/// A link to a note that is not there: icon and name in `Body`, as a set link, in the warning
+/// tone, then ` · Not found` in `Small`. When the row is too narrow, or its label stands above it
+/// (`stacked`, Lookup beside World), the name wraps by whole words and `Not found` takes its own
+/// line below it, whole. The name's first line is as tall as a row's control and centred in it,
+/// so a `Change` beside the value lines up with the name, not between the two lines.
 fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
-    let words = missing_words(name);
     let warning = colors().result.warning;
-    if !stacked && design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
-        ui.label(Type::Small.rich(ui, &words).color(warning));
+    let words = missing_name(name);
+    if !stacked && missing_width(ui, name, false) <= ui.available_width() {
+        let mut job = egui::text::LayoutJob::default();
+        let style = ui.style().clone();
+        for text in [
+            Type::Body.rich(ui, &words).color(warning),
+            Type::Small.rich(ui, NOT_FOUND).color(warning),
+        ] {
+            text.append_to(
+                &mut job,
+                &style,
+                egui::FontSelection::Style(egui::TextStyle::Body),
+                egui::Align::Center,
+            );
+        }
+        ui.label(job);
     } else {
         ui.vertical(|ui| {
-            let (name, state) = words.split_once(" · ").unwrap_or((&words, ""));
-            ui.add(egui::Label::new(Type::Small.rich(ui, name).color(warning)).wrap());
-            ui.label(Type::Small.rich(ui, state).color(warning));
+            // The name's first line sits where a one-line value is centred in the row's
+            // control, so `Change` beside it is level with the name; `Not found` follows it.
+            ui.add_space(((Density::Scan.control() - Type::Body.line()) / 2.0).max(0.0));
+            // `Not found` sits directly under the name, as one value's two lines.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add(egui::Label::new(Type::Body.rich(ui, &words).color(warning)).wrap());
+            ui.label(
+                Type::Small
+                    .rich(ui, NOT_FOUND.trim_start_matches(" · "))
+                    .color(warning),
+            );
         });
     }
 }
@@ -616,15 +648,41 @@ fn empty_optional(value: &Value) -> bool {
 }
 
 /// The message's action starts at its words, below them, as every message action does.
-fn unread_groups_message(ui: &mut egui::Ui, campaign: &Campaign, path: &str, reason: &str) {
-    let open = design::message_with_actions(ui, Tone::Warning, reason, |ui| {
-        design::link(ui, "Edit in Obsidian").clicked()
+fn unread_groups_message(
+    ui: &mut egui::Ui,
+    campaign: &Campaign,
+    path: &str,
+    reason: &str,
+    whole: &str,
+) {
+    let shown = ui.scope(|ui| {
+        design::message_with_actions(ui, Tone::Warning, reason, |ui| {
+            design::link(ui, "Edit in Obsidian").clicked()
+        })
     });
+    whole_value(ui, &shown.response, reason, whole);
+    let open = shown.inner;
     if open {
         ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
             &campaign.path.join(path),
         )));
     }
+}
+
+/// A warning that quotes an unread value cut around `…` (round 25 FD4): its hover and its
+/// accessible description keep the sentence with the value whole.
+fn whole_value(ui: &egui::Ui, response: &egui::Response, shown: &str, whole: &str) {
+    if shown != whole {
+        response.clone().on_hover_text(whole);
+        ui.ctx()
+            .accesskit_node_builder(response.id, |node| node.set_description(whole));
+    }
+}
+
+/// An unread-value warning, cut as `whole_value` says.
+fn unread_warning(ui: &mut egui::Ui, shown: &str, whole: &str) {
+    let response = design::message(ui, Tone::Warning, shown);
+    whole_value(ui, &response, shown, whole);
 }
 
 fn reference(value: &Value) -> Option<Reference> {
@@ -1675,8 +1733,9 @@ struct GroupFault {
     generation: u64,
     /// The Part of list on disk that could not be read.
     unread: Option<fields::Unread>,
-    /// Every other value not read, as the reader words it. They sit with the Part of reason.
-    notices: Vec<String>,
+    /// Every other value not read, as the reader words it, with a long value cut, then whole.
+    /// They sit with the Part of reason.
+    notices: Vec<(String, String)>,
     /// The entry for the shared reader, without its flags. None when it has none.
     entry: Option<Entry>,
 }
@@ -1692,14 +1751,18 @@ fn status_unread(entry: &Entry) -> bool {
         .any(|flag| flag.kind == FlagKind::Unread(Field::Status))
 }
 
-/// A value the reader could not read, as the shared reader says it (`src/library/view.rs`).
-fn flag_words(flag: &splat::content::layout::Flag) -> String {
-    flag.message.clone()
+/// A value the reader could not read, as the shared reader says it (`src/library/view.rs`):
+/// the sentence with a long value cut, then whole.
+fn flag_words(flag: &splat::content::layout::Flag) -> (String, String) {
+    (flag.short_message().to_owned(), flag.message.clone())
 }
 
 impl GroupFault {
     /// The flags of `entry` other than the Part of one, and the entry without any flags.
-    fn flags(entry: &Entry, unread: Option<&fields::Unread>) -> (Vec<String>, Option<Entry>) {
+    fn flags(
+        entry: &Entry,
+        unread: Option<&fields::Unread>,
+    ) -> (Vec<(String, String)>, Option<Entry>) {
         if entry.flags.is_empty() {
             return (Vec::new(), None);
         }
@@ -2033,7 +2096,7 @@ impl Reader {
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
             .and_then(|fault| fault.unread.as_ref())
-            .map(|unread| unread.reason.clone());
+            .map(|unread| (unread.reason.clone(), unread.whole.clone()));
         // A refused Part of write shows as the unread warning below the file line.
         if let Some(error) = &self.error
             && !(self.group_error && unread_reason.is_some())
@@ -2079,21 +2142,21 @@ impl Reader {
         design::reader::measure(ui, |ui| {
             // A draft whose note is gone, whatever note is open.
             self.lost_edits(ui, index);
-            if let Some(reason) = unread_reason
+            if let Some((reason, whole)) = unread_reason
                 && let Some(campaign) = campaign
                 && (self.error.is_none() || self.group_error)
             {
                 if file_line {
                     // The file line just above has the one Edit in Obsidian link.
-                    design::message(ui, Tone::Warning, &reason);
+                    unread_warning(ui, &reason, &whole);
                 } else {
-                    unread_groups_message(ui, campaign, &item.entry.path, &reason);
+                    unread_groups_message(ui, campaign, &item.entry.path, &reason, &whole);
                 }
             }
             // Every other value not read sits here too, not below the values.
             if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
-                for notice in &fault.notices {
-                    design::message(ui, Tone::Warning, notice);
+                for (notice, whole) in &fault.notices {
+                    unread_warning(ui, notice, whole);
                 }
             }
         });
@@ -2434,7 +2497,8 @@ impl Reader {
         design::quiet_section(ui, "Give this note a type", |ui| {
             // The help says what the choice does for the DM; how Splat stores it waits in
             // Technical details at the end of the section.
-            ui.label(Type::Small.rich(ui, TYPE_HELP).color(colors().muted));
+            // Help under a section keeps the reader measure (round 25 FG1, AG1).
+            a_shim::help(ui, TYPE_HELP);
             ui.horizontal_wrapped(|ui| {
                 for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
                     .into_iter()
@@ -2464,10 +2528,7 @@ impl Reader {
                 chosen = Some(other);
             }
             design::quiet_section(ui, "Technical details", |ui| {
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, TYPE_STORAGE).color(colors().muted))
-                        .wrap(),
-                );
+                a_shim::help(ui, TYPE_STORAGE);
             });
         });
         match make_entry(campaign, item, &chosen?) {

@@ -137,6 +137,16 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Overwrite with my draft");
     assert_eq!(fs::read_to_string(&path).unwrap(), outside);
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
+    // Round 25 FD1: the repair editor's top at each size, in every message state below.
+    let editor_tops = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.place_of(&crate::world::repair::editor_name("Notes/Broken.md"))
+                    .map(|editor| editor.top())
+            })
+        })
+    };
+    let mut tops = vec![("invalid draft, reason", editor_tops(d))];
     // Round 24 SA1, FA1: the disk did not fail, so the message is the cause alone; `Not saved.`
     // is only for a disk failure.
     let combined = "Line 3 opens a list with [ that never closes.";
@@ -234,13 +244,57 @@ pub fn broken(d: &mut Driver<'_>) {
             && d.is_disabled("Save repaired note"),
         "After Discard the unchanged unreadable draft says Invalid, and Save is blocked",
     );
+    // Round 25 FD1, lead's ruling: a result with a live Undo comes first in the one message
+    // space, so after Discard of a broken repair `Undo discard` is on its first line and Save's
+    // reason follows it, at every size.
+    let undo_first = |d: &mut Driver<'_>, undo_name: &str| {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (undo, reason, save) = d.at_size(size, |d| {
+                (
+                    d.place_of(undo_name),
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.role == Role::Label && node.name == combined)
+                        .map(|node| node.rect),
+                    d.place_of("Save repaired note"),
+                )
+            });
+            d.observe(
+                "iter-25-D-FD1-undo-first",
+                undo.zip(reason).zip(save).is_some_and(|((undo, reason), save)| {
+                    undo.top() >= save.bottom()
+                        && undo.top() - save.bottom() < design::Type::Body.line()
+                        && reason.top() >= undo.center().y
+                }),
+                format!("At {size:?}, {undo_name} {undo:?} leads, then the reason {reason:?}, below Save {save:?}"),
+            );
+        }
+    };
+    undo_first(d, "Undo discard of Broken.md");
+    tops.push(("discarded, Undo and reason", editor_tops(d)));
     d.click("Undo discard of Broken.md");
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
+    tops.push(("Undo discard, reason", editor_tops(d)));
+    // The discard result's owner is the discarded draft: an edit ends it, and the reason leads
+    // again. The edit types the same words back, so the draft is the one before Discard.
+    d.click("Discard");
+    d.expect("Undo discard of Broken.md");
+    d.replace_text_in("Note text", &unfinished);
+    d.observe(
+        "iter-25-D-FD1-owner",
+        !d.has("Undo discard of Broken.md")
+            && d.nodes()
+                .into_iter()
+                .any(|node| node.role == Role::Label && node.name == combined && node.in_view()),
+        "An edit after Discard ends Undo discard; Save's reason leads the message space",
+    );
     let fixed = format!(
         "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Repaired watchkeeper\nsplat_type: npc\n---\n\nThe watchkeeper is back.\n",
         splat::character::stable_id("repaired-watchkeeper")
     );
     d.replace_text_in("Note text", &fixed);
+    d.expect(&format!("{} Unsaved", design::icons::DRAFT));
+    tops.push(("valid draft, no message", editor_tops(d)));
     fs::write(&path, format!("{external}\nAnother outside edit.\n")).unwrap();
     d.settle();
     d.expect("This note changed on disk. Your draft is safe until you choose.");
@@ -264,9 +318,24 @@ pub fn broken(d: &mut Driver<'_>) {
         fs::read_to_string(&path).unwrap(),
         format!("{external}\nAnother outside edit.\n")
     );
+    undo_first(d, "Undo reload");
+    tops.push(("reloaded, Undo and reason", editor_tops(d)));
     d.state("repair-reloaded-with-undo", Sizes::All);
     d.click("Undo reload");
     assert_eq!(d.editor_text().as_deref(), Some(fixed.as_str()));
+    tops.push(("reload undone, no message", editor_tops(d)));
+    // Round 25 FD1: no reason, result or Undo moves the editor, at any size.
+    let first = tops[0].1;
+    d.observe(
+        "iter-25-D-FD1",
+        first.iter().all(Option::is_some)
+            && tops.iter().all(|(_, at)| {
+                at.iter()
+                    .zip(&first)
+                    .all(|(at, first)| at.zip(*first).is_some_and(|(a, f)| (a - f).abs() <= 0.5))
+            }),
+        format!("The repair editor's top in each state (960, 1200, 1920): {tops:?}"),
+    );
     d.state("repair-reload-undone", Sizes::All);
     fs::write(&path, format!("{external}\nA later outside edit.\n")).unwrap();
     d.settle();
@@ -277,6 +346,10 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has("Undo reload") && d.editor_text().as_deref() == Some(fixed.as_str()),
         "A new edit ends Undo reload and keeps the newly typed draft",
     );
+    // Round 25 FD1: the editor no longer moves when the message below it ends, so it keeps the
+    // keyboard after the edit (it lost it before). Escape gives the keyboard back, as after Undo
+    // reload, so the two states compare without the focus ring.
+    d.press(Key::Escape);
     d.expect_same("Editing after reload restores the same draft as Undo reload; the recovery control is gone in both states.");
     d.assert_state_matches("repair-edited-after-reload", "repair-reload-undone");
     d.observe_both(
@@ -485,6 +558,19 @@ pub fn broken(d: &mut Driver<'_>) {
             format!("At {size:?}, Copy text {copy:?} and Discard draft {discard:?} share a line, {} px apart", copy.zip(discard).map_or(f32::NAN, |(copy, discard)| discard.left() - copy.right())),
         );
     }
+    // Round 25 AA1: Discard draft is a message action without an icon, so it has the secondary
+    // border. Copy text keeps its icon and stays quiet.
+    let bordered = |d: &Driver<'_>, name: &str| {
+        d.control_frame(name).is_some_and(|frame| {
+            frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
+        })
+    };
+    d.observe(
+        "iter-25-D-AA1",
+        bordered(d, "Discard the draft of Repaired watchkeeper")
+            && !bordered(d, "Copy the text of Repaired watchkeeper"),
+        "Discard draft has the secondary border; Copy text with its icon does not",
+    );
     // Round 24 FA7: the warning says what happened in the DM's words, not `identity`.
     d.observe(
         "iter-24-D-FA7",
@@ -626,22 +712,56 @@ pub fn broken(d: &mut Driver<'_>) {
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
         "The file line with Show file sits above the message",
     );
-    action_at_text_edge(
-        d,
-        "iter-18-D-try-again-edge",
-        "Try again",
-        "Resize World notes column",
-        &[SMALL, DEFAULT, LARGE],
-        |d| d.painted_left(headline),
-    );
+    // Round 25 FG3 (replaces round 18's quiet `line_start` edge): Try again and Cancel are
+    // message actions without an icon, so each has the secondary border. Try again's border, not
+    // its words, starts at the message text; its words sit inside the border. Cancel follows on
+    // the same line, `L` after it.
     for size in [SMALL, DEFAULT, LARGE] {
-        let (again, cancel) = d.at_size(size, |d| (d.place_of("Try again"), d.place_of("Cancel")));
+        let (again, cancel, edge, words, splitter) = d.at_size(size, |d| {
+            let again = d.place_of("Try again");
+            let words = again.and_then(|again| words_left_in(d, again));
+            (
+                again,
+                d.place_of("Cancel"),
+                d.painted_left(headline),
+                words,
+                d.place_of("Resize World notes column"),
+            )
+        });
+        d.observe(
+            "iter-25-D-FG3",
+            again
+                .zip(edge)
+                .zip(words)
+                .is_some_and(|((again, edge), words)| {
+                    (again.left() - edge).abs() <= 1.0 && words >= edge + design::S
+                })
+                && again
+                    .zip(splitter)
+                    .is_some_and(|(again, splitter)| again.left() >= splitter.right()),
+            format!(
+                "At {size:?}, Try again's border {again:?} starts at the text edge {edge:?}, its \
+                 words at {words:?}"
+            ),
+        );
+        let border = |name: &str| {
+            d.control_frame(name).is_some_and(|frame| {
+                frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
+            })
+        };
+        let framed = border("Try again") && border("Cancel");
+        d.observe(
+            "iter-25-D-FG3-border",
+            framed,
+            format!("At {size:?}, Try again and Cancel have the secondary border"),
+        );
         d.observe(
             "iter-18-D-cancel-follows",
             again.zip(cancel).is_some_and(|(again, cancel)| {
-                (again.top() - cancel.top()).abs() < 0.5 && cancel.left() >= again.right()
+                (again.top() - cancel.top()).abs() < 0.5
+                    && (cancel.left() - again.right() - design::L).abs() <= 1.0
             }),
-            format!("At {size:?}, Cancel {cancel:?} follows Try again {again:?} on its line"),
+            format!("At {size:?}, Cancel {cancel:?} follows Try again {again:?}, L apart"),
         );
     }
     // Round 24 FG1, FE1, AG1 (L, D contract): a row marks every fault the header counts. The two
@@ -1313,6 +1433,18 @@ pub fn facts(d: &mut Driver<'_>) {
             && help.contains("stat block"),
         format!("The type help says {help:?}"),
     );
+    // Round 25 FG1, AG1: help keeps the reader measure (`design::help`) at every size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let width = d.at_size(size, |d| {
+            d.painted_rect_in(help, egui::Rect::EVERYTHING)
+                .map(|rect| rect.width())
+        });
+        d.observe(
+            "iter-25-D-FG1",
+            width.is_some_and(|width| width <= design::READER_MEASURE + 0.5),
+            format!("The help is {width:?} wide at {size:?}"),
+        );
+    }
     action_at_text_edge(
         d,
         "iter-17-D-type-choice",
@@ -2338,12 +2470,37 @@ pub fn tables(d: &mut Driver<'_>) {
                 && (design::XXL * 3.0..=design::XXL * 3.0 + design::S).contains(&field.width())
         },
     );
+    // Round 25 FD2: the next table's header, at each size, before the roll.
+    let gap_header = |d: &Driver<'_>| {
+        let mut top = None;
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text == "Gap" {
+                top = Some(text.pos.y);
+            }
+        });
+        top
+    };
+    let before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| gap_header(d)));
     d.type_into("Typed roll for Valid", "4");
     d.press(Key::Enter);
     d.observe(
         "World table author",
         d.visible_text("Fog") && d.visible_text("Typed 4"),
         "A valid range accepts a typed roll and shows the matched row",
+    );
+    // Round 25 FD2: the result's line is reserved, so the roll moves nothing below the table.
+    // The result is new (it was not on screen before), and the header keeps its y at each size.
+    let after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| gap_header(d)));
+    d.observe(
+        "iter-25-D-FD2",
+        d.visible_text("Typed 4 on 1d6: Fog")
+            && before.iter().all(Option::is_some)
+            && before.iter().zip(&after).all(|(before, after)| {
+                before
+                    .zip(*after)
+                    .is_some_and(|(b, a)| (a - b).abs() <= 0.5)
+            }),
+        format!("The d4 Gap header stays put after the roll: before {before:?}, after {after:?}"),
     );
     // Round 24 FG3: the rolled row's range (2-5, marked) starts at the x of the others.
     // `1` and `6` are found nearest the rolled row, in the same table.
@@ -2478,6 +2635,19 @@ pub fn generator(d: &mut Driver<'_>) {
             && !d.visible_text("splat:rolls"),
         "The World card says how to use your own names in words, and copies the marker",
     );
+    // Round 25 AE1, FE2: help keeps the reader measure (`design::help`) at every size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let width = d.at_size(size, |d| {
+            d.painted_rect_in(crate::lookup::OWN_NAMES_HELP, egui::Rect::EVERYTHING)
+                .map(|rect| rect.width())
+        });
+        d.observe(
+            "iter-25-D-AE1",
+            width.is_some_and(|width| width <= design::READER_MEASURE + 0.5),
+            format!("The help is {width:?} wide at {size:?}"),
+        );
+    }
+
     // FD4, ST2 ruling: the action starts a line outside a message, so it has no icon and its words
     // start at the card's text edge, with the help above it and `Will save` below it.
     let icon = super::words_left(d, crate::lookup::COPY_MARKER);
@@ -2675,6 +2845,19 @@ pub fn held_npc(d: &mut Driver<'_>) {
             && !d.visible_text("splat:rolls"),
         "The World card asks for a marked table of names in words",
     );
+    // Round 25 AD2: help keeps the reader measure (`design::help`) at every size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let width = d.at_size(size, |d| {
+            d.painted_rect_in(crate::lookup::OWN_NAMES_HELP, egui::Rect::EVERYTHING)
+                .map(|rect| rect.width())
+        });
+        d.observe(
+            "iter-25-D-AD2",
+            width.is_some_and(|width| width <= design::READER_MEASURE + 0.5),
+            format!("The help is {width:?} wide at {size:?}"),
+        );
+    }
+
     d.state("held-npc-card", Sizes::All);
 
     // Each path to another view keeps the NPC in one row above that view.
@@ -6302,7 +6485,7 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     // and `Not found` takes its own line, whole and visible, directly under the name, as the
     // missing-link rule says.
     for size in [SMALL, DEFAULT, LARGE] {
-        let (whole, detail) = d.at_size(size, |d| {
+        let (whole, detail, sized, level) = d.at_size(size, |d| {
             // Each painted text with exactly these words, wholly visible: its rows and its rect.
             let painted = |words: &str| {
                 let mut found = Vec::new();
@@ -6321,6 +6504,25 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                 });
                 found
             };
+            // Round 25 FA3: a missing link's icon and name are in `Body`, as a set link is; only
+            // `Not found` may be `Small`. The first section's size is the name's size.
+            let mut name_sizes = Vec::new();
+            d.each_painted_text(|text, _| {
+                let job = &text.galley.job;
+                if job.text.starts_with(design::icons::WARN)
+                    && ["Watchkeeper Guard", "Watch House"]
+                        .iter()
+                        .any(|name| job.text.contains(name))
+                    && let Some(section) = job.sections.first()
+                {
+                    name_sizes.push((job.text.clone(), section.format.font_id.size));
+                }
+            });
+            let body = design::Type::Body.size();
+            let sized = (
+                name_sizes.len() >= 2 && name_sizes.iter().all(|(_, size)| *size == body),
+                format!("Missing link names are in Body ({body}) at {size:?}: {name_sizes:?}"),
+            );
             let not_found = painted("Not found");
             let mut detail = Vec::new();
             let mut whole = true;
@@ -6351,6 +6553,29 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             }
             detail.push(format!("Not found texts {not_found:?}"));
             let change = d.place_of("Change Stat block");
+            // Round 25 AA2: Change lines up with the name's line, not between the name and
+            // `Not found`. The name line is the one-galley value, or the name alone above
+            // `Not found` (stacked), each one row; Lookup's copy is right of the pane.
+            let mut level = Vec::new();
+            for (name, label) in [
+                ("Watchkeeper Guard", "Change Stat block"),
+                ("Watch House", "Change In"),
+            ] {
+                let line = painted(&format!("{} {name} · Not found", design::icons::WARN))
+                    .into_iter()
+                    .chain(painted(&format!("{} {name}", design::icons::WARN)))
+                    .find(|(rows, _)| *rows == 1)
+                    .map(|(_, rect)| rect.center().y);
+                let target = d.place_of(label).map(|rect| rect.center().y);
+                level.push((name, line, target));
+            }
+            let level = (
+                level.iter().all(|(_, line, target)| {
+                    line.zip(*target)
+                        .is_some_and(|(line, target)| (line - target).abs() <= 2.0)
+                }),
+                format!("Change is level with the missing name's line at {size:?}: {level:?}"),
+            );
             // World's value only: Lookup, to the right, names the same stat block.
             let value = change.and_then(|change| {
                 d.painted_rect_in(
@@ -6367,8 +6592,12 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                         .zip(change)
                         .is_some_and(|(value, change)| change.left() >= value.right()),
                 format!("{detail:?}; value {value:?}, Change Stat block {change:?}"),
+                sized,
+                level,
             )
         });
+        d.observe("iter-25-D-FA3", sized.0, sized.1);
+        d.observe("iter-25-D-AA2", level.0, level.1);
         d.observe(
             "iter-23-D-FG1",
             whole,
@@ -7533,13 +7762,23 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
 }
 
 /// What the World reader says about an unread Part of list whose object value is on line 9.
+/// Round 25 FD4: the object is longer than 40 characters, so the warning quotes its first and
+/// last 12 characters around `…`.
 fn unread_reason(groups: &str) -> String {
-    let value = groups
-        .lines()
-        .find_map(|line| line.strip_prefix("- {id:"))
-        .expect("fixture: an object group");
+    let value: Vec<char> = format!(
+        "{{id:{}",
+        groups
+            .lines()
+            .find_map(|line| line.strip_prefix("- {id:"))
+            .expect("fixture: an object group")
+    )
+    .chars()
+    .collect();
+    assert!(value.len() > 40, "fixture: a long object group");
+    let start: String = value[..12].iter().collect();
+    let end: String = value[value.len() - 12..].iter().collect();
     format!(
-        "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
+        "Line 9: Part of “{start}…{end}” was not read. Write each group as a link, such as [[Arena Guild]]."
     )
 }
 
@@ -7661,6 +7900,18 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     let reason = &unread_reason(&unread_groups);
     d.expect(reason);
+    // Round 25 FD4: the warning cuts the long value, so its id is not on screen; the sentence
+    // with the value whole stays the warning's hover.
+    let id = unread_groups
+        .split("{id: ")
+        .nth(1)
+        .and_then(|rest| rest.split(',').next())
+        .expect("fixture: the group's id");
+    d.observe(
+        "iter-25-D-FD4",
+        d.has(reason) && !d.has_containing(id) && !d.in_view_containing(id),
+        format!("The unread warning quotes the value's start and end, not the id {id}"),
+    );
     d.observe_both(
         "iter-9-D-SD1-reader",
         "The refused write closes the picker and gives the source line and repair link",
