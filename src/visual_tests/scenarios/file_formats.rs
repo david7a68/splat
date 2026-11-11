@@ -37,6 +37,10 @@ pub fn run(d: &mut Driver<'_>) {
                 .contains("not read")
         },
     );
+    // Round 24 FE1: the row's warning icon has the warning tone before muted words, and the
+    // header's count equals the marked rows.
+    let (marked, detail) = d.at_size(LARGE, |d| super::world_build::world_fault_marks(d, false));
+    d.observe("iter-24-D-FE1", marked, detail);
     d.state("flagged-malformed-value", Sizes::All);
     assert_eq!(
         fs::read_to_string(&path).unwrap(),

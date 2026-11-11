@@ -37,7 +37,7 @@ use std::{
 use uuid::Uuid;
 
 /// The kind of a plain note's Lookup item. No file holds this kind.
-const NOTE_KIND: &str = "world_note";
+pub(crate) const NOTE_KIND: &str = "world_note";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Role {
@@ -507,12 +507,25 @@ fn missing_words(name: &str) -> String {
     format!("{} {name} · Not found", design::icons::WARN)
 }
 
+/// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
+/// name line above `Not found`.
+fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
+    let font = Type::Small.font(ui);
+    if stacked {
+        design::number_width(ui, &format!("{} {name}", design::icons::WARN), &font)
+            .max(design::number_width(ui, "Not found", &font))
+    } else {
+        design::number_width(ui, &missing_words(name), &font)
+    }
+}
+
 /// A link to a note that is not there: icon, name and ` · Not found`. When the row is too narrow,
-/// the name wraps and `Not found` takes its own line, whole.
-fn missing_link(ui: &mut egui::Ui, name: &str) {
+/// or its label stands above it (`stacked`, Lookup beside World), the name wraps by whole words
+/// and `Not found` takes its own line below it, whole.
+fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
     let words = missing_words(name);
     let warning = colors().result.warning;
-    if design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
+    if !stacked && design::number_width(ui, &words, &Type::Small.font(ui)) <= ui.available_width() {
         ui.label(Type::Small.rich(ui, &words).color(warning));
     } else {
         ui.vertical(|ui| {
@@ -521,6 +534,15 @@ fn missing_link(ui: &mut egui::Ui, name: &str) {
             ui.label(Type::Small.rich(ui, state).color(warning));
         });
     }
+}
+
+/// A compact reader's missing link: its muted `Small` label, then `⚠ <name> · Not found` in the
+/// warning tone, as the place that waits for a choice reads.
+fn compact_missing(ui: &mut egui::Ui, label: &str, name: &str) {
+    ui.horizontal(|ui| {
+        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+        missing_link(ui, name, false);
+    });
 }
 
 /// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
@@ -1131,7 +1153,33 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 }
 
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
-    ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
+    // When even `…/<file name>` does not fit beside the links, the path takes its own row and
+    // the links the row below, as in Library: the file name is never cut (FA4).
+    let budget = ui.available_width() - entry_file_links_width(ui, obsidian) - design::L;
+    let filename = relative.rsplit('/').next().unwrap_or(relative);
+    if design::number_width(ui, &format!("…/{filename}"), &Type::Small.font(ui)) > budget {
+        let path = root.join(relative);
+        let font = Type::Small.font(ui);
+        let shown = if design::number_width(ui, relative, &font) <= ui.available_width() {
+            relative.to_owned()
+        } else {
+            format!("…/{filename}")
+        };
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), Density::Read.control()),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                let response = ui.add(
+                    egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).wrap(),
+                );
+                design::named(ui, &response, &path.display().to_string());
+                response.on_hover_text(path.display().to_string());
+            },
+        );
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+    } else {
+        ui.horizontal_wrapped(|ui| entry_file_parts(ui, root, relative, obsidian));
+    }
 }
 
 pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
@@ -1288,6 +1336,67 @@ impl Change {
     pub(crate) fn undo(&self, campaign: &Campaign) -> Result<(), String> {
         write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
     }
+}
+
+/// A note's file renamed to match its name (FD5). Undo moves it back. Neither move replaces a
+/// file, and each checks that the file still holds the text the DM saw.
+pub(crate) struct FileRename {
+    from: String,
+    to: String,
+    text: String,
+}
+
+impl FileRename {
+    fn apply(root: &Path, from: &str, to: &str, text: &str) -> Result<Self, String> {
+        move_note(root, from, to, text)?;
+        Ok(Self {
+            from: from.into(),
+            to: to.into(),
+            text: text.into(),
+        })
+    }
+
+    fn undo(&self, root: &Path) -> Result<(), String> {
+        move_note(root, &self.to, &self.from, &self.text)
+    }
+
+    fn message(&self) -> String {
+        let file = self.to.rsplit('/').next().unwrap_or(&self.to);
+        format!("The file is now {file}.")
+    }
+}
+
+/// The file beside `path` for a note named `name`, when the name can be a file name.
+fn renamed_path(path: &str, name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.is_empty()
+        || name.starts_with('.')
+        || name.contains([
+            '/', '\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '[', ']',
+        ])
+    {
+        return None;
+    }
+    let to = match path.rsplit_once('/') {
+        Some((folder, _)) => format!("{folder}/{name}.md"),
+        None => format!("{name}.md"),
+    };
+    (to != path && crate::library::note_path_rule(&to).is_none()).then_some(to)
+}
+
+/// Moves a note file within the campaign. It refuses when `from` no longer holds `expected` or
+/// a file is already at `to`, so it never replaces or loses a file.
+fn move_note(root: &Path, from: &str, to: &str, expected: &str) -> Result<(), String> {
+    let source = crate::library::note_path(root, from)?;
+    let target = crate::library::note_path(root, to)?;
+    if file_fault::read_note(root, from)? != expected {
+        return Err(format!("{from} changed on disk. Nothing was renamed."));
+    }
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(format!("{to} already exists. Nothing was renamed."));
+    }
+    std::fs::rename(&source, &target)
+        .map_err(|error| file_fault::FileFault::write(from, &error).message())
 }
 
 /// World notes and Library entries share identity repair, but keep their own nouns.
@@ -1508,6 +1617,8 @@ pub struct Reader {
     kept: Option<(String, String)>,
     identity_undo: Option<(Uuid, Change)>,
     name_undo: Option<Change>,
+    /// The last `Rename the file to …` on this page, until it is undone or another replaces it.
+    file_undo: Option<FileRename>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -1871,12 +1982,47 @@ impl Reader {
                         "The file is {stem}.md, but the name is {}.",
                         item.entry.name
                     );
-                    if design::message_with_action(
-                        ui,
-                        Tone::Warning,
-                        &message,
-                        &format!("Rename the note to {stem}"),
-                    ) {
+                    // Two safe choices: the note takes the file's name, or the file takes the
+                    // note's name (FD5). An open edit form keeps its file, so the file keeps
+                    // its name while one is open.
+                    let file = renamed_path(&item.entry.path, &item.entry.name)
+                        .filter(|_| !self.editing(id));
+                    let (note, rename_file) =
+                        design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                let note = Action::secondary(&format!("Rename the note to {stem}"))
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked();
+                                let rename_file = file.as_ref().is_some_and(|to| {
+                                    // The layout's own gap after a control, with this, is `L`.
+                                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                    Action::secondary(&format!(
+                                        "Rename the file to {}",
+                                        to.rsplit('/').next().unwrap_or(to)
+                                    ))
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked()
+                                });
+                                (note, rename_file)
+                            })
+                            .inner
+                        });
+                    if rename_file && let Some(to) = &file {
+                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
+                            .and_then(|text| {
+                                FileRename::apply(&campaign.path, &item.entry.path, to, &text)
+                            });
+                        match result {
+                            Ok(rename) => {
+                                self.file_undo = Some(rename);
+                                return Some(Go::Reload(item.entry.id));
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    if note {
                         let result = (|| {
                             let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
                             let after = crate::content_workspace::patch_fields(
@@ -1904,6 +2050,18 @@ impl Reader {
                             }
                             Err(error) => self.error = Some(error),
                         }
+                    }
+                }
+                if let Some(rename) = &self.file_undo
+                    && rename.to == item.entry.path
+                    && design::undo_message(ui, CHANGED, &rename.message(), "Undo file rename")
+                {
+                    match rename.undo(&campaign.path) {
+                        Ok(()) => {
+                            self.file_undo = None;
+                            return Some(Go::Reload(item.entry.id));
+                        }
+                        Err(error) => self.error = Some(error),
                     }
                 }
                 if let Some(change) = &self.name_undo
@@ -2267,16 +2425,18 @@ impl Reader {
             "status" => "Status",
             _ => "Stat block",
         };
+        // Two notes with one name: the one a value opens is named with its folder, so the
+        // result tells the DM which file the change chose (AD2, FD3, SD2).
+        let one_name = |value: &Value| match edit::value_target(index, value) {
+            Some(at) => index.shown_name(at),
+            None => edit::value_name(index, value, label),
+        };
         let name = |value: &Value| match value.as_sequence() {
             Some(groups) if groups.is_empty() => "not set".into(),
             // Each value by the name the reader shows: the note its link opens, else the words
             // written in the file.
-            Some(groups) => groups
-                .iter()
-                .map(|group| edit::value_name(index, group, label))
-                .collect::<Vec<_>>()
-                .join(", "),
-            None => edit::value_name(index, value, label),
+            Some(groups) => groups.iter().map(one_name).collect::<Vec<_>>().join(", "),
+            None => one_name(value),
         };
         // Choosing what is already there changes nothing, and writes no Log line.
         let current = world_field(current_entry, key).filter(|value| !value.is_null());
@@ -2376,7 +2536,11 @@ impl Reader {
     }
 
     fn relationship_value_width(&self, ui: &egui::Ui, item: &Item, index: &ContentIndex) -> f32 {
+        let stacked = Self::stacked(ui);
+        let cap = Self::relationship_width(ui);
         let mut values = Vec::new();
+        // Missing links, measured as `missing_link` draws them.
+        let mut missing = Vec::new();
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
@@ -2399,11 +2563,8 @@ impl Reader {
                     place_choices_words(&name, choices.len())
                 )
             } else if let Some(value) = reader_field(&item.entry, key) {
-                format!(
-                    "{} {} · Not found",
-                    design::icons::WARN,
-                    link_name(value, label)
-                )
+                missing.push(missing_width(ui, &link_name(value, label), stacked));
+                continue;
             } else if key == "creature" {
                 "not set".into()
             } else {
@@ -2414,19 +2575,31 @@ impl Reader {
             values.push((value, if linked { Type::Body } else { Type::Small }));
         }
         // Part of is measured as drawn: each group in its own type, a missing one with its
-        // icon and ` · Not found`, with the gaps between them.
+        // icon and ` · Not found`, with the gaps between them. The groups wrap within the
+        // column, so the widest of their drawn lines counts, not all of them on one line (FG5).
         let groups = index.groups_of(&item.entry);
-        let mut groups_width = 0.0_f32;
-        for (at, (name, target)) in groups.iter().enumerate() {
-            let (words, role) = match target {
-                Some(_) => (name.clone(), Type::Body),
-                None => (missing_words(name), Type::Small),
+        let gap = ui.spacing().item_spacing.x;
+        let (mut groups_width, mut line) = (0.0_f32, 0.0_f32);
+        for (name, target) in groups.iter() {
+            // A found group shows its note's name, not the words written in the file.
+            let width = match target {
+                Some(at) => {
+                    design::number_width(ui, &index.items[*at].entry.name, &Type::Body.font(ui))
+                }
+                None => missing_width(ui, name, stacked),
             };
-            if at > 0 {
-                groups_width += ui.spacing().item_spacing.x;
-            }
-            groups_width += design::number_width(ui, &words, &role.font(ui));
+            line = if line > 0.0 && line + gap + width > cap {
+                groups_width = groups_width.max(line);
+                width
+            } else if line > 0.0 {
+                line + gap + width
+            } else {
+                width
+            };
         }
+        // A pixel of room, so a line that fits by its measure does not wrap on rounding.
+        groups_width = groups_width.max(line) + if groups.is_empty() { 0.0 } else { 1.0 };
+        let groups_width = missing.into_iter().fold(groups_width, f32::max);
         if self.unread_groups(item.entry.id).is_some() {
             values.push(("not read".into(), Type::Small));
         }
@@ -2455,7 +2628,7 @@ impl Reader {
             .iter()
             .map(|(value, role)| design::number_width(ui, value, &role.font(ui)))
             .fold(groups_width, f32::max)
-            .min(Self::relationship_width(ui));
+            .min(cap);
         if !self.compact && !choices.is_empty() {
             // The choice action is wider than Change. Both keep the column the narrower room allows.
             width.min(
@@ -2528,9 +2701,11 @@ impl Reader {
                         ui.spacing_mut().item_spacing.x = design::L;
                         let name = format!("Always use {path}");
                         let action = Action::secondary("Always use this one").name(&name);
+                        // The link centres on the action's row, as a value row's link and
+                        // Change share one line (FG4).
                         ui.allocate_ui_with_layout(
                             egui::vec2(file_width, Density::Read.control()),
-                            egui::Layout::top_down(egui::Align::LEFT),
+                            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
                             |ui| {
                                 ui.set_width(file_width);
                                 if design::wrapped_link(ui, path).clicked() {
@@ -2589,6 +2764,7 @@ impl Reader {
         if rows.is_empty() {
             return None;
         }
+        let stacked = Self::stacked(ui);
         let value = |ui: &mut egui::Ui, label: &str, name: &str, target: Option<usize>| match target
         {
             Some(at) => design::wrapped_link(ui, name)
@@ -2599,7 +2775,7 @@ impl Reader {
                 None
             }
             None => {
-                missing_link(ui, name);
+                missing_link(ui, name, stacked);
                 None
             }
         };
@@ -2624,7 +2800,7 @@ impl Reader {
                 let (words, role) = match target {
                     Some(_) => (name.clone(), Type::Body),
                     None if *label == "Status" => (name.clone(), Type::Small),
-                    None => (missing_words(name), Type::Small),
+                    None => return missing_width(ui, name, stacked),
                 };
                 design::number_width(ui, &words, &role.font(ui))
             })
@@ -2731,12 +2907,14 @@ impl Reader {
                 + Action::quiet("Change")
                     .density(Density::Scan)
                     .natural_width(ui)
+                // The `L` gap after Change, as `value_row` draws it.
+                + design::L
                 + design::number_width(ui, word, &Type::Body.font(ui))
                 + design::S
                 + design::HAIRLINE_WIDTH
-                // The icon of `CHANGED`, the tone of the notice.
+                // The icon of `CHANGED`, the tone of the notice, and the `XS` after it.
                 + design::number_width(ui, design::icons::SUCCESS, &Type::Body.font(ui))
-                - design::XS
+                + design::XS
                 + Action::quiet(kind.undo_label())
                     .icon(design::icons::UNDO)
                     .density(Density::Read)
@@ -2815,6 +2993,7 @@ impl Reader {
     ) -> Option<Go> {
         let mut go = None;
         let value_width = self.relationship_value_width(ui, item, index);
+        let stacked = Self::stacked(ui);
         for (key, label) in [("creature", "Stat block"), ("in", "In")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
@@ -2849,7 +3028,7 @@ impl Reader {
                                 self.place_choices_open = !self.place_choices_open;
                             }
                         } else if let Some(value) = reader_field(&item.entry, key) {
-                            missing_link(ui, &link_name(value, label));
+                            missing_link(ui, &link_name(value, label), stacked);
                         } else {
                             ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
                         }
@@ -2905,7 +3084,7 @@ impl Reader {
                                         go = Some(Go::Item(*at, None));
                                     }
                                 }
-                                None => missing_link(ui, name),
+                                None => missing_link(ui, name, stacked),
                             }
                         }
                     },
@@ -2986,7 +3165,7 @@ impl Reader {
         let mut cancel = false;
         for at in matches {
             let entry = &index.items[at].entry;
-            if design::link(ui, &entry.name).clicked() {
+            if design::link(ui, &index.shown_name(at)).clicked() {
                 chosen = if key == "part_of" {
                     let mut groups = groups.clone();
                     groups.push(index.link_to(at).into());
@@ -3088,20 +3267,13 @@ impl Reader {
                     }
                 });
             }
+            // A link fault reads as every compact value does (FD6): the muted label, then the
+            // value in the warning tone, `⚠ <name> · Not found`.
             if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
-                design::status(
-                    ui,
-                    design::Status {
-                        icon: design::icons::WARN,
-                        word: &format!(
-                            "Stat block: {} · Not found",
-                            reader_field(&item.entry, "creature")
-                                .map(|v| link_name(v, "Stat block"))
-                                .unwrap_or_else(|| "Stat block".into())
-                        ),
-                        color: colors().result.warning,
-                    },
-                );
+                let name = reader_field(&item.entry, "creature")
+                    .map(|v| link_name(v, "Stat block"))
+                    .unwrap_or_else(|| "Stat block".into());
+                compact_missing(ui, "Stat block", &name);
             }
             let choices = index.place_choices(item.entry.id);
             if !choices.is_empty() {
@@ -3140,18 +3312,7 @@ impl Reader {
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!(
-                                "{} In {} · Not found",
-                                design::icons::WARN,
-                                place.trim_matches(['[', ']'])
-                            ),
-                        )
-                        .color(colors().result.warning),
-                );
+                compact_missing(ui, "In", place.trim_matches(['[', ']']));
             }
             if go.is_some() {
                 return go;
@@ -3466,6 +3627,65 @@ mod tests {
     }
 
     use super::*;
+
+    /// Round 24 FD5: `Rename the file to <name>.md` and its Undo never replace or lose a file.
+    /// Bad inputs: a name that cannot be a file name, a file already at the target, a note
+    /// changed on disk since the DM saw it, the note moved away, and Undo after either side
+    /// changed.
+    #[test]
+    fn iter24_d_fd5_file_rename_is_guarded_and_undone() {
+        assert_eq!(
+            renamed_path("Notes/Broken.md", "Repaired watchkeeper").as_deref(),
+            Some("Notes/Repaired watchkeeper.md")
+        );
+        assert_eq!(
+            renamed_path("Broken.md", "Rook").as_deref(),
+            Some("Rook.md")
+        );
+        for name in ["", "  ", "A/B", "Who?", ".hidden", "[[Rook]]", "Broken"] {
+            assert_eq!(renamed_path("Notes/Broken.md", name), None, "{name:?}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("Notes")).unwrap();
+        let text = "---\nsplat_schema: 2\nsplat_kind: world\nsplat_name: Rook\n---\n";
+        let from = root.join("Notes/Broken.md");
+        let to = root.join("Notes/Rook.md");
+        std::fs::write(&from, text).unwrap();
+        // A file already at the target keeps its bytes, and the note stays where it was.
+        std::fs::write(&to, "Another note.").unwrap();
+        let refused = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", text);
+        assert!(refused.is_err(), "fd5-target-exists");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), "Another note.");
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text);
+        std::fs::remove_file(&to).unwrap();
+        // The note changed on disk after the DM saw it.
+        let refused = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", "Old text");
+        assert!(refused.is_err() && !to.exists(), "fd5-changed");
+        // The note moved away: nothing to rename.
+        assert!(
+            FileRename::apply(root, "Notes/Gone.md", "Notes/Rook.md", text).is_err(),
+            "fd5-gone"
+        );
+        let rename = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", text).unwrap();
+        assert!(!from.exists(), "fd5-moved");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), text, "fd5-bytes");
+        assert_eq!(rename.message(), "The file is now Rook.md.");
+        // Undo refuses while a new file holds the old path, and keeps both.
+        std::fs::write(&from, "A new note.").unwrap();
+        assert!(rename.undo(root).is_err(), "fd5-undo-target-exists");
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), "A new note.");
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), text);
+        std::fs::remove_file(&from).unwrap();
+        // Undo refuses when the renamed file changed since.
+        std::fs::write(&to, format!("{text}\nAn outside edit.\n")).unwrap();
+        assert!(rename.undo(root).is_err(), "fd5-undo-changed");
+        assert!(!from.exists());
+        std::fs::write(&to, text).unwrap();
+        rename.undo(root).unwrap();
+        assert_eq!(std::fs::read_to_string(&from).unwrap(), text, "fd5-undo");
+        assert!(!to.exists(), "fd5-undo-moved");
+    }
 
     #[test]
     fn iter8_optional_links_warn_only_when_set_and_unresolved() {

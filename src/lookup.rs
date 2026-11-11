@@ -873,6 +873,36 @@ impl ContentIndex {
         }
     }
 
+    /// A World note's name as a result or a chooser shows it: with its folder when another World
+    /// note has the same name (`Watch House (Locations)`), so the two can be told apart. One
+    /// lookup in the link names, not a scan of the index.
+    pub(crate) fn shown_name(&self, at: usize) -> String {
+        let entry = &self.items[at].entry;
+        let world = |item: &Item| {
+            item.is_private()
+                && (item.entry.kind == "world" || item.entry.kind == crate::world::NOTE_KIND)
+        };
+        let shared = self
+            .link_names
+            .get(&entry.name.to_lowercase())
+            .is_some_and(|found| {
+                found.iter().any(|&other| {
+                    let item = &self.items[other];
+                    other != at
+                        && world(item)
+                        && item.entry.name == entry.name
+                        && item.entry.path != entry.path
+                })
+            });
+        if !shared {
+            return entry.name.clone();
+        }
+        match entry.path.rsplit_once('/') {
+            Some((folder, _)) => format!("{} ({folder})", entry.name),
+            None => format!("{} ({})", entry.name, entry.path),
+        }
+    }
+
     /// Whether this world entry's `In` chain leads back to it.
     pub(crate) fn in_place_loop(&self, id: Uuid) -> bool {
         self.place_loop.contains(&id)
@@ -1788,7 +1818,9 @@ impl Lookup {
                     .index
                     .as_ref()
                     .and_then(|index| self.current.and_then(|at| index.items.get(at)))
-                    && !current.is_note()
+                    // Every World note opens on World, plain notes too (FD4). A session note
+                    // has no World page.
+                    && (!current.is_note() || current.is_world_note())
                     && design::locked(
                         ui,
                         self.library_draft
@@ -1797,7 +1829,7 @@ impl Lookup {
                             design::icon_button(
                                 ui,
                                 icons::OPEN_OUT,
-                                if current.entry.kind == "world" {
+                                if current.entry.kind == "world" || current.is_world_note() {
                                     "Open in World"
                                 } else {
                                     "Open in Library"
@@ -1865,15 +1897,16 @@ impl Lookup {
         let broken = &index.broken_world;
         if !broken.is_empty() {
             ui.horizontal_wrapped(|ui| {
+                // A note that cannot be read is an error here too, as on World's header.
                 design::status(
                     ui,
                     design::Status {
-                        icon: icons::WARN,
+                        icon: icons::ERROR,
                         word: &format!(
                             "{} cannot be read",
                             design::count(broken.len(), "note", "notes")
                         ),
-                        color: colors().result.warning,
+                        color: colors().result.error,
                     },
                 );
                 if design::link(ui, "Show").clicked() {
@@ -1915,8 +1948,17 @@ impl Lookup {
         }
         let matches = &self.matches.as_ref().unwrap().1;
         let mut chosen = None;
+        // One result that is already open offers nothing to show (FI6).
+        let only_open = match matches.as_slice() {
+            [Hit::Entry(only)] => {
+                self.reading_written.is_none() && self.current == Some(index.target_of(*only).0)
+            }
+            [Hit::Written(only)] => self.reading_written == Some(*only),
+            _ => false,
+        };
         if !query.is_empty()
             && !matches.is_empty()
+            && !only_open
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
             // Outside a message, a line-start action has no icon: its words start at the edge.
