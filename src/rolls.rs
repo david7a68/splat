@@ -170,10 +170,18 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
         response.request_focus();
     }
     if response.has_focus() {
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(menu_choice_focus_id(), response.id));
+        let frame = ui.ctx().cumulative_frame_nr();
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(menu_choice_focus_id(), response.id);
+            data.insert_temp(menu_choice_focus_frame_id(), frame);
+        });
     }
     response.clicked()
+}
+
+/// The frame in which a menu choice last had the keyboard focus.
+fn menu_choice_focus_frame_id() -> egui::Id {
+    egui::Id::new("roll_menu_focused_choice_frame")
 }
 
 /// The menu choice that had the keyboard focus last.
@@ -192,21 +200,33 @@ fn menu_keys_owner_id() -> egui::Id {
 /// At the end of each frame: when a menu the keys opened has closed, by any path (a choice, the
 /// last choice going away, Escape, a click outside, or its control gone), it ends here, and the
 /// focus goes back to the control that owned it. A click outside that gave the focus to another
-/// control keeps it there. Run after everything that draws a menu.
+/// control keeps it there. When the DM moves the focus out of the open menu (Tab to another
+/// control or a field), the return is cancelled at once, so a later Escape never takes the
+/// focus back from where the DM put it. The menu stays open, as a menu does when it loses the
+/// focus. Run after everything that draws a menu.
 pub(crate) fn end_menu_frame(ctx: &egui::Context) {
     let Some(owner) = ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) else {
         return;
     };
+    let focused = ctx.memory(|memory| memory.focused());
+    let clear = |ctx: &egui::Context| {
+        ctx.data_mut(|data| {
+            data.remove::<egui::Id>(menu_keys_owner_id());
+            data.remove::<bool>(focus_first_choice_id());
+            data.remove::<egui::Id>(menu_choice_focus_id());
+            data.remove::<u64>(menu_choice_focus_frame_id());
+        });
+    };
     if egui::Popup::is_id_open(ctx, owner.with("popup")) {
+        let in_menu = ctx.data(|data| data.get_temp::<u64>(menu_choice_focus_frame_id()))
+            == Some(ctx.cumulative_frame_nr());
+        if focused.is_some_and(|focused| focused != owner) && !in_menu {
+            clear(ctx);
+        }
         return;
     }
     let choice = ctx.data(|data| data.get_temp::<egui::Id>(menu_choice_focus_id()));
-    let focused = ctx.memory(|memory| memory.focused());
-    ctx.data_mut(|data| {
-        data.remove::<egui::Id>(menu_keys_owner_id());
-        data.remove::<bool>(focus_first_choice_id());
-        data.remove::<egui::Id>(menu_choice_focus_id());
-    });
+    clear(ctx);
     if focused.is_none() || focused == choice {
         ctx.memory_mut(|memory| memory.request_focus(owner));
     }

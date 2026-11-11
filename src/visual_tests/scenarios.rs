@@ -15120,7 +15120,31 @@ pub mod run_rolls {
             again,
             "With the focus back on the row, Shift+F10 opens its menu again",
         );
-        d.harness_focus_nothing();
+        // AJ1 (re-check): the DM leaves the open menu with Tab, to a button and to a text field,
+        // then presses Escape. The focus stays where the DM put it, or is cleared; it never
+        // goes back to the row.
+        for away in [NEXT_TURN, "Amount"] {
+            let row = d.row_node(ATTACKER).map(|node| node.name);
+            let on_row = row.as_deref().is_some_and(|row| d.tab_to(row));
+            d.press_shift(Key::F10);
+            let opened = d.has_containing("Inspiration: reroll one die");
+            let left = d.tab_to(away);
+            d.press(Key::Escape);
+            let focus = d.focused_name();
+            d.observe(
+                "iter-23-R-AJ1",
+                on_row
+                    && opened
+                    && left
+                    && !d.has_containing("Inspiration: reroll one die")
+                    && focus.as_deref().is_none_or(|focus| focus == away)
+                    && d.has("Roll for them"),
+                format!(
+                    "Tab from the open menu to {away}, then Escape: the menu closes and the focus is {focus:?}, not the row"
+                ),
+            );
+            d.harness_focus_nothing();
+        }
         d.begin_task();
         d.right_click_row(ATTACKER);
         d.observe(
