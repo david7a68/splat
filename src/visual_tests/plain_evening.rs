@@ -378,7 +378,11 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
         })
         .map(|lane| lane.left())
         .fold(f32::NAN, f32::min);
-    let inside = if lane.is_nan() { search } else { search.min(lane) };
+    let inside = if lane.is_nan() {
+        search
+    } else {
+        search.min(lane)
+    };
     let last = [Some(at), art, edit]
         .into_iter()
         .flatten()

@@ -987,7 +987,10 @@ fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> 
                 "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 14}}\n  initiative: {{value: 1}}\n",
                 plain_reader(name, true)
             ),
-            &format!("\n# {name}\n\nA sword for hire on the ford road.\n\n## Actions\n\n{}", ACTIONS.repeat(4)),
+            &format!(
+                "\n# {name}\n\nA sword for hire on the ford road.\n\n## Actions\n\n{}",
+                ACTIONS.repeat(4)
+            ),
         )?;
     }
     fs::create_dir_all(root.join("World")).map_err(|e| e.to_string())?;
