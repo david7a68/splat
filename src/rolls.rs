@@ -6,6 +6,8 @@ use crate::design::{self, Action, Density, Type, colors};
 use eframe::egui::{self, Id, text::LayoutJob};
 use splat::content::dice_text::{self, D20, DamagePart, RollLink};
 use splat::execution::dice::{Dice, Random, Roll};
+use splat::memo::Memo;
+use std::sync::Arc;
 
 /// How a d20 or a damage roll is made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -634,11 +636,24 @@ impl Chip {
 }
 
 /// A creature's actions, from its rules text: each named paragraph with an attack, a save
-/// DC, or damage, in the order printed. Quotes, tables and headings are not rules.
+/// DC, or damage, in the order printed. Quotes, tables and headings are not rules. This list
+/// is the one order of an entry's actions: a tile's Ctrl number is its place here.
 pub(crate) fn chips(text: &str) -> Vec<Chip> {
-    let mut chips: Vec<Chip> = Vec::new();
-    for paragraph in text.split("\n\n").map(str::trim) {
-        if paragraph.starts_with(['>', '|', '#', '<']) {
+    actions(text).iter().map(|(_, chip)| chip.clone()).collect()
+}
+
+/// The actions in `text`, each with the place of its paragraph among the blank-line
+/// paragraphs. Remembered by the text, so a frame that draws the same text parses nothing.
+pub(crate) fn actions(text: &str) -> Arc<Vec<(usize, Chip)>> {
+    static ACTIONS: Memo<Arc<Vec<(usize, Chip)>>> = Memo::new(128);
+    ACTIONS.get_or(&[text.as_bytes()], || Arc::new(parse_actions(text)))
+}
+
+fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
+    let mut chips: Vec<(usize, Chip)> = Vec::new();
+    for (at, paragraph) in text.split("\n\n").map(str::trim).enumerate() {
+        // Spellcasting stays prose: it lists spells, with links to them.
+        if paragraph.starts_with(['>', '|', '#', '<']) || paragraph.starts_with("Spellcasting") {
             continue;
         }
         let Some(title) = design::reader::run_in_title(paragraph) else {
@@ -661,12 +676,18 @@ pub(crate) fn chips(text: &str) -> Vec<Chip> {
         if let Some(chip) = link
             .cloned()
             .and_then(|link| Chip::new(link, paragraph.replace(['*', '_'], "")))
-            && !chips.iter().any(|known| known.label == chip.label)
+            && !chips.iter().any(|(_, known)| known.label == chip.label)
         {
-            chips.push(chip);
+            chips.push((at, chip));
         }
     }
     chips
+}
+
+/// The place of an action in an entry's whole list, by which Ctrl+number arms it.
+pub(crate) fn place_in(all: &[(usize, Chip)], chip: &Chip) -> Option<usize> {
+    all.iter()
+        .position(|(_, known)| known.label == chip.label && known.link == chip.link)
 }
 
 /// One press of an action and what it rolled: an attack and its damage, a save's damage,
@@ -1085,7 +1106,10 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
 
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
 /// tiles says how to use it; outside a run a tile previews, and the line shows the result.
-pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
+///
+/// Each tile comes with its place in the entry's whole list of actions, if it has one: the
+/// number it shows is the number that arms it.
+pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
     if chips.is_empty() {
         return;
     }
@@ -1093,13 +1117,15 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
     let in_run = ctx.data(|data| data.get_temp::<usize>(roller_id()).is_some());
     let armed = ctx
         .data(|data| data.get_temp::<ArmedView>(armed_id()))
-        .filter(|view| in_run && chips.iter().any(|chip| chip.link == view.link));
+        .filter(|view| in_run && chips.iter().any(|(_, chip)| chip.link == view.link));
     set_entry(&ctx, entry);
     ui.add_space(design::XS);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
-        for (at, chip) in chips.iter().enumerate() {
-            let number = (in_run && at < 9).then_some(at + 1);
+        for (place, chip) in chips {
+            let number = place
+                .filter(|place| in_run && *place < 9)
+                .map(|place| place + 1);
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let response = tile(ui, chip, number, lit);
             press(ui, &response, &chip.link);
@@ -1133,7 +1159,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
         });
     } else if !in_run
         && let Some(outcome) =
-            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|c| c.link == o.link))
+            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|(_, c)| c.link == o.link))
     {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
@@ -1189,6 +1215,39 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tiles_number_is_its_place_in_the_whole_list_of_actions() {
+        // A part of the body, as the reader draws one section, keeps the whole body's numbers.
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let entry = splat::content::Entry::parse("Aboleth.md", source).unwrap();
+        let all = actions(&entry.body);
+        let labels: Vec<&str> = all.iter().map(|(_, chip)| chip.label.as_str()).collect();
+        let tentacle = labels
+            .iter()
+            .position(|label| label.starts_with("Tentacle"))
+            .expect("a Tentacle action");
+        assert!(tentacle > 0, "a trait with a save comes first: {labels:?}");
+        let section = &entry.body[entry.body.find("Tentacle.").unwrap()..];
+        let here = actions(section);
+        assert!(here[0].1.label.starts_with("Tentacle"));
+        assert_eq!(place_in(&all, &here[0].1), Some(tentacle));
+        assert_eq!(
+            chips(&entry.body)[tentacle],
+            here[0].1,
+            "Ctrl+number arms that tile"
+        );
+        // Spellcasting is prose in the reader, so it takes no number.
+        let caster = "Dagger. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage.\n\nSpellcasting. The mage casts one of the following spells, using Intelligence as the spellcasting ability (spell save DC 14, +6 to hit with spell attacks).\n\nArcane Burst. Ranged Attack Roll: +6, range 120 ft. Hit: 14 (3d8 + 1) Force damage.";
+        let labels: Vec<String> = chips(caster).into_iter().map(|chip| chip.label).collect();
+        assert_eq!(labels, ["Dagger +4", "Arcane Burst +6"]);
+        // A rider that is no longer prose is in its tile's hover text.
+        let claw = "Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature that isn't an Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.";
+        assert!(chips(claw)[0].text.contains("Paralyzed condition"));
+        // The same text again is not parsed again.
+        assert!(Arc::ptr_eq(&actions(caster), &actions(caster)));
+    }
 
     fn attack() -> RollLink {
         RollLink::D20 {

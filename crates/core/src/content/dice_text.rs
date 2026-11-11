@@ -472,13 +472,18 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         if let Some((bonus, length)) = signed_number(&text[start..])
             && start + length == index
         {
+            // The hit is its own sentence, after `reach 5 ft., one target.`
+            let hit = text[index..]
+                .find("Hit:")
+                .map(|at| index + at)
+                .unwrap_or(index);
             spans.push(Span {
                 range: start..index,
                 link: RollLink::D20 {
                     what: D20::Attack,
                     bonus,
                     label: label.to_owned(),
-                    damage: damage_in(index..sentence_end(text, index)),
+                    damage: damage_in(hit..sentence_end(text, hit)),
                 },
             });
         }
@@ -597,6 +602,15 @@ mod tests {
                 _ => None,
             })
             .unwrap()
+    }
+
+    #[test]
+    fn an_older_attack_carries_the_damage_of_its_hit() {
+        let bite = "Bite. Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8 + 3) piercing damage.";
+        assert_eq!(hit_damage(bite), vec![part("1d8+3", "Piercing")]);
+        // A spell attack bonus has no hit of its own.
+        let spells = "Spellcasting. The mage is a 9th-level spellcaster (spell save DC 14, +6 to hit with spell attacks).";
+        assert_eq!(hit_damage(spells), vec![]);
     }
 
     #[test]

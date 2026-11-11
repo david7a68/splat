@@ -119,7 +119,9 @@ packages and notes (`splat::content::inspiration`):
   [attack_roll, saving_throw, ability_check]}`.
 
 With one such rule, the campaign uses it. With several, campaign settings shows
-`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`.
+`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`. A
+chosen rule that is gone, such as a deleted note, is no choice; the other
+settings still load.
 With none, a run offers no inspiration. A run keeps the rule it started with.
 
 Only a player character with inspiration is offered it: by the synced D&D Beyond
@@ -144,11 +146,15 @@ after the sheet has shown none, a new grant counts again.
   turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
+  It pays for one roll: the armed action's next roll has no advantage from it.
 
 ### A save
 
 1. Click `Ember Burst`. Click each target's row: a creature rolls its save at
-   once, shown where its AC is, `DEX 14`.
+   once, shown where its AC is, `DEX 14`. A click on a target takes it away
+   again, with its save; the last target stays. The row's right-click menu rolls
+   that target's save again, with advantage or disadvantage, and never takes a
+   target away.
 2. `Half for those at or above DC` marks them to take half. `Roll damage` rolls
    the damage once, for every target, into Amount; Enter applies it, halving
    where marked.
@@ -181,6 +187,10 @@ the tiles, and nothing is saved.
   so a player's tiles and `Roll for them` stay when the dock moves to the target.
 - `dice_text` marks a damage part's condition (`When`: its words, and whether it
   replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
+- `rolls::actions` is the one list of an entry's actions, remembered by its text,
+  so a frame that draws the same text parses nothing. A tile's number is its
+  place in the whole entry's list, in every section and in a searched sheet, and
+  Ctrl+number arms from the same list. Spellcasting is not in it.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
   run-in title, skipping printed quotes, tables and headings. A test checks every
   built-in creature: each `Attack Roll:` and each damage group is found.

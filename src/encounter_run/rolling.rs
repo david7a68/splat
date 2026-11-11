@@ -141,17 +141,20 @@ impl Run {
             return;
         };
         let inspired = ask.inspired && self.can_buy_advantage(actor);
+        // Inspiration's advantage is for one roll, so it is not the action's own mode. Without
+        // inspiration to pay for it, there is none.
+        let mode = if ask.inspired { Mode::Normal } else { ask.mode };
         let result = match &ask.link {
             RollLink::D20 {
                 what: D20::Attack, ..
             }
             | RollLink::SaveDc { .. }
             | RollLink::Damage { .. } => {
-                self.arm(actor, ask.link, ask.mode, inspired);
+                self.arm(actor, ask.link, mode, inspired);
                 Ok(())
             }
             RollLink::D20 { .. } | RollLink::Dice { .. } => {
-                self.roll_alone(actor, &ask.link, ask.mode, inspired)
+                self.roll_alone(actor, &ask.link, mode, inspired)
             }
         };
         if let Err(error) = result {
@@ -405,7 +408,7 @@ impl Run {
         let mode = mode.unwrap_or(armed.mode);
         let result = match &armed.link {
             RollLink::SaveDc { ability, .. } => {
-                self.add_save_target(row, ability, mode);
+                self.toggle_save_target(row, ability, mode);
                 Ok(())
             }
             _ if self.player(armed.actor) => {
@@ -441,14 +444,19 @@ impl Run {
                 };
                 self.asking = None;
                 match &armed.link {
+                    // The menu rolls this row's save again, or makes it a target first.
+                    // It never takes a target away.
                     RollLink::SaveDc { ability, .. } => {
-                        self.add_save_target(row, ability, mode);
+                        self.add_save_target(row);
+                        self.roll_save(row, ability, mode);
                         Ok(())
                     }
                     // For a player, the menu rolls for them.
                     link => {
-                        let inspired = inspired && self.can_buy_advantage(armed.actor);
-                        self.attack(armed.actor, row, link, mode, inspired)
+                        let bought = inspired && self.can_buy_advantage(armed.actor);
+                        // Advantage that inspiration cannot pay for is not given.
+                        let mode = if inspired { Mode::Normal } else { mode };
+                        self.attack(armed.actor, row, link, mode, bought)
                     }
                 }
             }
@@ -741,6 +749,10 @@ impl Run {
         )?;
         if inspired {
             self.spend_inspiration(actor);
+            // It paid for this one roll. The armed action's later rolls have none.
+            if let Some(armed) = &mut self.armed {
+                armed.inspired = false;
+            }
         }
         self.show_attack(row, &outcome);
         self.keep_for_reroll(actor, row, outcome, None);
@@ -768,18 +780,41 @@ impl Run {
         self.badges.insert(row, words.join(" · "));
     }
 
-    /// Add `row` to a save's targets, and roll its save if it is a creature.
-    fn add_save_target(&mut self, row: usize, ability: &str, mode: Mode) {
-        let actor = self.armed.as_ref().map(|armed| armed.actor);
-        if Some(self.selected) == actor || self.selected == row {
-            self.aim(row);
-        } else if !self.also.remove(&row) {
-            self.also.insert(row);
-        } else {
-            self.halved.remove(&row);
-            self.saves.remove(&row);
+    /// A click on a row while a save is armed: a new row becomes a target and rolls its
+    /// save, and a target stops being one. The last target stays, as the dock needs one.
+    fn toggle_save_target(&mut self, row: usize, ability: &str, mode: Mode) {
+        if !self.save_targets().contains(&row) {
+            self.add_save_target(row);
+            self.roll_save(row, ability, mode);
             return;
         }
+        if self.selected == row {
+            // Another target takes the dock's first place.
+            let Some(next) = self.also.pop_first() else {
+                return;
+            };
+            self.selected = next;
+        } else {
+            self.also.remove(&row);
+        }
+        self.halved.remove(&row);
+        self.saves.remove(&row);
+        self.badges.remove(&row);
+    }
+
+    /// Make `row` one of a save's targets. The targets before it stay.
+    fn add_save_target(&mut self, row: usize) {
+        let actor = self.armed.as_ref().map(|armed| armed.actor);
+        if Some(self.selected) == actor {
+            self.aim(row);
+        } else if self.selected != row {
+            self.also.insert(row);
+        }
+    }
+
+    /// Roll a creature target's save, in place of one it rolled before. A player rolls their
+    /// own.
+    fn roll_save(&mut self, row: usize, ability: &str, mode: Mode) {
         if self.player(row) {
             return;
         }
@@ -863,9 +898,13 @@ impl Run {
     /// Handle what was pressed under the armed tile.
     pub(super) fn armed_tiles_end(&mut self, ctx: &egui::Context) {
         rolls::set_inspired(ctx, false);
-        let Some(action) = rolls::take_armed_action(ctx) else {
-            return;
-        };
+        if let Some(action) = rolls::take_armed_action(ctx) {
+            self.armed_action(action);
+        }
+    }
+
+    /// What was pressed under the armed tile.
+    fn armed_action(&mut self, action: ArmedAction) {
         let Some(armed) = self.armed.clone() else {
             return;
         };
@@ -876,7 +915,7 @@ impl Run {
             }
             ArmedAction::RollForThem => {
                 let row = self.selected;
-                let inspired = armed.inspired && self.has_inspiration(armed.actor);
+                let inspired = armed.inspired && self.can_buy_advantage(armed.actor);
                 self.attack(armed.actor, row, &armed.link, armed.mode, inspired)
             }
             ArmedAction::RollDamage => self.save_damage(&armed),
@@ -1257,6 +1296,96 @@ mod tests {
         assert!(log_has(&run, "2d20kh1"), "{:?}", run.state.log);
         assert!(!run.has_inspiration(0), "it is spent");
         assert!(run.reroll.is_none(), "this rule has no reroll");
+    }
+
+    #[test]
+    fn inspiration_pays_for_advantage_on_one_roll_of_an_armed_action() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Advantage);
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        inspired_player(&mut run, actor);
+        // The tile's menu: `Roll with inspiration (advantage)`.
+        run.roll_link(Ask {
+            mode: Mode::Advantage,
+            inspired: true,
+            ..ask(attack(), actor)
+        });
+        let advantage_rolls = |run: &Run| {
+            run.state
+                .log
+                .iter()
+                .filter(|line| line.contains("2d20kh1"))
+                .count()
+        };
+        let spends = |run: &Run| {
+            run.state
+                .log
+                .iter()
+                .filter(|line| line.contains("expends inspiration"))
+                .count()
+        };
+        run.target(others[0], None);
+        run.armed_action(ArmedAction::RollForThem);
+        assert_eq!((advantage_rolls(&run), spends(&run)), (1, 1));
+        run.target(others[1], None);
+        run.armed_action(ArmedAction::RollForThem);
+        assert_eq!(
+            (advantage_rolls(&run), spends(&run)),
+            (1, 1),
+            "the second attack has no advantage: {:?}",
+            run.state.log
+        );
+    }
+
+    #[test]
+    fn a_rows_menu_rolls_a_targets_save_again_and_keeps_every_target() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let save = RollLink::SaveDc {
+            label: "Fire Breath".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "4d6".into(),
+                kind: Some("Fire".into()),
+                when: None,
+            }],
+        };
+        // Targets with a stat block that has a Dexterity save to roll.
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let aboleth = std::sync::Arc::new(Entry::parse("Aboleth.md", source).unwrap());
+        for row in &others {
+            run.state.participants[*row].definition = aboleth.clone();
+        }
+        run.roll_link(ask(save, actor));
+        run.target(others[0], None);
+        run.target(others[1], None);
+        assert_eq!(run.saves.len(), 2, "each new target rolls its save");
+        let targets = |run: &Run| {
+            let mut rows = run.save_targets();
+            rows.sort_unstable();
+            rows
+        };
+        assert_eq!(targets(&run), others);
+        // The menu on each target, the dock's first one too, rolls one new save.
+        for row in &others {
+            let lines = run.state.log.len();
+            run.row_choice(*row, RowChoice::Roll(Mode::Advantage, false));
+            assert_eq!(targets(&run), others, "row {row} stays a target");
+            assert_eq!(run.state.log.len(), lines + 1, "one new save");
+            assert!(run.state.log.last().unwrap().contains("2d20kh1"));
+        }
+        assert_eq!(run.saves.len(), 2);
+        // A click takes a target away, with its save; the last one stays.
+        run.target(others[0], None);
+        assert_eq!(targets(&run), vec![others[1]]);
+        assert!(!run.saves.contains_key(&others[0]));
+        run.target(others[1], None);
+        assert_eq!(targets(&run), vec![others[1]]);
     }
 
     #[test]

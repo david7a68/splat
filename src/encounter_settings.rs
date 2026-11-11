@@ -166,18 +166,15 @@ impl Options {
             }
         }
         result.inspiration_rules = inspiration_rules(campaign, catalogue, &document);
-        result.inspiration_choice = match entry
+        // A chosen rule that is gone, such as a deleted note, is no choice: the rest of the
+        // settings still load, and the DM chooses again where there are several.
+        result.inspiration_choice = entry
             .fields
             .get("splat_rule_choices")
             .and_then(|v| v.get(inspiration::CHOICE))
-        {
-            Some(reference) => {
-                let reference: EntryRef =
-                    serde_yaml_ng::from_value(reference.clone()).map_err(|e| e.to_string())?;
-                Some(catalogue.resolve_ref(&reference)?)
-            }
-            None => None,
-        };
+            .and_then(|reference| serde_yaml_ng::from_value::<EntryRef>(reference.clone()).ok())
+            .and_then(|reference| catalogue.resolve_ref(&reference).ok())
+            .filter(|id| result.inspiration_rules.iter().any(|rule| rule.id == *id));
         Ok(result)
     }
     /// What inspiration does in this campaign's runs: its only rule, or the chosen one of
@@ -474,6 +471,18 @@ mod tests {
             chosen.save(&campaign, &document.text).unwrap();
             assert_eq!(load().inspiration(), Some(effect));
         }
+        // The chosen note is deleted: the settings still load, and the one rule left applies.
+        let document = CampaignDocument::load(&campaign).unwrap();
+        Options {
+            inspiration_choice: Some(pick(Inspiration::Advantage)),
+            ..both.clone()
+        }
+        .save(&campaign, &document.text)
+        .unwrap();
+        fs::remove_file(dir.path().join("Rules/Inspiration.md")).unwrap();
+        let left = load();
+        assert_eq!(left.inspiration_choice, None);
+        assert_eq!(left.inspiration(), Some(Inspiration::Reroll));
     }
 
     fn campaign(root: &Path) -> Campaign {
