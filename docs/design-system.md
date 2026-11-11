@@ -117,8 +117,11 @@ Every control the app draws is at least 24 px (WCAG 2.5.8, and the `target-size`
 egui's own scroll bar, which is 8 px. The check reports it as chrome. It stays 8 px because egui paints the
 handle at the width it senses, and the wheel and the page keys also scroll. Tab steps over it
 (`Splat::skip_unnamed_focus`). The check counts a node as a bar only if it has no role and no name and matches
-the full length of a scroll surface's edge. A nested horizontal bar can float up to the reader's visible
-bottom edge. It stays hidden while its table is below view.
+the full length of a scroll surface's edge. A reader table's sideways bar has its own lane below the last row.
+While that lane is below view, egui floats the bar up to the reader's visible bottom edge, and the lane goes with
+it: rows pass under the lane's hairline, as they pass under the fixed header at the top, so the bar never covers
+cell text. Cells under the lane are out of view and are not controls. The bar stays hidden while its table is
+below view.
 
 Reader tables keep each column at least as wide as its longest word. A table that cannot fit scrolls sideways
 and says how to do that. The first column stays at the reader’s left edge, with a hairline beside it. The
@@ -201,8 +204,13 @@ reason and disables campaign choices. Package, encounter, repair and run-setting
 reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
-A quiet action at the start of a line uses `line_start`: align its text with the line above and extend
-its target into the gutter. This also applies to an icon-bearing quiet message action below its message. In a
+A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
+and its padding and any icon hang in the gutter (`LINE_START_HANG`, 28 px with an icon, `S` without one). A
+pane that holds such an action with an icon beside a splitter keeps a `HANG_GUTTER` (36 px) left gutter, so
+the whole target clears the splitter's grab area: Lookup, the World page, the Library reader and the encounter
+editor do, and the Library list gives up that width so the reader keeps its own. This also applies to an
+icon-bearing quiet message action below its message: its words start at the message's words, and its icon sits
+in the message's icon column. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
@@ -286,14 +294,19 @@ Reader links use accent text and an underline. Library links open in place; othe
 Each link in a paragraph is its own control: Tab reaches the links in reading order, a focus ring shows on that
 link only, and Enter or Space follows it. Its accessible name is its words and where it goes (`the bell keeper
 (opens Oskar)`); a missing link is not a Tab stop. A short link reserves its target in the layout: a link whose
-words are narrower than 24 px gets 24 px of layout width, with its words at the left, and the text after it
-starts after that space. The line wraps if it must. Two links side by side have a blank between them, so each
-keeps its own underline. Where the body line is shorter than 24 px (compact prose and compact rows), a line that
-holds a link grows to 24 px and keeps its baselines. So every link target is at least 24 × 24 px, stays on its
-own line, and never overlaps another link's target. Links 24 px or wider keep their layout, and the paragraph's
-words do not change. The focus ring sits `XS / 2` outside the link's words, so it never covers a letter, even at
-the start of a line, and it stays inside the reader's visible area (World and Library keep an `L` gutter beside
-the text). Focus stays on the link when the layout around it changes, and another reader with the same words, or
+words are narrower than 24 px gets 24 px of layout width. Inside a line, its words sit in the middle of that
+space, so the spare width is split before and after them and its target is centred on them. A link that starts
+a line (at the start of the paragraph, after a line break, or where it wraps) keeps its words at the text edge,
+with all the space after them. A link right after another short link gets as much space after it as before it,
+so the pair reads evenly. The text after a link starts after its space, and the line wraps if it must. Two links
+side by side have a blank between them, so each keeps its own underline. Where the body line is shorter than
+24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, so the paragraph
+keeps one line pitch and its baselines; a paragraph without a link keeps its own line height. A link's underline
+sits 2 px below its words' baseline and covers only its words, never at the bottom of a taller line. So every
+link target is at least 24 × 24 px, stays on its own line, and never overlaps another link's target. Links 24 px
+or wider keep their layout, and the paragraph's words do not change. The focus ring sits `XS / 2` outside the
+link's words, so it never covers a letter, even at the start of a line, and it stays inside the reader's visible
+area (World, Library and Lookup keep a `HANG_GUTTER` beside the text). Focus stays on the link when the layout around it changes, and another reader with the same words, or
 a reader with a document beside one without (Lookup beside a Sessions note), does not take it.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
@@ -663,7 +676,7 @@ heading. Fixed headers cover passing rows with page fill and a hairline. Generat
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
-marker` action drawn with `line_start`, so its icon starts at the card's text edge. It copies the exact marker line,
+marker` action drawn with `line_start`, so its words start at the card's text edge and its icon hangs in the gutter. It copies the exact marker line,
 and then a success message in its place says `Copied. Change 1d6 to the number of names.` until the card shows another
 NPC. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says

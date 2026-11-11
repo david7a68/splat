@@ -474,11 +474,11 @@ impl WorldPage {
                     });
             });
         let mut nav = None;
-        // An `L` gutter, so a quiet action that starts a line can reach into it and stay clear
-        // of the World column's splitter.
+        // A gutter that a quiet action with an icon that starts a line (`Copy the marker`) can
+        // hang into and stay clear of the World column's splitter.
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::L as i8,
+                left: design::HANG_GUTTER as i8,
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {

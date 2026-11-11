@@ -202,6 +202,15 @@ pub const L: f32 = 16.0;
 pub const XL: f32 = 24.0;
 pub const XXL: f32 = 32.0;
 
+/// The room an icon takes before an action's words: the Body-size glyph, its `XS` gap and 2 px.
+pub const ICON_SLOT: f32 = 20.0;
+/// How far a `line_start` quiet action with an icon reaches left of the text edge: its `S`
+/// padding and its icon hang in the gutter, so its words start at the edge.
+pub const LINE_START_HANG: f32 = S + ICON_SLOT;
+/// The gutter of a pane beside a splitter when the pane holds such an action: the hang, and
+/// egui's 5 px grab area on the pane's side of the splitter, rounded up to the grid.
+pub const HANG_GUTTER: f32 = XXL + XS;
+
 pub const RADIUS_CONTROL: f32 = 3.0;
 pub const RADIUS_LAYER: f32 = 6.0;
 pub const HAIRLINE_WIDTH: f32 = 1.0;
@@ -494,6 +503,18 @@ pub(crate) fn contrast(a: Color32, b: Color32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// The hang and the gutter that holds it follow the parts they are made of.
+    #[test]
+    fn iter18_a_the_hang_gutter_holds_an_icon_action_clear_of_a_splitter() {
+        assert_eq!(super::ICON_SLOT, super::Type::Body.size() + super::XS + 2.0);
+        assert_eq!(super::LINE_START_HANG, super::S + super::ICON_SLOT);
+        let grab = eframe::egui::Style::default()
+            .interaction
+            .resize_grab_radius_side;
+        assert!(super::HANG_GUTTER >= super::LINE_START_HANG + grab);
+        assert_eq!(super::HANG_GUTTER % super::XS, 0.0);
+    }
+
     use super::*;
 
     fn all_text(c: &Colors) -> Vec<(&'static str, Color32)> {

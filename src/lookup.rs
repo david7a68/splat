@@ -1737,14 +1737,22 @@ impl Lookup {
                 egui::Frame::new()
                     .fill(colors().page)
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
+                    // A `line_start` action with an icon hangs into the left gutter, clear
+                    // of the column's splitter.
+                    .inner_margin(egui::Margin {
+                        left: design::HANG_GUTTER as i8,
+                        ..egui::Margin::same(PANEL_MARGIN as i8)
+                    }),
             )
             .show(ctx, |ui| self.panel(ui));
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
         // With the margin, so a press anywhere on the panel counts as here.
-        let panel = ui.max_rect().expand(PANEL_MARGIN);
+        let panel = ui
+            .max_rect()
+            .expand(PANEL_MARGIN)
+            .with_min_x(ui.max_rect().min.x - design::HANG_GUTTER);
         self.panel_rect = Some(panel);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
