@@ -652,7 +652,7 @@ fn reference_text(reference: &Reference) -> String {
         let entries: Vec<String> = files
             .iter()
             .map(|(path, lines)| {
-                let lines: Vec<String> = lines.iter().map(|line| json(line)).collect();
+                let lines: Vec<String> = lines.iter().map(json).collect();
                 format!("{}: [\n{}\n]", json(path), lines.join(",\n"))
             })
             .collect();

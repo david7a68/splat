@@ -1,5 +1,94 @@
 # DM audit: one evening of play
 
+## The frozen evening (2026-11-11)
+
+The script `src/visual_tests/dm_audit.rs` now runs as the scenario `dm-audit` in every visual run, and it is
+G6: it plays the evening and fails when a task's page transitions, interactions or path differ from
+`counts.json`, when a frozen task is missing, when a task is new, or when a counted act finds no control.
+`devenv shell -- audit-freeze [label]` plays it again and writes `steps.tsv`, `summary.tsv` and
+`counts.json`. Run it on `main` only. A feature adds its own acts as **new** tasks and freezes again, so the
+diff of `counts.json` shows only new rows. The scenario takes no captures, so the capture names in the
+sections below refer to the first audit's run.
+
+**Set-up is apart.** Last week's session, the three restarts, the simulated microphone and service keys,
+and the Undo of the Fireball make the fixture ready. Each is a `Setup` row in `steps.tsv` and counts for
+nothing, so a set-up change cannot move a count.
+
+**Measured on `main`** at `77ec5920`, without pull request 232 (see "Not final yet" below):
+
+| Phase | Tasks | Transitions before | Transitions now | Interactions before | Interactions now |
+|---|---:|---:|---:|---:|---:|
+| Before | 7 | 5 | 5 | 34 | 35 |
+| During | 27 | 7 | 7 | 180 | 182 |
+| After | 6 (was 7) | 1 | 3 | 17 | 15 |
+| Total | 40 (was 41) | **13** | **15** | **231** | **232** |
+
+By kind, before and now: Nav 14 and 15, Sub 7 and 6, Panel 12 and 12, Find 49 and 53, Do 149 and 146.
+
+**Each difference from 13 and 231.** The old `steps.tsv` was measured on 2026-11-02 (#25). The script and
+the app changed after it, and the script was not run again.
+
+| Task | Before | Now | Why |
+|---|---|---|---|
+| Recall what happened last session | 1: `open Last time` | 2: the `Last time` link to the last session, then tonight's session again | Since #39 the line is a link with a one-line preview, and the script stopped clicking. The preview reads only `Recap of last time` or `What happened`. Last week's words are under another heading, so the line shows none of them (a fact in `summary.tsv`). Reading them takes the link and the way back |
+| Read last session's recap aloud | 1 | 2 | The same |
+| The party travels for half a day | 1 | 2: `More Add actions`, `Add Travel` | Since #136 the strip keeps Fight, Group and Long rest in view, and Travel is in **More** at 1200x800 |
+| Record a short rest | 1 | 2 | The same, for Short rest |
+| Build tonight's encounter | 15 | 16 | `Duplicate` is a line of the row's menu: 2, was 1 |
+| Make the boss your own | 6 | 5 | `Make it yours` is a line of the row's menu: 2, was 1. The HP field has focus, so the number is typed in 1, was 3 |
+| A fight you did not plan | 9 | 8 | `Close run` closes the empty run at once. `Close now` is no longer asked |
+| Say where the fight happened | 4, no transition | 4, **T T** | The `Details` tab went in #39. The place is now the `Where` field of the Timeline page: the row's `Timeline` link, type, then `Session` again |
+| Link the fight in the note | 2 | Removed | `Add to notes` is drawn only for an event with no run (`src/sessions/page.rs`, the plan row's action band). A played fight has a run, so the control does not exist and the act was blocked. No control links a played fight today; F7's `Add rewards` will write the link |
+| Process the recording | 4 | 4 | Its tab is named `Recordings, 1 recording` now. The count is the same |
+
+Sum: +1, +1, +1, +1, +1, −1, −1, 0 and −2 interactions give 232. The two transitions are the Timeline trip.
+One fact also changed with the app and not the count: "final HP reads in place" looked for a `FINAL HP`
+heading, which the opened row no longer has; it now looks for the HP lines and `Log`, and is true.
+
+### The plain campaign (G7)
+
+`Seed::Plain` in `src/visual_tests/fixture.rs` is the campaign of the measured evening plus what the
+session-cycle features touch: old task lines under `## Plan for tonight`, words typed as conditions
+(`Bless 10 rounds`, `Hexed until the hag dies`), a marked roll table, a played fight with loot, NPCs with and
+without a stat block, a session with a recap and one without, a Travel event, the participant name
+`Ashfang, Eldest Wolf of the Southern Ridge`, and 12 participants in one fight. The scenario
+`plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`) and records 40 views:
+eight screens at 1200x800 and 960x640 with Lookup closed and open, and six Lookup readers at both sizes. For
+each view it records every named control in view and every painted text, with its rectangle. It records
+every file of the campaigns at the start and the end. `src/visual_tests/plain_evening/reference.json` holds
+them. A run's file name and ID are random, so G7 names each run by its own name before it compares; nothing
+else is changed or masked.
+
+G7 fails on any difference that a row of `plain_evening/allowed.json` does not name whole: its row of
+section 2.5, the screen, the view, the control, text or file, and the rectangles or lines. A row that
+matches nothing fails, and the check fails when the reference or the evening's capture list is empty or
+missing. `audit-freeze` writes the reference again, and refuses while `allowed.json` has a row.
+
+### The reader's title, measured
+
+`titles.tsv` holds the measurement, from the same scenario. Lookup's reader, with the title in `Display`
+(26 px):
+
+| Title | Width | Case B (1200x800, Lookup open), inside 406: room after `Edit` | Case D (960x640, Lookup open), inside 320: room after `Edit` | With art (a campaign creature, no `Edit`): B and D |
+|---|---:|---:|---:|---:|
+| `Captain Varra`, 13 letters | 160.1 | 176.8 | 90.8 | 173.9 and 87.9 |
+| `Oren Thistlewick`, 16 | 196.5 | 140.4 | 54.4 | 137.5 and 51.5 |
+| `Captain Varra Black`, 19 | 229.5 | 107.4 | 21.4 | 104.5 and 18.5 |
+
+`Edit` is 61.1 px and starts 8 px after the title. In Lookup a campaign creature has no `Edit` (it offers
+`Open in Library`), and its art, 64 px, starts 8 px after the title. No reader scrolled. Section 1.2 of
+`docs/design/session-cycle.md` estimated 82, 47 and 12 at case D, and 168, 133 and 98 at case B. The
+verdicts at case D stay. At case B the 16-letter title now has room for `Start fight` and the icon, with
+0.4 px to spare on the estimated widths of actions that do not exist yet. Section 1.2 and section 7 now
+carry the measured numbers, and the limit "about 10 letters" for `Start fight` at case D is now about 11.
+
+### Not final yet
+
+Pull request 232 (saved Undo and Continue fight) changes the ended view and the Encounters page header. The
+counts and the reference above are from `main` without it. After it merges, run on merged `main`:
+`flock -x /tmp/splat-visual-slot-1.lock env SPLAT_VISUAL_VIDEO=0 devenv shell -- audit-freeze freeze`, then
+review the diff of `counts.json`, `summary.tsv` and `reference.json`, and update the table above.
+
 ## Update: what the design changes did
 
 Design changes A, B, D, E and F below are built. C, adding a participant to a live fight, is now built too. The run's Arrivals panel adds one creature, found or made up, and encounter groups add a prepared group. A group can also be assembled in the session's plan. The measured counts below do not include these flows. The same evening,

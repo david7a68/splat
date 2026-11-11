@@ -18,7 +18,8 @@ No feature adds a page, a panel, a tab, a strip or a dialog.
 **Counts, by hand against `steps.tsv`** (section 2.1): the 41 measured tasks go from 13 page transitions and
 231 interactions to 12 and 226, or 228 when the DM opens **More** twice on the Add strip. Seven records that
 were on paper cost 14 more, and 2 more, once, when the campaign has several travel tables. The audit script
-has drifted from `steps.tsv`, so P1a measures `main` again before any feature lands.
+had drifted from `steps.tsv`. P1a repaired it and measured `main` again: 40 tasks, 15 page transitions and
+232 interactions (`artifacts/dm-audit/README.md`). That is G6's yardstick for every feature.
 
 ## 1. Rules for every feature
 
@@ -99,17 +100,21 @@ Timeline` (F4).
   `Start fight` is never an icon. An entry that has only `Add to Log` shows its word, then its icon, then
   nothing.
 
-**Sums for the header** (estimates; P1a measures the title, and T18.2 tests them). A title in `Display`
-(26 px) takes about 12 px for each letter. `Edit` takes about 64 px, `Start fight` about 104, `Add to Log`
-about 108, and its icon 28. The room after the title is the width inside, less the title, 16 and 64. A reader
-that scrolls has 12 px less, and each cell still holds. An entry with a portrait has about 80 px less,
-because `Edit` follows the art (`src/world.rs:1750-1753`): at case D a 13-letter title then shows neither.
+**Sums for the header** (P1a measured the titles and Lookup's room: `artifacts/dm-audit/titles.tsv`;
+T18.2 tests the rule). A title in `Display` (26 px) is 160.1, 196.5 and 229.5 px for 13, 16 and 19 letters:
+about 12.2 px for each letter. `Edit` is 61 px wide and starts 8 px after the title. `Start fight` takes
+about 104, `Add to Log` about 108, and its icon 28, each with a gap of 4 before it (estimates: these do not
+exist yet). Lookup's reader is 320 px inside at case D and 406 at case B. The room after `Edit` is the width
+inside, less the title, 8 and 61. A reader that scrolls has 12 px less (an estimate: no measured reader
+scrolled), and each cell still holds. In Lookup a campaign creature has no `Edit`, and its art (64 px)
+starts 8 px after the title, so it has about 3 px less room than an NPC with `Edit`. An entry that has both
+art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campaign has none.
 
-| Reader | Inside | `Captain Varra`, 13 letters (about 160 px) | `Oren Thistlewick`, 16 (about 195) | `Captain Varra Black`, 19 (about 230) |
+| Reader | Inside | `Captain Varra`, 13 letters (160 px) | `Oren Thistlewick`, 16 (197) | `Captain Varra Black`, 19 (230) |
 |---|---:|---|---|---|
-| Lookup at case D | 322 | 82 px: `Add to Log` as its icon | 47: the icon | 12: neither |
-| Lookup at case B | 408 | 168: `Start fight`, and the icon | 133: `Start fight` | 98: the icon |
-| The World page at 960x640 | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
+| Lookup at case D (measured) | 320 | 91 px: `Add to Log` as its icon | 54: the icon | 21: neither |
+| Lookup at case B (measured) | 406 | 177: `Start fight`, and the icon | 140: `Start fight`, and the icon, with 0.4 px to spare | 107: the icon |
+| The World page at 960x640 (estimate) | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
 
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
@@ -249,7 +254,8 @@ typed scenes cost 1 more, and 1 to come back to the plan.
 - **The More clicks and the audit script.** `steps.tsv` counts no **More** click, and the script clicks
   **More** only when `Travel` or `Short rest` is not in view. Its task for a played fight clicks an `Add to
   notes` that the app no longer has (`src/sessions/page.rs:4388`). So this document gives no total for
-  `main`: P1a repairs the script, freezes it, and measures `main`.
+  `main`: P1a repairs the script, freezes it, and measures `main`. P1a measured 15 transitions and 232
+  interactions in 40 tasks; `artifacts/dm-audit/README.md` explains each difference from 13 and 231.
 
 ### 2.2 J2: the improvised evening
 
@@ -1721,9 +1727,9 @@ Each is a limit that this design keeps and states, with its count.
   searched again after Lookup closed or showed an entry: 1 or 2 more (section 2.3, F3). `Back` is as today;
   P1c records these states in a test.
 - **The rewards block does not follow the fight** after it is written (F7).
-- **A reader's header at 960x640 with Lookup open** shows `Start fight` beside a title of up to about 10
-  letters, and the `Add to Log` icon up to about 17; a portrait takes about 80 px more. Section 1.2 counts
-  the other routes.
+- **A reader's header at 960x640 with Lookup open** shows `Start fight` beside a title of up to about 11
+  letters (143 px, measured in P1a), and the `Add to Log` icon up to about 17 (219 px); art and `Edit`
+  together take about 72 px more. Section 1.2 counts the other routes.
 - **A row's effects share its second line with today's words.** At 1200x800 it holds one counted effect and
   a count, or two counted effects with short names. At 960x640 with Lookup open it holds one long reminder,
   or one counted effect, and a count. The hover, **Conditions** and the notice line hold the whole words
