@@ -1174,14 +1174,28 @@ pub mod library_author {
             "Overwrite puts the draft on disk in place of the other change",
         );
 
-        // Invalid note: the save is refused, the words stay, and the reason is on screen.
+        // Invalid note: Save would refuse it, so the state says Invalid with Save's reason and
+        // Save is blocked before any write; the words stay. (Round 23: a ready state means Save
+        // would accept the draft.)
         d.type_into_editor(THIRD_WORDS);
         d.replace_editor_text("no front matter at all");
-        d.click(SAVE);
+        let reason = crate::campaign_content::repair_problem(
+            "Rules/Ash Exposure.md",
+            "no front matter at all",
+        )
+        .0
+        .or_else(|| {
+            splat::content::Entry::parse("Rules/Ash Exposure.md", "no front matter at all").err()
+        })
+        .expect("the draft is refused");
         d.observe(
             "T8.3",
-            d.has_containing("Error: ") && draft_here(d, "no front matter at all"),
-            "An invalid note keeps the draft and states why",
+            d.is_disabled(SAVE)
+                && d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.has_containing(&reason)
+                && draft_here(d, "no front matter at all"),
+            format!("An invalid note blocks Save, keeps the draft and states why: {reason}"),
         );
         d.click(DISCARD);
         d.observe(

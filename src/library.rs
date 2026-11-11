@@ -72,8 +72,13 @@ fn draft_repair_problem(
     recovery: Option<&(Module, String, bool)>,
 ) -> (Option<String>, Option<usize>) {
     let (problem, line) = crate::campaign_content::repair_problem(&note.path, draft);
-    let Some(error) = note.error.as_ref().filter(|_| note.fault.is_none()) else {
+    // A file the system will not read has no text to repair: its reader names the read fault.
+    if note.fault.is_some() {
         return (None, line);
+    }
+    let Some(error) = note.error.as_ref() else {
+        // A readable entry's draft: Save's own refusal, with a YAML fault in its own words.
+        return (refusal.map(|refusal| problem.unwrap_or(refusal)), line);
     };
     if recovery.is_some_and(|(_, _, exists)| !exists) {
         return (Some(error.clone()), line);
@@ -1445,6 +1450,17 @@ fn package_registered(name: &str, chosen: bool) -> String {
     }
 }
 
+/// A Save that failed on the disk (a read-only file or folder, a write error): an action-time
+/// failure. It belongs to the draft Save tried to write, by owner, path and words. The draft's
+/// state slot says `Not saved` with Save's reason until the draft changes, another entry opens,
+/// or a Save succeeds. Nothing reads the disk to show it.
+struct SaveFailure {
+    owner: Option<Uuid>,
+    path: String,
+    draft: String,
+    reason: String,
+}
+
 /// A draft that `Let it go` dropped after its file left the disk, for one step of undo, and
 /// whether this campaign used its entry then.
 struct LetGo {
@@ -2424,6 +2440,8 @@ pub struct Library {
     /// The note's owner and path, and the discarded words.
     discarded: Option<(Option<Uuid>, String, String)>,
     discarded_note: Option<LetGo>,
+    /// A Save that failed on the disk, for the draft it tried to write.
+    save_failure: Option<SaveFailure>,
     identity_undo: Option<IdentityUndo>,
     identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
@@ -5129,8 +5147,9 @@ impl Library {
         let loaded = self.loaded.as_ref().unwrap();
         let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        let result = match loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft)) {
-            Some(error) => Err(error),
+        let refused = loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft));
+        let result = match &refused {
+            Some(error) => Err(error.clone()),
             None => {
                 let baseline = (!file_gone).then_some(note.text.as_str());
                 write_note(&root, &note.path, baseline, &self.draft)
@@ -5170,6 +5189,7 @@ impl Library {
                 self.matches = None;
                 self.scope_counts = None;
                 self.just_saved = true;
+                self.save_failure = None;
                 self.content_changed = Some(root);
                 l.refresh_diagnostics();
                 self.error = None;
@@ -5188,6 +5208,15 @@ impl Library {
                         moved_to: None,
                         text,
                         fault: None,
+                    });
+                }
+                // The disk refused the write: the draft's state slot says so with Save's reason.
+                Ok(_) if refused.is_none() => {
+                    self.save_failure = Some(SaveFailure {
+                        owner: note.owner.id(),
+                        path: note.path.clone(),
+                        draft: self.draft.clone(),
+                        reason: e,
                     });
                 }
                 Ok(_) => self.error = Some(e),
@@ -5488,8 +5517,18 @@ impl Library {
         let save_refusal = refusal.clone().filter(|_| dirty);
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A readable entry's draft that Save refuses names the reason where a repair draft does.
-        let repair_problem = repair_problem.or_else(|| save_refusal.clone());
+        // A Save that failed on the disk, while this is still the draft it tried to write.
+        if self.save_failure.as_ref().is_some_and(|failure| {
+            failure.owner != note.owner.id()
+                || failure.path != note.path
+                || failure.draft != self.draft
+        }) {
+            self.save_failure = None;
+        }
+        let failed = self
+            .save_failure
+            .as_ref()
+            .map(|failure| failure.reason.clone());
         if save_refusal.is_some() && !overwrite {
             save = false;
         }
@@ -5506,6 +5545,13 @@ impl Library {
                 icon: icons::WARN,
                 word: "Changed on disk",
                 color: d.external,
+            }
+        } else if failed.is_some() {
+            // An action-time failure: the disk refused the last Save of this draft.
+            Status {
+                icon: icons::ERROR,
+                word: "Not saved",
+                color: d.invalid,
             }
         } else if dirty {
             Status {
@@ -5904,7 +5950,13 @@ impl Library {
                     });
                 });
             });
-            if let Some(problem) = &repair_problem {
+            // A readable entry's refused draft and a failed Save name their reason in the reserved
+            // slot below Save, so neither the first refusal nor Discard moves the editor.
+            let slot_problem = repair_problem
+                .as_ref()
+                .filter(|_| note.error.is_none())
+                .or(failed.as_ref());
+            if let Some(problem) = repair_problem.as_ref().filter(|_| note.error.is_some()) {
                 repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
                 if discard_is_for(self.discarded.as_ref(), note)
                     && self.draft == note.text
@@ -5928,7 +5980,18 @@ impl Library {
                     .size()
                     .y
                     .max(discarded_height(ui, note.name(), editor_width))
-                    .max(Density::Read.control() + design::XS);
+                    .max(Density::Read.control() + design::XS)
+                    .max(slot_problem.map_or(0.0, |problem| {
+                        egui::WidgetText::from(Type::Body.rich(ui, problem))
+                            .into_galley(
+                                ui,
+                                Some(egui::TextWrapMode::Wrap),
+                                editor_width - design::XL,
+                                Type::Body.font(ui),
+                            )
+                            .size()
+                            .y
+                    }));
                 let (slot, _) =
                     ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
                 if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
@@ -5942,6 +6005,14 @@ impl Library {
                     {
                         self.draft = text;
                     }
+                } else if let Some(problem) = slot_problem {
+                    // Save's reason: its refusal before the write, or the disk's failure.
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    design::message(&mut slot_ui, Tone::Error, problem);
                 } else if let Some(reason) = draft_reason {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()
@@ -10073,6 +10144,67 @@ mod tests {
             "ready-accepted-no-reason\n{painted}"
         );
         assert!(library.can_save_and_close(), "ready-accepted-close-save");
+
+        // An action-time failure: the folder is read-only, so Save fails on the disk. The state
+        // slot says Not saved with Save's own reason, not Unsaved, and the file keeps its bytes.
+        use std::os::unix::fs::PermissionsExt;
+        let notes = campaign.path.join("Notes");
+        let writable = fs::metadata(&notes).unwrap().permissions();
+        fs::set_permissions(&notes, fs::Permissions::from_mode(0o555)).unwrap();
+        let accepted = library.draft.clone();
+        library.save_selected(false);
+        let reason = library
+            .save_failure
+            .as_ref()
+            .map(|failure| failure.reason.clone())
+            .expect("disk-failure-recorded");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Not saved"),
+            "disk-failure-state\n{painted}"
+        );
+        assert!(
+            painted.contains(&reason),
+            "disk-failure-reason {reason}\n{painted}"
+        );
+        assert!(
+            !painted.contains("Unsaved"),
+            "disk-failure-not-unsaved\n{painted}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), saved, "disk-failure-not-written");
+        assert_eq!(library.draft, accepted, "disk-failure-draft-kept");
+        // Only that draft owns it: the next edit ends it, and going back to the same words
+        // does not bring it back.
+        library.draft = format!("{accepted}More.\n");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Unsaved") && !painted.contains("Not saved"),
+            "disk-failure-edit-ends\n{painted}"
+        );
+        library.draft = accepted.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(
+            !painted.contains("Not saved"),
+            "disk-failure-stays-ended\n{painted}"
+        );
+        // It comes back on another failed Save, and a Save that succeeds ends it.
+        library.save_selected(false);
+        assert!(
+            sd1_painted(&mut library).contains("Not saved"),
+            "disk-failure-again"
+        );
+        fs::set_permissions(&notes, writable).unwrap();
+        library.save_selected(false);
+        let painted = sd1_painted(&mut library);
+        assert!(
+            !painted.contains("Not saved"),
+            "disk-failure-save-ends\n{painted}"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            accepted,
+            "disk-failure-then-written"
+        );
 
         // Lookalike outside the rule: another identity is not in the draft's parse, so a draft
         // that parses keeps the stored fault and Invalid until the file changes.
