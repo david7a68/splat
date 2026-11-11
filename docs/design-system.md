@@ -744,8 +744,11 @@ keep the remembered note without selected fill.
 
 Broken notes stay under Cannot be read. Each row's second line states the cause; a long path wraps and is never cut. The group uses the same gap as folder headings. They use the Campaign repair source editor. The editor and its save row end together at `LIST_MEASURE` (880 px),
 anchored left, as Campaign's do, so Save stays near the state and Discard; the two-version comparison after an outside
-change keeps the pane's width. The save row says `Invalid` while a changed draft still cannot be read (the message
-above it names the cause), as Library's does, and `Unsaved` only when Save would write. Keep drafts in memory and
+change keeps the pane's width. The save row says `Invalid` while Save would refuse a changed draft (the message
+above it names the cause), as Library's does: a path outside the folder, text that cannot be read, or an identity the
+campaign does not allow. These checks read no file. Otherwise it says `Unsaved`. A Save that then fails on the disk
+(read only, missing, a write error) says `Not saved` with Save's reason above the editor, and Save is no longer
+primary. That cause belongs to the draft: it stays until the draft changes or a Save succeeds. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
 permission) cannot open in the source editor. Its pane keeps the title and a file line with only `Show file`: no
