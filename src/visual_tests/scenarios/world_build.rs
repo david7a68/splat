@@ -3057,29 +3057,47 @@ fn reveal_in_space(d: &mut Driver<'_>, words: &str, control: &str) {
 
 /// Astra review of round 25: a message in the one message space below the save row is drawn and
 /// reachable, not only in the space's accessible name. At 960, 1200 and 1920, from the space's top:
-/// Tab to the space and step down with the arrow key until `words` are painted (and `undo`, when
-/// given, is fully in view); then, from the top again, the wheel over the space does the same.
-/// Returns whether the keyboard and the pointer each reached it, at each size.
+/// Tab to the space and step down with the arrow key, then from the top again turn the wheel over
+/// the space. Each traversal must bring every painted row that holds `words` fully into view inside
+/// that space, one time or another, and `undo` (when given) fully into view. Focus goes back to
+/// exactly the widget that had it (or to none), with no click, and the step checks that the app
+/// state did not change. Returns whether the keyboard and the pointer each reached it, per size.
 pub(super) fn space_reaches(
     d: &mut Driver<'_>,
     words: &str,
     undo: Option<&str>,
 ) -> [(bool, bool); 3] {
-    // The message is drawn and its last line comes into view: a message longer than the space's
-    // two lines is never in view whole, so reaching its end is the proof that it can be read. Its
-    // Undo or action (when given) comes fully into view too; at 960 the two need not share a view.
-    let end_in_view = |d: &Driver<'_>| {
-        let mut end = false;
+    // Marks each row of the message that holds `words` once it is fully in view in the space.
+    fn see_rows(d: &Driver<'_>, space: egui::Rect, words: &str, seen: &mut Vec<bool>) {
         d.each_painted_text(|text, clip| {
-            if text.galley.job.text.contains(words)
-                && let Some(row) = text.galley.rows.last()
-            {
-                let row = row.rect().translate(text.pos.to_vec2());
-                end |= row.is_positive() && clip.expand(1.0).contains_rect(row);
+            let galley = &text.galley;
+            let Some(byte) = galley.job.text.find(words) else {
+                return;
+            };
+            if !clip.intersects(space) {
+                return;
+            }
+            let first = galley.job.text[..byte].chars().count();
+            let last = first + words.chars().count();
+            let view = clip.intersect(space).expand(1.0);
+            let mut at = 0;
+            let mut index = 0;
+            for row in &galley.rows {
+                let count = row.glyphs.len() + usize::from(row.ends_with_newline);
+                let (start, end) = (at, at + count);
+                at = end;
+                if end <= first || start >= last {
+                    continue;
+                }
+                if seen.len() <= index {
+                    seen.push(false);
+                }
+                let rect = row.rect().translate(text.pos.to_vec2());
+                seen[index] |= rect.is_positive() && view.contains_rect(rect);
+                index += 1;
             }
         });
-        end
-    };
+    }
     let undo_in_view = |d: &Driver<'_>| {
         undo.is_none_or(|undo| {
             d.nodes()
@@ -3087,21 +3105,23 @@ pub(super) fn space_reaches(
                 .any(|node| node.name == undo && node.fully_in_view())
         })
     };
-    let reach = |d: &mut Driver<'_>, step: &dyn Fn(&mut Driver<'_>)| {
-        let (mut end, mut action) = (false, false);
+    let reach = |d: &mut Driver<'_>, space: egui::Rect, step: &dyn Fn(&mut Driver<'_>)| {
+        let mut seen = Vec::new();
+        let mut action = false;
         for _ in 0..12 {
-            end |= end_in_view(d);
+            see_rows(d, space, words, &mut seen);
             action |= undo_in_view(d);
-            if end && action {
+            if !seen.is_empty() && seen.iter().all(|row| *row) && action {
                 return true;
             }
             step(d);
         }
-        end && action
+        see_rows(d, space, words, &mut seen);
+        !seen.is_empty() && seen.iter().all(|row| *row) && action
     };
-    // Tab takes focus to the space; the control that had it gets it back after, so the steps that
-    // follow type where they did.
-    let focused = d.focused_name();
+    let focus = d.focus_id();
+    let editor = d.editor_text();
+    let dirty = d.app_mut().library.dirty();
     let reached = [SMALL, DEFAULT, LARGE].map(|size| {
         d.act_at_size(size, |d| {
             let Some(space) = d
@@ -3113,22 +3133,25 @@ pub(super) fn space_reaches(
             };
             let keyboard = d.tab_to(&space.name) && {
                 d.press(egui::Key::PageUp);
-                reach(d, &|d| d.press(egui::Key::ArrowDown))
+                reach(d, space.rect, &|d| d.press(egui::Key::ArrowDown))
             };
             d.press(egui::Key::PageUp);
             let pointer = {
                 d.scroll_up_at(space.rect.center(), 3);
-                reach(d, &|d| d.scroll_at(space.rect.center(), 1))
+                reach(d, space.rect, &|d| d.scroll_at(space.rect.center(), 1))
             };
             d.scroll_up_at(space.rect.center(), 3);
             (keyboard, pointer)
         })
     });
-    if let Some(name) = focused
-        && d.focused_name().as_deref() != Some(name.as_str())
-    {
-        d.click(&name);
-    }
+    d.restore_focus(focus);
+    let unchanged =
+        d.focus_id() == focus && d.editor_text() == editor && d.app_mut().library.dirty() == dirty;
+    d.observe(
+        "iter-25-L-space-reach-restores",
+        unchanged,
+        format!("Reaching {words:?} gives focus back to {focus:?} and changes no draft"),
+    );
     reached
 }
 
@@ -5624,6 +5647,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         ),
     )
     .unwrap();
+    // A's file as the scenario starts, to bring A back between the Remove cases at the end.
+    let a_text = fs::read_to_string(&rules).unwrap();
     go_library(d);
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
@@ -5987,6 +6012,70 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         !b_before && b_after && b_kept && a_back,
         format!(
             "B (Ash Wraith) chosen between Remove and Undo remove: before {b_before}, after {b_after}, after Undo {b_kept}; A's draft and chosen state back: {a_back}"
+        ),
+    );
+    // Astra re-check of round 25: Remove's Undo belongs to A in this campaign. Selecting any
+    // entry (Lookup, the list) or opening another campaign ends it, so Undo can never put A back
+    // into another catalogue or over another selection. A comes back between the cases: its
+    // file is written again, a draft is typed, and the file is deleted under it.
+    let gone_draft = |d: &mut Driver<'_>| {
+        fs::write(&rules, &a_text).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        go_library(d);
+        search_library(d, "Ash Exposure");
+        d.click_starting("Ash Exposure · ");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("A draft to let go.\n");
+        fs::remove_file(&rules).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.wait_for_text("Remove entry and lose draft");
+    };
+    let removed = |d: &mut Driver<'_>| {
+        d.click("Remove entry and lose draft");
+        d.wait_for_text("No entry open");
+        d.has("Undo remove")
+    };
+    // Lookup: Open in Library selects another entry.
+    let lookup_offered = removed(d);
+    look_up(d, "Ash Wraith");
+    d.wait_for_text("Open in Library");
+    d.click("Open in Library");
+    d.settle();
+    if d.has(SEARCH_LOOKUP) {
+        d.press_ctrl(Key::K);
+    }
+    go_library(d);
+    let lookup_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    // The list: a row selects another entry.
+    gone_draft(d);
+    let list_offered = removed(d);
+    search_library(d, "Ash Wraith");
+    d.click_starting("Ash Wraith · ");
+    d.settle();
+    let list_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    // Another campaign: Undo would put A into its catalogue with this campaign's choice.
+    gone_draft(d);
+    let switch_offered = removed(d);
+    switch_campaign(d, QUIET_CAMPAIGN);
+    go_library(d);
+    d.settle();
+    let in_other = d.has("Undo remove");
+    switch_campaign(d, CAMPAIGN);
+    go_library(d);
+    d.settle();
+    let switch_ended = !in_other && !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    d.observe(
+        "iter-25-L-undo-remove-owner",
+        lookup_offered
+            && lookup_ended
+            && list_offered
+            && list_ended
+            && switch_offered
+            && switch_ended,
+        format!(
+            "Undo remove offered then ended by Lookup ({lookup_offered}, {lookup_ended}), the list ({list_offered}, {list_ended}) and a campaign switch ({switch_offered}, shown in the other campaign {in_other}, {switch_ended})"
         ),
     );
 }

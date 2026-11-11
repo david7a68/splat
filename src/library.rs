@@ -1752,6 +1752,9 @@ mod draft_view {
 struct LetGo {
     note: Note,
     used: bool,
+    /// The campaign that was open when the entry was removed, once the page has seen it. Its
+    /// `used` flag and the catalogue it goes back into belong to that campaign.
+    campaign: Option<Option<Uuid>>,
 }
 
 /// `Show folder`: opens a folder in the system's file manager.
@@ -2946,6 +2949,15 @@ fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize
 #[cfg(test)]
 thread_local! {
     static BROKEN_LINE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static BROKEN_WORD_COMPOSITIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The message space's accessible text for the broken-link warnings. Every composition goes
+/// through here, and the test count is kept here.
+fn broken_words(warnings: &[String]) -> String {
+    #[cfg(test)]
+    BROKEN_WORD_COMPOSITIONS.with(|count| count.set(count.get() + 1));
+    warnings.join(" ")
 }
 
 /// Edit Markdown's warning for each link to no entry in a draft, as the row's `N broken links`
@@ -2957,7 +2969,7 @@ fn broken_link_warnings(
     entry: &Entry,
     index: &crate::lookup::ContentIndex,
     skip: Option<usize>,
-) -> Vec<String> {
+) -> (Vec<String>, String) {
     #[cfg(test)]
     BROKEN_LINE_SCANS.with(|count| count.set(count.get() + 1));
     let mut lines = Vec::new();
@@ -2986,7 +2998,9 @@ fn broken_link_warnings(
             }
         }
     }
-    lines
+    // The message space's accessible text for these warnings, composed once with them.
+    let words = broken_words(&lines);
+    (lines, words)
 }
 
 /// The broken-link warnings of one parsed draft against one link index, with the line Campaign's
@@ -2996,7 +3010,7 @@ type BrokenLines = (
     ParsedDraft,
     std::sync::Arc<crate::lookup::ContentIndex>,
     Option<usize>,
-    Vec<String>,
+    (Vec<String>, String),
 );
 
 #[derive(Default)]
@@ -3528,6 +3542,7 @@ impl Library {
                         owner: note.owner.clone(),
                     },
                     used,
+                    campaign: None,
                 });
                 self.draft = note.text.clone();
                 self.stale = true;
@@ -3605,6 +3620,21 @@ impl Library {
                 .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
                 .is_some_and(|n| matches!(n.owner, Owner::Campaign(_)))
     }
+    /// Remove's Undo (and the draft it keeps) belongs to the removed entry in the campaign that was
+    /// open. It ends when another campaign opens, and when any entry is selected, however the
+    /// selection was made: the list, the About row, `reveal` (Lookup and other pages), Back or
+    /// Forward, or `open_entry`. Its own Undo selects the entry it gives back after taking it.
+    fn end_remove_on_owner_change(&mut self, campaign: Option<Uuid>) {
+        let Some(gone) = &mut self.discarded_note else {
+            return;
+        };
+        let owner = *gone.campaign.get_or_insert(campaign);
+        if owner != campaign || self.selected.is_some() {
+            self.discarded_note = None;
+            self.discarded = None;
+        }
+    }
+
     /// Show an entry where it lives. False if a draft is open: it stays in Lookup.
     pub fn reveal(&mut self, entry: &Entry) -> bool {
         if self.dirty() {
@@ -3661,9 +3691,12 @@ impl Library {
         REPAIR_LOOKUPS.with(std::cell::Cell::get)
     }
 
+    /// The broken-link scans and the compositions of their words, together: an unchanged frame
+    /// does neither.
     #[cfg(test)]
     pub(crate) fn broken_line_scans(&self) -> usize {
         BROKEN_LINE_SCANS.with(std::cell::Cell::get)
+            + BROKEN_WORD_COMPOSITIONS.with(std::cell::Cell::get)
     }
     pub fn repair_file_link(
         &mut self,
@@ -3837,6 +3870,7 @@ impl Library {
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         self.end_repair_on_owner_change();
+        self.end_remove_on_owner_change(campaigns.active_campaign().map(|campaign| campaign.id));
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
         });
@@ -6082,7 +6116,7 @@ impl Library {
                 "Undo remove",
             )
             && let Some((_, _, draft)) = self.discarded.take()
-            && let Some(LetGo { note, used }) = self.discarded_note.take()
+            && let Some(LetGo { note, used, .. }) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
         {
             // The reload after Remove entry and lose draft left the entry out of what this campaign uses and
@@ -6856,7 +6890,7 @@ impl Library {
             });
             // Borrowed out of the cache for this frame and put back after the space is drawn.
             let mut broken_taken = false;
-            let broken = match (&index, parsed) {
+            let broken_cache: (Vec<String>, String) = match (&index, parsed) {
                 (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
                     let skip = missing_link.as_ref().map(|(at, _)| *at);
                     let fresh = self
@@ -6875,10 +6909,13 @@ impl Library {
                     broken_taken = true;
                     self.broken_lines
                         .as_mut()
-                        .map_or_else(Vec::new, |(_, _, _, warnings)| std::mem::take(warnings))
+                        .map_or_else(Default::default, |(_, _, _, warnings)| {
+                            std::mem::take(warnings)
+                        })
                 }
-                _ => Vec::new(),
+                _ => Default::default(),
             };
+            let (broken, broken_words) = (&broken_cache.0, broken_cache.1.as_str());
             let results_shown = !choices_in_reader && results.any();
             // The result group: Discard's result, the heading and stat fixes' results, and the
             // reader's results. It leads while one of them carries a live Undo.
@@ -6905,15 +6942,18 @@ impl Library {
                 || heading.fix.is_some()
                 || !vitals.is_empty();
             let waits = !reason && !warned && result_words.is_empty();
-            let mut reason_words = Vec::new();
-            reason_words.extend(repair_problem.iter().cloned());
-            reason_words.extend(failed.iter().cloned());
-            reason_words.extend(link_words.map(str::to_owned));
-            reason_words.extend(broken.iter().cloned());
-            reason_words.extend(heading.fix.as_ref().map(|(words, _, _)| words.clone()));
-            reason_words.extend(vitals.iter().map(|(_, _, _, words)| words.clone()));
+            // Borrowed parts; the broken links' part was composed once, with its warnings.
+            let mut reason_words: Vec<&str> = Vec::new();
+            reason_words.extend(repair_problem.as_deref());
+            reason_words.extend(failed.as_deref());
+            reason_words.extend(link_words);
+            if !broken_words.is_empty() {
+                reason_words.push(broken_words);
+            }
+            reason_words.extend(heading.fix.as_ref().map(|(words, _, _)| words.as_str()));
+            reason_words.extend(vitals.iter().map(|(_, _, _, words)| words.as_str()));
             if waits {
-                reason_words.extend(draft_reason.map(str::to_owned));
+                reason_words.extend(draft_reason);
             }
             let reason_words = reason_words.join(" ");
             let mut heading_fix = false;
@@ -6927,7 +6967,7 @@ impl Library {
             let mut space = design::MessageSpace::new("library_message_space", editor_width);
             if !reason_words.is_empty() {
                 let (repair_problem, failed, broken, vitals) =
-                    (&repair_problem, &failed, &broken, &vitals);
+                    (&repair_problem, &failed, broken, &vitals);
                 let (heading_fix, vital_use) = (&mut heading_fix, &mut vital_use);
                 let fix = heading.fix.as_ref();
                 space = space.reason(&reason_words, move |ui| {
@@ -6988,7 +7028,7 @@ impl Library {
             let (discard_undo, heading_undo, vital_undo, shown) =
                 space.show(ui).unwrap_or_default();
             if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
-                *warnings = broken;
+                *warnings = broken_cache;
             }
             if let Some(shown) = shown {
                 pressed = shown;

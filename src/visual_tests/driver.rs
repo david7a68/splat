@@ -2640,6 +2640,24 @@ impl<'a> Driver<'a> {
         );
     }
 
+    /// The widget id that has keyboard focus, if any.
+    pub fn focus_id(&self) -> Option<egui::Id> {
+        self.harness.ctx.memory(|memory| memory.focused())
+    }
+
+    /// Give keyboard focus back to exactly this widget id, or to none, with no click.
+    pub fn restore_focus(&mut self, id: Option<egui::Id>) {
+        self.harness.ctx.memory_mut(|memory| match id {
+            Some(id) => memory.request_focus(id),
+            None => {
+                if let Some(id) = memory.focused() {
+                    memory.surrender_focus(id);
+                }
+            }
+        });
+        self.settle();
+    }
+
     fn clear_focus(&mut self) {
         self.harness.ctx.memory_mut(|memory| {
             if let Some(id) = memory.focused() {
