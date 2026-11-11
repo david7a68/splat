@@ -46,7 +46,10 @@ pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, Strin
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Unread {
     pub line: usize,
+    /// The reader's sentence, with a long value cut around `…` (round 25 FD4).
     pub reason: String,
+    /// The same sentence with the value whole, for the warning's hover and accessible name.
+    pub whole: String,
 }
 
 /// Use the parser's flag inside the Part of value, including rejected object-list values. A
@@ -69,7 +72,8 @@ pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option
             })
             .map(|_| Unread {
                 line: flag.line,
-                reason: flag.message.clone(),
+                reason: super::copy_words(flag.short_message()),
+                whole: super::copy_words(&flag.message),
             })
     })
 }
