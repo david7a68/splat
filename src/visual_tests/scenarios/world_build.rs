@@ -99,7 +99,8 @@ pub fn broken(d: &mut Driver<'_>) {
     d.state("broken-note-listed", Sizes::All);
     d.click("1 note cannot be read");
     d.expect("Save repaired note");
-    d.click_containing("Notes/Broken.md");
+    // The row, not the editor, which now names the file too.
+    d.click_starting("Notes/Broken.md · ");
     d.expect("Save repaired note");
     d.observe(
         "W5",
@@ -153,7 +154,9 @@ pub fn broken(d: &mut Driver<'_>) {
                 .unwrap();
             let save = d.place_of("Save repaired note").unwrap();
             // Round 23 AF1: the editor and its save row end together within `LIST_MEASURE`.
-            let editor = d.place_of("Note text").unwrap();
+            let editor = d
+                .place_of(&crate::world::repair::editor_name("Notes/Broken.md"))
+                .unwrap();
             (
                 one_message,
                 state.is_some_and(|state| state.right() <= discard.left())
@@ -195,13 +198,13 @@ pub fn broken(d: &mut Driver<'_>) {
         );
     }
     d.state("invalid-conflict-draft-kept-for-repair", Sizes::All);
-    d.click("Note text");
+    d.click(&crate::world::repair::editor_name("Notes/Broken.md"));
     for size in [SMALL, LARGE, SMALL, DEFAULT] {
         d.set_base(size);
         d.observe(
             "iter-5-D-draft-resize",
             d.editor_text().as_deref() == Some(unfinished.as_str())
-                && d.focused_name().as_deref() == Some("Note text")
+                && d.focused_name() == Some(crate::world::repair::editor_name("Notes/Broken.md"))
                 && d.visible_passage("My unfinished draft."),
             format!("The same unsent draft, focus and visible passage survive resize to {size:?}"),
         );
@@ -265,7 +268,7 @@ pub fn broken(d: &mut Driver<'_>) {
         |d| d.visible_text(crate::encounters::draft_switch_reason()),
     );
     d.click("Setting · ");
-    d.click_containing("Notes/Broken.md");
+    d.click_starting("Notes/Broken.md · ");
     d.observe(
         "W5",
         d.editor_text().as_deref() == Some(&fixed),
@@ -352,7 +355,7 @@ pub fn broken(d: &mut Driver<'_>) {
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
-    d.click_containing("Notes/Broken.md");
+    d.click_starting("Notes/Broken.md · ");
     d.expect("Save repaired note");
     let clean = super::session_recording::accent_filled(d);
     d.replace_text_in("Note text", &fixed);
@@ -385,7 +388,7 @@ pub fn broken(d: &mut Driver<'_>) {
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
     reload(d);
     d.click("1 note cannot be read");
-    d.click_containing("Notes/Broken.md");
+    d.click_starting("Notes/Broken.md · ");
     d.expect("Save repaired note");
     d.replace_text_in("Note text", &fixed);
     d.click("Save repaired note");
@@ -758,7 +761,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.expect("Save repaired note");
     d.observe(
         "W5",
-        d.current_page() == "World" && d.has("Note text"),
+        d.current_page() == "World" && d.has(&crate::world::repair::editor_name("Notes/Broken.md")),
         "Lookup opens the broken file on World",
     );
     d.replace_editor_text(&fixed);

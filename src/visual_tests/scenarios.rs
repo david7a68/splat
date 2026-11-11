@@ -1764,8 +1764,8 @@ pub mod campaign_content {
                 super::session_recording::accent_filled(d)
             ),
         );
-        // Round 23 FA9: the message names the file; the REPAIR heading does not repeat it, but
-        // keeps it in its accessible name.
+        // Round 23 FA9: the message names the file; the REPAIR heading does not repeat it. The
+        // editor's accessible name holds the path.
         let mut named = 0;
         d.each_painted_text(|text, clip| {
             if text.galley.job.text.contains("Notes/Broken.md")
@@ -1776,7 +1776,9 @@ pub mod campaign_content {
         });
         d.observe(
             "iter-23-C-FA9",
-            named == 2 && d.has("Repair Notes/Broken.md") && d.visible_text("REPAIR"),
+            named == 2
+                && d.has(&crate::world::repair::editor_name("Notes/Broken.md"))
+                && d.visible_text("REPAIR"),
             format!("Notes/Broken.md is painted {named} times: the Save reason and the message"),
         );
         // Round 23 FA3: the unchanged draft is the invalid file, so Save would refuse it. Only
@@ -1809,7 +1811,7 @@ pub mod campaign_content {
         let editor_top = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
-                .find(|node| node.name == "Note text")
+                .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
                 .map(|node| node.rect.top())
         };
         let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| {
@@ -2070,9 +2072,117 @@ pub mod campaign_content {
         d.click_starting("Run · ");
         close_run(d);
         go_campaign(d);
+
+        // Round 23 review: each repair editor names its file, so a DM who tabs between the
+        // two hears which is which. No repair editor is named only `Note text`.
+        let (a_editor, b_editor) = (
+            crate::world::repair::editor_name("Notes/Broken.md"),
+            crate::world::repair::editor_name("Notes/Cracked.md"),
+        );
+        let bare = d
+            .nodes()
+            .iter()
+            .filter(|node| node.name == "Note text")
+            .count();
+        d.observe(
+            "iter-23-C-FA9-names",
+            d.has(&a_editor) && d.has(&b_editor) && bare == 0,
+            format!(
+                "Editors named {a_editor:?}: {}, {b_editor:?}: {}; named only Note text: {bare}",
+                d.has(&a_editor),
+                d.has(&b_editor)
+            ),
+        );
+
+        // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
+        // edit, B's Save and B's own failed Save; B's state is its own.
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
+        let top_of = |d: &Driver<'_>, words: &str| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.contains(words) && node.role != egui::accesskit::Role::TextRun
+                })
+                .map(|node| node.rect.top())
+                .collect::<Vec<_>>()
+        };
+        // A's cause sits above B's message; B's state sits below it.
+        let a_owns = |d: &Driver<'_>| {
+            let message = top_of(d, B_MESSAGE);
+            let cause = top_of(d, READ_ONLY);
+            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+        };
+        let b_state = |d: &Driver<'_>, word: &str| {
+            let message = top_of(d, B_MESSAGE);
+            message.len() == 1 && top_of(d, word).iter().any(|top| *top > message[0])
+        };
+        let a_file = d.root.join(BROKEN_NOTE);
+        let b_file = d.root.join(SECOND);
+        let set_read_only = |file: &std::path::Path, read_only: bool| {
+            let mut permissions = std::fs::metadata(file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(file, permissions).unwrap();
+        };
+        set_read_only(&a_file, true);
+        d.click_first("Save repaired note");
+        d.settle();
+        let a_before = a_owns(d);
+        // Round 23 review: an unchanged frame does not check the drafts again.
+        let checks = d.app_mut().campaign_content.repair_checks();
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        let unchanged = d.app_mut().campaign_content.repair_checks();
+        d.replace_text_in(&b_editor, &format!("{second}\nB edit.\n"));
+        let edited = d.app_mut().campaign_content.repair_checks();
+        d.observe(
+            "iter-23-C-check-once",
+            unchanged == checks && edited > unchanged,
+            format!(
+                "Draft checks: {checks} before, {unchanged} after unchanged frames at two sizes, {edited} after an edit"
+            ),
+        );
+        d.observe(
+            "iter-23-C-own-failure-edit",
+            a_before && a_owns(d) && b_state(d, "Unsaved"),
+            format!(
+                "A failed first: {a_before}; after B's edit, A's cause {} and B Unsaved {}",
+                a_owns(d),
+                b_state(d, "Unsaved")
+            ),
+        );
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        let b_written = std::fs::read_to_string(&b_file)
+            .unwrap()
+            .contains("B edit.");
+        d.observe(
+            "iter-23-C-own-failure-save",
+            b_written && a_owns(d) && b_state(d, "No changes"),
+            format!(
+                "After B's Save: B written {b_written}, A's cause {}, B No changes {}",
+                a_owns(d),
+                b_state(d, "No changes")
+            ),
+        );
+        d.replace_text_in(&b_editor, &format!("{second}\nB again.\n"));
+        std::fs::remove_file(&b_file).unwrap();
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        d.observe(
+            "iter-23-C-own-failure-fail",
+            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            format!(
+                "After B's Save fails: A's cause {}, B's own cause {}",
+                a_owns(d),
+                b_state(d, CHANGED_ON_DISK)
+            ),
+        );
+        set_read_only(&a_file, false);
         d.click("Discard");
         d.click("Discard");
-        std::fs::remove_file(d.root.join(SECOND)).unwrap();
+        let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
         assert!(!d.visible_text("Notes/Cracked.md"));

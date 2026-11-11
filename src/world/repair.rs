@@ -7,6 +7,12 @@ use crate::{
 };
 use eframe::egui;
 
+/// The repair editor's accessible name. It names the file, so a DM who tabs between two open
+/// repairs hears which is which. Selectors that ask for `Note text` still find it.
+pub(crate) fn editor_name(path: &str) -> String {
+    format!("Note text: {path}")
+}
+
 /// The source editor. True when the DM changed the text or moved focus into it this frame.
 pub(crate) fn editor(
     ui: &mut egui::Ui,
@@ -34,7 +40,7 @@ pub(crate) fn editor_events(
                 .font(egui::TextStyle::Monospace)
                 .desired_width(f32::INFINITY)
                 .show(ui);
-            design::named(ui, &output.response, "Note text");
+            design::named(ui, &output.response, &editor_name(path));
             let active = (output.response.changed(), output.response.gained_focus());
             if let Some(line) = error_line {
                 let position = draft
@@ -62,7 +68,7 @@ pub(crate) fn editor_events(
 /// line to fix, or an identity that the campaign does not allow. It writes nothing and reads no
 /// file: a refusal from the disk (read only, missing, a write error) is Save's own failure. Save, the save row's state, its cause
 /// and Save's availability all use it, so `Unsaved` always means that Save would write.
-pub(super) fn refusal(
+pub(crate) fn refusal(
     campaign: &Campaign,
     path: &str,
     draft: &str,

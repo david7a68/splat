@@ -37,7 +37,7 @@ pub(crate) struct Repair {
     path: String,
     baseline: String,
     draft: String,
-    /// Why Save would refuse `draft`, from `repair_refusal`.
+    /// Why Save would refuse `draft`: Save's own check without writing, shared with World.
     refusal: Option<String>,
     /// The line of `draft` to mark.
     error_line: Option<usize>,
@@ -46,7 +46,7 @@ pub(crate) struct Repair {
     failure: Option<String>,
 }
 impl Repair {
-    fn new(path: String, text: String, campaign: Uuid) -> Self {
+    fn new(path: String, text: String, campaign: &Campaign) -> Self {
         let mut repair = Self {
             path,
             baseline: text.clone(),
@@ -59,12 +59,12 @@ impl Repair {
         repair
     }
     /// Ask Save's question of the draft again.
-    fn check(&mut self, campaign: Uuid) {
-        self.refusal = repair_refusal(&self.path, &self.draft, campaign);
-        self.error_line = repair_problem(&self.path, &self.draft).1;
+    fn check(&mut self, campaign: &Campaign) {
+        (self.refusal, self.error_line) =
+            crate::world::repair::refusal(campaign, &self.path, &self.draft);
     }
     /// The draft changed: check it again. A failed Save no longer describes it.
-    fn draft_changed(&mut self, campaign: Uuid, checks: &mut usize) {
+    fn draft_changed(&mut self, campaign: &Campaign, checks: &mut usize) {
         *checks += 1;
         self.check(campaign);
         self.failure = None;
@@ -144,23 +144,6 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
     PROBLEMS.get_or(&[path.as_bytes(), text.as_bytes()], || {
         find_repair_problem(path, text)
     })
-}
-
-/// Why `Save repaired note` would refuse this draft: Save's own check of the text, run before
-/// it writes (the YAML fault, or an identity that settings own). The state word, the message
-/// and Save's availability come from it. None when Save would write the text; the file itself
-/// (read only, changed on disk) is checked when Save writes.
-fn repair_refusal(path: &str, draft: &str, campaign: Uuid) -> Option<String> {
-    // Each `Repair` keeps the answer and asks again only when its draft changes.
-    match Entry::parse(path, draft) {
-        Err(error) => Some(repair_problem(path, draft).0.unwrap_or(error)),
-        Ok(entry)
-            if entry.kind == "package" || (entry.kind == "campaign" && entry.id != campaign) =>
-        {
-            Some("Keep campaign ownership consistent with settings.".into())
-        }
-        Ok(_) => None,
-    }
 }
 
 fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
@@ -283,6 +266,11 @@ impl CampaignContent {
             }
             Err(error) => self.error = Some(error),
         }
+    }
+    /// How often a frame checked a repair draft again.
+    #[cfg(test)]
+    pub fn repair_checks(&self) -> usize {
+        self.repair_checks
     }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -785,9 +773,8 @@ impl CampaignContent {
             }
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
-                // The message above names the file. The heading keeps it for screen readers only.
-                let heading = ui.label(design::group_heading_text(ui, "Repair", 0));
-                design::named(ui, &heading, &format!("Repair {path}"));
+                // The message above names the file; the editor's accessible name names it too.
+                design::group_heading(ui, "Repair", 0);
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
@@ -801,7 +788,7 @@ impl CampaignContent {
                         self.active_repair = Some(path.clone());
                     }
                     if edited {
-                        repair.draft_changed(active.id, checks);
+                        repair.draft_changed(active, checks);
                     }
 
                     ui.horizontal(|ui| {
@@ -853,7 +840,7 @@ impl CampaignContent {
                         {
                             self.discarded_repair = Some((path.clone(), repair.draft.clone()));
                             repair.draft = repair.baseline.clone();
-                            repair.draft_changed(active.id, checks);
+                            repair.draft_changed(active, checks);
                         }
                         if repair.dirty()
                             && self
@@ -869,7 +856,7 @@ impl CampaignContent {
                         {
                             repair.draft = text.clone();
                             self.discarded_repair = None;
-                            repair.draft_changed(active.id, checks);
+                            repair.draft_changed(active, checks);
                         }
                         if repair.dirty() {
                             design::blocked_reason(
@@ -904,7 +891,13 @@ impl CampaignContent {
                                     }))
                             {
                                 // Save asks its own question again before it writes.
-                                let result = match repair_refusal(path, &repair.draft, active.id) {
+                                let result = match crate::world::repair::refusal(
+                                    active,
+                                    path,
+                                    &repair.draft,
+                                )
+                                .0
+                                {
                                     Some(refusal) => Err(refusal),
                                     None => write_note(
                                         &active.path,
@@ -2070,7 +2063,7 @@ pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
                         Some(text) => text.to_owned(),
                         None => fs::read_to_string(path).ok()?,
                     };
-                    Some(Repair::new(e.path.clone(), text, campaign.id))
+                    Some(Repair::new(e.path.clone(), text, campaign))
                 })
                 .collect()
         })
@@ -2218,35 +2211,42 @@ mod tests {
             problem.as_deref(),
             Some("Line 3 opens a list with [ that never closes.")
         );
-        // Round 23 FA3: the save row asks Save's own question. A draft Save refuses names its
-        // cause; one Save writes has none.
-        let campaign = Uuid::new_v4();
+        // Round 23 FA3: the save row asks Save's own question, the one World's repair asks. A
+        // draft Save refuses names its cause; one Save writes has none.
+        let active = campaign(std::path::Path::new("/nonexistent/splat-campaign"));
+        let refusal = |draft: &str| Repair::new("Notes/Broken.md".into(), draft.into(), &active);
         assert_eq!(
-            repair_refusal("Notes/Broken.md", text, campaign).as_deref(),
+            refusal(text).refusal.as_deref(),
             Some("Line 3 opens a list with [ that never closes.")
         );
+        assert_eq!(refusal(text).error_line, Some(3));
         let rule = crate::library::note_text("Broken", "rule", None);
-        assert_eq!(repair_refusal("Notes/Broken.md", &rule, campaign), None);
+        assert_eq!(refusal(&rule).refusal, None);
         // A draft that parses but takes an identity settings own is still refused.
         let ownership = Some("Keep campaign ownership consistent with settings.".to_owned());
         let package = crate::library::note_text("Broken", "package", Some("broken"));
-        assert_eq!(
-            repair_refusal("Notes/Broken.md", &package, campaign),
-            ownership
-        );
+        assert_eq!(refusal(&package).refusal, ownership);
         let other = crate::library::note_text("Broken", "campaign", Some("broken"));
-        assert_eq!(
-            repair_refusal("Notes/Broken.md", &other, campaign),
-            ownership
-        );
+        assert_eq!(refusal(&other).refusal, ownership);
         let own = other.replace(
             &splat::content::Entry::parse("Campaign.md", &other)
                 .unwrap()
                 .id
                 .to_string(),
-            &campaign.to_string(),
+            &active.id.to_string(),
         );
-        assert_eq!(repair_refusal("Notes/Broken.md", &own, campaign), None);
+        assert_eq!(refusal(&own).refusal, None);
+        // Round 23 review: the check runs when the draft changes, and the change ends this
+        // repair's failed Save.
+        let mut repair = refusal(&rule);
+        repair.failure = Some("This file is read only.".into());
+        let mut checks = 0;
+        repair.draft = package.clone();
+        repair.draft_changed(&active, &mut checks);
+        assert_eq!(
+            (repair.refusal, repair.failure, checks),
+            (ownership, None, 1)
+        );
     }
 
     #[test]
