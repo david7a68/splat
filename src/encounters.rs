@@ -2148,11 +2148,17 @@ impl Encounters {
         self.error = invalid.as_ref().map(|invalid| invalid.text.clone());
         self.validation_error = invalid;
     }
-    /// Save or a start checks this draft now: watch it, and check it again on the next frame.
+    /// Save or a start checks this draft now. A refusal starts the watch (`refused`). It stays
+    /// through a later Save, so an Undo that brings the fault back says so again; another draft
+    /// ends it.
     fn watch_refusals(&mut self, path: String) {
         self.validation_path = Some(path);
-        self.refusal_watch = true;
         self.validated = None;
+    }
+    /// Record what Save's check refused, if anything. A refusal starts the watch.
+    fn refused(&mut self, invalid: Option<Invalid>) {
+        self.refusal_watch |= invalid.is_some();
+        self.validation_error = invalid;
     }
     /// Whether the shown message is the last failed check of the draft.
     fn shows_validation_error(&self) -> bool {
@@ -2715,7 +2721,7 @@ impl Encounters {
             .and_then(|snapshot| draft.validate(snapshot).err())
         {
             self.error = Some(error.text.clone());
-            self.validation_error = Some(error);
+            self.refused(Some(error));
             return;
         }
         let outcome = draft.save(active, modules);
@@ -2755,11 +2761,12 @@ impl Encounters {
                 }
             }
             Err(e) => {
-                self.validation_error = self
+                let invalid = self
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.validate(snapshot).err())
                     .filter(|validation| validation.text == e);
+                self.refused(invalid);
                 self.error = Some(e);
             }
         }
@@ -3740,7 +3747,7 @@ impl Encounters {
             .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
         {
             self.error = Some(error.text.clone());
-            self.validation_error = Some(error);
+            self.refused(Some(error));
             return;
         }
         match self.start_run(active, modules) {
@@ -3750,12 +3757,13 @@ impl Encounters {
                 self.error = None;
             }
             Err(error) => {
-                self.validation_error = self
+                let invalid = self
                     .snapshot
                     .as_ref()
                     .zip(self.draft.as_ref())
                     .and_then(|(snapshot, draft)| draft.validate(snapshot).err())
                     .filter(|validation| validation.text == error);
+                self.refused(invalid);
                 self.error = Some(error);
             }
         }

@@ -1855,7 +1855,7 @@ impl Encounters {
             .as_ref()
             .and_then(|snapshot| draft.validate(snapshot, None).err())
         {
-            self.validation_error = Some(error.clone().into());
+            self.refused(Some(error.clone().into()));
             self.error = Some(error);
             return;
         }
@@ -1890,12 +1890,13 @@ impl Encounters {
                 }
             }
             Err(e) => {
-                self.validation_error = self
+                let invalid = self
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.validate(snapshot, None).err())
                     .filter(|validation| *validation == e)
                     .map(Into::into);
+                self.refused(invalid);
                 self.error = Some(e);
             }
         }
