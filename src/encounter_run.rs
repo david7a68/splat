@@ -4894,7 +4894,8 @@ mod tests {
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
     }
     /// 20 participants with a printed stat block each, and a full Undo of 100 steps of play:
-    /// damage, conditions, a group that arrives, standalone rolls and turns.
+    /// damage, conditions, a group that arrives, standalone rolls, initiative corrections,
+    /// table rolls and turns.
     fn long_fight(dir: &Path) -> (Run, PathBuf, Uuid) {
         let source =
             splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
@@ -4927,6 +4928,22 @@ mod tests {
                 run.apply(Command::Condition(target, format!("Marked {turn}")))
                     .unwrap();
                 run.roll_dice("2d6 + 3").unwrap();
+            }
+            if turn % 12 == 0 {
+                // A wrong initiative is corrected, and a table in a note is rolled on.
+                run.apply(Command::Initiative(target, Some(30 - turn as i64)))
+                    .unwrap();
+                run.roll_table(crate::roll_table::TableRoll {
+                    key: "gifts".into(),
+                    dice: "1d6".into(),
+                    typed: None,
+                    rows: vec![crate::roll_table::RollRow {
+                        min: 1,
+                        max: 6,
+                        text: "A potion".into(),
+                    }],
+                })
+                .unwrap();
             }
             run.apply(Command::Next).unwrap();
         }
