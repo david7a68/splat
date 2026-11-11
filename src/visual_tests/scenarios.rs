@@ -3249,6 +3249,15 @@ pub mod run_long_names {
         d.state("creature-changed-since", Sizes::All);
         // Must stay true: the action still opens the new version.
         d.click("Read the new version");
+        // The new line ends the entry. Stat block detail rows have the link pitch (iteration 20,
+        // FD4), so at 960x640 it can start just below Lookup's fold: scroll Lookup, as a DM would.
+        let (width, _) = d.window_size();
+        for _ in 0..6 {
+            if d.visible_text("The pack howls at the ash moon.") {
+                break;
+            }
+            d.scroll_at(pos2(width - 160.0, 400.0), 1);
+        }
         d.observe(
             "iter-17-B-read-new-opens",
             d.has("Close Lookup") && d.visible_text("The pack howls at the ash moon."),
