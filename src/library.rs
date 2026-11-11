@@ -1451,13 +1451,13 @@ fn package_registered(name: &str, chosen: bool) -> String {
 }
 
 /// A Save that failed on the disk (a read-only file or folder, a write error): an action-time
-/// failure. It belongs to the draft Save tried to write, by owner, path and words. The draft's
+/// failure. It belongs to the draft Save tried to write, by owner, path and draft revision. The draft's
 /// state slot says `Not saved` with Save's reason until the draft changes, another entry opens,
 /// or a Save succeeds. Nothing reads the disk to show it.
 struct SaveFailure {
     owner: Option<Uuid>,
     path: String,
-    draft: String,
+    revision: u64,
     reason: String,
 }
 
@@ -2448,6 +2448,13 @@ pub struct Library {
     discarded_note: Option<LetGo>,
     /// A Save that failed on the disk, for the draft it tried to write.
     save_failure: Option<SaveFailure>,
+    /// Raised by every event that changes the open draft (an edit, Discard and its Undo, a
+    /// reload, a repair action). A failed Save keeps the revision it wrote, so no frame compares
+    /// the draft's words to know whether it is still that draft.
+    draft_revision: u64,
+    /// Test only: how often the failed-Save check ran, and how often it read the draft's words.
+    #[cfg(test)]
+    failure_checks: std::cell::Cell<(usize, usize)>,
     identity_undo: Option<IdentityUndo>,
     identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
@@ -2833,6 +2840,8 @@ impl Library {
         loaded.invalidate();
         loaded.refresh_diagnostics();
         self.draft = after;
+        // The draft changed: a failed Save of the old words no longer owns it.
+        self.draft_revision += 1;
         self.stale = true;
         self.content_changed = Some(root);
         Ok(())
@@ -2849,6 +2858,8 @@ impl Library {
                 note.text = undo.before.clone();
                 note.entry = Entry::parse(&note.path, &note.text).ok();
                 self.draft = note.text.clone();
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
             }
         }
         self.identity_undo = None;
@@ -2904,6 +2915,7 @@ impl Library {
             note.path = path;
         }
         let draft = std::mem::take(&mut self.draft);
+        self.draft_revision += 1;
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
@@ -3228,6 +3240,8 @@ impl Library {
                             });
                             if let Some(i) = self.selected {
                                 self.draft = l.notes[i].text.clone();
+                                // The draft changed: a failed Save of the old words no longer owns it.
+                                self.draft_revision += 1;
                             }
                             self.reveal_row |= self.selected.is_some();
                             self.focus_repair =
@@ -5221,7 +5235,7 @@ impl Library {
                     self.save_failure = Some(SaveFailure {
                         owner: note.owner.id(),
                         path: note.path.clone(),
-                        draft: self.draft.clone(),
+                        revision: self.draft_revision,
                         reason: e,
                     });
                 }
@@ -5341,6 +5355,8 @@ impl Library {
             loaded.invalidate();
             loaded.refresh_diagnostics();
             self.draft = draft;
+            // The draft changed: a failed Save of the old words no longer owns it.
+            self.draft_revision += 1;
             self.source = true;
             self.disk_change = Some(DiskChange {
                 text: None,
@@ -5523,11 +5539,17 @@ impl Library {
         let save_refusal = refusal.clone().filter(|_| dirty);
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A Save that failed on the disk, while this is still the draft it tried to write.
+        // A Save that failed on the disk, while this is still the draft it tried to write: the
+        // same entry and no change event since. No words are compared.
+        #[cfg(test)]
+        {
+            let (checks, reads) = self.failure_checks.get();
+            self.failure_checks.set((checks + 1, reads));
+        }
         if self.save_failure.as_ref().is_some_and(|failure| {
             failure.owner != note.owner.id()
                 || failure.path != note.path
-                || failure.draft != self.draft
+                || failure.revision != self.draft_revision
         }) {
             self.save_failure = None;
         }
@@ -5951,6 +5973,8 @@ impl Library {
                             self.discarded =
                                 Some((note.owner.id(), note.path.clone(), self.draft.clone()));
                             self.draft = note.text.clone();
+                            // The draft changed: a failed Save of the old words no longer owns it.
+                            self.draft_revision += 1;
                             self.error = None;
                         }
                     });
@@ -5970,6 +5994,8 @@ impl Library {
                     && let Some((_, _, text)) = self.discarded.take()
                 {
                     self.draft = text;
+                    // The draft changed: a failed Save of the old words no longer owns it.
+                    self.draft_revision += 1;
                 }
                 ui.add_space(design::S);
             } else {
@@ -6010,6 +6036,8 @@ impl Library {
                         && let Some((_, _, text)) = self.discarded.take()
                     {
                         self.draft = text;
+                        // The draft changed: a failed Save of the old words no longer owns it.
+                        self.draft_revision += 1;
                     }
                 } else if let Some(problem) = slot_problem {
                     // Save's reason: its refusal before the write, or the disk's failure.
@@ -6044,6 +6072,8 @@ impl Library {
                 && let Some((_, _, text)) = self.discarded.take()
             {
                 self.draft = text;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
             }
         }
         let mut reload_from_disk = false;
@@ -6164,6 +6194,9 @@ impl Library {
         if !choices_in_reader {
             // Applied now, before the editor shows the draft.
             let pressed = heading.show(ui);
+            if pressed.0 || pressed.1 {
+                self.draft_revision += 1;
+            }
             save |= heading.apply(pressed, &note.path, &mut self.draft, &mut self.heading_undo);
         }
         if self.source && !conflict {
@@ -6184,6 +6217,8 @@ impl Library {
                                     format!("The stat block now says {label} {value}."),
                                 ));
                                 self.draft = after;
+                                // The draft changed: a failed Save of the old words no longer owns it.
+                                self.draft_revision += 1;
                             }
                             Err(error) => self.error = Some(error),
                         }
@@ -6197,6 +6232,8 @@ impl Library {
                 && design::undo_message(ui, Tone::Success, result, "Undo stat change")
             {
                 self.draft = before.clone();
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
                 self.vital_undo = None;
             }
         }
@@ -6234,6 +6271,10 @@ impl Library {
                                 .min_size(egui::vec2(0.0, visible_height))
                                 .interactive(editable)
                                 .show(ui);
+                            // Each edit is a new draft: a failed Save of the old words ends.
+                            if output.response.changed() {
+                                self.draft_revision += 1;
+                            }
                             pressed_link = crate::markdown_source::pressed_note_link(
                                 ui,
                                 &output,
@@ -6463,6 +6504,9 @@ impl Library {
                 });
             });
         }
+        if heading_pressed.0 || heading_pressed.1 {
+            self.draft_revision += 1;
+        }
         save |= heading.apply(
             heading_pressed,
             &note.path,
@@ -6475,6 +6519,8 @@ impl Library {
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
+            // The draft changed: a failed Save of the old words no longer owns it.
+            self.draft_revision += 1;
         }
         if repair_pressed {
             if let Some((module, path, exists)) = recovery {
@@ -9841,6 +9887,43 @@ mod tests {
         texts.join("\n")
     }
 
+    /// Types `words` into the open Markdown editor, as the DM does: focus, then text input.
+    fn sd1_type(library: &mut Library, words: &str) {
+        sd1_input(library, vec![vec![egui::Event::Text(words.to_owned())]]);
+    }
+
+    /// Sends each batch of input to the open Markdown editor, one frame each, in one context
+    /// (so the editor's own Undo remembers the earlier frames). The editor has focus.
+    fn sd1_input(library: &mut Library, batches: Vec<Vec<egui::Event>>) {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let note = &library.loaded.as_ref().unwrap().notes[library.selected.unwrap()];
+        let id = egui::Id::new(("library_markdown", note.owner.id(), &note.path));
+        let input = |events, time| egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 1400.0),
+            )),
+            events,
+            time: Some(time),
+            ..Default::default()
+        };
+        let frames = [vec![], vec![]]
+            .into_iter()
+            .chain(batches.into_iter().flat_map(|batch| {
+                // A quiet frame after each batch, a second later, so the editor settles its Undo.
+                [batch, vec![]]
+            }));
+        for (at, events) in frames.enumerate() {
+            let _ = ctx.run(input(events, at as f64 * 2.0), |ctx| {
+                ctx.memory_mut(|memory| memory.request_focus(id));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    library.editor(ui, "Entry", &Campaigns::default());
+                });
+            });
+        }
+    }
+
     fn sd1_select(loaded: Loaded, owner: Option<Uuid>, path: &str) -> Library {
         let selected = loaded
             .notes
@@ -10179,19 +10262,87 @@ mod tests {
         );
         assert_eq!(fs::read(&path).unwrap(), saved, "disk-failure-not-written");
         assert_eq!(library.draft, accepted, "disk-failure-draft-kept");
-        // Only that draft owns it: the next edit ends it, and going back to the same words
-        // does not bring it back.
-        library.draft = format!("{accepted}More.\n");
+        // Unchanged frames keep the failure and never read the draft's words to do so.
+        library.failure_checks.set((0, 0));
+        for _ in 0..3 {
+            let painted = sd1_painted(&mut library);
+            assert!(
+                painted.contains("Not saved"),
+                "disk-failure-kept\n{painted}"
+            );
+        }
+        let (checks, reads) = library.failure_checks.get();
+        assert!(checks >= 6, "disk-failure-checked-each-frame: {checks}");
+        assert_eq!(reads, 0, "disk-failure-no-draft-scan");
+        // Only that draft owns it: the next edit in the editor ends it, and going back to the
+        // same words does not bring it back.
+        assert!(library.source, "fixture: Edit Markdown is open");
+        sd1_type(&mut library, "More.");
+        assert_ne!(
+            library.draft, accepted,
+            "fixture: the editor took the words"
+        );
         let painted = sd1_painted(&mut library);
         assert!(
             painted.contains("Unsaved") && !painted.contains("Not saved"),
             "disk-failure-edit-ends\n{painted}"
         );
+        // Edit, then the editor's Undo back to the very words that failed: still ended.
+        let failed_again = |library: &mut Library| {
+            library.save_selected(false);
+            assert!(
+                sd1_painted(library).contains("Not saved"),
+                "fixture: the Save failed again"
+            );
+        };
+        library.draft = accepted.clone();
+        library.draft_revision += 1;
+        failed_again(&mut library);
+        sd1_input(
+            &mut library,
+            vec![
+                vec![egui::Event::Text("More.".into())],
+                vec![egui::Event::Key {
+                    key: egui::Key::Z,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::COMMAND,
+                }],
+            ],
+        );
+        assert_eq!(
+            library.draft, accepted,
+            "fixture: Undo gave back the failed words"
+        );
+        let painted = sd1_painted(&mut library);
+        assert!(
+            !painted.contains("Not saved") && painted.contains("Unsaved"),
+            "disk-failure-stays-ended\n{painted}"
+        );
+        // Never on another file, even with the same words: the failure is Yaml.md's.
+        failed_again(&mut library);
+        let yaml_at = library.selected.unwrap();
+        let other_at = library
+            .loaded
+            .as_ref()
+            .unwrap()
+            .notes
+            .iter()
+            .position(|note| note.path == "Notes/Other.md")
+            .unwrap();
+        library.selected = Some(other_at);
         library.draft = accepted.clone();
         let painted = sd1_painted(&mut library);
         assert!(
             !painted.contains("Not saved"),
-            "disk-failure-stays-ended\n{painted}"
+            "disk-failure-not-on-other\n{painted}"
+        );
+        library.selected = Some(yaml_at);
+        let painted = sd1_painted(&mut library);
+        assert!(
+            !painted.contains("Not saved"),
+            "disk-failure-owner-ended\n{painted}"
         );
         // It comes back on another failed Save, and a Save that succeeds ends it.
         library.save_selected(false);
@@ -10210,6 +10361,57 @@ mod tests {
             fs::read_to_string(&path).unwrap(),
             accepted,
             "disk-failure-then-written"
+        );
+        // The repair-link flow: an entry that cannot be read opens as a repair draft in Edit
+        // Markdown (as `repair_file` opens it). Its fixed draft parses, so Save would accept it,
+        // and the disk refuses the write: the same Not saved state, for this draft.
+        let broken = note_text("Broken", "rule", None).replace("splat_kind: rule", "splat_kind: [");
+        fs::write(notes.join("Broken.md"), &broken).unwrap();
+        let loaded = load_all(&[], Some(&campaign)).unwrap();
+        let mut repair = sd1_select(loaded, Some(campaign.id), "Notes/Broken.md");
+        repair.source = true;
+        assert!(
+            sd1_painted(&mut repair).contains("Invalid"),
+            "fixture: a repair draft"
+        );
+        let fixed = broken.replace("splat_kind: [", "splat_kind: rule");
+        sd1_input(
+            &mut repair,
+            vec![
+                vec![egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::COMMAND,
+                }],
+                vec![egui::Event::Text(fixed.clone())],
+            ],
+        );
+        assert_eq!(
+            repair.draft, fixed,
+            "fixture: the editor holds the fixed draft"
+        );
+        let writable = fs::metadata(&notes).unwrap().permissions();
+        fs::set_permissions(&notes, fs::Permissions::from_mode(0o555)).unwrap();
+        repair.save_selected(false);
+        let painted = sd1_painted(&mut repair);
+        let reason = repair
+            .save_failure
+            .as_ref()
+            .map(|failure| failure.reason.clone())
+            .expect("repair-disk-failure-recorded");
+        fs::set_permissions(&notes, writable).unwrap();
+        assert!(
+            painted.contains("Not saved")
+                && painted.contains(&reason)
+                && !painted.contains("Unsaved"),
+            "repair-disk-failure-state\n{painted}"
+        );
+        assert_eq!(
+            fs::read_to_string(notes.join("Broken.md")).unwrap(),
+            broken,
+            "repair-disk-failure-not-written"
         );
 
         // Lookalike outside the rule: another identity is not in the draft's parse, so a draft

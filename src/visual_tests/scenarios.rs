@@ -1510,39 +1510,62 @@ pub mod reader_tables {
             "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
              | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
              | 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | 0 | 0 | 0 | 0 | 0 | Ninth-slot |\n\n\
-             The table leaves this note readable.\n",
+             The table leaves this note readable.\n\n\
+             Read the row for your class level. A slot is spent when you cast a spell of that \
+             level or higher, and every slot comes back when you finish a Long Rest, so plan the \
+             hardest fights of the day around the slots you still have.\n",
         );
         d.click("Save");
         d.click("Read");
         d.state("wide-table-in-library", Sizes::All);
         // Round 23 AE1: at 1920 the table takes the pane past the prose measure and needs no
         // sideways scroll; the prose after it keeps the measure.
-        let wide = d.at_size(LARGE, |d| {
-            let read = d.place_of("Read")?;
-            let last = d.place_of("Ninth-slot")?;
-            let prose = d.painted_rect_in(
-                "The table leaves this note readable.",
-                egui::Rect::EVERYTHING,
-            )?;
-            Some((
-                read.left(),
-                last.right(),
-                prose.right(),
-                d.has_containing("More columns"),
-            ))
-        });
-        d.observe(
-            "iter-23-L-AE1",
-            wide.is_some_and(|(left, last, prose, hint)| {
-                !hint
-                    && last > left + crate::design::READER_MEASURE
-                    && last <= LARGE.0
-                    && prose <= left + crate::design::READER_MEASURE + 1.0
-            }),
-            format!(
-                "At 1920 the whole table shows past the prose measure, inside the pane, with no scroll hint; the prose keeps its measure (reader left, last cell right, prose right, hint): {wide:?}"
-            ),
-        );
+        // The pane's inner edge is the page's right edge, where `New entry` ends.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let seen = d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                let edge = d.place_of("New entry")?.right();
+                let row = d.place_of("Memorize Spell")?;
+                let last = d.place_of("Ninth-slot")?;
+                // The prose keeps the measure: a paragraph that wraps fills it, and no more.
+                let prose = d.painted_rect_in(
+                    "Read the row for your class level.",
+                    egui::Rect::EVERYTHING,
+                )?;
+                // Where the table scrolls, its visible part is its scroll surface.
+                let surface = d.horizontal_scroll_regions().into_iter().find(|region| {
+                    region.top() <= row.center().y && region.bottom() >= row.center().y
+                });
+                Some((
+                    read.left(),
+                    edge,
+                    last.right(),
+                    prose.width(),
+                    surface,
+                    d.has_containing("More columns"),
+                ))
+            });
+            let measure = crate::design::READER_MEASURE;
+            let ok = seen.is_some_and(|(left, edge, last, prose, surface, hint)| {
+                prose <= measure + 0.5
+                    && prose >= measure - crate::design::XXL
+                    && match surface {
+                        // It scrolls: the surface ends at or before the pane's inner edge.
+                        Some(surface) => hint && surface.right() <= edge + 0.5,
+                        // It fits: past the prose measure, inside the pane, with no scroll hint.
+                        None => {
+                            !hint && size == LARGE && last > left + measure && last <= edge + 0.5
+                        }
+                    }
+            });
+            d.observe(
+                "iter-23-L-AE1",
+                ok,
+                format!(
+                    "At {size:?} the prose wraps at the measure and the table stays inside the pane: reader left, pane edge, last cell right, prose width, scroll surface, hint = {seen:?}"
+                ),
+            );
+        }
         let table = d.place_of("Memorize Spell").expect("feature cell");
         d.scroll_at(table.center(), 1);
         d.observe(
