@@ -112,10 +112,10 @@ impl EntitySnapshot {
             if !text.contains(&self.definition.splat_id.to_string()) {
                 continue;
             }
-            // Generated words that still match their checksum hold nothing of the DM's. When
-            // the properties name this sheet, the refresh writes the copy again, whatever
-            // Splat can read of it, and keeps the notes below it.
-            if parts(&text).intact && note_id(&text) == Some(self.definition.splat_id) {
+            // A copy whose properties name this sheet is its file, whatever Splat can read of
+            // it. The checksum then decides, as for any copy: a refresh writes unchanged
+            // generated words again, and Replace archives changed ones first.
+            if note_id(&text) == Some(self.definition.splat_id) {
                 paths.push(path);
                 continue;
             }
@@ -776,27 +776,43 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(&rule).unwrap(), foreign);
 
-        // With a change in it, the copy is the DM's file. So is a copy whose properties name
-        // another character, whatever its notes say. A refresh or Replace names the file and
-        // changes nothing.
+        // A copy whose properties name another character is the DM's file, whatever its notes
+        // say. A refresh or Replace names the file and changes nothing.
         let another = unreadable_copy(uuid::Uuid::new_v4(), true, &format!("splat_id: {id}\n"));
-        for kept in [unreadable_copy(id, false, "Kept note.\n"), another] {
-            fs::write(&creature, &kept).unwrap();
-            let expected = format!(
-                "{}: Unsupported content schema; expected 2",
-                creature.display()
-            );
-            assert_eq!(
-                record.save_campaign_copy(root.path()),
-                Err(expected.clone().into())
-            );
-            assert_eq!(
-                record.overwrite_campaign_copy(root.path()),
-                Err(expected.into())
-            );
-            assert_eq!(fs::read_to_string(&creature).unwrap(), kept);
-            assert!(!creature.with_extension("md.splat-archive").exists());
-        }
+        let kept = another;
+        fs::write(&creature, &kept).unwrap();
+        let expected = format!(
+            "{}: Unsupported content schema; expected 2",
+            creature.display()
+        );
+        assert_eq!(
+            record.save_campaign_copy(root.path()),
+            Err(expected.clone().into())
+        );
+        assert_eq!(
+            record.overwrite_campaign_copy(root.path()),
+            Err(expected.into())
+        );
+        assert_eq!(fs::read_to_string(&creature).unwrap(), kept);
+        assert!(!creature.with_extension("md.splat-archive").exists());
+
+        // With a change in it, this sheet's copy stops a refresh, and Replace archives it.
+        fs::remove_file(&rule).unwrap();
+        let changed = unreadable_copy(id, false, "Kept note.\n");
+        fs::write(&creature, &changed).unwrap();
+        assert_eq!(
+            record.save_campaign_copy(root.path()),
+            Err(CampaignCopyError::Conflict(creature.clone()))
+        );
+        assert_eq!(fs::read_to_string(&creature).unwrap(), changed);
+        let archive = creature.with_extension("md.splat-archive");
+        assert_eq!(
+            record.overwrite_campaign_copy(root.path()).unwrap(),
+            std::slice::from_ref(&archive)
+        );
+        assert_eq!(fs::read_to_string(&archive).unwrap(), changed);
+        let replaced = fs::read_to_string(&creature).unwrap();
+        assert!(Entry::parse("sheet.md", &replaced).is_ok() && replaced.ends_with("Kept note.\n"));
     }
 
     #[test]
