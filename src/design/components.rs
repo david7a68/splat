@@ -1753,9 +1753,9 @@ impl Tone {
     }
 }
 
-/// The row of a message's choice without an icon, below the message. Its words start at the
-/// message words: `message` puts them `S + 1`, the icon and `XS` from its left edge. Put a quiet
-/// `line_start` action in it, so its words, not its padding, start there.
+/// The row of a choice without an icon on its own line below a result message. The row starts
+/// at the message words: `message` puts them `S + 1`, the icon and `XS` from its left edge. Put a
+/// secondary (bordered) action in it, so its border starts there; on a result, only Undo is quiet.
 pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.horizontal(|ui| {
         ui.add_space(S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);

@@ -13,6 +13,11 @@ use zeroize::{Zeroize, Zeroizing};
 pub struct Settings {
     cookie_input: String,
     focus_cookie: bool,
+    /// The request in progress is the DM's Connect.
+    connecting: bool,
+    /// A Connect failed. The next frame of the form scrolls its error, cookie and Connect into
+    /// view together; a new request ends it.
+    reveal_retry: bool,
     pub campaign_form_open: bool,
     sign_in_again: bool,
     session: Option<Session>,
@@ -65,6 +70,8 @@ impl Default for Settings {
         Self {
             cookie_input: String::new(),
             focus_cookie: false,
+            connecting: false,
+            reveal_retry: false,
             campaign_form_open: false,
             sign_in_again: false,
             session: None,
@@ -191,6 +198,8 @@ impl Settings {
 
     fn send(&mut self, action: Action, ctx: &egui::Context) {
         self.restoring = matches!(&action, Action::Restore);
+        self.connecting = matches!(&action, Action::Connect { .. });
+        self.reveal_retry = false;
         self.forgetting = matches!(&action, Action::Forget);
         self.refreshing = matches!(&action, Action::Refresh(_));
         if !matches!(&action, Action::Refresh(_)) {
@@ -252,6 +261,7 @@ impl Settings {
                             Err(error) => {
                                 self.session = None;
                                 self.error = Some(error);
+                                self.reveal_retry = self.connecting;
                                 // A failed removal says to select Disconnect again.
                                 self.saved_session = self.restoring || self.forgetting;
                             }
@@ -381,7 +391,8 @@ impl Settings {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
                 ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
-            });
+            })
+            .response
         };
         self.sign_in_again |= ui.ctx().data(|data| {
             data.get_temp::<bool>(egui::Id::new("focus_cookie"))
@@ -396,10 +407,7 @@ impl Settings {
         }
         match account {
             Account::Connected => {
-                small(
-                    ui,
-                    "The access token refreshes automatically while Splat is open.",
-                );
+                small(ui, "Splat stays signed in while it is open.");
             }
             Account::RefreshFailing => {
                 small(
@@ -409,12 +417,13 @@ impl Settings {
             }
             _ => {}
         }
+        let mut error_rect = None;
         if let Some(error) = &self.error {
-            if error == SESSION_ENDED {
-                small(ui, error);
+            error_rect = Some(if error == SESSION_ENDED {
+                small(ui, error).rect
             } else {
-                design::message(ui, Tone::Error, error);
-            }
+                design::message(ui, Tone::Error, error).rect
+            });
         }
         if let Some(warning) = &self.warning {
             if account == Account::KeyringWarning {
@@ -499,10 +508,17 @@ impl Settings {
                 };
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let clicked = action.blocked(reason).show(ui).clicked();
+                        let connect = action.blocked(reason).show(ui);
+                        // After a failed Connect, show the cause, the kept cookie and the
+                        // retry together, as far as the window allows.
+                        if std::mem::take(&mut self.reveal_retry) {
+                            let rect =
+                                error_rect.map_or(connect.rect, |error| error.union(connect.rect));
+                            ui.scroll_to_rect(rect, None);
+                        }
                         ui.spacing_mut().item_spacing.x = design::S;
                         design::blocked_reason(ui, reason);
-                        clicked
+                        connect.clicked()
                     })
                     .inner;
                 if clicked {
@@ -519,7 +535,7 @@ impl Settings {
             });
             small(
                 ui,
-                "Splat sends your session cookie only to D&D Beyond. In the keyring, it can reconnect at startup. The access token stays in memory.",
+                "Splat sends your session cookie only to D&D Beyond. With the box ticked, Splat signs in again when it starts.",
             );
         }
         if matches!(
@@ -528,7 +544,7 @@ impl Settings {
         ) {
             small(
                 ui,
-                "Disconnect removes Splat’s saved D&D Beyond sign-in and clears local credentials. It does not sign your browser out of D&D Beyond.",
+                "Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.",
             );
         }
         // Only when there is something to forget. It follows the trust text.
@@ -589,6 +605,36 @@ mod tests {
             .unwrap();
         settings.poll(&ctx);
         assert!(settings.saved_session, "the message says to select it");
+        // Round 23 SF1: only a failed Connect scrolls its retry into view.
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
+        settings.send(
+            Action::Connect {
+                cookie: Zeroizing::new("test-cookie".into()),
+                remember: false,
+            },
+            &ctx,
+        );
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Err("Could not reach D&D Beyond.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(settings.reveal_retry, "a failed Connect shows its retry");
+        // A new request ends it, before its reply.
+        settings.disconnect(&ctx);
+        assert!(!settings.reveal_retry);
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Err("The saved cookie could not be removed.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(!settings.reveal_retry, "a failed removal is not a retry");
         settings.disconnect(&ctx);
         let (id, _) = commands.recv().unwrap();
         results
