@@ -2554,6 +2554,27 @@ fn painted_marks(job: &egui::text::LayoutJob) -> Vec<(String, egui::Color32)> {
         .collect()
 }
 
+/// Campaign's package rows in view (each second line says `chosen`), and the marks of each row
+/// that has any.
+fn package_row_marks(d: &Driver<'_>) -> (usize, Vec<Vec<(String, egui::Color32)>>) {
+    let mut rows = 0;
+    let mut marked = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if (job.text.contains("chosen ·") || job.text.ends_with(" chosen"))
+            && !job.text.contains("entries chosen")
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            rows += 1;
+            let marks = painted_marks(job);
+            if !marks.is_empty() {
+                marked.push(marks);
+            }
+        }
+    });
+    (rows, marked)
+}
+
 /// True when there is at least one such row and each has exactly one mark: the warning icon in
 /// the warning colour.
 fn warning_marked(rows: &[Vec<(String, egui::Color32)>]) -> bool {
@@ -3554,6 +3575,17 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         let tone = manifest_fault_tone(d, "Ashen Marches: Package.md cannot be read");
         d.observe("iter-23-C-AE4-campaign", tone == Some("error"),
             format!("An invalid manifest on disk is an error in Campaign, as in Library: {tone:?}"));
+        // Round 24 FF4, outside the deleted case: the unreadable manifest marks its row with the
+        // error icon in the error colour, and only that row.
+        let (rows, marked) = package_row_marks(d);
+        d.observe(
+            "iter-24-C-FF4-invalid",
+            rows >= 2
+                && marked
+                    == [vec![(design::icons::ERROR.to_owned(), design::colors().result.error)]]
+                && d.has_containing("Ashen Marches · Manifest cannot be read · "),
+            format!("{rows} package rows; marked rows {marked:?}"),
+        );
     });
     let broken = fs::read_to_string(&path).unwrap();
     let creatures = folder.join("Creatures/Cinder Wolf.md");
@@ -3569,6 +3601,12 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&creatures).unwrap(), creature_before);
     d.state_prepared("manifest-replaced-with-undo", Sizes::All, |d| {
         check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Replaced");
+        // Round 24 FF5: the result and its Undo share one verb.
+        d.observe(
+            "iter-24-C-FF5",
+            d.visible_text("Package.md was written again.") && !d.visible_text("was replaced"),
+            "A replaced manifest says it was written again, as its Undo write does",
+        );
     });
     d.click("Undo write Package.md");
     d.wait_for_text("Package.md cannot be read (line 4)");
@@ -3630,6 +3668,17 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             tone == Some("warning"),
             format!("A deleted manifest is a warning in Campaign: {tone:?}"),
         );
+        // Round 24 FF4: the package the warning names has the warning mark on its row, and
+        // only that row is marked.
+        let (rows, marked) = package_row_marks(d);
+        d.observe(
+            "iter-24-C-FF4",
+            rows >= 2
+                && warning_marked(&marked)
+                && marked.len() == 1
+                && d.has_containing("Ashen Marches · Manifest deleted · "),
+            format!("{rows} package rows; marked rows {marked:?}"),
+        );
         let search = d
             .place_of("Find a needed entry")
             .expect("The entry search is present");
@@ -3645,8 +3694,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Save: {save:?}; search: {search:?}"
         );
     });
+    assert!(
+        !path.exists(),
+        "The manifest is deleted before it is written again"
+    );
     d.click("Write the manifest again");
     d.settle();
+    assert!(path.is_file(), "Write the manifest again writes the file");
     assert!(!d.has_containing("The package manifest was deleted"));
     assert_eq!(
         crate::library::local_module(&folder).unwrap().id,
@@ -3654,11 +3708,11 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     );
     d.expect("Package.md was written again.");
     d.expect("Undo write Package.md");
-    // Round 24 FF5: a manifest written after a delete and one written over a broken file give one
-    // result and one Undo, so this looks like `manifest-replaced-with-undo`. The deleted notice
-    // went and the package identity came back (asserted above).
+    // Round 24 FF5: a missing and a replaced manifest give one result sentence and one Undo, so
+    // this capture matches `manifest-replaced-with-undo`. The file above went from missing to
+    // written; what differs is only what Undo restores.
     d.expect_same(
-        "A written-again manifest has the same result and Undo as a replaced one; only the file before the write differs.",
+        "Writing a deleted manifest again says what replacing an invalid one says; only Undo's target differs: here it deletes the file again.",
     );
     d.state_prepared("manifest-written-again-campaign", Sizes::All, |d| {
         check_undo_icon(d, "Undo write Package.md", "iter-6-C-SD3-Package");
