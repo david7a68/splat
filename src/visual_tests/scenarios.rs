@@ -2333,6 +2333,36 @@ pub mod encounter_build {
         d.click("Cultist");
         let cost = d.interaction_count() - before;
         let read = d.has_containing("ARMOR CLASS");
+        // Round 23 SB1: an exact match shows no creation action, so no empty row stands between
+        // `Show 3 results` and the rule above the entry.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (close, detail) = d.at_size(size, |d| {
+                let Some(show) = d.place_of("Show the results") else {
+                    return (false, "no Show the results".to_owned());
+                };
+                // The rule spans the Lookup pane, so its centre lies right of the action.
+                let below = eframe::egui::Rect::from_min_max(
+                    pos2(show.left(), show.bottom() - 0.5),
+                    pos2(f32::INFINITY, show.bottom() + crate::design::XXL * 2.0),
+                );
+                let rule = d
+                    .hairlines_in(below)
+                    .into_iter()
+                    .map(|rule| rule.center().y)
+                    .min_by(f32::total_cmp);
+                (
+                    rule.is_some_and(|rule| rule - show.bottom() <= crate::design::S + 1.0)
+                        && !d.has_containing("New NPC")
+                        && !d.has("Generate NPC"),
+                    format!("Show the results {show:?}, rule at {rule:?}"),
+                )
+            });
+            d.observe(
+                "iter-23-D-SB1",
+                close,
+                format!("The rule follows Show 3 results with no empty row at {size:?}: {detail}"),
+            );
+        }
         d.state("stat-block-beside-editor", Sizes::All);
         // The Cultist's Skills row in Lookup: `Deception +2, Religion +2`.
         check_skills_row(
@@ -3467,8 +3497,21 @@ pub mod run_lookup {
             cost <= 1,
             format!("It took {cost}, against a target of 1"),
         );
+        let with_back = (d.has("Back"), d.place_of(SEARCH_LOOKUP));
         d.press_alt(Key::ArrowLeft);
         d.expect("Captain Varra");
+        // Round 23 FJ5: the search field keeps its place whether Back shows or not.
+        let without_back = (d.has("Back"), d.place_of(SEARCH_LOOKUP));
+        d.observe(
+            "iter-23-D-FJ5",
+            with_back.0
+                && !without_back.0
+                && with_back
+                    .1
+                    .zip(without_back.1)
+                    .is_some_and(|(with, without)| (with.top() - without.top()).abs() < 0.5),
+            format!("Search field with Back {with_back:?}, without {without_back:?}"),
+        );
         d.state("lookup-back-by-key", Sizes::All);
         d.press(Key::Escape);
 
@@ -7191,8 +7234,20 @@ pub mod world {
         d.check_tab_order("world-list");
 
         d.click("New ▾");
+        // Round 23 FG4: `…` marks each choice that asks for a name first. Generate NPC makes its
+        // card at once, so it has no mark.
+        d.observe(
+            "iter-23-D-FG4",
+            ["Note…", "NPC…", "Location…", "Generate NPC"]
+                .iter()
+                .all(|name| d.in_view(name))
+                && !d.has("NPC")
+                && !d.has("Location")
+                && !d.has("Generate NPC…"),
+            "The New menu marks Note…, NPC… and Location…, and not Generate NPC",
+        );
         d.state("world-new-menu", Sizes::Default);
-        d.click("NPC");
+        d.click("NPC…");
         d.expect("Type a name first.");
         d.type_into("Name", "Watchkeeper");
         d.wait_for_text("Will create NPCs/Watchkeeper.md");
