@@ -769,6 +769,8 @@ pub(crate) enum LinkProblem {
     PlaceMatches(usize),
     StatBlockNotFound,
     GroupNotFound,
+    /// The place's `In` chain leads back to this note.
+    PlaceLoop,
 }
 
 impl std::fmt::Display for LinkProblem {
@@ -778,18 +780,23 @@ impl std::fmt::Display for LinkProblem {
             Self::PlaceMatches(count) => write!(f, "Place has {count} matches"),
             Self::StatBlockNotFound => f.write_str("Stat block not found"),
             Self::GroupNotFound => f.write_str("Group not found"),
+            Self::PlaceLoop => f.write_str("Place loop"),
         }
     }
 }
 
 /// A list row's words for the links that need fixing. One problem names itself. Several are
-/// `broken links` only when every target is missing; a place that waits for a choice is not broken.
+/// `broken links` only when every target is missing; a place that waits for a choice, or one in a
+/// loop, is not broken.
 pub(crate) fn link_problem_words(problems: &[LinkProblem]) -> String {
     match problems {
         [one] => one.to_string(),
-        many if many
-            .iter()
-            .any(|problem| matches!(problem, LinkProblem::PlaceMatches(_))) =>
+        many if many.iter().any(|problem| {
+            matches!(
+                problem,
+                LinkProblem::PlaceMatches(_) | LinkProblem::PlaceLoop
+            )
+        }) =>
         {
             design::count(many.len(), "link needs fixing", "links need fixing")
         }
@@ -805,6 +812,9 @@ pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem
             0 => LinkProblem::PlaceNotFound,
             count => LinkProblem::PlaceMatches(count),
         });
+    }
+    if index.in_place_loop(item.entry.id) {
+        problems.push(LinkProblem::PlaceLoop);
     }
     if reader_field(&item.entry, "creature").is_some()
         && index.world_target(&item.entry, "creature").is_none()
@@ -1775,7 +1785,6 @@ impl Reader {
             }
         });
         self.form_focused = false;
-        self.lost_edits(ui, index);
         let editing = campaign.is_some() && self.editing(id);
         if !editing && let Some(campaign) = campaign {
             self.refresh_group_fault(item, index.generation(), || {
@@ -1813,6 +1822,9 @@ impl Reader {
         {
             // The form has no file line, so the result sits below the title.
             self.draw_page_result(ui);
+            if self.has_lost_edits(index) {
+                design::reader::measure(ui, |ui| self.lost_edits(ui, index));
+            }
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -1825,8 +1837,11 @@ impl Reader {
             let editor = !(self.group_error && self.group_error_unread_file);
             entry_file_actions(ui, &campaign.path, &item.entry.path, editor);
         }
-        // Unread-value warnings wrap at the reader measure, the right edge of the rows below.
+        // Every warning sits below the file line, so the file line keeps its place. Each wraps
+        // at the reader measure, the right edge of the rows below.
         design::reader::measure(ui, |ui| {
+            // A draft whose note is gone, whatever note is open.
+            self.lost_edits(ui, index);
             if let Some(reason) = unread_reason
                 && let Some(campaign) = campaign
                 && (self.error.is_none() || self.group_error)
@@ -1982,11 +1997,21 @@ impl Reader {
                 ui.add_space((design::M - spacing).max(0.0));
             }
         }
-        for warning in index.errors.iter().filter(|error| {
-            error.starts_with(&format!("{}:", item.entry.path))
-                || error.starts_with(&format!("{} is in ", item.entry.name))
-        }) {
-            design::message(ui, Tone::Warning, warning);
+        let warnings: Vec<_> = index
+            .errors
+            .iter()
+            .filter(|error| {
+                error.starts_with(&format!("{}:", item.entry.path))
+                    || error.starts_with(&format!("{} is in ", item.entry.name))
+            })
+            .collect();
+        // Only a warning gets the scope: an empty one would still add an item gap.
+        if !warnings.is_empty() {
+            design::reader::measure(ui, |ui| {
+                for warning in warnings {
+                    design::message(ui, Tone::Warning, warning);
+                }
+            });
         }
         // A value block that draws no row adds no gap. In World, the prose then starts where a
         // plain note's starts, below the file line. Lookup's compact reader has no file line:
@@ -2009,25 +2034,7 @@ impl Reader {
             }
         }
         if item.entry.kind == "world" && index.duplicate_world.contains_key(&item.entry.path) {
-            for (key, label) in [
-                ("creature", "Stat block"),
-                ("in", "In"),
-                ("status", "Status"),
-            ] {
-                if let Some(value) = world_field(&item.entry, key) {
-                    let name = serde_yaml_ng::from_value::<EntryRef>(value.clone())
-                        .ok()
-                        .and_then(|reference| reference.reference().ok())
-                        .and_then(|reference| index.position_of(&reference))
-                        .map(|at| index.items[at].entry.name.clone())
-                        .unwrap_or_else(|| link_name(value, label));
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("{label}: {name}"))
-                            .color(colors().muted),
-                    );
-                }
-            }
+            go = go.or(self.duplicate_values(ui, item, index));
         }
         let has_prose =
             !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
@@ -2262,9 +2269,11 @@ impl Reader {
         };
         let name = |value: &Value| match value.as_sequence() {
             Some(groups) if groups.is_empty() => "not set".into(),
+            // Each value by the name the reader shows: the note its link opens, else the words
+            // written in the file.
             Some(groups) => groups
                 .iter()
-                .map(|group| link_name(group, label))
+                .map(|group| edit::value_name(index, group, label))
                 .collect::<Vec<_>>()
                 .join(", "),
             None => edit::value_name(index, value, label),
@@ -2335,17 +2344,26 @@ impl Reader {
         }
     }
 
+    /// Below this width a row's label stands above its value, not beside it.
+    fn stacked(ui: &egui::Ui) -> bool {
+        ui.available_width() < design::XXL * 12.0
+    }
+
     fn relationship_width(ui: &egui::Ui) -> f32 {
         let width = design::XXL * 7.0 + design::L;
-        width.min(
-            (ui.available_width()
+        let change = Action::quiet("Change")
+            .density(Density::Scan)
+            .natural_width(ui);
+        // A stacked label stands above its value, so the value keeps the label column's room.
+        let room = if Self::stacked(ui) {
+            ui.available_width() - change - design::L
+        } else {
+            ui.available_width()
                 - (design::XXL * 3.0 + design::S)
-                - Action::quiet("Change")
-                    .density(Density::Scan)
-                    .natural_width(ui)
-                - ui.spacing().item_spacing.x * 2.0)
-                .max(design::XXL),
-        )
+                - change
+                - ui.spacing().item_spacing.x * 2.0
+        };
+        width.min(room.max(design::XXL))
     }
 
     /// The Part of reason while this note's list could not be read.
@@ -2456,7 +2474,7 @@ impl Reader {
 
     /// The place choices start below the values: below the label column on a wide pane.
     fn chooser_indent(ui: &egui::Ui) -> f32 {
-        if ui.available_width() >= design::XXL * 12.0 {
+        if !Self::stacked(ui) {
             design::XXL * 3.0 + design::S + ui.spacing().item_spacing.x
         } else {
             0.0
@@ -2542,10 +2560,115 @@ impl Reader {
             .density(design::Density::Scan)
             .name(&name)
             .blocked(blocked);
-        let stacked = ui.available_width() < design::XXL * 12.0;
-        let width = width
-            .min((ui.available_width() - change.natural_width(ui) - design::L).max(design::XXL));
+        Self::value_row(ui, label, width, value, notice, Some(change))
+    }
+
+    /// A duplicate note's values, read only until its repair is done. Each reads as every
+    /// reader's rows do: a muted label, then the value as a link. Only Change is left out.
+    fn duplicate_values(&self, ui: &mut egui::Ui, item: &Item, index: &ContentIndex) -> Option<Go> {
+        let mut go = None;
+        let rows: Vec<_> = [
+            ("creature", "Stat block"),
+            ("in", "In"),
+            ("status", "Status"),
+        ]
+        .into_iter()
+        .filter_map(|(key, label)| {
+            let value = world_field(&item.entry, key).filter(|value| !empty_optional(value))?;
+            if key == "status" {
+                return Some((label, value.as_str()?.trim().to_owned(), None));
+            }
+            let target = edit::value_target(index, value);
+            let name = target.map_or_else(
+                || link_name(value, label),
+                |at| index.items[at].entry.name.clone(),
+            );
+            Some((label, name, target))
+        })
+        .collect();
+        if rows.is_empty() {
+            return None;
+        }
+        let value = |ui: &mut egui::Ui, label: &str, name: &str, target: Option<usize>| match target
+        {
+            Some(at) => design::wrapped_link(ui, name)
+                .clicked()
+                .then_some(Go::Item(at, None)),
+            None if label == "Status" => {
+                ui.label(Type::Small.rich(ui, name).color(colors().muted));
+                None
+            }
+            None => {
+                missing_link(ui, name);
+                None
+            }
+        };
+        if self.compact {
+            // Lookup's compact line, as a note with one file has.
+            ui.horizontal_wrapped(|ui| {
+                for (n, (label, name, target)) in rows.iter().enumerate() {
+                    if n > 0 {
+                        ui.label(Type::Small.rich(ui, "·").color(colors().muted));
+                    }
+                    ui.label(Type::Small.rich(ui, *label).color(colors().muted));
+                    if let Some(next) = value(ui, label, name, *target) {
+                        go.get_or_insert(next);
+                    }
+                }
+            });
+            return go;
+        }
+        let width = rows
+            .iter()
+            .map(|(label, name, target)| {
+                let (words, role) = match target {
+                    Some(_) => (name.clone(), Type::Body),
+                    None if *label == "Status" => (name.clone(), Type::Small),
+                    None => (missing_words(name), Type::Small),
+                };
+                design::number_width(ui, &words, &role.font(ui))
+            })
+            .fold(0.0_f32, f32::max)
+            .min(Self::relationship_width(ui));
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y =
+                design::Density::Scan.row() - design::Density::Scan.control();
+            for (label, name, target) in &rows {
+                Self::value_row(
+                    ui,
+                    label,
+                    width,
+                    |ui| {
+                        if let Some(next) = value(ui, label, name, *target) {
+                            go.get_or_insert(next);
+                        }
+                    },
+                    None,
+                    None,
+                );
+            }
+        });
+        go
+    }
+
+    /// A labelled value row. With no `change`, the value is read only: the row keeps its label
+    /// and value column, and leaves out Change.
+    fn value_row(
+        ui: &mut egui::Ui,
+        label: &str,
+        width: f32,
+        value: impl FnOnce(&mut egui::Ui),
+        notice: Option<(&str, ChangeKind)>,
+        change: Option<Action<'_>>,
+    ) -> (bool, bool) {
+        let stacked = Self::stacked(ui);
+        let change_width = change
+            .as_ref()
+            .map_or(0.0, |change| change.natural_width(ui));
+        let width = width.min((ui.available_width() - change_width - design::L).max(design::XXL));
         if stacked {
+            // An `S` gap above each stacked label keeps each label with its own value.
+            ui.add_space(design::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
         let mut undo = false;
@@ -2573,6 +2696,9 @@ impl Reader {
                             value(ui);
                         },
                     );
+                    let Some(change) = change else {
+                        return false;
+                    };
                     ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
                     let clicked = change.show(ui).clicked();
                     if let Some((word, kind)) = notice {
@@ -2593,9 +2719,14 @@ impl Reader {
     }
 
     fn notice_fits(ui: &egui::Ui, value_width: f32, word: &str, kind: ChangeKind) -> bool {
+        // A stacked label stands above its row, so the row has no label column.
+        let label = if Self::stacked(ui) {
+            0.0
+        } else {
+            design::XXL * 3.0 + design::S
+        };
         ui.available_width()
-            >= design::XXL * 3.0
-                + design::S
+            >= label
                 + value_width
                 + Action::quiet("Change")
                     .density(Density::Scan)
@@ -3426,9 +3557,36 @@ mod tests {
             )
             .unwrap();
         }
+        // Round 23 FG2: a place whose `In` leads back to Rook makes a loop.
+        let loop_two = create_entry(&campaign, "Loop Two", "location").unwrap();
+        let loop_path = {
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            dir.path()
+                .join(&index.items[index.position(loop_two).unwrap()].entry.path)
+        };
+        let loop_file = fs::read_to_string(&loop_path).unwrap();
+        fs::write(
+            &loop_path,
+            loop_file.replacen("---\n", "---\nsplat_in: '[[Rook]]'\n", 1),
+        )
+        .unwrap();
         let path = dir.path().join("NPCs/Rook.md");
         let file = fs::read_to_string(&path).unwrap();
         for (fields, expected, words) in [
+            // Round 23 FG2: a note in a place loop names the loop on its row.
+            (
+                "splat_in: '[[Loop Two]]'\n",
+                vec![LinkProblem::PlaceLoop],
+                "Place loop",
+            ),
+            // A loop and a missing group: the loop is not a broken link.
+            (
+                "splat_in: '[[Loop Two]]'\nsplat_part_of: ['[[Nowhere]]']\n",
+                vec![LinkProblem::PlaceLoop, LinkProblem::GroupNotFound],
+                "2 links need fixing",
+            ),
+            // Lookalike: a place that does not lead back is no loop.
+            ("splat_in: '[[Locations/Watch House]]'\n", vec![], ""),
             // A place with two matches and a missing group: one waits for a choice.
             (
                 "splat_in: '[[Watch House]]'\nsplat_part_of: ['[[Nowhere]]']\n",
@@ -3460,7 +3618,16 @@ mod tests {
             assert!(item.entry.flags.is_empty(), "fixture {fields} reads");
             let problems = broken_links(item, &index);
             assert_eq!(problems, expected, "SD2-problems-{fields}");
-            assert_eq!(link_problem_words(&problems), words, "SD2-words-{fields}");
+            if !words.is_empty() {
+                assert_eq!(link_problem_words(&problems), words, "SD2-words-{fields}");
+            }
+            // The other end of the loop names the loop too, and only while Rook closes it.
+            let other = &index.items[index.position(loop_two).unwrap()];
+            assert_eq!(
+                broken_links(other, &index).contains(&LinkProblem::PlaceLoop),
+                fields.contains("Loop Two"),
+                "FG2-other-end-{fields}"
+            );
         }
     }
 

@@ -46,6 +46,45 @@ pub(crate) fn editor(
         .inner
 }
 
+/// Why Save would not write this draft: a path outside its folder, a fault in its text and the
+/// line to fix, or an identity that the campaign does not allow. It writes nothing and reads no
+/// file: a refusal from the disk (read only, missing, a write error) is Save's own failure. Save, the save row's state, its cause
+/// and Save's availability all use it, so `Unsaved` always means that Save would write.
+pub(super) fn refusal(
+    campaign: &Campaign,
+    path: &str,
+    draft: &str,
+) -> (Option<String>, Option<usize>) {
+    // The save row asks on every frame; a parse of a long note takes about 1 ms.
+    static REFUSALS: splat::memo::Memo<(Option<String>, Option<usize>)> =
+        splat::memo::Memo::new(64);
+    REFUSALS.get_or(
+        &[campaign.id.as_bytes(), path.as_bytes(), draft.as_bytes()],
+        || {
+            if let Some(rule) = crate::library::note_path_rule(path) {
+                return (Some(rule.into()), None);
+            }
+            let (problem, line) = crate::campaign_content::repair_problem(path, draft);
+            if problem.is_some() {
+                return (problem, line);
+            }
+            match splat::content::Entry::parse(path, draft) {
+                Ok(entry)
+                    if entry.kind == "package"
+                        || (entry.kind == "campaign" && entry.id != campaign.id) =>
+                {
+                    (Some(OWNERSHIP.into()), None)
+                }
+                Ok(_) => (None, None),
+                Err(error) => (Some(error), None),
+            }
+        },
+    )
+}
+
+/// Why Save refuses a note that would claim a package, or another campaign, as its identity.
+pub(super) const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+
 /// Why a repair did not open.
 #[derive(Debug)]
 pub(super) enum OpenError {
@@ -62,6 +101,10 @@ pub(super) struct Repair {
     reloaded: Option<String>,
     error: Option<String>,
     disk: Option<String>,
+    /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
+    /// write and Save's reason. This draft owns it. It shows until the draft changes or a Save
+    /// succeeds.
+    failed: Option<(String, String)>,
 }
 
 impl Repair {
@@ -79,6 +122,7 @@ impl Repair {
             reloaded: None,
             error: None,
             disk: None,
+            failed: None,
         })
     }
 
@@ -90,6 +134,14 @@ impl Repair {
 
     pub fn dirty(&self) -> bool {
         self.draft != self.baseline
+    }
+
+    /// Save's last failure on the disk, while the draft is still the one it tried to write.
+    fn failure(&self) -> Option<&str> {
+        self.failed
+            .as_ref()
+            .filter(|(tried, _)| *tried == self.draft)
+            .map(|(_, reason)| reason.as_str())
     }
 
     /// `run_open`: an open run owns `Next turn`, the screen's primary action, so Save stays
@@ -110,7 +162,17 @@ impl Repair {
                 self.error = None;
             }
         }
-        let (problem, line) = crate::campaign_content::repair_problem(&self.path, &self.draft);
+        // Save's failure on the disk belongs to the draft it tried to write. Any change ends it,
+        // so it never comes back with the same words later.
+        if self
+            .failed
+            .as_ref()
+            .is_some_and(|(tried, _)| *tried != self.draft)
+        {
+            self.failed = None;
+        }
+        // Save's own checks: the state word, its cause and Save's availability all come from them.
+        let (problem, line) = refusal(campaign, &self.path, &self.draft);
         design::reader::title(
             ui,
             std::path::Path::new(&self.path)
@@ -146,10 +208,32 @@ impl Repair {
             }
             return false;
         }
+        // The two-version comparison above keeps the pane's width. The ordinary editor and its
+        // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.edit(ui, campaign, run_open, problem, line)
+        })
+        .inner
+    }
+
+    /// The editor, its messages and its save row.
+    fn edit(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaign: &Campaign,
+        run_open: bool,
+        problem: Option<String>,
+        line: Option<usize>,
+    ) -> bool {
         if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
         }
-        if let Some(error) = &self.error {
+        if let Some(error) = self
+            .error
+            .as_ref()
+            .or(self.failure().map(str::to_owned).as_ref())
+        {
             design::message(ui, design::Tone::Error, error);
         } else if let Some(problem) = &problem {
             design::message(ui, design::Tone::Error, problem);
@@ -168,9 +252,11 @@ impl Repair {
                 } else {
                     problem.as_deref()
                 };
-                // One weight for a save row: primary while the draft has changes, unless an
-                // open run owns `Next turn`.
-                if (if reason.is_none() && !run_open {
+                // One weight for a save row: primary while the draft has changes Save can
+                // write, unless an open run owns `Next turn`. After Save failed on the disk it
+                // stays available to try again, but is not primary.
+                let failed = self.failure().is_some();
+                if (if reason.is_none() && !run_open && !failed {
                     design::Action::primary("Save repaired note")
                 } else {
                     design::Action::secondary("Save repaired note")
@@ -185,7 +271,22 @@ impl Repair {
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let dirty = self.dirty();
-                    let state = if dirty {
+                    // A changed draft that still cannot be read is Invalid, as in Library; the
+                    // message above names the cause. Unsaved means Save would write.
+                    let state = if dirty && problem.is_some() {
+                        design::Status {
+                            icon: design::icons::ERROR,
+                            word: "Invalid",
+                            color: colors().document.invalid,
+                        }
+                    } else if dirty && failed {
+                        // Save failed on the disk; the message above gives Save's reason.
+                        design::Status {
+                            icon: design::icons::ERROR,
+                            word: "Not saved",
+                            color: colors().document.invalid,
+                        }
+                    } else if dirty {
                         design::Status {
                             icon: design::icons::DRAFT,
                             word: "Unsaved",
@@ -221,25 +322,24 @@ impl Repair {
     }
 
     fn save(&mut self, campaign: &Campaign) -> bool {
-        let result = splat::content::Entry::parse(&self.path, &self.draft).and_then(|entry| {
-            if entry.kind == "package" || (entry.kind == "campaign" && entry.id != campaign.id) {
-                return Err("Keep campaign ownership consistent with settings.".into());
-            }
-            write_note(
+        let result = match refusal(campaign, &self.path, &self.draft) {
+            (Some(reason), _) => Err(reason),
+            (None, _) => write_note(
                 &campaign.path,
                 &self.path,
                 Some(&self.baseline),
                 &self.draft,
-            )
-        });
+            ),
+        };
         match result {
             Ok(_) => {
                 self.baseline = self.draft.clone();
                 self.reloaded = None;
+                self.failed = None;
                 true
             }
             Err(error) => {
-                self.error = Some(error);
+                self.failed = Some((self.draft.clone(), error));
                 false
             }
         }
@@ -262,6 +362,11 @@ mod tests {
 
     /// Draws the repair once. True when it painted an accent-filled (primary) button.
     fn show_with(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> bool {
+        painted(repair, campaign, run_open).0
+    }
+
+    /// Draws the repair once: whether a primary button showed, and every painted word.
+    fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let output = ctx.run(egui::RawInput::default(), |ctx| {
@@ -270,10 +375,19 @@ mod tests {
             });
         });
         let accent = colors().accent_fill;
-        output
-            .shapes
-            .iter()
-            .any(|clipped| matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == accent))
+        let mut words = String::new();
+        let mut primary = false;
+        for clipped in &output.shapes {
+            match &clipped.shape {
+                egui::Shape::Rect(rect) if rect.fill == accent => primary = true,
+                egui::Shape::Text(text) => {
+                    words.push_str(&text.galley.job.text);
+                    words.push('\n');
+                }
+                _ => {}
+            }
+        }
+        (primary, words)
     }
 
     fn show(repair: &mut Repair, campaign: &Campaign) {
@@ -341,13 +455,92 @@ mod tests {
         );
         // Round 22 FD3: one weight for a save row. Save is primary while the draft has changes
         // it can save, and secondary when unchanged, still invalid, or when a run owns Next turn.
-        assert!(!show_with(&mut repair, &campaign, false), "FD3-clean");
+        // Round 23 FF2: the state word. A changed draft that still cannot be read is Invalid,
+        // as in Library; Unsaved means Save would write.
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(!primary, "FD3-clean");
+        assert!(
+            words.contains("No changes") && !words.contains("Invalid"),
+            "FF2-clean\n{words}"
+        );
         repair.draft = format!("{before}\nStill broken.\n");
-        assert!(!show_with(&mut repair, &campaign, false), "FD3-invalid");
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(!primary, "FD3-invalid");
+        assert!(
+            words.contains("Invalid") && !words.contains("Unsaved"),
+            "FF2-invalid\n{words}"
+        );
         repair.draft = draft.clone();
-        assert!(show_with(&mut repair, &campaign, false), "FD3-changed");
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(primary, "FD3-changed");
+        assert!(
+            words.contains("Unsaved") && !words.contains("Invalid"),
+            "FF2-changed\n{words}"
+        );
+        // Round 23 review: a draft that parses, but that Save refuses (another campaign's
+        // identity), is Invalid with Save's reason, before and after a Save attempt. Save is
+        // not primary and writes nothing.
+        let other = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: campaign\nsplat_name: Other\nsplat_namespace: other\n",
+                uuid::Uuid::new_v4()
+            ),
+            "",
+        )
+        .unwrap();
+        assert!(
+            splat::content::Entry::parse("Broken.md", &other).is_ok(),
+            "fixture parses"
+        );
+        repair.draft = other.clone();
+        for attempt in ["before", "after"] {
+            let (primary, words) = painted(&mut repair, &campaign, false);
+            assert!(!primary, "review-refused-primary-{attempt}");
+            assert!(
+                words.contains("Invalid")
+                    && words.contains(OWNERSHIP)
+                    && !words.contains("Unsaved"),
+                "review-refused-state-{attempt}\n{words}"
+            );
+            assert!(!repair.save(&campaign), "review-refused-save-{attempt}");
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                before,
+                "review-refused-bytes-{attempt}"
+            );
+        }
+        assert_eq!(repair.draft, other);
+        repair.draft = draft.clone();
         assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
         assert_eq!(repair.draft, draft);
+        // Round 23 re-check: before Save the state comes from the draft's own checks, with no
+        // disk read. A Save that fails on the disk shows Save's own reason and `Not saved` in
+        // place of `Unsaved` until the draft changes. The expected reason is the one the write
+        // gives, which refuses before it writes anything.
+        let failed_save = |repair: &mut Repair, case: &str| {
+            let expected =
+                crate::library::write_note(&campaign.path, "Broken.md", Some(before), &draft)
+                    .unwrap_err();
+            let (_, words) = painted(repair, &campaign, false);
+            assert!(
+                words.contains("Unsaved") && !words.contains("Not saved"),
+                "recheck-{case}-before\n{words}"
+            );
+            assert!(!repair.save(&campaign), "recheck-{case}-save");
+            let (primary, words) = painted(repair, &campaign, false);
+            assert!(!primary, "recheck-{case}-primary");
+            assert!(
+                words.contains("Not saved")
+                    && words.contains(&expected)
+                    && !words.contains("Unsaved"),
+                "recheck-{case}-after: {expected}\n{words}"
+            );
+            // Another frame keeps it: only the draft or a successful Save ends it.
+            let (_, words) = painted(repair, &campaign, false);
+            assert!(words.contains("Not saved"), "recheck-{case}-kept\n{words}");
+            expected
+        };
         for moved in [true, false] {
             if moved {
                 std::fs::rename(&path, temp.path().join("Moved.md")).unwrap();
@@ -356,11 +549,70 @@ mod tests {
             }
             show(&mut repair, &campaign);
             assert_eq!(repair.draft, draft);
-            assert!(!repair.save(&campaign));
+            failed_save(&mut repair, if moved { "moved" } else { "missing" });
             assert!(!path.exists());
             assert_eq!(repair.draft, draft);
             std::fs::write(&path, before).unwrap();
+            // The file coming back is not an edit of the draft: the cause stays until one.
+            let (_, words) = painted(&mut repair, &campaign, false);
+            assert!(
+                words.contains("Not saved"),
+                "recheck-{moved}-file-back\n{words}"
+            );
+            repair.draft.push(' ');
+            show(&mut repair, &campaign);
+            repair.draft = draft.clone();
         }
+        // A read-only file: Save refuses, the bytes stay, and the next edit ends the cause.
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        let reason = failed_save(&mut repair, "read-only");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            before,
+            "recheck-read-only-bytes"
+        );
+        repair.draft.push_str("One more word.\n");
+        let (_, words) = painted(&mut repair, &campaign, false);
+        assert!(
+            words.contains("Unsaved") && !words.contains("Not saved") && !words.contains(&reason),
+            "recheck-read-only-edit-ends\n{words}"
+        );
+        // Going back to the same words does not bring the old cause back.
+        repair.draft = draft.clone();
+        let (_, words) = painted(&mut repair, &campaign, false);
+        assert!(
+            !words.contains("Not saved"),
+            "recheck-read-only-stays-ended\n{words}"
+        );
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        // A path outside the campaign folder is refused by the draft's own checks, with no disk
+        // read: Invalid, Save's reason, and nothing written.
+        let mut outside = Repair {
+            path: "../Outside.md".into(),
+            baseline: before.into(),
+            draft: draft.clone(),
+            discarded: None,
+            reloaded: None,
+            error: None,
+            disk: None,
+            failed: None,
+        };
+        let (primary, words) = painted(&mut outside, &campaign, false);
+        assert!(
+            !primary
+                && words.contains("Invalid")
+                && words.contains("Use a relative note path within the package."),
+            "recheck-path\n{words}"
+        );
+        assert!(!outside.save(&campaign), "recheck-path-save");
+        assert!(
+            !temp.path().parent().unwrap().join("Outside.md").exists(),
+            "recheck-path-bytes"
+        );
         assert!(repair.save(&campaign));
         assert!(!repair.dirty());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
