@@ -1869,89 +1869,6 @@ struct PagePress {
     unregistered: bool,
 }
 
-/// How many text lines each part of Edit Markdown's space below the save row holds.
-const SLOT_LINES: f32 = 2.0;
-
-/// One part of Edit Markdown's space below the save row: a fixed rect whatever it holds. Longer
-/// words wrap and scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and
-/// nothing below moves. The part is one focusable widget named with its whole message, so Tab
-/// reaches it and a screen reader reads all of it. While it has focus, the up and down arrows
-/// scroll it by a line and Page Up and Page Down by the part; the wheel scrolls it too.
-fn fixed_part<R>(
-    ui: &mut egui::Ui,
-    rect: egui::Rect,
-    id: &str,
-    name: &str,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let focus = egui::Id::new((id, "focus"));
-    let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
-    let step = if focused {
-        // The arrows scroll the part instead of moving focus.
-        ui.ctx().memory_mut(|memory| {
-            memory.set_focus_lock_filter(
-                focus,
-                egui::EventFilter {
-                    vertical_arrows: true,
-                    ..Default::default()
-                },
-            );
-        });
-        let line = Type::Body.line();
-        ui.input_mut(|input| {
-            let mut step = 0.0;
-            for (key, by) in [
-                (egui::Key::ArrowDown, line),
-                (egui::Key::ArrowUp, -line),
-                (egui::Key::PageDown, rect.height()),
-                (egui::Key::PageUp, -rect.height()),
-            ] {
-                while input.consume_key(egui::Modifiers::NONE, key) {
-                    step += by;
-                }
-            }
-            step
-        })
-    } else {
-        0.0
-    };
-    let mut part = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    );
-    let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
-    let inner = egui::ScrollArea::vertical()
-        .id_salt(id)
-        .max_height(rect.height())
-        // egui's default minimum would let a short overflow grow past the part.
-        .min_scrolled_height(rect.height())
-        .auto_shrink([false, true])
-        .show(&mut part, |ui| {
-            ui.set_max_width(rect.width() - lane);
-            if step != 0.0 {
-                ui.scroll_with_delta(egui::vec2(0.0, -step));
-            }
-            add(ui)
-        })
-        .inner;
-    let response = ui.interact(rect, focus, egui::Sense::focusable_noninteractive());
-    // A named group that holds the message and its actions: a screen reader reads the whole
-    // message, and the group is not a second target over its own Undo.
-    ui.ctx().accesskit_node_builder(response.id, |node| {
-        node.set_role(egui::accesskit::Role::GenericContainer);
-        node.set_label(name);
-    });
-    if response.has_focus() {
-        // Inside the content area, clear of the part's own scroll bar lane.
-        design::focus_ring(
-            ui,
-            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right() - lane, rect.bottom())),
-        );
-    }
-    inner
-}
-
 /// The kept results of the open entry's pane, in the order they show. With an entry open, Read
 /// draws them in the reader's warnings place, after the title; Edit Markdown draws them in the
 /// reserved slot below the save row. With no entry open, they sit above the empty reader.
@@ -6927,77 +6844,63 @@ impl Library {
                 _ => Vec::new(),
             };
             let results_shown = !choices_in_reader && results.any();
-            let results_first = results_shown && results.has_undo();
-            let undo_first =
-                discard_shown || heading.undo.is_some() || vital_result.is_some() || results_first;
-            let reason = repair_problem.is_some() || failed.is_some();
-            let warned = !reason
-                && (!broken.is_empty()
-                    || heading.fix.is_some()
-                    || !vitals.is_empty()
-                    || (results_shown && !results_first));
-            let guidance = !undo_first && !reason && !warned && link_words.is_none();
-            let mut name = Vec::new();
+            // The result group: Discard's result, the heading and stat fixes' results, and the
+            // reader's results. It leads while one of them carries a live Undo.
+            let undo_first = discard_shown
+                || heading.undo.is_some()
+                || vital_result.is_some()
+                || (results_shown && results.has_undo());
+            let mut result_words = Vec::new();
             if discard_shown {
-                name.push(format!("{} draft discarded.", note.name()));
+                result_words.push(format!("{} draft discarded.", note.name()));
             }
-            name.extend(heading.undo.clone());
-            name.extend(vital_result.map(str::to_owned));
-            if results_first {
-                name.push(results.words());
+            result_words.extend(heading.undo.clone());
+            result_words.extend(vital_result.map(str::to_owned));
+            if results_shown {
+                result_words.push(results.words());
             }
-            name.extend(repair_problem.iter().cloned());
-            name.extend(failed.iter().cloned());
-            name.extend(link_words.map(str::to_owned));
-            if warned {
-                name.extend(broken.iter().cloned());
-                name.extend(heading.fix.as_ref().map(|(words, _, _)| words.clone()));
-                name.extend(vitals.iter().map(|(_, _, _, words)| words.clone()));
-                if results_shown && !results_first {
-                    name.push(results.words());
-                }
+            let result_words = result_words.join(" ");
+            // The reason group: Save's reason, the link Campaign sent here, then the warnings
+            // (each broken link, the first heading, a stat line). With nothing else in the
+            // space, why other actions wait for this draft.
+            let reason = repair_problem.is_some() || failed.is_some();
+            let warned = link_words.is_some()
+                || !broken.is_empty()
+                || heading.fix.is_some()
+                || !vitals.is_empty();
+            let waits = !reason && !warned && result_words.is_empty();
+            let mut reason_words = Vec::new();
+            reason_words.extend(repair_problem.iter().cloned());
+            reason_words.extend(failed.iter().cloned());
+            reason_words.extend(link_words.map(str::to_owned));
+            reason_words.extend(broken.iter().cloned());
+            reason_words.extend(heading.fix.as_ref().map(|(words, _, _)| words.clone()));
+            reason_words.extend(vitals.iter().map(|(_, _, _, words)| words.clone()));
+            if waits {
+                reason_words.extend(draft_reason.map(str::to_owned));
             }
-            if guidance {
-                name.extend(draft_reason.map(str::to_owned));
-            }
-            let part = egui::Rect::from_min_size(
-                ui.cursor().min,
-                egui::vec2(editor_width, SLOT_LINES * Type::Body.line()),
-            );
-            ui.allocate_exact_size(part.size(), egui::Sense::hover());
-            let mut discard_undo = false;
+            let reason_words = reason_words.join(" ");
+            let mut heading_fix = false;
             let mut vital_use = None;
-            let mut vital_undo = false;
-            if !name.is_empty() {
-                fixed_part(ui, part, "library_message_space", &name.join(" "), |ui| {
-                    // Results with a live Undo first.
-                    if discard_shown {
-                        discard_undo = design::draft_discarded(ui, note.name());
+            let reason_tone = recovery
+                .as_ref()
+                .filter(|_| note.error.is_some())
+                .map_or(Tone::Error, |(_, _, exists)| {
+                    crate::content_workspace::manifest_fault_tone(*exists)
+                });
+            let mut space = design::MessageSpace::new("library_message_space", editor_width);
+            if !reason_words.is_empty() {
+                let (repair_problem, failed, broken, vitals) =
+                    (&repair_problem, &failed, &broken, &vitals);
+                let (heading_fix, vital_use) = (&mut heading_fix, &mut vital_use);
+                let fix = heading.fix.as_ref();
+                space = space.reason(&reason_words, move |ui| {
+                    // A repair draft's fault in its tone (a deleted manifest is a warning), or
+                    // Save's refusal before the write, a YAML fault in its own words.
+                    if let Some(problem) = repair_problem {
+                        design::message(ui, reason_tone, problem);
                     }
-                    // The fixes' results are messages, so each Undo keeps its icon on the line.
-                    if let Some(result) = &heading.undo {
-                        heading_pressed.1 =
-                            design::undo_message(ui, Tone::Success, result, "Undo heading change");
-                    }
-                    if let Some(result) = vital_result {
-                        vital_undo =
-                            design::undo_message(ui, Tone::Success, result, "Undo stat change");
-                    }
-                    if results_first {
-                        pressed = show_results(ui, &results);
-                    }
-                    // Then Save's reason: a repair draft's fault in its tone (a deleted manifest is
-                    // a warning), or Save's refusal before the write, a YAML fault in its own words.
-                    if let Some(problem) = &repair_problem {
-                        let tone = recovery
-                            .as_ref()
-                            .filter(|_| note.error.is_some())
-                            .map_or(Tone::Error, |(_, _, exists)| {
-                                crate::content_workspace::manifest_fault_tone(*exists)
-                            });
-                        design::message(ui, tone, problem);
-                    }
-                    if let Some(failure) = &failed {
+                    if let Some(failure) = failed {
                         // The disk's failure of the last Save of this draft.
                         design::message(ui, Tone::Error, failure);
                     }
@@ -7005,29 +6908,24 @@ impl Library {
                     if let Some(words) = link_words {
                         design::message(ui, Tone::Warning, words);
                     }
-                    if warned {
-                        for words in &broken {
-                            design::message(ui, Tone::Warning, words);
-                        }
-                        if let Some((words, action, _)) = &heading.fix {
-                            heading_pressed.0 =
-                                design::message_with_action(ui, Tone::Warning, words, action);
-                        }
-                        for (key, label, value, message) in &vitals {
-                            if design::message_with_action(
-                                ui,
-                                Tone::Warning,
-                                message,
-                                &format!("Use {value}"),
-                            ) {
-                                vital_use = Some((*key, *label, *value));
-                            }
-                        }
-                        if results_shown && !results_first {
-                            pressed = show_results(ui, &results);
+                    for words in broken {
+                        design::message(ui, Tone::Warning, words);
+                    }
+                    if let Some((words, action, _)) = fix {
+                        *heading_fix =
+                            design::message_with_action(ui, Tone::Warning, words, action);
+                    }
+                    for (key, label, value, message) in vitals {
+                        if design::message_with_action(
+                            ui,
+                            Tone::Warning,
+                            message,
+                            &format!("Use {value}"),
+                        ) {
+                            *vital_use = Some((*key, *label, *value));
                         }
                     }
-                    if guidance && let Some(reason) = draft_reason {
+                    if waits && let Some(reason) = draft_reason {
                         ui.add(
                             egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                                 .wrap(),
@@ -7035,6 +6933,28 @@ impl Library {
                     }
                 });
             }
+            let heading_undo = heading.undo.as_deref();
+            let results = &results;
+            if !result_words.is_empty() {
+                space = space.result(&result_words, undo_first, move |ui| {
+                    // The fixes' results are messages, so each Undo keeps its icon on the line.
+                    let discard_undo = discard_shown && design::draft_discarded(ui, note.name());
+                    let heading_undo = heading_undo.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo heading change")
+                    });
+                    let vital_undo = vital_result.is_some_and(|result| {
+                        design::undo_message(ui, Tone::Success, result, "Undo stat change")
+                    });
+                    let pressed = results_shown.then(|| show_results(ui, results));
+                    (discard_undo, heading_undo, vital_undo, pressed)
+                });
+            }
+            let (discard_undo, heading_undo, vital_undo, shown) =
+                space.show(ui).unwrap_or_default();
+            if let Some(shown) = shown {
+                pressed = shown;
+            }
+            heading_pressed = (heading_fix, heading_undo);
             if let Some(recovery) = recovery.as_ref().filter(|_| note.error.is_some()) {
                 repair_pressed = recovery_action(ui, recovery, draft_reason);
             }
