@@ -12,8 +12,9 @@ use eframe::egui::{
 use egui_kittest::{Harness, Node, kittest::NodeT};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -135,6 +136,43 @@ pub struct Driver<'a> {
     last_render: Option<((usize, u64), std::rc::Rc<image::RgbaImage>)>,
     /// Counts restarts: a new harness counts its passes from zero again.
     harness_generation: usize,
+    /// What every pass painted and copied, also the passes that kittest runs inside one step.
+    frames: Arc<Mutex<Frames>>,
+}
+
+/// Filled at the end of every pass, so a word painted for one frame is seen.
+#[derive(Default)]
+pub(super) struct Frames {
+    /// The words of the last pass.
+    pub last: BTreeSet<String>,
+    /// While a trace is on, every word painted by any pass.
+    pub during: Option<BTreeSet<String>>,
+    /// The last text the app put on the clipboard.
+    pub copied: Option<String>,
+}
+
+/// Each painted text of this pass, in every layer.
+fn pass_words(ctx: &egui::Context) -> BTreeSet<String> {
+    fn walk(shape: &egui::Shape, out: &mut BTreeSet<String>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            egui::Shape::Text(text) if !text.galley.job.text.trim().is_empty() => {
+                out.insert(text.galley.job.text.clone());
+            }
+            _ => {}
+        }
+    }
+    let layers: Vec<egui::LayerId> = ctx.memory(|memory| memory.layer_ids().collect());
+    let mut out = BTreeSet::new();
+    ctx.graphics(|graphics| {
+        for layer in layers {
+            if let Some(list) = graphics.get(layer) {
+                list.all_entries()
+                    .for_each(|clipped| walk(&clipped.shape, &mut out));
+            }
+        }
+    });
+    out
 }
 
 #[derive(Default)]
@@ -253,7 +291,8 @@ impl<'a> Driver<'a> {
                 .unwrap_or_else(|error| panic!("{scenario}: {error}"))
         });
         let started = Instant::now();
-        let harness = Self::build_harness(world, output.is_some());
+        let frames = Arc::new(Mutex::new(Frames::default()));
+        let harness = Self::build_harness(world, output.is_some(), frames.clone());
         if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
             println!(
                 "Timing {scenario}: app + fonts + renderer = {:?}",
@@ -288,6 +327,7 @@ impl<'a> Driver<'a> {
             settle_timeout: ASYNC_TIMEOUT,
             last_render: None,
             harness_generation: 0,
+            frames,
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -305,7 +345,11 @@ impl<'a> Driver<'a> {
         driver
     }
 
-    fn build_harness(world: &World, capturing: bool) -> Harness<'a, Splat> {
+    fn build_harness(
+        world: &World,
+        capturing: bool,
+        frames: Arc<Mutex<Frames>>,
+    ) -> Harness<'a, Splat> {
         let app = world.app();
         let builder = Harness::<Splat>::builder()
             .with_size(egui::vec2(SMALL.0, SMALL.1))
@@ -319,6 +363,30 @@ impl<'a> Driver<'a> {
         builder.build_eframe(move |cc| {
             crate::design::theme::install(&cc.egui_ctx);
             crate::art::install(&cc.egui_ctx);
+            cc.egui_ctx.on_end_pass(
+                "visual-test frames",
+                Arc::new(move |ctx| {
+                    let words = pass_words(ctx);
+                    let copied = ctx.output(|output| {
+                        output
+                            .commands
+                            .iter()
+                            .rev()
+                            .find_map(|command| match command {
+                                egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                                _ => None,
+                            })
+                    });
+                    let mut frames = frames.lock().expect("frames");
+                    if let Some(during) = &mut frames.during {
+                        during.extend(words.iter().cloned());
+                    }
+                    frames.last = words;
+                    if copied.is_some() {
+                        frames.copied = copied;
+                    }
+                }),
+            );
             app
         })
     }
@@ -326,7 +394,7 @@ impl<'a> Driver<'a> {
     /// Quit and start the app again on the same files, as a restart does.
     pub fn restart(&mut self) {
         // The old app writes its state as it runs. A new one reads that.
-        self.harness = Self::build_harness(&self.world, self.capturing);
+        self.harness = Self::build_harness(&self.world, self.capturing, self.frames.clone());
         self.harness_generation += 1;
         self.window = self.base;
         self.resize(self.base, 1.0);
@@ -1067,6 +1135,90 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// The words of the last pass, and run `act` with every pass's words collected.
+    pub(super) fn traced<T>(&mut self, act: impl FnOnce(&mut Self) -> T) -> (T, BTreeSet<String>) {
+        self.frames.lock().expect("frames").during = Some(BTreeSet::new());
+        let result = act(self);
+        let during = self.frames.lock().expect("frames").during.take();
+        (result, during.unwrap_or_default())
+    }
+
+    /// The words the last pass painted, in every layer.
+    pub(super) fn last_words(&self) -> BTreeSet<String> {
+        self.frames.lock().expect("frames").last.clone()
+    }
+
+    /// Paste what the app last copied, as Ctrl+V does.
+    pub fn paste_copied(&mut self) {
+        let text = self
+            .frames
+            .lock()
+            .expect("frames")
+            .copied
+            .clone()
+            .unwrap_or_else(|| panic!("{}: nothing was copied to paste", self.scenario));
+        let caption = "Press: Ctrl+V";
+        self.film_caption(caption);
+        self.harness.event(egui::Event::Paste(text));
+        self.interactions += 1;
+        self.settle();
+        self.film_result(caption);
+    }
+
+    /// Rest the pointer on a control until its hover text shows. Not an interaction.
+    pub(super) fn hover_name(&mut self, name: &str) {
+        let rect = self.aim(&format!("hover target {name:?}"), |node| {
+            node.name == name && !matches!(node.role, Role::Label | Role::TextRun)
+        });
+        self.rest_pointer(rect.center());
+    }
+
+    /// Rest the pointer on painted words until a hover text shows. Not an interaction.
+    pub(super) fn hover_words(&mut self, words: &str) {
+        let mut at = None;
+        self.each_painted_text(|shape, _| {
+            if at.is_none() && shape.galley.job.text.contains(words) {
+                at = Some(shape.visual_bounding_rect().center());
+            }
+        });
+        let at = at.unwrap_or_else(|| panic!("{}: no painted words {words:?}", self.scenario));
+        self.rest_pointer(at);
+    }
+
+    fn rest_pointer(&mut self, at: egui::Pos2) {
+        self.harness.hover_at(at);
+        // A tooltip waits half a second, and one frame here is a quarter second.
+        for _ in 0..6 {
+            self.harness.step();
+        }
+    }
+
+    /// Take the pointer away, so no hover text stays.
+    pub(super) fn pointer_away(&mut self) {
+        self.harness.remove_cursor();
+        self.settle();
+    }
+
+    /// Work at another size, with the driver in hand, then come back.
+    pub(super) fn at_size_mut<T>(
+        &mut self,
+        size: (f32, f32),
+        work: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        self.resize(size, 1.0);
+        let result = work(self);
+        self.resize(self.base, 1.0);
+        result
+    }
+
+    /// Click a link by its words, where a button elsewhere has the same name.
+    pub fn click_link(&mut self, name: &str) {
+        let rect = self.aim(&format!("link {name:?}"), |node| {
+            node.name == name && node.is_link()
+        });
+        self.click_rect(rect, &format!("Click: {name}"));
+    }
+
     /// Add an event from the shared strip, opening More only when the strip needs it.
     pub fn click_add_event(&mut self, name: &str) {
         if !self.has(name) {
@@ -1723,6 +1875,16 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, "Click: Markdown editor");
         self.press_ctrl(egui::Key::End);
         self.type_text(text);
+    }
+
+    /// Paste what the app copied at the end of the visible Markdown editor.
+    pub fn paste_into_editor(&mut self) {
+        let rect = self.aim("the Markdown editor", |node| {
+            node.role == Role::MultilineTextInput
+        });
+        self.click_rect(rect, "Click: Markdown editor");
+        self.press_ctrl(egui::Key::End);
+        self.paste_copied();
     }
 
     /// Replace everything in the visible Markdown editor.

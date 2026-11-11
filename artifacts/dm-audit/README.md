@@ -1,5 +1,165 @@
 # DM audit: one evening of play
 
+## The frozen evening (2026-11-11)
+
+The script `src/visual_tests/dm_audit.rs` runs as the scenario `dm-audit` in every visual run, and it is
+G6: it plays the evening and fails when a task's page transitions, interactions or path differ from
+`counts.json`, when a frozen task is missing, when a task is new or out of order, or when a counted act finds
+no control.
+
+**G6 runs in every gate.** When a change makes a task cost more or fewer acts on purpose, its author runs
+`devenv shell -- audit-freeze counts`, which writes `steps.tsv`, `summary.tsv` and `counts.json` from this
+source, and says in the pull request why the task costs more or less. A feature that adds acts of its own adds
+them as **new** tasks and runs `devenv shell -- audit-freeze add`: that writes one row for each new task and
+leaves every frozen row as it is; it refuses, and writes nothing, when a frozen task's transitions,
+interactions or path differ, or when a frozen task is missing or out of order. The scenario takes no captures,
+so the capture names in the sections below refer to the first audit's run.
+
+**Set-up is apart, and it is only what a DM does not do in the session.** Each is a `Setup` row in
+`steps.tsv` and counts for nothing:
+
+| Set-up act | Why it is not counted |
+|---|---|
+| Play last week's session, then quit and open the app | It makes the fixture: last week happened before this evening |
+| Work at 1200x800 | The window size of the measurement, not an act |
+| Save, quit and open the app at the table; and after the session | Time passing between prep, play and wrap-up. Starting the app is outside it |
+| A microphone is there | A simulated device: the test has no sound card |
+| The recorder hears the table | A simulated signal from that device |
+| The recording service has its keys | Settings made once, long before the evening; the test has no network |
+
+The Undo of the Fireball was set-up before; it is a key press the DM makes in the session, so it is now the
+counted task "The table rules that the Fireball missed: undo it" (1).
+
+**Measured on `main`** at `1040ddff`, with pull request 232:
+
+| Phase | Tasks before | Tasks now | Transitions before | Transitions now | Interactions before | Interactions now |
+|---|---:|---:|---:|---:|---:|---:|
+| Before | 7 | 7 | 5 | 5 | 34 | 36 |
+| During | 27 | 28 | 7 | 7 | 180 | 183 |
+| After | 7 | 7 | 1 | 5 | 17 | 21 |
+| Total | 41 | **42** | **13** | **17** | **231** | **240** |
+
+By kind, before and now: Nav 14 and 17, Sub 7 and 6, Panel 12 and 12, Find 49 and 53, Do 149 and 152.
+
+**Each difference from 13 and 231.** The old `steps.tsv` was measured on 2026-11-02 (#25). The script and
+the app changed after it, and the script was not run again.
+
+| Task | Before | Now | Why |
+|---|---|---|---|
+| Recall what happened last session | 1: `open Last time` | 2: the `Last time` link to the last session, then tonight's session again | Since #39 the line is a link with a one-line preview, and the script stopped clicking. The preview reads only `Recap of last time` or `What happened`. Last week's words are under another heading, so the line shows none of them (a fact in `summary.tsv`). Reading them takes the link and the way back |
+| Read last session's recap aloud | 1 | 2 | The same |
+| The party travels for half a day | 1 | 2: `More Add actions`, `Add Travel` | Since #136 the strip keeps Fight, Group and Long rest in view, and Travel is in **More** at 1200x800 |
+| Record a short rest | 1 | 2 | The same, for Short rest |
+| Build tonight's encounter | 15 | 16 | `Duplicate` is a line of the row's menu: 2, was 1 |
+| Write the read-aloud text and tactics | 3 | 4 | Since #247 the `Read-aloud and notes` field starts below the editor's visible part at 1200x800, so the DM scrolls to it first. The driver counts one scroll into view as one interaction. G6 caught this move when #247 merged |
+| Make the boss your own | 6 | 5 | `Make it yours` is a line of the row's menu: 2, was 1. The HP field has focus, so the number is typed in 1, was 3 |
+| The table rules that the Fireball missed: undo it | set-up, not counted | 1 | A key press the DM makes in the session |
+| A fight you did not plan | 9 | 8 | `Close run` closes the empty run at once. `Close now` is no longer asked |
+| Say where the fight happened | 4, no transition | 4, **T T** | The `Details` tab went in #39. The place is now the `Where` field of the Timeline page: the row's `Timeline` link, type, then `Session` again |
+| Link the fight in the note | 2: `Add to notes` | 6, **T T** | `Add to notes` is drawn only for an event with no run (`src/sessions/page.rs`, the plan row's action band), so on a played fight that act was blocked. The DM's goal still has a route: the row's `Timeline` link, `Copy link` in the Timeline's detail of the fight, `Session`, then click in the note, Ctrl+End and Ctrl+V. The note then holds the fight's `[[Timeline#^…]]` link (a fact in `summary.tsv`) |
+| Process the recording | 4 | 4 | Its tab is named `Recordings, 1 recording` now. The count is the same |
+
+Sum: +1, +1, +1, +1, +1, +1, −1, +1, −1, 0 and +4 interactions give 240. The four transitions are the two
+Timeline trips. One fact also changed with the app and not the count: "final HP reads in place" looked for a
+`FINAL HP` heading, which the opened row no longer has; it now looks for the HP lines and `Log`, and is true.
+
+**What G6 does not hold.** The order of acts inside one task is not frozen: two acts that swap places keep
+the task's counts and path.
+
+### The plain campaign (G7)
+
+`Seed::Plain` in `src/visual_tests/fixture.rs` is the campaign of the measured evening plus what the
+session-cycle features touch: old task lines under `## Plan for tonight`, words typed as conditions
+(`Bless 10 rounds`, `Hexed until the hag dies`), a marked roll table, two played fights in one session (one
+with loot and a title longer than its row), NPCs with and without a stat block, a session with a recap and one
+without, a Travel event, the participant name `Ashfang, Eldest Wolf of the Southern Ridge`, and 12
+participants in one fight. Its runs have IDs made from their campaign and name, so their files are the same
+on every run of the test.
+
+The scenario `plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`). `SCREENS`
+and `HOVERS` in that file fix its 140 views in code; a missing or extra view always fails, and no row of
+`allowed.json` can excuse one. After every act the screen must equal a view that G7 records, or the act is in
+`PASSING` with its reason (setting the stage, one `Next turn` of twelve, the editor scrolled to its loot row);
+so a form or panel that the evening opens between two views cannot go unseen:
+
+- **Pages, at 1200x800 and 960x640 with Lookup closed and open:** tonight's plan; its Travel row open; its
+  planned fight open; last session with its played fight open; the ended view of the fight that was played
+  last (with `Continue fight`) and of an older one (with the reason it cannot go on); Encounters; the
+  encounter editor; the 12-person run; its **Keys** list; its **Conditions** tab with `Other effect`; its
+  Arrivals panel; the run after a whole round of `Next turn`; Timeline; the World page's reader; a new session.
+- **Lookup's readers, at both sizes:** the six readers whose titles section 1.2 sums, the marked roll table
+  `Road Encounters`, and the package creature `Cinder Wolf`.
+- **Open menus, at both sizes:** the Add strip's **More**, a Travel row's menu, a planned fight's menu, an
+  encounter row's menu, and the loot editor's table menu. Each view must hold the menu's own items.
+- **Screens as they stand, at both sizes:** the page the app opens on; last session before and after each
+  played fight opens; Encounters after each ended run closes; a roster row selected; Encounters after the
+  run closes; the Session page under the readers; the World page's list; the new-session form, empty and
+  with its title; the new note written, and saved.
+- **Hovers, at both sizes (`HOVERS`, each with its reason):** the **Last time** link, a planned fight, a Travel
+  row's menu button, a played fight's long title, `Continue fight`, the older fight's reason, an encounter
+  row's menu button, a roster row's condition words, the dock's **Conditions**, the Undo label, a reader's
+  `Edit`, and a package creature's art. A control with no hover today is recorded too, so a hover it gains
+  is a difference.
+
+For each view G7 records every named control in view and every painted text, with its rectangle, and the
+part a person sees when that is less. Every input of the evening is an **act** (113 of them): for each, the
+words that any frame painted and the frame before did not, the words that went, and each campaign file that
+was written or changed, by digest. A test hook reads every frame, also the frames that one test step runs,
+so a notice shown for one frame is in the record, and so is a file written and put back. G7 compares every
+campaign file at the start and the end by its **bytes**. A run's file must open as a run (`Run::open`); in
+it, and nowhere else, the test folder inside `splat_run_source_path` becomes `<world>`, and the World page's
+path label loses the same folder. Each file that the evening changed is kept whole in
+`src/visual_tests/plain_evening/files/`, so a new reference shows as a readable diff, also of a saved run.
+
+G7 fails on any difference that a row of `plain_evening/allowed.json` does not name whole: its row of
+section 2.5, the screen, the view, the control, text, act or file, and the rectangles, words or lines. A row
+that matches nothing fails, a row cannot name a view, and the check fails when the reference or the
+evening's record is empty or missing.
+
+**G7 compares only with `SPLAT_FROZEN=1`.** Any change of the user interface fails it by design, so the
+default gate runs the scenario and its captures and skips the comparison; the pull requests of the
+session-cycle build plan run `SPLAT_FROZEN=1 devenv shell -- audit-gate <label>`. The reference is true only
+for the commit of `main` it was written on, which it records in `frozen_at`, and the failure's first line
+names it. Such a pull request carries one commit that is the output of `devenv shell -- audit-freeze reference`
+on an unchanged commit of `main` (the command refuses other changes in the tree), and makes it again after each
+merge of `main`. A feature adds a view of its own surface to `SCREENS` (a hover to `HOVERS`) and the acts that
+reach it, one row in `allowed.json` for each difference it makes to an old record, and runs
+`devenv shell -- audit-freeze add`: that inserts the new views and acts in their places and leaves every old
+record as it is, so `git diff --diff-algorithm=patience` of the reference shows added lines only; it refuses,
+and writes nothing, while any other difference has no row. A reviewer checks out the commit in `frozen_at`,
+copies in the pull request's frozen files, and runs `devenv shell -- audit-freeze verify`: it writes the
+reference into a scratch folder and fails unless the tree's files are byte for byte the same.
+
+**What G7 does not hold.** Content scrolled out of view: a feature whose change is below the fold adds a
+screen that shows it. A control's behaviour, colour or imagery. A key binding with no visible control: its
+feature tests it. Pages the plain evening does not visit, such as Settings. A same-bytes rewrite of
+`Sessions/.splat-session-paths.json`, which the app makes on a one-second poll of real time; a change of its
+bytes is recorded. A file created outside the campaign folder, a file created and deleted inside one act, a
+change of permissions with the same bytes, one extra frame of delay, and a corrupt-and-restore of
+`.splat-session-paths.json` inside one act. The `why` of an allowed row: the tool does not check it, so a
+reviewer reads the whole `difference`.
+
+### The reader's title, measured
+
+`titles.tsv` holds the measurement, from the same scenario. Lookup's reader, with the title in `Display`
+(26 px):
+
+| Title | Width | Case B (1200x800, Lookup open), inside 406: room after `Edit` | Case D (960x640, Lookup open), inside 320: room after `Edit` | With art (a campaign creature, no `Edit`): B and D |
+|---|---:|---:|---:|---:|
+| `Captain Varra`, 13 letters | 160.1 | 176.8 | 90.8 | 173.9 and 87.9 |
+| `Oren Thistlewick`, 16 | 196.5 | 140.4 | 54.4 | 129.5 and 43.9, scrolling |
+| `Captain Varra Black`, 19 | 229.5 | 107.4 | 21.4 | 96.5 and 10.9, scrolling |
+
+`Edit` is 61.1 px and starts 8 px after the title. In Lookup a campaign creature has no `Edit` (it offers
+`Open in Library`), and its art, 64 px, starts 8 px after the title. The two creatures of 16 and 19 letters
+have long stat blocks, so their readers scroll: the scroll bar starts 8 px inside the search field's edge at
+both sizes (at 1179 and 939.4), so a reader that scrolls has 8 px less. The 16-letter row reads 129.5 and
+43.9 for that reason. Section 1.2 of `docs/design/session-cycle.md` estimated 82, 47 and 12 at case D, and
+168, 133 and 98 at case B. The verdicts at case D stay. At case B the 16-letter title now has room for
+`Start fight` and the icon, with 0.4 px to spare on the estimated widths of actions that do not exist yet; in a
+reader that scrolls it has `Start fight` alone. Section 1.2 and section 7 now carry the measured numbers, and
+the limit "about 10 letters" for `Start fight` at case D is now about 11.
+
 ## Update: what the design changes did
 
 Design changes A, B, D, E and F below are built. C, adding a participant to a live fight, is now built too. The run's Arrivals panel adds one creature, found or made up, and encounter groups add a prepared group. A group can also be assembled in the session's plan. The measured counts below do not include these flows. The same evening,
