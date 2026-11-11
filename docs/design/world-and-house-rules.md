@@ -6,6 +6,13 @@ proposals, and the DM has put them behind the rest. It uses the Heralds of the E
 (`40-59 Campaigns/42 Heralds of the End` in the vault) as its test case. Those notes are early, so
 this design takes their shape and not their numbers.
 
+[The session cycle](session-cycle.md) (F4) checked the tracker parts against the app as it is now, with its
+Session page, plan, party bar and rail. It keeps the data model and changes four things, which this document
+now states. Trackers is a view of the Lookup panel and not a panel of its own; the Due count is in the rail
+and on the run's notice line; a tracker action is never a step of a run's Undo; a quick action's table
+roll is recorded in the ledger, not in the run's Log; and a notice keeps its roll results in the ledger and
+has an Undo for a tick and a dismissal.
+
 Three rounds of review shaped this version. The third round showed that each fix was adding rules for
 the next reviewer to break, so this version replaces most of those rules with stated limits. It has
 not been reviewed since that change. [World and rules: later](world-and-rules-later.md) holds what was
@@ -37,7 +44,7 @@ flowchart LR
         T[Roll tables]
         H[House rule notes:<br/>trackers, day marks, event types]
     end
-    H -- "in play" --> P[Tracker panel<br/>and Due list]
+    H -- "in play" --> P[Trackers view<br/>and Due list]
     T --> P
     P -- "the DM acts" --> L[Trackers.md<br/>the ledger]
     TL[Timeline.md] -- "day count" --> P
@@ -210,7 +217,7 @@ seals:
 | `min` | A hard limit. A quick action that would pass it is blocked, and it says why |
 | `goal` | Draws progress and blocks nothing, so the race clock can pass 120 |
 | `per` | A list of words: one value for each. With no list, there is one value |
-| `pin` | Show at the top of the tracker panel |
+| `pin` | Show under **Pinned** in the Trackers view. The others wait under **More trackers** |
 | `quick` | Named actions, so the DM clicks a meaning and not an amount |
 | `marks` | Values that raise a notice |
 
@@ -234,9 +241,14 @@ Rohan, missed 1", "Mirror Maze, Library". The DM changes it, and no rule reads i
   changes: [{add: 10}, {tracker: souls, add: 1}]
 ```
 
-An action writes one file, so it cannot be half written. After an action, the panel offers **Add to Timeline**,
-filled in with the action's label, through the normal Timeline add. This costs one more click when the DM
-wants it, and the DM can ignore it.
+An action writes one file, so it cannot be half written. After an action, its result line in the Trackers view
+names the change and offers **Undo change** and **Add to Timeline**. **Add to Timeline** makes a Major event
+with the action's label in the session being played, through the normal Timeline add, so the event is a row
+of tonight's plan at once. This costs one more click when the DM wants it, and the DM can ignore it.
+
+A quick action with a `table` rolls on its own dice, in a run and out of one. The ledger keeps the roll and
+its row. The run's Log does not, because one file owns one fact. A roll from a table's own **Roll** button in
+a note stays a step of the run, as it is today.
 
 **Limits.** A tracker counts. It does not know who the operator is, enforce one roll per round, or open a gate.
 A bought-in rule never changes a quick action's numbers.
@@ -252,9 +264,17 @@ A **mark** raises a notice when a value rises past it. Marks never act.
 | `tables` | Tables to roll, with a **Roll** button on the notice |
 | `changes` | Proposed changes, shown on the notice |
 
-The **Due list** holds open notices. Each row names its instance: "Old Guard: First seal". **Done** clears it,
-and it applies any `changes` that the DM has not unticked or edited. **Dismiss** clears it and applies nothing.
-A notice stays open until then, including after a restart. Roll results stay on the notice until the app closes.
+The **Due list** holds open notices. Each row names its instance: "Old Guard: First seal". A row starts with
+a box, as a scene in the session's plan does. A tick means done: it clears the row, and it applies any
+`changes` that the DM has not unticked or edited. **Dismiss**, in the row's menu, clears it and applies
+nothing. Each gives the result line **Undo change**, which brings the row back. A notice stays open until
+then, including after a restart. A table's roll results are listed under the notice and are kept with it in
+the ledger, so a restart does not lose them. A roll button names its table by the table's heading, never by
+its key.
+
+A Due notice is not a turn reminder. A reminder belongs to one participant of one run and is in the run file.
+A notice belongs to the campaign and is in the ledger. A mark never makes a reminder. See the table in
+[The session cycle](session-cycle.md), F4.
 
 **Identity.** A tracker's notice is the change that crossed the mark, plus the mark's value. So undoing the change
 removes the notice with no extra rule, and removing an old crossing cannot clear a different one. A notice
@@ -290,7 +310,7 @@ changes:
 notes:
   seals/Old Guard: Coming for the party
 notices:
-- {change: c-1a2b3c4d, at: 1, state: done}
+- {change: c-1a2b3c4d, at: 1, state: done, rolls: [{table: rival_track, roll: 4, row: The Keyring take a seal.}]}
 - {mark: month_end, n: 3, state: dismissed}
 ---
 ```
@@ -305,13 +325,17 @@ row shows no time.
 - **Moving a Timeline event never changes a value.**
 - **Tuning.** Editing `start` corrects the past. To change a value from today, the DM adds a change. The history
   shows the start value at its top.
-- **Undo.** The panel has a named undo: "Undo: Favor −1". In a tracker's history, **Remove** works on any row, with
-  a one-step undo as the Timeline has (`src/timeline.rs:654-658`). Changes that share a `use` go together.
-  Neither reverses later spending that relied on the old value.
-- **The `U` key.** During a run, a campaign tracker's action also puts a step on the run's undo stack that restores
-  no run state and names the change. So `U` always undoes the newest action, whichever it was. This matters
-  because the run's undo restores whole states (`src/encounter_run.rs:801`), and pressing `U` after a mistaken
-  Favor click must not take back 7 damage. It holds for the current session, as run undo does today.
+- **Undo.** The result line of an action names its change ("Favor −1.") and has **Undo change**. It removes the
+  ledger's newest change of the session being played. The ledger is a file, so this Undo is still there after
+  a restart. In a tracker's history, **Remove** works on any row, with a one-step undo as the Timeline has
+  (`src/timeline.rs:654-658`). Changes that share a `use` go together. Neither reverses later spending that
+  relied on the old value.
+- **The `U` key.** A tracker action is never a step of a run's Undo. An earlier version put a step on the run's
+  stack, so that `U` took back the newest action of either kind. The run's steps are now saved in the run file
+  ([The session cycle](session-cycle.md), F8), and a step there that changes `Trackers.md` could not be kept
+  true after a restart. `U` is the run's Undo. It takes back the run's last step, which the run's header names,
+  and never a tracker change. A tracker change is taken back with **Undo change** on its own result line.
+  While Lookup shows Trackers, the run's letter keys work, because that view has nothing to type into.
 - **Repair.** A row for an unknown tracker or word stays in the file and shows in a problems list. The DM fixes
   it with find and replace, because the keys are plain words.
 - **Saving.** This shares `timeline::Book`'s atomic write and external-change checks (`src/timeline.rs:403-599`),
@@ -396,7 +420,8 @@ while a run is open. It asks for a stat block if the NPC has none, and it offers
 the run has more than one, and for initiative, or rolls it if that is empty. It then adds a one-member group, with the
 NPC's name as an override, through the run's existing `AddGroup` command. A team of rivals
 is a group already, such as `Rival: Convicts, 1-2 seals`, so the same path brings them in together. With no run open,
-the DM starts a run from a party-only encounter kept for this.
+the same place says **Start a fight**: it makes an encounter named after the NPC, with the party, links it in
+tonight's plan and opens Setup ([The session cycle](session-cycle.md), F3). This is proposed, not built.
 
 **Locations.** A location's page lists the places inside it and the NPCs there. The Timeline's `place` field suggests
 locations but stays plain text. An event's detail panel links to the location when the text matches exactly one name or
@@ -463,24 +488,38 @@ boundary does not reverse its income. An overdue item uses today's values, and a
 **World** joins the sidebar between Timeline and Party. It answers: "What is true in this world?" It has one list of notes
 and entries, grouped by world `type` and then by folder, and the Reader.
 
-**The tracker panel** answers: "What is due, and what are the numbers?" It opens beside any page with **Ctrl+T**, the way Notes
-opens with Ctrl+J and Lookup with Ctrl+K. It works in run setup, in live play, on the ended view and with no run open. This
-matters because most of a race happens between fights, when no run exists.
+**Trackers** answers: "What is due, and what are the numbers?" It is a view of the Lookup panel, and **Ctrl+T** opens it
+beside any page. It works in run setup, in live play, on the ended view and with no run open. This matters because most of
+a race happens between fights, when no run exists. An earlier version made it a third panel beside Lookup and Notes. The
+app now has one rule for that space (one panel beside the page, and the run's own panel gives way when the roster needs
+the width), and a third panel would need a second rule and would hide the stat block more often. As a Lookup view,
+Trackers is a place in Lookup's Back history: a search leaves it, and Back or Ctrl+T returns.
 
 ```text
-Due: Bell. The Cistern floods. [Roll rival_track] [Done] [Dismiss]
-Crowd Favor       3   [Crowd loves it] [Throw a gift]
+Trackers
+DUE 1
+☐ Bell. The Cistern floods.                          ⋯
+  [Roll Rival Track] [Roll Wandering, 0:40 to 1:19]
+PINNED
+Crowd Favor            3   [Crowd loves it] [Throw a gift]
 Elapsed race time 42 / 120   [Enter room] [Collect soul] ...
-Seals   Party 1   Old Guard 2 "Coming for the party"   [Take seal]
-Undo: Favor −1                                [Add to Timeline]
+Seals   Party 1 · Old Guard 2   Old Guard: Coming for the party   [Take seal ⌄]
+──────────────────────────────────────────────
+✓ Favor −1.   Undo change   Add to Timeline
 ```
 
-Pinned trackers come first, and the rest are below them. The run strip shows a Due count on other pages, and in a run the
-panel's button shows the same count, so a new notice shows when the panel is closed. Splat is one DM's tool, so it has no
-visibility model. A secret number is secret because it is not pinned.
+Due rows come first, then pinned trackers, and the rest are under **More trackers**. The result line keeps a fixed place at
+the panel's bottom edge, and the list above it scrolls. In a run, each control of the view gives focus back to `Amount`.
+While a house rule note is in play,
+the rail's status slot says `Trackers`, or `Due 2` with a bell, on every page, and a click opens the view. In a run, while a
+notice is due and the view is not in sight, the header's notice line shows the notice's words, after a conflict, a sync
+notice and the current turn's reminder. So a notice shows when the view is closed. The Session page has no tracker surface of its own: the rail is on that page
+too. Splat is one DM's tool, so it has no visibility model. A secret number is secret because it is not pinned.
 
-The Practice Ring is the layout test: a full roster, the panel open, at 960x640. Each phase adds a visual-test scenario and a test
-ID in `docs/ux-intent.md`.
+The Practice Ring is the layout test: a full roster, Trackers open, at 960x640. The roster keeps 454 px and the current
+stat block's tile line, as beside any Lookup view. Each phase adds a visual-test scenario and a test ID in
+`docs/ux-intent.md`. [The session cycle](session-cycle.md) has the wireframe, the exact words, the states and the build
+plan (P9 to P11).
 
 ## Coverage against Heralds
 
@@ -524,14 +563,14 @@ unplanned, so part 5 may come sooner than its number.
    *Changes:* `content::read_directory`, `Catalogue`, `markdown_view`, `lookup.rs`, `main.rs` `Page`. *Done when:* at the table,
    the DM finds "Reliability" and reads it beside a run in two interactions.
 2. **Roll tables.** *Built.* Small, and useful in the first session. *Changes:* `content/markdown.rs`, Reader, `encounter_run.rs`.
-3. **Trackers.** *Not built, and deprioritized.* Members, in play, the ledger, quick actions, marks, the Due list and the panel. This is still the largest part. If
-   it must split, ship the ledger and quick actions first, then marks. *Changes:* new ledger and validator modules, `main.rs`,
-   `encounter_run.rs`, `KNOWN_FIELDS` (`splat_members`, `splat_in_play`). *Done when:* a whole race runs from
+3. **Trackers.** *Not built, and deprioritized.* Members, in play, the ledger, quick actions, marks, the Due list and the Trackers view. This is still the largest part. It
+   splits as [The session cycle](session-cycle.md) plans it: the ledger, quick actions and the view (P9), then marks and the Due list (P10), then day marks (P11). *Changes:* new ledger, validator and view modules, `lookup.rs`, `lib.rs` (Ctrl+T and the rail's status),
+   the run's notice line, `KNOWN_FIELDS` (`splat_members`, `splat_in_play`). The run's commands and its Undo do not change. *Done when:* a whole race runs from
    [the example](world-examples/heralds-tournament.md), with no paper tracking except the map, the final sum and player levels.
 4. **Event types.** *Not built, and deprioritized.* *Changes:* `timeline.rs`, `timeline/page.rs`, `processing.rs`. A test covers an unknown type's round trip.
 5. **NPCs and locations.** *Built.* *Changes:* `content/mod.rs` (`splat_world`), `presentation.rs`, `lookup.rs`, `encounter_run.rs`.
    *Done when:* a typed name becomes a participant in the fight, and the run stays on screen.
-6. **The clock and day marks.** *The clock is built. Day marks wait for part 3.* Year 1 begins. *Changes:* `timeline.rs`, the ledger module, the panel.
+6. **The clock and day marks.** *The clock is built. Day marks wait for part 3.* Year 1 begins. *Changes:* `timeline.rs`, the ledger module, the Trackers view.
 
 ## Alternatives rejected
 
@@ -545,6 +584,9 @@ unplanned, so part 5 may come sooner than its number.
 | Store state in `Timeline.md` | A race makes dozens of changes, and the Timeline must stay readable as the story |
 | Store current values, not a history | Undo across sessions and an honest record would both need another store |
 | A separate run tracker store | It needs a second undo, frozen definitions and rules for mixed actions, to give the Practice Ring what a plain tracker gives |
+| A tracker panel of its own, beside Lookup and Notes | A third thing would want the one space beside a page. It would need a second rule for which shows, and it would hide the run's stat block more often |
+| A tracker action as a step of the run's Undo | The run file now keeps its steps. A step there that changes `Trackers.md` cannot be kept true after a restart or an outside edit |
+| Due rows in the session's plan | A notice would show in two places, the plan and the view, with two sets of controls |
 | One action writing the ledger and the Timeline | It needs a recovery protocol for a rare crash window. A second click is honest and cannot half fail |
 | A new `Kind` variant for custom types | It touches every use of `Kind`, and an unknown value could stop the file's parse |
 | Namespaced `#` member keys | They need lowering, self-reference rules, keys on copy and rename support, for a conflict that one DM can see and fix |
