@@ -207,7 +207,11 @@ impl Run {
 
     /// True when this row's character has inspiration they can expend now.
     pub(super) fn has_inspiration(&self, row: usize) -> bool {
-        if self.inspiration.is_none() || !self.player(row) || self.spent_inspiration.contains(&row)
+        if self.inspiration.is_none()
+            || !self.player(row)
+            || self
+                .spent_inspiration
+                .contains(&self.state.participants[row].key)
         {
             return false;
         }
@@ -217,11 +221,46 @@ impl Run {
             .and_then(|sync| sync.values().get("inspiration"))
         {
             Some(group) => group["inspiration"] == true,
-            None => self
-                .sheet
-                .as_ref()
-                .filter(|_| self.sheet_for == Some(row))
-                .is_some_and(|record| record.initial.inspiration),
+            None => self.sheet_inspiration.get(&row) == Some(&true),
+        }
+    }
+
+    /// What a read of a character's sheet says about their inspiration. A sheet that shows
+    /// none has caught up with what the run spent.
+    pub(super) fn note_sheet_inspiration(&mut self, row: usize, has: bool) {
+        self.sheet_inspiration.insert(row, has);
+        if !has
+            && self
+                .spent_inspiration
+                .remove(&self.state.participants[row].key)
+        {
+            self.dirty = true;
+        }
+    }
+
+    /// Send what the run spent to each synced sheet that can take it now. Until a sheet
+    /// shows none, the run remembers the spend, and saves it with the run.
+    pub(super) fn settle_spent_inspiration(&mut self) {
+        if self.spent_inspiration.is_empty() {
+            return;
+        }
+        for (row, sync) in &mut self.syncs {
+            let Some(p) = self.state.participants.get(*row) else {
+                continue;
+            };
+            if !self.spent_inspiration.contains(&p.key) || !sync.ready() {
+                continue;
+            }
+            match sync.values().get("inspiration") {
+                Some(group) if group["inspiration"] == true => {
+                    sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
+                }
+                Some(_) => {
+                    self.spent_inspiration.remove(&p.key);
+                    self.dirty = true;
+                }
+                None => {}
+            }
         }
     }
 
@@ -231,17 +270,13 @@ impl Run {
         self.inspiration == Some(Inspiration::Advantage) && self.has_inspiration(row)
     }
 
-    /// The character expends inspiration. A synced sheet sends it to D&D Beyond; otherwise the
-    /// run remembers it, and the Log says so for the DM to mark on the sheet.
+    /// The character expends inspiration. The run remembers it until their sheet shows none:
+    /// a synced sheet is sent it now, or when its sync next can take it.
     fn spend_inspiration(&mut self, row: usize) {
-        match self.syncs.get_mut(&row) {
-            Some(sync) if sync.values().contains_key("inspiration") => {
-                sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
-            }
-            _ => {
-                self.spent_inspiration.insert(row);
-            }
-        }
+        self.spent_inspiration
+            .insert(self.state.participants[row].key.clone());
+        self.dirty = true;
+        self.settle_spent_inspiration();
     }
 
     /// Keep a player's d20 roll for a reroll, by a rule that rerolls after the roll.
@@ -972,7 +1007,7 @@ impl Run {
         {
             self.reroll = None;
         }
-        self.spent_inspiration.retain(|row| *row < rows);
+        self.sheet_inspiration.retain(|row, _| *row < rows);
         self.badges.retain(|row, _| *row < rows);
         self.saves.retain(|row, _| *row < rows);
     }
@@ -1028,8 +1063,14 @@ mod tests {
 
     /// Row `row` as a party member whose synced sheet says they have inspiration.
     fn inspired_player(run: &mut Run, row: usize) {
-        use crate::combat_sync::{CombatSync, SyncState};
         run.state.participants[row].side = "party".into();
+        inspired_sync(run, row);
+        assert!(run.inspiration.is_none() || run.has_inspiration(row));
+    }
+
+    /// A sync for `row` whose read says the character has inspiration.
+    fn inspired_sync(run: &mut Run, row: usize) {
+        use crate::combat_sync::{CombatSync, SyncState};
         let mut sync = CombatSync::simulated_state(SyncState::Matching, 7, 30, 0);
         sync.simulate_sheet(
             7,
@@ -1037,7 +1078,49 @@ mod tests {
             &serde_json::json!({"id":7,"canEdit":true,"removedHitPoints":0,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[],"inspiration":true}),
         );
         run.syncs.insert(row, sync);
-        assert!(run.inspiration.is_none() || run.has_inspiration(row));
+    }
+
+    #[test]
+    fn spent_inspiration_stays_with_the_run_until_the_sheet_shows_none() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        run.state.participants[0].side = "party".into();
+        // No sync: the last read of the sheet says they have it.
+        run.note_sheet_inspiration(0, true);
+        assert!(run.has_inspiration(0));
+        run.spend_inspiration(0);
+        assert!(!run.has_inspiration(0));
+        let key = run.state.participants[0].key.clone();
+        assert!(run.spent_inspiration.contains(&key), "saved with the run");
+        // A read that still says they have it is older than the spend.
+        run.note_sheet_inspiration(0, true);
+        assert!(!run.has_inspiration(0));
+        // The sheet caught up; a later grant counts again.
+        run.note_sheet_inspiration(0, false);
+        assert!(run.spent_inspiration.is_empty());
+        run.note_sheet_inspiration(0, true);
+        assert!(run.has_inspiration(0));
+    }
+
+    #[test]
+    fn a_sync_that_starts_later_is_sent_the_spent_inspiration() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        run.state.participants[0].side = "party".into();
+        run.note_sheet_inspiration(0, true);
+        run.spend_inspiration(0);
+        // The sync's first read still shows inspiration on the sheet.
+        inspired_sync(&mut run, 0);
+        assert!(
+            !run.has_inspiration(0),
+            "the run's spend wins over the read"
+        );
+        run.settle_spent_inspiration();
+        let sync = &run.syncs[&0];
+        assert_eq!(sync.values()["inspiration"]["inspiration"], false);
+        assert!(sync.dirty(), "the change waits to be sent");
+        run.settle_spent_inspiration();
+        assert!(run.spent_inspiration.is_empty(), "the sync has it now");
     }
 
     fn log_has(run: &Run, words: &str) -> bool {
