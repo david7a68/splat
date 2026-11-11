@@ -594,13 +594,18 @@ result, and a copied package's registration with `Use the copy in encounters`. O
 they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
 Markdown keeps one space of fixed height below the save row: a result part, then the reason slot directly above the
 editor, each two text lines high whatever it holds. Longer words wrap and scroll inside their part, beside a lane
-kept for its scroll bar, so no text is cut. The result part holds the guidance first when Save's reason or the
+kept for its scroll bar, so no text is cut. Each part is one focusable group named with its whole message: Tab
+reaches it, a screen reader reads all of it, and while it has focus the up and down arrows scroll it by a line and
+Page Up and Page Down by the part; the wheel scrolls it too. The result part holds the guidance first when Save's reason or the
 discard result holds the slot. So no result, reason, Discard or Undo discard moves the editor. With no entry
 open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
 Undo, or when a file the update wrote changes on disk. An offer is checked again on every load and before its write:
-its entry still has the new name, and neither name names another entry, or it goes and writes nothing.
+its entry still has the new name, and neither name names another entry, or it goes and writes nothing. Just before
+the write, Splat reads the entry's own file from disk; if it no longer has the new name, the update writes nothing
+and says `No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it
+again.` Each linking file must still hold what was read, or nothing is written.
 Undo restores only the files that update wrote, so another entry's link update stays.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will

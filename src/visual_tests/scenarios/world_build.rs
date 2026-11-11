@@ -2388,6 +2388,52 @@ fn reader_pane(d: &Driver<'_>) -> egui::Rect {
     egui::Rect::from_min_max(egui::pos2(405.0, 0.0), egui::pos2(width, height))
 }
 
+/// Astra re-check 2: a fixed part below Edit Markdown's save row whose message is longer than
+/// the part. Tab reaches the part (one widget named with the whole message), Down scrolls its
+/// words up, and the wheel does too. Returns (Tab reached it, a key scrolled it, the wheel
+/// scrolled it), each from a changed painted position.
+fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool) {
+    let top = |d: &Driver<'_>| {
+        let mut found = None;
+        d.each_painted_text(|text, clip| {
+            // A message's words may follow its icon in one galley.
+            let start = message.chars().take(24).collect::<String>();
+            if text.galley.job.text.contains(&start) && clip.intersects(text.visual_bounding_rect())
+            {
+                found = Some(text.pos.y);
+            }
+        });
+        found
+    };
+    let tabbed = d.tab_to(message);
+    // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
+    // part's top.
+    d.press(egui::Key::PageUp);
+    let before = top(d);
+    d.press(egui::Key::ArrowDown);
+    let keyed = top(d);
+    let key_scrolled = before
+        .zip(keyed)
+        .is_some_and(|(before, keyed)| keyed < before - 1.0);
+    // Back to the top, then the wheel over the part.
+    d.press(egui::Key::PageUp);
+    let back = top(d);
+    let part = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == message)
+        .map(|node| node.rect)
+        .max_by(|a, b| a.area().total_cmp(&b.area()));
+    let wheel_scrolled = match (back, part) {
+        (Some(back), Some(part)) => {
+            d.scroll_at(part.center(), 1);
+            top(d).is_some_and(|after| after < back - 1.0)
+        }
+        _ => false,
+    };
+    (tabbed, key_scrolled, wheel_scrolled)
+}
+
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
 /// 960, 1200 and 1920. A result in the reader's result place moves none of them.
 pub(super) fn reader_frame(d: &mut Driver<'_>, title: &str) -> Vec<Option<(f32, f32, f32)>> {
@@ -3194,6 +3240,31 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
+    // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
+    // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
+    let b_message = format!("Links now say “{LAMP}”.");
+    let (tabbed, keyed, wheeled) = fixed_part_scrolls(d, &b_message);
+    let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Undo link update")
+                .is_some_and(|undo| {
+                    !undo.shown.is_positive()
+                        || (lanes.iter().all(|lane| !lane.intersects(undo.shown))
+                            && super::press_area_clear(d, undo.rect, "Undo link update", None)
+                                .is_ok())
+                })
+        })
+    });
+    d.observe(
+        "iter-24-L-part-keyboard-result",
+        tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear),
+        format!(
+            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}"
+        ),
+    );
     d.observe(
         "iter-24-L-wrapped-result",
         b_offer_shown
@@ -3294,7 +3365,17 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let second_offer = d.has_containing(&format!(
         "Change links from “{LAMP}” to “Veilglass Beacon”."
     ));
+    // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
+    // first, writes nothing and says why.
     rename_outside("Veilglass Torch");
+    let pressed = d.has("Update 1 link");
+    if pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    let no_reload_kept = pressed
+        && fs::read(&wraith).unwrap() == linking
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
     d.click("Packages");
     d.click("Reload from disk");
     d.settle();
@@ -3305,9 +3386,14 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let bytes_kept = fs::read(&wraith).unwrap() == linking;
     d.observe(
         "iter-24-L-stale-offer",
-        first_offer && second_rename_gone && second_offer && outside_gone && bytes_kept,
+        first_offer
+            && second_rename_gone
+            && second_offer
+            && no_reload_kept
+            && outside_gone
+            && bytes_kept,
         format!(
-            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, gone after an outside rename {outside_gone}; the linking file kept its bytes {bytes_kept}"
+            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, Update after an outside rename with no reload writes nothing {no_reload_kept}, gone after reload {outside_gone}; the linking file kept its bytes {bytes_kept}"
         ),
     );
     // The later steps compare with the package before B's renames: give B and Ash Wraith their
@@ -3697,7 +3783,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     let unsaved = (kept(d), editor_below_read(d));
     let long_kind = written.replacen(
         "splat_kind: package",
-        "splat_kind: package of the watch that keeps the ember gate beyond the long ash road",
+        "splat_kind: package of the watch that keeps the ember gate beyond the long ash road and the old cinder bridge where the patrol waits for the lantern signal at dusk",
         1,
     );
     assert_ne!(long_kind, written, "fixture: the manifest names its kind");
@@ -3709,6 +3795,38 @@ pub fn package_about(d: &mut Driver<'_>) {
         .find(|node| node.name.contains("ember gate beyond the long ash road"))
         .map(|node| node.name);
     let failed = (kept(d), editor_below_read(d));
+    // Astra re-check 2: the long reason scrolls by keyboard and by wheel, and its words keep
+    // clear of every scroll bar and splitter at 960, 1200 and 1920.
+    let message = reason.clone().unwrap_or_default();
+    let mut sizes = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text == message {
+            sizes.push((text.pos, text.galley.size(), clip));
+        }
+    });
+    let (tabbed, keyed, wheeled) = fixed_part_scrolls(d, &message);
+    let clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            let mut words = Vec::new();
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == message {
+                    words.push(text.visual_bounding_rect().intersect(clip));
+                }
+            });
+            !words.is_empty()
+                && words.iter().all(|rect| {
+                    !rect.is_positive() || lanes.iter().all(|lane| !lane.intersects(*rect))
+                })
+        })
+    });
+    d.observe(
+        "iter-24-L-part-keyboard-reason",
+        tabbed && keyed && wheeled && clear.iter().all(|clear| *clear),
+        format!(
+            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}; painted {sizes:?}"
+        ),
+    );
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     let after = (kept(d), editor_below_read(d));

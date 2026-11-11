@@ -920,6 +920,20 @@ impl Loaded {
         notes
     }
 
+    /// The offer checked against the disk just before its write: the entry's own file still
+    /// holds it with the new name (an outside rename since the last load ends the offer).
+    /// The linking files are checked as they are written: each must still hold what was read.
+    fn offer_holds_on_disk(&self, offer: &LinkOffer) -> bool {
+        self.notes
+            .iter()
+            .find(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
+            .and_then(|note| {
+                let text = fs::read_to_string(note.owner.root()?.join(&note.path)).ok()?;
+                Entry::parse(&note.path, &text).ok()
+            })
+            .is_some_and(|entry| entry.id == offer.owner && entry.name == offer.new)
+    }
+
     /// True while a rename's offer still holds: its entry still has the new name, and the old and
     /// new names name no other entry or file.
     fn offer_holds(&self, offer: &LinkOffer) -> bool {
@@ -1774,28 +1788,78 @@ const SLOT_LINES: f32 = 2.0;
 
 /// One part of Edit Markdown's space below the save row: a fixed rect whatever it holds. Longer
 /// words wrap and scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and
-/// nothing below moves.
+/// nothing below moves. The part is one focusable widget named with its whole message, so Tab
+/// reaches it and a screen reader reads all of it. While it has focus, the up and down arrows
+/// scroll it by a line and Page Up and Page Down by the part; the wheel scrolls it too.
 fn fixed_part<R>(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     id: &str,
+    name: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
+    let focus = egui::Id::new((id, "focus"));
+    let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
+    let step = if focused {
+        // The arrows scroll the part instead of moving focus.
+        ui.ctx().memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                focus,
+                egui::EventFilter {
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+        let line = Type::Body.line();
+        ui.input_mut(|input| {
+            let mut step = 0.0;
+            for (key, by) in [
+                (egui::Key::ArrowDown, line),
+                (egui::Key::ArrowUp, -line),
+                (egui::Key::PageDown, rect.height()),
+                (egui::Key::PageUp, -rect.height()),
+            ] {
+                while input.consume_key(egui::Modifiers::NONE, key) {
+                    step += by;
+                }
+            }
+            step
+        })
+    } else {
+        0.0
+    };
     let mut part = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
-    egui::ScrollArea::vertical()
+    let inner = egui::ScrollArea::vertical()
         .id_salt(id)
         .max_height(rect.height())
+        // egui's default minimum would let a short overflow grow past the part.
+        .min_scrolled_height(rect.height())
         .auto_shrink([false, true])
         .show(&mut part, |ui| {
             ui.set_max_width(rect.width() - lane);
+            if step != 0.0 {
+                ui.scroll_with_delta(egui::vec2(0.0, -step));
+            }
             add(ui)
         })
-        .inner
+        .inner;
+    let response = ui.interact(rect, focus, egui::Sense::focusable_noninteractive());
+    // A named group that holds the message and its actions: a screen reader reads the whole
+    // message, and the group is not a second target over its own Undo.
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::GenericContainer);
+        node.set_label(name);
+    });
+    if response.has_focus() {
+        design::focus_ring(ui, rect);
+    }
+    inner
 }
 
 /// The kept results of the open entry's pane, in the order they show. With an entry open, Read
@@ -1831,6 +1895,29 @@ struct ResultPress {
 }
 
 impl ReaderResults {
+    /// Every result's words, in the order they show, for the part's accessible name.
+    fn words(&self) -> String {
+        let page = &self.page;
+        page.link_offer
+            .as_ref()
+            .map(|(words, _)| words.clone())
+            .into_iter()
+            .chain(page.links.clone())
+            .chain(page.registration.as_ref().map(|(words, _)| words.clone()))
+            .chain(page.rosters.map(|_| USE_COPY_RESULT.to_owned()))
+            .chain(self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()))
+            .chain(self.manifest.as_ref().map(|(words, _)| words.clone()))
+            .chain(self.identities.clone())
+            .chain(self.identity.clone())
+            .chain(
+                self.discarded
+                    .as_ref()
+                    .map(|name| format!("{name} draft discarded.")),
+            )
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     fn any(&self) -> bool {
         self.page.any()
             || self.package_use
@@ -1981,6 +2068,9 @@ pub(crate) fn kept_undo_message(
     }
     false
 }
+
+/// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
+pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
 
 /// The warning for a draft whose file moved on disk. Its two choices name what each one does.
 pub(crate) const MOVED_ON_DISK: &str =
@@ -4593,9 +4683,11 @@ impl Library {
             let offer = self.renamed_links.remove(at);
             // The offer is checked again before the write: its entry still has the new name, and
             // neither name names another entry. A stale offer goes and writes nothing.
-            let holds = loaded.offer_holds(&offer);
+            let holds = loaded.offer_holds(&offer) && loaded.offer_holds_on_disk(&offer);
             let LinkOffer { owner, old, new } = offer;
-            if holds {
+            if !holds {
+                self.error = Some(LINKS_NOT_CHANGED.into());
+            } else {
                 let files: Vec<_> = loaded
                     .notes
                     .iter()
@@ -6554,7 +6646,13 @@ impl Library {
                 let results_shown = !choices_in_reader && results.any();
                 if results_shown || link_above.is_some() {
                     let upper = egui::Rect::from_min_size(top, egui::vec2(editor_width, part));
-                    if let Some(press) = fixed_part(ui, upper, "library_result_part", |ui| {
+                    let name = link_above
+                        .map(String::as_str)
+                        .into_iter()
+                        .chain(results_shown.then(|| results.words()).as_deref())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if let Some(press) = fixed_part(ui, upper, "library_result_part", &name, |ui| {
                         if let Some(words) = link_above {
                             design::message(ui, Tone::Warning, words);
                         }
@@ -6568,7 +6666,8 @@ impl Library {
                     egui::vec2(editor_width, part),
                 );
                 if discard_shown {
-                    if fixed_part(ui, slot, "library_reason_part", |ui| {
+                    let name = format!("{} draft discarded.", note.name());
+                    if fixed_part(ui, slot, "library_reason_part", &name, |ui| {
                         design::draft_discarded(ui, note.name())
                     }) && let Some((_, _, text)) = self.discarded.take()
                     {
@@ -6578,16 +6677,16 @@ impl Library {
                     }
                 } else if let Some(problem) = slot_problem {
                     // Save's reason: its refusal before the write, or the disk's failure.
-                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                    fixed_part(ui, slot, "library_reason_part", problem, |ui| {
                         design::message(ui, Tone::Error, problem);
                     });
                 } else if let Some(words) = slot_link {
                     // The repair this note was opened for, in the reason line.
-                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                    fixed_part(ui, slot, "library_reason_part", words, |ui| {
                         design::message(ui, Tone::Warning, words);
                     });
                 } else if let Some(reason) = draft_reason {
-                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                    fixed_part(ui, slot, "library_reason_part", reason, |ui| {
                         ui.add(
                             egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                                 .wrap(),
