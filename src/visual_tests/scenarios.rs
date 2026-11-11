@@ -1680,6 +1680,7 @@ pub mod campaign_content {
         );
         d.state("repair-dirty", Sizes::All);
         d.click("Discard");
+        two_changed_repairs_have_one_primary(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
         let before = std::fs::read_to_string(&manifest).unwrap();
@@ -1713,6 +1714,100 @@ pub mod campaign_content {
         d.click("Write a new Campaign.md");
         d.wait_for_text("Undo write Campaign.md");
         assert!(manifest.exists());
+    }
+
+    /// Every `Save repaired note` in view, top to bottom, and whether it is accent-filled.
+    fn repair_saves(d: &Driver<'_>) -> Vec<(egui::Rect, bool)> {
+        let accent = crate::design::colors().accent_fill;
+        let mut saves: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == "Save repaired note" && node.in_view())
+            .map(|node| {
+                let filled = d
+                    .control_frame_at(node.rect)
+                    .is_some_and(|frame| frame.fill == accent);
+                (node.rect, filled)
+            })
+            .collect();
+        saves.sort_by(|a, b| a.0.top().total_cmp(&b.0.top()));
+        saves
+    }
+
+    /// Round 22 review: two changed repairs give one primary Save, the active repair's; an
+    /// open run takes the primary from both. Both drafts stay. Starts and ends with the first
+    /// repair open and unchanged.
+    fn two_changed_repairs_have_one_primary(d: &mut Driver<'_>) {
+        const LARGE: (f32, f32) = (1920.0, 1080.0);
+        const SECOND: &str = "campaigns/emberfall/Notes/Cracked.md";
+        let broken = "---\nsplat_schema: 2\nsplat_id: [\n---\n";
+        std::fs::write(d.root.join(SECOND), broken).unwrap();
+        d.click(RELOAD);
+        d.wait_for_text("Notes/Cracked.md cannot be read");
+        d.click(REPAIR);
+        assert_eq!(
+            d.nodes()
+                .iter()
+                .filter(|node| node.name == "Close repair")
+                .count(),
+            2,
+            "Both repairs are open"
+        );
+        let first = format!("{broken}\nFirst draft.\n");
+        let second = format!("{broken}\nSecond draft.\n");
+        // Edit the upper repair, close it, edit the lower one, then open the upper one again.
+        d.replace_text_in("Note text", &first);
+        d.click("Close repair");
+        d.replace_text_in("Note text", &second);
+        d.click(REPAIR);
+        let (lower_active, kept) = d.at_size(LARGE, |d| {
+            (
+                repair_saves(d),
+                d.visible_text("First draft.") && d.visible_text("Second draft."),
+            )
+        });
+        d.observe(
+            "iter-22-C-FD3-two-repairs",
+            lower_active.len() == 2
+                && lower_active.iter().filter(|(_, filled)| *filled).count() == 1
+                && lower_active[1].1
+                && kept,
+            format!("Lower repair edited last: saves {lower_active:?}; both drafts shown: {kept}"),
+        );
+        // Focusing the upper repair makes it the active one.
+        d.type_into("Note text", "");
+        let upper_active = d.at_size(LARGE, repair_saves);
+        d.observe(
+            "iter-22-C-FD3-two-repairs-focus",
+            upper_active.len() == 2
+                && upper_active.iter().filter(|(_, filled)| *filled).count() == 1
+                && upper_active[0].1,
+            format!("Upper repair focused: saves {upper_active:?}"),
+        );
+        // An open run owns `Next turn`: no repair Save is primary, and both drafts stay.
+        go_encounters(d);
+        run_saved_encounter(d, SIBLING_ENTRY);
+        go_campaign(d);
+        let (in_run, kept) = d.at_size(LARGE, |d| {
+            (
+                repair_saves(d),
+                d.visible_text("First draft.") && d.visible_text("Second draft."),
+            )
+        });
+        d.observe(
+            "iter-22-C-FD3-two-repairs-run",
+            in_run.len() == 2 && in_run.iter().all(|(_, filled)| !filled) && kept,
+            format!("With a run open: saves {in_run:?}; both drafts shown: {kept}"),
+        );
+        d.click_starting("Run · ");
+        close_run(d);
+        go_campaign(d);
+        d.click("Discard");
+        d.click("Discard");
+        std::fs::remove_file(d.root.join(SECOND)).unwrap();
+        d.click(RELOAD);
+        d.settle();
+        assert!(!d.visible_text("Notes/Cracked.md"));
     }
 }
 

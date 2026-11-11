@@ -4480,10 +4480,12 @@ impl Run {
         design::rule(ui);
         if let Some(path) = &self.roster_source {
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
                 let words = fault.words();
-                // One file names every unread row, so its name and actions show once.
-                if index > 0 {
+                // One file names every unread row, so its name and actions show once, after
+                // the last warning about it.
+                if index < last {
                     design::small_message(ui, Tone::Warning, &words);
                     continue;
                 }

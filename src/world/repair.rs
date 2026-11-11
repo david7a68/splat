@@ -7,7 +7,13 @@ use crate::{
 };
 use eframe::egui;
 
-pub(crate) fn editor(ui: &mut egui::Ui, path: &str, draft: &mut String, error_line: Option<usize>) {
+/// The source editor. True when the DM changed the text or moved focus into it this frame.
+pub(crate) fn editor(
+    ui: &mut egui::Ui,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> bool {
     egui::ScrollArea::vertical()
         .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
         .id_salt(("repair", path))
@@ -17,6 +23,7 @@ pub(crate) fn editor(ui: &mut egui::Ui, path: &str, draft: &mut String, error_li
                 .desired_width(f32::INFINITY)
                 .show(ui);
             design::named(ui, &output.response, "Note text");
+            let active = output.response.changed() || output.response.gained_focus();
             if let Some(line) = error_line {
                 let position = draft
                     .lines()
@@ -34,7 +41,9 @@ pub(crate) fn editor(ui: &mut egui::Ui, path: &str, draft: &mut String, error_li
                     egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
                 );
             }
-        });
+            active
+        })
+        .inner
 }
 
 /// Why a repair did not open.

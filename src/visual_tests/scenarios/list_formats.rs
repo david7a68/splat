@@ -134,6 +134,56 @@ pub fn run(d: &mut Driver<'_>) {
     }
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
+    // Round 22 review: two flags about Campaign.md give one file line, after the last flag.
+    let two_flags = flagged.replace(
+        " id=00000000-0000-0000-0000-000000000002 %% |\n",
+        " id=00000000-0000-0000-0000-000000000002 %% |\n| Flanking | Imaginary flanking %% splat rule=dnd2024:rules/flanking %% |\n",
+    );
+    assert_ne!(two_flags, flagged);
+    fs::write(&manifest, &two_flags).unwrap();
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("3 content issues to repair");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            let last = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Flanking choice"))
+                .ok_or("the second flag is not shown".to_owned())?;
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Line 23: Combat initiative"))
+                .map(|node| node.rect)
+                .ok_or("the first flag is not shown".to_owned())?;
+            let files: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == manifest.display().to_string())
+                .map(|node| node.rect)
+                .collect();
+            super::file_links_at_message_words(d, &last.name, &manifest, "Campaign.md").and_then(
+                |()| {
+                    (files.len() == 1 && first.bottom() <= last.rect.top())
+                        .then_some(())
+                        .ok_or(format!(
+                            "file lines {files:?}; flags {first:?}, {:?}",
+                            last.rect
+                        ))
+                },
+            )
+        });
+        d.observe(
+            "iter-22-C-FD1-campaign-two-flags",
+            placed.is_ok(),
+            format!("At {size:?}, two Campaign flags and their file line: {placed:?}"),
+        );
+    }
+    fs::write(&manifest, &flagged).unwrap();
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("2 content issues to repair");
     d.click("Choose in Rules and runs");
     d.expect("Combat initiative choice");
     d.expect("Roll NPC initiative");
@@ -556,6 +606,56 @@ pub fn run(d: &mut Driver<'_>) {
         one_row > 0 && warnings == 2 * one_row && show_file == 1,
         format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
     );
+    // Round 22 review: the one file line follows the last warning about the file, at its
+    // words (or beside them, when a wide column has room).
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            let mut faults: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.contains("the change “HP lots” was not read")
+                        && node.in_view()
+                })
+                .collect();
+            faults.sort_by(|a, b| a.rect.top().total_cmp(&b.rect.top()));
+            faults.dedup_by(|a, b| a.rect == b.rect);
+            let files: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == roster_path.display().to_string())
+                .map(|node| node.rect)
+                .collect();
+            let (Some(last), [file]) = (faults.last(), files.as_slice()) else {
+                return Err(format!("{} warnings, file lines {files:?}", faults.len()));
+            };
+            if faults.len() != 2 {
+                return Err(format!("{} warnings", faults.len()));
+            }
+            if file.top() >= last.rect.bottom() - 1.0 {
+                super::file_links_at_message_words(
+                    d,
+                    &last.name,
+                    &roster_path,
+                    "Shrine of Cinders.md",
+                )
+            } else if size != SMALL
+                && file.left() >= last.rect.right()
+                && file.top() >= last.rect.top() - 1.0
+                && file.top() < last.rect.bottom()
+            {
+                Ok(())
+            } else {
+                Err(format!("file line {file:?}, last warning {:?}", last.rect))
+            }
+        });
+        d.observe(
+            "iter-22-C-AD2-two-rows",
+            placed.is_ok(),
+            format!("At {size:?}, two unread rows and their one file line: {placed:?}"),
+        );
+    }
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 
