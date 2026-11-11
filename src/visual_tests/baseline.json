@@ -114,7 +114,7 @@
       "package-delete-entry": 108,
       "package-duplicate-id": 88,
       "package-file-changed": 131,
-      "package-folder-copied": 147,
+      "package-folder-copied": 149,
       "package-manifest-broken": 123,
       "package-rename": 100,
       "package-to-table": 61,

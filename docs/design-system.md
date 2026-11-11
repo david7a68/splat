@@ -265,7 +265,7 @@ line`.
 (`empty_value_block`). The reader then leaves out its own gap before the prose, unless line warnings sit
 above it. World uses this, so a typed note with no set values starts its prose where a plain note's does.
 Lookup has no file line: there an empty value block draws nothing, and the prose keeps the reader's gap below
-the kind line, as a spell's does. Lookup's reader keeps the app's row spacing whether a search or a link
+the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy and creation
 actions, then Back. Drop Back's key hint first; fold Copy and Make NPC note into quiet More when needed, with

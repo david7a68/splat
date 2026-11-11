@@ -2165,10 +2165,19 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     // must match.
     look_up_again(d, "bless");
     d.wait_for_text("Spell · Level 1 · Campaign");
-    for (size, place) in [SMALL, DEFAULT, LARGE].into_iter().zip(place_gaps) {
-        let spell = d.at_size(size, |d| {
-            lookup_prose_gap(d, "Bless", "Spell · Level 1 · Campaign")
-        });
+    let spell_gaps: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                lookup_prose_gap(d, "Bless", "Spell · Level 1 · Campaign")
+            })
+        })
+        .collect();
+    for ((size, place), spell) in [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .zip(place_gaps)
+        .zip(spell_gaps.iter().copied())
+    {
         d.observe(
             "iter-18-E-FT2",
             place
@@ -2176,6 +2185,29 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
                 .is_some_and(|(place, spell)| (place - spell).abs() <= 1.0),
             format!(
                 "At {size:?}, Lookup's Watch House has {place:?} px from its kind line to its prose, Bless {spell:?} px"
+            ),
+        );
+    }
+    // FT2, plain notes: a note with no front matter keeps the same gap in Lookup.
+    fs::create_dir_all(root(d).join("Notes")).unwrap();
+    fs::write(
+        root(d).join("Notes/Harbour Rumours.md"),
+        "# Harbour Rumours\n\nThe ferry master hears every rumour first.\n",
+    )
+    .unwrap();
+    reload(d);
+    look_up_again(d, "harbour rumours");
+    d.wait_for_text("The ferry master hears every rumour first.");
+    for (size, spell) in [SMALL, DEFAULT, LARGE].into_iter().zip(spell_gaps) {
+        let note = d.at_size(size, |d| {
+            lookup_prose_gap(d, "Harbour Rumours", "World note · Campaign")
+        });
+        d.observe(
+            "iter-18-E-FT2-note",
+            note.zip(spell)
+                .is_some_and(|(note, spell)| (note - spell).abs() <= 1.0),
+            format!(
+                "At {size:?}, Lookup's plain note Harbour Rumours has {note:?} px from its kind line to its prose, Bless {spell:?} px"
             ),
         );
     }
@@ -4472,6 +4504,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "Undo package registration",
             crate::content_workspace::UNDO_ENDED,
         );
+        d.state("registration-undo-blocked", Sizes::Default);
         d.observe(
             "iter-14-E-AD1-registration",
             blocked && use_kept && reason && fs::read(&file).unwrap() == outside,

@@ -2004,10 +2004,10 @@ impl Reader {
                 }
             }
         }
-        if (item.entry.kind == "world" || item.is_world_note())
-            && crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
-                .is_empty()
-        {
+        let has_prose =
+            !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
+                .is_empty();
+        if (item.entry.kind == "world" || item.is_world_note()) && !has_prose {
             ui.label(
                 Type::Small
                     .rich(ui, "Nothing written yet.")
@@ -2017,6 +2017,11 @@ impl Reader {
             empty_value_block = false;
         }
         if item.is_note() {
+            // In Lookup, a plain note's prose has the reader's gap below the kind line, as every
+            // entry's has. World's plain note follows its file line directly.
+            if self.compact && has_prose {
+                ui.add_space(design::L);
+            }
             let followed = style::measure(ui, |ui| {
                 style::markdown(ui, &item.entry.body);
                 related(ui, item, index)
