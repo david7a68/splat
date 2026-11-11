@@ -5021,8 +5021,8 @@ mod tests {
         setup.rest_saved_setup(1);
         assert_eq!(setup.history.len(), undo::LIMIT);
         assert_eq!(setup.undo_label(), "Undo: full HP after long rest");
-        let campaign = stored(&mut setup, dir.path());
-        let reopened = close_and_reopen(&mut setup, campaign);
+        let other = stored(&mut setup, dir.path());
+        let reopened = close_and_reopen(&mut setup, other);
         assert_same_undo(&setup, &reopened);
 
         // A file with one step too many, as another program can leave it: the newest are read.
