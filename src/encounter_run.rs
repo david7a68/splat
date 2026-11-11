@@ -323,7 +323,7 @@ impl Participant {
         let mut base = Base::of(&entry, &side);
         let resolved = overrides
             .resolve_for(&entry, &side)
-            .map_err(|error| format!("{key} ({}): {error}", entry.name))?;
+            .map_err(|error| format!("{}: {error}", entry.name))?;
         let mut initial = entry
             .fields
             .get("splat_initial")
@@ -335,9 +335,13 @@ impl Participant {
             initial
                 .get(field)
                 .map(|v| {
-                    v.as_i64()
-                        .filter(|n| *n >= 0)
-                        .ok_or_else(|| format!("{}: invalid starting {field}.", entry.name))
+                    v.as_i64().filter(|n| *n >= 0).ok_or_else(|| {
+                        let words = if field == "hp" { "HP" } else { "Temporary HP" };
+                        format!(
+                            "{}: its starting {words} must be a whole number, 0 or more.",
+                            entry.name
+                        )
+                    })
                 })
                 .transpose()
         };
@@ -3769,7 +3773,7 @@ impl Run {
         {
             let round_prefix = format!("Round {}: ", self.state.round);
             let last = last.strip_prefix(&round_prefix).unwrap_or(last);
-            label.push_str(&format!(" · Last: {last}"));
+            label.push_str(&format!(" · {LAST_CHANGE}{last}"));
         }
         label.push_str(&saved);
         let legacy = self.name.split_once(" · saved ");
@@ -4018,6 +4022,9 @@ pub fn state_words(round: u64, paused: bool, ended: bool) -> String {
 }
 
 /// Recent saves use the same age words as sheets. Older saves use a short UTC date.
+/// The start of a paused run's last change in its list label.
+pub(crate) const LAST_CHANGE: &str = "Last: ";
+
 pub(crate) fn saved_time(at: u64, now: u64) -> String {
     if now / 86_400 <= at / 86_400 + 1 {
         crate::party::fetch_age(now.saturating_sub(at))
