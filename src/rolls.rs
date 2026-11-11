@@ -200,6 +200,8 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .open_memory(open)
         .width(width)
         .show(|ui| {
+            // The area keeps the size it had; the content sets it each frame.
+            ui.set_width(width);
             ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
             for (words, mode, inspired) in mode_choices("Roll", inspired) {
                 if menu_choice(ui, &words) {
