@@ -4513,7 +4513,7 @@ impl Sessions {
                             else {
                                 for warning in &group.warnings {
                                     ui.add_space(design::XS);
-                                    design::small_message(ui, Tone::Warning, warning);
+                                    design::small_message(ui, warning.tone(), warning);
                                 }
                             }
                         }, |ui| {

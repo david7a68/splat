@@ -348,7 +348,9 @@ pub(super) fn paragraph_row_tops(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<f32
 }
 
 /// A note under a menu choice (its blocked reason or its help) starts at the choice's words, after
-/// the padding and any icon. Requires the choice and at least one painted note below it.
+/// the padding and any icon, and ends at least the choice's padding `S` before the menu content's
+/// right edge (iter-22-B FT2), with the menu inside the window. Requires the choice and at least
+/// one painted note below it.
 fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Result<(), String> {
     let target = d
         .nodes()
@@ -367,13 +369,103 @@ fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Resu
     if notes.is_empty() {
         return Err(format!("{note} is not painted"));
     }
+    let window = d.window_size();
     notes
         .iter()
-        .all(|rect| (rect.left() - words).abs() <= 1.0 && rect.top() >= target.bottom() - 1.0)
+        .all(|rect| {
+            (rect.left() - words).abs() <= 1.0
+                && rect.top() >= target.bottom() - 1.0
+                && rect.right() <= target.right() - crate::design::S + 0.5
+        })
         .then_some(())
+        .filter(|()| target.right() <= window.0 && target.bottom() <= window.1)
         .ok_or(format!(
-            "{choice} words at {words}, {target:?}; {note} at {notes:?}"
+            "{choice} words at {words}, {target:?}; {note} at {notes:?}; window {window:?}"
         ))
+}
+
+/// The tones of the bars beside each visible painted paragraph that holds `words`, in paint
+/// order: "error", "warning" or "none". Empty when no such paragraph is visible.
+pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
+    let mut paragraphs = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text.contains(words) && clip.intersects(rect) {
+            paragraphs.push(rect);
+        }
+    });
+    let result = crate::design::colors().result;
+    paragraphs
+        .into_iter()
+        .map(|rect| {
+            match (
+                d.has_tone_bar(rect, result.error),
+                d.has_tone_bar(rect, result.warning),
+            ) {
+                (true, false) => "error",
+                (false, true) => "warning",
+                _ => "none",
+            }
+        })
+        .collect()
+}
+
+/// A submenu and its choices keep `S` clear of every scroll bar and column splitter beside them,
+/// and stay in the window. Requires every choice. Returns the submenu's frame.
+fn submenu_clear_of_chrome(
+    d: &Driver<'_>,
+    choices: &[&str],
+    beside_a_lane: bool,
+) -> Result<egui::Rect, String> {
+    let nodes = d.nodes();
+    let opener = d
+        .place_of("Move to…")
+        .ok_or("Move to… is not in view".to_owned())?;
+    // A page can show the same words elsewhere: each choice is the one level with the opener's
+    // row or below it, nearest to it.
+    let mut targets = Vec::new();
+    for choice in choices {
+        targets.push(
+            nodes
+                .iter()
+                .filter(|node| {
+                    node.name == *choice && node.in_view() && node.rect.top() >= opener.top() - 1.0
+                })
+                .min_by(|a, b| {
+                    (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
+                })
+                .ok_or(format!("{choice} is not in view beside Move to…"))?
+                .rect,
+        );
+    }
+    let margin = egui::Frame::menu(&d.app_style()).total_margin();
+    let frame = targets
+        .iter()
+        .fold(egui::Rect::NOTHING, |all, rect| all.union(*rect))
+        + margin;
+    let window = d.window_size();
+    if frame.left() < 0.0 || frame.right() > window.0 {
+        return Err(format!("submenu {frame:?} leaves the window {window:?}"));
+    }
+    let lanes = d.chrome_lanes();
+    let beside: Vec<_> = lanes
+        .iter()
+        .filter(|lane| lane.bottom() > frame.top() && lane.top() < frame.bottom())
+        .collect();
+    if beside_a_lane && beside.is_empty() {
+        return Err(format!(
+            "no scroll bar or splitter beside {frame:?}: {lanes:?}"
+        ));
+    }
+    for lane in beside {
+        let clear = (lane.left() - frame.right()).max(frame.left() - lane.right());
+        if clear < crate::design::S - 0.5 {
+            return Err(format!(
+                "submenu {frame:?} is {clear} from {lane:?}; lanes {lanes:?}"
+            ));
+        }
+    }
+    Ok(frame)
 }
 
 /// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
@@ -4700,6 +4792,28 @@ pub mod gallery {
                 format!("The submenu and quiet menu action share a text edge: {edges:?}"),
             );
         });
+        // SD2/AD1, the other caller: with room on the right, the gallery's submenu still opens
+        // there, clear of any splitter.
+        d.press(Key::Escape);
+        d.click("Group actions");
+        d.click("Move to…");
+        d.expect("Bridge Ambush");
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let placed = d.at_size(size, |d| {
+                let parent = d.place_of("Make available to any encounter");
+                super::submenu_clear_of_chrome(d, &["Bridge Ambush"], false).and_then(|frame| {
+                    parent
+                        .is_some_and(|parent| frame.left() >= parent.right())
+                        .then_some(())
+                        .ok_or(format!("submenu {frame:?} is not right of {parent:?}"))
+                })
+            });
+            d.observe(
+                "iter-22-B-SD2-gallery",
+                placed.is_ok(),
+                format!("At {size:?}, the gallery's Move to… submenu: {placed:?}"),
+            );
+        }
         d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
         d.click("More actions for Bridge Ambush");
@@ -10130,6 +10244,20 @@ pub mod encounter_groups {
         d.expect(LIST_HEADING);
         d.click_starting(LIST_HEADING);
         d.state("groups-in-the-list", Sizes::All);
+        // FT1: one fault, one tone, from its kind. The invalid maximum HP is an error here, as
+        // in the editor and Arrivals; the member that is not in the packages stays a warning.
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "not in this campaign's packages"),
+        );
+        d.observe(
+            "iter-22-B-FT1-list",
+            tones.0 == ["error"] && tones.1 == ["warning"],
+            format!(
+                "Encounters list: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
+        );
         d.check_tab_order("encounters, with groups");
 
         // An existing group: its changes are out in the open, with the values they replace.
@@ -10186,6 +10314,20 @@ pub mod encounter_groups {
             "T13.3",
             found && invalid && d.has("Replace Unknown creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
+        );
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "cannot find this creature"),
+        );
+        d.observe(
+            "iter-22-B-FT1-editor",
+            !tones.0.is_empty()
+                && tones.0.iter().all(|tone| *tone == "error")
+                && tones.1 == ["warning"],
+            format!(
+                "Group editor: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
         );
         d.expect("Replace Unknown creature");
         // The repair link is a notice action: its words start at the warning text, and its icon
@@ -10428,6 +10570,18 @@ pub mod encounter_groups {
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
+        );
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "not in this campaign's packages"),
+        );
+        d.observe(
+            "iter-22-B-FT1-arrivals",
+            tones.0 == ["error"] && tones.1 == ["warning"],
+            format!(
+                "Arrivals: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
         );
         d.begin_task();
         d.type_into(TOTAL_FOR_RIVALS, "-");
@@ -10888,7 +11042,18 @@ pub mod encounter_owned_groups {
         d.click_containing("Move to…");
         d.expect(RUN_ARENA);
         assert!(!d.has("Any encounter"));
-        d.state("move-encounter-group-menu", Sizes::All);
+        // SD2/AD1: in each capture, the submenu is clear of the roster's scroll bar and the
+        // splitter before Add participants.
+        d.state_prepared("move-encounter-group-menu", Sizes::All, |d| {
+            let size = d.window_size();
+            let clear = super::submenu_clear_of_chrome(d, &[RUN_ARENA, RUN], true)
+                .map(|frame| (frame, d.place_of("Move to…")));
+            d.observe(
+                "iter-22-B-SD2",
+                clear.is_ok(),
+                format!("At {size:?}, the Move to… submenu and its opener: {clear:?}"),
+            );
+        });
         d.click("Make available to any encounter");
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");

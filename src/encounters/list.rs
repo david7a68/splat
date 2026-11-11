@@ -31,7 +31,9 @@ fn menu_icon(word: &str) -> Option<&'static str> {
 }
 
 /// A line under a menu choice: why it is blocked, or what it does. It starts at the choice's
-/// words, after the quiet action's padding and any icon.
+/// words, after the quiet action's padding and any icon, and it ends the quiet action's padding
+/// before the menu's edge. The menu asks for its width with both, so the note keeps the menu's
+/// right margin and wraps before it.
 pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
     if note.is_none() {
         return;
@@ -39,7 +41,13 @@ pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
     let inset = design::S + menu_icon(word).map_or(0.0, |_| design::ICON_SLOT);
     ui.horizontal(|ui| {
         ui.add_space(inset);
-        blocked_reason(ui, note);
+        let gap = ui.spacing().item_spacing.x;
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width() - design::S);
+            blocked_reason(ui, note);
+        });
+        // The layout adds its item gap after the note; together they make the padding `S`.
+        ui.add_space(design::S - gap);
     });
 }
 

@@ -172,7 +172,7 @@ eye during long sessions.
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
 | Empty state | `empty_state` | Icon, serif title, purpose and one next step at the top of an empty pane or page, with normal padding |
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
-| Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
+| Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left, else as far right as fits; never over a splitter or scroll bar |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
@@ -776,7 +776,8 @@ on and retains names and starting values, with one Undo.
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
 Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. A menu choice's
 reason (`Already last.`) or help line (`Edit a copy in this campaign.`) starts at the choice's words, after its
-padding and any icon. Side
+padding and any icon, and ends that padding (`S`) before the menu's right edge: the menu asks for its width with
+both, so a long note keeps the right margin and wraps before it. Side
 pickers offer Party, Enemies and Other…; only Other opens a name field and replaces the value. Changed stays
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
 the full change link, removing source before base creature. Remove a source whole without an ellipsis;
@@ -1053,13 +1054,16 @@ Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
 Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, says `Enter a whole number, or clear
 the field to roll.` as a warning `small_message` (amber icon and bar, text-colour words), and blocks Add and drop. Campaign → Packages opens repair.
+In the group editor, an unread Changes cell (`Changes “HP lots” not read. …`) is a warning `small_message`, as
+every unread value is, and its example line starts at the message words. `No members can join.` in the Encounters
+list is a warning `message`, in the same form as the member faults above it.
 In the group editor, a missing member's `Campaign → Packages` is a notice action under its warning
 (`message_with_actions`): the link's words start at the warning text, and its icon hangs in the gutter before them.
 Arrivals and the Encounters list draw a member fault's repair (`Campaign → Packages` or `Edit group`) the same way
 when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
-with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use `message`: an amber icon and bar with text-colour words. Live initiative notices name who joins and the total. Before the current turn,
+with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 
