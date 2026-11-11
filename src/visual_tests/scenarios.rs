@@ -13291,6 +13291,23 @@ pub mod run_rolls {
         d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
         d.press(Key::Escape);
 
+        // A tile's number is its place among all of the creature's actions. Spellcasting, which
+        // is prose, parts the cultist's two tiles, and takes no number.
+        d.click_row(CASTER);
+        d.observe(
+            "T16.5",
+            d.name_starting("Scorching Sickle").ends_with("Ctrl+1.")
+                && d.name_starting(BURST).ends_with("Ctrl+2."),
+            "The tile after the Spellcasting text says Ctrl+2, not Ctrl+1 again",
+        );
+        d.press_ctrl(Key::Num2);
+        d.observe(
+            "T16.5",
+            d.has_containing("Click each target"),
+            "Ctrl+2 arms the tile that says Ctrl+2, the save",
+        );
+        d.press(Key::Escape);
+
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);
         d.begin_task();

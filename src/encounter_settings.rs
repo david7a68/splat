@@ -166,15 +166,14 @@ impl Options {
             }
         }
         result.inspiration_rules = inspiration_rules(campaign, catalogue, &document);
-        // A chosen rule that is gone, such as a deleted note, is no choice: the rest of the
-        // settings still load, and the DM chooses again where there are several.
-        result.inspiration_choice = entry
-            .fields
-            .get("splat_rule_choices")
-            .and_then(|v| v.get(inspiration::CHOICE))
-            .and_then(|reference| serde_yaml_ng::from_value::<EntryRef>(reference.clone()).ok())
-            .and_then(|reference| catalogue.resolve_ref(&reference).ok())
-            .filter(|id| result.inspiration_rules.iter().any(|rule| rule.id == *id));
+        result.inspiration_choice = chosen_inspiration(
+            entry
+                .fields
+                .get("splat_rule_choices")
+                .and_then(|v| v.get(inspiration::CHOICE)),
+            catalogue,
+            &result.inspiration_rules,
+        );
         Ok(result)
     }
     /// What inspiration does in this campaign's runs: its only rule, or the chosen one of
@@ -394,6 +393,19 @@ impl Options {
     }
 }
 
+/// The campaign's saved choice of inspiration rule, if it still names one of its rules. A
+/// choice that is gone, such as a deleted note, is no choice: the rest of the settings still
+/// load, and the DM chooses again where there are several.
+fn chosen_inspiration(
+    saved: Option<&Value>,
+    catalogue: &Catalogue,
+    rules: &[InspirationRule],
+) -> Option<Uuid> {
+    let reference = serde_yaml_ng::from_value::<EntryRef>(saved?.clone()).ok()?;
+    let id = catalogue.resolve_ref(&reference).ok()?;
+    rules.iter().any(|rule| rule.id == id).then_some(id)
+}
+
 /// The inspiration rules a campaign can use: its own notes, and its packages' entries.
 fn inspiration_rules(
     campaign: &Campaign,
@@ -483,6 +495,42 @@ mod tests {
         let left = load();
         assert_eq!(left.inspiration_choice, None);
         assert_eq!(left.inspiration(), Some(Inspiration::Reroll));
+        // The same at the loader's own boundary, where a choice names an entry by its ID: one
+        // that is gone, and one that is not an inspiration rule, are each no choice.
+        let catalogue = Catalogue::load(&[], Some(&campaign)).unwrap();
+        let saved = |id: Uuid| {
+            serde_yaml_ng::to_value(EntryRef {
+                id: Some(id),
+                key: None,
+                link: None,
+            })
+            .unwrap()
+        };
+        let gone = saved(Uuid::new_v4());
+        assert!(
+            catalogue
+                .resolve_ref(&serde_yaml_ng::from_value(gone.clone()).unwrap())
+                .is_err(),
+            "this choice does not resolve, which once stopped the load"
+        );
+        assert_eq!(
+            chosen_inspiration(Some(&gone), &catalogue, &left.inspiration_rules),
+            None
+        );
+        let other = *catalogue
+            .entries
+            .keys()
+            .find(|id| left.inspiration_rules.iter().all(|rule| rule.id != **id))
+            .unwrap();
+        assert_eq!(
+            chosen_inspiration(Some(&saved(other)), &catalogue, &left.inspiration_rules),
+            None
+        );
+        let kept = left.inspiration_rules[0].id;
+        assert_eq!(
+            chosen_inspiration(Some(&saved(kept)), &catalogue, &left.inspiration_rules),
+            Some(kept)
+        );
     }
 
     fn campaign(root: &Path) -> Campaign {

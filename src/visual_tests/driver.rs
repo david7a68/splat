@@ -869,6 +869,15 @@ impl<'a> Driver<'a> {
         self.nodes().iter().any(|node| node.name == name)
     }
 
+    /// The whole name of the visible control whose name starts with these words, or nothing.
+    pub fn name_starting(&self, words: &str) -> String {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with(words) && Self::is_control(node) && node.in_view())
+            .map(|node| node.name)
+            .unwrap_or_default()
+    }
+
     pub fn has_containing(&self, name: &str) -> bool {
         self.nodes().iter().any(|node| node.name.contains(name))
     }

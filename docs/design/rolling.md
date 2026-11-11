@@ -131,7 +131,8 @@ inspiration. A value that waits to be sent, or that a read-only sheet cannot
 take, is not a confirmation. A synced sheet is sent `No inspiration` at once, or
 when its sync next can take it (a sync that starts later, or reconnects). A read
 that still shows inspiration is older than the spend and does not give it back;
-after the sheet has shown none, a new grant counts again.
+after the sheet has shown none, a new grant counts again. A grant the DM made
+in the panel that still waits to be sent is spent with it.
 
 - **Reroll rule.** After the run rolls for a player (`Roll for them`, or a
   check, save, skill or dice from the sheet), a right-click on the row with the
@@ -142,8 +143,9 @@ after the sheet has shown none, a new grant counts again.
   and only the roll that changed. On an attack, the damage rolls again only when
   the d20 begins or ends a critical hit. A save's damage rolled for a player is
   one roll for all of its targets: each target's row offers its dice, and the
-  targets and half marks stay. The next step of the run (an applied amount, Next
-  turn) ends the chance to reroll.
+  targets and half marks stay. That roll stands only while the same save is
+  armed against the same targets; `Stop` or a change of targets ends it. The
+  next step of the run (an applied amount, Next turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
   It pays for one roll: the armed action's next roll has no advantage from it.
@@ -155,9 +157,14 @@ after the sheet has shown none, a new grant counts again.
    again, with its save; the last target stays. The row's right-click menu rolls
    that target's save again, with advantage or disadvantage, and never takes a
    target away.
-2. `Half for those at or above DC` marks them to take half. `Roll damage` rolls
-   the damage once, for every target, into Amount; Enter applies it, halving
-   where marked.
+2. `Half for those at or above DC` marks them to take half, and takes the mark
+   from a target whose save is now under the DC. `Roll damage` rolls the damage
+   once, for every target, into Amount; Enter applies it, halving where marked.
+3. The run keeps that rolled damage until it is applied or the action ends.
+   When a target is added or taken away, a save is rolled again, or the marks
+   change, Amount is made again from it: Enter applies Amount as it is to one
+   target, so one target that made its save has half in Amount. A save rolled
+   again loses the half mark of the save before it.
 
 ### A player's attack
 

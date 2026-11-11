@@ -46,8 +46,8 @@ pub(super) struct Reroll {
     /// The row that shows the result: the target, or the actor for a check.
     pub shown: usize,
     pub outcome: Outcome,
-    /// The save whose damage this is, rolled once for all of its targets.
-    pub save: Option<Armed>,
+    /// The save whose damage this is, rolled once for all of these targets.
+    pub save: Option<(Armed, Vec<usize>)>,
 }
 
 /// What a row's right-click menu chose.
@@ -173,6 +173,7 @@ impl Run {
         self.saves.clear();
         self.asking = None;
         self.reroll = None;
+        self.save_total = None;
         if self.selected != actor {
             self.select(actor);
         }
@@ -188,6 +189,7 @@ impl Run {
     pub(crate) fn disarm(&mut self) {
         self.armed = None;
         self.asking = None;
+        self.save_total = None;
     }
 
     /// A check, a save, a skill or dice: rolled now, shown on the actor's row.
@@ -266,11 +268,14 @@ impl Run {
                     .get("inspiration")
                     .map(|group| group["inspiration"] == true)
             };
-            if sync.confirmed().and_then(has) == Some(false) {
+            // What waits to be sent first: a grant the DM made here and that D&D Beyond has
+            // not confirmed is spent too, or it would be there to spend again.
+            if sync.ready() && has(sync.values()) == Some(true) {
+                sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
+            }
+            if sync.confirmed().and_then(has) == Some(false) && has(sync.values()) != Some(true) {
                 self.spent_inspiration.remove(&p.key);
                 self.dirty = true;
-            } else if sync.ready() && has(sync.values()) == Some(true) {
-                sync.set_group("inspiration", serde_json::json!({"inspiration": false}));
             }
         }
     }
@@ -296,7 +301,7 @@ impl Run {
         actor: usize,
         shown: usize,
         outcome: Outcome,
-        save: Option<Armed>,
+        save: Option<(Armed, Vec<usize>)>,
     ) {
         self.reroll = (self.inspiration == Some(Inspiration::Reroll)
             && self.has_inspiration(actor))
@@ -313,7 +318,7 @@ impl Run {
         let Some(kept) = self.reroll.take() else {
             return Ok(());
         };
-        if !self.has_inspiration(kept.actor) {
+        if !self.has_inspiration(kept.actor) || !self.reroll_stands(&kept) {
             return Ok(());
         }
         let who = self.state.participants[kept.actor].name.clone();
@@ -334,14 +339,33 @@ impl Run {
             },
         )?;
         self.spend_inspiration(kept.actor);
-        if let Some(save) = &kept.save {
-            self.show_save_damage(save, &outcome);
+        if kept.save.is_some() {
+            self.show_save_damage(&outcome);
         } else if kept.shown != kept.actor {
             self.show_attack(kept.shown, &outcome);
         } else if let Some(first) = &outcome.first {
             self.badges.insert(kept.shown, first.headline());
         }
         Ok(())
+    }
+
+    /// True while a kept roll is still about what the dock shows. A save's damage is one roll
+    /// for its targets: it stands only while that save is armed against the same rows.
+    fn reroll_stands(&self, kept: &Reroll) -> bool {
+        let Some((save, targets)) = &kept.save else {
+            return true;
+        };
+        self.armed
+            .as_ref()
+            .is_some_and(|armed| armed.actor == save.actor && armed.link == save.link)
+            && self.sorted_save_targets() == *targets
+    }
+
+    /// The save's targets, in row order.
+    fn sorted_save_targets(&self) -> Vec<usize> {
+        let mut rows = self.save_targets();
+        rows.sort_unstable();
+        rows
     }
 
     /// A run's change to the actor's attack and damage, from its encounter or group.
@@ -563,8 +587,11 @@ impl Run {
         }
         // A save's damage is one roll for all of its targets, so each of their rows offers it.
         if let Some(kept) = self.reroll.as_ref().filter(|kept| {
-            (kept.shown == row || (kept.save.is_some() && self.save_targets().contains(&row)))
-                && self.has_inspiration(kept.actor)
+            let shown = match &kept.save {
+                Some((_, targets)) => targets.contains(&row),
+                None => kept.shown == row,
+            };
+            shown && self.reroll_stands(kept) && self.has_inspiration(kept.actor)
         }) {
             sections.push((
                 "Inspiration: reroll one die".to_owned(),
@@ -800,6 +827,7 @@ impl Run {
         self.halved.remove(&row);
         self.saves.remove(&row);
         self.badges.remove(&row);
+        self.refresh_save_damage();
     }
 
     /// Make `row` one of a save's targets. The targets before it stay.
@@ -810,6 +838,7 @@ impl Run {
         } else if self.selected != row {
             self.also.insert(row);
         }
+        self.refresh_save_damage();
     }
 
     /// Roll a creature target's save, in place of one it rolled before. A player rolls their
@@ -829,7 +858,10 @@ impl Run {
             |rolled: &Rolled| vec![rolled.line()],
         ) {
             Ok(rolled) => {
+                // A half mark was for the save before this one.
+                self.halved.remove(&row);
                 self.saves.insert(row, rolled.total);
+                self.refresh_save_damage();
             }
             Err(error) => self.error = Some(error),
         }
@@ -959,6 +991,7 @@ impl Run {
             // from before is not this save's damage, so Enter must not apply it.
             self.amount.clear();
             self.reroll = None;
+            self.save_total = None;
             for row in self.save_targets() {
                 self.badges
                     .insert(row, "No damage · see the text".to_owned());
@@ -975,27 +1008,39 @@ impl Run {
             |random| rolls::make(&who, &link, Mode::Normal, changes, None, random),
             Outcome::lines,
         )?;
-        self.show_save_damage(armed, &outcome);
+        self.show_save_damage(&outcome);
         let shown = self.selected;
-        self.keep_for_reroll(armed.actor, shown, outcome, Some(armed.clone()));
+        let save = (armed.clone(), self.sorted_save_targets());
+        self.keep_for_reroll(armed.actor, shown, outcome, Some(save));
         Ok(())
     }
 
-    /// A save's damage in Amount and on each target's row. The targets and their half marks
-    /// stay as they are.
-    fn show_save_damage(&mut self, armed: &Armed, outcome: &Outcome) {
-        let (RollLink::SaveDc { dc, half, .. }, Some(rolled)) = (&armed.link, &outcome.damage)
-        else {
+    /// The armed save's rolled damage, in Amount and on each target's row.
+    fn show_save_damage(&mut self, outcome: &Outcome) {
+        if let Some(rolled) = &outcome.damage {
+            self.save_total = Some(rolled.total.max(0));
+            self.refresh_save_damage();
+        }
+    }
+
+    /// Put the armed save's rolled damage in Amount again, for the targets and the saves as
+    /// they are now. Enter applies Amount as it is to one target and by the half marks to
+    /// several, so a change of targets, of a save or of a mark must not leave an older amount.
+    fn refresh_save_damage(&mut self) {
+        let (Some(total), Some(RollLink::SaveDc { dc, half, .. })) = (
+            self.save_total,
+            self.armed.as_ref().map(|armed| armed.link.clone()),
+        ) else {
             return;
         };
-        let total = rolled.total.max(0);
-        // One target has no half mark, so its half goes straight into Amount.
-        let lone_half = *half
+        // One target shows no half mark, so its half goes straight into Amount.
+        let lone_half = half
             && self.also.is_empty()
-            && self
-                .saves
-                .get(&self.selected)
-                .is_some_and(|save| save >= dc);
+            && (self.halved.contains(&self.selected)
+                || self
+                    .saves
+                    .get(&self.selected)
+                    .is_some_and(|save| *save >= dc));
         self.amount = if lone_half { total / 2 } else { total }.to_string();
         self.focus_amount = true;
         for row in self.save_targets() {
@@ -1003,16 +1048,24 @@ impl Run {
         }
     }
 
-    /// Mark the save targets at or above the DC to take half.
+    /// Mark the save targets at or above the DC to take half, and no target under it. A
+    /// target with no rolled save, such as a player, keeps the mark the DM gave it.
     fn half_made(&mut self, armed: &Armed) {
         let RollLink::SaveDc { dc, .. } = armed.link else {
             return;
         };
         for row in self.save_targets() {
-            if self.saves.get(&row).is_some_and(|total| *total >= dc) {
-                self.halved.insert(row);
+            match self.saves.get(&row) {
+                Some(total) if *total >= dc => {
+                    self.halved.insert(row);
+                }
+                Some(_) => {
+                    self.halved.remove(&row);
+                }
+                None => {}
             }
         }
+        self.refresh_save_damage();
     }
 
     /// What a row shows while an action is armed or after it: the chance to hit, or the
@@ -1110,6 +1163,7 @@ impl Run {
         self.armed = None;
         self.asking = None;
         self.reroll = None;
+        self.save_total = None;
         self.badges.clear();
         self.saves.clear();
     }
@@ -1386,6 +1440,126 @@ mod tests {
         assert!(!run.saves.contains_key(&others[0]));
         run.target(others[1], None);
         assert_eq!(targets(&run), vec![others[1]]);
+    }
+
+    /// A save armed by `actor` against the other two rows, which have a Dexterity save.
+    fn armed_save(run: &mut Run, actor: usize) -> (Armed, Vec<usize>) {
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let aboleth = std::sync::Arc::new(Entry::parse("Aboleth.md", source).unwrap());
+        for row in &others {
+            run.state.participants[*row].definition = aboleth.clone();
+        }
+        let save = RollLink::SaveDc {
+            label: "Burning Hands".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "3d6".into(),
+                kind: Some("Fire".into()),
+                when: None,
+            }],
+        };
+        run.roll_link(ask(save, actor));
+        run.target(others[0], None);
+        run.target(others[1], None);
+        (run.armed.clone().unwrap(), others)
+    }
+
+    fn offers_reroll(run: &Run, row: usize) -> bool {
+        run.row_menu_sections(row)
+            .iter()
+            .any(|(heading, _)| heading.starts_with("Inspiration"))
+    }
+
+    #[test]
+    fn a_save_reroll_ends_when_its_action_stops_or_its_targets_change() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        inspired_player(&mut run, actor);
+        let (armed, others) = armed_save(&mut run, actor);
+        run.state.random = Random::controlled([1, 2, 3, 6]);
+        run.save_damage(&armed).unwrap();
+        assert!(offers_reroll(&run, others[0]) && offers_reroll(&run, others[1]));
+        let die = run.reroll.as_ref().unwrap().outcome.dice()[0].1;
+        // A target taken away: the roll was for both, so no row offers it now.
+        let kept = run.reroll.clone();
+        run.target(others[0], None);
+        assert!(!offers_reroll(&run, others[0]) && !offers_reroll(&run, others[1]));
+        // Stop, then select the caster: a reroll must not put the damage on the caster.
+        run.reroll = kept;
+        run.disarm();
+        run.select(actor);
+        assert!(!offers_reroll(&run, others[1]));
+        run.row_choice(others[1], RowChoice::Reroll(die));
+        assert_eq!(run.amount, "");
+        assert_eq!(run.badges.get(&actor), None);
+        assert!(run.has_inspiration(actor), "nothing was spent");
+    }
+
+    #[test]
+    fn a_grant_that_waits_to_be_sent_can_be_spent_only_once() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        run.state.participants[0].side = "party".into();
+        inspired_sync(&mut run, 0);
+        // D&D Beyond confirms none; then the DM grants it here, and it waits to be sent.
+        let sync = run.syncs.get_mut(&0).unwrap();
+        sync.simulate_sheet(
+            7,
+            30,
+            &serde_json::json!({"id":7,"canEdit":true,"removedHitPoints":0,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[],"inspiration":false}),
+        );
+        sync.set_group("inspiration", serde_json::json!({"inspiration": true}));
+        assert!(run.has_inspiration(0));
+        run.spend_inspiration(0);
+        run.settle_spent_inspiration();
+        run.settle_spent_inspiration();
+        assert!(!run.has_inspiration(0), "the grant was spent with it");
+        assert_eq!(run.syncs[&0].values()["inspiration"]["inspiration"], false);
+    }
+
+    #[test]
+    fn amount_follows_the_targets_the_saves_and_the_half_marks() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let (armed, others) = armed_save(&mut run, actor);
+        run.saves.insert(others[0], 9);
+        run.saves.insert(others[1], 15);
+        run.half_made(&armed);
+        run.state.random = Random::controlled([1, 2, 3]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "6");
+        // The first target is taken away: the one left made its save, and takes half.
+        run.target(others[0], None);
+        assert_eq!(run.save_targets(), vec![others[1]]);
+        assert_eq!(
+            run.amount, "3",
+            "Enter applies Amount as it is to one target"
+        );
+        // Its save rolled again fails: the half mark from the save before goes.
+        run.state.random = Random::controlled([1]);
+        run.row_choice(others[1], RowChoice::Roll(Mode::Normal, false));
+        assert!(run.saves[&others[1]] < 14);
+        assert!(!run.halved.contains(&others[1]));
+        assert_eq!(run.amount, "6");
+        // With both targets again, `Half` marks only who is at or above the DC now.
+        run.row_choice(others[0], RowChoice::Roll(Mode::Normal, false));
+        run.saves.insert(others[0], 20);
+        run.halved.insert(others[1]);
+        run.half_made(&armed);
+        assert_eq!(
+            run.halved.iter().copied().collect::<Vec<_>>(),
+            vec![others[0]]
+        );
+        // Applied damage is not put in Amount again by a later change of targets.
+        run.apply(Command::Damage(others[0], 3)).unwrap();
+        run.amount.clear();
+        run.target(others[0], None);
+        assert_eq!(run.amount, "");
     }
 
     #[test]
