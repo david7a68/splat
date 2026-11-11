@@ -686,9 +686,21 @@ fn reader_table(
                 .color(colors().muted),
         );
     }
+    // The sideways scroll bar has its own lane below the last row, so it never covers cell text.
+    let lane = if scrolls {
+        let scroll = ui.spacing().scroll;
+        scroll.bar_width + scroll.bar_outer_margin
+    } else {
+        0.0
+    };
     let top = ui.cursor().top();
     let left = ui.cursor().left();
     let outer_clip = ui.clip_rect();
+    // While the table's own lane is below view, egui floats the bar up to the reader's bottom
+    // edge. There the lane stays at that edge, as the header stays at the top: rows pass under
+    // its hairline, so the bar never covers cell text.
+    let cut = (scrolls && top < outer_clip.bottom() && top + height + lane > outer_clip.bottom())
+        .then(|| (outer_clip.bottom() - lane, outer_clip.bottom()));
     let mut moving_origin = egui::pos2(left + widths[0] + TABLE_GAP, top);
     let mut moving_clip = outer_clip.intersect(egui::Rect::from_min_max(
         egui::pos2(left + widths[0] + TABLE_GAP, outer_clip.top()),
@@ -700,7 +712,7 @@ fn reader_table(
             egui::vec2(widths[0], height),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
-                table_part(ui, &cells, widths, &heights, 0..1, matched);
+                table_part(ui, &cells, widths, &heights, 0..1, matched, cut);
             },
         );
         if widths.len() > 1 {
@@ -709,7 +721,10 @@ fn reader_table(
                 ui.set_width(moving_width);
                 moving_origin = ui.cursor().min;
                 ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                    table_part(ui, &cells, widths, &heights, 1..widths.len(), matched);
+                    table_part(ui, &cells, widths, &heights, 1..widths.len(), matched, cut);
+                    if lane > 0.0 {
+                        ui.add_space(lane);
+                    }
                 });
             };
             if scrolls {
@@ -747,11 +762,19 @@ fn reader_table(
         }
     });
     let painter = ui.painter().with_clip_rect(outer_clip);
+    let rows_end = cut.map_or(top + height, |(lane_top, _)| (top + height).min(lane_top));
     painter.vline(
         left + widths[0],
-        top..=top + height,
+        top..=rows_end,
         egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
     );
+    if let Some((lane_top, _)) = cut {
+        painter.hline(
+            left..=(left + width).min(moving_clip.right()),
+            lane_top,
+            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
+    }
     // The header follows the top edge until the final row leaves the reader.
     if let Some(header) = cells.first() {
         let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
@@ -809,8 +832,18 @@ fn table_part(
     heights: &[f32],
     columns: std::ops::Range<usize>,
     matched: Option<usize>,
+    cut: Option<(f32, f32)>,
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
+    // Under the scroll bar's lane (`cut`: its top, and the reader's visible bottom) a row is out
+    // of view: it is drawn clipped at the lane, and its cells are not controls.
+    let painter = match cut {
+        Some((lane_top, _)) => ui.painter().with_clip_rect(
+            ui.clip_rect()
+                .intersect(egui::Rect::everything_above(lane_top)),
+        ),
+        None => ui.painter().clone(),
+    };
     let width = widths[columns.clone()].iter().sum::<f32>()
         + TABLE_GAP * columns.len().saturating_sub(1) as f32;
     for (row, cells) in cells.iter().enumerate() {
@@ -821,8 +854,7 @@ fn table_part(
             if columns.start == 0 && columns.end == 1 && widths.len() > 1 {
                 fill.max.x += TABLE_GAP;
             }
-            ui.painter()
-                .rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
+            painter.rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
         }
         let mut x = rect.left();
         for column in columns.clone() {
@@ -830,10 +862,15 @@ fn table_part(
                 egui::pos2(x, rect.top() + design::XS),
                 cells[column].size(),
             );
-            ui.place(cell, egui::Label::new(cells[column].clone()));
+            if cut.is_some_and(|(lane_top, bottom)| cell.bottom() > lane_top && cell.top() < bottom)
+            {
+                painter.galley(cell.min, cells[column].clone(), colors().text);
+            } else {
+                ui.place(cell, egui::Label::new(cells[column].clone()));
+            }
             x += widths[column] + TABLE_GAP;
         }
-        ui.painter().hline(
+        painter.hline(
             rect.x_range(),
             rect.bottom(),
             egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
@@ -988,6 +1025,9 @@ impl LinkTarget {
     }
 }
 
+/// A link's underline, or a missing link's dots, sit this far below the words' baseline.
+const UNDERLINE_BELOW_BASELINE: f32 = design::HAIRLINE_WIDTH * 2.0;
+
 /// A paragraph stays one paragraph. Each link in it is its own control: Tab reaches the
 /// links in reading order, Enter or Space follows the focused one, and the pointer presses
 /// only a link's own target.
@@ -997,14 +1037,29 @@ fn draw_with_links(
     mut links: Vec<(std::ops::Range<usize>, LinkTarget)>,
     reader: egui::Id,
 ) -> egui::Rect {
-    // A one-line linked paragraph still needs a full control target.
-    job.first_row_min_height = job
-        .first_row_min_height
-        .max(design::Density::Read.control());
+    // A one-line linked paragraph still needs a full target. Every row of a linked paragraph is
+    // `XL` (see `lift_link_rows`), so the first row is no taller than the rest.
+    job.first_row_min_height = job.first_row_min_height.max(design::XL);
     // The paragraph's own words, before any display space is added.
     let text = job.text.clone();
     reserve_short_links(ui, &mut job, &mut links);
-    lift_link_rows(ui, &mut job, &links);
+    lift_link_rows(ui, &mut job);
+    // The paragraph draws each link's underline itself, 2 px below the words' baseline, so a
+    // taller row never moves it down to the bottom of the target, near the next line.
+    let mut underlines: Vec<egui::Stroke> = vec![egui::Stroke::NONE; links.len()];
+    for section in &mut job.sections {
+        if section.format.underline == egui::Stroke::NONE {
+            continue;
+        }
+        let range = &section.byte_range;
+        if let Some(at) = links
+            .iter()
+            .position(|(link, _)| link.start <= range.start && range.end <= link.end)
+        {
+            underlines[at] = section.format.underline;
+            section.format.underline = egui::Stroke::NONE;
+        }
+    }
     let (position, galley, response) = egui::Label::new(job)
         .wrap()
         .sense(egui::Sense::hover())
@@ -1021,10 +1076,21 @@ fn draw_with_links(
         &galley,
     );
     let words = link_words(&galley, position, &links);
+    for (stroke, parts) in underlines.iter().zip(&words) {
+        if *stroke == egui::Stroke::NONE {
+            continue;
+        }
+        for part in parts {
+            let y = ui
+                .painter()
+                .round_to_pixel_center(part.y + UNDERLINE_BELOW_BASELINE);
+            ui.painter().hline(part.left..=part.right, y, *stroke);
+        }
+    }
     for ((_, destination), parts) in links.iter().zip(&words) {
         if matches!(destination, LinkTarget::Missing) {
             for part in parts {
-                let y = part.y + design::HAIRLINE_WIDTH * 2.0;
+                let y = part.y + UNDERLINE_BELOW_BASELINE;
                 let mut dot = part.left;
                 while dot < part.right {
                     ui.painter().circle_filled(
@@ -1097,10 +1163,11 @@ fn draw_with_links(
     response.rect
 }
 
-/// A link whose words are narrower than `XL` gets `XL` of layout width. Its words stay at the
-/// left, and the text after it starts after the reserved space, so the line wraps if it must.
-/// The space is display only: the paragraph's words do not change. Links `XL` or wider keep
-/// their layout.
+/// A link whose words are narrower than `XL` gets `XL` of layout width. A link inside a line has
+/// its words in the middle of that space, so the spare width is split before and after them. A
+/// link that starts a line keeps its words at the text edge, with all the space after them. The
+/// text after a link starts after its space, so the line wraps if it must. The space is display
+/// only: the paragraph's words do not change. Links `XL` or wider keep their layout.
 fn reserve_short_links(
     ui: &egui::Ui,
     job: &mut LayoutJob,
@@ -1109,20 +1176,108 @@ fn reserve_short_links(
     let mut measure = job.clone();
     measure.wrap.max_width = f32::INFINITY;
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(measure));
-    // Where each short link ends, and the space it still needs, in text order.
-    let mut spaces: Vec<(usize, f32)> = Vec::new();
-    for ((range, _), parts) in links
+    // Each short link, by its index in `links`, and the space it still needs.
+    let short: Vec<(usize, f32)> = link_words(&galley, egui::Pos2::ZERO, links)
         .iter()
-        .zip(link_words(&galley, egui::Pos2::ZERO, links))
-    {
-        let width: f32 = parts.iter().map(|part| part.right - part.left).sum();
-        if parts.is_empty() || width >= design::XL {
-            continue;
+        .enumerate()
+        .filter_map(|(index, parts)| {
+            let width: f32 = parts.iter().map(|part| part.right - part.left).sum();
+            // Glyphs snap to whole pixels, which can take up to a pixel from the space.
+            (!parts.is_empty() && width < design::XL).then_some((index, design::XL - width + 1.0))
+        })
+        .collect();
+    if short.is_empty() {
+        return;
+    }
+    // A link at the start of the paragraph or after a line break starts a line. One that wraps to
+    // the start of a row is found by laying the paragraph out at the width its label wraps at.
+    // Moving a link's space after it can only change the rows after that link, so each pass
+    // keeps the links it found.
+    let mut starts: Vec<bool> = short
+        .iter()
+        .map(|(index, _)| {
+            let start = links[*index].0.start;
+            start == 0 || job.text[..start].ends_with('\n')
+        })
+        .collect();
+    let original = (job.clone(), links.to_vec());
+    for _ in 0..4 {
+        *job = original.0.clone();
+        links.clone_from_slice(&original.1);
+        place_short_links(ui, job, links, &short, &starts);
+        let mut measure = job.clone();
+        measure.wrap.max_width = ui.available_width();
+        let galley = ui.fonts_mut(|fonts| fonts.layout_job(measure));
+        let words = link_words(&galley, egui::Pos2::ZERO, links);
+        let mut changed = false;
+        for ((index, _), starts) in short.iter().zip(&mut starts) {
+            if !*starts && words[*index].first().is_some_and(|part| part.row_start) {
+                *starts = true;
+                changed = true;
+            }
         }
-        // Glyphs snap to whole pixels, which can take up to a pixel from the space.
-        let space = design::XL - width + 1.0;
+        if !changed {
+            return;
+        }
+    }
+    *job = original.0;
+    links.clone_from_slice(&original.1);
+    place_short_links(ui, job, links, &short, &starts);
+}
+
+/// Adds each short link's space: half before and half after its words, or all after them when
+/// it starts a line.
+fn place_short_links(
+    ui: &egui::Ui,
+    job: &mut LayoutJob,
+    links: &mut [(std::ops::Range<usize>, LinkTarget)],
+    short: &[(usize, f32)],
+    starts: &[bool],
+) {
+    // Where each short link ends, and the space that still goes there, in text order.
+    let mut spaces: Vec<(usize, f32)> = Vec::new();
+    // Where the last short link ended, and the space after it.
+    let mut previous: Option<(usize, f32)> = None;
+    for (&(index, space), &starts) in short.iter().zip(starts) {
+        let range = links[index].0.clone();
+        let own = job.sections.iter_mut().find(|section| {
+            section.byte_range.start == range.start && !section.byte_range.is_empty()
+        });
+        // A row drops the space before its first glyph, so a link that starts a line keeps its
+        // words at the text edge.
+        let before = match own {
+            Some(own) if !starts => {
+                own.leading_space += space / 2.0;
+                space / 2.0
+            }
+            _ => 0.0,
+        };
+        let mut space = space - before;
         let at_line_end = job.text[range.end..].starts_with('\n') || range.end == job.text.len();
         let link_follows = links.iter().any(|(other, _)| other.start == range.end);
+        // A link right after another short link has the first one's space before it as well as
+        // its own. It gets as much space after it, so the pair reads evenly; a blank that
+        // follows in the text counts toward it.
+        if let Some((_, after)) = previous.filter(|(end, _)| *end == range.start)
+            && !at_line_end
+            && !link_follows
+        {
+            let next = job.text[range.end..].chars().next();
+            let blank = next
+                .filter(|next| next.is_whitespace())
+                .map_or(0.0, |next| {
+                    let font = job
+                        .sections
+                        .iter()
+                        .find(|section| section.byte_range.start == range.end)
+                        .map(|section| section.format.font_id.clone());
+                    font.map_or(0.0, |font| {
+                        ui.fonts_mut(|fonts| fonts.glyph_width(&font, next))
+                    })
+                });
+            space += (after - blank).max(0.0);
+        }
+        previous = Some((range.end, space));
         match job
             .sections
             .iter_mut()
@@ -1135,6 +1290,7 @@ fn reserve_short_links(
             _ => spaces.push((range.end, space)),
         }
     }
+    spaces.sort_by_key(|(at, _)| *at);
     if spaces.is_empty() {
         return;
     }
@@ -1182,14 +1338,11 @@ fn reserve_short_links(
     job.sections = sections;
 }
 
-/// Where the body line is shorter than `XL`, a row that holds a link grows to `XL`, so each
-/// link's target is `XL` tall and stays on its own row. Every part of that row grows by the
-/// same amount, so the words keep their baselines. Other rows keep their height.
-fn lift_link_rows(
-    ui: &egui::Ui,
-    job: &mut LayoutJob,
-    links: &[(std::ops::Range<usize>, LinkTarget)],
-) {
+/// Where the body line is shorter than `XL`, every row of a paragraph that holds a link grows to
+/// `XL`, so each link's target is `XL` tall and stays on its own row, and the paragraph keeps one
+/// line pitch. Every part of a row grows by the same amount, so the words keep their baselines.
+/// A paragraph without a link keeps its line height.
+fn lift_link_rows(ui: &egui::Ui, job: &mut LayoutJob) {
     // Reader prose is already `XL` tall, so it needs no second layout.
     if job.sections.iter().all(|section| {
         section
@@ -1216,10 +1369,7 @@ fn lift_link_rows(
         if row.ends_with_newline {
             byte_at += 1;
         }
-        let holds_link = links
-            .iter()
-            .any(|(range, _)| range.start < end && start < range.end);
-        if holds_link && row.height() < design::XL {
+        if row.height() < design::XL {
             lifts.push((start..end, design::XL - row.height()));
         }
     }
@@ -1334,6 +1484,8 @@ struct LinkPart {
     y: f32,
     /// The whole row's height across the words.
     rect: egui::Rect,
+    /// The words are the first on their row, at the text edge.
+    row_start: bool,
 }
 
 /// Where each link's words are drawn, one part for each row it is on.
@@ -1349,8 +1501,10 @@ fn link_words(
             let mut byte_at = 0;
             for row in &galley.rows {
                 let mut run: Option<(f32, f32, f32)> = None;
-                for glyph in &row.glyphs {
+                let mut row_start = false;
+                for (at, glyph) in row.glyphs.iter().enumerate() {
                     if range.contains(&byte_at) {
+                        row_start |= at == 0;
                         let x = position.x + row.pos.x + glyph.pos.x;
                         let y = position.y + row.pos.y + glyph.pos.y;
                         let start = run.map_or(x, |(start, _, _)| start);
@@ -1365,6 +1519,7 @@ fn link_words(
                         right,
                         y,
                         rect: egui::Rect::from_x_y_ranges(left..=right, row_rect.y_range()),
+                        row_start,
                     });
                 }
                 if row.ends_with_newline {
@@ -1376,14 +1531,22 @@ fn link_words(
         .collect()
 }
 
-/// Each link part's press target: at least `XL` square where the paragraph has room, growing
-/// right from the words first, as `text_link` does. Two targets never share a point: where
+/// Each link part's press target: at least `XL` square where the paragraph has room. Inside a
+/// line it is centred on the words, as `reserve_short_links` centres them in their space; at the
+/// start of a row it grows right from the text edge. Two targets never share a point: where
 /// grown targets meet, they split halfway between the words. The paragraph's own layout stays.
 fn link_targets(words: &[Vec<LinkPart>], bounds: egui::Rect) -> Vec<Vec<egui::Rect>> {
-    let grow = |words: egui::Rect| {
-        let mut x = words.left()..=words.left() + words.width().max(design::XL);
+    let grow = |part: &LinkPart| {
+        let words = part.rect;
+        let width = words.width().max(design::XL);
+        let left = if part.row_start {
+            words.left()
+        } else {
+            (words.center().x - width / 2.0).max(bounds.left())
+        };
+        let mut x = left..=left + width;
         if *x.end() > bounds.right() {
-            let left = (bounds.right() - words.width().max(design::XL)).max(bounds.left());
+            let left = (bounds.right() - width).max(bounds.left());
             x = left..=bounds.right().max(words.right());
         }
         let height = words.height().max(design::XL);
@@ -1394,7 +1557,7 @@ fn link_targets(words: &[Vec<LinkPart>], bounds: egui::Rect) -> Vec<Vec<egui::Re
     };
     let mut targets: Vec<Vec<egui::Rect>> = words
         .iter()
-        .map(|parts| parts.iter().map(|part| grow(part.rect)).collect())
+        .map(|parts| parts.iter().map(grow).collect())
         .collect();
     let all: Vec<(usize, usize)> = words
         .iter()
@@ -2203,6 +2366,7 @@ mod tests {
             right,
             y: top + 16.0,
             rect: egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, top + 22.0)),
+            row_start: false,
         };
         let words = vec![
             vec![part(10.0, 24.0, 0.0)],
@@ -2453,8 +2617,10 @@ mod tests {
                 let missing = markdown.matches("splat-missing:").count();
                 assert!(targets.len() >= links - missing, "AD1-count-parts: {at}");
                 if missing > 0 {
-                    // Its words still have their own XL before the next link's target.
-                    let (jo, _) = glyph_at(&harness, "Jo").expect("Jo is drawn");
+                    // Its words still have their own XL, centred on them, before the next
+                    // link's target.
+                    let (jo_left, jo_right, _) = words_span(&harness, "Jo").expect("Jo is drawn");
+                    let jo = (jo_left + jo_right) / 2.0 - design::XL / 2.0;
                     let li = targets
                         .iter()
                         .find(|(name, _)| name == "Li (opens Li)")
@@ -2462,7 +2628,7 @@ mod tests {
                         .expect("Li is a link");
                     assert!(
                         li.left() >= jo + design::XL - 0.5,
-                        "AD1-missing-space: {at}"
+                        "AD1-missing-space: {at}: Jo at {jo}, Li target {li:?}, targets {targets:?}"
                     );
                 }
                 for (name, target) in &targets {
@@ -2494,50 +2660,249 @@ mod tests {
         }
     }
 
+    /// Where `words` are drawn on one row: left, right and baseline.
+    fn words_span(harness: &egui_kittest::Harness<'_>, words: &str) -> Option<(f32, f32, f32)> {
+        for (pos, galley) in galleys_in(harness) {
+            let Some(start) = galley.job.text.find(words) else {
+                continue;
+            };
+            let end = start + words.len();
+            let mut byte_at = 0;
+            let mut span: Option<(f32, f32, f32)> = None;
+            for row in &galley.rows {
+                for glyph in &row.glyphs {
+                    if (start..end).contains(&byte_at) {
+                        let x = pos.x + row.pos.x + glyph.pos.x;
+                        let y = pos.y + row.pos.y + glyph.pos.y;
+                        let right = x + glyph.advance_width;
+                        span = Some(span.map_or((x, right, y), |(left, _, y)| (left, right, y)));
+                    }
+                    byte_at += glyph.chr.len_utf8();
+                }
+                if row.ends_with_newline {
+                    byte_at += 1;
+                }
+            }
+            return span;
+        }
+        None
+    }
+
+    fn target_of(harness: &egui_kittest::Harness<'_>, name: &str) -> egui::Rect {
+        targets_in(harness)
+            .into_iter()
+            .find(|(found, _)| found == name)
+            .map(|(_, rect)| rect)
+            .unwrap_or_else(|| panic!("{name} is a link"))
+    }
+
+    /// The horizontal lines a reader paints: its links' underlines.
+    fn underlines_in(harness: &egui_kittest::Harness<'_>) -> Vec<(f32, f32, f32)> {
+        harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points, .. } if points[0].y == points[1].y => Some((
+                    points[0].x.min(points[1].x),
+                    points[0].x.max(points[1].x),
+                    points[0].y,
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// FD5: a short link inside a line has its words in the middle of its `XL` target, and the
+    /// words before and after it stay outside that target.
     #[test]
-    fn iter17_a_ad1_text_after_a_short_link_starts_after_its_space() {
+    fn iter18_a_fd5_a_short_link_inside_a_line_centres_its_words() {
         for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
             let harness = reader_at(
                 "Ask [Jo](splat-note:Jo) or [Li](splat-note:Li) about the ferry.",
                 width,
                 dense,
             );
-            let targets = targets_in(&harness);
-            let jo = targets
-                .iter()
-                .find(|(name, _)| name == "Jo (opens Jo)")
-                .map(|(_, rect)| *rect)
-                .expect("Jo is a link");
-            let (jo_left, _) = glyph_at(&harness, "Jo").expect("Jo is drawn");
-            let (or_left, _) = glyph_at(&harness, "or").expect("or is drawn");
+            let at = format!("at {width} (dense {dense})");
+            for (words, name, before, after) in [
+                ("Jo", "Jo (opens Jo)", "Ask", "or"),
+                ("Li", "Li (opens Li)", "or", "about"),
+            ] {
+                let target = target_of(&harness, name);
+                let (left, right, _) = words_span(&harness, words).expect("words are drawn");
+                let (_, before, _) = words_span(&harness, before).expect("word before");
+                let (after, _, _) = words_span(&harness, after).expect("word after");
+                let (space_before, space_after) = (left - target.left(), target.right() - right);
+                assert!(
+                    target.width() >= design::XL - 0.01
+                        && (space_before - space_after).abs() <= 1.0
+                        && space_before > 2.0,
+                    "FD5-centred: {at}: {words} at {left}..{right}, target {target:?}"
+                );
+                assert!(
+                    before <= target.left() + 0.5 && after >= target.right() - 0.5,
+                    "FD5-apart: {at}: {words} target {target:?}, before ends {before}, after starts {after}"
+                );
+            }
+        }
+    }
+
+    /// FD5 witness: `[[Jo]][[Li]]` inside a line has even space before and after `Li`, and both
+    /// targets are `XL` wide and apart.
+    #[test]
+    fn iter18_a_fd5_a_side_by_side_pair_inside_a_line_is_even() {
+        for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
+            let harness = reader_at(
+                "Ask [Jo](splat-note:Jo)[Li](splat-note:Li) work the inner ferry.",
+                width,
+                dense,
+            );
+            let at = format!("at {width} (dense {dense})");
+            let (_, jo_right, _) = words_span(&harness, "Jo").expect("Jo is drawn");
+            let (li_left, li_right, _) = words_span(&harness, "Li").expect("Li is drawn");
+            let (work, _, _) = words_span(&harness, "work").expect("work is drawn");
+            let (before, after) = (li_left - jo_right, work - li_right);
             assert!(
-                (jo.left() - jo_left).abs() < 0.5 && or_left >= jo_left + design::XL - 0.5,
-                "AD1-reserved: at {width}: Jo's words at {jo_left}, target {jo:?}, `or` at {or_left}"
+                (before - after).abs() <= 2.0,
+                "FD5-even: {at}: before Li {before}, after Li {after}"
+            );
+            let jo = target_of(&harness, "Jo (opens Jo)");
+            let li = target_of(&harness, "Li (opens Li)");
+            assert!(
+                jo.width() >= design::XL - 0.01
+                    && li.width() >= design::XL - 0.01
+                    && jo.right() <= li.left() + 0.01,
+                "FD5-pair-targets: {at}: {jo:?} {li:?}"
             );
         }
     }
 
+    /// FD5: a short link that starts a line keeps its words at the text edge, with its target
+    /// growing right and the next target or word after it. This holds at the start of the
+    /// paragraph and where the link wraps to the start of a row.
     #[test]
-    fn iter17_a_ad1_side_by_side_links_keep_separate_underlines() {
-        for (width, dense) in [(480.0, false), (360.0, false)] {
-            let harness = reader_at("[Jo](splat-note:Jo)[Li](splat-note:Li)", width, dense);
-            let galleys = galleys_in(&harness);
-            let galley = &galleys[0].1;
-            let text = &galley.job.text;
-            let (Some(jo), Some(li)) = (text.find("Jo"), text.find("Li")) else {
-                panic!("AD1-underline-words: {text:?}");
-            };
-            // epaint joins one underline across glyphs that share a stroke, so a drawn character
-            // without one must sit between the two links.
+    fn iter18_a_fd5_a_link_that_starts_a_line_keeps_its_words_at_the_edge() {
+        for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
+            let harness = reader_at(
+                "[Jo](splat-note:Jo)[Li](splat-note:Li) work the inner ferry.",
+                width,
+                dense,
+            );
+            let edge = galleys_in(&harness)[0].0.x;
+            let (left, _, _) = words_span(&harness, "Jo").expect("Jo is drawn");
+            let target = target_of(&harness, "Jo (opens Jo)");
+            let li = target_of(&harness, "Li (opens Li)");
             assert!(
-                galley.job.sections.iter().any(|section| {
-                    section.byte_range.start >= jo + 2
-                        && section.byte_range.end <= li
-                        && !section.byte_range.is_empty()
-                        && section.format.underline == egui::Stroke::NONE
-                }),
-                "AD1-underline-break: at {width}: {:?}",
-                galley.job.sections
+                (left - edge).abs() < 0.5
+                    && (target.left() - left).abs() < 0.5
+                    && li.left() >= target.right() - 0.01,
+                "FD5-line-start: at {width} (dense {dense}): edge {edge}, Jo at {left}, target {target:?}, Li {li:?}"
+            );
+        }
+        // A link that wraps to the start of a row: every width that puts `Jo` first on a later row.
+        let markdown = "The ferry hands wait on the pier for [Jo](splat-note:Jo) tonight.";
+        let mut wrapped = 0;
+        for width in (160..=420).step_by(4) {
+            let harness = reader_at(markdown, width as f32, false);
+            let (pos, galley) = galleys_in(&harness)[0].clone();
+            let Some(row) = galley
+                .rows
+                .iter()
+                .skip(1)
+                .find(|row| row.glyphs.first().is_some_and(|glyph| glyph.chr == 'J'))
+            else {
+                continue;
+            };
+            wrapped += 1;
+            let edge = pos.x + row.pos.x;
+            let (left, _, _) = words_span(&harness, "Jo").expect("Jo is drawn");
+            let (tonight, _, _) = words_span(&harness, "tonight").expect("tonight is drawn");
+            let target = target_of(&harness, "Jo (opens Jo)");
+            assert!(
+                (left - edge).abs() < 0.5
+                    && (target.left() - left).abs() < 0.5
+                    && tonight >= target.right() - 0.5,
+                "FD5-wrapped-start: at {width}: edge {edge}, Jo at {left}, target {target:?}, tonight at {tonight}"
+            );
+        }
+        assert!(
+            wrapped > 0,
+            "FD5-wrapped-reached: no width put Jo first on a row"
+        );
+    }
+
+    /// FT1: in compact prose, every row of a paragraph that holds a link has the link pitch, so
+    /// the lines are evenly spaced. A compact paragraph without a link keeps its own pitch.
+    #[test]
+    fn iter18_a_ft1_a_linked_compact_paragraph_has_one_pitch() {
+        let linked = "The ferry crosses the inner sea twice each day, and the hands rest on the far pier. On the way back [ask Wren](splat-note:Wren) about the rope, then about the bells and the tide tables.";
+        let plain = "The ferry crosses the inner sea twice each day, and the hands rest on the far pier. On the way back ask Wren about the rope, then about the bells and the tide tables.";
+        for (width, dense) in [(360.0, false), (480.0, true), (300.0, true)] {
+            let at = format!("at {width} (dense {dense})");
+            let pitches = |markdown: &'static str| {
+                let harness = reader_at(markdown, width, dense);
+                let tops: Vec<f32> = rows_in(&harness).iter().map(|row| row.top()).collect();
+                tops.windows(2)
+                    .map(|pair| pair[1] - pair[0])
+                    .collect::<Vec<f32>>()
+            };
+            let linked_pitch = pitches(linked);
+            assert!(linked_pitch.len() >= 2, "FT1-rows: {at}: {linked_pitch:?}");
+            assert!(
+                linked_pitch
+                    .iter()
+                    .all(|pitch| (pitch - design::XL).abs() < 0.5),
+                "FT1-even: {at}: {linked_pitch:?}"
+            );
+            let harness = reader_at(linked, width, dense);
+            let (_, _, ask) = words_span(&harness, "ask Wren").expect("the link is drawn");
+            assert!(
+                !rows_in(&harness)[0].y_range().contains(ask),
+                "FT1-link-on-a-later-line: {at}"
+            );
+            let plain_pitch = pitches(plain);
+            assert!(
+                plain_pitch.len() >= 2 && plain_pitch.iter().all(|pitch| *pitch < design::XL - 0.5),
+                "FT1-plain-keeps-pitch: {at}: {plain_pitch:?}"
+            );
+        }
+    }
+
+    /// FT1: a link's underline is under its words, 2 px below their baseline, in reader and
+    /// compact prose, never at the bottom of a taller row. Side-by-side links keep separate
+    /// underlines.
+    #[test]
+    fn iter18_a_ft1_the_underline_sits_under_its_words() {
+        for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
+            let harness = reader_at(
+                "On the way back [ask Wren](splat-note:Wren) and [Jo](splat-note:Jo)[Li](splat-note:Li) about the rope.",
+                width,
+                dense,
+            );
+            let at = format!("at {width} (dense {dense})");
+            let lines = underlines_in(&harness);
+            for words in ["ask Wren", "Jo", "Li"] {
+                let (left, right, baseline) = words_span(&harness, words).expect("words are drawn");
+                let under: Vec<_> = lines
+                    .iter()
+                    .filter(|(l, r, _)| *l < right && left < *r)
+                    .collect();
+                assert!(
+                    under.len() == 1
+                        && (under[0].0 - left).abs() < 0.5
+                        && (under[0].1 - right).abs() < 0.5
+                        && (under[0].2 - (baseline + 2.0)).abs() <= 1.0,
+                    "FT1-underline: {at}: {words} at {left}..{right}, baseline {baseline}, lines {under:?}"
+                );
+            }
+            // The text itself draws no underline, which would sit at the bottom of the row.
+            assert!(
+                galleys_in(&harness).iter().all(|(_, galley)| galley
+                    .job
+                    .sections
+                    .iter()
+                    .all(|section| section.format.underline == egui::Stroke::NONE)),
+                "FT1-one-underline: {at}"
             );
         }
     }

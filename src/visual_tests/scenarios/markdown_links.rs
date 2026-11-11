@@ -11,6 +11,7 @@ const SECOND: &str = "the bell keeper (opens Oskar)";
 const SECOND_TEXT: &str = "Oskar keeps the bell ropes dry.";
 /// A note whose prose starts with two short links side by side.
 const HANDS: &str = "Ferry Hands";
+const CREW: &str = "Ferry Crew";
 const JO: &str = "Jo (opens Jo)";
 const LI: &str = "Li (opens Li)";
 
@@ -253,6 +254,83 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.state("prose-short-links-first-focused", Sizes::All);
+    // FD5: at the start of the line, Jo keeps its words at the text edge, with its target growing
+    // right from them; Li, inside the line, has as much space before its words as after them.
+    for (size, at) in [(SMALL, "960"), (DEFAULT, "1200"), (LARGE, "1920")] {
+        let found = d.at_size(size, |d| {
+            let paragraph = "work the inner ferry";
+            let edge = super::paragraph_row_tops(d, paragraph).len();
+            let mut origin = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text.contains(paragraph)
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    origin = Some(text.pos.x + text.galley.rows[0].pos.x);
+                }
+            });
+            let span = |words: &str| super::glyph_spans(d, paragraph, words).first().copied();
+            (
+                edge,
+                origin,
+                span("Jo"),
+                span("Li"),
+                span("work"),
+                d.place_of(JO),
+            )
+        });
+        let (paragraphs, origin, jo, li, work, jo_target) = found;
+        d.observe(
+            &format!("iter-18-A-FD5-line-start-{at}"),
+            paragraphs == 1
+                && origin.zip(jo).zip(jo_target).is_some_and(|((origin, jo), target)| {
+                    (jo.0 - origin).abs() < 0.5 && (target.left() - jo.0).abs() < 0.5
+                }),
+            format!("At {at}, Jo starts the line at the text edge {origin:?}: words {jo:?}, target {jo_target:?}"),
+        );
+        d.observe(
+            &format!("iter-18-A-FD5-even-line-start-{at}"),
+            jo.zip(li).zip(work).is_some_and(|((jo, li), work)| {
+                ((li.0 - jo.1) - (work.0 - li.1)).abs() <= 2.0
+            }),
+            format!("At {at}, the space before Li equals the space after it: Jo {jo:?}, Li {li:?}, work {work:?}"),
+        );
+    }
+
+    // FD5 witness: the same pair inside a line has its words centred in their targets, with even
+    // space before and after Li, and both targets XL wide and apart.
+    write_notes(
+        d,
+        [(
+            format!("{CREW}.md"),
+            CREW,
+            "place",
+            "Ask [[Jo]][[Li]] about the tide before the crossing.",
+        )],
+    );
+    d.click_starting(&format!("{CREW} · "));
+    d.expect(JO);
+    for (size, at) in [(SMALL, "960"), (DEFAULT, "1200"), (LARGE, "1920")] {
+        let held = pair_holds_xl(d, JO, LI, size);
+        let (jo, li, about, li_target) = d.at_size(size, |d| {
+            let paragraph = "about the tide";
+            let span = |words: &str| super::glyph_spans(d, paragraph, words).first().copied();
+            (span("Jo"), span("Li"), span("about"), d.place_of(LI))
+        });
+        d.observe(
+            &format!("iter-18-A-FD5-mid-line-{at}"),
+            held && jo.zip(li).zip(about).zip(li_target).is_some_and(
+                |(((jo, li), about), target)| {
+                    ((li.0 - jo.1) - (about.0 - li.1)).abs() <= 2.0
+                        && ((li.0 - target.left()) - (target.right() - li.1)).abs() <= 1.0
+                },
+            ),
+            format!(
+                "At {at}, Li inside the line has even space: Jo {jo:?}, Li {li:?}, about {about:?}, \
+                 Li's target {li_target:?}, targets XL and apart: {held}"
+            ),
+        );
+    }
+    d.state("prose-short-links-mid-line", Sizes::All);
 
     // AD1 in World.
     d.click_starting(&format!("{NOTE} · "));

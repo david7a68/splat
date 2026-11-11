@@ -236,17 +236,78 @@ fn undo_shape(d: &Driver<'_>, action: &str) -> Option<(egui::Stroke, egui::Color
     ))
 }
 
+/// Whether painted text is only icon glyphs (the icon font's private-use characters).
+fn is_icon(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|c| ('\u{E000}'..='\u{F8FF}').contains(&c) || c.is_whitespace())
+}
+
 /// Where a control's words start: the leftmost text painted inside its press area. An icon
-/// before the words counts, since `line_start` puts it at the text edge.
+/// before the words does not count: `line_start` hangs it in the gutter, so the words start at
+/// the text edge.
 fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-        if area.contains(rect.center()) {
+        if area.contains(rect.center()) && !is_icon(&text.galley.job.text) {
             left = Some(left.map_or(rect.left(), |left| left.min(rect.left())));
         }
     });
     left
+}
+
+/// Where `words` are drawn in each visible painted paragraph that contains `paragraph`: the
+/// left and right of the words and their baseline, for a match on one row.
+pub(super) fn glyph_spans(d: &Driver<'_>, paragraph: &str, words: &str) -> Vec<(f32, f32, f32)> {
+    let mut spans = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if !job.text.contains(paragraph) || !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        let Some(start) = job.text.find(words) else {
+            return;
+        };
+        let end = start + words.len();
+        let mut byte_at = 0;
+        let mut span: Option<(f32, f32, f32)> = None;
+        for row in &text.galley.rows {
+            for glyph in &row.glyphs {
+                if (start..end).contains(&byte_at) {
+                    let x = text.pos.x + row.pos.x + glyph.pos.x;
+                    let y = text.pos.y + row.pos.y + glyph.pos.y;
+                    let right = x + glyph.advance_width;
+                    span = Some(span.map_or((x, right, y), |(left, _, y)| (left, right, y)));
+                }
+                byte_at += glyph.chr.len_utf8();
+            }
+            if row.ends_with_newline {
+                byte_at += 1;
+            }
+        }
+        spans.extend(span);
+    });
+    spans
+}
+
+/// The row tops of each visible painted paragraph that contains `paragraph`.
+pub(super) fn paragraph_row_tops(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<f32>> {
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text.contains(paragraph) && clip.intersects(text.visual_bounding_rect())
+        {
+            found.push(
+                text.galley
+                    .rows
+                    .iter()
+                    .map(|row| text.pos.y + row.pos.y)
+                    .collect(),
+            );
+        }
+    });
+    found
 }
 
 fn words_left(d: &Driver<'_>, name: &str) -> Option<f32> {
@@ -7665,7 +7726,7 @@ pub mod session_notes {
             d,
             "iter-17-D-FT2-generate",
             "Generate NPC",
-            &[DEFAULT],
+            &[SMALL, DEFAULT, LARGE],
             |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
         );
         d.state("session-beside-lookup", Sizes::Default);
@@ -7953,6 +8014,69 @@ pub mod session_notes {
                 })
             },
         );
+        // FT1: the paragraph that holds Wren has one line pitch, the link pitch, in the Session
+        // reader and in Lookup's compact card, and Wren's underline is under its words.
+        const PARAGRAPH: &str = "The ferry crosses the inner sea twice each day.";
+        let pitches = |d: &Driver<'_>| {
+            paragraph_row_tops(d, PARAGRAPH)
+                .into_iter()
+                .map(|tops| {
+                    tops.windows(2)
+                        .map(|pair| pair[1] - pair[0])
+                        .collect::<Vec<f32>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        for size in [SMALL, DEFAULT] {
+            let found = d.at_size(size, pitches);
+            d.observe(
+                "iter-18-A-FT1-pitch",
+                found.len() == 2
+                    && found.iter().all(|pitch| {
+                        pitch.len() >= 2
+                            && pitch
+                                .iter()
+                                .all(|step| (step - crate::design::XL).abs() < 0.5)
+                    }),
+                format!(
+                    "At {size:?}, the Session reader and Lookup's card each keep one {} px pitch \
+                     in the paragraph that holds Wren: {found:?}",
+                    crate::design::XL
+                ),
+            );
+            let under = d.at_size(size, |d| {
+                let spans = glyph_spans(d, PARAGRAPH, "Wren");
+                let lines: Vec<Vec<egui::Rect>> = spans
+                    .iter()
+                    .map(|(left, right, baseline)| {
+                        let area = egui::Rect::from_min_max(
+                            egui::pos2(*left + 1.0, *baseline),
+                            egui::pos2(*right - 1.0, *baseline + crate::design::S),
+                        );
+                        d.line_segments_in(area)
+                    })
+                    .collect();
+                (spans, lines)
+            });
+            d.observe(
+                "iter-18-A-FT1-underline",
+                under.0.len() == 2
+                    && under
+                        .0
+                        .iter()
+                        .zip(&under.1)
+                        .all(|((left, right, baseline), lines)| {
+                            lines.len() == 1
+                                && (lines[0].center().y - (baseline + 2.0)).abs() <= 1.0
+                                && (lines[0].left() - left).abs() < 1.0
+                                && (lines[0].right() - right).abs() < 1.0
+                        }),
+                format!(
+                    "At {size:?}, Wren's underline sits 2 px below its baseline, under its words, \
+                     in both readers: {under:?}"
+                ),
+            );
+        }
         d.state("lookup-written-card-link", Sizes::Default);
     }
 }
@@ -11736,16 +11860,50 @@ pub mod session_plan {
             &[SMALL, DEFAULT, LARGE],
             field_left,
         );
+        // ST2: the words of `New NPC “Miller”` start at the result names. Outside a message, a
+        // line-start action has no icon, so nothing of it sits left of the names.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (npc, location, edge, splitter) = d.at_size(size, |d| {
-                d.expect("New location “Miller”");
+            let (words, names, icon) = d.at_size(size, |d| {
+                let target = d.place_of("New NPC “Miller”");
                 (
-                    d.place_of("New NPC “Miller”"),
-                    d.place_of("New location “Miller”"),
-                    field_left(d),
-                    d.place_of(LOOKUP_SPLITTER),
+                    target.and_then(|target| words_left_in(d, target)),
+                    lookup_row_text_left(d),
+                    target.is_some_and(|target| {
+                        let mut icon = false;
+                        d.each_painted_text(|text, _| {
+                            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                            icon |=
+                                target.contains(rect.center()) && is_icon(&text.galley.job.text);
+                        });
+                        icon
+                    }),
                 )
             });
+            d.observe(
+                "iter-18-A-ST2",
+                words
+                    .zip(names)
+                    .is_some_and(|(words, names)| (words - names).abs() <= 1.0)
+                    && !icon,
+                format!(
+                    "At {size:?}, New NPC's words start at {words:?}, the result names at \
+                     {names:?}; an icon in its target: {icon}"
+                ),
+            );
+        }
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (npc, location, edge, splitter, words) = d.at_size(size, |d| {
+                d.expect("New location “Miller”");
+                let location = d.place_of("New location “Miller”");
+                (
+                    d.place_of("New NPC “Miller”"),
+                    location,
+                    field_left(d),
+                    d.place_of(LOOKUP_SPLITTER),
+                    location.and_then(|location| words_left_in(d, location)),
+                )
+            });
+            // On a line of its own, its words start at the edge and its icon hangs left of it.
             let placed = npc
                 .zip(location)
                 .zip(edge)
@@ -11753,7 +11911,7 @@ pub mod session_plan {
                     if (location.top() - npc.top()).abs() < 1.0 {
                         location.left() >= npc.right()
                     } else {
-                        (location.left() + crate::design::S - edge).abs() <= 1.0
+                        words.is_some_and(|words| (words - edge).abs() <= 1.0)
                     }
                 });
             d.observe(
@@ -12815,9 +12973,9 @@ fn lookup_action_at_text_edge(
     action_at_text_edge(d, id, action, LOOKUP_SPLITTER, sizes, edge);
 }
 
-/// A quiet action that starts a line uses `line_start`: its icon or word (`S` inside its target)
-/// starts at `edge`, the text edge of what is above it, and its press area stays right of the
-/// nearest column splitter. It runs at each size given, the sizes its state is captured at.
+/// A quiet action that starts a line uses `line_start`: its words start at `edge`, the text edge
+/// of what is above it, with any icon hanging in the gutter, and its press area stays right of
+/// the nearest column splitter. It runs at each size given, the sizes its state is captured at.
 fn action_at_text_edge(
     d: &mut Driver<'_>,
     id: &str,
@@ -12827,12 +12985,13 @@ fn action_at_text_edge(
     edge: impl Fn(&Driver<'_>) -> Option<f32>,
 ) {
     for &size in sizes {
-        let (target, edge, splitter) = d.at_size(size, |d| {
+        let (target, edge, splitter, start) = d.at_size(size, |d| {
             d.expect(action);
             d.expect(splitter);
-            (d.place_of(action), edge(d), d.place_of(splitter))
+            let target = d.place_of(action);
+            let start = target.and_then(|target| words_left_in(d, target));
+            (target, edge(d), d.place_of(splitter), start)
         });
-        let start = target.map(|target| target.left() + crate::design::S);
         d.observe(
             id,
             start
