@@ -1697,8 +1697,10 @@ impl Splat {
                         encounters.group_in_plan_view(ui, campaign, campaigns);
                     };
                     let party = self.party.order();
+                    let sources = self.lookup.index().map(|index| index.loot_sources());
                     let plan = sessions::page::Plan {
                         party: &party,
+                        tables: sources.as_ref().map_or(&[], |sources| &sources.tables),
                         fights: &fights,
                         saved_runs: &saved_runs,
                         groups: &groups,
@@ -1731,6 +1733,8 @@ impl Splat {
                     self.timeline.run_open = self.encounters.has_run();
                     self.timeline_page.saved_runs = self.encounters.saved_runs();
                     self.timeline_page.dated = self.sessions.current_dated();
+                    self.timeline_page.tables =
+                        self.lookup.index().map(|index| index.loot_sources());
                     self.timeline_page.places = self
                         .lookup
                         .index()
@@ -2478,6 +2482,9 @@ impl eframe::App for Splat {
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;
+        if !self.sessions.on_page {
+            self.sessions.left_page();
+        }
         self.sessions.banner(
             ctx,
             &self.processing,

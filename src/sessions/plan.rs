@@ -5,9 +5,9 @@ use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     encounter_run::fight_summary,
     encounters::PlanFight,
-    sessions::{Apply, each_linked_name, insert_in_note, linked_names, section_text},
+    sessions::{Apply, NoteUndo, each_linked_name, insert_in_note, insert_in_plan, linked_names},
     timeline::{
-        self, Book, Kind,
+        self, Book, Kind, checks,
         page::{added_message, long_rest_status, problems, quick_add, rest_ruling},
         removed_event_words,
     },
@@ -474,7 +474,227 @@ fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
         .and(book.removal_action())
 }
 
+/// Each link to a fight under the plan's heading, in order: where its line starts in the words,
+/// the fight, and whether it is still to come. A played event of the session takes one link of
+/// its name, so a plan can hold the same fight again.
+fn plan_links<'a>(
+    body: &str,
+    events: &[timeline::Event],
+    session: Option<Uuid>,
+    fights: &'a [PlanFight],
+) -> Vec<(usize, &'a PlanFight, bool)> {
+    let mut played: BTreeMap<String, usize> = BTreeMap::new();
+    for event in events {
+        if event.is_in(session) && event.run.is_some() {
+            *played.entry(event.title.to_lowercase()).or_default() += 1;
+        }
+    }
+    let mut links = Vec::new();
+    let mut inside = false;
+    let mut start = 0;
+    for line in body.split_inclusive('\n') {
+        let at = start;
+        start += line.len();
+        let text = line.trim_end_matches(['\n', '\r']);
+        if !inside {
+            inside = text.trim_end().strip_prefix("## ") == Some("Plan for tonight");
+            continue;
+        }
+        if text.starts_with("## ") {
+            break;
+        }
+        for name in each_linked_name(text) {
+            if let Some(fight) = fights
+                .iter()
+                .find(|fight| fight.name.eq_ignore_ascii_case(&name))
+            {
+                let done = played.entry(fight.name.to_lowercase()).or_default();
+                links.push((at, fight, *done == 0));
+                *done = done.saturating_sub(1);
+            }
+        }
+    }
+    links
+}
+
+/// The note's words with a plan line before the first line still to come, so that its fight is
+/// the next row. With nothing to come, it goes at the plan's end.
+fn plan_first(
+    body: &str,
+    line: &str,
+    events: &[timeline::Event],
+    session: Option<Uuid>,
+    fights: &[PlanFight],
+) -> String {
+    let mut words = body.to_owned();
+    match plan_links(body, events, session, fights)
+        .into_iter()
+        .find(|(_, _, waiting)| *waiting)
+    {
+        Some((at, _, _)) => words.insert_str(at, &format!("{line}\n")),
+        None => insert_in_plan(&mut words, line),
+    }
+    words
+}
+
+/// The help line of **How long** when the clock cannot place the journey.
+const LENGTH_HELP: &str = "A number and a unit move the clock: 3 days, 8 hours, an hour.";
+
+/// Which result's Undo the DM pressed in a journey's checks.
+#[derive(Clone, Copy, PartialEq)]
+enum TravelUndo {
+    None,
+    Checks,
+    PlanLine,
+}
+
+/// A journey's encounter checks in the plan: what the DM typed, and the result of the last act
+/// with its Undo. Leaving the page ends them.
+#[derive(Default)]
+pub(super) struct Travel {
+    block: checks::State,
+    /// **How long** while it has focus: the event and the words typed.
+    length: Option<(String, String)>,
+    focus_length: bool,
+    done: Option<checks::Done>,
+    /// `Plan “<name>”`: the journey, the name, and the note's Undo.
+    planned: Option<(String, String, NoteUndo)>,
+}
+
 impl Sessions {
+    /// The DM left the Session page: a journey's results and their Undo end.
+    pub fn left_page(&mut self) {
+        self.travel.done = None;
+        self.travel.planned = None;
+    }
+
+    /// The open Travel row's checks: the table, **How long**, the lines and the last results.
+    /// Returns the act the DM asked for, whether the length changed, and which Undo was pressed.
+    fn travel_block(
+        &mut self,
+        ui: &mut egui::Ui,
+        event: &mut timeline::Event,
+        start: Option<u64>,
+        plan: &Plan<'_>,
+        planned: &dyn Fn(&str) -> Option<bool>,
+        results: (Option<&checks::Done>, Option<&str>),
+    ) -> (Option<checks::Act>, bool, TravelUndo) {
+        let travel = &mut self.travel;
+        let focus = std::mem::take(&mut travel.focus_length);
+        let mut undo = TravelUndo::None;
+        ui.add_space(design::XS);
+        let header = checks::View {
+            event,
+            start,
+            length: &event.duration,
+            tables: plan.tables,
+            planned,
+        };
+        let mut act = checks::header(ui, &header, &mut travel.block);
+        let typed = match &travel.length {
+            Some((id, words)) if *id == event.id => words.clone(),
+            _ => event.duration.clone(),
+        };
+        let help = checks::span(start, &typed).or_else(|| {
+            timeline::read_duration(&typed)
+                .is_none()
+                .then(|| LENGTH_HELP.to_owned())
+        });
+        let (length, changed) = design::field(ui, "How long", help.as_deref(), None, |ui| {
+            checks::length_input(ui, &mut travel.length, event, "", focus)
+        });
+        let view = checks::View {
+            event,
+            start,
+            length: &length,
+            tables: plan.tables,
+            planned,
+        };
+        act = checks::lines(ui, &view, &mut travel.block).or(act);
+        let (done, plan_line) = results;
+        if let Some(done) = done {
+            ui.add_space(design::S);
+            if design::undo_message(ui, Tone::Success, &done.words, done.undo) {
+                undo = TravelUndo::Checks;
+            }
+        }
+        if let Some(name) = plan_line {
+            ui.add_space(design::S);
+            if design::undo_message(
+                ui,
+                Tone::Success,
+                &format!("“{name}” is in tonight’s plan."),
+                "Undo plan line",
+            ) {
+                undo = TravelUndo::PlanLine;
+            }
+        }
+        (act, changed, undo)
+    }
+
+    /// Take back the plan line of `Plan “…”`, while the note is as that act left it.
+    fn undo_plan_line(&mut self) {
+        let (Some((_, name, undo)), Some(draft)) = (self.travel.planned.take(), &mut self.draft)
+        else {
+            return;
+        };
+        // A note that changed since says so where the DM acted.
+        if let Err(fault) = undo.undo(draft) {
+            self.travel
+                .block
+                .failed(&checks::Act::Plan(name), fault.words().to_owned());
+        }
+    }
+
+    /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
+    /// `Timeline.md`.
+    fn travel_act(
+        &mut self,
+        book: &mut Book,
+        session: Option<Uuid>,
+        id: &str,
+        act: checks::Act,
+        plan: &Plan<'_>,
+    ) {
+        self.travel.block.clear_problem();
+        if act == checks::Act::Start {
+            // The row opens on its checks, with focus where the length goes.
+            self.open_event = Some(id.to_owned());
+            self.reveal_event = true;
+            self.travel.focus_length = book
+                .events
+                .iter()
+                .any(|event| event.id == id && event.duration.trim().is_empty());
+        }
+        if let checks::Act::Plan(name) = &act {
+            let (Some(draft), Some(note)) = (&mut self.draft, session) else {
+                return;
+            };
+            let line = format!("- [[{name}]]");
+            let written = draft.apply(note, Apply::Now, |words| {
+                Some(plan_first(words, &line, &book.events, session, plan.fights))
+            });
+            match written {
+                Ok(undo) => self.travel.planned = Some((id.to_owned(), name.clone(), undo)),
+                Err(fault) => {
+                    let words = fault.words().to_owned();
+                    if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
+                        self.travel.planned = Some((id.to_owned(), name.clone(), undo));
+                    }
+                    self.travel.block.failed(&act, words);
+                }
+            }
+            self.mentions
+                .insert(note, timeline::referenced_ids(&draft.body));
+            return;
+        }
+        match checks::apply(book, id, &act, plan.tables) {
+            Ok(Some(done)) => self.travel.done = Some(done),
+            Ok(None) => {}
+            Err(error) => self.travel.block.failed(&act, error),
+        }
+    }
+
     fn removed_group_message(
         &self,
         ui: &mut egui::Ui,
@@ -526,26 +746,9 @@ impl Sessions {
             .draft
             .as_ref()
             .map_or_else(String::new, |draft| draft.body.clone());
-        let mut played: BTreeMap<String, usize> = BTreeMap::new();
-        for event in &book.events {
-            if event.is_in(session) && event.run.is_some() {
-                *played.entry(event.title.to_lowercase()).or_default() += 1;
-            }
-        }
-        let fight_plan = section_text(&body, "Plan for tonight").unwrap_or_default();
-        let planned: Vec<&PlanFight> = each_linked_name(&fight_plan)
-            .iter()
-            .filter_map(|name| {
-                plan.fights
-                    .iter()
-                    .find(|fight| fight.name.eq_ignore_ascii_case(name))
-            })
-            .filter(|fight| {
-                let done = played.entry(fight.name.to_lowercase()).or_default();
-                let waiting = *done == 0;
-                *done = done.saturating_sub(1);
-                waiting
-            })
+        let planned: Vec<&PlanFight> = plan_links(&body, &book.events, session, plan.fights)
+            .into_iter()
+            .filter_map(|(_, fight, waiting)| waiting.then_some(fight))
             .collect();
         let planned_groups: Vec<_> = linked_names(&body)
             .iter()
@@ -654,6 +857,56 @@ impl Sessions {
         let open_event = self.open_event.clone();
         let ruling_undo = book.rest_undo_id().map(str::to_owned);
         let mut ruling = None;
+        // A journey's checks: the clock at the open journey's start, and the results that hold.
+        checks::settle_length(book, &mut self.travel.length, open_event.as_deref());
+        let journey_start = book
+            .events
+            .iter()
+            .position(|event| open_event.as_ref() == Some(&event.id) && checks::shown(event))
+            .and_then(|at| timeline::clock(&book.events)[at]);
+        if self
+            .travel
+            .done
+            .as_ref()
+            .is_some_and(|done| !done.live(book))
+        {
+            self.travel.done = None;
+        }
+        if self
+            .travel
+            .planned
+            .as_ref()
+            .is_some_and(|(_, _, undo)| self.draft.as_ref().is_none_or(|draft| !undo.live(draft)))
+        {
+            self.travel.planned = None;
+        }
+        let travel_done = self.travel.done.clone();
+        let plan_line = self
+            .travel
+            .planned
+            .as_ref()
+            .map(|(id, name, _)| (id.clone(), name.clone()));
+        let mut travel_act = None;
+        let mut travel_undo = TravelUndo::None;
+        // A name a result links: an encounter or a group, and whether a row for it is to come.
+        let in_plan = |name: &str| {
+            let fight = plan
+                .fights
+                .iter()
+                .any(|fight| fight.name.eq_ignore_ascii_case(name));
+            let group = plan
+                .groups
+                .iter()
+                .any(|group| group.name.eq_ignore_ascii_case(name));
+            (fight || group).then(|| {
+                planned
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                    || planned_groups
+                        .iter()
+                        .any(|group| group.name.eq_ignore_ascii_case(name))
+            })
+        };
         egui::CentralPanel::default().frame(egui::Frame::new()).show_inside(ui, |ui| {
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
                 .auto_shrink([false, false]).show(ui, |ui| {
@@ -727,6 +980,9 @@ impl Sessions {
                                 // Overflow is always at the row's right edge.
                                 let more = design::icon_button(ui, icons::EXPAND, &format!("More actions for {label}"));
                                 egui::Popup::menu(&more).show(|ui| {
+                                    if checks::offered(event, plan.tables) && Action::quiet("Roll for encounters").show(ui).clicked() {
+                                        travel_act = Some((event.id.clone(), checks::Act::Start)); ui.close();
+                                    }
                                     if Action::quiet("Remove").name("Remove this event")
                                         .blocked_if(running, "This run is open. Close it first.").show(ui).clicked() {
                                         remove = Some(event.id.clone()); ui.close();
@@ -753,6 +1009,14 @@ impl Sessions {
                                 self.fight_block(ui, run, &event.id, plan);
                             } else {
                                 changed |= event_fields(ui, event);
+                                if checks::shown(event) {
+                                    let results = (travel_done.as_ref().filter(|done| done.id == event.id),
+                                        plan_line.as_ref().filter(|(id, _)| *id == event.id).map(|(_, name)| name.as_str()));
+                                    let (act, edited, undo) = self.travel_block(ui, event, journey_start, plan, &in_plan, results);
+                                    changed |= edited;
+                                    if let Some(act) = act { travel_act = Some((event.id.clone(), act)); }
+                                    if undo != TravelUndo::None { travel_undo = undo; }
+                                }
                                 if let Some(action) = rest_ruling(ui, event, ruling_undo.as_ref() == Some(&event.id)) {
                                     ruling = Some((event.id.clone(), action));
                                 }
@@ -948,6 +1212,18 @@ impl Sessions {
         }
         if changed {
             book.touch();
+        }
+        if let Some((id, act)) = travel_act {
+            self.travel_act(book, session, &id, act, plan);
+        }
+        match travel_undo {
+            TravelUndo::Checks => {
+                if let Some(done) = self.travel.done.take() {
+                    done.undo(book);
+                }
+            }
+            TravelUndo::PlanLine => self.undo_plan_line(),
+            TravelUndo::None => {}
         }
         if let Some((id, action)) = ruling {
             action.apply(book, &id);
@@ -1402,6 +1678,73 @@ mod tests {
     }
 
     #[test]
+    fn t11_10_a_planned_result_goes_before_the_first_fight_still_to_come() {
+        let session = Uuid::from_u128(7);
+        let fights = [
+            planned_fight("Wolf Pack", "Encounters/Wolf Pack.md"),
+            planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
+        ];
+        let body = "# The Crossing\n\n## Plan for tonight\n\n- [[Wolf Pack]]\n- [[Bridge Ambush]]\n\n## What happened\n\n[[Wolf Pack]] came.\n";
+        let mut book = Book::default();
+        let played = book.add(Kind::Encounter, Some(session));
+        let event = book
+            .events
+            .iter_mut()
+            .find(|event| event.id == played)
+            .unwrap();
+        event.title = "Wolf Pack".into();
+        event.run = Some(Uuid::from_u128(8));
+        // The first Wolf Pack was played, so Bridge Ambush is the first line to come.
+        let after = plan_first(
+            body,
+            "- [[Wolf Pack]]",
+            &book.events,
+            Some(session),
+            &fights,
+        );
+        assert_eq!(
+            after,
+            body.replace(
+                "- [[Bridge Ambush]]",
+                "- [[Wolf Pack]]\n- [[Bridge Ambush]]"
+            )
+        );
+        let to_come: Vec<&str> = plan_links(&after, &book.events, Some(session), &fights)
+            .into_iter()
+            .filter(|(_, _, waiting)| *waiting)
+            .map(|(_, fight, _)| fight.name.as_str())
+            .collect();
+        assert_eq!(
+            to_come,
+            ["Wolf Pack", "Bridge Ambush"],
+            "the new fight is the next row"
+        );
+        // With every fight played, the line goes at the plan's end, before the next heading.
+        let all = book.add(Kind::Encounter, Some(session));
+        let event = book
+            .events
+            .iter_mut()
+            .find(|event| event.id == all)
+            .unwrap();
+        event.title = "Bridge Ambush".into();
+        event.run = Some(Uuid::from_u128(9));
+        let after = plan_first(
+            body,
+            "- [[Wolf Pack]]",
+            &book.events,
+            Some(session),
+            &fights,
+        );
+        assert_eq!(
+            after,
+            body.replace(
+                "- [[Bridge Ambush]]\n",
+                "- [[Bridge Ambush]]\n- [[Wolf Pack]]\n"
+            )
+        );
+    }
+
+    #[test]
     fn iter9_c2_legacy_recovery_copy_matches_the_unique_planned_fight() {
         let fights = [planned_fight("Bridge Ambush", "Bridge.md")];
         let mut runs = [legacy_plan_run("Bridge Ambush · saved 03:00:00 (2)")];
@@ -1496,6 +1839,7 @@ mod tests {
                         open_state: "Round 2".into(),
                         open_encounter: None,
                         party: &[],
+                        tables: &[],
                     };
                     egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan));
                 },

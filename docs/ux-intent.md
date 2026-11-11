@@ -276,7 +276,10 @@ switching (`src/main.rs:164`), which is correct and must stay.
 campaign's folder, and each encounter, rest, journey, day and major event is on one timeline that any note
 can refer to. **Context:** desk and table. **Frequency:** every session.
 
-**Done well:** T11.1 to T11.4, and T11.8.
+A journey that the DM asks to check rolls its encounter checks in its own row, and a result becomes a planned
+fight in one step.
+
+**Done well:** T11.1 to T11.4, T11.8 to T11.10.
 
 ### W12. Record a session and process it later
 **Trigger:** the table agrees to be recorded. **Goal:** the audio is safe, its state is plain, and later it
@@ -584,6 +587,8 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
+| T11.9 | A two-day journey rolls two checks in 1; each is a quoted line of the event in `Timeline.md`, and an older reader keeps a line whose words hold `: `. A shorter length deletes none. A result edited in Obsidian shows its words, and `Clear` removes it | travel-checks **new**, roll-table-author | cost, state | New |
+| T11.10 | A result that names an encounter is planned in 1, and its `Start fight` is next; `In the plan` shows only while that row is to come. With several tables and no earlier choice, `Roll` waits, and the event holds `Checks table:` through a restart. `No checks` takes the block off. With no marked table, the row's menu is as before | travel-checks **new**, session-notes | cost, state | New |
 | T14.1 | A plain note reads in Splat, with no change to the file | world | state | New |
 | T14.2 | A link in a note opens the note it names, as in Obsidian | world | state | New |
 | T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |

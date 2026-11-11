@@ -1,5 +1,5 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
-use super::{Book, Event, Kind, clock, clock_now, clock_words, day_numbers, reference};
+use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 use std::time::{Duration, Instant};
@@ -83,6 +83,14 @@ pub struct TimelinePage {
     pub places: Vec<(Uuid, Vec<String>)>,
     /// The DM asked to read this location.
     pub open_place: Option<Uuid>,
+    /// The campaign's marked tables, for a journey's encounter checks.
+    pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
+    /// **How long** while it has focus: the event and the words typed.
+    length: Option<(String, String)>,
+    focus_length: bool,
+    /// What the DM typed in a journey's checks, and the last act's result with its Undo.
+    checks: checks::State,
+    checks_done: Option<checks::Done>,
 }
 
 /// One button for each of these kinds of event. Returns the new event's ID.
@@ -449,6 +457,8 @@ impl TimelinePage {
 
     pub fn reopen(&mut self) {
         self.reset_detail = true;
+        // A journey's result and its Undo end when the DM leaves the page.
+        self.checks_done = None;
     }
 
     fn row(
@@ -779,6 +789,7 @@ impl TimelinePage {
         notes: &mut crate::sessions::page::Sessions,
     ) {
         let c = colors();
+        checks::settle_length(book, &mut self.length, self.selected.as_deref());
         let Some(id) = self
             .selected
             .clone()
@@ -818,6 +829,17 @@ impl TimelinePage {
         let mut changed = false;
         let mut removed = false;
         let mut placed: Option<Option<String>> = None;
+        let sources = self.tables.clone();
+        let tables = sources.as_ref().map_or(&[][..], |sources| &sources.tables);
+        let mut checks_act = None;
+        let mut undo_checks = false;
+        if self
+            .checks_done
+            .as_ref()
+            .is_some_and(|done| !done.live(book))
+        {
+            self.checks_done = None;
+        }
         let labels: Vec<String> = book
             .events
             .iter()
@@ -889,6 +911,12 @@ impl TimelinePage {
                 &format!("More actions for {}", event.label(days[index])),
             );
             egui::Popup::menu(&more).show(|ui| {
+                if checks::offered(event, tables)
+                    && Action::quiet("Roll for encounters").show(ui).clicked()
+                {
+                    checks_act = Some(checks::Act::Start);
+                    ui.close();
+                }
                 let open_run = event.run.is_some() && event.run == self.open_run;
                 removed = Action::quiet("Remove")
                     .name("Remove this event")
@@ -991,6 +1019,7 @@ impl TimelinePage {
             ui.set_max_width(form_width);
             notes.event_link_offer(ui, book, &id);
             let event = &mut book.events[index];
+            let mut length = event.duration.clone();
             ui.add_space(design::M);
             let day_start = starts
                 .filter(|_| event.kind == Kind::Day)
@@ -1022,14 +1051,11 @@ impl TimelinePage {
                             Kind::ShortRest => "1 hour",
                             _ => "",
                         };
-                        changed |= design::text_input(
-                            ui,
-                            "How long",
-                            &mut event.duration,
-                            hint,
-                            ui.available_width(),
-                        )
-                        .changed();
+                        let focus = std::mem::take(&mut self.focus_length);
+                        let (words, edited) =
+                            checks::length_input(ui, &mut self.length, event, hint, focus);
+                        length = words;
+                        changed |= edited;
                     },
                 );
             }
@@ -1055,6 +1081,23 @@ impl TimelinePage {
                         );
                     }
                 });
+            }
+            // A journey's encounter checks, under its own **How long**.
+            if checks::shown(event) {
+                ui.add_space(design::M);
+                let view = checks::View {
+                    event,
+                    start: starts,
+                    length: &length,
+                    tables,
+                    planned: &|_| None,
+                };
+                checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
+                checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
+                if let Some(done) = self.checks_done.as_ref().filter(|done| done.id == id) {
+                    ui.add_space(design::S);
+                    undo_checks |= design::undo_message(ui, Tone::Success, &done.words, done.undo);
+                }
             }
             ui.add_space(design::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
@@ -1183,6 +1226,20 @@ impl TimelinePage {
         });
         if changed {
             book.touch();
+        }
+        if let Some(act) = checks_act {
+            self.checks.clear_problem();
+            if act == checks::Act::Start {
+                self.focus_length = book.events[index].duration.trim().is_empty();
+            }
+            match checks::apply(book, &id, &act, tables) {
+                Ok(Some(done)) => self.checks_done = Some(done),
+                Ok(None) => {}
+                Err(error) => self.checks.failed(&act, error),
+            }
+        }
+        if undo_checks && let Some(done) = self.checks_done.take() {
+            done.undo(book);
         }
         if let Some(action) = ruling {
             action.apply(book, &id);

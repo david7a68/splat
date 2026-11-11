@@ -2,6 +2,7 @@
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
 //! `Timeline.md`. Version 2 keeps the events in the body.
+pub mod checks;
 pub(crate) mod formats;
 pub mod page;
 
@@ -243,8 +244,51 @@ pub struct Event {
     /// When this was last played or ruled on, among the others. Zero is before any of them.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub played_order: u64,
+    /// A journey's encounter checks roll on the marked table with this key. An empty key holds
+    /// the checks while no table is chosen; none means the DM never asked for checks here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks_table: Option<String>,
+    /// The journey's rolled encounter checks, in the file's order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checks: Vec<Check>,
     #[serde(flatten)]
     pub extra: serde_yaml_ng::Mapping,
+}
+
+/// One rolled encounter check of a journey: `- Check at 24h: "16 · [[Wolf Pack]] pick up the
+/// trail."`. It belongs to its offset from the journey's start, never to a day's name.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Check {
+    /// The line's label as the file has it. `Clear` finds the line by it.
+    pub label: String,
+    /// Hours from the journey's start, when the label can be read.
+    pub at: Option<u64>,
+    /// The result as the file holds it, unquoted: the number, `·`, and the row's words.
+    pub words: String,
+}
+
+impl Check {
+    pub fn new(at: u64, words: String) -> Self {
+        Self {
+            label: format!("Check at {at}h"),
+            at: Some(at),
+            words,
+        }
+    }
+
+    /// A label from the file: `Check at 24h`, in any case. Its offset, when it can be read.
+    pub fn read(label: &str, words: String) -> Option<Self> {
+        let rest = label.to_lowercase();
+        let offset = rest.strip_prefix("check at ")?;
+        Some(Self {
+            label: label.to_owned(),
+            at: offset
+                .trim()
+                .strip_suffix('h')
+                .and_then(|h| h.trim().parse().ok()),
+            words,
+        })
+    }
 }
 
 impl Event {
@@ -1174,6 +1218,8 @@ impl Book {
                 restores: false,
                 continued_in: None,
                 played_order: 0,
+                checks_table: None,
+                checks: Vec::new(),
                 extra: Default::default(),
             },
         );
@@ -1966,6 +2012,8 @@ mod tests {
             restores: false,
             continued_in: None,
             played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
             extra: Default::default(),
         }
     }
@@ -2660,6 +2708,8 @@ mod tests {
             restores,
             continued_in: None,
             played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
             extra: Default::default(),
         };
         let first = Uuid::new_v4();

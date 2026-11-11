@@ -51,6 +51,8 @@ fn event(kind: Kind, id: String, title: String) -> Event {
         restores: false,
         continued_in: None,
         played_order: 0,
+        checks_table: None,
+        checks: Vec::new(),
         extra: Default::default(),
     }
 }
@@ -98,6 +100,23 @@ fn meta(event: &mut Event, text: &str) {
             event.marker = marker;
         }
     }
+}
+/// A value under a label this reader does not know, as YAML. An older Splat reads every travel
+/// check line this way, so a check's words are written in quotes: one string, also with `: `.
+fn unknown_value(value: &str) -> serde_yaml_ng::Value {
+    serde_yaml_ng::from_str(value).unwrap_or_else(|_| value.into())
+}
+/// A travel check's words or table key, quoted or plain, as the older reader keeps them.
+fn scalar(value: &str) -> String {
+    match unknown_value(value) {
+        serde_yaml_ng::Value::String(words) => words,
+        serde_yaml_ng::Value::Null => String::new(),
+        _ => value.to_owned(),
+    }
+}
+/// The label of a line that holds a journey's checks: its table, or one rolled check.
+fn is_check_label(label: &str) -> bool {
+    label.eq_ignore_ascii_case("Checks table") || Check::read(label, String::new()).is_some()
 }
 fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
     let mut rows: Vec<Row> = Vec::new();
@@ -194,11 +213,14 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
                 || label.eq_ignore_ascii_case("Continued in")
             {
                 child = None;
+            } else if label.eq_ignore_ascii_case("Checks table") {
+                row.event.checks_table = Some(scalar(value));
+                child = None;
+            } else if let Some(check) = Check::read(label, scalar(value)) {
+                row.event.checks.push(check);
+                child = None;
             } else {
-                row.event.extra.insert(
-                    label.into(),
-                    serde_yaml_ng::from_str(value).unwrap_or_else(|_| value.into()),
-                );
+                row.event.extra.insert(label.into(), unknown_value(value));
                 child = None;
             }
             meta(&mut row.event, raw);
@@ -378,6 +400,20 @@ fn result(event: &Event) -> String {
     };
     format!("  - Result: {}{suffix}\n", clean(&event.result))
 }
+/// A journey's table line and its check lines. Each check's words go in quotes.
+fn checks_text(event: &Event) -> String {
+    let mut out = String::new();
+    if let Some(key) = &event.checks_table {
+        let key = clean(key);
+        let gap = if key.is_empty() { "" } else { " " };
+        out.push_str(&format!("  - Checks table:{gap}{key}\n"));
+    }
+    for check in &event.checks {
+        let words = serde_json::to_string(&clean(&check.words)).unwrap_or_default();
+        out.push_str(&format!("  - {}: {words}\n", clean(&check.label)));
+    }
+    out
+}
 fn event_text(event: &Event, day: u32, sessions: &BTreeMap<Uuid, String>) -> String {
     let mut out = head(event, day);
     for (label, value) in [
@@ -398,6 +434,7 @@ fn event_text(event: &Event, day: u32, sessions: &BTreeMap<Uuid, String>) -> Str
     if let Some(name) = event.session.and_then(|id| sessions.get(&id)) {
         out.push_str(&format!("  - Session: [[{}]]\n", clean(name)));
     }
+    out.push_str(&checks_text(event));
     for (key, value) in &event.extra {
         if let Some(key) = key.as_str() {
             let yaml = serde_yaml_ng::to_string(value).unwrap_or_default();
@@ -587,6 +624,42 @@ pub fn patch(
         }
         if !addition.is_empty() {
             edits.push((row.head.range.end..row.head.range.end, addition));
+        }
+        if row.event.checks_table != event.checks_table || row.event.checks != event.checks {
+            // The checks' lines are the event's, as its other fields are: they go in one place.
+            let owned: Vec<&Line> = row
+                .lines
+                .iter()
+                .filter(|l| {
+                    l.text
+                        .trim_start()
+                        .strip_prefix("- ")
+                        .and_then(|item| item.split_once(':'))
+                        .is_some_and(|(label, _)| is_check_label(label))
+                })
+                .collect();
+            let replacement = checks_text(event).replace('\n', newline);
+            if let Some((first, rest)) = owned.split_first() {
+                edits.push((first.range.clone(), replacement));
+                for line in rest {
+                    edits.push((line.range.clone(), String::new()));
+                }
+            } else {
+                let at = row
+                    .lines
+                    .iter()
+                    .find(|l| l.text.trim_start().starts_with("%% splat "))
+                    .map(|l| l.range.start)
+                    .or_else(|| row.lines.last().map(|l| l.range.end))
+                    .unwrap_or(row.head.range.end);
+                // The file's last line can end with no line break.
+                let lead = if text[..at].ends_with('\n') {
+                    ""
+                } else {
+                    newline
+                };
+                edits.push((at..at, format!("{lead}{replacement}")));
+            }
         }
     }
     for (index, event) in events
@@ -850,6 +923,95 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(!parse(&edited).0[0].extra.contains_key("loot"));
+    }
+
+    #[test]
+    fn t11_9_a_check_line_is_one_quoted_string_and_an_older_reader_keeps_it() {
+        let mut road = event(Kind::Travel, "t-road".into(), "Road".into());
+        road.duration = "2 days".into();
+        road.checks_table = Some("road".into());
+        road.checks = vec![
+            Check::new(0, "12 · Nothing stirs.".into()),
+            Check::new(24, "17 · A toll gang: they want \"5 gp\" each.".into()),
+        ];
+        let text = render(std::slice::from_ref(&road), &BTreeMap::new());
+        assert!(
+            text.contains("  - Checks table: road\n  - Check at 0h: \"12 · Nothing stirs.\"\n"),
+            "{text}"
+        );
+        assert_eq!(parse(&text).0, vec![road.clone()]);
+        // The reader of the format before travel checks keeps each line it does not know as a
+        // YAML value under its label, and writes it back. Each check is one string, also when
+        // its words hold `: `; a table that is not chosen yet comes back as no key.
+        let mut blank = road.clone();
+        blank.checks_table = Some(String::new());
+        for event in [road, blank] {
+            let text = render(std::slice::from_ref(&event), &BTreeMap::new());
+            let mut older = event.clone();
+            older.checks_table = None;
+            older.checks.clear();
+            for line in text.lines().filter_map(|line| line.strip_prefix("  - ")) {
+                let (label, value) = line.split_once(':').unwrap();
+                if is_check_label(label) {
+                    older
+                        .extra
+                        .insert(label.into(), unknown_value(value.trim()));
+                }
+            }
+            for check in &event.checks {
+                assert_eq!(
+                    older.extra.get(check.label.as_str()),
+                    Some(&serde_yaml_ng::Value::String(check.words.clone())),
+                    "{text}"
+                );
+            }
+            let written = render(std::slice::from_ref(&older), &BTreeMap::new());
+            assert_eq!(parse(&written).0, vec![event], "{written}");
+        }
+    }
+
+    #[test]
+    fn t11_9_checks_patch_their_own_lines_and_keep_the_dms() {
+        let text = "---\ntimeline_version: 2\n---\n\n- Travel: **Road** ^t-road\n  - Duration: 2 days\n  - weather: rain\n  %% splat order=3 %%\n\nDM prose.\n";
+        let mut events = parse(text).0;
+        events[0].checks_table = Some(String::new());
+        let chosen = patch(text, &events, &BTreeMap::new(), false).unwrap();
+        assert_eq!(
+            chosen,
+            text.replace("  %% splat", "  - Checks table:\n  %% splat")
+        );
+        events[0].checks_table = Some("road".into());
+        events[0].checks = vec![
+            Check::new(0, "3 · Rain.".into()),
+            Check::new(24, "16 · [[Wolf Pack]] pick up the trail.".into()),
+        ];
+        let rolled = patch(&chosen, &events, &BTreeMap::new(), false).unwrap();
+        assert_eq!(parse(&rolled).0, events);
+        // An edit in Obsidian: plain words, which Splat shows as they are. Clear takes out only
+        // the line with that label.
+        let edited = rolled.replace(
+            "\"16 · [[Wolf Pack]] pick up the trail.\"",
+            "16 · Two wolves, driven off.",
+        );
+        let mut events = parse(&edited).0;
+        assert_eq!(events[0].checks[1].words, "16 · Two wolves, driven off.");
+        events[0]
+            .checks
+            .retain(|check| check.label != "Check at 24h");
+        let cleared = patch(&edited, &events, &BTreeMap::new(), false).unwrap();
+        assert_eq!(
+            cleared,
+            text.replace(
+                "  %% splat",
+                "  - Checks table: road\n  - Check at 0h: \"3 · Rain.\"\n  %% splat"
+            )
+        );
+        // A last line with no line break still gets the checks on lines of their own.
+        let bare = "- Travel: **Road** ^t-road\n  - Duration: 2 days";
+        let mut events = parse(bare).0;
+        events[0].checks_table = Some("road".into());
+        let after = patch(bare, &events, &BTreeMap::new(), false).unwrap();
+        assert_eq!(after, format!("{bare}\n  - Checks table: road\n"));
     }
 
     #[test]

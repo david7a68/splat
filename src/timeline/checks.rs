@@ -1,0 +1,798 @@
+//! A journey's encounter checks: one roll on a marked table for each day or watch of a Travel
+//! event, kept in that event's lines of `Timeline.md` by its offset from the journey's start.
+//! The plan's Travel row and Timeline's detail column draw the same block from here.
+use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
+use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
+use crate::roll_table::{PER_NOT_READ, Per, Table};
+use eframe::egui;
+use splat::execution::dice::Random;
+use std::collections::BTreeMap;
+
+/// A journey with more checks than this lists none: it is too long to roll here.
+const MOST_CHECKS: usize = 31;
+/// The most `Plan “…”` offers under one result.
+const MOST_OFFERS: usize = 3;
+
+/// What the DM asked for in a journey's checks. One press in a frame.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Act {
+    /// `Roll for encounters`: the block, on the table that the earlier choices name.
+    Start,
+    /// A table from the menu, or `No checks`.
+    Choose(Option<String>),
+    /// `Roll` on one line, or `Roll all`: the offsets in hours.
+    Roll(Vec<u64>),
+    /// `Enter a roll`: a player's own roll for one line.
+    Enter(u64, i64),
+    /// `Clear` on a result: its label and its words.
+    Clear(String, String),
+    /// `Plan “<name>”` on a result that links an encounter or a group.
+    Plan(String),
+}
+
+/// Whether this journey shows its checks: the DM chose `Roll for encounters` on it.
+pub fn shown(event: &Event) -> bool {
+    event.kind == Kind::Travel && (event.checks_table.is_some() || !event.checks.is_empty())
+}
+
+/// Whether a row's menu offers `Roll for encounters`: a journey with no checks yet, in a
+/// campaign that has a marked table.
+pub fn offered(event: &Event, tables: &[Table]) -> bool {
+    event.kind == Kind::Travel && !shown(event) && !tables.is_empty()
+}
+
+/// The table a journey's checks start on. One table: that one. Several: the table of the
+/// journey with checks that is latest on the Timeline, while that table is there. Else no
+/// table, and the DM chooses. Never a key's name or a file's order.
+pub fn first_table(events: &[Event], id: &str, tables: &[Table]) -> String {
+    if let [table] = tables {
+        return table.key.clone();
+    }
+    events
+        .iter()
+        .rev()
+        .filter(|event| event.id != id && event.kind == Kind::Travel)
+        .find_map(|event| event.checks_table.as_ref().filter(|key| !key.is_empty()))
+        .filter(|key| tables.iter().any(|table| table.key == **key))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// The chosen table, when the campaign still has it.
+fn chosen<'a>(event: &Event, tables: &'a [Table]) -> Option<&'a Table> {
+    let key = event
+        .checks_table
+        .as_deref()
+        .filter(|key| !key.is_empty())?;
+    tables.iter().find(|table| table.key == key)
+}
+
+/// The length in minutes, when the clock can read it and it is more than nothing.
+fn minutes(length: &str) -> Option<u64> {
+    read_duration(length.trim()).filter(|minutes| *minutes > 0)
+}
+
+/// Whether a check at this offset is one of the journey's: a whole interval from the start,
+/// and before the end.
+fn fits(at: u64, every: u64, length: Option<u64>) -> bool {
+    at.is_multiple_of(every) && (at == 0 || length.is_some_and(|minutes| at * HOUR < minutes))
+}
+
+/// The offsets of a journey's checks, in hours: one at each whole interval from the start, and
+/// none at the end. An empty length, or one the clock cannot read, has one. Too many is a count.
+pub fn offsets(length: &str, every: u64) -> Result<Vec<u64>, usize> {
+    let Some(minutes) = minutes(length) else {
+        return Ok(vec![0]);
+    };
+    let count = minutes.div_ceil(every * HOUR);
+    if count > MOST_CHECKS as u64 {
+        return Err(count as usize);
+    }
+    Ok((0..count).map(|at| at * every).collect())
+}
+
+/// A check's name, read from the clock: `Day 3` for a day, `Day 3, 08:00` for a watch or for
+/// hours. A journey before the first day counts its own days from one.
+pub fn name(start: Option<u64>, at: u64, per: &Per) -> String {
+    let minute = start.unwrap_or(0) + at * HOUR;
+    match per {
+        Per::Day | Per::NotRead(_) => format!("Day {}", minute / DAY + 1),
+        Per::Watch | Per::Hours(_) => clock_words(minute),
+    }
+}
+
+/// The result of a Timeline act, with its Undo. It lasts while the event is as the act left
+/// it, with no time limit; the page drops it when the DM leaves.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Done {
+    pub id: String,
+    before: Event,
+    after: Event,
+    pub words: String,
+    pub undo: &'static str,
+}
+
+impl Done {
+    pub fn live(&self, book: &Book) -> bool {
+        book.events.iter().find(|event| event.id == self.id) == Some(&self.after)
+    }
+
+    /// Put the event back as it was before the act, while nothing else changed it.
+    pub fn undo(&self, book: &mut Book) {
+        if !self.live(book) {
+            return;
+        }
+        if let Some(event) = book.events.iter_mut().find(|event| event.id == self.id) {
+            event.clone_from(&self.before);
+            book.touch();
+            book.save();
+        }
+    }
+}
+
+/// Change one journey's checks, and save the file. `Plan` is the session note's act, not this
+/// one's. The words come back when the act cannot
+/// happen; a result comes back when the act has one to show.
+pub fn apply(
+    book: &mut Book,
+    id: &str,
+    act: &Act,
+    tables: &[Table],
+) -> Result<Option<Done>, String> {
+    let first = first_table(&book.events, id, tables);
+    let event = book
+        .events
+        .iter_mut()
+        .find(|event| event.id == id)
+        .ok_or("This journey is gone from the Timeline.")?;
+    let before = event.clone();
+    let mut random = Random::seeded(crate::hermetic::new_uuid().as_u128() as u64);
+    let mut add = |event: &mut Event, at: u64, typed: Option<i64>| -> Result<(), String> {
+        let table = chosen(event, tables).ok_or("Choose a table first.")?;
+        let (value, row) = table.roll(typed)?.draw(&mut random)?;
+        // The words as the table has them, links and all, so the result can still name them.
+        let row = table.linked_words(value).map_or(row, str::to_owned);
+        let place = event
+            .checks
+            .iter()
+            .position(|check| check.at.is_some_and(|other| other > at))
+            .unwrap_or(event.checks.len());
+        event
+            .checks
+            .insert(place, Check::new(at, format!("{value} · {row}")));
+        Ok(())
+    };
+    let result = match act {
+        Act::Start => {
+            event.checks_table = Some(first);
+            Some((
+                "Encounter checks added to this journey.".to_owned(),
+                "Undo checks",
+            ))
+        }
+        Act::Choose(Some(key)) => {
+            event.checks_table = Some(key.clone());
+            None
+        }
+        Act::Choose(None) if !event.checks.is_empty() => {
+            return Err("Clear the results first.".to_owned());
+        }
+        Act::Choose(None) => {
+            event.checks_table = None;
+            None
+        }
+        Act::Roll(offsets) => {
+            for at in offsets {
+                if let Err(error) = add(event, *at, None) {
+                    event.clone_from(&before);
+                    return Err(error);
+                }
+            }
+            let rolled = design::count(offsets.len(), "travel check", "travel checks");
+            Some((format!("{rolled} rolled."), "Undo roll"))
+        }
+        Act::Enter(at, value) => {
+            add(event, *at, Some(*value))?;
+            Some(("1 travel check rolled.".to_owned(), "Undo roll"))
+        }
+        Act::Clear(label, words) => {
+            let at = event
+                .checks
+                .iter()
+                .position(|check| check.label == *label && check.words == *words)
+                .ok_or("That check changed on disk.")?;
+            event.checks.remove(at);
+            Some(("Check cleared.".to_owned(), "Undo clear"))
+        }
+        Act::Plan(_) => return Ok(None),
+    };
+    let after = event.clone();
+    if after == before {
+        return Ok(None);
+    }
+    book.touch();
+    book.save();
+    Ok(result.map(|(words, undo)| Done {
+        id: id.to_owned(),
+        before,
+        after,
+        words,
+        undo,
+    }))
+}
+
+/// What one open block needs from its page.
+pub struct View<'a> {
+    pub event: &'a Event,
+    /// The clock's minute at the journey's start, when a day sets it.
+    pub start: Option<u64>,
+    /// The length as the DM typed it, saved or not.
+    pub length: &'a str,
+    pub tables: &'a [Table],
+    /// For a name that a result links: nothing when it is not an encounter or a group, else
+    /// whether the plan has a row still to come for it.
+    pub planned: &'a dyn Fn(&str) -> Option<bool>,
+}
+
+/// What the DM typed in one block: a roll for each line, and the last line's fault.
+#[derive(Default)]
+pub struct State {
+    event: String,
+    typed: BTreeMap<u64, String>,
+    problem: Option<(Option<u64>, String)>,
+}
+
+impl State {
+    /// Keep what was typed for this journey only.
+    fn follow(&mut self, id: &str) {
+        if self.event != id {
+            *self = Self {
+                event: id.to_owned(),
+                ..Default::default()
+            };
+        }
+    }
+
+    /// An act that could not happen says why on its line.
+    pub fn failed(&mut self, act: &Act, error: String) {
+        let at = match act {
+            Act::Enter(at, _) => Some(*at),
+            Act::Roll(offsets) if offsets.len() == 1 => Some(offsets[0]),
+            _ => None,
+        };
+        self.problem = Some((at, error));
+    }
+
+    pub fn clear_problem(&mut self) {
+        self.problem = None;
+    }
+}
+
+/// The block's first line: `Encounter checks`, the table menu, and the dice with the interval.
+pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
+    state.follow(&view.event.id);
+    let c = colors();
+    let table = chosen(view.event, view.tables);
+    let mut act = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = design::S;
+        ui.label(Type::Small.rich(ui, "Encounter checks").color(c.muted));
+        let word = match (table, view.event.checks_table.as_deref()) {
+            (Some(table), _) => table.name(),
+            (None, Some(key)) if !key.is_empty() => "Table not found",
+            _ => "Choose a table",
+        };
+        let button = design::menu_button(ui, word, false);
+        egui::Popup::menu(&button).show(|ui| {
+            let mut names: Vec<&Table> = view.tables.iter().collect();
+            names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
+            for option in names {
+                let selected = table.is_some_and(|table| table.key == option.key);
+                if ui.selectable_label(selected, option.name()).clicked() {
+                    act = Some(Act::Choose(Some(option.key.clone())));
+                    ui.close();
+                }
+            }
+            ui.separator();
+            let results = !view.event.checks.is_empty();
+            if Action::quiet("No checks")
+                .blocked_if(results, "Clear the results first.")
+                .show(ui)
+                .clicked()
+            {
+                act = Some(Act::Choose(None));
+                ui.close();
+            }
+            if results {
+                design::blocked_reason(ui, Some("Clear the results first."));
+            }
+        });
+        if let Some(table) = table {
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("· {} {}", table.dice, table.per.words()))
+                    .color(c.muted),
+            );
+        }
+    });
+    if let Some(fault) = table.and_then(Table::fault) {
+        design::status(
+            ui,
+            Status {
+                icon: icons::WARN,
+                word: "Cannot roll",
+                color: c.document.external,
+            },
+        )
+        .on_hover_text(fault);
+    } else if table.is_some_and(|table| matches!(table.per, Per::NotRead(_))) {
+        design::small_message(ui, Tone::Warning, PER_NOT_READ);
+    }
+    act
+}
+
+/// The span of the journey on the clock, for the line under **How long**.
+pub fn span(start: Option<u64>, length: &str) -> Option<String> {
+    let start = start?;
+    let end = start + minutes(length)?;
+    Some(format!("{} to {}", clock_words(start), clock_words(end)))
+}
+
+/// One line for each check, then `Roll all`, then results that are no longer on a line.
+pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
+    state.follow(&view.event.id);
+    let c = colors();
+    let table = chosen(view.event, view.tables);
+    let per = table.map_or(Per::Day, |table| table.per.clone());
+    let every = per.hours();
+    let length = minutes(view.length);
+    let blocked = match table {
+        None => Some("Choose a table first."),
+        Some(table) if table.problem.is_some() => Some("Cannot roll"),
+        Some(_) => None,
+    };
+    let named = |at: u64| {
+        if length.is_none() && at == 0 {
+            "This journey".to_owned()
+        } else {
+            name(view.start, at, &per)
+        }
+    };
+    let schedule = offsets(view.length, every);
+    let listed = schedule.clone().unwrap_or_default();
+    let placed = |check: &Check| {
+        check.at.is_some_and(|at| match &schedule {
+            Ok(listed) => listed.contains(&at),
+            Err(_) => fits(at, every, length),
+        })
+    };
+    // Each result on its line, or a line to roll, in the journey's order.
+    let mut rows: Vec<(String, Option<&Check>, u64)> = Vec::new();
+    for at in &listed {
+        let results: Vec<&Check> = view
+            .event
+            .checks
+            .iter()
+            .filter(|check| check.at == Some(*at))
+            .collect();
+        if results.is_empty() {
+            rows.push((named(*at), None, *at));
+        }
+        rows.extend(
+            results
+                .into_iter()
+                .map(|check| (named(*at), Some(check), *at)),
+        );
+    }
+    if schedule.is_err() {
+        let mut far: Vec<&Check> = view.event.checks.iter().filter(|c| placed(c)).collect();
+        far.sort_by_key(|check| check.at);
+        rows.extend(far.into_iter().map(|check| {
+            let at = check.at.unwrap_or_default();
+            (named(at), Some(check), at)
+        }));
+    }
+    let outside: Vec<(String, &Check)> = view
+        .event
+        .checks
+        .iter()
+        .filter(|check| !placed(check))
+        .map(|check| {
+            let label = check
+                .at
+                .map_or_else(|| check.label.clone(), |at| name(view.start, at, &per));
+            (label, check)
+        })
+        .collect();
+    let font = Type::Small.font(ui);
+    let column = rows
+        .iter()
+        .map(|(label, _, _)| label)
+        .chain(outside.iter().map(|(label, _)| label))
+        .map(|label| design::number_width(ui, label, &font))
+        .fold(0.0, f32::max)
+        + design::S;
+    let mut act = None;
+    let mut line = |ui: &mut egui::Ui, label: &str, check: Option<&Check>, at: Option<u64>| {
+        let mut act = None;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = design::S;
+            ui.allocate_ui_with_layout(
+                egui::vec2(column, Density::Read.control()),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_size(egui::vec2(column, Density::Read.control()));
+                    ui.label(Type::Small.rich(ui, label).color(c.muted));
+                },
+            );
+            match check {
+                Some(check) => {
+                    if let Some(found) = result(ui, label, check, view.planned) {
+                        act = Some(found);
+                    }
+                }
+                None => {
+                    let at = at.unwrap_or_default();
+                    if Action::secondary("Roll")
+                        .icon(icons::DICE)
+                        .name(&format!("Roll for {label}"))
+                        .density(Density::Read)
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked()
+                    {
+                        act = Some(Act::Roll(vec![at]));
+                    }
+                    let typed = state.typed.entry(at).or_default();
+                    let field = ui
+                        .add_enabled_ui(blocked.is_none(), |ui| {
+                            design::number_field(
+                                ui,
+                                &format!("Enter a roll for {label}"),
+                                typed,
+                                "Enter a roll",
+                                design::XXL * 3.0,
+                                Density::Read.control(),
+                            )
+                        })
+                        .inner;
+                    if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        match typed.trim().parse::<i64>() {
+                            Ok(value) => act = Some(Act::Enter(at, value)),
+                            Err(_) if typed.trim().is_empty() => {}
+                            Err(_) => {
+                                state.problem = Some((Some(at), "Type a whole number.".into()));
+                            }
+                        }
+                        typed.clear();
+                    }
+                }
+            }
+        });
+        if let Some((Some(place), problem)) = &state.problem
+            && check.is_none()
+            && at == Some(*place)
+        {
+            design::small_message(ui, Tone::Warning, problem);
+        }
+        act
+    };
+    for (label, check, at) in &rows {
+        act = line(ui, label, *check, Some(*at)).or(act);
+    }
+    if table.is_none() {
+        design::blocked_reason(ui, blocked);
+    }
+    if let Err(count) = schedule {
+        design::small_message(
+            ui,
+            Tone::Info,
+            &format!(
+                "This journey has {count} checks. Split it into shorter journeys to roll them here."
+            ),
+        );
+    }
+    let waiting: Vec<u64> = rows
+        .iter()
+        .filter(|(_, check, _)| check.is_none())
+        .map(|(_, _, at)| *at)
+        .collect();
+    if waiting.len() > 1 {
+        ui.add_space(design::XS);
+        if Action::secondary(&format!("Roll all {}", waiting.len()))
+            .icon(icons::DICE)
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
+        {
+            act = Some(Act::Roll(waiting));
+        }
+    }
+    if !outside.is_empty() {
+        ui.add_space(design::XS);
+        ui.label(
+            Type::Small
+                .rich(ui, "Outside this journey now")
+                .color(c.muted),
+        );
+        for (label, check) in &outside {
+            act = line(ui, label, Some(check), None).or(act);
+        }
+    }
+    if let Some((None, problem)) = &state.problem {
+        design::small_message(ui, Tone::Warning, problem);
+    }
+    act
+}
+
+/// A result: its number and words, `Clear` at the line's end, and an offer for each encounter
+/// or group that it links.
+fn result(
+    ui: &mut egui::Ui,
+    label: &str,
+    check: &Check,
+    planned: &dyn Fn(&str) -> Option<bool>,
+) -> Option<Act> {
+    let c = colors();
+    let mut act = None;
+    let clear_name = format!("Clear the check for {label}");
+    let clear = Action::quiet("Clear")
+        .name(&clear_name)
+        .density(Density::Read);
+    let width = (ui.available_width() - clear.natural_width(ui) - design::S).max(0.0);
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_width(width);
+            ui.add_space((Density::Read.control() - Type::Body.size()) / 2.0 - design::XS);
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(ui, crate::sessions::plain_links(&check.words))
+                        .color(c.text),
+                )
+                .wrap(),
+            );
+            let mut names = crate::sessions::linked_names(&check.words);
+            names.retain(|name| planned(name).is_some());
+            for name in names.into_iter().take(MOST_OFFERS) {
+                if planned(&name) == Some(true) {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::OK,
+                            word: "In the plan",
+                            color: c.document.saved,
+                        },
+                    );
+                } else if Action::quiet(&format!("Plan “{name}”"))
+                    .line_start()
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    act = Some(Act::Plan(name));
+                }
+            }
+        },
+    );
+    if clear.show(ui).clicked() {
+        act = Some(Act::Clear(check.label.clone(), check.words.clone()));
+    }
+    act
+}
+
+/// **How long**, the Timeline's field. The file takes the words on Enter or when the field
+/// loses focus; until then the page shows what was typed. Returns the words in view, and
+/// whether the event took a new length.
+pub fn length_input(
+    ui: &mut egui::Ui,
+    draft: &mut Option<(String, String)>,
+    event: &mut Event,
+    hint: &str,
+    focus: bool,
+) -> (String, bool) {
+    let mut words = match draft {
+        Some((id, words)) if *id == event.id => words.clone(),
+        _ => event.duration.clone(),
+    };
+    let response = design::text_input(ui, "How long", &mut words, hint, ui.available_width());
+    if focus {
+        response.request_focus();
+    }
+    let mut changed = false;
+    if response.has_focus() {
+        *draft = Some((event.id.clone(), words.clone()));
+    } else if draft.as_ref().is_some_and(|(id, _)| *id == event.id) {
+        // Enter, or focus gone elsewhere.
+        changed = words != event.duration;
+        event.duration.clone_from(&words);
+        *draft = None;
+    }
+    (words, changed)
+}
+
+/// A length typed for a journey whose field is no longer in view: its event takes it, as the
+/// field would have when it lost focus.
+pub fn settle_length(book: &mut Book, draft: &mut Option<(String, String)>, shown: Option<&str>) {
+    if draft
+        .as_ref()
+        .is_none_or(|(id, _)| Some(id.as_str()) == shown)
+    {
+        return;
+    }
+    let Some((id, words)) = draft.take() else {
+        return;
+    };
+    if let Some(event) = book.events.iter_mut().find(|event| event.id == id)
+        && event.duration != words
+    {
+        event.duration = words;
+        book.touch();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::roll_table::RollRow;
+
+    fn table(key: &str, heading: &str, per: Per) -> Table {
+        Table {
+            key: key.into(),
+            dice: "1d20".into(),
+            path: "Road.md".into(),
+            heading: Some(heading.into()),
+            per,
+            problem: None,
+            rows: vec![
+                RollRow {
+                    min: 1,
+                    max: 14,
+                    text: "Nothing stirs.".into(),
+                },
+                RollRow {
+                    min: 15,
+                    max: 20,
+                    text: "Wolf Pack pick up the trail.".into(),
+                },
+            ],
+            markup: vec![
+                "Nothing stirs.".into(),
+                "[[Wolf Pack]] pick up the trail.".into(),
+            ],
+        }
+    }
+
+    fn journey(id: &str, key: Option<&str>) -> Event {
+        Event {
+            id: id.into(),
+            kind: Kind::Travel,
+            title: String::new(),
+            duration: String::new(),
+            place: String::new(),
+            notes: String::new(),
+            result: String::new(),
+            session: None,
+            run: None,
+            marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
+            checks_table: key.map(str::to_owned),
+            checks: Vec::new(),
+            extra: Default::default(),
+        }
+    }
+
+    #[test]
+    fn t11_9_one_check_at_each_whole_interval_and_none_at_the_end() {
+        assert_eq!(offsets("2 days", 24), Ok(vec![0, 24]));
+        assert_eq!(offsets("2 days", 8), Ok(vec![0, 8, 16, 24, 32, 40]));
+        assert_eq!(offsets("36 hours", 24), Ok(vec![0, 24]));
+        for length in ["", "a while", "0 days"] {
+            assert_eq!(offsets(length, 24), Ok(vec![0]), "{length}");
+        }
+        assert_eq!(offsets("10 days", 1), Err(240));
+        assert_eq!(name(Some(2 * DAY + 8 * HOUR), 24, &Per::Day), "Day 4");
+        assert_eq!(
+            name(Some(2 * DAY + 8 * HOUR), 8, &Per::Watch),
+            "Day 3, 16:00"
+        );
+        assert_eq!(name(None, 24, &Per::Day), "Day 2");
+        assert_eq!(
+            span(Some(2 * DAY + 8 * HOUR), "2 days").as_deref(),
+            Some("Day 3, 08:00 to Day 5, 08:00")
+        );
+    }
+
+    #[test]
+    fn t11_10_the_first_table_follows_the_four_cases_never_a_key_or_file_order() {
+        let road = table("road", "On the road", Per::Day);
+        let sea = table("sea", "At sea", Per::Watch);
+        let alone = [road.clone()];
+        let both = [road.clone(), sea.clone()];
+        let earlier = [
+            journey("a", Some("sea")),
+            journey("b", Some("road")),
+            journey("c", Some("")),
+            journey("this", None),
+        ];
+        // One marked table: that one, whatever came before.
+        assert_eq!(first_table(&earlier, "this", &alone), "road");
+        // Several: the latest journey on the Timeline with a chosen table.
+        assert_eq!(first_table(&earlier, "this", &both), "road");
+        let mut moved = earlier.clone();
+        moved.swap(0, 1);
+        assert_eq!(first_table(&moved, "this", &both), "sea");
+        // Several and no earlier choice, or an earlier choice whose table is gone: none.
+        assert_eq!(first_table(&earlier[2..], "this", &both), "");
+        assert_eq!(
+            first_table(&earlier, "this", &[sea, table("x", "X", Per::Day)]),
+            ""
+        );
+    }
+
+    #[test]
+    fn t11_9_acts_keep_results_through_a_new_length_and_undo_their_own_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let id = book.add(Kind::Travel, None);
+        let other = book.add(Kind::Travel, None);
+        let tables = [table("road", "On the road", Per::Day)];
+        let started = apply(&mut book, &id, &Act::Start, &tables)
+            .unwrap()
+            .unwrap();
+        assert_eq!(started.words, "Encounter checks added to this journey.");
+        assert_eq!(book.events[0].checks_table.as_deref(), Some("road"));
+        crate::hermetic::closed::repeatable_uuids(5);
+        let rolled = apply(&mut book, &id, &Act::Roll(vec![0, 24]), &tables)
+            .unwrap()
+            .unwrap();
+        assert_eq!(rolled.words, "2 travel checks rolled.");
+        assert!(!started.live(&book), "a later act ends the earlier Undo");
+        let saved = std::fs::read_to_string(dir.path().join(super::super::FILE)).unwrap();
+        assert!(saved.contains("  - Check at 24h: \""), "{saved}");
+        // A typed roll that no row has says so, and changes nothing.
+        let typed = apply(&mut book, &id, &Act::Enter(48, 25), &tables);
+        assert_eq!(typed, Err("1d20 rolled 25, and no row has it.".to_owned()));
+        let entered = apply(&mut book, &id, &Act::Enter(48, 16), &tables)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            book.events[0].checks[2].words,
+            "16 · [[Wolf Pack]] pick up the trail."
+        );
+        // An unrelated act B on another journey, then Undo of A: only A's step goes.
+        apply(&mut book, &other, &Act::Start, &tables).unwrap();
+        assert!(entered.live(&book));
+        entered.undo(&mut book);
+        assert_eq!(book.events[0].checks.len(), 2);
+        assert_eq!(book.events[1].checks_table.as_deref(), Some("road"));
+        // A shorter journey deletes no result; `No checks` waits until they are cleared.
+        assert_eq!(offsets("1 day", 24), Ok(vec![0]));
+        assert_eq!(book.events[0].checks.len(), 2);
+        let refused = apply(&mut book, &id, &Act::Choose(None), &tables);
+        assert_eq!(refused, Err("Clear the results first.".to_owned()));
+        for check in book.events[0].checks.clone() {
+            let cleared = apply(
+                &mut book,
+                &id,
+                &Act::Clear(check.label, check.words),
+                &tables,
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                (cleared.words.as_str(), cleared.undo),
+                ("Check cleared.", "Undo clear")
+            );
+        }
+        apply(&mut book, &id, &Act::Choose(None), &tables).unwrap();
+        assert!(!shown(&book.events[0]));
+        assert!(offered(&book.events[0], &tables) && !offered(&book.events[0], &[]));
+    }
+}

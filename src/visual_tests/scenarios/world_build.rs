@@ -2385,7 +2385,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
 }
 
 pub fn tables(d: &mut Driver<'_>) {
-    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
+    let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 per=fortnight -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
     let body = body.replace(
         "<!-- splat:rolls key=words",
         &format!(
@@ -2401,6 +2401,12 @@ pub fn tables(d: &mut Driver<'_>) {
         "W6",
         "Table faults appear in the World list and warning count",
         |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+    );
+    // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
+    d.observe(
+        "T11.9",
+        d.visible_text(crate::roll_table::PER_NOT_READ) && d.has("Roll 1d6"),
+        "An interval that cannot be read warns on its table",
     );
     d.state("authored-table-validation", Sizes::All);
     d.observe_both(
@@ -2481,6 +2487,20 @@ pub fn tables(d: &mut Driver<'_>) {
             )
         })
     };
+    // F9: the descriptor holds the interval. With no `per`, a journey checks each day; a word
+    // that cannot be read also checks each day.
+    let per = |key: &str| {
+        tables
+            .iter()
+            .find(|table| table.key == key)
+            .map(|table| table.per.clone())
+    };
+    d.observe(
+        "P5-table-interval",
+        per("forced_trip") == Some(crate::roll_table::Per::Day)
+            && per("valid") == Some(crate::roll_table::Per::NotRead("fortnight".into())),
+        format!("Each table names how often a journey rolls it: {tables:?}"),
+    );
     // A note's title is its name, not a heading above the table; a `##` heading is one.
     d.observe(
         "P1c-table-descriptor",
