@@ -1504,6 +1504,9 @@ fn creature_result_row(
                         .density(Density::Read)
                         .natural_width(ui)
                     + design::M
+                    // The gaps between the words and both buttons: the results keep the scroll
+                    // bar's lane (FH3), so nothing may spill into it.
+                    + 2.0 * ui.spacing().item_spacing.x
             } else {
                 design::S * 12.0
             };
@@ -5460,33 +5463,11 @@ impl Encounters {
                 // other change too.
                 let save_key = blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-                // AF1: the state, Discard and the reasons start the row and Save ends it, as on
-                // every save row. Without room, the state's words wrap before Save.
-                let pressed = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), Density::Scan.control()),
-                        egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let pressed = {
-                        if run_files > 0 && !run_open {
-                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
-                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
-                            if move_runs {
-                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
-                                    Ok(warning) => { settings_saved = true; error = warning; },
-                                    Err(e) => error = Some(e),
-                                }
-                            }
-                            leave_runs
-                        } else {
-                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
-                                .blocked(blocked).show(ui).clicked();
-                            design::blocked_reason(ui, blocked.filter(|_| changed));
-                            pressed
-                        }
-                        };
-                        ui.with_layout(
-                            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
-                            |ui| {
+                // The save state, Discard and the reasons; then Save, or the two run-moving
+                // choices.
+                macro_rules! save_state {
+                    ($ui:ident) => {{
+                        let ui = &mut *$ui;
                 if changed {
                     self.discarded_options = None;
                     design::status(
@@ -5535,11 +5516,57 @@ impl Encounters {
                         }),
                     );
                 }
-                            },
-                        );
-                        pressed
-                    })
-                    .inner;
+                    }};
+                }
+                macro_rules! save_actions {
+                    ($ui:ident) => {{
+                        let ui = &mut *$ui;
+                        if run_files > 0 && !run_open {
+                            let move_runs = Action::primary("Move runs and save").show(ui).clicked();
+                            let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
+                            if move_runs {
+                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
+                                    Ok(warning) => { settings_saved = true; error = warning; },
+                                    Err(e) => error = Some(e),
+                                }
+                            }
+                            leave_runs
+                        } else {
+                            let pressed = Action::primary("Save run settings").key("Ctrl+S")
+                                .blocked(blocked).show(ui).clicked();
+                            design::blocked_reason(ui, blocked.filter(|_| changed));
+                            pressed
+                        }
+                    }};
+                }
+                // AF1: with one Save, the state starts the row and Save ends it, as on every save
+                // row; without room, the state's words wrap before Save. The two run-moving
+                // choices need the width, so they take the row below the state.
+                let one_row = run_files == 0 || run_open;
+                let pressed = if one_row {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let pressed = save_actions!(ui);
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center)
+                                    .with_main_wrap(true),
+                                |ui| save_state!(ui),
+                            );
+                            pressed
+                        },
+                    )
+                    .inner
+                } else {
+                    ui.horizontal(|ui| save_state!(ui));
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), Density::Scan.control()),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| save_actions!(ui),
+                    )
+                    .inner
+                };
                 if (pressed || save_key) && !run_open {
                     if folder_changed && let Err(e) = &left { error = Some(e.clone()); return; }
                     match snapshot.options.save(&active, &snapshot.campaign_text) {
