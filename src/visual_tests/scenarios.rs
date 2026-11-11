@@ -3683,6 +3683,8 @@ pub mod dialogs {
                     && (save.center().y - keep.center().y).abs() < 1.0
             },
         );
+        // Round 24 FE6: the help names the three choices in the order the DM reads them.
+        d.expect("Save and close, keep editing, or close and lose these changes.");
         d.state("unsaved-changes-on-close", Sizes::All);
         d.goal("ask to close with unsaved changes");
 
@@ -8271,6 +8273,8 @@ pub mod session_notes {
     pub fn run(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         d.expect("No session notes yet");
+        // Round 24 FF7: the empty state says what a session gives, not how it is stored.
+        d.expect("Start a session from a template. It holds tonight’s plan and your notes.");
         d.state("sessions-empty", Sizes::Default);
         d.check_tab_order("sessions-empty");
 
@@ -8348,6 +8352,17 @@ pub mod session_notes {
         d.replace_editor_text(&draft);
         d.press_ctrl(Key::S);
         d.expect("Notes saved");
+        // Round 24 FL5: a note just written says `Notes saved` in the same muted colour as a
+        // note opened unchanged, here and in the Notes panel beside a run.
+        let saved = format!("{} Notes saved", crate::design::icons::OK);
+        d.observe(
+            "iter-24-S-FL5",
+            d.painted_color(&saved) == Some(crate::design::colors().document.clean),
+            format!(
+                "A written note's `Notes saved` is muted: {:?}",
+                d.painted_color(&saved)
+            ),
+        );
         d.state("session-written", Sizes::Default);
 
         read_note(d);
@@ -8459,9 +8474,9 @@ pub mod session_notes {
                 .any(|node| node.name == ADD_LONG_REST && node.fully_in_view())
         );
         d.click(ADD_LONG_REST);
-        d.wait_for_text("Long rest added. Everyone starts the next fight at full.");
+        d.wait_for_text("Long rest added to Session 1. Everyone starts the next fight at full.");
         d.goal_within("T11.2", "put a long rest on the timeline", 2);
-        d.expect("Long rest added. Everyone starts the next fight at full.");
+        d.expect("Long rest added to Session 1. Everyone starts the next fight at full.");
         d.state("session-event-added", Sizes::Default);
         d.click_add_event(ADD_SHORT_REST);
         d.observe(
@@ -8665,9 +8680,10 @@ pub mod session_notes {
         d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
         d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link in notes");
-        d.expect("Undo update links");
+        d.expect("Links now say “Rest at the mill”.");
+        d.expect("Undo link update");
         d.state("event-links-updated", Sizes::Default);
-        d.click("Undo update links");
+        d.click("Undo link update");
         d.expect("Update 1 link in notes");
         d.click("Update 1 link in notes");
         d.click_starting("Rest at the mill ·");
@@ -8675,7 +8691,7 @@ pub mod session_notes {
         d.settle();
         d.observe(
             "iter-4-S2",
-            !d.has("Undo update links"),
+            !d.has("Undo link update"),
             "Leaving Timeline clears the link-update Undo",
         );
         read_note(d);
@@ -9320,6 +9336,16 @@ pub mod session_notes {
             &["Play it tonight", "New session"],
             None,
             &[DEFAULT],
+        );
+        // Round 24 FL4: both choices have no icon, so both have the secondary border and fill.
+        let frames = ["Play it tonight", "New session"].map(|name| {
+            d.control_frame(name)
+                .map(|frame| (frame.stroke, frame.fill))
+        });
+        d.observe(
+            "iter-24-S-FL4",
+            frames[0].is_some_and(|(stroke, _)| stroke.width > 0.0) && frames[0] == frames[1],
+            format!("`New session` has the border of `Play it tonight`: {frames:?}"),
         );
         d.state("run-with-old-note", Sizes::Default);
         // The action bar above the dock sits an `XS` gap apart from it, and its first button
@@ -10124,7 +10150,39 @@ pub mod session_recording {
         d.state_prepared("stalled-elsewhere-with-unprocessed-row", Sizes::All, |d| {
             d.expect("Session 2: Unprocessed recording");
             d.expect("Not processed");
-            d.expect("The recording of “Session 1: Failed processing” is not saving audio");
+            d.expect("The recording of “Session 1: Failed processing” stopped saving audio.");
+            // Round 24 FC7: on the line below the session title, only the icon and `Not saving
+            // audio` are red; the other session's time and title are muted.
+            let mut parts = Vec::new();
+            d.each_painted_text(|text, _| {
+                let job = &text.galley.job;
+                if job.text.contains("Not saving audio")
+                    && job.text.contains(" in Session 1: Failed processing")
+                {
+                    parts.extend(job.sections.iter().map(|section| {
+                        (
+                            job.text[section.byte_range.clone()].to_owned(),
+                            section.format.color,
+                        )
+                    }));
+                }
+            });
+            let c = crate::design::colors();
+            d.observe(
+                "iter-24-S-FC7",
+                parts
+                    .iter()
+                    .any(|(words, _)| words.contains("in Session 1"))
+                    && parts.iter().all(|(words, color)| {
+                        *color
+                            == if words.contains("in Session 1") {
+                                c.muted
+                            } else {
+                                c.result.error
+                            }
+                    }),
+                format!("Only the state is red on the other session's line: {parts:?}"),
+            );
             assert!(
                 d.nodes()
                     .iter()
@@ -10137,7 +10195,7 @@ pub mod session_recording {
         d.expect("Stop recording");
         d.observe(
             "iter-8-C-banner-restart",
-            !d.visible_text("is not saving audio"),
+            !d.visible_text("stopped saving audio"),
             "Record again clears the stalled recorder's warning",
         );
         d.app_mut()
@@ -10754,6 +10812,13 @@ pub mod session_recording {
             d.has_containing("Not saving audio"),
             "A stall shows in the rail on other pages",
         );
+        // Round 24 FJ7: the banner says what stopped and what is kept, in two sentences.
+        d.observe(
+            "iter-24-S-FJ7",
+            d.has_containing("” stopped saving audio. The first ")
+                && d.has_containing(" are kept. Record again starts a new file."),
+            "The stall banner says the recording stopped saving and how much is kept",
+        );
         d.state("recording-stalled-elsewhere", Sizes::Default);
         d.app_mut()
             .sessions
@@ -10810,23 +10875,50 @@ pub mod session_recording {
             },
         );
         d.state("processing-settings", Sizes::All);
+        // Round 24 FK6, FM1: help on this tab keeps the reader measure, as Account help does.
+        let helps = [
+            "Recording is your choice in each session.",
+            "Turns your recording into text.",
+            "Goes over the transcript twice:",
+        ]
+        .map(|start| {
+            d.nodes()
+                .iter()
+                .find(|node| node.name.starts_with(start))
+                .map(|node| node.rect.width())
+        });
+        d.observe(
+            "iter-24-S-FK6",
+            helps.iter().all(|width| {
+                width.is_some_and(|width| width <= crate::design::READER_MEASURE + 1.0)
+            }),
+            format!("Recording help widths stay within the reader measure: {helps:?}"),
+        );
+        // Round 24 AM2, FM2, FK1, SK1: the DM's words for the second service, not the code's.
+        d.observe(
+            "iter-24-S-AM2",
+            d.has("Transcript and summary instructions")
+                && !d.has_containing("LLM")
+                && !d.has_containing("sandbox"),
+            "The instructions section and the Codex help use the DM's words",
+        );
         d.observe(
             "T11.6",
-            d.field_text("LLM model").as_deref() == Some("gpt-6.1-sol")
+            d.field_text("Transcript and summary model").as_deref() == Some("gpt-6.1-sol")
                 && d.field_text("Speech model").as_deref() == Some("gpt-transcribe"),
             "The defaults are Sol through the Codex CLI, after OpenAI's gpt-transcribe",
         );
-        d.scroll_until(pos2(600.0, 400.0), "LLM service", 12);
-        d.click("LLM service");
+        d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
+        d.click("Transcript and summary service");
         d.state_prepared("processing-llm-choices", Sizes::Default, |d| {
             if !d.has("Anthropic") {
-                d.click("LLM service");
+                d.click("Transcript and summary service");
             }
             d.wait_for_text("Anthropic");
         });
         d.click("Anthropic");
         d.state("processing-settings-anthropic", Sizes::All);
-        d.click("LLM service");
+        d.click("Transcript and summary service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
 
@@ -10836,8 +10928,8 @@ pub mod session_recording {
         d.settle();
         // A key saved for one service is not sent to another.
         d.click("Recording and processing");
-        d.scroll_until(pos2(600.0, 400.0), "LLM service", 12);
-        d.click("LLM service");
+        d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
+        d.click("Transcript and summary service");
         d.click("Anthropic");
         d.observe(
             "T11.6",
@@ -10850,7 +10942,7 @@ pub mod session_recording {
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
             d.scroll_until(
                 pos2(600.0, 400.0),
-                "Remove transcript and summary key (OpenAI): LLM API key",
+                "Remove transcript and summary key (OpenAI): Transcript and summary API key",
                 12,
             );
             d.expect("Remove transcript and summary key (OpenAI)");
@@ -10859,8 +10951,14 @@ pub mod session_recording {
                 d.has_containing("Remove transcript and summary key (OpenAI)"),
                 "The key removal action names the transcript and summary task",
             );
+            // Round 24 FK3, SM1: a saved key says where it is in the DM's words.
+            d.observe(
+                "iter-24-S-FK3",
+                d.has_containing("Saved on this computer.") && !d.has_containing("keyring"),
+                "A saved key says it is saved on this computer",
+            );
         });
-        d.click("LLM service");
+        d.click("Transcript and summary service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
         d.click(NAV_SESSIONS);
@@ -11062,6 +11160,17 @@ pub mod session_recording {
         );
         d.expect("These events were suggested from the transcript. Only events you add go on the timeline.");
         d.state_prepared("marker-added", Sizes::All, |d| {
+            // Round 24 FK5: the result is not held to the marker rows' width, so `Undo add`
+            // follows its words on the message line.
+            let words = d.place_of("Rest at the mill added to the timeline.");
+            let undo = d.place_of("Undo add");
+            d.observe(
+                "iter-24-S-FK5",
+                words.zip(undo).is_some_and(|(words, undo)| {
+                    undo.left() > words.right() && undo.top() < words.bottom()
+                }),
+                format!("`Undo add` sits on the message line: {words:?}, {undo:?}"),
+            );
             check_events_gap(d, "iter-15-C-FT2");
             check_marker_columns(d);
             check_clean_row(d, "iter-11-C-FT3-marker");
@@ -11159,7 +11268,38 @@ pub mod session_recording {
             "Navigation and Add to notes share a line; all four view choices stay on the next line",
         );
         d.expect("This draft was written automatically. Check it against your memory.");
-        d.state("recording-summary", Sizes::All);
+        d.state_prepared("recording-summary", Sizes::All, |d| {
+            // Round 24 AM1: the viewer is one block. Prose and its rules keep the reader
+            // measure, and Add to notes ends at the block's edge, not the pane's far edge.
+            let measure = crate::design::READER_MEASURE;
+            let back = d.place_of("Back to recordings").unwrap();
+            let add = d.place_of("Add to notes").unwrap();
+            let views = d.place_of("Raw transcript").unwrap();
+            let below = egui::Rect::from_min_max(
+                pos2(back.left(), views.bottom()),
+                pos2(f32::INFINITY, f32::INFINITY),
+            );
+            let rules = d.hairlines_in(below);
+            let mut prose = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let bounds = text.visual_bounding_rect();
+                if below.contains(bounds.min) && clip.intersects(bounds) {
+                    prose.push(bounds.width());
+                }
+            });
+            let block = measure.max(views.right() - back.left());
+            d.observe(
+                "iter-24-S-AM1",
+                !rules.is_empty()
+                    && !prose.is_empty()
+                    && rules.iter().all(|rule| rule.width() <= measure + 1.0)
+                    && prose.iter().all(|width| *width <= measure + 1.0)
+                    && add.right() - back.left() <= block + 1.0,
+                format!(
+                    "Prose and rules keep {measure} px and Add to notes ends at the block: rules {rules:?}, prose {prose:?}, add {add:?}, back {back:?}"
+                ),
+            );
+        });
         d.click("Back to recordings");
 
         // A warning lasts as long as the result, past the message and the rail.
@@ -11521,6 +11661,33 @@ pub mod session_recording {
         d.click("Speech service");
         d.click("Another service");
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
+        // Round 24 FH4, AH1, SH1: after the choice, the notice shows whole, and the field that
+        // blocks processing says why below itself.
+        let notice = "You cannot process yet. Enter the speech service’s address.";
+        d.observe(
+            "iter-24-S-FH4",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains(notice) && node.fully_in_view()),
+            "The notice is whole in view after the DM chooses another service",
+        );
+        let address = d.place_of("Speech address");
+        let reason = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("Enter the address.") && node.fully_in_view())
+            .map(|node| node.rect);
+        let model = d.place_of("Speech model");
+        d.observe(
+            "iter-24-S-AH1",
+            address
+                .zip(reason)
+                .zip(model)
+                .is_some_and(|((address, reason), model)| {
+                    reason.top() >= address.bottom() && reason.bottom() <= model.top()
+                }),
+            format!("`Enter the address.` is in view below Address: {address:?}, {reason:?}"),
+        );
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
         d.state("processing-custom-speech-service", Sizes::All);
 
@@ -14582,11 +14749,6 @@ pub mod session_plan {
         assert!(d.in_view("Remove this event"));
         d.click("Remove this event");
         d.expect(&format!("Resume: {FIRST}"));
-        d.click(&format!("More actions for {FIRST}"));
-        assert!(d.in_view("Delete the saved run"));
-        d.click("Delete the saved run");
-        d.expect(&format!("Start fight: {FIRST}"));
-        assert!(!d.has(&format!("Resume: {FIRST}")));
         // AT2: the notice says which Bridge Ambush went, and that the planned one stays.
         let notice = format!("Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” stays.");
         d.observe(
@@ -14601,6 +14763,46 @@ pub mod session_plan {
                     .zip(d.place_of(FIRST))
                     .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
             "Undo remove stays with the notice, above the remaining row",
+        );
+        d.click(&format!("More actions for {FIRST}"));
+        assert!(d.in_view("Delete the saved run"));
+        d.click("Delete the saved run");
+        d.expect(&format!("Start fight: {FIRST}"));
+        assert!(!d.has(&format!("Resume: {FIRST}")));
+        // Round 24 FL3: one step gives one result. Deleting the saved run replaces the earlier
+        // removal's result in the plan, so the plan has one message and one Undo.
+        let undos = d
+            .nodes()
+            .iter()
+            .filter(|node| node.in_view() && node.name.starts_with("Undo"))
+            .map(|node| node.name.clone())
+            .collect::<Vec<_>>();
+        d.observe(
+            "iter-24-S-FL3",
+            undos == ["Undo delete run"]
+                && d.visible_text(&format!("Deleted the saved run of {FIRST}."))
+                && !d.visible_text(&notice),
+            format!("The plan shows one result and one Undo after two steps: {undos:?}"),
+        );
+        // Review of PR 245: Undo delete run ends only the deletion's result. The run comes back,
+        // and the removal's message and Undo show again; then delete the run again.
+        d.click("Undo delete run");
+        d.expect(&format!("Resume: {FIRST}"));
+        d.observe(
+            "iter-24-S-FL3-undo",
+            !d.has("Undo delete run")
+                && d.visible_text(&notice)
+                && d.in_view("Undo remove")
+                && d.in_view(&format!("Resume: {FIRST}")),
+            "Undo delete run brings the run back, and the removal's result returns",
+        );
+        d.click(&format!("More actions for {FIRST}"));
+        d.click("Delete the saved run");
+        d.expect(&format!("Start fight: {FIRST}"));
+        d.observe(
+            "iter-24-S-FL3",
+            !d.has("Undo remove") && d.in_view("Undo delete run"),
+            "Deleting the run again replaces the removal's result again",
         );
         // FT4: Timeline names the removed fight as the plan does.
         d.click(NAV_TIMELINE);
@@ -15164,7 +15366,7 @@ pub mod session_plan {
             "Undo removes both the rest and the full-HP ruling",
         );
         d.click("Add Long rest");
-        assert!(d.has("Long rest added. Everyone starts the next fight at full."));
+        assert!(d.has("Long rest added to Session 2. Everyone starts the next fight at full."));
         d.state("long-rest-restores", Sizes::All);
         d.click("Long rest");
         d.click("Mark not at full");

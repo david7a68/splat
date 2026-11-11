@@ -1295,7 +1295,8 @@ and for accessibility.
 Session title and muted date wrap together, with Record on the title line. Below 640 px, save state and
 Details sit beside Read on the content tab row. Read and Write sit there while notes are visible. An empty
 Read view keeps only its inline Write link; hide tab-row Write until the note has content. Notes saved
-centres on the title action row. Last time is one line linking the previous session and recap, with full recap
+centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
+(`document.clean`) on the session page and in the Notes panel, also just after a write. Last time is one line linking the previous session and recap, with full recap
 on hover. Without recap, use prose under What happened and omit link-only lines; without either, show the
 session link alone. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
@@ -1356,7 +1357,13 @@ Ambush” and its result stay.` The book owns that message and its Undo remove, 
 and they belong to the removed event's session. They end at an edit of that session's note, plan or Timeline
 events, and when combat begins in that session (its event reaches Timeline; opening Setup does not). Another
 session's edit, opening a note, a run's new round and a reload that leaves that session alone keep them. A
-newer removal replaces them. Undo puts the event back after the event that was before it. Plan additions offer Undo add. A recording count stays muted inside its tab and
+newer removal replaces them. One step gives one result in the plan: after a removal, Delete the saved run
+replaces the removal's message there, and Timeline keeps its Undo remove until the book's removal changes.
+Undo puts the event back after the event that was before it. Plan additions offer Undo add. Every Add result
+comes from one function: `<event> added to Session 2.` names the session it went to; a restoring long rest
+then says `Everyone starts the next fight at full.` Timeline lists every session, so its result names only
+the event. A Timeline event's link update uses the Library's words: `Links now say “<name>”.` with
+`Undo link update`. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. When the second line is too long, its `Last:` part gives up whole words first (`Last: 1 damage to
@@ -1495,7 +1502,10 @@ the only colour on the session page. While recording, rail status stays visible 
 audio saved, stopping when saving stops. One linked rail slot above account status opens the recording. Use
 Recording, Recording silence or Not saving audio consistently on rail and session. Silence has warning colour
 everywhere after a minute, including the run notice, and no banner. On the session page, only the icon and
-status word use warning colour; detail stays Small and muted. Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
+status word use warning colour; detail stays Small and muted. The line for a recording in another session
+does the same for Not saving audio: only its icon and word are red; time and session title stay Small and
+muted. The stall banner says `The recording of “<session>” stopped saving audio. The first <time> are kept.
+Record again starts a new file.` Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
 
 Recordings' live row owns sound state, duration, input help and Stop recording, beside Process. Hide its
 header status; Plan and notes retains the live header line. Other tabs keep header Stop recording. A row
@@ -1515,7 +1525,7 @@ primary when no open run owns it. Unresolved recording recovery takes priority o
 input when the input is missing, otherwise Record again. A blocked action never owns primary. Audio removed
 stays visible in results after WAV deletion. A recording row's sentences (stop, failure, cancel and result
 warnings) keep READER_MEASURE; its rule, menu and events keep LIST_MEASURE; result readers
-fill the pane. The session list omits the date during recording, jobs or a processed result. State and Playing
+keep READER_MEASURE for prose and its rules. The session list omits the date during recording, jobs or a processed result. State and Playing
 share line two when they fit; otherwise Playing starts a line without a separator. Equal titles and dates show
 each note's file name on line two (it wraps at a space, and each of its lines starts at the first line's x) and in its accessible name. The rail says Processing cancelled; the list
 keeps Cancelled.
@@ -1548,10 +1558,12 @@ Opening the session acknowledges the completion notice and keeps the result and 
 session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
 its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
 on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
-and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
+and transcript markers. Marker text takes its content width, capped at READER_MEASURE. A marker's Add
+result is not held to the rows' width: it keeps LIST_MEASURE, so Undo add follows its words. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 
-The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
+The viewer is one block, READER_MEASURE wide, or as wide as its view choices when they are wider. It has back
+link and muted date on line one, Add to notes at the block's right edge on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
 views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
@@ -1590,7 +1602,14 @@ Recording settings clip at the tab rule, with a fixed `L` margin below tabs outs
 muted Small through small_field and small_text_field: Service, Address, Model, API key. Accessible names keep
 service context. Focused inputs scroll to the Recording heading. Speech setup first explains how to turn
 recording into text. API compatibility help sits beside custom services; Codex limits appear only when
-selected. Combat sync help uses muted Small text.
+selected. Combat sync help uses muted Small text. Help on this tab keeps READER_MEASURE, as Account help does,
+and says what a choice does, not how it works (`It cannot change your campaign files.`). The second service
+keeps one name: `Transcript and summary instructions`, `Transcript and summary API key`, and accessible names
+`Transcript and summary service`, `… address` and `… model`. A value that blocks processing says so below its
+own field in the notice's tone (`Enter the address.`, `Enter the model’s name.`). When the DM chooses a
+service that leaves such a field empty, the notice and that reason scroll into view together, once; a key
+problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;
+`keyring` stays in warnings about the keyring itself.
 
 Warnings name the saved key's service and chosen service. A key for another service keeps Save key visible
 with Paste a key first and a separate quiet remove action. A saved key for the chosen service hides Save key
