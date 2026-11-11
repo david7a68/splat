@@ -4802,10 +4802,14 @@ pub mod gallery {
             let placed = d.at_size(size, |d| {
                 let parent = d.place_of("Make available to any encounter");
                 super::submenu_clear_of_chrome(d, &["Bridge Ambush"], false).and_then(|frame| {
+                    // Right beside its menu, where egui puts it: only the menus' frames
+                    // and egui's small gap lie between them.
                     parent
-                        .is_some_and(|parent| frame.left() >= parent.right())
-                        .then_some(())
-                        .ok_or(format!("submenu {frame:?} is not right of {parent:?}"))
+                        .is_some_and(|parent| {
+                            (0.0..=crate::design::XL).contains(&(frame.left() - parent.right()))
+                        })
+                        .then_some(frame)
+                        .ok_or(format!("submenu {frame:?} is not beside {parent:?}"))
                 })
             });
             d.observe(
