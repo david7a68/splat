@@ -153,7 +153,7 @@ and then the sheet-change summary. F2 adds one part. No tracker part is on this 
 | # | Part | Shows when | Words |
 |---|---|---|---|
 | 1 | As today: a state notice (a sync conflict first, recording silence, another sync notice, `No participants are present`; `notice.rs:168`, `:187`), or else `Next: <name>` | As today | As today: `Sync conflict: <name>`, or `Conflict: <name>` where that does not fit (`:118`, `:393`) |
-| 2 | As today: the sheet-change summary with its `Log` link (`:1183-1199`) | As today | As today |
+| 2 | As today: the sheet-change summary with its `Log` link (`notice.rs:458-489`) | As today | As today |
 | 3 | The current turn's reminders (F2) | The current participant has an effect with a time | `⚑ Wis save DC 15 (Hold Person) · Bless 9`, or the count `⚑ 3`, whose hover and accessible name hold each whole |
 
 **Part 3 takes only the room that is spare.** Today the notice is measured first and `Undo` takes the rest;
@@ -167,7 +167,7 @@ run's header; `notice.rs:232-246`). Part 3 is measured after them:
 
 So no feature makes `Undo` shorter, and no state notice loses a word. One repair comes from rule K: when a
 conflict's name is wider than the line beside the bare `Undo`, the name shortens as the dock's name does
-(`dock_name`, `:6108`); the icon, `Conflict` and `Review` stay (section 2.5, row 20).
+(`dock_name`, `src/encounter_run/view.rs:5791`); the icon, `Conflict` and `Review` stay (section 2.5, row 20).
 
 - **Sums at case D** (estimates; T17.4 tests the rule with a short and a long name). The roster is 442 px.
   Beside Lookup `Undo: next turn` has no key letter and takes about 145 px, with a gap of 16. With no state
@@ -537,7 +537,7 @@ the DM gave the effect a time: a count of rounds, or `on its turn`.** Words with
   (`dock.rs:80-172`). **The fit rule for `Effect`, stated once:** it shows with its word while the selected
   name keeps its size and its words; with its icon only while the name keeps both beside the icon; and not at
   all otherwise. `Death saves` and a roll's total, which that line holds at times (`dock.rs:109-143`), keep
-  their places first. With several rows selected, the line is one sentence today (`:2170-2187`) and has no
+  their places first. With several rows selected, the line is one sentence today (`target_words`, `dock.rs:197-213`) and has no
   `Effect`. The field in the Conditions tab is then the way, as today: `E` opens the tab with focus in the
   field, for 4. By the pointer with Lookup open it is 5 (select, **Conditions**, the field, the words, Enter),
   and Ctrl+K shows Lookup again.
