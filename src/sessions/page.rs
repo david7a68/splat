@@ -1,12 +1,12 @@
 //! The Sessions page: notes, templates and recordings, one campaign at a time. The
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
 use super::{
-    DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, Recording, Template, body_of,
-    create_note, create_template, delete_recording, folder_setting, fresh_line_in_note,
-    insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings, list_templates,
-    nested_in_note, new_recording_path, parts_of, plain_links, recording_title, rename_links,
-    rename_links_in_file, save_folder, section_text, unreadable_notes, update_details,
-    without_empty_sections, without_own_heading,
+    Apply, DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, NoteUndo, Recording,
+    Template, body_of, create_note, create_template, delete_recording, folder_setting,
+    fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
+    list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
+    rename_links, rename_links_in_file, save_folder, section_text, unreadable_notes,
+    update_details, without_empty_sections, without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
@@ -188,6 +188,17 @@ struct Live {
     recorder: Recorder,
 }
 
+/// Whether a session is being played (W14), and which: the answer of `played_session`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Played {
+    /// No session is being played.
+    No,
+    /// A fight is open or a recording is live, and no session note is current.
+    NoNote,
+    /// This session's note is being played.
+    Session(Uuid),
+}
+
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
@@ -227,7 +238,7 @@ pub struct Sessions {
     updated_links: Option<Vec<(Draft, String)>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
-    removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
+    removed_fight: Option<(Option<Uuid>, usize, String, NoteUndo)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
     /// What the removal's owner note looked like; a later edit of it ends the removal.
@@ -1543,8 +1554,19 @@ impl Sessions {
             if !draft.unsaved() && draft.dropped.is_none() {
                 match self.notes.iter().find(|note| note.id == id) {
                     Some(note) if note.path != draft.path => {
+                        // The one note with this ID moved, so its Undo goes with it. A copy
+                        // that claims the ID too is not followed.
+                        let moved = note
+                            .also
+                            .is_empty()
+                            .then(|| (draft.path.clone(), note.path.clone()));
                         self.draft = None;
                         self.select(Some(id));
+                        if let (Some((from, to)), Some((.., undo))) =
+                            (moved, &mut self.removed_fight)
+                        {
+                            undo.moved(&from, &to);
+                        }
                     }
                     None => {
                         self.draft = None;
@@ -1795,17 +1817,32 @@ impl Sessions {
         }
     }
 
-    /// A link to the note of the session being played, as a world entry's Log writes it.
-    /// A session is being played when its date is today. So what the DM changes while they
-    /// prepare, between sessions, is not put on the last session.
+    /// A link to the note of the session being played, as a world entry's Log writes it. So
+    /// what the DM changes between sessions, with no fight or recording, is not put on the
+    /// last session.
     pub fn current_link(&mut self) -> Option<String> {
-        let today = self.today();
-        let current = self.current()?;
-        let note = self.notes.iter().find(|note| note.id == current)?;
-        (note.date == today)
-            .then(|| note.path.file_stem())
-            .flatten()
+        let Played::Session(played) = self.played_session() else {
+            return None;
+        };
+        let note = self.notes.iter().find(|note| note.id == played)?;
+        note.path
+            .file_stem()
             .map(|stem| format!("[[{}]]", stem.to_string_lossy()))
+    }
+
+    /// The session being played (W14): a fight is open, a recording is live, or the current
+    /// session is not dated before today. Every reader of "the session being played" asks this
+    /// one function.
+    pub fn played_session(&mut self) -> Played {
+        let today = self.today();
+        let current = self.current();
+        let dated = current
+            .and_then(|current| self.notes.iter().find(|note| note.id == current))
+            .is_some_and(|note| note.date.as_str() >= today.as_str());
+        if !(self.run_open || self.live.is_some() || dated) {
+            return Played::No;
+        }
+        current.map_or(Played::NoNote, Played::Session)
     }
 
     /// Today, as of when the app started. A game that passes midnight is still tonight.
@@ -1821,13 +1858,7 @@ impl Sessions {
         if let Some(chosen) = self.party_bar {
             return chosen;
         }
-        if self.run_open || self.live.is_some() {
-            return true;
-        }
-        let today = self.today();
-        self.current()
-            .and_then(|current| self.notes.iter().find(|note| note.id == current))
-            .is_some_and(|note| note.date.as_str() >= today.as_str())
+        self.played_session() != Played::No
     }
 
     /// The words if new events go to a session that looks like an old one.
@@ -3878,8 +3909,12 @@ impl Sessions {
         let (Some(draft), Some(session)) = (&mut self.draft, self.selected) else {
             return;
         };
-        insert_in_plan(&mut draft.body, &format!("- [[{name}]]"));
-        draft.edited();
+        let line = format!("- [[{name}]]");
+        let _ = draft.apply(session, Apply::WithTyping, |words| {
+            let mut words = words.to_owned();
+            insert_in_plan(&mut words, &line);
+            Some(words)
+        });
         self.mentions
             .insert(session, timeline::referenced_ids(&draft.body));
     }
@@ -7137,5 +7172,101 @@ mod tests {
         assert!(rendered.contains("[Bridge Ambush](<splat-note:Bridge Ambush>)"));
         assert!(rendered.contains(&format!("[Old name](<splat-note:Timeline#^{id}>)")));
         assert!(source.contains("|Old name]]"));
+    }
+
+    /// W14's one test for the session being played. Its callers are the Log stamp
+    /// (`current_link`) and the party bar, and each gives the same answer in each case.
+    #[test]
+    fn the_session_being_played_is_one_test_for_the_log_stamp_and_the_party_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = |date: &str| Note {
+            id: Uuid::new_v4(),
+            number: 3,
+            title: String::new(),
+            date: date.to_owned(),
+            path: dir.path().join("Session 3.md"),
+            also: Vec::new(),
+        };
+        let link = Some("[[Session 3]]".to_owned());
+        // (case, the current note's date, a fight open, a recording live, played)
+        let cases = [
+            ("dated today", Some("2026-05-10"), false, false, true),
+            (
+                "dated before today",
+                Some("2026-05-09"),
+                false,
+                false,
+                false,
+            ),
+            // The old tests disagreed here: the bar showed, and the Log stamp was "dated today".
+            (
+                "prep for a later date",
+                Some("2026-05-17"),
+                false,
+                false,
+                true,
+            ),
+            (
+                "a fight on an older note",
+                Some("2026-05-09"),
+                true,
+                false,
+                true,
+            ),
+            (
+                "a recording on an older note",
+                Some("2026-05-09"),
+                false,
+                true,
+                true,
+            ),
+            ("a fight with no session note", None, true, false, true),
+        ];
+        for (case, date, fight, recording, played) in cases {
+            let mut sessions = Sessions {
+                today: Some("2026-05-10".to_owned()),
+                notes: date.map(note).into_iter().collect(),
+                run_open: fight,
+                ..Sessions::default()
+            };
+            let current = sessions.current();
+            let expected = match (played, current) {
+                (false, _) => Played::No,
+                (true, None) => Played::NoNote,
+                (true, Some(id)) => Played::Session(id),
+            };
+            if recording {
+                let path = dir.path().join("live.wav");
+                sessions.live = Some(Live {
+                    session: Uuid::nil(),
+                    label: "Session 3".to_owned(),
+                    recorder: crate::recording::Recorder::start(
+                        crate::recording::Tool::Simulated,
+                        None,
+                        path,
+                    )
+                    .unwrap(),
+                });
+            }
+            assert_eq!(sessions.played_session(), expected, "{case}");
+            assert_eq!(sessions.party_bar_shows(), played, "{case}: the party bar");
+            assert_eq!(
+                sessions.current_link(),
+                if played && current.is_some() {
+                    link.clone()
+                } else {
+                    None
+                },
+                "{case}: the Log stamp"
+            );
+            // The DM's own choice moves only the bar.
+            sessions.party_bar = Some(!played);
+            assert_eq!(
+                sessions.party_bar_shows(),
+                !played,
+                "{case}: the DM's choice"
+            );
+            assert_eq!(sessions.played_session(), expected, "{case}");
+        }
     }
 }

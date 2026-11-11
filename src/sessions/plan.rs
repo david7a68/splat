@@ -5,7 +5,7 @@ use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     encounter_run::fight_summary,
     encounters::PlanFight,
-    sessions::{each_linked_name, insert_in_note, linked_names, section_text},
+    sessions::{Apply, each_linked_name, insert_in_note, linked_names, section_text},
     timeline::{
         self, Book, Kind,
         page::{added_message, file_notices, long_rest_status, problems, quick_add, rest_ruling},
@@ -907,8 +907,10 @@ impl Sessions {
                 }
             });
         });
+        // A draft is open only for a selected session, so the act has its session.
         if let Some((position, name)) = remove_fight
             && let Some(draft) = &mut self.draft
+            && let Some(note) = session
         {
             let occurrence = book
                 .events
@@ -923,13 +925,13 @@ impl Sessions {
                     .iter()
                     .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
                     .count();
-            let before = draft.body.clone();
-            let after = unlink_planned_fight(&before, &name, occurrence);
-            if before != after {
-                draft.body = after.clone();
-                draft.edited();
-                self.removed_fight = Some((session, position, name, before, after.clone()));
-                self.plan_notice_state = Some((after, book.events.clone()));
+            // A fight that is not in the words changes nothing, and says nothing, as before.
+            if let Ok(undo) = draft.apply(note, Apply::WithTyping, |words| {
+                let after = unlink_planned_fight(words, &name, occurrence);
+                (after != words).then_some(after)
+            }) {
+                self.plan_notice_state = Some((undo.after().to_owned(), book.events.clone()));
+                self.removed_fight = Some((session, position, name, undo));
             }
         }
         if undo_group_remove
@@ -1016,12 +1018,12 @@ impl Sessions {
     }
 
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
-        let Some((id, at, name, before, after)) = &self.removed_fight else {
+        let Some((id, at, name, undo)) = &self.removed_fight else {
             return;
         };
         if *id != session
             || *at != position
-            || self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+            || self.draft.as_ref().is_none_or(|draft| !undo.live(draft))
         {
             return;
         }
@@ -1033,8 +1035,7 @@ impl Sessions {
             "Undo remove",
         ) {
             if let Some(draft) = &mut self.draft {
-                draft.body = before.clone();
-                draft.edited();
+                let _ = undo.undo(draft);
             }
             self.removed_fight = None;
             self.plan_notice_state = None;
@@ -1675,6 +1676,58 @@ mod tests {
             crate::sessions::each_linked_name("- [ ] [[Bridge]]\n- [x] [[Shrine]]"),
             ["Bridge", "Shrine"]
         );
+    }
+
+    /// `Undo remove` is as on `main` when the note is renamed outside Splat: the folder scan
+    /// follows the one note with that ID, and the Undo's file goes with it. A copy that claims
+    /// the ID, and wins by its plainer name, does not take the Undo.
+    #[test]
+    fn undo_remove_follows_a_moved_note_and_not_a_copy() {
+        use crate::sessions::{Apply, Draft, NewNote, create_note};
+        for copy in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let note = create_note(
+                dir.path(),
+                &NewNote {
+                    number: 1,
+                    title: "One",
+                    date: "2026-11-01",
+                    campaign: "Marches",
+                    template: "## Plan for tonight\n\n- [[Bridge]]\n",
+                },
+            )
+            .unwrap();
+            let mut draft = Draft::open(&note.path).unwrap();
+            let undo = draft
+                .apply(note.id, Apply::WithTyping, |words| {
+                    Some(words.replace("- [[Bridge]]\n", ""))
+                })
+                .unwrap();
+            draft.save();
+            let mut sessions = Sessions {
+                selected: Some(note.id),
+                notes: vec![note.clone()],
+                folder: Some(dir.path().to_owned()),
+                draft: Some(draft),
+                removed_fight: Some((Some(note.id), 0, "Bridge".into(), undo)),
+                ..Sessions::default()
+            };
+            let renamed = dir.path().join("Session 1, at the ford.md");
+            fs::rename(&note.path, &renamed).unwrap();
+            let plainer = dir.path().join("S.md");
+            if copy {
+                fs::copy(&renamed, &plainer).unwrap();
+            }
+            sessions.scan_folder();
+            let draft = sessions.draft.as_ref().unwrap();
+            let (owner, _, _, undo) = sessions.removed_fight.as_ref().unwrap();
+            assert_eq!(draft.path, if copy { plainer } else { renamed });
+            assert_eq!(
+                (*owner, draft.body.as_str()),
+                (sessions.selected, undo.after())
+            );
+            assert_eq!(undo.live(draft), !copy, "a copy: {copy}");
+        }
     }
 
     #[test]

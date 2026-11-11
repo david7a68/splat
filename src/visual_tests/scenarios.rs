@@ -13835,6 +13835,38 @@ pub mod run_loot {
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
         d.goal("add loot and a roll on a campaign table");
+        // P1c: the add field is the design system's shared one. Beside Lookup: an arrow key and
+        // Enter add a suggestion, and the field stays open for the next line. Escape clears the
+        // highlight, then the words.
+        d.click(NAV_LOOKUP);
+        d.type_into(ADD, "roll ge");
+        d.expect("gems · 1d4 · Treasure.md");
+        d.press(Key::ArrowDown);
+        d.state("loot-suggestion-chosen-beside-lookup", Sizes::Default);
+        d.press(Key::Enter);
+        d.observe(
+            "P1c-add-field",
+            d.has("Rolls on gems, the encounter loot line 5")
+                && d.field_text(ADD).as_deref() == Some("")
+                && d.focused_name().as_deref() == Some(ADD),
+            "An arrow key and Enter add the suggestion, and the field stays open for the next line",
+        );
+        d.type_into(ADD, "roll");
+        d.press(Key::ArrowDown);
+        d.press(Key::Escape);
+        let highlight = (d.field_text(ADD), d.focused_name());
+        d.clear_text_in(ADD);
+        d.type_into(ADD, "rope");
+        d.press(Key::Escape);
+        let words = (d.field_text(ADD), d.focused_name());
+        d.observe(
+            "P1c-add-field",
+            highlight == (Some("roll".to_owned()), None)
+                && words.0.as_deref() == Some("")
+                && !d.has_containing("gems · 1d4 · Treasure.md"),
+            format!("Escape with a chosen suggestion clears the choice and keeps the words; with none, it clears the words: {highlight:?}, then {words:?}"),
+        );
+        d.click(NAV_LOOKUP);
 
         // iter-23 FJ1 beside round 22 FD3: while a run is open, its `Next turn` is the only
         // primary, even with unsaved changes here. Closed, the draft's Save owns it; after Save,
@@ -15337,6 +15369,38 @@ pub mod session_plan {
         d.state("planned-fight-removed", Sizes::All);
         d.click("Undo remove");
         d.expect(&format!("Start fight: {SECOND}"));
+        // P1c: both plan acts go through the note's one act path, `Draft::apply`, with today's
+        // behaviour: the change joins the draft as typed words do, and the note saves after its
+        // pause. Beside Lookup as without it. Test builds have no timed save, so the file holds
+        // only what an act would save at once.
+        d.click(NAV_LOOKUP);
+        let folder = d
+            .app()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(crate::sessions::DEFAULT_FOLDER);
+        let note = crate::sessions::list_notes(&folder)
+            .into_iter()
+            .find(|note| note.title == "The Crossing")
+            .expect("the session's note")
+            .path;
+        let line = format!("[[{SECOND}]]");
+        let before = std::fs::read_to_string(&note).unwrap();
+        d.click(&format!("More actions for {SECOND}"));
+        d.click("Remove from tonight");
+        d.expect(&format!("Removed “{SECOND}” from tonight."));
+        d.state("planned-fight-removed-beside-lookup", Sizes::Default);
+        d.click("Undo remove");
+        d.expect(&format!("Start fight: {SECOND}"));
+        let after = std::fs::read_to_string(&note).unwrap();
+        d.observe(
+            "P1c-plan-acts",
+            !before.contains(&line) && after == before && d.has("Close Lookup"),
+            format!("Beside Lookup, Remove from tonight and its Undo change the draft, and the file waits for the note's pause: {before:?}, then {after:?}"),
+        );
+        d.click(NAV_LOOKUP);
 
         d.state_prepared("plan-with-fights", Sizes::AllAndHiDpi, |d| {
             assert!(

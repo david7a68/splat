@@ -169,6 +169,23 @@ struct BrokenDetail {
     hover: String,
 }
 
+/// The one row above another view while an unsaved generated NPC is held, on World and in
+/// Lookup: `Unsaved NPC: <name> · Show`. Returns whether the DM chose `Show`.
+pub(crate) fn unsaved_npc_row(ui: &mut egui::Ui, name: &str) -> bool {
+    let mut show = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            Type::Body
+                .rich(ui, format!("{UNSAVED_NPC}: {name}"))
+                .color(colors().text),
+        );
+        ui.label(Type::Body.rich(ui, "·").color(colors().muted));
+        show = design::link(ui, "Show").clicked();
+    });
+    ui.add_space(design::S);
+    show
+}
+
 impl WorldPage {
     /// All file reads and repair parsing stay behind this generation check.
     fn refresh_checks(
@@ -729,21 +746,10 @@ impl WorldPage {
     /// Above another view: the held NPC's one row. The Undo for a discarded NPC is a result, so
     /// it sits below the file line.
     fn held_row(&mut self, ui: &mut egui::Ui) {
-        if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown) {
-            let mut show = false;
-            ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Body
-                        .rich(ui, format!("{UNSAVED_NPC}: {}", npc.name))
-                        .color(colors().text),
-                );
-                ui.label(Type::Body.rich(ui, "·").color(colors().muted));
-                show = design::link(ui, "Show").clicked();
-            });
-            ui.add_space(design::S);
-            if show {
-                self.show_held();
-            }
+        if let Some(npc) = self.generated.as_ref().filter(|_| !self.generated_shown)
+            && unsaved_npc_row(ui, &npc.name)
+        {
+            self.show_held();
         }
     }
 
