@@ -1238,9 +1238,6 @@ fn tile(
         tile_detail(shown)
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
-    ui.ctx().accesskit_node_builder(response.id, |node| {
-        node.set_description(chip.text.clone());
-    });
     if ui.is_rect_visible(rect) {
         let text = TileText::new(ui, chip, shown, rect.width(), number, armed);
         let painter = ui.painter_at(rect);
@@ -1278,11 +1275,27 @@ fn tile(
     }
     if response.has_focus() {
         design::focus_ring(ui, rect);
-        // Keyboard focus reads the rules as hover does. A click gives no focus.
-        response.show_tooltip_ui(|ui| tile_rules(ui, chip, shown, &keys));
+    }
+    rules_on_hover_and_focus(ui, response, chip, shown, &keys)
+}
+
+/// A tile's rules text, and its printed numbers and keys, on hover and on keyboard focus (a
+/// click gives no focus), and as the control's accessible description.
+fn rules_on_hover_and_focus(
+    ui: &egui::Ui,
+    response: egui::Response,
+    chip: &Chip,
+    shown: &RollLink,
+    keys: &str,
+) -> egui::Response {
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_description(chip.text.clone());
+    });
+    if response.has_focus() {
+        response.show_tooltip_ui(|ui| tile_rules(ui, chip, shown, keys));
         response
     } else {
-        response.on_hover_ui(|ui| tile_rules(ui, chip, shown, &keys))
+        response.on_hover_ui(|ui| tile_rules(ui, chip, shown, keys))
     }
 }
 
@@ -1444,8 +1457,8 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 .name(&label)
                 .density(Density::Read)
                 .selected(lit)
-                .hint(&hint(&shown))
                 .show(ui);
+            let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
             press(ui, &response, &chip.link);
         }
     });
@@ -1720,6 +1733,48 @@ mod tests {
                 .is_some_and(|label| label.contains("Reach 5 ft.")),
             "its name has where it lands"
         );
+    }
+
+    #[test]
+    fn keyboard_focus_shows_a_tiles_rules_on_the_tiles_and_on_the_action_bar() {
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let text = "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.";
+        for bar in [false, true] {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(600.0, 300.0))
+                .build_ui(move |ui| {
+                    design::theme::install(ui.ctx());
+                    if bar {
+                        compact_tiles(ui, &chips(text));
+                    } else {
+                        tiles(ui, "Wolf", &chips(text));
+                    }
+                });
+            let rules_shown = |harness: &Harness<'_>| {
+                harness
+                    .query_all_by_label_contains("Melee Attack Roll: +4, reach 5 ft.")
+                    .any(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
+            };
+            assert!(!rules_shown(&harness), "no rules before focus (bar {bar})");
+            // The tile's name, `Bite · +4 · …`, or the bar's button, `Bite +4`.
+            let name = if bar { "Bite +4" } else { "Bite · +4" };
+            harness.get_by_label_contains(name).focus();
+            harness.run_steps(3);
+            assert!(
+                rules_shown(&harness),
+                "iter-19-R-ST3: keyboard focus shows the rules (bar {bar})"
+            );
+            assert_eq!(
+                harness
+                    .get_by_label_contains(name)
+                    .accesskit_node()
+                    .description()
+                    .as_deref(),
+                Some(text),
+                "the rules are its description (bar {bar})"
+            );
+        }
     }
 
     #[test]
