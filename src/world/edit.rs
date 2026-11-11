@@ -44,10 +44,17 @@ fn split_text<'a>(file: &'a str, name: &str) -> Option<(&'a str, &'a str)> {
     Some((&file[..file.len() - text.len()], text))
 }
 
-/// The name of an entry a value points at, as the DM knows it.
+/// The note a value's link opens, as the reader finds it, else the note its key or id names.
+pub(super) fn value_target(index: &ContentIndex, value: &Value) -> Option<usize> {
+    index
+        .world_value_target(value)
+        .or_else(|| reference(value).and_then(|reference| index.position_of(&reference)))
+}
+
+/// A value's name as the reader shows it: the name of the note its link opens, else the words
+/// written in the file.
 pub(super) fn value_name(index: &ContentIndex, value: &Value, label: &str) -> String {
-    reference(value)
-        .and_then(|reference| index.position_of(&reference))
+    value_target(index, value)
         .map(|at| index.items[at].entry.name.clone())
         .unwrap_or_else(|| {
             if super::empty_optional(value) {
@@ -346,16 +353,7 @@ impl EditDraft {
                 value.trim().to_owned()
             }
         };
-        if self.now.status.trim() != theirs.status.trim() {
-            effects.push((
-                "Status",
-                effect(
-                    changed.status,
-                    status(&self.now.status),
-                    status(&theirs.status),
-                ),
-            ));
-        }
+        // The Read order: Stat block, In, Part of, then Status.
         for (label, draft_changed, now, disk) in [
             (
                 "Stat block",
@@ -434,6 +432,16 @@ impl EditDraft {
                 format!("{} and {last}", parts.join(", "))
             };
             effects.push(("Part of", format!("Overwrite {words}.")));
+        }
+        if self.now.status.trim() != theirs.status.trim() {
+            effects.push((
+                "Status",
+                effect(
+                    changed.status,
+                    status(&self.now.status),
+                    status(&theirs.status),
+                ),
+            ));
         }
         if self.now.text != theirs.text {
             effects.push((
@@ -580,7 +588,8 @@ impl Reader {
     }
 
     /// Drafts whose note was deleted or given a new identity outside Splat. They cannot open
-    /// again, so the DM copies the text or lets the draft go here.
+    /// again, so the DM copies the text or lets the draft go here. A draft let go stays in
+    /// `discarded` for one `Undo discard` until the next Edit, the next Discard or the Undo.
     pub(super) fn lost_edits(&mut self, ui: &mut egui::Ui, index: &ContentIndex) {
         let mut lost: Vec<_> = self
             .edits
@@ -612,20 +621,30 @@ impl Reader {
                                 ui.ctx().copy_text(draft.now.text.clone());
                             }
                             let discard_name = format!("Discard the draft of {name}");
-                            // Discard draft has no Undo, so an `L` gap keeps it apart. The gap
-                            // starts at Copy text's target, which `line_start` draws `S` left of
-                            // its place in the row.
+                            // Discard draft lets the DM's words go, so an `L` gap keeps it apart.
+                            // The gap starts at Copy text's target, which `line_start` draws `S`
+                            // left of its place in the row.
                             ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
                             let discard = Action::quiet("Discard draft")
                                 .density(Density::Read)
                                 .name(&discard_name);
-                            if super::starts_line(ui, discard, false).show(ui).clicked() {
-                                self.edits.remove(&id);
+                            if super::starts_line(ui, discard, false).show(ui).clicked()
+                                && let Some(draft) = self.edits.remove(&id)
+                            {
+                                self.discarded = Some((id, draft));
                             }
                         });
                     },
                 );
             });
+        }
+        // The Undo for a lost draft sits where its warning sat, whatever note is open.
+        if let Some((at, draft)) = &self.discarded
+            && index.position(*at).is_none()
+            && design::draft_discarded(ui, &draft.name)
+            && let Some((id, draft)) = self.discarded.take()
+        {
+            self.edits.insert(id, draft);
         }
     }
 
@@ -699,20 +718,7 @@ impl Reader {
             draft.now = previous;
         }
         let mut focused = false;
-        // The shared text field, with a faint example of the one rule the value has.
-        focused |= design::field(ui, "Status", None, None, |ui| {
-            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft.now.status)
-                    .desired_width(width)
-                    .min_size(egui::vec2(0.0, Density::Read.control()))
-                    .margin(egui::vec2(design::S, 5.0))
-                    .hint_text(design::placeholder(ui, STATUS_HINT)),
-            );
-            design::named(ui, &response, "Status");
-            response
-        })
-        .has_focus();
+        // The Read order: Stat block, In, Part of, then Status.
         let npc = super::fights(&item.entry);
         for (key, label, slot) in [
             (
@@ -776,6 +782,7 @@ impl Reader {
                     .iter()
                     .map(|value| value_name(index, value, "group"))
                     .collect();
+                // `not read` has the warning colour, as in the reader.
                 ui.label(
                     Type::Body
                         .rich(
@@ -788,7 +795,11 @@ impl Reader {
                                 names.join(", ")
                             },
                         )
-                        .color(colors().muted),
+                        .color(if groups_error.is_some() {
+                            colors().result.warning
+                        } else {
+                            colors().muted
+                        }),
                 );
                 if Action::quiet("Change")
                     .density(Density::Read)
@@ -821,6 +832,20 @@ impl Reader {
         {
             draft.now.groups = groups;
         }
+        // The shared text field, with a faint example of the one rule the value has.
+        focused |= design::field(ui, "Status", None, None, |ui| {
+            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut draft.now.status)
+                    .desired_width(width)
+                    .min_size(egui::vec2(0.0, Density::Read.control()))
+                    .margin(egui::vec2(design::S, 5.0))
+                    .hint_text(design::placeholder(ui, STATUS_HINT)),
+            );
+            design::named(ui, &response, "Status");
+            response
+        })
+        .has_focus();
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
             let height = (ui.available_height() - Density::Read.control() - design::L - design::S)

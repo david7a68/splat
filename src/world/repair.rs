@@ -146,6 +146,24 @@ impl Repair {
             }
             return false;
         }
+        // The two-version comparison above keeps the pane's width. The ordinary editor and its
+        // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            self.edit(ui, campaign, run_open, problem, line)
+        })
+        .inner
+    }
+
+    /// The editor, its messages and its save row.
+    fn edit(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaign: &Campaign,
+        run_open: bool,
+        problem: Option<String>,
+        line: Option<usize>,
+    ) -> bool {
         if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
         }
@@ -185,7 +203,15 @@ impl Repair {
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let dirty = self.dirty();
-                    let state = if dirty {
+                    // A changed draft that still cannot be read is Invalid, as in Library; the
+                    // message above names the cause. Unsaved means Save would write.
+                    let state = if dirty && problem.is_some() {
+                        design::Status {
+                            icon: design::icons::ERROR,
+                            word: "Invalid",
+                            color: colors().document.invalid,
+                        }
+                    } else if dirty {
                         design::Status {
                             icon: design::icons::DRAFT,
                             word: "Unsaved",
@@ -262,6 +288,11 @@ mod tests {
 
     /// Draws the repair once. True when it painted an accent-filled (primary) button.
     fn show_with(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> bool {
+        painted(repair, campaign, run_open).0
+    }
+
+    /// Draws the repair once: whether a primary button showed, and every painted word.
+    fn painted(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> (bool, String) {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let output = ctx.run(egui::RawInput::default(), |ctx| {
@@ -270,10 +301,19 @@ mod tests {
             });
         });
         let accent = colors().accent_fill;
-        output
-            .shapes
-            .iter()
-            .any(|clipped| matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == accent))
+        let mut words = String::new();
+        let mut primary = false;
+        for clipped in &output.shapes {
+            match &clipped.shape {
+                egui::Shape::Rect(rect) if rect.fill == accent => primary = true,
+                egui::Shape::Text(text) => {
+                    words.push_str(&text.galley.job.text);
+                    words.push('\n');
+                }
+                _ => {}
+            }
+        }
+        (primary, words)
     }
 
     fn show(repair: &mut Repair, campaign: &Campaign) {
@@ -341,11 +381,28 @@ mod tests {
         );
         // Round 22 FD3: one weight for a save row. Save is primary while the draft has changes
         // it can save, and secondary when unchanged, still invalid, or when a run owns Next turn.
-        assert!(!show_with(&mut repair, &campaign, false), "FD3-clean");
+        // Round 23 FF2: the state word. A changed draft that still cannot be read is Invalid,
+        // as in Library; Unsaved means Save would write.
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(!primary, "FD3-clean");
+        assert!(
+            words.contains("No changes") && !words.contains("Invalid"),
+            "FF2-clean\n{words}"
+        );
         repair.draft = format!("{before}\nStill broken.\n");
-        assert!(!show_with(&mut repair, &campaign, false), "FD3-invalid");
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(!primary, "FD3-invalid");
+        assert!(
+            words.contains("Invalid") && !words.contains("Unsaved"),
+            "FF2-invalid\n{words}"
+        );
         repair.draft = draft.clone();
-        assert!(show_with(&mut repair, &campaign, false), "FD3-changed");
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(primary, "FD3-changed");
+        assert!(
+            words.contains("Unsaved") && !words.contains("Invalid"),
+            "FF2-changed\n{words}"
+        );
         assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
         assert_eq!(repair.draft, draft);
         for moved in [true, false] {
