@@ -150,23 +150,16 @@ impl Flag {
         )
     }
 
-    /// What is wrong, without the line or the help. A flag read back from a saved run has only
-    /// its sentence.
-    pub fn cause(&self) -> &str {
-        if self.cause.is_empty() {
-            &self.message
-        } else {
-            &self.cause
-        }
+    /// What is wrong, without the line or the help. None for a flag read back from a saved run:
+    /// it has only its sentence, so a screen shows that sentence and adds no line.
+    pub fn cause(&self) -> Option<&str> {
+        (!self.cause.is_empty()).then_some(self.cause.as_str())
     }
 
     /// The cause and the help without the line, for a screen that names the line its own way.
-    pub fn words(&self) -> String {
-        if self.cause.is_empty() {
-            self.message.clone()
-        } else {
-            words(&self.cause, &self.help)
-        }
+    /// None for a flag read back from a saved run, as for [`Flag::cause`].
+    pub fn words(&self) -> Option<String> {
+        self.cause().map(|cause| words(cause, &self.help))
     }
 }
 

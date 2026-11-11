@@ -761,7 +761,7 @@ mod tests {
         let (events, flags) = parse(&outside);
         assert_eq!(
             flags[0].cause(),
-            "“Day 5” is day 1 in order. Splat renumbers it when it saves."
+            Some("“Day 5” is day 1 in order. Splat renumbers it when it saves.")
         );
         let after = patch(&outside, &events, &sessions, true).unwrap();
         assert!(after.contains("## Day 1: Start"));

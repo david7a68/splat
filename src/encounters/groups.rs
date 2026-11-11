@@ -299,7 +299,7 @@ impl GroupDraft {
         list_formats::resolve(&mut entry, &entries, &source);
         if changes.is_some() {
             if let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) {
-                return Err(flag.words());
+                return Err(flag.words().unwrap_or_else(|| flag.message.clone()));
             }
             let setup: GroupSetup =
                 serde_yaml_ng::from_value(entry.fields["splat_encounter_group"].clone())
@@ -718,11 +718,16 @@ fn resolve_group(
         warnings.push(MemberFault::new(
             FaultKind::CannotJoin,
             // The row, its line and the cause, as a roster row says them; the help stays in the
-            // editor. `line 15` wraps whole.
-            format!(
-                "{fault_name} · line\u{a0}{}: {}.",
-                member.flag.line,
-                member.flag.cause().trim_end_matches('.')
+            // editor. `line 15` wraps whole. A flag without its parts says its own sentence.
+            member.flag.cause().map_or_else(
+                || format!("{fault_name}: {}", member.flag.message),
+                |cause| {
+                    format!(
+                        "{fault_name} · line\u{a0}{}: {}.",
+                        member.flag.line,
+                        cause.trim_end_matches('.')
+                    )
+                },
             ),
         ));
         let count = member.count.unwrap_or(1);

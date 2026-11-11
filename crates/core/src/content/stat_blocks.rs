@@ -1538,7 +1538,8 @@ pub(super) fn section_and_extras(
                 "Review unsupported {root} values before writing: {}",
                 invalid
                     .iter()
-                    .map(|f| f.words())
+                    // The words without the line; a read-back flag has only its sentence.
+                    .map(|f| f.words().unwrap_or_else(|| f.message.clone()))
                     .collect::<Vec<_>>()
                     .join(", ")
             ));

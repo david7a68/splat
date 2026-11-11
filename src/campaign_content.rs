@@ -1358,16 +1358,16 @@ impl CampaignContent {
             .errors
             .iter()
             .filter(|error| {
-                !campaign_flags
-                    .iter()
-                    .any(|flag| error.contains(&flag.words()))
-                    && !catalogue.manifest_problems.iter().any(|(id, problem)| {
-                        error.contains(problem)
-                            || catalogue
-                                .entries
-                                .get(id)
-                                .is_some_and(|entry| error.contains(&entry.entry.path))
-                    })
+                !campaign_flags.iter().any(|flag| {
+                    flag.words()
+                        .map_or_else(|| error.contains(&flag.message), |w| error.contains(&w))
+                }) && !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                    error.contains(problem)
+                        || catalogue
+                            .entries
+                            .get(id)
+                            .is_some_and(|entry| error.contains(&entry.entry.path))
+                })
             })
             .chain(&closure.errors)
             .collect();

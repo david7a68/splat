@@ -358,6 +358,7 @@ fn world_relations_and_dates_read_from_flat_properties_and_stay_on_a_patch() {
     assert!(
         entry.flags[0]
             .cause()
+            .unwrap()
             .starts_with("When “120” was not read")
     );
 }
@@ -1031,7 +1032,7 @@ fn i19_challenge_derives_missing_xp_and_pb_and_flags_explicit_mismatches() {
         );
         if let Some(warning) = warning {
             assert!(
-                entry.flags.iter().any(|flag| flag.cause() == warning
+                entry.flags.iter().any(|flag| flag.cause() == Some(warning)
                     && text
                         .lines()
                         .nth(flag.line - 1)
@@ -1158,7 +1159,7 @@ fn i19_write_keeps_explicit_challenge_mismatch_and_flags_it() {
         entry
             .flags
             .iter()
-            .any(|flag| flag.cause() == "CR 3 is XP 700; XP 200 is used")
+            .any(|flag| flag.cause() == Some("CR 3 is XP 700; XP 200 is used"))
     );
 }
 
@@ -1199,6 +1200,7 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     assert!(
         entry.flags[0]
             .cause()
+            .unwrap()
             .starts_with("Combat initiative choice “Imaginary initiative” is not a rule."),
         "{}",
         entry.flags[0].message
@@ -1206,7 +1208,7 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
     // A plain flag with the same words is not a rule choice: a second resolve keeps it and
     // replaces only its own rule-choice flag.
-    let lookalike = super::layout::Flag::new(1, entry.flags[0].cause().to_owned());
+    let lookalike = super::layout::Flag::new(1, entry.flags[0].cause().unwrap().to_owned());
     entry.flags.push(lookalike.clone());
     super::list_formats::resolve(&mut entry, &[], &source);
     assert_eq!(entry.flags.len(), 2, "{:?}", entry.flags);
@@ -1244,6 +1246,7 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     assert!(
         entry.flags[0]
             .cause()
+            .unwrap()
             .starts_with("combat initiative choice “Imaginary initiative”"),
         "{}",
         entry.flags[0].message
@@ -1694,7 +1697,7 @@ fn i20_x27_copied_party_row_is_flagged_and_monster_copy_keeps_only_visible_cells
         entry
             .flags
             .iter()
-            .any(|flag| flag.cause() == "This party member is already in the roster")
+            .any(|flag| flag.cause() == Some("This party member is already in the roster"))
     );
     assert_eq!(
         entry.fields["splat_encounter"]["roster"]
@@ -2015,7 +2018,7 @@ fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
         .replace("| Hit Points | 22 (4d8 + 4) |", "| HP | about twenty |")
         .replace("| Armor Class | 13 |", "| Armor Class | about fifteen |");
     let entry = Entry::parse("Rook.md", &bad).unwrap();
-    let messages: Vec<String> = entry.flags.iter().map(|f| f.words()).collect();
+    let messages: Vec<String> = entry.flags.iter().flat_map(|f| f.words()).collect();
     // The alias row still names the stat by its full name, with the example.
     assert!(
         messages
