@@ -48,6 +48,8 @@ mod rolls;
 mod sessions;
 mod settings;
 mod sheet_writer;
+#[cfg(test)]
+mod test_support;
 mod timeline;
 mod touchpad;
 mod ui_state;
