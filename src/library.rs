@@ -73,7 +73,11 @@ fn recovery_paragraph(ui: &mut egui::Ui, fault: &FileFault) {
 fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
         recovery_paragraph(ui, fault);
-        Action::quiet("Try again").line_start().show(ui).clicked()
+        // A message action without an icon is a bordered secondary button (round 25).
+        Action::secondary("Try again")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
     });
     ui.add_space(design::S);
     design::quiet_section(ui, "Technical details", |ui| {

@@ -7616,6 +7616,37 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect(&format!(
         "{count} files in ashen-marches-copy/ are now separate entries."
     ));
+    // Round 25 FF5: the folder that tells two Ashen Marches packages apart ends the row, as it
+    // ends the reader's kind line; at every size it is whole, and a cut falls before it.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let rows = d.at_size(size, |d| {
+            let mut rows = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let words = &text.galley.job.text;
+                if words.starts_with("Creature · CR 1")
+                    && words.contains("ashen-marches")
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    rows.push(words.clone());
+                }
+            });
+            rows
+        });
+        d.observe(
+            "iter-25-L-FF5",
+            // The list rows, not the open reader's kind line, which has the folder alone.
+            {
+                let listed: Vec<_> = rows
+                    .iter()
+                    .filter(|row| row.as_str() != "Creature · CR 1 · ashen-marches/")
+                    .collect();
+                listed.len() == 2
+                    && listed.iter().any(|row| row.ends_with(" · ashen-marches/"))
+                    && listed.iter().any(|row| row.ends_with(" · ashen-marches-copy/"))
+            },
+            format!("At {size:?} each row ends with its whole folder: {rows:?}"),
+        );
+    }
     d.state("copied-folder-identities-repaired-together", Sizes::All);
     // Round 23 FE6: the batch result takes the warning's place after the title, so the title
     // does not move when the DM presses the repair.
@@ -8638,6 +8669,19 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
     fs::write(&path, &not_text).unwrap();
     refocus(d);
     d.wait_for_text(HEADLINE);
+    // Round 25 FB3, SB1: the recovery steps are prose and keep the reader measure, with a
+    // draft and without one.
+    fn recovery_measure(d: &mut Driver<'_>, id: &str) {
+        let recovery = d.painted_rect_in("Splat reads notes as UTF-8 text.", egui::Rect::EVERYTHING);
+        d.observe(
+            id,
+            recovery.is_some_and(|rect| rect.width() <= design::READER_MEASURE + 1.0),
+            format!(
+                "The recovery paragraph wraps at {} px or less: {recovery:?}",
+                design::READER_MEASURE
+            ),
+        );
+    }
     d.state_prepared("package-file-not-text", Sizes::All, |d| {
         file_fault_reader(
             d,
@@ -8645,6 +8689,13 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
             HEADLINE,
             "Creatures/Cinder Wolf.md",
             false,
+        );
+        recovery_measure(d, "iter-25-L-SB1-no-draft");
+        // Round 25 family: a message action without an icon is a bordered secondary button.
+        d.observe(
+            "iter-25-L-try-again-bordered",
+            d.control_frame("Try again").is_some_and(|frame| frame.stroke.width > 0.0),
+            "Try again under the fault is bordered",
         );
     });
     let unread_count = files_to_fix(d);
@@ -8707,6 +8758,7 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
             "Reload and lose my draft",
             None,
         );
+        recovery_measure(d, "iter-25-L-FB3");
         d.observe(
             "iter20-E-SD1-draft-no-save",
             !d.has("Save my draft again")
@@ -8881,17 +8933,19 @@ fn file_fault_reader(d: &mut Driver<'_>, id: &str, headline: &str, path: &str, c
         || Err("Try again is not in view".to_owned()),
         |again| super::press_area_clear(d, again, "Try again", None),
     );
-    let placed = message
-        .zip(again)
-        .zip(words)
-        .is_some_and(|((message, again), words)| {
-            again.top() >= message.bottom() - 1.0 && (words - message.left()).abs() <= 1.0
-        });
+    // Round 25: Try again is a bordered secondary button, so its border (not its words) starts
+    // at the message words, as every message action without an icon does.
+    let bordered = d
+        .control_frame("Try again")
+        .is_some_and(|frame| frame.stroke.width > 0.0);
+    let placed = message.zip(again).is_some_and(|(message, again)| {
+        again.top() >= message.bottom() - 1.0 && (again.left() - message.left()).abs() <= 1.0
+    });
     d.observe(
         &format!("{id}-try-again"),
-        placed && clear.is_ok(),
+        placed && bordered && clear.is_ok(),
         format!(
-            "Try again {again:?} starts its words {words:?} at the message words {message:?}; press area: {clear:?}"
+            "Try again {again:?} (words {words:?}, bordered {bordered}) starts at the message words {message:?}; press area: {clear:?}"
         ),
     );
     d.observe(
