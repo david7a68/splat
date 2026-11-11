@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5190871a-5add-5e4b-a707-8999d4ffc8b3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/haste"
-splat_name: "Haste"
+splat_id: 5190871a-5add-5e4b-a707-8999d4ffc8b3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/haste
+splat_name: Haste
 splat_pages:
 - 139
 ---

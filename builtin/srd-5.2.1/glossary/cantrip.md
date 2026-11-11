@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "81e5efe2-92d5-580f-946f-01415b5f45f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/cantrip"
-splat_name: "Cantrip"
+splat_id: 81e5efe2-92d5-580f-946f-01415b5f45f0
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/cantrip
+splat_name: Cantrip
 splat_pages:
 - 178
 ---

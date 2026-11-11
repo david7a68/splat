@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b23f87a0-2133-50a6-b913-bc953b78f5c1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/saving_throw"
-splat_name: "Saving Throw"
+splat_id: b23f87a0-2133-50a6-b913-bc953b78f5c1
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/saving_throw
+splat_name: Saving Throw
 splat_pages:
 - 187
 ---

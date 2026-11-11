@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d73bd2d4-1013-5747-86f6-1ecce49dd50c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_elemental"
-splat_name: "Conjure Elemental"
+splat_id: d73bd2d4-1013-5747-86f6-1ecce49dd50c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_elemental
+splat_name: Conjure Elemental
 splat_pages:
 - 118
 ---

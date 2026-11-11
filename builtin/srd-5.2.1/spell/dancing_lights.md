@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ec6aa52-0a3b-5f33-a1ad-2468610e25b5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dancing_lights"
-splat_name: "Dancing Lights"
+splat_id: 1ec6aa52-0a3b-5f33-a1ad-2468610e25b5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dancing_lights
+splat_name: Dancing Lights
 splat_pages:
 - 121
 - 122

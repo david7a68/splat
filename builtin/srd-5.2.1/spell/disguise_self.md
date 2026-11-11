@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5900d80f-982e-53f3-857f-c81528344c01"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/disguise_self"
-splat_name: "Disguise Self"
+splat_id: 5900d80f-982e-53f3-857f-c81528344c01
+splat_kind: reference
+splat_key: dnd2024:reference/spell/disguise_self
+splat_name: Disguise Self
 splat_pages:
 - 124
 ---

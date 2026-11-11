@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6acc03c-3daa-525a-8423-0b0ba5053357"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_blue_dragon"
-splat_name: "Adult Blue Dragon"
+splat_id: b6acc03c-3daa-525a-8423-0b0ba5053357
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_blue_dragon
+splat_name: Adult Blue Dragon
 splat_pages:
 - 266
 - 267

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "80672ebc-9d96-520d-ba26-b8eb19d52070"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/passwall"
-splat_name: "Passwall"
+splat_id: 80672ebc-9d96-520d-ba26-b8eb19d52070
+splat_kind: reference
+splat_key: dnd2024:reference/spell/passwall
+splat_name: Passwall
 splat_pages:
 - 151
 ---

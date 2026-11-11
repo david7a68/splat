@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0085266f-2ef6-559c-9fd2-f6cd38124446"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_green_dragon"
-splat_name: "Adult Green Dragon"
+splat_id: 0085266f-2ef6-559c-9fd2-f6cd38124446
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_green_dragon
+splat_name: Adult Green Dragon
 splat_pages:
 - 294
 ---

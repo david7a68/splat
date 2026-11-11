@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "15488ab0-d945-5632-bc4a-91a565f335e1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_rats"
-splat_name: "Swarm of Rats"
+splat_id: 15488ab0-d945-5632-bc4a-91a565f335e1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_rats
+splat_name: Swarm of Rats
 splat_pages:
 - 362
 ---

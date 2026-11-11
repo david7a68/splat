@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6e78c7f3-1c70-5804-8628-a271901c3ba0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/raise_dead"
-splat_name: "Raise Dead"
+splat_id: 6e78c7f3-1c70-5804-8628-a271901c3ba0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/raise_dead
+splat_name: Raise Dead
 splat_pages:
 - 157
 ---

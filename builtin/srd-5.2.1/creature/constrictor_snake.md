@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6e22340e-5844-537b-9bf8-2874e059911f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/constrictor_snake"
-splat_name: "Constrictor Snake"
+splat_id: 6e22340e-5844-537b-9bf8-2874e059911f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/constrictor_snake
+splat_name: Constrictor Snake
 splat_pages:
 - 346
 - 347

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4d0f518f-4777-50ff-8aa7-cbcd0862fbdb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cultist"
-splat_name: "Cultist"
+splat_id: 4d0f518f-4777-50ff-8aa7-cbcd0862fbdb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cultist
+splat_name: Cultist
 splat_pages:
 - 278
 ---

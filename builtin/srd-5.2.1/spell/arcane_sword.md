@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7544e44e-408d-53fe-a636-959a2fe6f998"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/arcane_sword"
-splat_name: "Arcane Sword"
+splat_id: 7544e44e-408d-53fe-a636-959a2fe6f998
+splat_kind: reference
+splat_key: dnd2024:reference/spell/arcane_sword
+splat_name: Arcane Sword
 splat_pages:
 - 110
 ---

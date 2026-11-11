@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f6af3aa9-75d3-5e47-b1c9-ac6879e4d5ba"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/animated_armor"
-splat_name: "Animated Armor"
+splat_id: f6af3aa9-75d3-5e47-b1c9-ac6879e4d5ba
+splat_kind: reference
+splat_key: dnd2024:reference/creature/animated_armor
+splat_name: Animated Armor
 splat_pages:
 - 259
 ---

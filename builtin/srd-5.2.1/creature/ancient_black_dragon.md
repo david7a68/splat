@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "aaf02fd1-885f-5217-b445-de1e3e4c85eb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_black_dragon"
-splat_name: "Ancient Black Dragon"
+splat_id: aaf02fd1-885f-5217-b445-de1e3e4c85eb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_black_dragon
+splat_name: Ancient Black Dragon
 splat_pages:
 - 265
 ---

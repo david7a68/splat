@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6c46b4f6-2bb6-5f1e-88a0-1cb90083fc1d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/frog"
-splat_name: "Frog"
+splat_id: 6c46b4f6-2bb6-5f1e-88a0-1cb90083fc1d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/frog
+splat_name: Frog
 splat_pages:
 - 348
 - 349

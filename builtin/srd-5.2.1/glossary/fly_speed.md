@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9a644dbc-6a1e-5149-adad-fda4e36484d9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/fly_speed"
-splat_name: "Fly Speed"
+splat_id: 9a644dbc-6a1e-5149-adad-fda4e36484d9
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/fly_speed
+splat_name: Fly Speed
 splat_pages:
 - 182
 ---

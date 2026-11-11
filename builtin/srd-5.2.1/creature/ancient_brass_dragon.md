@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d69437f4-18ab-5a63-b979-3670425dc6a5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_brass_dragon"
-splat_name: "Ancient Brass Dragon"
+splat_id: d69437f4-18ab-5a63-b979-3670425dc6a5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_brass_dragon
+splat_name: Ancient Brass Dragon
 splat_pages:
 - 269
 ---

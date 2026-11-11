@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "141bd44a-f35e-5192-a758-4b901ac8a7f7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/grease"
-splat_name: "Grease"
+splat_id: 141bd44a-f35e-5192-a758-4b901ac8a7f7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/grease
+splat_name: Grease
 splat_pages:
 - 137
 ---

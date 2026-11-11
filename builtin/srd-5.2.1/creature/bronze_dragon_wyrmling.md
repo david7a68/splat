@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e7e51ab1-3b15-59d4-bfa6-906569c81c87"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bronze_dragon_wyrmling"
-splat_name: "Bronze Dragon Wyrmling"
+splat_id: e7e51ab1-3b15-59d4-bfa6-906569c81c87
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bronze_dragon_wyrmling
+splat_name: Bronze Dragon Wyrmling
 splat_pages:
 - 269
 - 270

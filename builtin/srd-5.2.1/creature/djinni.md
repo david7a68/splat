@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "683c923f-ddbe-56ec-8c8a-2e907967bd5f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/djinni"
-splat_name: "Djinni"
+splat_id: 683c923f-ddbe-56ec-8c8a-2e907967bd5f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/djinni
+splat_name: Djinni
 splat_pages:
 - 280
 ---

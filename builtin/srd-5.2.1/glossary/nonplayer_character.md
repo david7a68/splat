@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8f0ddeee-f05e-5f16-bcdc-ef38cfc5697c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/nonplayer_character"
-splat_name: "Nonplayer Character"
+splat_id: 8f0ddeee-f05e-5f16-bcdc-ef38cfc5697c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/nonplayer_character
+splat_name: Nonplayer Character
 splat_pages:
 - 185
 ---

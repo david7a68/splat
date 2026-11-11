@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0bf87b00-0f54-5ab0-869b-3bcb87383fb5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/werewolf"
-splat_name: "Werewolf"
+splat_id: 0bf87b00-0f54-5ab0-869b-3bcb87383fb5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/werewolf
+splat_name: Werewolf
 splat_pages:
 - 339
 ---

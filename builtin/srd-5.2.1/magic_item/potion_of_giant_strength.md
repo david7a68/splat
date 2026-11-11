@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4e69fda4-24b2-5954-b182-01453b2ceb26"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_giant_strength"
-splat_name: "Potion of Giant Strength"
+splat_id: 4e69fda4-24b2-5954-b182-01453b2ceb26
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_giant_strength
+splat_name: Potion of Giant Strength
 splat_pages:
 - 235
 ---

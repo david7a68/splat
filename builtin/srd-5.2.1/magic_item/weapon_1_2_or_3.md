@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8a74cc4a-ad75-5157-96ac-58d2ae2bc3b7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/weapon_1_2_or_3"
-splat_name: "Weapon, +1, +2, or +3"
+splat_id: 8a74cc4a-ad75-5157-96ac-58d2ae2bc3b7
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/weapon_1_2_or_3
+splat_name: Weapon, +1, +2, or +3
 splat_pages:
 - 253
 ---

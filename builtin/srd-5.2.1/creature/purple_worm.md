@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "661a2a62-b1ed-5055-a69e-83ce18c1046c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/purple_worm"
-splat_name: "Purple Worm"
+splat_id: 661a2a62-b1ed-5055-a69e-83ce18c1046c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/purple_worm
+splat_name: Purple Worm
 splat_pages:
 - 316
 - 317

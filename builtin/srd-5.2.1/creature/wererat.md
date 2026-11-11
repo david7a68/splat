@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "965d537f-0989-5972-a0b9-7a36cd26ea14"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wererat"
-splat_name: "Wererat"
+splat_id: 965d537f-0989-5972-a0b9-7a36cd26ea14
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wererat
+splat_name: Wererat
 splat_pages:
 - 338
 ---

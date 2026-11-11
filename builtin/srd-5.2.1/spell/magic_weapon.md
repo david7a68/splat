@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9c945f15-b7a2-586f-a255-8bb54d966193"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magic_weapon"
-splat_name: "Magic Weapon"
+splat_id: 9c945f15-b7a2-586f-a255-8bb54d966193
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magic_weapon
+splat_name: Magic Weapon
 splat_pages:
 - 146
 - 147

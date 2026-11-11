@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fc0dcea5-10f2-5128-8783-16f926260007"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/brazier_of_commanding_fire_elementals"
-splat_name: "Brazier of Commanding Fire Elementals"
+splat_id: fc0dcea5-10f2-5128-8783-16f926260007
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/brazier_of_commanding_fire_elementals
+splat_name: Brazier of Commanding Fire Elementals
 splat_pages:
 - 214
 ---

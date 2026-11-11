@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "adaab34b-96db-5db0-a895-6d1a84e19398"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/flame_strike"
-splat_name: "Flame Strike"
+splat_id: adaab34b-96db-5db0-a895-6d1a84e19398
+splat_kind: reference
+splat_key: dnd2024:reference/spell/flame_strike
+splat_name: Flame Strike
 splat_pages:
 - 132
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "207abbe7-dd10-55ab-8d70-ac7de68d8647"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/etherealness"
-splat_name: "Etherealness"
+splat_id: 207abbe7-dd10-55ab-8d70-ac7de68d8647
+splat_kind: reference
+splat_key: dnd2024:reference/spell/etherealness
+splat_name: Etherealness
 splat_pages:
 - 128
 ---

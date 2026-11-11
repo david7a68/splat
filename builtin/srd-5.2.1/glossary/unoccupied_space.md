@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5decfef4-d9d0-5bc6-abf5-d0f02b6168aa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/unoccupied_space"
-splat_name: "Unoccupied Space"
+splat_id: 5decfef4-d9d0-5bc6-abf5-d0f02b6168aa
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/unoccupied_space
+splat_name: Unoccupied Space
 splat_pages:
 - 191
 ---

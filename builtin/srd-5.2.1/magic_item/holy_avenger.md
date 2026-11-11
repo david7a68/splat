@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ed22ab0-edaa-58df-88a9-bc06e00b4f35"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/holy_avenger"
-splat_name: "Holy Avenger"
+splat_id: 1ed22ab0-edaa-58df-88a9-bc06e00b4f35
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/holy_avenger
+splat_name: Holy Avenger
 splat_pages:
 - 226
 ---

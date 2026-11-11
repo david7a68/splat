@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub const GROUP: &[&str] = &["Count", "Creature", "Name", "Changes", "Note"];
 pub const ROSTER: &[&str] = &["Side", "Creature", "Name", "Changes", "Note"];
-pub const RULES: &[&str] = &["Rule", "Choice"];
+const RULES: &[&str] = &["Rule", "Choice"];
 const STATS: &[(&str, &str)] = &[
     ("HP", "max_hp"),
     ("AC", "armor_class"),
@@ -812,7 +812,7 @@ fn render(fields: &Mapping) -> Result<Rendered, String> {
         {
             let id = words(&package["package"], "id");
             if id.is_empty() {
-                return Err("Package needs an id before conversion".into());
+                return Err("Package needs an id".into());
             }
             let name = package.get("name").and_then(Value::as_str).unwrap_or(id);
             body.push_str(&format!("- [x] {} ^{id}\n", cell(name)));
@@ -1135,12 +1135,12 @@ pub(super) fn canonical(fields: &Mapping) -> Mapping {
     fields
 }
 
-pub fn convert(text: &str, entry: &Entry) -> Result<String, String> {
-    let (mut changes, body, data) = render(&entry.fields)?;
-    changes.push(("splat_schema", Some(2.into())));
-    let mut after = patch_fields(text, &changes)?;
-    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    after.push_str(&body.replace('\n', newline));
+/// Write a list note. `entry` is the model of `fields` and `body`.
+pub(super) fn write(entry: &Entry, fields: &Mapping, body: &str) -> Result<String, String> {
+    let (changes, lists, data) = render(&entry.fields)?;
+    let newline = if body.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut after = formats::note(fields, changes, body)?;
+    after.push_str(&lists.replace('\n', newline));
     if !data.is_empty() {
         after.push_str(
             &format!(
@@ -1152,7 +1152,7 @@ pub fn convert(text: &str, entry: &Entry) -> Result<String, String> {
     }
     let checked = Entry::parse(&entry.path, &after)?;
     if canonical(&entry.fields) != canonical(&checked.fields) || !checked.flags.is_empty() {
-        return Err("Conversion changed a value. The old file was kept.".into());
+        return Err("The written note does not read back to the same values.".into());
     }
     Ok(formats::folded_data(&after))
 }
@@ -1819,7 +1819,7 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
             }
         }
     }
-    if entry.kind == "campaign" && formats::schema(&entry.fields) == Ok(2) {
+    if entry.kind == "campaign" {
         entry.flags.retain(|flag| {
             !flag.message.starts_with("Choice ") && !flag.message.contains(" choice \"")
         });
@@ -1940,9 +1940,7 @@ fn owned_ranges(body: &str, group: bool) -> Vec<std::ops::Range<usize>> {
 
 /// Notes forms show the DM's prose; the owned table stays in its original bytes.
 pub fn prose(entry: &Entry) -> String {
-    if formats::schema(&entry.fields) != Ok(2)
-        || !["encounter_group", "encounter"].contains(&entry.kind.as_str())
-    {
+    if !["encounter_group", "encounter"].contains(&entry.kind.as_str()) {
         return entry.body.trim().into();
     }
     let mut body = entry.body.clone();

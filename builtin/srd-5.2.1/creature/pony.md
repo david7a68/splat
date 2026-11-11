@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2a20700b-ff14-55e8-8629-be39157459e4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pony"
-splat_name: "Pony"
+splat_id: 2a20700b-ff14-55e8-8629-be39157459e4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pony
+splat_name: Pony
 splat_pages:
 - 359
 ---

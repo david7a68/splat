@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ac12a2df-59f9-5fcb-bbe1-3891cee3bf0b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/quasit"
-splat_name: "Quasit"
+splat_id: ac12a2df-59f9-5fcb-bbe1-3891cee3bf0b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/quasit
+splat_name: Quasit
 splat_pages:
 - 317
 ---

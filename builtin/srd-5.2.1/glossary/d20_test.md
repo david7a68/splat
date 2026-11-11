@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3c3c8d6b-ec60-5c1b-8f1e-bb17fc75c420"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/d20_test"
-splat_name: "D20 Test"
+splat_id: 3c3c8d6b-ec60-5c1b-8f1e-bb17fc75c420
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/d20_test
+splat_name: D20 Test
 splat_pages:
 - 180
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6b92aaa6-2070-5896-b79b-63684b319f73"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fire_shield"
-splat_name: "Fire Shield"
+splat_id: 6b92aaa6-2070-5896-b79b-63684b319f73
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fire_shield
+splat_name: Fire Shield
 splat_pages:
 - 132
 ---

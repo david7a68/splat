@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c068ae7c-3210-5ffc-8f54-5bec7c62344e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mirror_of_life_trapping"
-splat_name: "Mirror of Life Trapping"
+splat_id: c068ae7c-3210-5ffc-8f54-5bec7c62344e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mirror_of_life_trapping
+splat_name: Mirror of Life Trapping
 splat_pages:
 - 230
 ---

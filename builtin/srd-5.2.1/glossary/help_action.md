@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d445b0ca-2d29-590d-9fbf-1306517ac363"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/help_action"
-splat_name: "Help [Action]"
+splat_id: d445b0ca-2d29-590d-9fbf-1306517ac363
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/help_action
+splat_name: Help [Action]
 splat_pages:
 - 182
 - 183

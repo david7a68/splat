@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cde63172-b83d-578f-91de-810789a71534"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/instant_fortress"
-splat_name: "Instant Fortress"
+splat_id: cde63172-b83d-578f-91de-810789a71534
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/instant_fortress
+splat_name: Instant Fortress
 splat_pages:
 - 227
 ---

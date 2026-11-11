@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7ff7d118-29d5-55f6-991f-6583791339e3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mysterious_deck"
-splat_name: "Mysterious Deck"
+splat_id: 7ff7d118-29d5-55f6-991f-6583791339e3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mysterious_deck
+splat_name: Mysterious Deck
 splat_pages:
 - 231
 - 232

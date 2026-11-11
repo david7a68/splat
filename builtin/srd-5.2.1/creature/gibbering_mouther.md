@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "27b2191c-edd1-5c87-8e97-29390a3b4b9e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gibbering_mouther"
-splat_name: "Gibbering Mouther"
+splat_id: 27b2191c-edd1-5c87-8e97-29390a3b4b9e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gibbering_mouther
+splat_name: Gibbering Mouther
 splat_pages:
 - 288
 ---

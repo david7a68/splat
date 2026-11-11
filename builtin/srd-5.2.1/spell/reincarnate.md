@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ea8ddde-9f7a-5f45-8c2a-cbdf8bf71431"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/reincarnate"
-splat_name: "Reincarnate"
+splat_id: 1ea8ddde-9f7a-5f45-8c2a-cbdf8bf71431
+splat_kind: reference
+splat_key: dnd2024:reference/spell/reincarnate
+splat_name: Reincarnate
 splat_pages:
 - 158
 ---

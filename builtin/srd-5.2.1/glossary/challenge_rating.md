@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "770a59bc-613b-5b18-9f51-43fec48a671c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/challenge_rating"
-splat_name: "Challenge Rating"
+splat_id: 770a59bc-613b-5b18-9f51-43fec48a671c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/challenge_rating
+splat_name: Challenge Rating
 splat_pages:
 - 178
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4f6267ac-0d97-5aed-b11a-42c6a7468551"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mass_suggestion"
-splat_name: "Mass Suggestion"
+splat_id: 4f6267ac-0d97-5aed-b11a-42c6a7468551
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mass_suggestion
+splat_name: Mass Suggestion
 splat_pages:
 - 148
 ---

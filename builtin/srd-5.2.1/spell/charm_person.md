@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a8aff3a3-3e53-5c17-b3e2-e7ebeba9ce25"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/charm_person"
-splat_name: "Charm Person"
+splat_id: a8aff3a3-3e53-5c17-b3e2-e7ebeba9ce25
+splat_kind: reference
+splat_key: dnd2024:reference/spell/charm_person
+splat_name: Charm Person
 splat_pages:
 - 115
 ---

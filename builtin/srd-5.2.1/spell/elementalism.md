@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fcff17b0-9d84-5fdd-834a-c3799f96c929"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/elementalism"
-splat_name: "Elementalism"
+splat_id: fcff17b0-9d84-5fdd-834a-c3799f96c929
+splat_kind: reference
+splat_key: dnd2024:reference/spell/elementalism
+splat_name: Elementalism
 splat_pages:
 - 127
 ---

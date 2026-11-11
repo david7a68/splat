@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2e58fbc1-cf2d-5a11-87d7-45e4fb51808a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/blindness_deafness"
-splat_name: "Blindness/Deafness"
+splat_id: 2e58fbc1-cf2d-5a11-87d7-45e4fb51808a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/blindness_deafness
+splat_name: Blindness/Deafness
 splat_pages:
 - 113
 ---

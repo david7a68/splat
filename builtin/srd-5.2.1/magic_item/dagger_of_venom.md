@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "71ead1b2-d196-5c7b-990c-f33d41281bba"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dagger_of_venom"
-splat_name: "Dagger of Venom"
+splat_id: 71ead1b2-d196-5c7b-990c-f33d41281bba
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dagger_of_venom
+splat_name: Dagger of Venom
 splat_pages:
 - 216
 ---

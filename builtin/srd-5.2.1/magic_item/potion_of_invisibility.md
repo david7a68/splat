@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "05a97a78-98f8-50d4-87db-003221bfa53d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_invisibility"
-splat_name: "Potion of Invisibility"
+splat_id: 05a97a78-98f8-50d4-87db-003221bfa53d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_invisibility
+splat_name: Potion of Invisibility
 splat_pages:
 - 236
 ---

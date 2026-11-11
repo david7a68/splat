@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d41a5feb-9ffa-5f2d-ac44-87e86417ce9b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/locate_animals_or_plants"
-splat_name: "Locate Animals or Plants"
+splat_id: d41a5feb-9ffa-5f2d-ac44-87e86417ce9b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/locate_animals_or_plants
+splat_name: Locate Animals or Plants
 splat_pages:
 - 144
 ---

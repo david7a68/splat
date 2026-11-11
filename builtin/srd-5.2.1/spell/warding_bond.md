@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "673e8c94-6ba6-5c31-a421-634ae23ea31d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/warding_bond"
-splat_name: "Warding Bond"
+splat_id: 673e8c94-6ba6-5c31-a421-634ae23ea31d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/warding_bond
+splat_name: Warding Bond
 splat_pages:
 - 173
 ---

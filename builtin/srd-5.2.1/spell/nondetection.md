@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7e367bb9-e188-52bf-9e3b-34f0e79a8c24"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/nondetection"
-splat_name: "Nondetection"
+splat_id: 7e367bb9-e188-52bf-9e3b-34f0e79a8c24
+splat_kind: reference
+splat_key: dnd2024:reference/spell/nondetection
+splat_name: Nondetection
 splat_pages:
 - 151
 ---

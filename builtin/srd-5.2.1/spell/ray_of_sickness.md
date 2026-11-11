@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d3204852-4d69-576e-abcb-2d443daccec3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ray_of_sickness"
-splat_name: "Ray of Sickness"
+splat_id: d3204852-4d69-576e-abcb-2d443daccec3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ray_of_sickness
+splat_name: Ray of Sickness
 splat_pages:
 - 158
 ---

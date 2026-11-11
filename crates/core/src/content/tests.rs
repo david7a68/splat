@@ -1,12 +1,12 @@
 use super::*;
 
 fn note(key: &str, kind: &str, extra: &str, body: &str) -> String {
-    let text = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: {kind}\nsplat_key: 'test:{key}'\nsplat_name: Example\n{extra}\n---\n{body}",
+    let fields = format!(
+        "splat_id: {}\nsplat_kind: {kind}\nsplat_key: 'test:{key}'\nsplat_name: Example\n{extra}\n",
         Uuid::new_v4()
     );
-    crate::content::formats::convert("Fixture.md", &text)
-        .unwrap_or_else(|_| text.replace("splat_schema: 1", "splat_schema: 2"))
+    crate::content::formats::fixture("Fixture.md", &fields, body)
+        .unwrap_or_else(|_| format!("---\nsplat_schema: 2\n{fields}---\n{body}"))
 }
 
 fn parse(key: &str, kind: &str, extra: &str, body: &str) -> Entry {

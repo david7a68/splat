@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f7459e5e-19ac-5aa7-8c87-b1f67e9f43dd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/foresight"
-splat_name: "Foresight"
+splat_id: f7459e5e-19ac-5aa7-8c87-b1f67e9f43dd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/foresight
+splat_name: Foresight
 splat_pages:
 - 134
 ---

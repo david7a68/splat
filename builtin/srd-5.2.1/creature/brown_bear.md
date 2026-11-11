@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f987b8c2-fe59-56d4-b07b-674bc1b1297a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/brown_bear"
-splat_name: "Brown Bear"
+splat_id: f987b8c2-fe59-56d4-b07b-674bc1b1297a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/brown_bear
+splat_name: Brown Bear
 splat_pages:
 - 346
 ---

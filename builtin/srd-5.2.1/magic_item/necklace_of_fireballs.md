@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3c5d996c-13ac-5545-9f85-02f7f783d3b4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/necklace_of_fireballs"
-splat_name: "Necklace of Fireballs"
+splat_id: 3c5d996c-13ac-5545-9f85-02f7f783d3b4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/necklace_of_fireballs
+splat_name: Necklace of Fireballs
 splat_pages:
 - 233
 ---

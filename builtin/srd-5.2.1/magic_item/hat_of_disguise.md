@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ee1ab59-cfca-5003-a00a-0f4739598135"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/hat_of_disguise"
-splat_name: "Hat of Disguise"
+splat_id: 1ee1ab59-cfca-5003-a00a-0f4739598135
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/hat_of_disguise
+splat_name: Hat of Disguise
 splat_pages:
 - 224
 ---

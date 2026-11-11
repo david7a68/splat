@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "776e978e-76c9-5003-b503-bf4859279aa4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/guiding_bolt"
-splat_name: "Guiding Bolt"
+splat_id: 776e978e-76c9-5003-b503-bf4859279aa4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/guiding_bolt
+splat_name: Guiding Bolt
 splat_pages:
 - 138
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "32ff78c1-2372-5e1c-a9fd-f19bf87b180c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_magic_missiles"
-splat_name: "Wand of Magic Missiles"
+splat_id: 32ff78c1-2372-5e1c-a9fd-f19bf87b180c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_magic_missiles
+splat_name: Wand of Magic Missiles
 splat_pages:
 - 251
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9de34a5e-c357-5348-b128-eb9090515c7a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/speed"
-splat_name: "Speed"
+splat_id: 9de34a5e-c357-5348-b128-eb9090515c7a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/speed
+splat_name: Speed
 splat_pages:
 - 188
 ---

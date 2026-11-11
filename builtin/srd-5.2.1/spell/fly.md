@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5016ea2f-0bbf-5c06-bb51-b3c878509131"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fly"
-splat_name: "Fly"
+splat_id: 5016ea2f-0bbf-5c06-bb51-b3c878509131
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fly
+splat_name: Fly
 splat_pages:
 - 133
 ---

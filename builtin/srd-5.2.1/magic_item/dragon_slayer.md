@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bc34f854-4019-5a0a-8b6d-a8d36a148d64"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dragon_slayer"
-splat_name: "Dragon Slayer"
+splat_id: bc34f854-4019-5a0a-8b6d-a8d36a148d64
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dragon_slayer
+splat_name: Dragon Slayer
 splat_pages:
 - 219
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eeb29388-f9d3-58ab-bc14-24e68e94dbe1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/periapt_of_wound_closure"
-splat_name: "Periapt of Wound Closure"
+splat_id: eeb29388-f9d3-58ab-bc14-24e68e94dbe1
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/periapt_of_wound_closure
+splat_name: Periapt of Wound Closure
 splat_pages:
 - 234
 ---

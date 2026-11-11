@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f95ea64b-07b4-5099-9e94-809944d71fce"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/flesh_to_stone"
-splat_name: "Flesh to Stone"
+splat_id: f95ea64b-07b4-5099-9e94-809944d71fce
+splat_kind: reference
+splat_key: dnd2024:reference/spell/flesh_to_stone
+splat_name: Flesh to Stone
 splat_pages:
 - 133
 ---

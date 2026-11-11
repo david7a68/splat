@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "61f67059-1f4a-5f23-89f1-e303ba8cbca0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mace_of_terror"
-splat_name: "Mace of Terror"
+splat_id: 61f67059-1f4a-5f23-89f1-e303ba8cbca0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mace_of_terror
+splat_name: Mace of Terror
 splat_pages:
 - 229
 ---

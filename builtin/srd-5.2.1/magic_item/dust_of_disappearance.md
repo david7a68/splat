@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "32b60e86-340f-5cf9-8438-e5c32adf830b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dust_of_disappearance"
-splat_name: "Dust of Disappearance"
+splat_id: 32b60e86-340f-5cf9-8438-e5c32adf830b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dust_of_disappearance
+splat_name: Dust of Disappearance
 splat_pages:
 - 219
 ---

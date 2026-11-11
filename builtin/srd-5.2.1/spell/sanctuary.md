@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "95dca732-f48f-55fc-849d-85e198b28e0d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sanctuary"
-splat_name: "Sanctuary"
+splat_id: 95dca732-f48f-55fc-849d-85e198b28e0d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sanctuary
+splat_name: Sanctuary
 splat_pages:
 - 159
 ---

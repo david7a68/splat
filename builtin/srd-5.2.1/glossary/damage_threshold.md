@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6a16a681-5b8d-5a36-b3bd-5f18662c4f57"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/damage_threshold"
-splat_name: "Damage Threshold"
+splat_id: 6a16a681-5b8d-5a36-b3bd-5f18662c4f57
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/damage_threshold
+splat_name: Damage Threshold
 splat_pages:
 - 180
 ---

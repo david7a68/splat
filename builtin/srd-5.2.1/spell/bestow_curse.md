@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9a7baca1-eecf-59e9-a0af-ca1e92492ea7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/bestow_curse"
-splat_name: "Bestow Curse"
+splat_id: 9a7baca1-eecf-59e9-a0af-ca1e92492ea7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/bestow_curse
+splat_name: Bestow Curse
 splat_pages:
 - 112
 - 113

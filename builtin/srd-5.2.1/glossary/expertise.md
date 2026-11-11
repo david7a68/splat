@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b5273850-6a59-50d4-8706-5f2f4d7cd1cf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/expertise"
-splat_name: "Expertise"
+splat_id: b5273850-6a59-50d4-8706-5f2f4d7cd1cf
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/expertise
+splat_name: Expertise
 splat_pages:
 - 182
 ---

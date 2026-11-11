@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3b91e270-3e6c-590d-8ba1-230f51294ba6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/aura_of_life"
-splat_name: "Aura of Life"
+splat_id: 3b91e270-3e6c-590d-8ba1-230f51294ba6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/aura_of_life
+splat_name: Aura of Life
 splat_pages:
 - 111
 ---

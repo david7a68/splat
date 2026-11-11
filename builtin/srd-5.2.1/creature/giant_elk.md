@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8a013836-6722-56c8-8d52-f1e0a66bc522"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_elk"
-splat_name: "Giant Elk"
+splat_id: 8a013836-6722-56c8-8d52-f1e0a66bc522
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_elk
+splat_name: Giant Elk
 splat_pages:
 - 351
 ---

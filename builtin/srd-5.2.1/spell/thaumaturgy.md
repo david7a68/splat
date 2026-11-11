@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "780bf545-267c-5208-ac7c-7033958c2153"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/thaumaturgy"
-splat_name: "Thaumaturgy"
+splat_id: 780bf545-267c-5208-ac7c-7033958c2153
+splat_kind: reference
+splat_key: dnd2024:reference/spell/thaumaturgy
+splat_name: Thaumaturgy
 splat_pages:
 - 169
 ---

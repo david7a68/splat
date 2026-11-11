@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9fcab880-4637-5457-a937-51833ff87fe7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/glibness"
-splat_name: "Glibness"
+splat_id: 9fcab880-4637-5457-a937-51833ff87fe7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/glibness
+splat_name: Glibness
 splat_pages:
 - 136
 ---

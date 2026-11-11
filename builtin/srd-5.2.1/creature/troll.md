@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cf9a32e9-110e-53cf-8411-e9f509a06528"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/troll"
-splat_name: "Troll"
+splat_id: cf9a32e9-110e-53cf-8411-e9f509a06528
+splat_kind: reference
+splat_key: dnd2024:reference/creature/troll
+splat_name: Troll
 splat_pages:
 - 333
 ---

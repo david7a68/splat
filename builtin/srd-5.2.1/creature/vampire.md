@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d78adff0-526a-5cad-8fc0-c47e9397cd06"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/vampire"
-splat_name: "Vampire"
+splat_id: d78adff0-526a-5cad-8fc0-c47e9397cd06
+splat_kind: reference
+splat_key: dnd2024:reference/creature/vampire
+splat_name: Vampire
 splat_pages:
 - 335
 - 336

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "41e053d0-86fb-5f53-af1d-0a74c6e93f9a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/detect_magic"
-splat_name: "Detect Magic"
+splat_id: 41e053d0-86fb-5f53-af1d-0a74c6e93f9a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/detect_magic
+splat_name: Detect Magic
 splat_pages:
 - 123
 ---

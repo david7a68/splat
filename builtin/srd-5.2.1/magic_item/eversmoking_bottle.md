@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8a2284c9-4e59-5858-aadf-6a88f02c644d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/eversmoking_bottle"
-splat_name: "Eversmoking Bottle"
+splat_id: 8a2284c9-4e59-5858-aadf-6a88f02c644d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/eversmoking_bottle
+splat_name: Eversmoking Bottle
 splat_pages:
 - 220
 - 221

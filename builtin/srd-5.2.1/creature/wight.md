@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e0021cf7-fda4-5c09-aca6-6cec82cbf93e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wight"
-splat_name: "Wight"
+splat_id: e0021cf7-fda4-5c09-aca6-6cec82cbf93e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wight
+splat_name: Wight
 splat_pages:
 - 341
 ---

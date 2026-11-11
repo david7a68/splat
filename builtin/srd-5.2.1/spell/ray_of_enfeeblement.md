@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "523aafc9-ec3e-546d-8c1b-d4e3b1a2ed79"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ray_of_enfeeblement"
-splat_name: "Ray of Enfeeblement"
+splat_id: 523aafc9-ec3e-546d-8c1b-d4e3b1a2ed79
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ray_of_enfeeblement
+splat_name: Ray of Enfeeblement
 splat_pages:
 - 157
 ---

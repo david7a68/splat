@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4b5a7709-d865-56ef-91fd-89c1b5221e05"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gray_ooze"
-splat_name: "Gray Ooze"
+splat_id: 4b5a7709-d865-56ef-91fd-89c1b5221e05
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gray_ooze
+splat_name: Gray Ooze
 splat_pages:
 - 293
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1eb8f450-1b7f-5ec7-803d-ff78384d93a9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/blight"
-splat_name: "Blight"
+splat_id: 1eb8f450-1b7f-5ec7-803d-ff78384d93a9
+splat_kind: reference
+splat_key: dnd2024:reference/spell/blight
+splat_name: Blight
 splat_pages:
 - 113
 ---

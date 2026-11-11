@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4c95839a-4b94-5658-8944-9c9022fae5d8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/goblin_minion"
-splat_name: "Goblin Minion"
+splat_id: 4c95839a-4b94-5658-8944-9c9022fae5d8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/goblin_minion
+splat_name: Goblin Minion
 splat_pages:
 - 290
 ---

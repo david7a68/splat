@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "98ae3159-1e75-52c3-b97c-eaf19c4f194e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mantle_of_spell_resistance"
-splat_name: "Mantle of Spell Resistance"
+splat_id: 98ae3159-1e75-52c3-b97c-eaf19c4f194e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mantle_of_spell_resistance
+splat_name: Mantle of Spell Resistance
 splat_pages:
 - 229
 ---

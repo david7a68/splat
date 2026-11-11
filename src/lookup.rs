@@ -1841,32 +1841,7 @@ impl Lookup {
             });
             return;
         };
-        let (old, broken): (Vec<_>, Vec<_>) = index
-            .broken_world
-            .iter()
-            .partition(|(_, problem)| crate::formats_ui::is_old(problem));
-        if !old.is_empty() {
-            let message = if old.len() == 1 {
-                crate::formats_ui::old_message(&old[0].0)
-            } else {
-                format!("{} files use the old layout.", old.len())
-            };
-            if self.run_open {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("{message} Close the run to convert these files."),
-                );
-            } else {
-                crate::formats_ui::old_notice(
-                    ui,
-                    &message,
-                    old.iter()
-                        .map(|(path, _)| std::path::PathBuf::from(path))
-                        .collect(),
-                );
-            }
-        }
+        let broken = &index.broken_world;
         if !broken.is_empty() {
             ui.horizontal_wrapped(|ui| {
                 design::status(
@@ -3043,9 +3018,14 @@ mod tests {
     }
 
     fn entry_note(id: Uuid, name: &str, world: &str) -> String {
-        splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
-        )).expect("schema-2 fixture")
+        splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n"
+            ),
+            "",
+        )
+        .expect("schema-2 fixture")
     }
 
     #[test]

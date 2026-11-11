@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b0005825-c843-525e-b9d7-f1ddcb577c38"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_crawling_claws"
-splat_name: "Swarm of Crawling Claws"
+splat_id: b0005825-c843-525e-b9d7-f1ddcb577c38
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_crawling_claws
+splat_name: Swarm of Crawling Claws
 splat_pages:
 - 278
 ---

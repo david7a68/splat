@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "221c46f2-542c-5061-869c-ee4b0d8f6947"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/copper_dragon_wyrmling"
-splat_name: "Copper Dragon Wyrmling"
+splat_id: 221c46f2-542c-5061-869c-ee4b0d8f6947
+splat_kind: reference
+splat_key: dnd2024:reference/creature/copper_dragon_wyrmling
+splat_name: Copper Dragon Wyrmling
 splat_pages:
 - 275
 - 276

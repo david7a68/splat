@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "21a8d927-d62e-5d00-bc13-0c5826709bc6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/priest"
-splat_name: "Priest"
+splat_id: 21a8d927-d62e-5d00-bc13-0c5826709bc6
+splat_kind: reference
+splat_key: dnd2024:reference/creature/priest
+splat_name: Priest
 splat_pages:
 - 316
 ---

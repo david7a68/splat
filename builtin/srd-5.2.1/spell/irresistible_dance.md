@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4f0e502f-777e-5b85-b371-b3f029eda38a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/irresistible_dance"
-splat_name: "Irresistible Dance"
+splat_id: 4f0e502f-777e-5b85-b371-b3f029eda38a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/irresistible_dance
+splat_name: Irresistible Dance
 splat_pages:
 - 143
 ---

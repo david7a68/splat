@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4988a59f-e379-54cb-b44d-80c7826a62ec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/lamia"
-splat_name: "Lamia"
+splat_id: 4988a59f-e379-54cb-b44d-80c7826a62ec
+splat_kind: reference
+splat_key: dnd2024:reference/creature/lamia
+splat_name: Lamia
 splat_pages:
 - 303
 - 304

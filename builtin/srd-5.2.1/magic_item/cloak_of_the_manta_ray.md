@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4f51ab0d-9bec-54d1-8b48-871e76d6a726"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_the_manta_ray"
-splat_name: "Cloak of the Manta Ray"
+splat_id: 4f51ab0d-9bec-54d1-8b48-871e76d6a726
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_the_manta_ray
+splat_name: Cloak of the Manta Ray
 splat_pages:
 - 216
 ---

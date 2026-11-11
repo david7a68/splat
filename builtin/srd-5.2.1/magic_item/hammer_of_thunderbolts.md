@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a2aa5b86-99d0-5801-8eee-e41ffba33ab5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/hammer_of_thunderbolts"
-splat_name: "Hammer of Thunderbolts"
+splat_id: a2aa5b86-99d0-5801-8eee-e41ffba33ab5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/hammer_of_thunderbolts
+splat_name: Hammer of Thunderbolts
 splat_pages:
 - 224
 ---

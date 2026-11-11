@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5077e8d2-9022-5cec-9ae1-9433ef33a1da"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/initiative"
-splat_name: "Initiative"
+splat_id: 5077e8d2-9022-5cec-9ae1-9433ef33a1da
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/initiative
+splat_name: Initiative
 splat_pages:
 - 184
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "90518ead-d583-5b7c-8e22-79bd9b039120"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/helm_of_comprehending_languages"
-splat_name: "Helm of Comprehending Languages"
+splat_id: 90518ead-d583-5b7c-8e22-79bd9b039120
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/helm_of_comprehending_languages
+splat_name: Helm of Comprehending Languages
 splat_pages:
 - 226
 ---

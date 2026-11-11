@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "78dc9b70-2007-59ef-a5a0-7d84affc12c7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dimension_door"
-splat_name: "Dimension Door"
+splat_id: 78dc9b70-2007-59ef-a5a0-7d84affc12c7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dimension_door
+splat_name: Dimension Door
 splat_pages:
 - 123
 - 124

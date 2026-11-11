@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ceb14742-15f2-58d8-93e7-f1cb6bbee475"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/burning_hazard"
-splat_name: "Burning [Hazard]"
+splat_id: ceb14742-15f2-58d8-93e7-f1cb6bbee475
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/burning_hazard
+splat_name: Burning [Hazard]
 splat_pages:
 - 178
 ---

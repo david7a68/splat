@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "30a9c9c3-4c1f-5434-878f-29f53d4a786a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/red_dragon_wyrmling"
-splat_name: "Red Dragon Wyrmling"
+splat_id: 30a9c9c3-4c1f-5434-878f-29f53d4a786a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/red_dragon_wyrmling
+splat_name: Red Dragon Wyrmling
 splat_pages:
 - 318
 ---

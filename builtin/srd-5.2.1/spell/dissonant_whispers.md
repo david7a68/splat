@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "dab5fdb6-e029-5be1-a615-bc78594b846b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dissonant_whispers"
-splat_name: "Dissonant Whispers"
+splat_id: dab5fdb6-e029-5be1-a615-bc78594b846b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dissonant_whispers
+splat_name: Dissonant Whispers
 splat_pages:
 - 124
 ---

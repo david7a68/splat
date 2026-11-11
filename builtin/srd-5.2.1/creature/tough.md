@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b509f703-544d-5d70-a3a6-db6ba7d5f146"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/tough"
-splat_name: "Tough"
+splat_id: b509f703-544d-5d70-a3a6-db6ba7d5f146
+splat_kind: reference
+splat_key: dnd2024:reference/creature/tough
+splat_name: Tough
 splat_pages:
 - 332
 ---

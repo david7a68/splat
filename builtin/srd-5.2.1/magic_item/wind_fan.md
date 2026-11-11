@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a81f240e-d237-5a3d-a627-44af69edf5d8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wind_fan"
-splat_name: "Wind Fan"
+splat_id: a81f240e-d237-5a3d-a627-44af69edf5d8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wind_fan
+splat_name: Wind Fan
 splat_pages:
 - 253
 ---

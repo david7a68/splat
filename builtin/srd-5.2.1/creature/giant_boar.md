@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "80f366b1-9a1d-58df-b350-ac1d01192883"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_boar"
-splat_name: "Giant Boar"
+splat_id: 80f366b1-9a1d-58df-b350-ac1d01192883
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_boar
+splat_name: Giant Boar
 splat_pages:
 - 349
 ---

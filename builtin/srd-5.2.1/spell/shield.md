@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b144b498-e435-574f-878b-51b861f08221"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shield"
-splat_name: "Shield"
+splat_id: b144b498-e435-574f-878b-51b861f08221
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shield
+splat_name: Shield
 splat_pages:
 - 161
 - 162

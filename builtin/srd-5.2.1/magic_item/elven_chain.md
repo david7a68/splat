@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9bf3cf5e-0740-5796-885d-16ede8654449"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/elven_chain"
-splat_name: "Elven Chain"
+splat_id: 9bf3cf5e-0740-5796-885d-16ede8654449
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/elven_chain
+splat_name: Elven Chain
 splat_pages:
 - 220
 ---

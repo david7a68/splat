@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "599e9d78-4245-54cc-a7ed-0fb06240da8a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/attitude"
-splat_name: "Attitude"
+splat_id: 599e9d78-4245-54cc-a7ed-0fb06240da8a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/attitude
+splat_name: Attitude
 splat_pages:
 - 177
 ---

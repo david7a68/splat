@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5b63df58-89c0-53d8-84b1-b6dcddb7a86e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/knocking_out_a_creature"
-splat_name: "Knocking Out a Creature"
+splat_id: 5b63df58-89c0-53d8-84b1-b6dcddb7a86e
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/knocking_out_a_creature
+splat_name: Knocking Out a Creature
 splat_pages:
 - 184
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5f3580e8-07eb-5053-b003-bf372def9421"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_white_dragon"
-splat_name: "Ancient White Dragon"
+splat_id: 5f3580e8-07eb-5053-b003-bf372def9421
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_white_dragon
+splat_name: Ancient White Dragon
 splat_pages:
 - 341
 ---

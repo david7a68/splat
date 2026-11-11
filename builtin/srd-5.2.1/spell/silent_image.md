@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "89233ecf-8b29-568b-9e35-d64f845afe5d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/silent_image"
-splat_name: "Silent Image"
+splat_id: 89233ecf-8b29-568b-9e35-d64f845afe5d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/silent_image
+splat_name: Silent Image
 splat_pages:
 - 162
 ---

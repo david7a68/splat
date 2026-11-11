@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3b5157c6-7a04-572a-826c-bd4629bae9dd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/boots_of_speed"
-splat_name: "Boots of Speed"
+splat_id: 3b5157c6-7a04-572a-826c-bd4629bae9dd
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/boots_of_speed
+splat_name: Boots of Speed
 splat_pages:
 - 214
 ---

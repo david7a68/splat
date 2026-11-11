@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bbd9d12b-b636-58f2-87db-fe4301cb0a96"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/faithful_hound"
-splat_name: "Faithful Hound"
+splat_id: bbd9d12b-b636-58f2-87db-fe4301cb0a96
+splat_kind: reference
+splat_key: dnd2024:reference/spell/faithful_hound
+splat_name: Faithful Hound
 splat_pages:
 - 129
 ---

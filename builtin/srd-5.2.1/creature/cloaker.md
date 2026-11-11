@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9831c1b4-f3fc-59a7-a5f8-dd1f3b4a8306"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cloaker"
-splat_name: "Cloaker"
+splat_id: 9831c1b4-f3fc-59a7-a5f8-dd1f3b4a8306
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cloaker
+splat_name: Cloaker
 splat_pages:
 - 274
 ---

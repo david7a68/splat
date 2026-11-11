@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5c52bf79-26d5-5275-86e5-f99510b2a8f2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/treant"
-splat_name: "Treant"
+splat_id: 5c52bf79-26d5-5275-86e5-f99510b2a8f2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/treant
+splat_name: Treant
 splat_pages:
 - 333
 ---

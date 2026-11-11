@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "89b86c22-bf78-57f0-927a-3b9e61b383df"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_the_war_mage_1_2_or_3"
-splat_name: "Wand of the War Mage, +1, +2, or +3"
+splat_id: 89b86c22-bf78-57f0-927a-3b9e61b383df
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_the_war_mage_1_2_or_3
+splat_name: Wand of the War Mage, +1, +2, or +3
 splat_pages:
 - 251
 ---

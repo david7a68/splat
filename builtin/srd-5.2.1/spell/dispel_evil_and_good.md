@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f29682d6-b739-5ccc-8550-20c896f67fad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dispel_evil_and_good"
-splat_name: "Dispel Evil and Good"
+splat_id: f29682d6-b739-5ccc-8550-20c896f67fad
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dispel_evil_and_good
+splat_name: Dispel Evil and Good
 splat_pages:
 - 124
 ---

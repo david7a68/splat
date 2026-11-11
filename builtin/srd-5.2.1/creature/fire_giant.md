@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8555b152-d31f-548e-bf04-458602edf5c6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/fire_giant"
-splat_name: "Fire Giant"
+splat_id: 8555b152-d31f-548e-bf04-458602edf5c6
+splat_kind: reference
+splat_key: dnd2024:reference/creature/fire_giant
+splat_name: Fire Giant
 splat_pages:
 - 285
 ---

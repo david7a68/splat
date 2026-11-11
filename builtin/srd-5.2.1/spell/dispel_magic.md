@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "271c9e1c-5c09-5d36-8c42-32fe3922632e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dispel_magic"
-splat_name: "Dispel Magic"
+splat_id: 271c9e1c-5c09-5d36-8c42-32fe3922632e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dispel_magic
+splat_name: Dispel Magic
 splat_pages:
 - 124
 ---

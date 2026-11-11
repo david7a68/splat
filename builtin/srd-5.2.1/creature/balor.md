@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a58ec5ce-a760-5984-a3a8-731dd2e20dbd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/balor"
-splat_name: "Balor"
+splat_id: a58ec5ce-a760-5984-a3a8-731dd2e20dbd
+splat_kind: reference
+splat_key: dnd2024:reference/creature/balor
+splat_name: Balor
 splat_pages:
 - 261
 ---

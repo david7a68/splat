@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f0b382c9-3b6a-545f-beb0-52045fb7eab5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ioun_stone"
-splat_name: "Ioun Stone"
+splat_id: f0b382c9-3b6a-545f-beb0-52045fb7eab5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ioun_stone
+splat_name: Ioun Stone
 splat_pages:
 - 227
 - 228

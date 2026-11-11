@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2245ed65-f61f-5bfe-b157-1418b7600aee"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/burning_hands"
-splat_name: "Burning Hands"
+splat_id: 2245ed65-f61f-5bfe-b157-1418b7600aee
+splat_kind: reference
+splat_key: dnd2024:reference/spell/burning_hands
+splat_name: Burning Hands
 splat_pages:
 - 114
 ---

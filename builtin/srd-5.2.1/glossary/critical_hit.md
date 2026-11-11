@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bb169db5-5a9d-5cca-a4d8-1738e3bdd986"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/critical_hit"
-splat_name: "Critical Hit"
+splat_id: bb169db5-5a9d-5cca-a4d8-1738e3bdd986
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/critical_hit
+splat_name: Critical Hit
 splat_pages:
 - 179
 ---

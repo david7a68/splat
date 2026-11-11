@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "500f239d-5f4d-565a-a0c6-c7c61386c062"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/illusions"
-splat_name: "Illusions"
+splat_id: 500f239d-5f4d-565a-a0c6-c7c61386c062
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/illusions
+splat_name: Illusions
 splat_pages:
 - 183
 ---

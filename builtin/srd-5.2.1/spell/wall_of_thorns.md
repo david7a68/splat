@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2cfa5859-9ed5-59e9-b7f0-11520306f1d6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wall_of_thorns"
-splat_name: "Wall of Thorns"
+splat_id: 2cfa5859-9ed5-59e9-b7f0-11520306f1d6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wall_of_thorns
+splat_name: Wall of Thorns
 splat_pages:
 - 173
 ---

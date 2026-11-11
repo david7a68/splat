@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ac2aadad-343d-5504-8c0e-9744db6a74fb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wings_of_flying"
-splat_name: "Wings of Flying"
+splat_id: ac2aadad-343d-5504-8c0e-9744db6a74fb
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wings_of_flying
+splat_name: Wings of Flying
 splat_pages:
 - 253
 ---

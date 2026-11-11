@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c5242053-6f4a-5c6a-bdaf-b5f5e8c089a4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/portable_hole"
-splat_name: "Portable Hole"
+splat_id: c5242053-6f4a-5c6a-bdaf-b5f5e8c089a4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/portable_hole
+splat_name: Portable Hole
 splat_pages:
 - 234
 - 235

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b4d1d2d9-a74a-51f6-af3f-452c04ee7980"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/shadow"
-splat_name: "Shadow"
+splat_id: b4d1d2d9-a74a-51f6-af3f-452c04ee7980
+splat_kind: reference
+splat_key: dnd2024:reference/creature/shadow
+splat_name: Shadow
 splat_pages:
 - 322
 - 323

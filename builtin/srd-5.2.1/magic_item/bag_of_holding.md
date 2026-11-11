@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "66a1ec50-9858-544b-8246-b568eb6c5049"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bag_of_holding"
-splat_name: "Bag of Holding"
+splat_id: 66a1ec50-9858-544b-8246-b568eb6c5049
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bag_of_holding
+splat_name: Bag of Holding
 splat_pages:
 - 212
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "72f66053-94a9-5af1-b9fb-e1cebcdb5cb0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/possession"
-splat_name: "Possession"
+splat_id: 72f66053-94a9-5af1-b9fb-e1cebcdb5cb0
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/possession
+splat_name: Possession
 splat_pages:
 - 186
 ---

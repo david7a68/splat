@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5b3de5ba-34bc-5793-b707-6f20a3754d50"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/insect_plague"
-splat_name: "Insect Plague"
+splat_id: 5b3de5ba-34bc-5793-b707-6f20a3754d50
+splat_kind: reference
+splat_key: dnd2024:reference/spell/insect_plague
+splat_name: Insect Plague
 splat_pages:
 - 143
 ---

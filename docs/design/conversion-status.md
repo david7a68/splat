@@ -1,7 +1,7 @@
 # Definition conversion and rule contracts
 
 The [Markdown layout](markdown-layout.md) defines body tables, local YAML blocks
-and the single-authority rule. These schema-1 fields distinguish completed authoring, informational source,
+and the single-authority rule. These note-model fields distinguish completed authoring, informational source,
 and unavailable engine behavior. See the [SRD report](../srd-definitions.md)
 for the source inventory and current results.
 

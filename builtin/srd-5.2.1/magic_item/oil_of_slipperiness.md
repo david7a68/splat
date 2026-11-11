@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4396c13c-6143-5107-81a0-5e27b76aff64"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/oil_of_slipperiness"
-splat_name: "Oil of Slipperiness"
+splat_id: 4396c13c-6143-5107-81a0-5e27b76aff64
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/oil_of_slipperiness
+splat_name: Oil of Slipperiness
 splat_pages:
 - 233
 - 234

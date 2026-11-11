@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f0ceea2f-c772-54b2-96fd-21c43680c27f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/shield_1_2_or_3"
-splat_name: "Shield, +1, +2, or +3"
+splat_id: f0ceea2f-c772-54b2-96fd-21c43680c27f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/shield_1_2_or_3
+splat_name: Shield, +1, +2, or +3
 splat_pages:
 - 243
 ---

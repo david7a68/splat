@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60d9adbb-69cf-5a48-901f-2f4da50b83fc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/azer_sentinel"
-splat_name: "Azer Sentinel"
+splat_id: 60d9adbb-69cf-5a48-901f-2f4da50b83fc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/azer_sentinel
+splat_name: Azer Sentinel
 splat_pages:
 - 261
 ---

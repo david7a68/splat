@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1928ffd6-f6c3-54ef-a392-d5b236e9df16"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ice_storm"
-splat_name: "Ice Storm"
+splat_id: 1928ffd6-f6c3-54ef-a392-d5b236e9df16
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ice_storm
+splat_name: Ice Storm
 splat_pages:
 - 141
 - 142

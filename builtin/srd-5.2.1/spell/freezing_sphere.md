@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d34501dc-a82c-5a49-9c67-1883d074619c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/freezing_sphere"
-splat_name: "Freezing Sphere"
+splat_id: d34501dc-a82c-5a49-9c67-1883d074619c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/freezing_sphere
+splat_name: Freezing Sphere
 splat_pages:
 - 134
 ---

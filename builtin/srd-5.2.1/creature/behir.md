@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "770f2382-d587-5607-a52c-90582559d306"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/behir"
-splat_name: "Behir"
+splat_id: 770f2382-d587-5607-a52c-90582559d306
+splat_kind: reference
+splat_key: dnd2024:reference/creature/behir
+splat_name: Behir
 splat_pages:
 - 263
 ---

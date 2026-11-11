@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "be755344-1cf7-5e0d-87fc-78399f88fde8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/lesser_restoration"
-splat_name: "Lesser Restoration"
+splat_id: be755344-1cf7-5e0d-87fc-78399f88fde8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/lesser_restoration
+splat_name: Lesser Restoration
 splat_pages:
 - 144
 ---

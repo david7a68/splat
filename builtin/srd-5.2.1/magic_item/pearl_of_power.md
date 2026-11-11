@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "37b38f8a-83e4-5958-ac2c-c1266e802697"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/pearl_of_power"
-splat_name: "Pearl of Power"
+splat_id: 37b38f8a-83e4-5958-ac2c-c1266e802697
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/pearl_of_power
+splat_name: Pearl of Power
 splat_pages:
 - 234
 ---

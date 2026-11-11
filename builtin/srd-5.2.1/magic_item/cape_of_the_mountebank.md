@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e180f888-05a5-5688-b841-a1eb9845c386"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cape_of_the_mountebank"
-splat_name: "Cape of the Mountebank"
+splat_id: e180f888-05a5-5688-b841-a1eb9845c386
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cape_of_the_mountebank
+splat_name: Cape of the Mountebank
 splat_pages:
 - 215
 ---

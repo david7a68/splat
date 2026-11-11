@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "889fe9bc-2145-5272-baaa-1c3826e20332"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/transport_via_plants"
-splat_name: "Transport via Plants"
+splat_id: 889fe9bc-2145-5272-baaa-1c3826e20332
+splat_kind: reference
+splat_key: dnd2024:reference/spell/transport_via_plants
+splat_name: Transport via Plants
 splat_pages:
 - 170
 ---

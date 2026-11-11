@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "93bd3d73-ab93-51b7-b0fd-56156d29d966"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mind_blank"
-splat_name: "Mind Blank"
+splat_id: 93bd3d73-ab93-51b7-b0fd-56156d29d966
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mind_blank
+splat_name: Mind Blank
 splat_pages:
 - 149
 ---

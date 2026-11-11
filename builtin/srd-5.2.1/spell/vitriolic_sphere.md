@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f60c9a52-2737-5f1d-8eb3-104eaabd85f7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/vitriolic_sphere"
-splat_name: "Vitriolic Sphere"
+splat_id: f60c9a52-2737-5f1d-8eb3-104eaabd85f7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/vitriolic_sphere
+splat_name: Vitriolic Sphere
 splat_pages:
 - 172
 ---

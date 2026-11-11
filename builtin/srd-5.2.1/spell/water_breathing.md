@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ce75579b-a267-5731-b7d5-255ed495e197"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/water_breathing"
-splat_name: "Water Breathing"
+splat_id: ce75579b-a267-5731-b7d5-255ed495e197
+splat_kind: reference
+splat_key: dnd2024:reference/spell/water_breathing
+splat_name: Water Breathing
 splat_pages:
 - 173
 ---

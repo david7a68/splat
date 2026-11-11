@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "edd3cbc4-32e7-56da-b9b8-97fc8bfff477"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/horseshoes_of_a_zephyr"
-splat_name: "Horseshoes of a Zephyr"
+splat_id: edd3cbc4-32e7-56da-b9b8-97fc8bfff477
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/horseshoes_of_a_zephyr
+splat_name: Horseshoes of a Zephyr
 splat_pages:
 - 226
 ---

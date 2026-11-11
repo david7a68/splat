@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "92276cfa-298c-58d4-ba11-706b7e9db3e8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_swarming_insects"
-splat_name: "Staff of Swarming Insects"
+splat_id: 92276cfa-298c-58d4-ba11-706b7e9db3e8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_swarming_insects
+splat_name: Staff of Swarming Insects
 splat_pages:
 - 246
 ---

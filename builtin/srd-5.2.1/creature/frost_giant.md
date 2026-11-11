@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ad7ee015-54ad-5e60-91d6-9e5727a0c6f8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/frost_giant"
-splat_name: "Frost Giant"
+splat_id: ad7ee015-54ad-5e60-91d6-9e5727a0c6f8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/frost_giant
+splat_name: Frost Giant
 splat_pages:
 - 285
 - 286

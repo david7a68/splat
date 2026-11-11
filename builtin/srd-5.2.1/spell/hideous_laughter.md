@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "63a48475-10c7-5814-8d5b-aa8939ac345b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hideous_laughter"
-splat_name: "Hideous Laughter"
+splat_id: 63a48475-10c7-5814-8d5b-aa8939ac345b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hideous_laughter
+splat_name: Hideous Laughter
 splat_pages:
 - 140
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fd10494c-28ce-5e85-b486-35262262f64e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/otyugh"
-splat_name: "Otyugh"
+splat_id: fd10494c-28ce-5e85-b486-35262262f64e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/otyugh
+splat_name: Otyugh
 splat_pages:
 - 313
 ---

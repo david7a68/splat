@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9ccd7ffe-363d-537c-9a4e-326e4694fb94"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bandit"
-splat_name: "Bandit"
+splat_id: 9ccd7ffe-363d-537c-9a4e-326e4694fb94
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bandit
+splat_name: Bandit
 splat_pages:
 - 261
 ---

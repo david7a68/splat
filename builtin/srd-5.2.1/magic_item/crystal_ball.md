@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7f5760b2-e7ce-5b77-a1c9-daa83638b592"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/crystal_ball"
-splat_name: "Crystal Ball"
+splat_id: 7f5760b2-e7ce-5b77-a1c9-daa83638b592
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/crystal_ball
+splat_name: Crystal Ball
 splat_pages:
 - 216
 ---

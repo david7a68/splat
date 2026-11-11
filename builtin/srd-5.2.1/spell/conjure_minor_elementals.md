@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "86319b11-f7b5-51ec-8c79-b479081bb849"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_minor_elementals"
-splat_name: "Conjure Minor Elementals"
+splat_id: 86319b11-f7b5-51ec-8c79-b479081bb849
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_minor_elementals
+splat_name: Conjure Minor Elementals
 splat_pages:
 - 118
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b2de0b68-1767-51f6-a2cb-44b2ec4779d8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shining_smite"
-splat_name: "Shining Smite"
+splat_id: b2de0b68-1767-51f6-a2cb-44b2ec4779d8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shining_smite
+splat_name: Shining Smite
 splat_pages:
 - 162
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d6950892-aeae-5f19-a200-a197fa486c03"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_animals"
-splat_name: "Conjure Animals"
+splat_id: d6950892-aeae-5f19-a200-a197fa486c03
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_animals
+splat_name: Conjure Animals
 splat_pages:
 - 117
 - 118

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "66b93ec0-fc9b-5528-9d32-85c191d912f6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gargoyle"
-splat_name: "Gargoyle"
+splat_id: 66b93ec0-fc9b-5528-9d32-85c191d912f6
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gargoyle
+splat_name: Gargoyle
 splat_pages:
 - 286
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60038fed-3f96-5c6c-ac93-0a70ff980166"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/calm_emotions"
-splat_name: "Calm Emotions"
+splat_id: 60038fed-3f96-5c6c-ac93-0a70ff980166
+splat_kind: reference
+splat_key: dnd2024:reference/spell/calm_emotions
+splat_name: Calm Emotions
 splat_pages:
 - 114
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "04f1f0e8-90d4-5410-ab37-1ef86eef9b8d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/steam_mephit"
-splat_name: "Steam Mephit"
+splat_id: 04f1f0e8-90d4-5410-ab37-1ef86eef9b8d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/steam_mephit
+splat_name: Steam Mephit
 splat_pages:
 - 308
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "973ff678-7fe5-5b4c-8625-4ca4032a7f3b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/otherworldly_steed"
-splat_name: "Otherworldly Steed"
+splat_id: 973ff678-7fe5-5b4c-8625-4ca4032a7f3b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/otherworldly_steed
+splat_name: Otherworldly Steed
 splat_pages:
 - 131
 ---

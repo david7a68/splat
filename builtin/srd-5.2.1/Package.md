@@ -1,10 +1,10 @@
 ---
 splat_schema: 2
-splat_id: "71871979-b5d2-59a8-81c8-2081b92bb2fe"
-splat_kind: "package"
-splat_key: "dnd2024:package/srd"
-splat_name: "System Reference Document 5.2.1"
-splat_namespace: "dnd2024"
+splat_id: 71871979-b5d2-59a8-81c8-2081b92bb2fe
+splat_kind: package
+splat_key: dnd2024:package/srd
+splat_name: System Reference Document 5.2.1
+splat_namespace: dnd2024
 splat_pages:
 - 1
 - 2

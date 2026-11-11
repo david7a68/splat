@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2485a3f3-4003-5152-9d1f-37207e43339e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/bless"
-splat_name: "Bless"
+splat_id: 2485a3f3-4003-5152-9d1f-37207e43339e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/bless
+splat_name: Bless
 splat_pages:
 - 113
 ---

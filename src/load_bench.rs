@@ -75,7 +75,7 @@ fn load_bench() {
             time("packages", || {
                 crate::campaign_content::load_snapshot(campaign, modules)
             })
-            .2
+            .1
             .unwrap();
         }
         "app" => time("app", || {
@@ -90,7 +90,7 @@ fn load_bench() {
                     time("  packages", || {
                         crate::campaign_content::load_snapshot(campaign, modules)
                     })
-                    .2
+                    .1
                     .unwrap();
                 });
                 scope.spawn(|| {

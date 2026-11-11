@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af2e9725-0713-5667-b1ea-5c2c42edfef3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shatter"
-splat_name: "Shatter"
+splat_id: af2e9725-0713-5667-b1ea-5c2c42edfef3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shatter
+splat_name: Shatter
 splat_pages:
 - 161
 ---

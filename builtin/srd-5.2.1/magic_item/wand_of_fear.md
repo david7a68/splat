@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "48fe3e86-88f1-5a12-b480-537f9b142cc8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_fear"
-splat_name: "Wand of Fear"
+splat_id: 48fe3e86-88f1-5a12-b480-537f9b142cc8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_fear
+splat_name: Wand of Fear
 splat_pages:
 - 250
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "42be99a1-0743-578f-a005-2896fa49aee9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/cylinder_area_of_effect"
-splat_name: "Cylinder [Area of Effect]"
+splat_id: 42be99a1-0743-578f-a005-2896fa49aee9
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/cylinder_area_of_effect
+splat_name: Cylinder [Area of Effect]
 splat_pages:
 - 180
 ---

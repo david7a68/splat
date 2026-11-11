@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "44e0c53c-0168-58dc-84fd-13936ca9eb2c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/death_dog"
-splat_name: "Death Dog"
+splat_id: 44e0c53c-0168-58dc-84fd-13936ca9eb2c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/death_dog
+splat_name: Death Dog
 splat_pages:
 - 279
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7003b5f2-f90a-5fd5-bc8d-d25f56ef53ca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/talisman_of_ultimate_evil"
-splat_name: "Talisman of Ultimate Evil"
+splat_id: 7003b5f2-f90a-5fd5-bc8d-d25f56ef53ca
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/talisman_of_ultimate_evil
+splat_name: Talisman of Ultimate Evil
 splat_pages:
 - 249
 ---

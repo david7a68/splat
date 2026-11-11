@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9d1f59bd-5811-56e0-9ce3-f0f06bad879d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/difficult_terrain"
-splat_name: "Difficult Terrain"
+splat_id: 9d1f59bd-5811-56e0-9ce3-f0f06bad879d
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/difficult_terrain
+splat_name: Difficult Terrain
 splat_pages:
 - 181
 ---

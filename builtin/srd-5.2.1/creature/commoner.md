@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "be3442d8-61eb-595d-aeda-a8eecfe31fe0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/commoner"
-splat_name: "Commoner"
+splat_id: be3442d8-61eb-595d-aeda-a8eecfe31fe0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/commoner
+splat_name: Commoner
 splat_pages:
 - 275
 ---

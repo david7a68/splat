@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "31b4e8fc-9439-5d22-b9a4-5246441ec4b4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/divine_word"
-splat_name: "Divine Word"
+splat_id: 31b4e8fc-9439-5d22-b9a4-5246441ec4b4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/divine_word
+splat_name: Divine Word
 splat_pages:
 - 125
 ---

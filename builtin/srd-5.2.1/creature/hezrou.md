@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "155c89f8-eb9b-5e56-9a05-5bd2678b94d7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hezrou"
-splat_name: "Hezrou"
+splat_id: 155c89f8-eb9b-5e56-9a05-5bd2678b94d7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hezrou
+splat_name: Hezrou
 splat_pages:
 - 298
 ---
