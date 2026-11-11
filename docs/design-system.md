@@ -689,7 +689,9 @@ until the next note or plan edit.
 The header's New menu lists `Note…`, `NPC…`, `Location…` and `Generate NPC`. `…` marks each choice that asks for a
 name before it creates anything; Generate NPC makes its card at once, so it has no mark.
 
-Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. Duplicate readers keep
+Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. The path
+shortens from the front and keeps its file name whole; when `…/<file name>` does not fit beside the links, the path
+takes its own Read row and the links the row below, as in Library. Duplicate readers keep
 the path on this file line only; search results keep paths to distinguish names. A duplicate Lookup row
 puts the path right after the name, so the part that differs is cut last. Plain notes use
 one-line rows. A plain note's `Give this note a type` section says what a type gives the DM, and does not repeat the heading:
@@ -701,7 +703,9 @@ readable body says `Nothing written yet.` only. The file line keeps the one `Edi
 A History list gives its dates one column, as wide as the widest date in the list plus an `S` gap, so event
 names share one left edge and a wrapped summary stays right of the dates. The column takes at most a third of
 the width; a longer date wraps in it, with its first line on the name's line. A row without a date keeps the
-column empty. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
+column empty. A row in Here, Members or History is one paragraph: the name's link, then what the note is, wrapping at
+the name's edge with one `Small` line pitch; the link keeps its 24 px target on the first line, with that room above and
+below the paragraph. Lookup's `Use your own names` never replaces an unsaved NPC on the World page. World opens on its own card,
 which says `Lookup keeps <Lookup’s NPC>. Save or discard <this card’s NPC> to move <Lookup’s NPC> here.` while Lookup
 holds that NPC, so each of the two NPCs has its name.
 An unsaved generated NPC on the World page is a held draft. Only Save NPC and Discard end it. Every other path keeps
@@ -728,10 +732,12 @@ reader with no file line.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
-gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line. In a narrow pane (Lookup beside World), each label stands
+gap, capped at the value measure. Values wrap within their column, with Change on the first line. Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
-`L` gap come off its width, so a missing link stays on one line where it fits and otherwise wraps by whole words. The value column measures each value as it
-is drawn, including a missing group's icon and ` · Not found`. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
+`L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
+`Not found` has its own line directly below it. The value column measures each value as it is drawn, including a
+missing group's icon and ` · Not found`, and each wrapped line of Part of apart: Change follows the widest drawn line,
+and a group is measured by the name its link shows, not the words in the file. Empty or whitespace-only place, stat block and group values, and a Part of key with no value, are unset and give no warning. Broken links have a
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
@@ -750,7 +756,7 @@ keep their place when a warning comes or goes. Folder groups use normal-case pat
 type groups. The empty Status field in Edit shows the faint placeholder `A short word, such as alive.`
 
 Change pickers focus search. Place choices start at the value column beside In, with one file link and a
-bordered `Always use this one` action on each row. Change and the choice actions share one column: the
+bordered `Always use this one` action on each row; the link centres on the action's line. Change and the choice actions share one column: the
 widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages name
 both values as the rows show them: the name of the note a link opens, else the words in the file
@@ -766,13 +772,15 @@ move never replaces a file and checks that the note still holds the text the DM 
 <name>.md.` has `Undo file rename`, which checks the same before it moves the file back. The file choice is left out
 while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
-Lookup.
+Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
+tone (`In` `⚠ Watch House · Not found`).
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
-the editor and its scrollbar, so scrolling does not shorten the field. The shared save row
+the editor and its scrollbar, so scrolling does not shorten the field. Stat block, In and Part of share one Change
+column, an `L` gap after the widest of their values, which wrap within it. The shared save row
 keeps the state at the left, then quiet `Cancel` while the form has no changes or quiet `Discard` while it
 has changes, and Save changes at that right edge. Save changes is primary unless a live run owns Next turn;
 then it is secondary. Cancel closes the form. Discard closes the form and offers Undo discard.
