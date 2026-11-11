@@ -152,6 +152,15 @@ pub(crate) fn menu_item(ui: &mut egui::Ui, words: &str) -> bool {
         .clicked()
 }
 
+/// One line of a menu under a heading or a question: its words start at the heading's text.
+pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
+    Action::quiet(words)
+        .density(Density::Read)
+        .line_start()
+        .show(ui)
+        .clicked()
+}
+
 /// The right-click menu on a d20 roll. Returns how to roll it, when one was chosen.
 fn mode_menu(response: &egui::Response, link: &RollLink) -> Option<(Mode, bool)> {
     if !matches!(link, RollLink::D20 { .. }) {
@@ -913,7 +922,90 @@ fn icon(link: &RollLink) -> &'static str {
     }
 }
 
-/// A tile's second line: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
+fn changes_id() -> Id {
+    Id::new("roll_changes")
+}
+
+/// The run row whose stat block or sheet is drawn now, if any.
+pub(crate) fn roller(ctx: &egui::Context) -> Option<usize> {
+    ctx.data(|data| data.get_temp::<usize>(roller_id()))
+}
+
+/// A run's attack and damage changes for `row`, so that row's tiles show the numbers Splat
+/// rolls. Set it with the roller, around a run's reader.
+pub(crate) fn set_changes(ctx: &egui::Context, row: usize, changes: (i64, i64)) {
+    ctx.data_mut(|data| data.insert_temp(changes_id(), (row, changes)));
+}
+
+/// The changes of the roller drawn now: none outside a run, and none for another row.
+fn roller_changes(ctx: &egui::Context) -> (i64, i64) {
+    let roller = roller(ctx);
+    ctx.data(|data| data.get_temp::<(usize, (i64, i64))>(changes_id()))
+        .filter(|(row, _)| Some(*row) == roller)
+        .map_or((0, 0), |(_, changes)| changes)
+}
+
+/// `1d6+2` with `change` added to its flat part: `1d6+3`. For what a tile shows only.
+fn add_flat(dice: &str, change: i64) -> String {
+    let dice = dice.trim();
+    let digits = dice.len() - dice.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+    let (head, number) = dice.split_at(dice.len() - digits);
+    let head = head.trim_end();
+    // A fixed amount, such as `7`, has no dice.
+    if head.is_empty()
+        && let Ok(number) = number.parse::<i64>()
+    {
+        return design::signed(number + change)
+            .trim_start_matches('+')
+            .to_owned();
+    }
+    let sign = match head.chars().last() {
+        Some('+') => 1,
+        Some('-' | '\u{2212}') => -1,
+        _ => 0,
+    };
+    let (base, flat) = match number.parse::<i64>() {
+        Ok(number) if sign != 0 => {
+            let sign_width = head.chars().last().map_or(0, char::len_utf8);
+            (head[..head.len() - sign_width].trim_end(), sign * number)
+        }
+        _ => (dice, 0),
+    };
+    match flat + change {
+        0 => base.to_owned(),
+        total if total > 0 => format!("{base}+{total}"),
+        total => format!("{base}\u{2212}{}", -total),
+    }
+}
+
+/// `link` with a run's attack change in its bonus and its damage change in its first damage
+/// part (or the part that replaces it), as `make` rolls it. For what a tile shows; a press still asks for the printed link.
+fn with_changes(link: &RollLink, (attack, damage): (i64, i64)) -> RollLink {
+    let mut link = link.clone();
+    let parts = match &mut link {
+        RollLink::D20 {
+            what: D20::Attack,
+            bonus,
+            damage: parts,
+            ..
+        } => {
+            *bonus += attack;
+            Some(parts)
+        }
+        RollLink::SaveDc { damage: parts, .. } | RollLink::Damage { parts, .. } => Some(parts),
+        RollLink::D20 { .. } | RollLink::Dice { .. } => None,
+    };
+    // The first part, and a part that takes its place when its condition holds, as
+    // `or 2d6+2 slashing`: either one is first when it rolls.
+    for (at, part) in parts.into_iter().flatten().enumerate() {
+        if damage != 0 && (at == 0 || part.when.as_ref().is_some_and(|when| when.instead)) {
+            part.dice = add_flat(&part.dice, damage);
+        }
+    }
+    link
+}
+
+/// A tile's numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
 fn tile_detail(link: &RollLink) -> String {
     match link {
         RollLink::D20 { bonus, damage, .. } if damage.is_empty() => design::signed(*bonus),
@@ -937,25 +1029,217 @@ fn tile_detail(link: &RollLink) -> String {
     }
 }
 
-/// The width of an action tile.
+/// A tile's numbers for painting: each damage part, such as `2d6+2 slashing`, joined by
+/// no-break spaces, so a wrap falls only between parts and never parts a type from its dice.
+fn keep_together(text: &str) -> String {
+    text.split(" · ")
+        .map(|group| {
+            group
+                .split(", ")
+                .map(|part| part.replace(' ', "\u{a0}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// The number before `ft` or `feet` right after `key`: `5` in `reach 5 ft.`, `80/320` in
+/// `range 80/320 ft.`.
+fn feet_after<'t>(text: &'t str, key: &str) -> Option<&'t str> {
+    let at = text.find(key)? + key.len();
+    let rest = &text[at..];
+    let length = rest
+        .find(|c: char| !(c.is_ascii_digit() || c == '/'))
+        .unwrap_or(rest.len());
+    let unit = rest[length..].trim_start();
+    (length > 0 && (unit.starts_with("ft") || unit.starts_with("feet"))).then(|| &rest[..length])
+}
+
+/// An area in lower-case rules text, `10-foot emanation` or `20-foot-radius sphere`, as
+/// `10-ft emanation`.
+fn area(text: &str) -> Option<String> {
+    const SHAPES: [&str; 7] = [
+        "cone",
+        "cube",
+        "cylinder",
+        "emanation",
+        "line",
+        "sphere",
+        "square",
+    ];
+    for (at, _) in text.match_indices("-foot") {
+        let size = &text[..at];
+        let digits = size.len() - size.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+        if digits == 0 {
+            continue;
+        }
+        let rest = &text[at + "-foot".len()..];
+        let (radius, rest) = match rest
+            .strip_prefix("-radius")
+            .or_else(|| rest.strip_prefix(" radius"))
+        {
+            Some(rest) => ("-radius", rest),
+            None => ("", rest),
+        };
+        let rest = rest.trim_start();
+        if let Some(shape) = SHAPES.into_iter().find(|shape| {
+            rest.starts_with(shape)
+                && !rest[shape.len()..].starts_with(|c: char| c.is_ascii_alphabetic())
+        }) {
+            return Some(format!(
+                "{}-ft{radius} {shape}",
+                &size[size.len() - digits..]
+            ));
+        }
+    }
+    None
+}
+
+/// Where and how an action lands, from its rules text, for a tile's last line: `Reach 5 ft`,
+/// `Range 80/320 ft`, `10-ft emanation · Half on a success`. `None` when the text says none.
+fn tile_facts(chip: &Chip) -> Option<String> {
+    let text = chip.text.to_lowercase();
+    let mut facts = Vec::new();
+    if let Some(reach) = feet_after(&text, "reach ") {
+        facts.push(format!("reach {reach} ft"));
+    }
+    if let Some(range) = feet_after(&text, "range ") {
+        facts.push(format!("range {range} ft"));
+    }
+    if let Some(area) = area(&text) {
+        facts.push(area);
+    } else if let Some(within) = feet_after(&text, "within ") {
+        facts.push(format!("within {within} ft"));
+    }
+    if matches!(chip.link, RollLink::SaveDc { half: true, .. }) {
+        facts.push("half on a success".to_owned());
+    }
+    let mut facts = facts.join(" · ");
+    if let Some(first) = facts.get_mut(..1) {
+        first.make_ascii_uppercase();
+    }
+    (!facts.is_empty()).then_some(facts)
+}
+
+/// The width of an action tile, when two fit on a line.
 const TILE_WIDTH: f32 = 208.0;
 
-/// One action as a tile: its icon, name and hotkey number, and its numbers under them. The
-/// rules text is in hover. It is painted, so the tile is one control with one name.
-fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> egui::Response {
+/// A tile's words, laid out for its width: its name on one line, then its numbers and its
+/// facts, each wrapped, so no damage type or range is cut.
+struct TileText {
+    mark: std::sync::Arc<egui::Galley>,
+    digit: Option<std::sync::Arc<egui::Galley>>,
+    name: std::sync::Arc<egui::Galley>,
+    detail: std::sync::Arc<egui::Galley>,
+    facts: Option<std::sync::Arc<egui::Galley>>,
+}
+
+impl TileText {
+    fn new(
+        ui: &egui::Ui,
+        chip: &Chip,
+        shown: &RollLink,
+        width: f32,
+        number: Option<usize>,
+        armed: bool,
+    ) -> Self {
+        let c = colors();
+        let inner = (width - 2.0 * design::S).max(1.0);
+        let mark = design::one_line(
+            ui,
+            if armed {
+                design::icons::ARMED
+            } else {
+                icon(&chip.link)
+            },
+            Type::Body.font(ui),
+            if armed { c.accent } else { c.muted },
+            f32::INFINITY,
+        );
+        let digit = number.map(|n| {
+            design::one_line(
+                ui,
+                &n.to_string(),
+                Type::Small.font(ui),
+                c.faint,
+                f32::INFINITY,
+            )
+        });
+        let room = (inner
+            - mark.size().x
+            - design::XS
+            - digit.as_ref().map_or(0.0, |g| g.size().x + design::XS))
+        .max(1.0);
+        let name = design::words_that_fit(ui, link_label(&chip.link), &Type::Strong.font(ui), room);
+        let name = design::one_line(ui, &name, Type::Strong.font(ui), c.text, room);
+        let wrapped = |text: String| {
+            ui.painter()
+                .layout(text, Type::Small.font(ui), c.muted, inner)
+        };
+        Self {
+            mark,
+            digit,
+            name,
+            detail: wrapped(keep_together(&tile_detail(shown))),
+            facts: tile_facts(chip).map(wrapped),
+        }
+    }
+
+    /// The height of a tile with these words.
+    fn height(&self) -> f32 {
+        Type::Strong.line()
+            + self.detail.size().y
+            + self.facts.as_ref().map_or(0.0, |facts| facts.size().y)
+            + 2.0 * design::XS
+            + 2.0
+    }
+}
+
+/// The hover and focus text of a tile: its rules, its printed numbers when a run changes
+/// them, and its keys.
+fn tile_rules(ui: &mut egui::Ui, chip: &Chip, shown: &RollLink, keys: &str) {
     let c = colors();
-    let width = TILE_WIDTH.min(ui.available_width()).max(48.0);
-    let height = Type::Strong.line() + Type::Small.line() + 2.0 * design::XS + 2.0;
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+    ui.set_max_width(360.0);
+    ui.add(egui::Label::new(Type::Body.rich(ui, &chip.text).color(c.text)).wrap());
+    if *shown != chip.link {
+        ui.label(
+            Type::Small
+                .rich(ui, format!("Printed {}", tile_detail(&chip.link)))
+                .color(c.muted),
+        );
+    }
+    ui.label(
+        Type::Small
+            .rich(ui, format!("{}{keys}", hint(shown)))
+            .color(c.muted),
+    );
+}
+
+/// One action as a tile: its icon, name and hotkey number, then its numbers and where it
+/// lands. The rules text shows on hover and on keyboard focus, and is the tile's accessible
+/// description. It is painted, so the tile is one control with one name.
+fn tile(
+    ui: &mut egui::Ui,
+    chip: &Chip,
+    shown: &RollLink,
+    size: egui::Vec2,
+    number: Option<usize>,
+    armed: bool,
+) -> egui::Response {
+    let c = colors();
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
+    let facts = tile_facts(chip).map_or_else(String::new, |facts| format!(" {facts}."));
     let label = format!(
-        "{} · {}.{keys}",
+        "{} · {}.{facts}{keys}",
         link_label(&chip.link),
-        tile_detail(&chip.link)
+        tile_detail(shown)
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
     if ui.is_rect_visible(rect) {
+        let text = TileText::new(ui, chip, shown, rect.width(), number, armed);
         let painter = ui.painter_at(rect);
         let edge = if armed {
             c.accent
@@ -972,62 +1256,93 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
             egui::StrokeKind::Inside,
         );
         let inner = rect.shrink2(egui::vec2(design::S, design::XS));
-        let mark = if armed {
-            design::icons::ARMED
-        } else {
-            icon(&chip.link)
-        };
-        let mark = design::one_line(
-            ui,
-            mark,
-            Type::Body.font(ui),
-            if armed { c.accent } else { c.muted },
-            f32::INFINITY,
-        );
-        let mark_width = mark.size().x + design::XS;
-        painter.galley(inner.min, mark, c.text);
-        let digit = number.map(|n| {
-            design::one_line(
-                ui,
-                &n.to_string(),
-                Type::Small.font(ui),
-                c.faint,
-                f32::INFINITY,
-            )
-        });
-        let digit_width = digit.as_ref().map_or(0.0, |g| g.size().x + design::XS);
-        if let Some(digit) = digit {
+        let mark_width = text.mark.size().x + design::XS;
+        painter.galley(inner.min, text.mark, c.text);
+        if let Some(digit) = text.digit {
             painter.galley(
                 egui::pos2(inner.right() - digit.size().x, inner.top()),
                 digit,
                 c.faint,
             );
         }
-        let room = (inner.width() - mark_width - digit_width).max(1.0);
-        let name = design::words_that_fit(ui, link_label(&chip.link), &Type::Strong.font(ui), room);
-        let name = design::one_line(ui, &name, Type::Strong.font(ui), c.text, room);
-        painter.galley(inner.min + egui::vec2(mark_width, 0.0), name, c.text);
-        let detail = tile_detail(&chip.link);
-        let detail = design::words_that_fit(ui, &detail, &Type::Small.font(ui), inner.width());
-        let detail = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, inner.width());
-        painter.galley(
-            egui::pos2(inner.left(), inner.top() + Type::Strong.line()),
-            detail,
-            c.muted,
-        );
+        painter.galley(inner.min + egui::vec2(mark_width, 0.0), text.name, c.text);
+        let detail_top = inner.top() + Type::Strong.line();
+        let facts_top = detail_top + text.detail.size().y;
+        painter.galley(egui::pos2(inner.left(), detail_top), text.detail, c.muted);
+        if let Some(facts) = text.facts {
+            painter.galley(egui::pos2(inner.left(), facts_top), facts, c.muted);
+        }
     }
     if response.has_focus() {
         design::focus_ring(ui, rect);
     }
-    response.on_hover_ui(|ui| {
-        ui.set_max_width(360.0);
-        ui.add(egui::Label::new(Type::Body.rich(ui, &chip.text).color(c.text)).wrap());
-        ui.label(
-            Type::Small
-                .rich(ui, format!("{}{keys}", hint(&chip.link)))
-                .color(c.muted),
-        );
-    })
+    rules_on_hover_and_focus(ui, response, chip, shown, &keys)
+}
+
+/// A tile's rules text, and its printed numbers and keys, on hover and on keyboard focus (a
+/// click gives no focus), and as the control's accessible description.
+fn rules_on_hover_and_focus(
+    ui: &egui::Ui,
+    response: egui::Response,
+    chip: &Chip,
+    shown: &RollLink,
+    keys: &str,
+) -> egui::Response {
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_description(chip.text.clone());
+    });
+    if response.has_focus() {
+        response.show_tooltip_ui(|ui| tile_rules(ui, chip, shown, keys));
+        response
+    } else {
+        response.on_hover_ui(|ui| tile_rules(ui, chip, shown, keys))
+    }
+}
+
+/// The width of each tile on a line `line` wide: two to a line when two fit, or else the
+/// line's width up to the reader measure, so a tile that stands alone wraps nothing it need
+/// not.
+fn tile_width(line: f32) -> f32 {
+    if line >= 2.0 * TILE_WIDTH + design::S {
+        TILE_WIDTH
+    } else {
+        line.clamp(48.0, design::READER_MEASURE)
+    }
+}
+
+/// Quiet actions on a line under a message, wrapped by whole actions. The first action of
+/// each line starts its words at the text edge.
+fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Option<T> {
+    let mut chosen = None;
+    let width = ui.available_width();
+    let mut lines: Vec<Vec<(&str, T)>> = Vec::new();
+    let mut used = width;
+    for (word, action) in actions {
+        let needed = Action::quiet(word).density(Density::Read).natural_width(ui);
+        // The first action hangs its padding in the gutter, so it takes less of the line.
+        if lines.is_empty() || used + design::S + needed > width {
+            lines.push(Vec::new());
+            used = needed;
+        } else {
+            used += design::S + needed;
+        }
+        if let Some(line) = lines.last_mut() {
+            line.push((word, *action));
+        }
+    }
+    for line in lines {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = design::S;
+            for (at, (word, action)) in line.into_iter().enumerate() {
+                let button = Action::quiet(word).density(Density::Read);
+                let button = if at == 0 { button.line_start() } else { button };
+                if button.show(ui).clicked() {
+                    chosen = Some(action);
+                }
+            }
+        });
+    }
+    chosen
 }
 
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
@@ -1037,18 +1352,34 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
         return;
     }
     let ctx = ui.ctx().clone();
-    let in_run = ctx.data(|data| data.get_temp::<usize>(roller_id()).is_some());
+    let in_run = roller(&ctx).is_some();
     let armed = ctx
         .data(|data| data.get_temp::<ArmedView>(armed_id()))
         .filter(|view| in_run && chips.iter().any(|chip| chip.link == view.link));
+    let changes = if in_run { roller_changes(&ctx) } else { (0, 0) };
     set_entry(&ctx, entry);
     ui.add_space(design::XS);
+    let width = tile_width(ui.available_width());
+    let shown: Vec<RollLink> = chips
+        .iter()
+        .map(|chip| with_changes(&chip.link, changes))
+        .collect();
+    // One height for every tile, so a line of tiles keeps one edge.
+    let height = chips
+        .iter()
+        .zip(&shown)
+        .enumerate()
+        .map(|(at, (chip, link))| {
+            let number = (in_run && at < 9).then_some(at + 1);
+            TileText::new(ui, chip, link, width, number, false).height()
+        })
+        .fold(0.0, f32::max);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
-        for (at, chip) in chips.iter().enumerate() {
+        for (at, (chip, link)) in chips.iter().zip(&shown).enumerate() {
             let number = (in_run && at < 9).then_some(at + 1);
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
-            let response = tile(ui, chip, number, lit);
+            let response = tile(ui, chip, link, egui::vec2(width, height), number, lit);
             press(ui, &response, &chip.link);
         }
     });
@@ -1066,18 +1397,9 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
                 egui::Label::new(Type::Small.rich(ui, &view.status).color(colors().text)).wrap(),
             );
         });
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = design::S;
-            for (word, action) in &view.actions {
-                if Action::quiet(word)
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    ctx.data_mut(|data| data.insert_temp(armed_action_id(), *action));
-                }
-            }
-        });
+        if let Some(action) = line_start_actions(ui, &view.actions) {
+            ctx.data_mut(|data| data.insert_temp(armed_action_id(), action));
+        }
     } else if !in_run
         && let Some(outcome) =
             preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|c| c.link == o.link))
@@ -1108,26 +1430,35 @@ pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     }
 }
 
-/// The run's actions on one line above the dock while Lookup or Notes hide the panel:
-/// a quiet button for each tile, the armed one marked.
+/// The height of a line of buttons above the dock.
+pub(crate) const BAR_BUTTONS: f32 = 28.0;
+
+/// The run's actions on one line above the dock while Lookup or Notes hide the panel: a
+/// quiet button for each tile, the armed one marked, with a run's changes in its numbers.
+/// The first button starts at the dock's content edge.
 pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     let ctx = ui.ctx().clone();
     let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));
+    let changes = roller_changes(&ctx);
     ui.horizontal(|ui| {
-        ui.set_height(28.0);
+        ui.set_height(BAR_BUTTONS);
         ui.spacing_mut().item_spacing.x = design::XS;
+        ui.add_space(design::S);
         for chip in chips {
             if ui.available_width() < 80.0 {
                 break;
             }
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
-            let words = format!("{} {}", icon(&chip.link), chip.label);
+            let shown = with_changes(&chip.link, changes);
+            let label = Chip::new(shown.clone(), chip.text.clone())
+                .map_or_else(|| chip.label.clone(), |shown| shown.label);
+            let words = format!("{} {label}", icon(&chip.link));
             let response = Action::secondary(&words)
-                .name(&chip.label)
+                .name(&label)
                 .density(Density::Read)
                 .selected(lit)
-                .hint(&hint(&chip.link))
                 .show(ui);
+            let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
             press(ui, &response, &chip.link);
         }
     });
@@ -1256,6 +1587,194 @@ mod tests {
             "{}",
             rolled.line()
         );
+    }
+
+    #[test]
+    fn a_tile_shows_a_runs_changes_in_the_numbers_it_rolls() {
+        assert_eq!(add_flat("1d6+2", 1), "1d6+3");
+        assert_eq!(add_flat("1d6", 1), "1d6+1");
+        assert_eq!(add_flat("2d6+2", -2), "2d6");
+        assert_eq!(add_flat("1d4 + 2", -3), "1d4\u{2212}1");
+        assert_eq!(add_flat("1d8-1", 2), "1d8+1");
+        assert_eq!(add_flat("7", 1), "8");
+        let sickle = RollLink::D20 {
+            what: D20::Attack,
+            bonus: 3,
+            label: "Scorching Sickle".into(),
+            damage: vec![
+                DamagePart {
+                    dice: "1d6+2".into(),
+                    kind: Some("Slashing".into()),
+                    when: None,
+                },
+                DamagePart {
+                    dice: "1d6".into(),
+                    kind: Some("Fire".into()),
+                    when: None,
+                },
+            ],
+        };
+        // iter-19-R-FT3: the numbers Splat rolls, with the printed ones kept for hover.
+        assert_eq!(
+            tile_detail(&with_changes(&sickle, (1, 1))),
+            "+4 · 1d6+3 slashing, 1d6 fire"
+        );
+        assert_eq!(with_changes(&sickle, (0, 0)), sickle);
+        // `make` rolls the same: the bonus, and the damage change on the first part.
+        let mut random = Random::controlled([10, 1, 1]);
+        let outcome = make("Guard", &sickle, Mode::Normal, (1, 1), None, &mut random).unwrap();
+        assert_eq!(outcome.first.unwrap().total, 14);
+        assert_eq!(outcome.damage.unwrap().total, 1 + 2 + 1 + 1);
+        // A part that takes the first one's place shows the change too, as it rolls with it.
+        let charge = RollLink::D20 {
+            what: D20::Attack,
+            bonus: 3,
+            label: "Gore".into(),
+            damage: vec![
+                DamagePart {
+                    dice: "1d6+2".into(),
+                    kind: Some("Piercing".into()),
+                    when: None,
+                },
+                DamagePart {
+                    dice: "2d6+2".into(),
+                    kind: Some("Piercing".into()),
+                    when: Some(dice_text::When {
+                        text: "if the attack roll had Advantage".into(),
+                        instead: true,
+                    }),
+                },
+            ],
+        };
+        assert_eq!(
+            tile_detail(&with_changes(&charge, (0, 1))),
+            "+3 · 1d6+3 piercing, or 2d6+3 piercing"
+        );
+        let mut random = Random::controlled([10, 10, 1, 1]);
+        let outcome = make("Goat", &charge, Mode::Advantage, (0, 1), None, &mut random).unwrap();
+        assert_eq!(outcome.damage.unwrap().total, 1 + 1 + 2 + 1);
+    }
+
+    #[test]
+    fn a_tile_says_where_its_action_lands() {
+        let facts = |text: &str| chips(text).first().and_then(tile_facts).unwrap_or_default();
+        assert_eq!(
+            facts("Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage."),
+            "Reach 5 ft"
+        );
+        assert_eq!(
+            facts(
+                "Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage."
+            ),
+            "Range 150/600 ft"
+        );
+        assert_eq!(
+            facts(
+                "Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or range 20/60 ft. Hit: 4 (1d4 + 2) Piercing damage."
+            ),
+            "Reach 5 ft · range 20/60 ft"
+        );
+        assert_eq!(
+            facts(
+                "Ember Burst. Dexterity Saving Throw: DC 12, each creature in a 10-foot Emanation originating from the cultist. Failure: 7 (2d6) Fire damage. Success: Half damage."
+            ),
+            "10-ft emanation · half on a success"
+        );
+        assert_eq!(
+            facts(
+                "Fire Breath. The dragon exhales fire in a 15-foot cone. Each creature in that area must make a DC 13 Dexterity saving throw, taking 22 (4d10) fire damage on a failed save, or half as much damage on a successful one."
+            ),
+            "15-ft cone · half on a success"
+        );
+        assert_eq!(
+            facts(
+                "Fireball. Each creature in a 20-foot-radius Sphere must make a DC 15 Dexterity saving throw, taking 28 (8d6) fire damage on a failed save, or half as much damage on a successful one."
+            ),
+            "20-ft-radius sphere · half on a success"
+        );
+        // Feet that are no area, and a save with no half, say nothing they do not know.
+        assert_eq!(
+            facts(
+                "Charge. If the goat moved 20+ feet straight toward a target, it takes 7 (2d6) damage."
+            ),
+            ""
+        );
+    }
+
+    #[test]
+    fn a_tile_alone_on_its_line_takes_the_line_and_two_share_a_wide_one() {
+        assert_eq!(tile_width(416.0), 416.0);
+        assert_eq!(tile_width(300.0), 300.0);
+        assert_eq!(tile_width(2.0 * TILE_WIDTH + design::S), TILE_WIDTH);
+        assert_eq!(tile_width(1000.0), TILE_WIDTH);
+        assert_eq!(tile_width(423.0), 423.0);
+    }
+
+    #[test]
+    fn a_tiles_rules_text_is_its_accessible_description() {
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let text = "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.";
+        let harness = Harness::builder()
+            .with_size(egui::vec2(600.0, 300.0))
+            .build_ui(move |ui| {
+                design::theme::install(ui.ctx());
+                tiles(ui, "Wolf", &chips(text));
+            });
+        let tile = harness.get_by_label_contains("Bite · +4");
+        assert_eq!(
+            tile.accesskit_node().description().as_deref(),
+            Some(text),
+            "iter-19-R-ST3: the rules text is the tile's description"
+        );
+        assert!(
+            tile.accesskit_node()
+                .label()
+                .is_some_and(|label| label.contains("Reach 5 ft.")),
+            "its name has where it lands"
+        );
+    }
+
+    #[test]
+    fn keyboard_focus_shows_a_tiles_rules_on_the_tiles_and_on_the_action_bar() {
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let text = "Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.";
+        for bar in [false, true] {
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(600.0, 300.0))
+                .build_ui(move |ui| {
+                    design::theme::install(ui.ctx());
+                    if bar {
+                        compact_tiles(ui, &chips(text));
+                    } else {
+                        tiles(ui, "Wolf", &chips(text));
+                    }
+                });
+            let rules_shown = |harness: &Harness<'_>| {
+                harness
+                    .query_all_by_label_contains("Melee Attack Roll: +4, reach 5 ft.")
+                    .any(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
+            };
+            assert!(!rules_shown(&harness), "no rules before focus (bar {bar})");
+            // The tile's name, `Bite · +4 · …`, or the bar's button, `Bite +4`.
+            let name = if bar { "Bite +4" } else { "Bite · +4" };
+            harness.get_by_label_contains(name).focus();
+            harness.run_steps(3);
+            assert!(
+                rules_shown(&harness),
+                "iter-19-R-ST3: keyboard focus shows the rules (bar {bar})"
+            );
+            assert_eq!(
+                harness
+                    .get_by_label_contains(name)
+                    .accesskit_node()
+                    .description()
+                    .as_deref(),
+                Some(text),
+                "the rules are its description (bar {bar})"
+            );
+        }
     }
 
     #[test]

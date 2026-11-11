@@ -152,7 +152,6 @@ pub(crate) struct RunValues {
     pub hp: Option<i64>,
     pub current_hp: Option<i64>,
     pub initiative: Option<i64>,
-    pub by_hand: Vec<String>,
     pub speed: Option<String>,
 }
 

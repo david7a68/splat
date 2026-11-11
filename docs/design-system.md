@@ -790,7 +790,7 @@ below name and action, without an extra item gap, and extend to the menu slot. O
 member count, XP, Changed, members. Shorten members first, with full text on hover. Member counts and XP use
 one dot-separated line. Members and XP share one heading. Keep a member summary below search when there are
 members, also in compact editors. Member names and stats sit above Count, Edit and the menu; count stays at
-the left and actions together at the right. Changes stay on one line, such as `Changed · 2 to add by hand`,
+the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
 Save group with Add a creature first.
 
@@ -950,11 +950,13 @@ its help. Correct initiative says This row moves. The current turn stays. Labels
 initiative and DM-note commits have a short adjacent reason. Correct HP has an `L` gap after death saves.
 Empty Prep offers Edit encounter if its encounter exists.
 
-Changed creatures show Changed and unapplied values such as Attack +1 or Speed 40 ft on line two, aligned
-under the name at every scale. Setup shows only Changed. If name-only shrinking is insufficient, keep the
+Changed creatures show Changed and the changes the printed stat block does not show, such as Attack +1 or Speed
+40 ft, on line two, aligned under the name at every scale. Setup shows only Changed. If name-only shrinking is insufficient, keep the
 first table bonus and more; long conditions keep those that fit and a Conditions count link. The card puts
 changes at the top of its Stat block tab, except AC, maximum HP and initiative bonus, which already appear in
-the value trio. Add by hand comes first, in larger type on one summary line. An arriving member says `Changed
+the value trio. Add by hand comes first, in larger type on one summary line, and holds only what the run
+cannot apply, such as speed. Splat's rolls include attack and damage changes: the card and the editors list them
+as `in Splat’s rolls`, the tiles show the numbers rolled, and nothing tells the DM to add them again. An arriving member says `Changed
 · arrived with <group>` once. Use run AC, current/maximum HP and initiative bonus, with printed values below
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
 Paused snapshots state when they differ from the current file.
@@ -962,24 +964,38 @@ Paused snapshots state when they differ from the current file.
 ### Rolls
 
 A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
-wrapping row with `S` gaps, its text in hover. A tile is 208 px wide or the room left, two lines in a hairline frame
-with control radius: a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in
-faint Small at the right in a run, then its numbers in muted Small, shortened by whole words. Hover draws the frame in
-the focus colour. Spellcasting stays prose. A character's Actions page shows its attacks as tiles.
+wrapping row with `S` gaps. A tile is 208 px wide when two fit on a line; a tile alone on its line takes the line's
+width, up to the reader measure. Tiles in one row share one height. A tile has a hairline frame with control radius:
+a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in faint Small at the
+right in a run, then its numbers in muted Small, then, when the text says, where it lands and what a save does
+(`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
+cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
+draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
+changes in them; its hover adds the printed numbers. Spellcasting stays prose. A character's Actions page shows its
+attacks as tiles.
 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
-it. Enter applies the damage. Escape stops.`), then quiet actions on their own line: `Stop`, and for a save `Roll
-damage` and `Half for those at or above DC`, or for a player's attack `Roll for them`. Each other row shows, in accent
-Small, under its state or after its second line, the chance to hit it while an attack is armed, then the result
-against it (`11 vs AC 13 · 10 damage`); the longest form that fits whole, dropping its first parts. A save's creature
-targets show their roll in the AC cell. Outside a run a tile previews, and its totals show in Strong under the tiles.
+it. Enter applies the damage. Escape stops.`), led by the way the d20 rolls when it is not plain (`With advantage.
+Click a target…`). Then quiet actions on their own line, the first of each line with `line_start`, so its words start
+at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
+`Roll for them`. Each other row shows, in accent Small, under its state or after its second line, the chance to hit it
+while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the result against it, a plain comparison
+with no hit or miss verdict (`17 vs AC 13 · 10 damage`). It takes the longest form that fits whole, dropping words before the result first; the
+result's last two parts (the comparison and the damage) never drop, and are cut by words only where no place holds
+them. A save's creature targets show their roll in the AC cell. After `Roll damage`, each target says its own result,
+from the amount Enter gives it (`Saved · 1 damage (half)`, `Failed · 3 damage`), and keeps it after Enter. Outside a
+run a tile previews, and its totals show in Strong under the tiles.
+
+While Lookup or Notes hide the panel, its tiles are one line of secondary Read buttons above the dock, with the run's
+changes in their numbers (`Dagger +6`, `Fire Bolt +7`). The line keeps an `XS` gap above the dock, and its first button
+starts at the dock's content edge, where Amount starts.
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
 and the character allow it. A row's menu opens under the row, headed in muted Small (`Bite against Cinder Wolf 2`), so
-the row stays in view. A damage question opens there too: the condition in Small, wrapped at 320 px, then `Yes · …`,
-`No · …` and `Cancel`.
+the row stays in view; its choices start at the heading's words. A damage question opens there too: the condition in
+Small, wrapped at 320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
 save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.

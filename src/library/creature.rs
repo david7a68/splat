@@ -287,36 +287,13 @@ fn prose(
     spell_links: &mut impl FnMut(&mut egui::Ui, &str),
 ) {
     let mut tiles: Vec<crate::rolls::Chip> = Vec::new();
-    // Action tiles in a row, with a run's attack changes under them.
+    // Action tiles in a row. In a run, a tile shows the numbers Splat rolls, with a run's
+    // attack and damage changes in them, so no line under the tiles repeats those changes.
     let flush = |ui: &mut egui::Ui, tiles: &mut Vec<crate::rolls::Chip>| {
-        if tiles.is_empty() {
-            return;
+        if !tiles.is_empty() {
+            crate::rolls::tiles(ui, name, tiles);
+            tiles.clear();
         }
-        crate::rolls::tiles(ui, name, tiles);
-        let attack = tiles.iter().any(|chip| {
-            matches!(
-                chip.link,
-                RollLink::D20 {
-                    what: D20::Attack,
-                    ..
-                }
-            )
-        });
-        if attack
-            && let Some(values) = values
-            && !values.by_hand.is_empty()
-        {
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} · in the rolls", values.by_hand.join(", ")))
-                        .color(colors().participant.changed),
-                )
-                .wrap(),
-            );
-            ui.add_space(design::S);
-        }
-        tiles.clear();
     };
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
         // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
@@ -378,6 +355,7 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
         base: printed.into(),
         changed: speed.into(),
         by_hand: true,
+        in_rolls: false,
     });
     stat_detail(ui, "Speed", &preview, colors().participant.changed);
 }
