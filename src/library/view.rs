@@ -537,8 +537,7 @@ mod tests {
             .expect("the stat block opens with a heavy rule");
         let closing = heavy
             .iter()
-            .filter(|rule| rule.bottom() <= heading_top)
-            .last()
+            .rfind(|rule| rule.bottom() <= heading_top)
             .expect("a heavy rule closes the stat block above the heading");
         assert!(closing.top() > opening.top(), "two heavy rules");
         (opening.top(), closing.bottom(), heading_top)
