@@ -13336,7 +13336,7 @@ pub mod session_plan_groups {
         let with_note = lost_text.replacen(
             "\n## Members",
             &format!(
-                "\nScouts last saw {missing_id} at the ford.\n\n## Example\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[{missing_id}]] |  |  |  |\n\n## Members"
+                "\nScouts last saw {missing_id} at the ford. They report to [[Rival Team]].\n\n## Example\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[{missing_id}]] |  |  |  |\n\n## Members"
             ),
             1,
         );
@@ -13441,40 +13441,43 @@ pub mod session_plan_groups {
                 "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
             ),
         );
-        // The guidance belongs to Lost Patrol while it stays open. Selecting another entry ends
-        // it, by the list and by Back: coming back to Lost Patrol does not bring it back.
+        // The guidance belongs to Lost Patrol while it stays open. Opening another entry ends it,
+        // by a link and Back, and by the list: coming back to Lost Patrol does not bring it back.
         const GUIDANCE: &str = "needs a creature that cannot be found. Replace the link";
-        let shown_before_list = d.visible_text(GUIDANCE);
-        d.click_starting("Rival Team ·");
-        d.click_starting("Lost Patrol ·");
-        d.expect("Markdown editor");
-        d.click("Edit Markdown");
-        let after_list = (
-            d.editor_text()
-                .is_some_and(|text| text.contains(&missing_id)),
-            d.visible_text(GUIDANCE),
-        );
+        let open_with_editor = |d: &mut Driver<'_>| {
+            if !d.has("Markdown editor") {
+                d.click("Edit Markdown");
+            }
+            d.expect("Markdown editor");
+            (
+                d.editor_text()
+                    .is_some_and(|text| text.contains(&missing_id)),
+                d.visible_text(GUIDANCE),
+            )
+        };
+        let shown_before_back = d.visible_text(GUIDANCE);
+        // A link opens another entry and records Lost Patrol on the trail; Back returns to it.
+        d.click("Read");
+        d.click("Rival Team (opens Rival Team)");
+        d.wait_for_text("Rival Captain");
+        d.click("Back");
+        let after_back = open_with_editor(d);
         d.click(NAV_CAMPAIGN);
         d.expect("Repair Lost Patrol");
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
-        let shown_before_back = d.visible_text(GUIDANCE);
+        let shown_before_list = d.visible_text(GUIDANCE);
         d.click_starting("Rival Team ·");
-        d.click("Back");
-        d.click("Edit Markdown");
-        let after_back = (
-            d.editor_text()
-                .is_some_and(|text| text.contains(&missing_id)),
-            d.visible_text(GUIDANCE),
-        );
+        d.click_starting("Lost Patrol ·");
+        let after_list = open_with_editor(d);
         d.observe(
             "iter-23-B-FK1-owner",
-            shown_before_list
-                && after_list == (true, false)
-                && shown_before_back
-                && after_back == (true, false),
+            shown_before_back
+                && after_back == (true, false)
+                && shown_before_list
+                && after_list == (true, false),
             format!(
-                "Guidance before the list {shown_before_list}, Lost Patrol again after the list (open, guidance) {after_list:?}; before Back {shown_before_back}, after Back {after_back:?}"
+                "Guidance before Back {shown_before_back}, Lost Patrol again after Back (open, guidance) {after_back:?}; before the list {shown_before_list}, after the list {after_list:?}"
             ),
         );
         std::fs::write(&lost, &lost_text).unwrap();
