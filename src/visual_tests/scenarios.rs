@@ -29,6 +29,21 @@ const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 /// all show. `gap` names the choice that keeps exactly an `L` gap from the one before it (the red
 /// choice, or a quiet dismissal): on a shared line the gap is `L`; on a line of its own it starts at
 /// the text edge, as every wrapped choice does.
+/// Iteration 21 (FD4): at each size, the Skills rows in view hold at least `least` bonuses, and
+/// every one keeps the row's rule (`Driver::skills_row_faults`): one blank after each comma, a
+/// target at least `XL` square, clear of its skill's name and of the next entry, and whole entries
+/// on each row.
+fn check_skills_row(d: &mut Driver<'_>, id: &str, least: usize, sizes: &[(f32, f32)]) {
+    for &size in sizes {
+        let (count, faults) = d.at_size(size, Driver::skills_row_faults);
+        d.observe(
+            id,
+            count >= least && faults.is_empty(),
+            format!("{count} skill bonuses in view at {size:?} (at least {least}): {faults:?}"),
+        );
+    }
+}
+
 fn check_choices_at_text(
     d: &mut Driver<'_>,
     id: &str,
@@ -657,6 +672,13 @@ pub mod creature_filter {
         d.expect(ABERRATION);
         d.expect("MATCHES 9");
         d.state("underdark-aberrations", Sizes::All);
+        // The Aboleth's Skills row: `History +12, Perception +10`.
+        check_skills_row(
+            d,
+            "iter-21-S-fd4-library-skills",
+            2,
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.goal("find the aberrations of the Underdark");
         d.observe(
             "creature filter",
@@ -680,6 +702,12 @@ pub mod creature_filter {
         search_library(d, "immune:fire cr:17+");
         d.expect(SEARCH_RESULTS);
         d.state("search-terms", Sizes::Default);
+        check_skills_row(
+            d,
+            "iter-21-S-fd4-dragon-skills",
+            2,
+            &[SMALL, DEFAULT, LARGE],
+        );
         d.goal("search by immunity and challenge");
         d.observe(
             "creature search terms",
@@ -1966,6 +1994,13 @@ pub mod encounter_build {
         let cost = d.interaction_count() - before;
         let read = d.has_containing("ARMOR CLASS");
         d.state("stat-block-beside-editor", Sizes::All);
+        // The Cultist's Skills row in Lookup: `Deception +2, Religion +2`.
+        check_skills_row(
+            d,
+            "iter-21-S-fd4-lookup-skills",
+            2,
+            &[SMALL, DEFAULT, LARGE],
+        );
         let still_editing = d.has_containing(EDITOR_NAME);
         // The real loop: read, decide, add. The results stay beside what was just read.
         let add_in_view = d.nodes().iter().any(|n| n.name == ADD && n.in_view());
