@@ -286,8 +286,8 @@ Overwrite keeps.
 
 `Discard` takes one press, with no dialog. Show it only for a dirty draft, apart from Save. Keep `Draft
 discarded` and `Undo discard` until the next edit. A later disk change also clears Undo discard. Library shows the
-same Undo message in its reserved reason slot, aligned with the editor's left edge. The slot reserves the
-message's height, so neither the reason nor the message moves the editor. A repair draft keeps its parse error
+same Undo message in its reserved reason slot, aligned with the editor's left edge. The slot has a fixed
+height of two text lines (see Files and recovery), so neither the reason nor the message moves the editor. A repair draft keeps its parse error
 above the slot, and the slot below the error holds the discard result the same way. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
@@ -592,12 +592,15 @@ the same place. Every Library result takes it too: package use, a manifest write
 separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
 result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
 they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown keeps one space of fixed height below the save row: a result line, then the reason slot directly above the
-editor. The result line is reserved whether or not a result shows, and holds the guidance first when Save's reason
-or the discard result holds the slot. So no result, reason, Discard or Undo discard moves the editor. With no entry
+Markdown keeps one space of fixed height below the save row: a result part, then the reason slot directly above the
+editor, each two text lines high whatever it holds. Longer words wrap and scroll inside their part, beside a lane
+kept for its scroll bar, so no text is cut. The result part holds the guidance first when Save's reason or the
+discard result holds the slot. So no result, reason, Discard or Undo discard moves the editor. With no entry
 open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
-open, and end on its next link update or saved edit, on Undo, or when a file the update wrote changes on disk.
+open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
+Undo, or when a file the update wrote changes on disk. An offer is checked again on every load and before its write:
+its entry still has the new name, and neither name names another entry, or it goes and writes nothing.
 Undo restores only the files that update wrote, so another entry's link update stays.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will

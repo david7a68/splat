@@ -3142,9 +3142,10 @@ pub fn package_rename(d: &mut Driver<'_>) {
             .unwrap()
             .path,
     );
+    let wraith_before = fs::read_to_string(&wraith).unwrap();
     fs::write(
         &wraith,
-        fs::read_to_string(&wraith).unwrap() + "\nSee [[Veilglass Lantern]].\n",
+        format!("{wraith_before}\nSee [[Veilglass Lantern]].\n"),
     )
     .unwrap();
     d.click("Packages");
@@ -3153,24 +3154,60 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Veilglass Lantern · ");
     d.wait_for_text("Veilglass Lantern");
     let a_hidden_in_b = !d.has_containing("Links now say") && !d.has("Undo link update");
+    let lantern_path = package.join(
+        &entries
+            .iter()
+            .find(|e| e.name == "Veilglass Lantern")
+            .unwrap()
+            .path,
+    );
     d.click(EDIT_MARKDOWN);
+    // Astra re-check: B's long name makes its offer and its result wrap. They scroll inside the
+    // two-line result part, so the editor keeps its place before, with the offer and with the
+    // result, at 960, 1200 and 1920.
+    const LAMP: &str = "Veilglass Lantern of the Ninth Ember Watch at Cinderfall Gate";
+    // From Save's row to the editor: the space that holds the results and the reason.
+    let editor_below_read = |d: &mut Driver<'_>| {
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                // The editor's frame: its accessible rect follows its scrolled text.
+                Some(d.input_frame("Markdown editor")?.0.top() - d.place_of("Save")?.bottom())
+            })
+        })
+    };
     let lantern = d.editor_text().unwrap();
-    let lamp = crate::content_workspace::patch_fields(
-        &lantern,
-        &[("splat_name", Some("Veilglass Lamp".into()))],
-    )
-    .unwrap()
-    .replace("# Veilglass Lantern", "# Veilglass Lamp");
+    let lamp =
+        crate::content_workspace::patch_fields(&lantern, &[("splat_name", Some(LAMP.into()))])
+            .unwrap()
+            .replace("# Veilglass Lantern", &format!("# {LAMP}"));
     d.replace_text_in("Markdown editor", &lamp);
+    let b_unsaved = editor_below_read(d);
     d.click("Save");
-    d.wait_for_text("Change links from “Veilglass Lantern” to “Veilglass Lamp”.");
+    d.settle();
+    let b_offer_shown = d.has_containing(&format!(
+        "Change links from “Veilglass Lantern” to “{LAMP}”."
+    ));
     let b_offer_alone = !d.has_containing("Links now say “Ash Wolf”");
+    let b_with_offer = editor_below_read(d);
     d.click("Update 1 link");
-    d.wait_for_text("Links now say “Veilglass Lamp”.");
+    d.settle();
+    let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
+    let b_with_result = editor_below_read(d);
+    d.observe(
+        "iter-24-L-wrapped-result",
+        b_offer_shown
+            && b_result_shown
+            && b_unsaved.iter().all(Option::is_some)
+            && b_unsaved == b_with_offer
+            && b_unsaved == b_with_result,
+        format!(
+            "B's wrapped offer and result keep its editor below Read: unsaved {b_unsaved:?}, offer {b_with_offer:?}, result {b_with_result:?}"
+        ),
+    );
     let b_saved = fs::read_to_string(&wraith)
         .unwrap()
-        .contains("[[Veilglass Lamp]]");
+        .contains(&format!("[[{LAMP}]]"));
     search_library(d, "Ash Wolf");
     d.click_starting("Ash Wolf · ");
     d.settle();
@@ -3190,7 +3227,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
         .contains("[[Cinder Wolf]]");
     let b_kept = fs::read_to_string(&wraith)
         .unwrap()
-        .contains("[[Veilglass Lamp]]");
+        .contains(&format!("[[{LAMP}]]"));
     d.observe(
         "iter-24-L-link-owner-undo",
         a_undone && b_kept,
@@ -3210,6 +3247,76 @@ pub fn package_rename(d: &mut Driver<'_>) {
         ),
     );
     d.state("renamed-creature-link-update-undone", Sizes::All);
+
+    // Astra re-check: a stale offer goes. B is renamed (offer), then renamed again to a name
+    // another entry has: the earlier offer ends with that save, though the new rename gives no
+    // offer. Then a valid offer whose entry is renamed outside Splat goes on reload. The linking
+    // file keeps its bytes throughout.
+    let rename_b = |d: &mut Driver<'_>, from: &str, to: &str| {
+        d.click(EDIT_MARKDOWN);
+        let text = d.editor_text().unwrap();
+        let renamed =
+            crate::content_workspace::patch_fields(&text, &[("splat_name", Some(to.into()))])
+                .unwrap()
+                .replace(&format!("# {from}"), &format!("# {to}"));
+        d.replace_text_in("Markdown editor", &renamed);
+        d.click("Save");
+        d.settle();
+    };
+    let rename_outside = |to: &str| {
+        let text = fs::read_to_string(&lantern_path).unwrap();
+        let name = splat::content::Entry::parse("Item.md", &text).unwrap().name;
+        fs::write(
+            &lantern_path,
+            crate::content_workspace::patch_fields(&text, &[("splat_name", Some(to.into()))])
+                .unwrap()
+                .replace(&format!("# {name}"), &format!("# {to}")),
+        )
+        .unwrap();
+    };
+    let linking = fs::read(&wraith).unwrap();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let first_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
+    rename_b(d, "Veilglass Beacon", "Ash Wraith");
+    let second_rename_gone =
+        !d.has_containing("Change links from") && !d.has_containing("Update 1 link");
+    rename_outside(LAMP);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let second_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
+    rename_outside("Veilglass Torch");
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting("Veilglass Torch · ");
+    d.settle();
+    let outside_gone = !d.has_containing("Change links from") && !d.has_containing("Update 1 link");
+    let bytes_kept = fs::read(&wraith).unwrap() == linking;
+    d.observe(
+        "iter-24-L-stale-offer",
+        first_offer && second_rename_gone && second_offer && outside_gone && bytes_kept,
+        format!(
+            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, gone after an outside rename {outside_gone}; the linking file kept its bytes {bytes_kept}"
+        ),
+    );
+    // The later steps compare with the package before B's renames: give B and Ash Wraith their
+    // first text back.
+    fs::write(&wraith, &wraith_before).unwrap();
+    fs::write(&lantern_path, &lantern).unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
 
     let moved = d.root.join("modules/watch-package");
     fs::rename(&package, &moved).unwrap();
@@ -3584,6 +3691,38 @@ pub fn package_about(d: &mut Driver<'_>) {
     );
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    // Astra re-check: a Save reason that wraps (a read-only file, at 960) scrolls inside its
+    // two-line slot; before it, with it and after Discard the editor keeps its place.
+    let changed = format!("{written}\nA note for the watch.\n");
+    d.replace_editor_text(&changed);
+    let unsaved = (kept(d), editor_below_read(d));
+    let mut read_only = fs::metadata(&path).unwrap().permissions();
+    read_only.set_readonly(true);
+    fs::set_permissions(&path, read_only.clone()).unwrap();
+    d.click("Save");
+    d.wait_for_text("Not saved");
+    let reason = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.contains("read only") || node.name.contains("no permission"))
+        .map(|node| node.name);
+    let failed = (kept(d), editor_below_read(d));
+    #[allow(clippy::permissions_set_readonly_false)]
+    read_only.set_readonly(false);
+    fs::set_permissions(&path, read_only).unwrap();
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    let after = (kept(d), editor_below_read(d));
+    d.observe(
+        "iter-24-L-FB3-wrapped-reason",
+        reason.is_some()
+            && [&unsaved, &failed, &after]
+                .iter()
+                .all(|(kept, tops)| *kept && *tops == no_result),
+        format!(
+            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?}, discarded {after:?}"
+        ),
+    );
     assert!(!folder.join("Package.md").exists());
     d.click("Undo write Module.md");
     d.wait_for_text("Line 4 opens a list");

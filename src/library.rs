@@ -920,6 +920,21 @@ impl Loaded {
         notes
     }
 
+    /// True while a rename's offer still holds: its entry still has the new name, and the old and
+    /// new names name no other entry or file.
+    fn offer_holds(&self, offer: &LinkOffer) -> bool {
+        self.notes
+            .iter()
+            .position(|note| note.entry.as_ref().is_some_and(|e| e.id == offer.owner))
+            .is_some_and(|at| {
+                self.notes[at]
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.name == offer.new)
+                    && self.can_rename_links(at, &offer.old, &offer.new)
+            })
+    }
+
     /// How many links in the notes name `old`, for the offer to change them to `new`. Counted
     /// once per pair of names until `invalidate` or a reload.
     fn rename_link_count(&self, old: &str, new: &str) -> usize {
@@ -1752,6 +1767,35 @@ struct PagePress {
     registration: bool,
     use_copy: bool,
     rosters: bool,
+}
+
+/// How many text lines each part of Edit Markdown's space below the save row holds.
+const SLOT_LINES: f32 = 2.0;
+
+/// One part of Edit Markdown's space below the save row: a fixed rect whatever it holds. Longer
+/// words wrap and scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and
+/// nothing below moves.
+fn fixed_part<R>(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    id: &str,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let mut part = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
+    egui::ScrollArea::vertical()
+        .id_salt(id)
+        .max_height(rect.height())
+        .auto_shrink([false, true])
+        .show(&mut part, |ui| {
+            ui.set_max_width(rect.width() - lane);
+            add(ui)
+        })
+        .inner
 }
 
 /// The kept results of the open entry's pane, in the order they show. With an entry open, Read
@@ -2659,33 +2703,6 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
     all.notes.sort_by_cached_key(|n| natural_key(n.name()));
     all.refresh_diagnostics();
     Ok(all)
-}
-
-/// The height `design::draft_discarded` takes at this width: one line beside Undo discard, or the
-/// message with Undo discard on the line below.
-fn discarded_height(ui: &egui::Ui, name: &str, width: f32) -> f32 {
-    let text = format!("{name} draft discarded.");
-    let body = Type::Body.font(ui);
-    let gap = ui.spacing().item_spacing.x;
-    let inset =
-        design::S + 1.0 + design::number_width(ui, icons::INFO, &body) + gap * 2.0 - design::XS;
-    let button = Action::quiet("Undo discard")
-        .icon(icons::UNDO)
-        .density(Density::Read)
-        .natural_width(ui);
-    if design::number_width(ui, &text, &body) + inset + gap + button <= width {
-        return Density::Read.control();
-    }
-    let lines = egui::WidgetText::from(Type::Body.rich(ui, text))
-        .into_galley(
-            ui,
-            Some(egui::TextWrapMode::Wrap),
-            (width - inset).max(1.0),
-            body,
-        )
-        .size()
-        .y;
-    lines + ui.spacing().item_spacing.y + Density::Read.control()
 }
 
 /// Undo discard offers words only to the note they came from. Two owners can each have a
@@ -3630,6 +3647,9 @@ impl Library {
                             self.focus_repair =
                                 self.selected.is_some_and(|i| l.notes[i].error.is_some());
                             self.forget_changed_undos();
+                            // An offer whose entry changed outside Splat, or whose names now name
+                            // another entry, goes; it is checked again before any write too.
+                            self.renamed_links.retain(|offer| l.offer_holds(offer));
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -4570,33 +4590,40 @@ impl Library {
                 .position(|offer| Some(offer.owner) == open)
             && let Some(loaded) = &self.loaded
         {
-            let LinkOffer { owner, old, new } = self.renamed_links.remove(at);
-            let files: Vec<_> = loaded
-                .notes
-                .iter()
-                .filter_map(|note| {
-                    let root = note.owner.root()?;
-                    let (after, changed) = crate::world::rename_note_links(&note.text, &old, &new);
-                    (changed > 0).then(|| {
-                        (
-                            root.to_path_buf(),
-                            note.path.clone(),
-                            note.text.clone(),
-                            after,
-                        )
+            let offer = self.renamed_links.remove(at);
+            // The offer is checked again before the write: its entry still has the new name, and
+            // neither name names another entry. A stale offer goes and writes nothing.
+            let holds = loaded.offer_holds(&offer);
+            let LinkOffer { owner, old, new } = offer;
+            if holds {
+                let files: Vec<_> = loaded
+                    .notes
+                    .iter()
+                    .filter_map(|note| {
+                        let root = note.owner.root()?;
+                        let (after, changed) =
+                            crate::world::rename_note_links(&note.text, &old, &new);
+                        (changed > 0).then(|| {
+                            (
+                                root.to_path_buf(),
+                                note.path.clone(),
+                                note.text.clone(),
+                                after,
+                            )
+                        })
                     })
-                })
-                .collect();
-            match crate::content_workspace::ContentEdits::write(files) {
-                Ok(edits) => {
-                    // The owner's new update ends its earlier result.
-                    self.link_edits.retain(|result| result.owner != owner);
-                    self.link_edits.push(LinkResult { owner, edits, new });
-                    self.stale = true;
-                    self.content_changed =
-                        campaigns.active_campaign().map(|campaign| campaign.path);
+                    .collect();
+                match crate::content_workspace::ContentEdits::write(files) {
+                    Ok(edits) => {
+                        // The owner's new update ends its earlier result.
+                        self.link_edits.retain(|result| result.owner != owner);
+                        self.link_edits.push(LinkResult { owner, edits, new });
+                        self.stale = true;
+                        self.content_changed =
+                            campaigns.active_campaign().map(|campaign| campaign.path);
+                    }
+                    Err(error) => self.error = Some(error),
                 }
-                Err(error) => self.error = Some(error),
             }
         }
         if pressed.links
@@ -5619,15 +5646,16 @@ impl Library {
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
-                // A saved edit of the entry ends its link update's result; a rename gives it a
-                // new offer, which replaces its earlier one. Other entries keep theirs.
+                // A saved edit of the entry ends its link update's result and its earlier offer,
+                // whatever this save offers. A rename that passes the check gives a new offer.
+                // Other entries keep theirs.
                 self.link_edits.retain(|result| result.owner != entry.id);
+                self.renamed_links.retain(|offer| offer.owner != entry.id);
                 if let Some(old) = &l.notes[i].entry
                     && old.name != entry.name
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
-                    self.renamed_links.retain(|offer| offer.owner != entry.id);
                     self.renamed_links.push(LinkOffer {
                         owner: entry.id,
                         old: old.name.clone(),
@@ -6511,87 +6539,38 @@ impl Library {
             {
                 // One space below the save row holds the reader's results and, below them, the
                 // reason slot: the discard result, Save's reason, the guidance or the draft's
-                // reason. Its height is one result line and the slot together, whether or not
-                // either shows, so no result, reason or Discard moves the editor. The guidance
-                // comes directly above when the slot holds Save's reason or the discard result.
+                // reason. Each part is two text lines high whatever it holds; longer words wrap
+                // and scroll inside their part. So no result, reason or Discard moves the editor.
+                // The guidance comes first in the result part when the slot holds Save's reason
+                // or the discard result.
                 let discard_shown =
                     discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
                 let slot_busy = discard_shown || slot_problem.is_some();
                 let slot_link = link_words.filter(|_| !slot_busy);
                 let link_above = link_words.filter(|_| slot_busy);
-                // Measure the same words in both states, so the first edit keeps the caret in place.
-                let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
-                // The discard message is measured too, so neither state moves the editor.
-                let body_height = |words: &str| {
-                    egui::WidgetText::from(Type::Body.rich(ui, words))
-                        .into_galley(
-                            ui,
-                            Some(egui::TextWrapMode::Wrap),
-                            editor_width - design::XL,
-                            Type::Body.font(ui),
-                        )
-                        .size()
-                        .y
-                };
-                let height = if let Some(link) = slot_link {
-                    body_height(link).max(Density::Read.control() + design::XS)
-                } else {
-                    egui::WidgetText::from(Type::Small.rich(ui, words))
-                        .into_galley(
-                            ui,
-                            Some(egui::TextWrapMode::Wrap),
-                            editor_width,
-                            Type::Small.font(ui),
-                        )
-                        .size()
-                        .y
-                        .max(discarded_height(ui, note.name(), editor_width))
-                        .max(Density::Read.control() + design::XS)
-                        .max(slot_problem.map_or(0.0, |problem| body_height(problem)))
-                };
-                // The results draw from the space's top. A result line is one message with its
-                // Undo; a result too long for one line takes the room it needs.
-                // The guidance, when the slot is busy, comes first in the same upper part, so it
-                // stays directly above the slot.
+                let part = SLOT_LINES * Type::Body.line();
                 let top = ui.cursor().min;
-                let mut drawn = 0.0;
+                ui.allocate_exact_size(egui::vec2(editor_width, part * 2.0), egui::Sense::hover());
                 let results_shown = !choices_in_reader && results.any();
                 if results_shown || link_above.is_some() {
-                    let mut results_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(egui::Rect::from_min_size(
-                                top,
-                                egui::vec2(editor_width, ui.available_height()),
-                            ))
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    if let Some(words) = link_above {
-                        design::message(&mut results_ui, Tone::Warning, words);
+                    let upper = egui::Rect::from_min_size(top, egui::vec2(editor_width, part));
+                    if let Some(press) = fixed_part(ui, upper, "library_result_part", |ui| {
+                        if let Some(words) = link_above {
+                            design::message(ui, Tone::Warning, words);
+                        }
+                        results_shown.then(|| show_results(ui, &results))
+                    }) {
+                        pressed = press;
                     }
-                    if results_shown {
-                        pressed = show_results(&mut results_ui, &results);
-                    }
-                    drawn = results_ui.min_rect().height();
                 }
-                // The reason slot sits directly above the editor, below the result line, which is
-                // reserved whether or not a result shows.
-                let result_line = drawn.max(Density::Read.control());
-                ui.allocate_exact_size(
-                    egui::vec2(editor_width, result_line + height),
-                    egui::Sense::hover(),
-                );
                 let slot = egui::Rect::from_min_size(
-                    top + egui::vec2(0.0, result_line),
-                    egui::vec2(editor_width, height),
+                    top + egui::vec2(0.0, part),
+                    egui::vec2(editor_width, part),
                 );
                 if discard_shown {
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    if design::draft_discarded(&mut slot_ui, note.name())
-                        && let Some((_, _, text)) = self.discarded.take()
+                    if fixed_part(ui, slot, "library_reason_part", |ui| {
+                        design::draft_discarded(ui, note.name())
+                    }) && let Some((_, _, text)) = self.discarded.take()
                     {
                         self.draft = text;
                         // The draft changed: a failed Save of the old words no longer owns it.
@@ -6599,30 +6578,21 @@ impl Library {
                     }
                 } else if let Some(problem) = slot_problem {
                     // Save's reason: its refusal before the write, or the disk's failure.
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    design::message(&mut slot_ui, Tone::Error, problem);
+                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                        design::message(ui, Tone::Error, problem);
+                    });
                 } else if let Some(words) = slot_link {
                     // The repair this note was opened for, in the reason line.
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::top_down(egui::Align::Min)),
-                    );
-                    design::message(&mut slot_ui, Tone::Warning, words);
+                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                        design::message(ui, Tone::Warning, words);
+                    });
                 } else if let Some(reason) = draft_reason {
-                    let mut slot_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .max_rect(slot)
-                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                    );
-                    slot_ui.add(
-                        egui::Label::new(Type::Small.rich(&slot_ui, reason).color(colors().muted))
-                            .wrap(),
-                    );
+                    fixed_part(ui, slot, "library_reason_part", |ui| {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                                .wrap(),
+                        );
+                    });
                 }
             }
         }
@@ -7807,52 +7777,6 @@ mod tests {
         assert!(manifest.error.is_none());
         assert_eq!(loaded.files_to_fix(&[], None), 1);
         assert_eq!(about(&loaded), format!("{} About Emberfall", icons::WARN));
-    }
-
-    /// The reserved slot measures the shared message, on one line and wrapped, so the editor keeps
-    /// its place when Discard replaces the reason.
-    #[test]
-    fn discarded_height_matches_the_shared_message() {
-        let ctx = egui::Context::default();
-        for (name, width) in [
-            ("Ash Exposure", 600.0),
-            ("Ash Exposure", 200.0),
-            ("Cinder Hound of the Long Ash Road", 260.0),
-        ] {
-            let mut measured = (0.0, 0.0);
-            for _ in 0..2 {
-                let _ = ctx.run(egui::RawInput::default(), |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let expected = discarded_height(ui, name, width);
-                        let shown = ui
-                            .allocate_ui_with_layout(
-                                egui::vec2(width, f32::INFINITY),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ui.set_width(width);
-                                    design::draft_discarded(ui, name)
-                                },
-                            )
-                            .response
-                            .rect
-                            .height();
-                        measured = (expected, shown);
-                    });
-                });
-            }
-            let (expected, shown) = measured;
-            assert!(
-                (expected - shown).abs() <= 0.5,
-                "{name} at {width}: slot {expected}, message {shown}"
-            );
-            // The narrow case wraps, so the slot must grow past one control.
-            if width < 300.0 {
-                assert!(
-                    expected > Density::Read.control() + design::XS,
-                    "{name} at {width}"
-                );
-            }
-        }
     }
 
     #[test]

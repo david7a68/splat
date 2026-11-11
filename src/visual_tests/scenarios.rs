@@ -14460,10 +14460,13 @@ pub mod session_plan_groups {
                 gap_below(d, LINK_WORDS, d.place_of("Markdown editor"))
             }));
         }
+        // Round 24 (lead ruling on the Astra re-check): the reason slot is two text lines high
+        // whatever it holds, so the gap is at most that slot; an empty part between them fails.
+        let slot = 2.0 * crate::design::Type::Body.line();
         d.observe(
             "iter-23-B-FK1-slot",
             gaps.iter()
-                .all(|gap| gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))),
+                .all(|gap| gap.is_some_and(|gap| (0.0..=slot).contains(&gap))),
             format!("Guidance to editor at 960 and 1200: {gaps:?}"),
         );
         // This repair looked the row up, and unchanged frames and a resize do not look it up
