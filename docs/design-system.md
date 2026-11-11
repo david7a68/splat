@@ -511,7 +511,8 @@ Missing dependencies lead with the owner and retained member name: `Lost Patrol 
 deleted.` Without a known name, say `Lost Patrol needs a creature that cannot be found.` The repair opens Edit
 Markdown with the caret on the missing link's line and names it in the reserved reason line (`Line 14: Lost Patrol
 needs a creature that cannot be found. Replace the link on this line with another creature, or remove its row.`)
-while the draft holds that link. The link is found as the reader reads the member's Creature cell, never by
+while the draft holds that link. When Save's reason or the discard result needs that line, the guidance comes first,
+directly above it. The guidance belongs to its entry: when another entry is selected, by any path, it ends. The link is found as the reader reads the member's Creature cell, never by
 matching its id in the text, so notes that mention the id are not the repair. Link repair to the
 referring file; keep raw references in Technical details. A removed package is named without claiming its file
 was deleted.
