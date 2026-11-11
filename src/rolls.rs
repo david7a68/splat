@@ -171,8 +171,9 @@ pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
 
 /// The right-click menu on a d20 roll, as a row's menu is: under the tile or number, so it
 /// stays in view, headed in muted Small with what it rolls, and its choices start at the
-/// heading's words. Returns how to roll it, when one was chosen.
-fn mode_menu(response: &egui::Response, link: &RollLink) -> Option<(Mode, bool)> {
+/// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
+/// roll it, when one was chosen.
+fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
     let heading = menu_heading(link)?;
     let inspired = response
         .ctx
@@ -185,16 +186,28 @@ fn mode_menu(response: &egui::Response, link: &RollLink) -> Option<(Mode, bool)>
     } else {
         None
     };
+    // As wide as its tile, and never past the pane's right edge, which `right` is: a menu
+    // that ran past the window would be pushed left, over the panel's splitter.
+    let margin = egui::Frame::popup(&response.ctx.style())
+        .total_margin()
+        .sum()
+        .x;
+    let width = (response.rect.width().max(TILE_WIDTH) - margin)
+        .min(right - response.rect.left() - margin)
+        .max(1.0);
     let mut chosen = None;
-    egui::Popup::menu(response).open_memory(open).show(|ui| {
-        ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
-        for (words, mode, inspired) in mode_choices("Roll", inspired) {
-            if menu_choice(ui, &words) {
-                chosen = Some((mode, inspired));
-                ui.close();
+    egui::Popup::menu(response)
+        .open_memory(open)
+        .width(width)
+        .show(|ui| {
+            ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
+            for (words, mode, inspired) in mode_choices("Roll", inspired) {
+                if menu_choice(ui, &words) {
+                    chosen = Some((mode, inspired));
+                    ui.close();
+                }
             }
-        }
-    });
+        });
     chosen
 }
 
@@ -321,7 +334,7 @@ fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
     if response.clicked() {
         ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link), false);
     }
-    if let Some((mode, inspired)) = mode_menu(response, link) {
+    if let Some((mode, inspired)) = mode_menu(response, link, ui.clip_rect().right()) {
         ask(ui.ctx(), link.clone(), mode, inspired);
     }
 }

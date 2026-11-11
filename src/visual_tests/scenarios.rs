@@ -13557,6 +13557,50 @@ pub mod run_rolls {
                 }),
             format!("The tile menu opens under the tile with its heading: tile {tile_rect:?}, heading {heading:?}, choices at {choice:?}, first choice {first:?}"),
         );
+        // Review repair 1: the tile menu stays inside the panel, clear of its splitter, at
+        // every size: its heading and each choice start at least `S` right of the splitter.
+        let mut faults = Vec::new();
+        for size in [SMALL, DEFAULT, LARGE] {
+            faults.extend(d.at_size(size, |d| {
+                let splitter = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Resize fight panel column")
+                    .map(|node| node.rect);
+                let tile = tile(d, BITE).map(|tile| tile.rect);
+                let below = tile.map(|tile| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(0.0, tile.bottom()),
+                        egui::pos2(f32::INFINITY, f32::INFINITY),
+                    )
+                });
+                let heading = below.and_then(|below| d.painted_rect_in("Bite", below));
+                let choices: Vec<egui::Rect> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name.starts_with("Roll with"))
+                    .filter(|node| below.is_some_and(|below| below.contains(node.rect.center())))
+                    .map(|node| node.rect)
+                    .collect();
+                let clear = splitter.zip(heading).is_some_and(|(splitter, heading)| {
+                    let edge = splitter.right() + crate::design::S;
+                    choices.len() == 2
+                        && heading.left() >= edge
+                        && choices.iter().all(|choice| choice.left() >= edge)
+                });
+                (!clear).then(|| {
+                    format!(
+                        "{}x{}: splitter {splitter:?}, heading {heading:?}, choices {choices:?}",
+                        size.0, size.1
+                    )
+                })
+            }));
+        }
+        d.observe(
+            "iter-20-R-review-1",
+            faults.is_empty(),
+            format!("The tile menu stays clear of the panel's splitter: {faults:?}"),
+        );
         d.state("tile-menu", Sizes::Default);
         d.click("Roll with advantage");
         d.observe(

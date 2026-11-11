@@ -1008,7 +1008,8 @@ They are the chance to hit it while an attack is armed, with the way it rolls (`
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison and the
 damage) never drop, and are cut by whole words only where the line has no room. The row's accessible name holds them
-whole. Roll words never move a row's columns or change its height. A save's creature targets show their roll in the AC
+whole. Roll words never move a row's columns. When the conditions leave no room for one word, the words take a line
+of their own under them, at the name's edge, and that row grows by the line. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
 damage` go, the rows show their AC again, and the panel and the dock go back to the caster. Undo of that step arms the
@@ -1021,7 +1022,8 @@ starts at the dock's content edge, where Amount starts.
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
-and the character allow it. Every such menu opens under its tile, number or row, so what it is about stays in view.
+and the character allow it. Every such menu opens under its tile, number or row, so what it is about stays in view,
+and stays inside its pane: a tile's menu is the tile's width, so it never crosses the panel's splitter.
 Each of its sections has a heading in muted Small with what it rolls: `Bite` or `Dexterity save` for a tile or a
 number, `Bite against Cinder Wolf 2` for a row, then `Inspiration: reroll one die` with a line for each die (`4 on the
 d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small, wrapped at

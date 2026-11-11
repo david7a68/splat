@@ -1464,6 +1464,7 @@ impl Run {
                 let p = &self.state.participants[index];
                 RowLayout::new(ui, width, p, self.row_sync_word(index), scale, fit, longest)
                     .with_art(self.row_art(ui.ctx(), p))
+                    .with_badge(ui, self.row_badge(index).as_deref())
             })
             .collect()
     }
@@ -6296,6 +6297,9 @@ struct RowLayout {
     inline_state: bool,
     /// A name-only row in a list that needs the height.
     tight: bool,
+    /// The row's roll words have no room after its second line, so they take a line of
+    /// their own under it, and the row grows by that line.
+    badge_below: bool,
     fit: RowFit,
     bar_inset: f32,
     bar_below_detail: bool,
@@ -6313,6 +6317,30 @@ fn header_height(scale: RunScale) -> f32 {
 }
 
 impl RowLayout {
+    /// The row's roll words, if any, decide whether they need a line of their own.
+    fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
+        self.badge_below = false;
+        if let Some(badge) = badge {
+            let (_, _, room) = badge_place(&self, 0.0);
+            self.badge_below = badge_words(ui, badge, &Type::Small.font(ui), room).is_none();
+        }
+        self
+    }
+
+    /// The second line and, when they have their own, the roll words' line under it.
+    fn second_block(&self, scale: RunScale) -> f32 {
+        let second = self
+            .second_line
+            .as_ref()
+            .map_or(scale.condition + 2.0, |line| line.size().y);
+        second
+            + if self.badge_below {
+                Type::Small.line()
+            } else {
+                0.0
+            }
+    }
+
     fn with_art(mut self, art: Option<PathBuf>) -> Self {
         self.art = art;
         self
@@ -6670,6 +6698,7 @@ impl RowLayout {
             initiative_span,
             inline_state,
             tight,
+            badge_below: false,
             fit,
             initiative_right,
             name_left,
@@ -6702,10 +6731,7 @@ impl RowLayout {
         }
         // The row's own text decides, with the bar and its hairline clear below it.
         let second_height = scale.condition + 2.0;
-        let second = self
-            .second_line
-            .as_ref()
-            .map_or(second_height, |line| line.size().y);
+        let second = self.second_block(scale);
         let name_line = self.name_line(scale);
         if self.fit != RowFit::Natural {
             return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
@@ -6737,10 +6763,8 @@ impl RowLayout {
     fn line_y(&self, scale: RunScale, height: f32) -> f32 {
         let name_line = self.name_line(scale);
         let second_height = scale.condition + 2.0;
-        if self.fit != RowFit::Natural
-            && let Some(second) = &self.second_line
-        {
-            let content = name_line + self.name_extra() + second.size().y;
+        if self.fit != RowFit::Natural && self.second_line.is_some() {
+            let content = name_line + self.name_extra() + self.second_block(scale);
             return ((height - content) / 2.0).max(design::HAIRLINE_WIDTH / 2.0) + name_line / 2.0;
         }
         // A row with one line centres it until there is room for two. Then every row
@@ -6854,6 +6878,14 @@ fn condition_links(
 /// their room. After the last line of the row's second line, or at its start when it has none;
 /// they end before the HP column, as the second line does.
 fn badge_place(layout: &RowLayout, x: f32) -> (f32, f32, f32) {
+    if layout.badge_below {
+        let left = x + layout.second_left;
+        let top = layout
+            .second_line
+            .as_ref()
+            .map_or(0.0, |line| line.size().y);
+        return (left, top, x + layout.temp_right - left - design::S);
+    }
     let (after, top) = layout
         .second_line
         .as_ref()
@@ -6880,8 +6912,9 @@ fn badge_words(ui: &egui::Ui, badge: &str, font: &egui::FontId, room: f32) -> Op
     {
         return Some(words.clone());
     }
+    // `words_that_fit` keeps a first word even where it does not fit.
     let words = design::words_that_fit(ui, forms.last()?, font, room);
-    (!words.is_empty()).then_some(words)
+    (!words.is_empty() && design::number_width(ui, &words, font) <= room).then_some(words)
 }
 
 /// `save` is a save's result for this row, such as `DEX` and 19, shown where AC is, and
@@ -8184,6 +8217,60 @@ mod tests {
         );
     }
 
+    /// Review repair 4: roll words always fit their place. When a row's conditions leave no
+    /// room for one word, the words take a line of their own at the name's edge, and the row
+    /// grows by that line.
+    #[test]
+    fn roll_words_take_their_own_line_when_the_conditions_fill_it() {
+        let mut p = super::super::tests::run().state.participants[0].clone();
+        p.initiative = Some(17);
+        p.hp = Some(22);
+        p.max_hp = Some(22);
+        p.concentration = true;
+        p.conditions = vec!["Grappled".into(), "Poisoned".into(), "Restrained".into()];
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let badge = "84% to hit · advantage";
+                let scale = design::RUN_COMPACT;
+                let plain = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0);
+                let layout = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0)
+                    .with_badge(ui, Some(badge));
+                let (left, top, room) = badge_place(&layout, 0.0);
+                let words = badge_words(ui, badge, &font, room);
+                assert!(
+                    words
+                        .as_ref()
+                        .is_some_and(|words| design::number_width(ui, words, &font) <= room),
+                    "{words:?} in {room} px at {left} after {:?}",
+                    layout
+                        .second_line
+                        .as_ref()
+                        .map(|line| line.text().to_owned())
+                );
+                // On a line of its own at the name's edge, under the conditions: the row grows
+                // by that one line, and a row without roll words does not.
+                assert_eq!(left, layout.second_left);
+                assert_eq!(top, plain.second_line.as_ref().unwrap().size().y);
+                assert_eq!(
+                    layout.height(scale),
+                    plain.height(scale) + Type::Small.line()
+                );
+                let none = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0)
+                    .with_badge(ui, None);
+                assert_eq!(none.height(scale), plain.height(scale));
+                // Must stay true: words that fit after the conditions stay there.
+                let mut fewer = p.clone();
+                fewer.conditions.truncate(1);
+                let room = RowLayout::new(ui, 442.0, &fewer, None, scale, RowFit::Natural, 0.0)
+                    .with_badge(ui, Some(badge));
+                assert!(!room.badge_below);
+            });
+        });
+    }
+
     /// iter-20-R-FT4: a row's roll words have one place at every size: the line under the
     /// name, after its conditions, never the state column. Long words fit whole or are cut by
     /// whole words.
@@ -8211,9 +8298,12 @@ mod tests {
                     (design::RUN_REGULAR, 596.0),
                     (design::RUN_LARGE, 760.0),
                 ] {
-                    for p in [&plain, &conc, &bloodied, &long] {
+                    for (p, full) in [&plain, &conc, &bloodied, &long].into_iter().flat_map(|p| {
+                        ["Saved · 10 damage (half)", "84% to hit · advantage"].map(|full| (p, full))
+                    }) {
                         let layout =
-                            RowLayout::new(ui, width, p, None, scale, RowFit::Natural, 0.0);
+                            RowLayout::new(ui, width, p, None, scale, RowFit::Natural, 0.0)
+                                .with_badge(ui, Some(full));
                         let (left, top, room) = badge_place(&layout, 0.0);
                         let at = format!("{} at {width}", p.name);
                         assert!(left >= layout.name_left, "{at}");
@@ -8222,6 +8312,11 @@ mod tests {
                             "{at}: never in the state column"
                         );
                         match &layout.second_line {
+                            // No room after the conditions: a line of their own under them.
+                            Some(line) if layout.badge_below => {
+                                assert_eq!(left, layout.second_left, "{at}");
+                                assert_eq!(top, line.size().y, "{at}");
+                            }
                             Some(line) => {
                                 let last = line.rows.last().unwrap().rect();
                                 assert!(left >= layout.second_left + last.right(), "{at}");
@@ -8243,7 +8338,7 @@ mod tests {
                                 >= name_top + layout.name.size().y - spacing - 1.0,
                             "{at}: the words start under the name's last line"
                         );
-                        for full in ["Saved · 10 damage (half)", "84% to hit · advantage"] {
+                        {
                             let shown = badge_words(ui, full, &font, room).unwrap();
                             let kept = shown.trim_end_matches('…');
                             assert!(

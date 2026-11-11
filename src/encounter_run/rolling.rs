@@ -40,6 +40,8 @@ pub(super) struct Cast {
     amount: String,
     /// The DM had edited Amount since the damage was rolled.
     amount_typed: bool,
+    /// The rows' own words then, such as `No damage · see the text`.
+    badges: BTreeMap<usize, String>,
 }
 
 /// A target that waits for the DM to say which damage condition holds, as in `if the goat
@@ -1247,6 +1249,7 @@ impl Run {
             halved: self.halved.clone(),
             amount: self.amount.clone(),
             amount_typed: self.amount_typed,
+            badges: self.badges.clone(),
         })
     }
 
@@ -1265,7 +1268,8 @@ impl Run {
     }
 
     /// Undo of a save's damage step: the save is armed again as it stood, with its saves, its
-    /// targets, its damage in Amount, and each target's result from it.
+    /// targets, its damage in Amount, and each target's result from it. What a later action
+    /// left on the rows, and a roll it kept for a reroll, go.
     pub(super) fn resume_cast(&mut self, cast: Cast) {
         let rows = self.state.participants.len();
         if cast.armed.actor >= rows || cast.selected >= rows {
@@ -1273,6 +1277,9 @@ impl Run {
         }
         self.armed = Some(cast.armed);
         self.asking = None;
+        // A later action's results and its kept roll were not part of the save.
+        self.badges = cast.badges;
+        self.reroll = None;
         self.saves = cast.saves;
         self.selected = cast.selected;
         self.also = cast.also;
@@ -2501,6 +2508,127 @@ mod tests {
         run.apply(Command::Next).unwrap();
         assert!(run.armed.is_none());
         assert!((0..3).all(|row| run.row_badge(row).is_none()));
+    }
+
+    fn frost_breath() -> RollLink {
+        RollLink::SaveDc {
+            label: "Frost Breath".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "2d6".into(),
+                kind: Some("Cold".into()),
+                when: None,
+            }],
+        }
+    }
+
+    /// Save A applied to both others, then Next turn. Returns the row that is not the new
+    /// actor, A's result on it, and the new actor.
+    fn save_applied_then_next_turn(run: &mut Run) -> (usize, String, usize) {
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        run.roll_link(ask(fire_breath(), actor));
+        for row in &others {
+            run.target(*row, None);
+            run.saves.insert(*row, 1);
+        }
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([1, 1, 1, 1]);
+        run.save_damage(&armed).unwrap();
+        enter(run);
+        let results = run.state.roll_results.clone();
+        run.apply(Command::Next).unwrap();
+        let actor = run.current().unwrap();
+        let row = *others.iter().find(|row| **row != actor).unwrap();
+        let result = results.get(&row).cloned().unwrap();
+        assert!(run.row_badge(row).is_none(), "Next turn clears the rows");
+        (row, result, actor)
+    }
+
+    /// Review repair 2, on the live path: save A applied, Next turn, save B armed and its
+    /// damage rolled, then Undo of the turn brings A's applied result back into the state.
+    /// B's target shows what Enter gives it now, not A's result.
+    #[test]
+    fn undo_of_the_turn_never_shows_an_older_result_over_a_new_saves_words() {
+        let mut run = live();
+        let (row, older, actor) = save_applied_then_next_turn(&mut run);
+        run.roll_link(ask(frost_breath(), actor));
+        run.target(row, None);
+        run.saves.insert(row, 1);
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([6, 6]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "12");
+        run.undo();
+        assert_eq!(
+            run.state.roll_results.get(&row),
+            Some(&older),
+            "Undo of the turn brings A's applied result back into the state"
+        );
+        assert_eq!(
+            run.row_badge(row).as_deref(),
+            Some("Failed · 12 damage"),
+            "B's target shows the Amount words, not A's {older:?}"
+        );
+    }
+
+    /// Review repair 2: B's damage, rolled after Undo brought A's result back, takes that
+    /// result off B's target, so it does not show again when B stops.
+    #[test]
+    fn a_new_saves_damage_takes_an_older_result_off_its_target() {
+        let mut run = live();
+        let (row, older, actor) = save_applied_then_next_turn(&mut run);
+        run.roll_link(ask(frost_breath(), actor));
+        run.target(row, None);
+        run.saves.insert(row, 1);
+        run.undo();
+        assert_eq!(run.state.roll_results.get(&row), Some(&older));
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([6, 6]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.row_badge(row).as_deref(), Some("Failed · 12 damage"));
+        assert_eq!(run.state.roll_results.get(&row), None);
+        run.disarm();
+        assert_eq!(run.row_badge(row), None, "A's {older:?} does not come back");
+    }
+
+    /// Review repair 3: Undo of a save's damage step arms the save again as it stood. A
+    /// later action's result and its kept reroll were not part of it, and go.
+    #[test]
+    fn undo_of_a_saves_damage_takes_a_later_actions_result_and_reroll_away() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let (target, player) = (others[0], others[1]);
+        inspired_player(&mut run, player);
+        run.roll_link(ask(fire_breath(), actor));
+        run.target(target, None);
+        run.saves.insert(target, 1);
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        let save_words = run.row_badge(target);
+        assert!(save_words.is_some());
+        enter(&mut run);
+        // A later action: the player's attack, rolled for them against the caster.
+        run.roll_link(ask(attack(), player));
+        run.state.random = Random::controlled([12, 3, 4]);
+        run.row_choice(actor, RowChoice::Roll(Mode::Normal, false));
+        assert!(run.row_badge(actor).unwrap().ends_with(" damage"));
+        assert!(offers_reroll(&run, actor));
+        run.undo();
+        assert!(
+            run.armed
+                .as_ref()
+                .is_some_and(|armed| matches!(armed.link, RollLink::SaveDc { .. }))
+        );
+        assert_eq!(run.row_badge(actor), None, "the attack's result goes");
+        assert!(!offers_reroll(&run, actor), "its reroll goes");
+        // Must stay true: the save's own target shows its words again.
+        assert_eq!(run.row_badge(target), save_words);
     }
 
     /// The transition table's last rows, and the carried row-index limit: a result belongs to
