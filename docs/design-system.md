@@ -161,11 +161,12 @@ eye during long sessions.
 
 | Part | Function | Notes |
 |---|---|---|
-| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions at the right; hairline, then an `L` gap. Never repeat the campaign name |
+| Page header | `page_header` | Title and one `Small` muted state or count on the same baseline; actions at the right; hairline, then an `L` gap. Never repeat the campaign name. The title and its count go first: the actions get the width they leave, and a status link among them wraps there, so the count is never cut |
 | Nav item | `nav_item` | Icon and word; accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and adds a hover reason and accessible description. For one blocked control, show `blocked_reason` beside it in `Small` text, then an `L` gap before the next action. `.key("N")` shows the key beside the word |
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
-| Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name |
+| Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name. The help is `help` |
+| Help | `help` | Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, whatever the pane's width |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
 | Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send; in each of its blocks the labels share one column (the widest label plus `S`) and every well has the widest value's width, so each − and each + share an x. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
@@ -174,7 +175,7 @@ eye during long sessions.
 | Rail toggle | `nav_toggle` | Lookup and panels; its own `Open` word distinguishes it from the current page |
 | Segmented | `segmented` | Words with an underline, no pill |
 | List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
-| Status | `status`, `status_link`, `Status` | Icon, word and colour; `status_link` opens where the DM can act |
+| Status | `status`, `status_link`, `Status`, `rail_status_detail` | Icon, word and colour; `status_link` opens where the DM can act. A two-line rail status paints its icon and its word where a one-line status paints them; its second line starts at the word |
 | Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
 | Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding |
@@ -183,6 +184,7 @@ eye during long sessions.
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. Keep the strip on one line |
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
+| Message space | `MessageSpace`, `fixed_part` | The one space below a save row, `MESSAGE_SPACE_LINES` (two) body lines high whatever it holds. It holds Save's reason and the latest result in one part: a result whose Undo is live comes first, then the reason; otherwise the reason comes first. The result says whether its Undo is live (`has_undo`); the space chooses the order. Longer words wrap and scroll inside the part (`fixed_part`): one focusable group named with every message in that order, a lane kept for its scroll bar, arrows and Page Up or Page Down scroll it while it has focus |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
 | Column | `Column::left / right / panel` | Rail, page lists and panels; inner-edge drag handle; natural width until dragged or moved with keys, then saved width across restarts; preserve page room and `RUN_LIST_KEEPS`; adjacent content reaches the column edge, with text measured inside it |
 | Link | `link` | Real `Link` role, at least 24 px high. A word narrower than 24 px reserves 24 px of layout width from the link's own minimum size, never from spaces in the text: the word starts at the text edge, the underline covers only the word, and the next item starts after the whole target, so two short links side by side never share a press area. An icon before the words is not part of the underline: draw it as its own glyph, as `status_link` does |
