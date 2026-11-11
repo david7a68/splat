@@ -488,6 +488,18 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
+                        // The repair is the newer result. A change result kept from before the
+                        // note broke has nothing left to undo, and would hide `Note repaired.`.
+                        // Another note's rename keeps its Undo.
+                        self.reader.clear_notice();
+                        if self
+                            .reader
+                            .name_undo
+                            .as_ref()
+                            .is_some_and(|change| change.path == repair.path)
+                        {
+                            self.reader.name_undo = None;
+                        }
                         self.repair = None;
                         self.reload = true;
                     }
@@ -537,6 +549,12 @@ impl WorldPage {
                     .id_salt(("world_reader", item.entry.id))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        // A later result on the repaired note replaces `Note repaired.`.
+                        if self.repaired == Some(item.entry.id)
+                            && self.reader.has_change_result(&item.entry.path)
+                        {
+                            self.repaired = None;
+                        }
                         self.reader.page_result = self.result(Some(item.entry.id));
                         let read = self.reader.read(ui, item, index, Some(campaign));
                         self.reader.page_result = None;
@@ -770,13 +788,20 @@ impl WorldPage {
             Some(Err(error)) => self.error = Some(error),
             None => {}
         }
-        if let Some(error) = &self.error {
-            design::message(ui, design::Tone::Error, error);
-            if self.new_kind.is_none()
-                && !self.card_shown()
-                && design::Action::quiet("Cancel").show(ui).clicked()
-            {
-                self.error = None;
+        if let Some(error) = self.error.clone() {
+            if self.new_kind.is_none() && !self.card_shown() {
+                // Cancel starts at the message text, as every message's choices do.
+                let cancel = design::message_with_actions(ui, design::Tone::Error, &error, |ui| {
+                    design::Action::quiet("Cancel")
+                        .line_start()
+                        .show(ui)
+                        .clicked()
+                });
+                if cancel {
+                    self.error = None;
+                }
+            } else {
+                design::message(ui, design::Tone::Error, &error);
             }
         }
     }

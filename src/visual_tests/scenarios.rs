@@ -224,6 +224,158 @@ fn check_undo_icon(d: &mut Driver<'_>, action: &str, id: &str) {
     );
 }
 
+/// A message action's shape: its border, fill, height and whether it bears the Undo icon.
+fn undo_shape(d: &Driver<'_>, action: &str) -> Option<(egui::Stroke, egui::Color32, i32, bool)> {
+    let target = d.place_of(action)?;
+    let frame = d.control_frame(action)?;
+    Some((
+        frame.stroke,
+        frame.fill,
+        target.height().round() as i32,
+        d.painted_in(target).contains(crate::design::icons::UNDO),
+    ))
+}
+
+/// Where a control's words start: the leftmost text painted inside its press area. An icon
+/// before the words counts, since `line_start` puts it at the text edge.
+fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
+    let mut left = None::<f32>;
+    d.each_painted_text(|text, _| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if area.contains(rect.center()) {
+            left = Some(left.map_or(rect.left(), |left| left.min(rect.left())));
+        }
+    });
+    left
+}
+
+fn words_left(d: &Driver<'_>, name: &str) -> Option<f32> {
+    let area = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == name && node.in_view())?
+        .rect;
+    words_left_in(d, area)
+}
+
+/// The painted line that holds these words, and the named control nearest below it. A name
+/// can be on two controls (a header link and a dialog's action); this is the one under the text.
+fn line_and_action_below(
+    d: &Driver<'_>,
+    above: &str,
+    action: &str,
+) -> Option<(egui::Rect, crate::visual_tests::driver::Found)> {
+    let mut line = None;
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text.contains(above) {
+            line = Some(egui::Rect::from_min_size(text.pos, text.galley.size()));
+        }
+    });
+    let line = line?;
+    let node = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            node.name == action && node.in_view() && node.rect.top() >= line.bottom() - 1.0
+        })
+        .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))?;
+    Some((line, node))
+}
+
+/// A control's press area overlaps no splitter and no other control. `among` limits the others
+/// to these names, for a modal dialog whose page stays in the tree behind it. On success, says
+/// which splitter is nearest and how far.
+fn press_area_clear(
+    d: &Driver<'_>,
+    target: egui::Rect,
+    action: &str,
+    among: Option<&[&str]>,
+) -> Result<String, String> {
+    use egui::accesskit::Role;
+    const PRESSABLE: [Role; 12] = [
+        Role::Button,
+        Role::DefaultButton,
+        Role::Link,
+        Role::CheckBox,
+        Role::ComboBox,
+        Role::TextInput,
+        Role::MultilineTextInput,
+        Role::Splitter,
+        Role::Slider,
+        Role::SpinButton,
+        Role::Tab,
+        Role::RadioButton,
+    ];
+    let mut nearest = None::<(f32, String)>;
+    for node in d.nodes() {
+        if (node.name == action && (node.shown.center() - target.center()).length() < 1.0)
+            || !node.in_view()
+            || !PRESSABLE.contains(&node.role)
+            || among.is_some_and(|names| !names.contains(&node.name.as_str()))
+        {
+            continue;
+        }
+        // A row or panel that holds the action is not a second target.
+        if node.rect.contains_rect(target) && node.rect.area() > 4.0 * target.area() {
+            continue;
+        }
+        // What a press can reach: the part of each control in view.
+        let overlap = node.shown.intersect(target);
+        if overlap.is_positive() && overlap.area() > 0.5 {
+            return Err(format!(
+                "{action} {target:?} overlaps {} {:?}",
+                node.name, node.shown
+            ));
+        }
+        if node.role == Role::Splitter {
+            let gap = (target.left() - node.shown.right()).max(node.shown.left() - target.right());
+            if nearest.as_ref().is_none_or(|(near, _)| gap < *near) {
+                nearest = Some((gap, node.name.clone()));
+            }
+        }
+    }
+    Ok(nearest.map_or_else(
+        || "no splitter compared".to_owned(),
+        |(gap, name)| format!("{gap:.1} px from {name}"),
+    ))
+}
+
+/// A quiet action that starts a line: its words start at the text edge of the line above
+/// (`above`), its press area clears every splitter, and no other press area overlaps it.
+fn check_line_start(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    above: &str,
+    sizes: &[(f32, f32)],
+    among: Option<&[&str]>,
+) {
+    for &size in sizes {
+        let (words, edge, clear) = d.at_size(size, |d| {
+            let Some((line, node)) = line_and_action_below(d, above, action) else {
+                return (None, None, Err(format!("no {action} below {above:?}")));
+            };
+            (
+                words_left_in(d, node.rect),
+                Some(line.left()),
+                press_area_clear(d, node.shown, action, among),
+            )
+        });
+        d.observe(
+            id,
+            words
+                .zip(edge)
+                .is_some_and(|(words, edge)| (words - edge).abs() <= 1.0),
+            format!("At {size:?}, {action} starts at {words:?}, the text above at {edge:?}"),
+        );
+        d.observe(
+            &format!("{id}-clear"),
+            clear.is_ok(),
+            format!("At {size:?}, {action}'s press area: {clear:?}"),
+        );
+    }
+}
+
 /// Each affected encounter remains a separate link with a word space on both sides of `and`.
 fn check_link_spaces(d: &mut Driver<'_>) {
     let first = d
@@ -2802,8 +2954,60 @@ pub mod run_long_names {
     const RENAMED: &str = "Iselle Marrowind";
     const BACK_TO_RUN: &str = "Back to run";
     const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+    /// Past three lines of the name column at 960x640.
+    const LONGEST_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell, Warden of the Cinder Road and the Ashen Gate";
     const FIRST_NAME: &str = "Seraphina";
     const ENEMY: &str = "Cinder Wolf 1";
+
+    /// A row's AC right edge and HP slash, from what it paints. The AC number ends at the AC
+    /// column; the HP readout's `/max` starts at its slash.
+    fn numeric_columns(d: &Driver<'_>, name: &str) -> Option<(f32, f32)> {
+        let row = d.row_node(name)?.shown;
+        let mut texts = Vec::new();
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if row.contains(rect.center()) {
+                texts.push((text.galley.job.text.clone(), rect));
+            }
+        });
+        let label = texts.iter().find(|(text, _)| text == "AC")?.1;
+        let ac = texts
+            .iter()
+            .filter(|(_, rect)| {
+                rect.left() >= label.right() && (rect.center().y - label.center().y).abs() < 4.0
+            })
+            .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))?
+            .1
+            .right();
+        let hp = texts
+            .iter()
+            .find(|(text, _)| text.starts_with('/'))?
+            .1
+            .left();
+        Some((ac, hp))
+    }
+
+    /// FT3: the numeric columns never move for a long name, at every captured size.
+    fn check_columns_stay(d: &mut Driver<'_>, when: &str) {
+        check_columns_stay_for(d, LONG_NAME, when);
+    }
+
+    fn check_columns_stay_for(d: &mut Driver<'_>, name: &str, when: &str) {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (long, short) = d.at_size(size, |d| {
+                (numeric_columns(d, name), numeric_columns(d, ENEMY))
+            });
+            d.observe(
+                "iter-17-B-FT3",
+                long.zip(short).is_some_and(|(long, short)| {
+                    (long.0 - short.0).abs() <= 1.0 && (long.1 - short.1).abs() <= 1.0
+                }),
+                format!(
+                    "{when} at {size:?}: AC and HP x on the long-name row {long:?} match a short row {short:?}"
+                ),
+            );
+        }
+    }
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
@@ -2815,6 +3019,7 @@ pub mod run_long_names {
         d.settle();
         d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
+        check_columns_stay(d, "Selected");
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
@@ -2829,6 +3034,7 @@ pub mod run_long_names {
         // The header names the current participant first. Two turns on, that is this name.
         d.click(NEXT_TURN);
         d.state("long-name-has-the-turn", Sizes::All);
+        check_columns_stay(d, "With the turn");
         let turn = current_participant(d);
         let header = d.header_rect();
         let words = d.painted_in(header);
@@ -2849,6 +3055,84 @@ pub mod run_long_names {
         );
         go_library(d);
         d.state("long-name-has-the-turn-on-the-strip", Sizes::Default);
+        // FT3, edge content: a name past three lines ends its third line in `…` and keeps the
+        // columns. Hover and the row's accessible name give it whole.
+        d.click(BACK_TO_RUN);
+        d.app_mut()
+            .encounters
+            .simulate_rename(LONG_NAME, LONGEST_NAME);
+        d.settle();
+        // The row paints the name's first whole words in three lines, then `…`.
+        let row = d.row_node(LONGEST_NAME).map(|row| row.shown);
+        let mut shown = None;
+        d.each_painted_text(|text, _| {
+            let words = &text.galley.job.text;
+            if words.starts_with(FIRST_NAME)
+                && row.is_some_and(|row| row.contains(text.visual_bounding_rect().center()))
+            {
+                shown = Some((words.clone(), text.galley.rows.len(), text.galley.elided));
+            }
+        });
+        d.observe(
+            "iter-17-B-FT3-cut",
+            shown.as_ref().is_some_and(|(words, lines, elided)| {
+                *lines == 3
+                    && !elided
+                    && words.ends_with('…')
+                    && LONGEST_NAME.starts_with(words.trim_end_matches('…'))
+                    && words.len() < LONGEST_NAME.len()
+            }),
+            format!("At 960x640 the row paints (words, lines, cut by egui) = {shown:?}"),
+        );
+        d.expect_same(
+            "Only the long name's third line differs: it ends in `…` after the longest name's \
+             first whole words",
+        );
+        d.state("longest-name", Sizes::All);
+        check_columns_stay_for(d, LONGEST_NAME, "Longest name");
+        let cut = shown.map(|(words, _, _)| words).unwrap_or_default();
+        let whole = !cut.is_empty() && d.painted_tooltip_shows(&cut, LONGEST_NAME);
+        d.observe(
+            "iter-17-B-FT3-hover",
+            whole,
+            "Hover over the cut name paints the whole name",
+        );
+        // iter-17-B: a creature file changed during the run. The stat block says so, and its
+        // Read the new version starts its line at the notice's text edge.
+        let file = d
+            .app_mut()
+            .campaigns
+            .modules()
+            .iter()
+            .map(|module| module.path.join("Creatures/Cinder Wolf.md"))
+            .find(|path| path.is_file())
+            .expect("a package holds the Cinder Wolf");
+        let text = std::fs::read_to_string(&file).expect("read the creature");
+        std::fs::write(&file, text + "\nThe pack howls at the ash moon.\n")
+            .expect("change the creature on disk");
+        d.focus_window(false);
+        d.focus_window(true);
+        d.click_row(ENEMY);
+        if d.has("Stat block") && !d.has_containing("has changed since") {
+            d.click("Stat block");
+        }
+        d.wait_for_text("Read the new version");
+        check_line_start(
+            d,
+            "iter-17-B-read-new",
+            "Read the new version",
+            "has changed since",
+            &[SMALL, DEFAULT, LARGE],
+            None,
+        );
+        d.state("creature-changed-since", Sizes::All);
+        // Must stay true: the action still opens the new version.
+        d.click("Read the new version");
+        d.observe(
+            "iter-17-B-read-new-opens",
+            d.has("Close Lookup") && d.visible_text("The pack howls at the ash moon."),
+            "Read the new version opens the changed creature in Lookup",
+        );
         d.not_measured(
             "Long names",
             "outside a run: only the run's rows, header, dock, panel and strip have long-name data",
@@ -5000,6 +5284,28 @@ pub mod run_sync_states {
             "With a conflict, Close is blocked in the ended view, whose row and controls show it",
         );
         d.state("ended-with-conflict", Sizes::All);
+        // iter-17-B: each Stop sync for <name> starts its line at the sync block's text edge.
+        let stops: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Stop sync for ") && node.in_view())
+            .map(|node| node.name)
+            .collect();
+        d.observe(
+            "iter-17-B-stop-sync",
+            !stops.is_empty(),
+            format!("The ended view offers Stop sync: {stops:?}"),
+        );
+        for stop in &stops {
+            check_line_start(
+                d,
+                "iter-17-B-stop-sync",
+                stop,
+                "Splat and D&D Beyond differ.",
+                &[SMALL, DEFAULT, LARGE],
+                None,
+            );
+        }
         for size in [SMALL, LARGE] {
             let (row_edge, undo_edge) = d.at_size(size, |d| {
                 (
@@ -5244,7 +5550,7 @@ pub mod library_scope {
             d.field_text("Search the Library").as_deref() == Some("fireball"),
             "A scope change keeps the query and selected Fireball",
         );
-        d.state("scope-everything", Sizes::Default);
+        d.state("scope-everything", Sizes::All);
         d.observe(
             "Reader selection",
             d.visible_text("Casting Time"),
@@ -5257,6 +5563,94 @@ pub mod library_scope {
             before == after && after.as_deref() == Some(ACTIVE),
             format!("The active campaign is {after:?} after browsing, as before: {before:?}"),
         );
+        // The file line is one Read row for every owner, so the title does not move
+        // between the built-in Fireball, the campaign Fireball and a package About.
+        assert!(
+            d.visible_text(BUILT_IN) && !d.has("Show file"),
+            "fixture: the built-in Fireball is open"
+        );
+        let built_in = title_offsets(d, "Fireball");
+        d.click_starting("Fireball · Spell · Level 3 · Campaign");
+        d.wait_for_text(CAMPAIGN_OWNER);
+        d.expect("Show file");
+        let campaign = title_offsets(d, "Fireball");
+        file_line_centred(d, &[CAMPAIGN_OWNER], &["Show file"], "campaign Fireball");
+        d.state("campaign-fireball", Sizes::All);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(MODULE);
+        d.click("About Ashen Marches");
+        d.wait_for_text(PACKAGE_OWNER);
+        d.expect("Use every entry");
+        let about = title_offsets(d, MODULE);
+        file_line_centred(
+            d,
+            &[PACKAGE_OWNER],
+            &["Use every entry", "Show file"],
+            "package About",
+        );
+        d.state("package-about-title", Sizes::All);
+        d.observe(
+            "iter-17-E-FD2",
+            built_in.iter().all(Option::is_some)
+                && built_in == campaign
+                && built_in == about,
+            format!(
+                "The reader title is the same distance below Read for every owner (960, 1200, 1920): built-in {built_in:?}, campaign {campaign:?}, package About {about:?}"
+            ),
+        );
+    }
+
+    const BUILT_IN: &str = "Built-in · Read only";
+    const CAMPAIGN_OWNER: &str = "Campaign · Editable";
+    const PACKAGE_OWNER: &str = "Used here · 5 of 6 entries";
+
+    /// The reader title's distance below the Read tab, at each captured size.
+    fn title_offsets(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
+        [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                d.at_size(size, |d| {
+                    let read = d.place_of("Read")?;
+                    super::world_build::reader_title(d, title)
+                        .map(|rect| rect.top() - read.bottom())
+                })
+            })
+            .collect()
+    }
+
+    /// Must stay true: the owner words and every control on the file line share one centre
+    /// line, at each captured size.
+    fn file_line_centred(d: &mut Driver<'_>, words: &[&str], controls: &[&str], what: &str) {
+        for size in [SMALL, DEFAULT, LARGE] {
+            let centres = d.at_size(size, |d| {
+                let read = d.place_of("Read")?;
+                let below = egui::Rect::from_min_max(
+                    egui::pos2(read.left() - 1.0, read.bottom()),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                words
+                    .iter()
+                    .map(|word| d.painted_rect_in(word, below).map(|rect| rect.center().y))
+                    .chain(
+                        controls
+                            .iter()
+                            .map(|name| d.place_of(name).map(|rect| rect.center().y)),
+                    )
+                    .collect::<Option<Vec<f32>>>()
+            });
+            let line = centres.as_ref().map(|centres| {
+                centres.iter().copied().fold(f32::INFINITY, f32::min)
+                    ..=centres.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+            });
+            d.observe(
+                "iter-17-E-FD2-centre",
+                line.as_ref()
+                    .is_some_and(|line| line.end() - line.start() <= 1.0),
+                format!(
+                    "The {what} file line keeps its words and controls on one centre line at {size:?}: {centres:?}"
+                ),
+            );
+        }
     }
 }
 
@@ -5293,6 +5687,15 @@ pub mod signed_in {
     const NOTHING_TO_SEND: &str = "Iselle Marrowind";
     const CLOSE_RUN: &str = "Close run";
     const STRANDED: &str = "were not sent to D&D Beyond";
+    /// The run's close dialog. Its page stays in the tree behind it.
+    const CLOSE_DIALOG: [&str; 6] = [
+        "Connect to sync",
+        "Review conflict",
+        "Close and lose changes",
+        "Save as a new run and close",
+        "Close now",
+        "Keep running",
+    ];
 
     pub fn run(d: &mut Driver<'_>) {
         d.app_mut().settings.simulate(Account::Connected);
@@ -5508,6 +5911,15 @@ pub mod signed_in {
             "Closing after that names the changes that were never sent, and promises only what it keeps",
         );
         d.state("close-with-unsent-changes", Sizes::Default);
+        // iter-17-B: Connect to sync starts its line at the dialog's text edge.
+        check_line_start(
+            d,
+            "iter-17-B-connect",
+            "Connect to sync",
+            STRANDED,
+            &[SMALL, DEFAULT, LARGE],
+            Some(&CLOSE_DIALOG),
+        );
         d.press(Key::Escape);
         // Damage recorded after the session ended. Reconnecting must not take it away.
         d.click_row(MEMBER);
@@ -5577,6 +5989,70 @@ pub mod signed_in {
         );
         d.state("link-tab-during-run", Sizes::Default);
         d.begin_task();
+
+        // iter-17-B: the close dialog with a conflict. Signed out, Review conflict follows
+        // Connect to sync on one line, and neither press area overlaps the other. A conflict
+        // that the reconnect brings while the dialog is open leaves Review conflict alone,
+        // first on its line.
+        const REVIEW: &str = "Review conflict";
+        const OTHER: &str = "Sable Harrowgate";
+        const CHOOSE: &str = "Choose which HP to keep";
+        d.click(BACK_TO_RUN);
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, crate::combat_sync::SyncState::Pending);
+        d.settle();
+        d.app_mut().encounters.simulate_session_end();
+        d.app_mut().settings.simulate_session_expiry();
+        d.settle();
+        d.click(CLOSE_RUN);
+        d.app_mut().encounters.simulate_sync_conflict(OTHER);
+        d.settle();
+        for size in [SMALL, DEFAULT, LARGE] {
+            let pair = d.at_size(size, |d| {
+                let connect = line_and_action_below(d, CHOOSE, "Connect to sync");
+                let review = line_and_action_below(d, CHOOSE, REVIEW);
+                let clear = review.as_ref().map(|(_, review)| {
+                    press_area_clear(d, review.shown, REVIEW, Some(&CLOSE_DIALOG))
+                });
+                (
+                    connect
+                        .map(|(line, node)| (line.left(), node.shown, words_left_in(d, node.rect))),
+                    review.map(|(_, node)| node.shown),
+                    clear,
+                )
+            });
+            d.observe(
+                "iter-17-B-review-beside",
+                matches!(
+                    pair,
+                    (Some((edge, connect, Some(words))), Some(review), Some(Ok(_)))
+                        if (connect.center().y - review.center().y).abs() < 1.0
+                            && review.left() >= connect.right()
+                            && (words - edge).abs() <= 1.0
+                ),
+                format!("At {size:?}, Connect to sync starts the line and Review conflict follows it, apart: {pair:?}"),
+            );
+        }
+        d.state("close-with-conflict-signed-out", Sizes::Default);
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        d.observe(
+            "iter-17-B-review-alone",
+            line_and_action_below(d, CHOOSE, REVIEW).is_some()
+                && line_and_action_below(d, CHOOSE, "Connect to sync").is_none(),
+            "Signed in again with the dialog open, Review conflict is the only action on its line",
+        );
+        check_line_start(
+            d,
+            "iter-17-B-review",
+            REVIEW,
+            CHOOSE,
+            &[SMALL, DEFAULT, LARGE],
+            Some(&CLOSE_DIALOG),
+        );
+        d.state("close-with-conflict-signed-in", Sizes::Default);
+        d.press(Key::Escape);
     }
 }
 
@@ -5984,7 +6460,7 @@ pub mod world {
         d.state("world-generated-npc-saved", Sizes::Default);
 
         look_up_again(d, NPC);
-        d.click(&format!("New NPC \"{NPC}\""));
+        d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
         d.expect("NPC · alive · Campaign");
@@ -7184,6 +7660,14 @@ pub mod session_notes {
         );
         d.click(NAV_SESSIONS);
         d.expect("All sessions");
+        // FT2: Generate NPC starts a line at the search field's edge.
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-FT2-generate",
+            "Generate NPC",
+            &[DEFAULT],
+            |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
+        );
         d.state("session-beside-lookup", Sizes::Default);
         d.click("All sessions");
         d.expect("Session 1: ");
@@ -7230,6 +7714,15 @@ pub mod session_notes {
                         })
                 })
             },
+        );
+        // The open fight's state is a link whose run icon is its own glyph: only `Round 2` is
+        // underlined, and the link's name is the words.
+        d.expect("Round 2");
+        let parts = icon_link_parts(d, crate::design::icons::RUN, "Round 2");
+        d.observe(
+            "iter-17-D-plan-run-link",
+            parts.is_some_and(|(icon, words, _)| !icon && words),
+            format!("(icon underlined, words underlined, icon colour) is {parts:?}"),
         );
         d.state("plan-open-fight-aligned", Sizes::Default);
         write_note(d);
@@ -7364,6 +7857,103 @@ pub mod session_notes {
             },
         );
         d.state("timeline-disk-conflict", Sizes::All);
+        links_beside_lookup(d);
+    }
+
+    /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
+    /// Lookup's written-note card gives the same link an XL target on its own line.
+    fn links_beside_lookup(d: &mut Driver<'_>) {
+        const LINK: &str = "Wren (opens Wren)";
+        const NOTE_TEXT: &str = "Wren runs the ferry at dusk.";
+        let id = splat::character::stable_id("Wren.md");
+        let text = format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Wren\n\
+             splat_world:\n  type: npc\n---\n\n# Wren\n\n{NOTE_TEXT}\n"
+        );
+        let text = splat::content::formats::convert("World.md", &text).unwrap();
+        std::fs::write(d.root.join("campaigns/emberfall/Wren.md"), text).unwrap();
+        d.app_mut().lookup.refresh();
+        d.settle();
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "Ferry Watch");
+        d.click("Create session");
+        d.expect("Ferry Watch");
+        write_note(d);
+        d.replace_editor_text(
+            "The ferry crosses the inner sea twice each day. On the way back, ask [[Wren]] \
+             about the rope, the toll at the old mill, and the bells that ring at dusk.\n",
+        );
+        d.press_ctrl(Key::S);
+        d.expect("Notes saved");
+        read_note(d);
+        let reached = d.tab_to(LINK);
+        let before = !d.visible_text(NOTE_TEXT);
+        // Lookup opens a document reader beside the page, without taking focus.
+        d.app_mut().lookup.open_name("Wren");
+        d.settle();
+        d.observe(
+            "iter-17-A-L1-sessions-focus",
+            reached
+                && before
+                && d.visible_text(NOTE_TEXT)
+                && d.focused_name().as_deref() == Some(LINK),
+            format!(
+                "Focus stays on the Sessions link when Lookup opens Wren beside it: {:?}",
+                d.focused_name()
+            ),
+        );
+        // Lookup's written-note card shows the session note in compact rows.
+        d.app_mut().lookup.search_for("toll at the old mill");
+        d.settle();
+        d.click_containing("Ferry Watch · Session note");
+        d.expect("Open this session");
+        // The card's link, right of the Sessions page, and the card's next line of words.
+        let card_link = |d: &Driver<'_>| {
+            let nodes = d.nodes();
+            let page_right = nodes
+                .iter()
+                .find(|node| node.name == "New session")
+                .map(|node| node.rect.right())?;
+            let link = nodes
+                .iter()
+                .filter(|node| {
+                    node.name == LINK && node.role == egui::accesskit::Role::Link && node.in_view()
+                })
+                .find(|node| node.rect.left() > page_right)?
+                .rect;
+            let runs: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::TextRun && node.rect.left() > page_right
+                })
+                .map(|node| node.rect)
+                .collect();
+            // The card's lines just above and just below the link's line.
+            let above = runs
+                .iter()
+                .filter(|run| run.bottom() <= link.center().y && run.bottom() > link.top() - 30.0)
+                .max_by(|a, b| a.bottom().total_cmp(&b.bottom()))?;
+            let below = runs
+                .iter()
+                .filter(|run| run.top() >= link.center().y && run.top() < link.bottom() + 30.0)
+                .min_by(|a, b| a.top().total_cmp(&b.top()))?;
+            Some((link, *above, *below))
+        };
+        d.observe_both(
+            "iter-17-A-AD1-written-card",
+            "In Lookup's written-note card, Wren's target is XL square on its own line, clear of \
+             the lines above and below it",
+            |d| {
+                card_link(d).is_some_and(|(link, above, below)| {
+                    link.width() >= crate::design::XL
+                        && link.height() >= crate::design::XL
+                        && link.top() >= above.bottom() - 0.01
+                        && link.bottom() <= below.top() + 0.01
+                })
+            },
+        );
+        d.state("lookup-written-card-link", Sizes::Default);
     }
 }
 
@@ -8861,6 +9451,9 @@ pub mod session_recording {
         // steps prove the words and come back to the same choices, so they are not task cost.
         d.aside(|d| {
         d.click(DISCARD);
+        // The folder scan, which follows the renamed file every few seconds, keeps the Undo.
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
         d.expect("Undo discard");
         d.observe(
             "iter-15-C-FT4",
@@ -10302,6 +10895,45 @@ pub mod run_add_creature {
             })
             .expect("Show all names how many creatures match");
         let before = choices(d);
+        // FT2: Show all starts a line, so its words start at the result rows' words, and its
+        // press area reaches into the gutter, never into the fight panel's splitter.
+        let label = format!("Show all {show_all}");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (words, rows, target, splitter) = d.at_size(size, |d| {
+                let row = d.place_of("Choose Wolf");
+                let mut rows = None::<f32>;
+                d.each_painted_text(|text, _| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    if row.is_some_and(|row| row.contains(rect.center())) {
+                        rows = Some(rows.map_or(rect.left(), |left| left.min(rect.left())));
+                    }
+                });
+                (
+                    d.painted_left(&label),
+                    rows,
+                    d.place_of(&label),
+                    d.place_of("Resize fight panel column"),
+                )
+            });
+            d.observe(
+                "iter-17-B-FT2",
+                words
+                    .zip(rows)
+                    .is_some_and(|(words, rows)| (words - rows).abs() <= 1.0),
+                format!(
+                    "At {size:?}, {label} starts at {words:?}, the result rows' words at {rows:?}"
+                ),
+            );
+            d.observe(
+                "iter-17-B-FT2-splitter",
+                target
+                    .zip(splitter)
+                    .is_some_and(|(target, splitter)| target.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, {label}'s press area {target:?} starts right of the splitter {splitter:?}"
+                ),
+            );
+        }
         d.click(&format!("Show all {show_all}"));
         d.observe(
             "iter-14-B-AT1",
@@ -11093,11 +11725,74 @@ pub mod session_plan {
         // T12.9: words the DM wrote, found beside the fight.
         d.press_ctrl(Key::K);
         d.type_text("miller");
+        // FT2 and FT4: `New NPC “Miller”` starts a line at the search field's edge, with curly
+        // quotation marks. `New location “Miller”` follows it on its line, or starts the next
+        // line at the same edge when it wraps.
+        let field_left = |d: &Driver<'_>| d.place_of(SEARCH_LOOKUP).map(|field| field.left());
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-FT2-new",
+            "New NPC “Miller”",
+            &[SMALL, DEFAULT, LARGE],
+            field_left,
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (npc, location, edge, splitter) = d.at_size(size, |d| {
+                d.expect("New location “Miller”");
+                (
+                    d.place_of("New NPC “Miller”"),
+                    d.place_of("New location “Miller”"),
+                    field_left(d),
+                    d.place_of(LOOKUP_SPLITTER),
+                )
+            });
+            let placed = npc
+                .zip(location)
+                .zip(edge)
+                .is_some_and(|((npc, location), edge)| {
+                    if (location.top() - npc.top()).abs() < 1.0 {
+                        location.left() >= npc.right()
+                    } else {
+                        (location.left() + crate::design::S - edge).abs() <= 1.0
+                    }
+                });
+            d.observe(
+                "iter-17-D-FT2-new-location",
+                placed
+                    && location
+                        .zip(splitter)
+                        .is_some_and(|(location, splitter)| location.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, New location {location:?} follows New NPC {npc:?} or starts at the \
+                     edge {edge:?}, right of the splitter {splitter:?}"
+                ),
+            );
+        }
+        d.observe(
+            "iter-17-D-FT4",
+            d.has("New NPC “Miller”")
+                && d.has("New location “Miller”")
+                && !d.has_containing("\"Miller\""),
+            "Lookup's New actions name the new note in curly quotation marks",
+        );
         d.state("lookup-finds-a-note", Sizes::All);
         d.observe(
             "T12.9",
             d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
             "Lookup finds last session's note, and the run stays in view",
+        );
+        // Reading a result closes the list. `N results`, which opens it again, starts a line at
+        // the search field's edge.
+        let first = lookup_results(d).first().map(|row| row.name.clone());
+        if let Some(first) = &first {
+            d.click(first);
+        }
+        lookup_action_at_text_edge(
+            d,
+            "iter-17-D-results",
+            "Show the results",
+            &[SMALL, DEFAULT, LARGE],
+            |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
         );
         d.press(Key::Escape);
 
@@ -11464,6 +12159,13 @@ pub mod session_plan {
             "The header names the new step, not an empty history",
         );
         d.state("saved-hp-restored", Sizes::All);
+        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
+        let saved_hp_undo = undo_shape(d, "Undo");
+        d.observe(
+            "iter-17-B-AT1",
+            saved_hp_undo.is_some_and(|(stroke, _, _, icon)| stroke == egui::Stroke::NONE && icon),
+            format!("The saved-HP result's Undo is quiet with the Undo icon: {saved_hp_undo:?}"),
+        );
         d.click("Undo");
         d.observe(
             "iter-16-B-FT2-undo",
@@ -11487,6 +12189,14 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         d.click("Add Long rest");
         d.expect("Long rest added. Everyone starts the next fight at full.");
+        let undo_add = undo_shape(d, "Undo add");
+        d.observe(
+            "iter-17-B-AT1-pair",
+            saved_hp_undo.is_some() && undo_add == saved_hp_undo,
+            format!(
+                "The saved-HP Undo {saved_hp_undo:?} has the same shape as Undo add {undo_add:?}"
+            ),
+        );
         d.click("Undo add");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Add Long rest");
@@ -11792,6 +12502,24 @@ pub mod npc_in_encounter {
                 format!("Prep action text aligns with its title at {size:?}"),
             );
         }
+        // The action's press area reaches into the panel's gutter, never into its splitter.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (action, splitter) = d.at_size(size, |d| {
+                (
+                    d.place_of("Edit encounter"),
+                    d.place_of("Resize fight panel column"),
+                )
+            });
+            d.observe(
+                "iter-17-B-splitter",
+                action
+                    .zip(splitter)
+                    .is_some_and(|(action, splitter)| action.left() >= splitter.right()),
+                format!(
+                    "At {size:?}, Edit encounter's press area {action:?} starts right of the splitter {splitter:?}"
+                ),
+            );
+        }
         assert!(d.in_view("Edit encounter"));
         d.click("Edit encounter");
         d.expect("Back to run");
@@ -12076,12 +12804,116 @@ fn show_all_count(d: &Driver<'_>) -> Option<usize> {
     })
 }
 
+/// FT2: a quiet Lookup action that starts a line uses `line_start`. See `action_at_text_edge`.
+fn lookup_action_at_text_edge(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    sizes: &[(f32, f32)],
+    edge: impl Fn(&Driver<'_>) -> Option<f32>,
+) {
+    action_at_text_edge(d, id, action, LOOKUP_SPLITTER, sizes, edge);
+}
+
+/// A quiet action that starts a line uses `line_start`: its icon or word (`S` inside its target)
+/// starts at `edge`, the text edge of what is above it, and its press area stays right of the
+/// nearest column splitter. It runs at each size given, the sizes its state is captured at.
+fn action_at_text_edge(
+    d: &mut Driver<'_>,
+    id: &str,
+    action: &str,
+    splitter: &str,
+    sizes: &[(f32, f32)],
+    edge: impl Fn(&Driver<'_>) -> Option<f32>,
+) {
+    for &size in sizes {
+        let (target, edge, splitter) = d.at_size(size, |d| {
+            d.expect(action);
+            d.expect(splitter);
+            (d.place_of(action), edge(d), d.place_of(splitter))
+        });
+        let start = target.map(|target| target.left() + crate::design::S);
+        d.observe(
+            id,
+            start
+                .zip(edge)
+                .is_some_and(|(start, edge)| (start - edge).abs() <= 1.0)
+                && target
+                    .zip(splitter)
+                    .is_some_and(|(target, splitter)| target.left() >= splitter.right()),
+            format!(
+                "At {size:?}, {action:?} starts at {start:?}, the text edge is at {edge:?}; its press \
+                 area {target:?} is right of the splitter {splitter:?}"
+            ),
+        );
+    }
+}
+
+/// The left of the first Lookup result's painted name: the text edge of the result rows.
+fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
+    let row = lookup_results(d).into_iter().next()?;
+    let name = row.name.split(" · ").next()?.to_owned();
+    d.painted_rect_in(&name, row.rect).map(|rect| rect.left())
+}
+
+const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
+/// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
+/// words are, and the icon's colour. An underline counts whether the text paints it or the link
+/// paints it as a line under the text.
+fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, bool, egui::Color32)> {
+    let whole = format!("{icon} {words}");
+    let mut found = None;
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if job.text != whole || !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        let section = |part: &str| {
+            job.sections
+                .iter()
+                .find(|section| job.text[section.byte_range.clone()].contains(part))
+        };
+        if let Some((icon, name)) = section(icon).zip(section(words)) {
+            let bounds = egui::Rect::from_min_size(text.pos, text.galley.size());
+            let start = whole.chars().count() - words.chars().count();
+            let words_left = text.pos.x
+                + text
+                    .galley
+                    .pos_from_cursor(egui::text::CCursor::new(start))
+                    .left();
+            found = Some((bounds, words_left, icon.format.clone(), name.format.clone()));
+        }
+    });
+    let (bounds, words_left, icon, name) = found?;
+    // A line just under the text, across the icon or across the words.
+    let lines = d.line_segments_in(bounds.expand2(egui::vec2(0.0, 4.0)));
+    let line_under = |from: f32, to: f32| {
+        lines
+            .iter()
+            .any(|line| line.left() < to - 0.5 && line.right() > from + 0.5)
+    };
+    Some((
+        icon.underline.width > 0.0 || line_under(bounds.left(), words_left),
+        name.underline.width > 0.0 || line_under(words_left, bounds.right()),
+        icon.color,
+    ))
+}
+
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
 fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());
+    // FT2: Show all starts a line, so its word starts at the result rows' text.
+    lookup_action_at_text_edge(
+        d,
+        "iter-17-D-FT2-show-all",
+        &label,
+        &[SMALL, DEFAULT, LARGE],
+        lookup_row_text_left,
+    );
     let frame = d.control_frame(&label);
     let quiet = frame
         .as_ref()

@@ -593,34 +593,41 @@ impl Reader {
             .collect();
         lost.sort_by(|a, b| a.1.cmp(&b.1));
         for (id, name) in lost {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!(
-                    "The note for your unsaved changes to {name} is gone. It was deleted, or given a new identity."
-                ),
-            );
+            // The choices start at the message text, as every message's choices do.
             ui.push_id(id, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if Action::quiet("Copy text")
-                        .icon(design::icons::COPY)
-                        .density(Density::Read)
-                        .name(&format!("Copy the text of {name}"))
-                        .show(ui)
-                        .clicked()
-                        && let Some(draft) = self.edits.get(&id)
-                    {
-                        ui.ctx().copy_text(draft.now.text.clone());
-                    }
-                    if Action::quiet("Discard draft")
-                        .density(Density::Read)
-                        .name(&format!("Discard the draft of {name}"))
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.edits.remove(&id);
-                    }
-                });
+                design::message_with_actions(
+                    ui,
+                    Tone::Warning,
+                    &format!(
+                        "The note for your unsaved changes to {name} is gone. It was deleted, or given a new identity."
+                    ),
+                    |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            let copy_name = format!("Copy the text of {name}");
+                            let copy = Action::quiet("Copy text")
+                                .icon(design::icons::COPY)
+                                .density(Density::Read)
+                                .name(&copy_name);
+                            let copied = super::starts_line(ui, copy, true).show(ui);
+                            if copied.clicked()
+                                && let Some(draft) = self.edits.get(&id)
+                            {
+                                ui.ctx().copy_text(draft.now.text.clone());
+                            }
+                            let discard_name = format!("Discard the draft of {name}");
+                            // Discard draft has no Undo, so an `L` gap keeps it apart. The gap
+                            // starts at Copy text's target, which `line_start` draws `S` left of
+                            // its place in the row.
+                            ui.add_space((copied.rect.right() + design::L - ui.cursor().left()).max(0.0));
+                            let discard = Action::quiet("Discard draft")
+                                .density(Density::Read)
+                                .name(&discard_name);
+                            if super::starts_line(ui, discard, false).show(ui).clicked() {
+                                self.edits.remove(&id);
+                            }
+                        });
+                    },
+                );
             });
         }
     }
@@ -1025,16 +1032,16 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of: [Guild, {id: 1}] # A note.\n".to_owned(),
-                Some(format!("Part of \"[Guild, {{id: 1}}]\" not read (line 7). {help}")),
+                Some(format!("Part of “[Guild, {{id: 1}}]” not read (line 7). {help}")),
             ),
             (
                 "splat_part_of: 17\n".to_owned(),
-                Some(format!("Part of \"17\" not read (line 7). {help}")),
+                Some(format!("Part of “17” not read (line 7). {help}")),
             ),
             (
                 "splat_part_of: # Kept.\n- '[[Zarel]]'\n- [[Verori]]\n\n- {link: '[[Lost]]'} # Old.\n"
                     .to_owned(),
-                Some(format!("Part of \"{{link: '[[Lost]]'}}\" not read (line 11). {help}")),
+                Some(format!("Part of “{{link: '[[Lost]]'}}” not read (line 11). {help}")),
             ),
             (
                 "splat_part_of:\n- '[[Zarel]]'\n- [[Verori]]\n".to_owned(),
@@ -1063,12 +1070,12 @@ mod tests {
         for (front, expected) in [
             (
                 "splat_part_of:\n  x: 1\n",
-                Some(format!("Part of \"\" not read (line 7). {help}")),
+                Some(format!("Part of “” not read (line 7). {help}")),
             ),
             ("splat_part_of:\n", None),
             (
                 "splat_in:\n  x: 1\n",
-                Some("In \"\" not read (line 7). Use one place name or link.".to_owned()),
+                Some("In “” not read (line 7). Use one place name or link.".to_owned()),
             ),
         ] {
             let file = format!(
@@ -1095,7 +1102,7 @@ mod tests {
         let entry = Entry::parse("NPCs/Rook.md", &file).unwrap();
         assert!(super::super::fields::unread_groups(&entry, &file).is_none());
         assert!(entry.flags.iter().any(|flag| flag.message
-            == "Status \"[alive]\" not read (line 7). Use a short word, such as alive."));
+            == "Status “[alive]” not read (line 7). Use a short word, such as alive."));
     }
 
     #[test]
@@ -1179,7 +1186,7 @@ mod tests {
             .find_map(|line| line.strip_prefix("- {id:"))
             .unwrap();
         format!(
-            "Part of \"{{id:{value}\" not read (line 9). Write each group as a link, such as [[Arena Guild]]."
+            "Part of “{{id:{value}” not read (line 9). Write each group as a link, such as [[Arena Guild]]."
         )
     }
 

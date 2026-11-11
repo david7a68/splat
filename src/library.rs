@@ -2122,6 +2122,21 @@ fn obsidian_for(root: &Path, owner: &Owner) -> bool {
             .ancestors()
             .any(|parent| parent.join(".obsidian").is_dir())
 }
+
+/// The reader's owner and file line is one Read row for every owner, whatever it holds
+/// (status, `Show file`, a quiet `Use every entry`), so the title below it does not move
+/// between a built-in entry, a campaign entry and a package About.
+fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui)) {
+    let height = Density::Read.control();
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), height),
+        egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(wrap),
+        |ui| {
+            ui.set_min_height(height);
+            add(ui);
+        },
+    );
+}
 const NOTE_CHANGED: &str = "This entry changed on disk.";
 /// What is on disk now, in place of what the draft started from.
 struct DiskChange {
@@ -5230,6 +5245,7 @@ impl Library {
                     && campaigns.active_campaign().is_some()
                     && package_word != "All entries used here"
                     && Action::quiet("Use every entry")
+                        .density(Density::Read)
                         .blocked(draft_reason)
                         .show(ui)
                         .clicked()
@@ -5241,6 +5257,7 @@ impl Library {
                     && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
                     && let Some(entry) = &note.entry
                     && Action::quiet("Use in this campaign")
+                        .density(Density::Read)
                         .blocked(draft_reason)
                         .show(ui)
                         .clicked()
@@ -5251,23 +5268,21 @@ impl Library {
                     file_line(ui);
                 }
             };
+            file_line_row(ui, file_below, owner_line);
             if file_below {
-                ui.horizontal_wrapped(owner_line);
-            } else {
-                ui.horizontal(owner_line);
-            }
-            if file_below {
-                ui.horizontal(file_line);
+                file_line_row(ui, false, file_line);
             }
         } else {
-            design::status(
-                ui,
-                Status {
-                    icon: icons::READ_ONLY,
-                    word: "Built-in · Read only",
-                    color: d.read_only,
-                },
-            );
+            file_line_row(ui, false, |ui| {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::READ_ONLY,
+                        word: "Built-in · Read only",
+                        color: d.read_only,
+                    },
+                );
+            });
         }
         if !duplicate_indices.is_empty() && !choices_in_reader {
             duplicate_choices(
@@ -6079,12 +6094,12 @@ mod tests {
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Wolf.md: Hit Points \"about twenty\" not read"))
+                .any(|s| s.contains("Wolf.md: Hit Points “about twenty” not read"))
         );
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Spark.md: Level \"many\" not read"))
+                .any(|s| s.contains("Spark.md: Level “many” not read"))
         );
     }
 

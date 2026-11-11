@@ -46,6 +46,8 @@ const SCROLL_BAR: f32 = 12.0;
 const TIGHT_ROW: f32 = 25.0;
 /// The name column a row needs, in units of its name size, to keep a state column too.
 const NAME_ROOM: f32 = 8.0;
+/// A long name wraps to at most this many lines; the last one ends in `…`.
+const NAME_LINES: usize = 3;
 /// Run toggles use a selected surface; the turn action keeps the accent fill.
 pub(crate) fn toggle(
     ui: &mut egui::Ui,
@@ -166,12 +168,14 @@ fn panel_width(ui: &egui::Ui) -> f32 {
         .max(ui.available_width() - design::RUN_LARGE.max_width - GUTTER)
 }
 
-/// A panel beside the run keeps only a gutter from what it sits beside.
+/// A panel beside the run keeps only a gutter from what it sits beside. It is `L`, because a
+/// quiet action at its text edge (Prep's `Edit encounter`) reaches into it, never into the
+/// splitter.
 fn side_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(colors().page)
         .inner_margin(egui::Margin {
-            left: GUTTER as i8,
+            left: design::L as i8,
             ..egui::Margin::ZERO
         })
 }
@@ -1583,7 +1587,12 @@ impl Run {
                         }
                     });
                     let (response, rect) = response.inner;
-                    let response = response.on_hover_text(&p.side);
+                    // A name cut to `…` is whole in hover, as it is in the row's name.
+                    let response = if layout.name_cut {
+                        response.on_hover_text(format!("{}\n{}", p.name, p.side))
+                    } else {
+                        response.on_hover_text(&p.side)
+                    };
                     ui.set_clip_rect(original_clip);
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
@@ -2650,16 +2659,22 @@ impl Run {
             }
             ui.add_space(design::S);
             if (self.sync_needs_sign_in() && !stranded.is_empty()) || conflict.is_some() {
+                // The first action starts the line at the text edge; a second follows it.
                 ui.horizontal(|ui| {
-                    if self.sync_needs_sign_in()
-                        && !stranded.is_empty()
-                        && Action::quiet("Connect to sync").show(ui).clicked()
+                    let connect = self.sync_needs_sign_in() && !stranded.is_empty();
+                    if connect
+                        && Action::quiet("Connect to sync")
+                            .line_start()
+                            .show(ui)
+                            .clicked()
                     {
                         self.wants_sign_in = true;
                         keep = true;
                     }
                     if conflict.is_some() {
-                        review = Action::quiet("Review conflict").show(ui).clicked();
+                        let action = Action::quiet("Review conflict");
+                        let action = if connect { action } else { action.line_start() };
+                        review = action.show(ui).clicked();
                     }
                 });
             }
@@ -2865,6 +2880,7 @@ impl Run {
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
                     .density(Density::Read)
+                    .line_start()
                     .name(&format!("Stop sync for {name}"))
                     .hint("Sync stops, and changes not yet confirmed are not sent")
                     .show(ui)
@@ -3865,7 +3881,10 @@ impl Run {
             if let Some(message) = snapshot_notice(definition, current, unreadable) {
                 ui.label(Type::Small.rich(ui, message).color(colors().muted));
                 if let Some(at) = at
-                    && Action::quiet("Read the new version").show(ui).clicked()
+                    && Action::quiet("Read the new version")
+                        .line_start()
+                        .show(ui)
+                        .clicked()
                 {
                     self.lookup_request = Some(at);
                 }
@@ -4422,7 +4441,7 @@ impl Run {
             }
         } else if self.saved_hp_used() {
             // The same slot, so the DM sees the result where they pressed, and can take it back.
-            if design::message_with_action(ui, Tone::Success, SAVED_HP_USED, "Undo") {
+            if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo") {
                 self.undo();
             }
         } else if let Some((from, back)) = self.back_to_sheets()
@@ -5113,16 +5132,34 @@ impl Run {
                     } else {
                         ui.available_height() * 0.6
                     };
-                    egui::ScrollArea::vertical()
-                        .id_salt("run_ended_sync")
-                        .max_height(room)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            self.sync_block(ui);
-                            if !self.setup_details.is_empty() {
-                                design::section(ui, "Prep", |ui| self.notes_tab(ui));
-                            }
-                        });
+                    // A quiet action at the text edge (`Stop sync for …`) reaches `S` into the
+                    // panel's gutter. The scroll area starts there too, so it shows the whole
+                    // target, and its margin keeps the text where it was.
+                    let area = ui.available_rect_before_wrap();
+                    ui.scope_builder(
+                        egui::UiBuilder::new().max_rect(area.with_min_x(area.min.x - design::S)),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("run_ended_sync")
+                                .max_height(room)
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    egui::Frame::new()
+                                        .inner_margin(egui::Margin {
+                                            left: design::S as i8,
+                                            ..egui::Margin::ZERO
+                                        })
+                                        .show(ui, |ui| {
+                                            self.sync_block(ui);
+                                            if !self.setup_details.is_empty() {
+                                                design::section(ui, "Prep", |ui| {
+                                                    self.notes_tab(ui);
+                                                });
+                                            }
+                                        });
+                                });
+                        },
+                    );
                     if choosing {
                         design::section(ui, "Combat log", |ui| self.log_tab(ui));
                     } else {
@@ -5168,9 +5205,13 @@ impl Run {
                                 0.0,
                             )
                             .with_art(self.row_art(ui.ctx(), p));
-                            design::row(ui, layout.height(scale), false, &name, |ui, rect| {
-                                paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
-                            });
+                            let response =
+                                design::row(ui, layout.height(scale), false, &name, |ui, rect| {
+                                    paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
+                                });
+                            if layout.name_cut {
+                                response.on_hover_text(&p.name);
+                            }
                         }
                     });
             });
@@ -5804,6 +5845,66 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
 }
 
 /// Keep the copy suffix when a name needs fewer words.
+/// A name in at most `NAME_LINES` lines of this width. A longer one keeps its first whole words
+/// and ends in `…`, so it is never cut inside a word. Says whether it was cut.
+fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Arc<Galley>, bool) {
+    let layout = |text: String, rows: usize| {
+        let mut job =
+            egui::text::LayoutJob::simple(text, font.clone(), egui::Color32::PLACEHOLDER, width);
+        job.wrap.max_rows = rows;
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
+    // One layout in the usual case. A cut one says how many letters fit.
+    let first = layout(name.to_owned(), NAME_LINES);
+    if !first.elided {
+        return (first, false);
+    }
+    let room: usize = first
+        .rows
+        .iter()
+        .map(|row| row.char_count_including_newline())
+        .sum();
+    let mut words = Vec::new();
+    let mut count = 0;
+    for word in name.split_whitespace() {
+        count += word.chars().count() + 1;
+        if count > room {
+            break;
+        }
+        words.push(word);
+    }
+    if words.is_empty() {
+        words.extend(name.split_whitespace().next());
+    }
+    loop {
+        // A name does not end on a joining word or a comma.
+        while words.len() > 1
+            && words
+                .last()
+                .is_some_and(|word| ["of", "the", "and", "de", "von"].contains(word))
+        {
+            words.pop();
+        }
+        let shown = format!("{}…", words.join(" ").trim_end_matches([',', ';', ':']));
+        let galley = layout(shown, usize::MAX);
+        if galley.rows.len() <= NAME_LINES {
+            return (galley, true);
+        }
+        if words.len() <= 1 {
+            // One word longer than the lines: cut it by letters.
+            let mut letters: Vec<char> = name.chars().take(room.saturating_sub(1)).collect();
+            loop {
+                let galley = layout(format!("{}…", String::from_iter(&letters)), usize::MAX);
+                if galley.rows.len() <= NAME_LINES || letters.len() <= 1 {
+                    return (galley, true);
+                }
+                letters.pop();
+            }
+        }
+        words.pop();
+    }
+}
+
 fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
     let fitted = design::words_that_fit(ui, name, font, width);
     if fitted == name {
@@ -6001,6 +6102,8 @@ struct RowLayout {
     second_left: f32,
     /// The name at this row's width. A long name wraps and the row grows.
     name: Arc<Galley>,
+    /// The name needed more than `NAME_LINES`, so its last line ends in `…`.
+    name_cut: bool,
     second_line: Option<Arc<Galley>>,
     /// Where each condition is on the second line, in characters.
     condition_spans: Vec<(String, std::ops::Range<usize>)>,
@@ -6359,27 +6462,12 @@ impl RowLayout {
                 name_width,
             )
         });
-        let (mut ac_right, mut temp_right, mut hp_right) = (ac_right, temp_right, hp_right);
+        // The numeric columns never move: a long name wraps in the shared name column at the
+        // compact size, and a fourth line is cut to `…`. Hover and the row's name keep it whole.
+        let mut name_cut = false;
         if name.rows.len() > 2 {
-            let spare = if sync.is_none() && hp_word(p).is_none() {
-                state_width
-            } else {
-                0.0
-            };
-            let widened = (name_width + spare)
-                .min(width - name_left - ac_width - temp_width - hp_width - design::S);
-            name = ui.fonts_mut(|fonts| {
-                fonts.layout(
-                    p.name.clone(),
-                    Type::Name.sized(ui, design::RUN_COMPACT.name.min(scale.name)),
-                    egui::Color32::PLACEHOLDER,
-                    widened.max(name_width),
-                )
-            });
-            let extra = (widened - name_width).max(0.0);
-            ac_right += extra;
-            temp_right += extra;
-            hp_right += extra;
+            let font = Type::Name.sized(ui, design::RUN_COMPACT.name.min(scale.name));
+            (name, name_cut) = name_lines(ui, &p.name, &font, name_width);
         }
         let tight = fit != RowFit::Natural
             && second_line.is_none()
@@ -6390,6 +6478,7 @@ impl RowLayout {
             picture,
             second_left,
             name,
+            name_cut,
             even: 0.0,
             bar_inset,
             bar_below_detail,
@@ -7995,6 +8084,105 @@ mod tests {
                         expected
                     );
                 }
+            });
+        });
+    }
+
+    /// FT3: a long name wraps in the shared name column, and AC, temporary HP and HP keep the
+    /// short row's x. Past three lines the name ends in `…`, and the row is tall enough for it.
+    #[test]
+    fn iter_17_b_long_names_keep_the_numeric_columns() {
+        let short = super::super::tests::run().state.participants[0].clone();
+        let mut long = short.clone();
+        long.name = "Seraphina Thornwood-Ashgrave of the Ninth Bell".into();
+        let mut longest = short.clone();
+        longest.name = "Seraphina Thornwood-Ashgrave of the Ninth Bell, Warden of the Cinder \
+                        Road and the Ashen Gate"
+            .into();
+        // Edge content: one word longer than the three lines.
+        let mut one_word = short.clone();
+        one_word.name = "Thornwood".repeat(10);
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for (scale, width) in [
+                    (design::RUN_COMPACT, 442.40625),
+                    (design::RUN_REGULAR, 596.0),
+                    (design::RUN_LARGE, 760.0),
+                ] {
+                    // As the roster measures it: the longest name in the list.
+                    let font = Type::Name.sized(ui, scale.name);
+                    let widest = design::number_width(ui, &longest.name, &font) + 1.0;
+                    for fit in [RowFit::Natural, RowFit::Compressed, RowFit::Summary] {
+                        let layout = |p: &Participant| {
+                            RowLayout::new(ui, width, p, None, scale, fit, widest)
+                        };
+                        let base = layout(&short);
+                        for p in [&long, &longest, &one_word] {
+                            let row = layout(p);
+                            assert_eq!(
+                                (row.ac_right, row.temp_right, row.hp_right),
+                                (base.ac_right, base.temp_right, base.hp_right),
+                                "{} moves the columns at {width} and scale {}",
+                                p.name,
+                                scale.row
+                            );
+                            assert!(row.name.rows.len() <= NAME_LINES, "{}", p.name);
+                            // Must stay true: the row grows for every name line, and the
+                            // second line stays inside the row.
+                            let height = row.height(scale);
+                            let rect = Rect::from_min_size(egui::Pos2::ZERO, vec2(width, height));
+                            let name_top = row.line_y(scale, height) - row.name_line(scale) / 2.0;
+                            let second = row.second_line.as_ref().map_or(0.0, |line| line.size().y);
+                            assert!(
+                                name_top >= 0.0
+                                    && name_top + row.name.size().y <= height + 1.0
+                                    && row.second_y(scale, rect) + second <= height + 1.0,
+                                "the name or detail leaves the row at {width} and scale {}: \
+                                 height {height}, name {name_top} + {}, second {} + {second}",
+                                scale.row,
+                                row.name.size().y,
+                                row.second_y(scale, rect),
+                            );
+                        }
+                    }
+                }
+                // The compact column at 960x640 cuts the longest name at three lines.
+                let row = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &longest,
+                    None,
+                    design::RUN_COMPACT,
+                    RowFit::Natural,
+                    0.0,
+                );
+                let last = row.name.rows.last().and_then(|line| line.glyphs.last());
+                assert!(row.name_cut && !row.name.elided && row.name.rows.len() == NAME_LINES);
+                assert_eq!(last.map(|glyph| glyph.chr), Some('…'));
+                assert!(row.name.text().starts_with("Seraphina Thornwood-Ashgrave"));
+                // The fixture's long name fits in three lines, so it stays whole.
+                let row = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &long,
+                    None,
+                    design::RUN_COMPACT,
+                    RowFit::Natural,
+                    0.0,
+                );
+                assert!(!row.name_cut && row.name.text() == long.name);
+                let row = RowLayout::new(
+                    ui,
+                    442.40625,
+                    &one_word,
+                    None,
+                    design::RUN_COMPACT,
+                    RowFit::Natural,
+                    0.0,
+                );
+                assert!(row.name_cut && row.name.text().ends_with('…'));
             });
         });
     }

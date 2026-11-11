@@ -315,7 +315,7 @@ fn world_relations_and_dates_read_from_flat_properties_and_stay_on_a_patch() {
         Value::from("Kaun")
     );
     assert_eq!(entry.flags.len(), 1);
-    assert!(entry.flags[0].message.starts_with("When \"120\" not read"));
+    assert!(entry.flags[0].message.starts_with("When “120” not read"));
 }
 
 #[test]
@@ -655,7 +655,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points \"about twenty\" not read (line 21). Start with a number, such as 22 (4d8 + 4).",
+        "Hit Points “about twenty” not read (line 21). Start with a number, such as 22 (4d8 + 4).",
         "Duplicate Hit Points",
         "Save needs",
         "Old data ignored",
@@ -671,7 +671,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             entry
                 .flags
                 .iter()
-                .find(|f| f.message.contains("Hit Points \"about twenty\" not read"))
+                .find(|f| f.message.contains("Hit Points “about twenty” not read"))
                 .unwrap()
                 .line
                 - 1
@@ -899,7 +899,7 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(
         entry.flags[0].message,
-        "the change \"HP lots\" was not read. Use a number, such as HP +5."
+        "the change “HP lots” was not read. Use a number, such as HP +5."
     );
     assert_eq!(
         entry.fields["splat_encounter_group"]["members"]
@@ -1337,7 +1337,7 @@ fn i19_world_properties_accept_case_and_explain_bad_values() {
         assert!(
             entry.flags[0]
                 .message
-                .contains("Status \"[alive]\" not read (line 7). Use a short word, such as alive.")
+                .contains("Status “[alive]” not read (line 7). Use a short word, such as alive.")
         );
     }
 }
@@ -2125,7 +2125,7 @@ fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
     assert!(
         messages
             .iter()
-            .any(|m| m.starts_with("Hit Points \"about twenty\" not read")
+            .any(|m| m.starts_with("Hit Points “about twenty” not read")
                 && m.ends_with(". Start with a number, such as 22 (4d8 + 4).")),
         "{messages:?}"
     );
@@ -2133,8 +2133,20 @@ fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
     assert!(
         messages
             .iter()
-            .any(|m| m.starts_with("Armor Class \"about fifteen\" not read")
+            .any(|m| m.starts_with("Armor Class “about fifteen” not read")
                 && m.ends_with(". Use a number first.")),
         "{messages:?}"
+    );
+}
+
+/// UI words name an unread value in curly quotation marks, on one line, whatever it holds.
+#[test]
+fn unread_values_use_curly_quotes_on_one_line() {
+    assert_eq!(formats::quoted("about twenty"), "“about twenty”");
+    assert_eq!(formats::quoted(""), "“”");
+    // The DM's own marks stay as typed, and a tab or newline reads as a space.
+    assert_eq!(
+        formats::quoted("say \"hi\"”\tnow\nthen"),
+        "“say \"hi\"” now then”"
     );
 }

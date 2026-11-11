@@ -522,6 +522,67 @@ fn missing_link(ui: &mut egui::Ui, name: &str) {
     }
 }
 
+/// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
+/// wraps to a line of its own. A later one on the same line keeps its normal target, so the two
+/// targets never overlap.
+pub(crate) fn starts_line<'a>(ui: &egui::Ui, action: Action<'a>, first: bool) -> Action<'a> {
+    if first || action.natural_width(ui) > ui.available_size_before_wrap().x {
+        action.line_start()
+    } else {
+        action
+    }
+}
+
+/// The words of a place link that matches more than one note.
+fn place_choices_words(name: &str, count: usize) -> String {
+    format!("{name} · {count} matches")
+}
+
+/// A link that a warning introduces, such as `⚠ Watch House · 2 matches`. The icon is its own
+/// glyph before the link words, in the warning colour, as in `status_link`, so the underline
+/// covers only the words. The press target and the accessible name keep the icon, so the name
+/// still says it is a warning. The text wraps and has the same size as `wrapped_link`.
+fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    let style = ui.style().clone();
+    for text in [
+        Type::Body
+            .rich(ui, format!("{} ", design::icons::WARN))
+            .color(c.result.warning),
+        Type::Body.rich(ui, words).color(c.accent).underline(),
+    ] {
+        text.append_to(
+            &mut job,
+            &style,
+            egui::FontSelection::Style(egui::TextStyle::Body),
+            egui::Align::Center,
+        );
+    }
+    job.wrap.max_width = ui.available_width().max(1.0);
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(galley.size().x, galley.size().y.max(design::XL)),
+        egui::Sense::click(),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::WidgetType::Link,
+            ui.is_enabled(),
+            format!("{} {words}", design::icons::WARN),
+        )
+    });
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter()
+            .galley(egui::pos2(rect.left(), top), galley, c.accent);
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 fn empty_optional(value: &Value) -> bool {
     value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
 }
@@ -1822,6 +1883,17 @@ impl Reader {
             }
             // Every World result sits here, where the separate-note result sits.
             self.draw_page_result(ui);
+            // The edit form's save result names no row value, so it is a page result too.
+            if edit::editable(item, index) {
+                self.kept_notice(ui, item);
+                if let Some(change) = &self.undo
+                    && change.path == item.entry.path
+                    && change.kind == ChangeKind::Edit
+                    && Self::change_notice(ui, &change.word, change.kind)
+                {
+                    return self.undo_change(campaign, item.entry.id);
+                }
+            }
             if let Some((_, undo)) = &self.identity_undo
                 && design::undo_message(
                     ui,
@@ -1891,14 +1963,23 @@ impl Reader {
         }) {
             design::message(ui, Tone::Warning, warning);
         }
+        // The gap to take back before the prose, when the value block draws no row.
+        let mut lift = 0.0;
         if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-            go = ui
-                .scope(|ui| {
-                    ui.spacing_mut().item_spacing.y =
-                        design::Density::Scan.row() - design::Density::Scan.control();
-                    self.entry_controls(ui, item, index, campaign)
-                })
-                .inner;
+            let top = ui.cursor().top();
+            let block = ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y =
+                    design::Density::Scan.row() - design::Density::Scan.control();
+                self.entry_controls(ui, item, index, campaign)
+            });
+            go = block.inner;
+            // A value block that draws no row adds no gap, so the prose starts where a plain
+            // note's does. Its own item gap goes now, and the reader's `L` before the prose,
+            // which separates the prose from the rows, goes below.
+            if block.response.rect.height() <= 0.0 {
+                ui.add_space(top - ui.cursor().top());
+                lift = design::L;
+            }
         }
         if item.entry.kind == "world" && index.duplicate_world.contains_key(&item.entry.path) {
             for (key, label) in [
@@ -1930,6 +2011,8 @@ impl Reader {
                     .rich(ui, "Nothing written yet.")
                     .color(colors().muted),
             );
+            // The reader's gap now follows these words, not an empty value block.
+            lift = 0.0;
         }
         if item.is_note() {
             let followed = style::measure(ui, |ui| {
@@ -1941,16 +2024,21 @@ impl Reader {
                 go = go.or(self.make_entry_control(ui, item, campaign));
             }
         } else {
+            let entry = self
+                .group_fault
+                .as_ref()
+                .filter(|fault| fault.id == item.entry.id)
+                .and_then(|fault| fault.entry.as_ref())
+                .unwrap_or(&item.entry);
+            // The reader adds its `L` after the entry's line warnings. With no warning, it
+            // would follow the empty value block at once.
+            if entry.flags.is_empty() {
+                ui.add_space(-lift);
+            }
             let followed = view::show_with_related(
                 ui,
                 &item.entry.name,
-                Some(
-                    self.group_fault
-                        .as_ref()
-                        .filter(|fault| fault.id == item.entry.id)
-                        .and_then(|fault| fault.entry.as_ref())
-                        .unwrap_or(&item.entry),
-                ),
+                Some(entry),
                 &item.entry.body,
                 &view::Origin {
                     path: &item.entry.path,
@@ -2000,12 +2088,12 @@ impl Reader {
                     .color(colors().muted),
             );
             ui.horizontal_wrapped(|ui| {
-                for (label, kind) in [("NPC", "npc"), ("Location", "location")] {
-                    if Action::quiet(label)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
+                for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let action = Action::quiet(label).density(Density::Read);
+                    if starts_line(ui, action, at == 0).show(ui).clicked() {
                         chosen = Some(kind.to_owned());
                     }
                 }
@@ -2021,6 +2109,7 @@ impl Reader {
             if !other.is_empty()
                 && Action::quiet(&format!("Make {other}"))
                     .density(Density::Read)
+                    .line_start()
                     .show(ui)
                     .clicked()
             {
@@ -2250,7 +2339,11 @@ impl Reader {
                 let name = reader_field(&item.entry, key)
                     .map(|value| link_name(value, label))
                     .unwrap_or_default();
-                format!("{} {name} · {} matches", design::icons::WARN, choices.len())
+                format!(
+                    "{} {}",
+                    design::icons::WARN,
+                    place_choices_words(&name, choices.len())
+                )
             } else if let Some(value) = reader_field(&item.entry, key) {
                 format!(
                     "{} {} · Not found",
@@ -2505,6 +2598,17 @@ impl Reader {
             .map(|change| (change.word.clone(), kind))
     }
 
+    /// A change result on this note. It is newer than the page's repair result, so it takes
+    /// the one place for results.
+    pub(crate) fn has_change_result(&self, path: &str) -> bool {
+        self.undo.as_ref().is_some_and(|change| change.path == path)
+            || self.kept.as_ref().is_some_and(|(kept, _)| kept == path)
+            || self
+                .name_undo
+                .as_ref()
+                .is_some_and(|change| change.path == path)
+    }
+
     pub fn clear_notice(&mut self) {
         self.undo = None;
         self.kept = None;
@@ -2571,15 +2675,8 @@ impl Reader {
                             let name = reader_field(&item.entry, key)
                                 .map(|value| link_name(value, label))
                                 .unwrap_or_default();
-                            if design::wrapped_link(
-                                ui,
-                                &format!(
-                                    "{} {name} · {} matches",
-                                    design::icons::WARN,
-                                    choices.len()
-                                ),
-                            )
-                            .clicked()
+                            if warning_link(ui, &place_choices_words(&name, choices.len()))
+                                .clicked()
                             {
                                 self.place_choices_open = !self.place_choices_open;
                             }
@@ -2734,7 +2831,7 @@ impl Reader {
         if key == "part_of" {
             for (at, group) in groups.iter().enumerate() {
                 let name = format!("Remove {}", link_name(group, "group"));
-                if Action::quiet(&name).show(ui).clicked() {
+                if Action::quiet(&name).line_start().show(ui).clicked() {
                     let mut groups = groups.clone();
                     groups.remove(at);
                     chosen = Some(Value::Sequence(groups));
@@ -2769,10 +2866,12 @@ impl Reader {
             });
         }
         ui.horizontal_wrapped(|ui| {
-            if key != "part_of" && Action::quiet("Clear value").show(ui).clicked() {
+            if key != "part_of" && Action::quiet("Clear value").line_start().show(ui).clicked() {
                 chosen = Some(Value::Null);
             }
-            cancel = Action::quiet("Cancel").show(ui).clicked();
+            cancel = starts_line(ui, Action::quiet("Cancel"), key == "part_of")
+                .show(ui)
+                .clicked();
         });
         if chosen.is_some()
             || cancel
@@ -2840,12 +2939,7 @@ impl Reader {
                     let name = world_field(&item.entry, "in")
                         .map(|value| link_name(value, "Place"))
                         .unwrap_or_default();
-                    if design::wrapped_link(
-                        ui,
-                        &format!("{} {name} · {} matches", design::icons::WARN, choices.len()),
-                    )
-                    .clicked()
-                    {
+                    if warning_link(ui, &place_choices_words(&name, choices.len())).clicked() {
                         self.place_choices_open = !self.place_choices_open;
                     }
                 });
@@ -2864,9 +2958,9 @@ impl Reader {
                     }
                 }
             }
-            self.kept_notice(ui, item);
             if let Some(change) = &self.undo
                 && change.path == item.entry.path
+                && change.kind != ChangeKind::Edit
                 && Self::change_notice(ui, &change.word, change.kind)
             {
                 return self.undo_change(campaign, item.entry.id);
@@ -2979,20 +3073,18 @@ impl Reader {
                 }
             }
         }
-        if !self.compact {
-            self.kept_notice(ui, item);
-        }
         if !self.compact
             && let Some(change) = &self.undo
             && change.path == item.entry.path
-            // A row shows its own change when it fits. Any other change shows here.
+            // A change that names a row value shows beside its row when it fits, and here,
+            // below the row block, when it does not. Every other result is a page result.
+            && change.kind.has_row()
             && (!Self::notice_fits(
                 ui,
                 self.relationship_value_width(ui, item, index),
                 &change.word,
                 change.kind,
-            ) || !change.kind.has_row()
-                || (change.kind == ChangeKind::Status && (self.status_editing || status(&item.entry).is_empty()))
+            ) || (change.kind == ChangeKind::Status && (self.status_editing || status(&item.entry).is_empty()))
                 || (change.kind == ChangeKind::Place && reader_field(&item.entry, "in").is_none())
                 || (change.kind == ChangeKind::PartOf && index.groups_of(&item.entry).is_empty()))
             && ui

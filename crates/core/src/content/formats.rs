@@ -77,6 +77,16 @@ pub fn model_reference(value: Value) -> Value {
     value
 }
 
+/// A value the reader could not read, as UI words name it: in curly quotation marks, on one
+/// line. A control character, such as a tab, reads as a space.
+pub(crate) fn quoted(value: &str) -> String {
+    let words: String = value
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    format!("“{words}”")
+}
+
 /// The text of a value that was not read, without its comment, and its line. A list written
 /// below its key names its first item that is not text; the key's line names the rest.
 fn unread_value(text: &str, key_line: usize) -> (String, usize) {
@@ -263,7 +273,7 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                         let (shown, line) = unread_value(text, last.line);
                         last.line = line;
                         last.message =
-                            format!("{label} \"{shown}\" not read (line {line}). {help}");
+                            format!("{label} {} not read (line {line}). {help}", quoted(&shown));
                     }
                 }
             }
