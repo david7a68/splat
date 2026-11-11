@@ -14,6 +14,8 @@ pub(crate) struct Template {
     pub id: Uuid,
     pub name: String,
     pub summary: Option<String>,
+    /// How hard its saved roster is for the party. Shown only while it is ready to run.
+    pub difficulty: crate::difficulty::Difficulty,
     /// It stays in Ready while a run is unfinished, with Start fight blocked.
     pub repeatable: bool,
 }
@@ -178,6 +180,7 @@ mod tests {
             id: Uuid::new_v4(),
             name: name.into(),
             summary: None,
+            difficulty: Default::default(),
             repeatable: false,
         }
     }

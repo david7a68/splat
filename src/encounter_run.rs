@@ -653,6 +653,9 @@ struct State {
     #[serde(skip)]
     cast: Option<rolling::Cast>,
 }
+/// The state, groups and scale an answer in Arrivals was worked out from: the count of steps
+/// kept or taken back, and the two reads by their address.
+type ArrivalKey = (u64, usize, usize);
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
@@ -713,6 +716,15 @@ pub(crate) struct Run {
     /// How many steps the DM has taken or taken back since this opened. A sheet's change is
     /// not one, and neither is opening a run to read it. Never saved.
     dm_steps: usize,
+    /// Bumped by each step kept or taken back, so an answer worked out from the state is kept
+    /// until the state changes. Never saved.
+    steps_kept: u64,
+    /// What each group in Arrivals would make the fight, worked out for one `steps_kept`, one
+    /// read of the groups and one scale. Never saved.
+    arrival_words: Option<(ArrivalKey, BTreeMap<Uuid, crate::difficulty::Rating>)>,
+    /// How often frames asked for the Arrivals words, and how often they were worked out.
+    #[cfg(test)]
+    pub(crate) arrival_counts: (usize, usize),
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -810,6 +822,8 @@ pub(crate) struct Run {
     /// The campaign's encounter groups, as they read from disk, once they have been read. A
     /// run does not save these.
     pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The campaign's XP budget table and party, once they have been read.
+    pub scale: Option<Arc<crate::difficulty::Scale>>,
     /// The campaign's creatures that can join a fight, once they have been read.
     pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
     /// The names linked in tonight's plan. Those groups come first in the panel.
@@ -1124,6 +1138,10 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            steps_kept: 0,
+            arrival_words: None,
+            #[cfg(test)]
+            arrival_counts: (0, 0),
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1188,6 +1206,7 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            scale: None,
             creatures: None,
             planned: Vec::new(),
             ad_hoc: ad_hoc::AdHoc::default(),
@@ -1272,6 +1291,7 @@ impl Run {
         self.history_labels.drain(..extra);
         self.history_from_sheet.drain(..extra);
         self.history.push(before);
+        self.steps_kept += 1;
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
     }
@@ -2447,6 +2467,7 @@ impl Run {
                 .map(|p| std::mem::take(&mut p.combat_values))
                 .collect();
             self.state = previous;
+            self.steps_kept += 1;
             for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
                 p.combat_values = values;
             }
@@ -4063,6 +4084,10 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            steps_kept: 0,
+            arrival_words: None,
+            #[cfg(test)]
+            arrival_counts: (0, 0),
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -4126,6 +4151,7 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            scale: None,
             creatures: None,
             planned: Vec::new(),
             ad_hoc: ad_hoc::AdHoc::default(),

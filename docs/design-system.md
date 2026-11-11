@@ -929,6 +929,19 @@ name; full hover and accessible text includes name and state. It resumes in one 
 runs and `2 fights` open Encounters. An open run keeps Run and its round or Setup. Rail details never end on a
 separator; a short rail shows Ended or Paused with full state on hover.
 
+**Encounter difficulty** (F1) is passive words at the end of a line that exists: `Low`, `Moderate`, `High` or
+`Above High`, from `difficulty::Scale::weigh`, the one computation. It compares the XP of every creature against
+the party with the party's budget from the campaign's rules (`splat_rule/parameters/per_character_xp`). The word
+is in the line's own type in `text`; its numbers and separators are `muted`; it has no icon and no state colour,
+because a colour would be a verdict. Its hover and accessible description give the budgets: `Budget for 5 at
+level 3: Low 750 · Moderate 1,125 · High 2,000` (`at levels 3 to 4`; `for the party of 5` when the roster has no
+character). The editor's `ROSTER 8` heading ends `· XP 1,050 of 1,125 · Moderate` (`XP 2,400 · Above High`);
+below 760 px the tab row ends at its right with `Moderate · XP 1,050 of 1,125`. A Ready to run row's summary ends
+`· Low`. Each shows only while the line keeps its lines and words with it, and only when the XP, every level and
+the table are known and something stands against the party; otherwise the line is as before. A row with an
+unfinished run shows no word. The answer is worked out when the encounter, the saved sheets or the rules
+change, and when the editor's draft changes; never on a frame with no change.
+
 History opens read-only final state and log in place, outside the live-run slot. Rows put outcome before ended
 state and retain outcome and round. The detail header shows only Read-only and end reason. History rows keep
 Open or Close and their menu; Start and Edit stay in that menu.
@@ -1299,6 +1312,10 @@ eight rows tall, so the words, the chosen match and the roster stay in view. New
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
+After a group's XP, ` → Moderate` (in `text`) says what the fight becomes when the group joins: the characters who
+are present against every present creature and the group. It shows only where the totals and the status words are
+in the heading and stay there with it; it never widens the group block or adds a line. The drag handle's
+accessible description says `Adds 400 XP; the fight becomes Moderate`, and its hover adds the budget line.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
 say Added before combat. A status that cannot fit the member slot whole takes a full-width line above the members
 and controls, and wraps there at its spaces, never inside a word. Names include count when adding more than one creature. No confirmation is needed;
@@ -1438,6 +1455,11 @@ a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Trav
 It stays in place when messages or rows change. Empty plans use empty_state
 below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
+
+A planned fight's summary ends with its difficulty word (`5 party · 2 × Ember Cultist · Low`) only while the
+summary keeps its lines with it. The opened row's `Read encounter` line ends with `· Low · XP 550 of 750` when the
+line has room for the whole; so a row whose summary had no room gives its word there, for 1 `Find`. A running or
+played fight's row shows its status, not a word.
 
 The first upcoming fight gets primary Start fight when no run is open; later fights use secondary. Use Start
 fight here and in Encounters. Saved unfinished fights offer Resume, including timeline rows whose run

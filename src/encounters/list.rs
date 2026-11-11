@@ -214,6 +214,7 @@ pub(super) fn list_row(
     name: &str,
     detail: &str,
     status: bool,
+    rating: Option<&crate::difficulty::Rating>,
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
@@ -236,12 +237,17 @@ pub(super) fn list_row(
                                 .truncate(),
                         )
                         .on_hover_text(name);
-                        let visible_detail = fit_detail(
-                            ui,
-                            detail,
-                            &Type::Small.font(ui),
-                            ui.available_width() - if status { design::L } else { 0.0 },
-                        );
+                        let room = ui.available_width() - if status { design::L } else { 0.0 };
+                        let visible_detail = fit_detail(ui, detail, &Type::Small.font(ui), room);
+                        // F1: the word ends the line only when the detail stays whole with it.
+                        let rating = rating.filter(|rating| {
+                            visible_detail == detail
+                                && design::number_width(
+                                    ui,
+                                    &format!("{detail} · {}", rating.word.text()),
+                                    &Type::Small.font(ui),
+                                ) <= room
+                        });
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
                         });
@@ -279,8 +285,18 @@ pub(super) fn list_row(
                                 },
                             );
                         }
-                        let response = ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
-                        design::named(ui, &response, &format!("{name} · {detail}"));
+                        let Some(rating) = rating else {
+                            let response =
+                                ui.add(egui::Label::new(job).extend()).on_hover_text(detail);
+                            design::named(ui, &response, &format!("{name} · {detail}"));
+                            return;
+                        };
+                        let word = rating.word.text();
+                        crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
+                        crate::difficulty::append(&mut job, ui, Type::Small, word, colors().text);
+                        let response = ui.add(egui::Label::new(job).extend());
+                        design::named(ui, &response, &format!("{name} · {detail} · {word}"));
+                        crate::difficulty::describe(ui, response, rating);
                     },
                 );
             },
@@ -455,7 +471,7 @@ pub(super) fn in_progress_list(
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
         let detail = paused_run_detail(run, &page.in_progress, open, story);
-        list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
+        list_row(ui, &run.path, &run.encounter, &detail, !open, None, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
             let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
             ui.allocate_ui_with_layout(
@@ -557,6 +573,12 @@ pub(super) fn ready_list(
                 .filter(|s| !s.is_empty())
                 .unwrap_or("No participants yet"),
             false,
+            // A fight with an unfinished run is not ready, so it has no word (F1).
+            template
+                .difficulty
+                .rating
+                .as_ref()
+                .filter(|_| !row.unfinished_run),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
                     if menu_action(ui, "Edit encounter", None) {
@@ -665,7 +687,7 @@ pub(super) fn history_list(
                             ""
                         }
                     );
-                    list_row(ui, &run.path, &run.encounter, &detail, false, |ui| {
+                    list_row(ui, &run.path, &run.encounter, &detail, false, None, |ui| {
                         row_menu(ui, &run.encounter, |ui| {
                             if menu_action(
                                 ui,

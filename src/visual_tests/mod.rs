@@ -61,7 +61,7 @@ type Script = fn(&mut Driver<'_>);
 
 const DEFAULT_JOBS: usize = 4;
 
-const SCENARIOS: [(&str, Seed, Script); 81] = [
+const SCENARIOS: [(&str, Seed, Script); 82] = [
     ("file-formats", Seed::Formats, scenarios::file_formats::run),
     ("stat-formats", Seed::Formats, scenarios::stat_formats::run),
     ("data-integrity", Seed::Campaign, scenarios::integrity::run),
@@ -380,6 +380,11 @@ const SCENARIOS: [(&str, Seed, Script); 81] = [
         scenarios::world_build::campaign_copy_registered,
     ),
     ("run-continue", Seed::Loot, scenarios::run_continue::run),
+    (
+        "encounter-difficulty",
+        Seed::Campaign,
+        scenarios::encounter_difficulty::run,
+    ),
 ];
 
 impl crate::Splat {

@@ -1183,6 +1183,84 @@ fn slot_sheet<'a>(
     let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
     party.sheet(creature.character.as_deref()?)
 }
+/// `ROSTER 8 · XP 1,050 of 1,125 · Moderate`: the editor's roster heading, with the difficulty
+/// at its end while the line has room for it (F1).
+fn roster_heading(ui: &mut egui::Ui, count: usize, rating: Option<&crate::difficulty::Rating>) {
+    let mut job = design::group_heading_text(ui, "Roster", count);
+    let Some(rating) = rating else {
+        ui.label(job);
+        return;
+    };
+    let plain = job.clone();
+    let c = colors();
+    let numbers = format!(" · {} · ", rating.numbers());
+    crate::difficulty::append(&mut job, ui, Type::Label, &numbers, c.muted);
+    crate::difficulty::append(&mut job, ui, Type::Label, rating.word.text(), c.text);
+    if ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x) > ui.available_width() {
+        ui.label(plain);
+        return;
+    }
+    let response = ui.label(job);
+    crate::difficulty::describe(ui, response, rating);
+}
+
+/// `Moderate · XP 1,050 of 1,125` at the right of the narrow editor's tab row, while the row has
+/// room for it (F1).
+fn narrow_difficulty(ui: &mut egui::Ui, rating: &crate::difficulty::Rating) {
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    crate::difficulty::append(&mut job, ui, Type::Small, rating.word.text(), c.text);
+    crate::difficulty::append(
+        &mut job,
+        ui,
+        Type::Small,
+        &format!(" · {}", rating.numbers()),
+        c.muted,
+    );
+    let width = ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x);
+    if width + design::L > ui.available_width() {
+        return;
+    }
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let response = ui.label(job);
+        crate::difficulty::describe(ui, response, rating);
+    });
+}
+
+/// The roster's difficulty: each character on the party's side by level, and each creature
+/// against the party by XP. Allies on the party's side count for neither. A participant whose
+/// entry is gone counts as not known.
+fn roster_difficulty(
+    setup: &Setup,
+    catalogue: &Catalogue,
+    scale: &crate::difficulty::Scale,
+) -> crate::difficulty::Difficulty {
+    let mut party = Vec::new();
+    let mut foes = Vec::new();
+    for slot in &setup.roster {
+        let side = slot
+            .overrides
+            .get("side")
+            .and_then(Value::as_str)
+            .unwrap_or(&slot.side);
+        let entry = slot
+            .creature
+            .as_ref()
+            .and_then(|reference| catalogue.resolve_ref(reference).ok())
+            .and_then(|id| catalogue.entries.get(&id))
+            .map(|entry| &entry.entry);
+        if side.trim() == "party" {
+            match entry {
+                Some(entry) => party.extend(crate::difficulty::character_level(entry)),
+                None => party.push(None),
+            }
+        } else {
+            foes.push(entry.and_then(crate::difficulty::creature_xp));
+        }
+    }
+    scale.weigh(&party, foes)
+}
+
 fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
     let mut party = 0;
     let mut creatures = std::collections::BTreeMap::<String, usize>::new();
@@ -1693,6 +1771,8 @@ struct Snapshot {
     runs: Vec<crate::encounter_run::SavedRunInfo>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
+    /// The campaign's XP budget table and its party's levels, for each fight's difficulty.
+    scale: Arc<crate::difficulty::Scale>,
 }
 /// Load what the Encounters page shows, for the load benchmark.
 #[cfg(test)]
@@ -1862,6 +1942,17 @@ impl Snapshot {
             .collect();
         creatures.extend(npcs);
         creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.origin, c.id));
+        let scale = crate::difficulty::Scale {
+            budgets: crate::encounter_settings::xp_budgets(campaign, &catalogue, &document),
+            party: creatures
+                .iter()
+                .filter(|creature| creature.party)
+                .map(|creature| {
+                    crate::difficulty::character_level(&catalogue.entries[&creature.id].entry)
+                        .flatten()
+                })
+                .collect(),
+        };
         let mut templates: Vec<_> = catalogue
             .entries
             .values()
@@ -1879,6 +1970,10 @@ impl Snapshot {
                     summary: setup
                         .as_ref()
                         .map(|setup| roster_summary(setup, &catalogue)),
+                    difficulty: setup
+                        .as_ref()
+                        .map(|setup| roster_difficulty(setup, &catalogue, &scale))
+                        .unwrap_or_default(),
                     repeatable: setup.is_some_and(|setup| setup.repeatable),
                 }
             })
@@ -1944,6 +2039,7 @@ impl Snapshot {
             groups,
             known_creature_names,
             run_creatures,
+            scale: Arc::new(scale),
             options: options.clone(),
             saved_options: options,
             campaign_text: document.text,
@@ -1988,6 +2084,12 @@ pub struct Encounters {
     /// How often frames reached that key's guard.
     #[cfg(test)]
     validation_reached: usize,
+    /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
+    /// worked out for.
+    difficulty: Option<((Uuid, u64, Uuid), crate::difficulty::Difficulty)>,
+    /// How often frames asked for the draft's difficulty, and how often it was worked out.
+    #[cfg(test)]
+    difficulty_counts: (usize, usize),
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
@@ -2047,6 +2149,7 @@ pub struct PlanFight {
     pub name: String,
     pub path: String,
     pub summary: String,
+    pub difficulty: crate::difficulty::Difficulty,
 }
 /// What the page needs from the story: where each run's event is, and which sessions exist.
 pub struct Story<'a> {
@@ -2319,6 +2422,30 @@ impl Encounters {
     pub fn dirty(&self) -> bool {
         self.has_run() || self.unsaved()
     }
+    /// The open draft's difficulty. Worked out again only when the draft, an edit or the
+    /// campaign's read changes.
+    fn draft_difficulty(&mut self) -> Option<&crate::difficulty::Difficulty> {
+        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
+        let key = (snapshot.revision, self.edit_epoch, draft.id);
+        #[cfg(test)]
+        {
+            self.difficulty_counts.0 += 1;
+        }
+        if self.difficulty.as_ref().map(|(at, _)| *at) != Some(key) {
+            #[cfg(test)]
+            {
+                self.difficulty_counts.1 += 1;
+            }
+            let difficulty = roster_difficulty(&draft.setup, &snapshot.catalogue, &snapshot.scale);
+            self.difficulty = Some((key, difficulty));
+        }
+        self.difficulty.as_ref().map(|(_, difficulty)| difficulty)
+    }
+    /// How often frames asked for the open draft's difficulty, and how often it was worked out.
+    #[cfg(test)]
+    pub(crate) fn difficulty_counts(&self) -> (usize, usize) {
+        self.difficulty_counts
+    }
     pub fn draft_name(&self) -> Option<String> {
         self.draft
             .as_ref()
@@ -2360,6 +2487,7 @@ impl Encounters {
                     name: template.name.clone(),
                     path: template.path.clone(),
                     summary: template.summary.clone().unwrap_or_default(),
+                    difficulty: template.difficulty.clone(),
                 })
                 .collect()
         })
@@ -2834,6 +2962,7 @@ impl Encounters {
                         id: entry.id,
                         name: draft.name.clone(),
                         summary: Some(roster_summary(&draft.setup, &s.catalogue)),
+                        difficulty: roster_difficulty(&draft.setup, &s.catalogue, &s.scale),
                         repeatable: draft.setup.repeatable,
                     });
                     s.templates
@@ -3269,6 +3398,7 @@ impl Encounters {
         if let Some(snapshot) = &self.snapshot {
             run.set_roster_names(snapshot.revision, &snapshot.known_creature_names);
             run.groups = Some(snapshot.groups.clone());
+            run.scale = Some(snapshot.scale.clone());
             run.creatures = Some(snapshot.run_creatures.clone());
         }
         run.planned.clone_from(&self.planned_groups);
@@ -4171,6 +4301,9 @@ impl Encounters {
             self.error = Some(e);
         }
         self.refresh_validation_error(false, edit_input(ui.ctx()));
+        let rating = self
+            .draft_difficulty()
+            .and_then(|difficulty| difficulty.rating.clone());
         if let Some(e) = &self.error {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             design::message(ui, self.error_tone(), e);
@@ -4208,6 +4341,9 @@ impl Encounters {
                         },
                     )],
                 );
+                if let Some(rating) = &rating {
+                    narrow_difficulty(ui, rating);
+                }
             });
             self.editor_pane = pane;
         }
@@ -4226,7 +4362,7 @@ impl Encounters {
                     expanded,
                     linked.then_some(party),
                     &mut make_yours,
-                    true,
+                    None,
                 ),
                 EditorPane::Add => {
                     match &mut self.creature {
@@ -4310,7 +4446,7 @@ impl Encounters {
                             expanded,
                             linked.then_some(party),
                             &mut make_yours,
-                            false,
+                            Some(rating.as_ref()),
                         );
                     });
                 ui.advance_cursor_after_rect(roster_ui.min_rect());
@@ -4621,7 +4757,9 @@ impl Encounters {
         expanded: &mut Option<String>,
         linked_party: Option<&Party>,
         make_yours: &mut Option<usize>,
-        tabbed: bool,
+        // The heading, with the roster's difficulty when it is known. None when the tab row
+        // holds the heading's place.
+        heading: Option<Option<&crate::difficulty::Rating>>,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
         // A line-start quiet action reaches `S` into the page's
@@ -4641,7 +4779,7 @@ impl Encounters {
                     .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
                     .show(ui, |ui| {
                 ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
+                if let Some(rating) = heading { roster_heading(ui, draft.setup.roster.len(), rating); }
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
@@ -5812,7 +5950,7 @@ mod tests {
                             &mut None,
                             None,
                             &mut None,
-                            parent == "compact",
+                            (parent != "compact").then_some(None),
                         );
                     });
                 });
@@ -5877,7 +6015,14 @@ mod tests {
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     Encounters::roster_pane(
-                        ui, &mut draft, &snapshot, &mut false, &mut None, None, &mut None, false,
+                        ui,
+                        &mut draft,
+                        &snapshot,
+                        &mut false,
+                        &mut None,
+                        None,
+                        &mut None,
+                        Some(None),
                     );
                 });
             });
@@ -5959,7 +6104,14 @@ mod tests {
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     Encounters::roster_pane(
-                        ui, &mut draft, &snapshot, &mut false, &mut None, None, &mut None, false,
+                        ui,
+                        &mut draft,
+                        &snapshot,
+                        &mut false,
+                        &mut None,
+                        None,
+                        &mut None,
+                        Some(None),
                     );
                 });
             });

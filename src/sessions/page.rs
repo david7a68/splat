@@ -6744,6 +6744,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
+            difficulty: Default::default(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
         let compact = compact_plan_for_reading(source, &fights, &[], true);
@@ -6794,6 +6795,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
+            difficulty: Default::default(),
         }];
         for (links, count) in [
             ("- [[ash pack|The wolves]]", "1 group"),

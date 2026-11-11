@@ -187,7 +187,9 @@ name (2), `Add all cached party members`, search (2), `Add`, `Duplicate`, search
   button is enabled and calls `unwrap` on a missing draft (`:522-528`). The app should
   panic. From code reading only; not run.
 
-**Done well:** T5.1 to T5.5.
+The editor says how the roster compares with the party's XP budget.
+
+**Done well:** T5.1 to T5.5, and T5.7.
 
 ### W6. Read rules and content
 **Trigger:** the DM studies a monster, a class, or a rule. **Goal:** find it, read it
@@ -560,6 +562,7 @@ reading the code, not from a test run.
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
 | T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
+| T5.7 | The editor's roster line ends with the XP and a word from the rules data, wide and narrow; so do a Ready to run row, a planned fight's row or its opened line, and a group's XP in Arrivals. With no table, sheets or XP it is as today | encounter-build, encounter-difficulty, encounter-groups | state | No route |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
