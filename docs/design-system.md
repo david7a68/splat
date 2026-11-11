@@ -170,7 +170,7 @@ eye during long sessions.
 | Status | `status`, `status_link`, `Status` | Icon, word and colour; `status_link` opens where the DM can act |
 | Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
-| Empty state | `empty_state` | Icon, serif title, purpose and one next step at the top of an empty pane or page, with normal padding |
+| Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding |
 | Group heading | `group_heading` | `Label` capitals and muted, nonzero count; no rule; serif headings belong to readers and stat blocks |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height |
 | Row menu | `row_menu` | Quiet `⋯` at the right, named `More actions for <name>`; holds Remove and Delete |
@@ -196,7 +196,11 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. Clean rows say `No
-changes`. `No changes to save.` belongs only to blocked Save's hover text and accessible description. Unsaved,
+changes`. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
+has one weight: its Save is primary while the draft has changes that it can save and no open run owns `Next turn`,
+and secondary otherwise. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
+several Campaign repairs have changes, only the active one (edited or focused last; else the last changed one) has
+the primary Save; the others keep their drafts with a secondary Save. Unsaved,
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
@@ -217,6 +221,14 @@ wrapping row, the first action uses it, and a later one uses it only when it wra
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
 (`Copy text`, `Cancel`) start at the text edge above them. UI text that names a thing uses curly quotation marks
 (`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes.
+A file line that follows a warning (the path, `Edit in Obsidian` and `Show file`) is that warning's action. Draw it
+in `message_with_actions`, so the path and both links start at the warning's words, and wrap a long path whole
+instead of cutting it. When several warnings name one file, the file line follows the last one. The warning names
+the row and the line, never the file (`Ember Cultist · line 20: …`, `Line 9: “Day 5” is day 1 in order. …`); the
+file line holds the path once. Encounters, Rules and runs, Campaign, Timeline and run setup follow this. In the run
+setup, a file line that fits beside the last compact warning sits on its line after an `L` gap; otherwise it wraps
+below, at the warning's words. A reader's
+file line below its title is not a message action and keeps its place.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
@@ -521,8 +533,9 @@ change; results explaining which entry an encounter will use are Small muted tex
 
 ## Campaign
 
-Campaign's header counts chosen entries only. Flags appear once in the content issue count, with file and
-repair actions on their warning line. Packages keeps its save row directly below the tabs, before notices.
+Campaign's header counts chosen entries only. Flags appear once in the content issue count. The count is a status:
+the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Each flag's
+repair choice and file line start at its words. Packages keeps its save row directly below the tabs, before notices.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row.
 Repair fills the column with the invalid-note reason above it; an `L` gap and hairline separate its save row
@@ -786,7 +799,7 @@ at the end of the second line as one collapsed link. Shorten muted detail first;
 the full change link, removing source before base creature. Remove a source whole without an ellipsis;
 hover keeps the full detail.
 
-An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
@@ -830,7 +843,7 @@ saving.
 Arrivals reserves one Add slot as wide as the widest Add label in the panel. Each group's Initiative and Add
 block ends at the panel's inner right edge, so every Initiative field shares one left edge and every Add one
 right edge; the member summary takes the rest. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
-Flagged members name file and line, with Edit in Obsidian, Show file, Edit and a Remove member row menu
+Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
 each creature needing repair: shown name, base creature when different, and source line. In the plan, each
@@ -1164,7 +1177,8 @@ planned encounters with a saved run, including legacy runs without a source ID. 
 while the strip owns primary. Planned, played and running
 summaries use space below actions up to the menu. Keep summary parts and Ended · Round 1 whole.
 A line never ends with a separator: the `·` moves to the next line with the part after it. Group summaries wrap between members, never inside a
-name, to at most three lines, then shorten with full hover text. Plan and Timeline share fight summaries: open fights show round as a run status link
+name, to at most three lines, then shorten with full hover text. A flagged group's summary wraps the same way and
+shows every fact, however many lines it takes. Plan and Timeline share fight summaries: open fights show round as a run status link
 without Paused; ended, named and custom results keep stored words. Played fights show result and last round
 once on line two, then final party HP in a grid of two or three first-name cells, quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
@@ -1250,8 +1264,8 @@ Version 2 stores event lists and day IDs in comments below headings. Every write
 displayed clock. File items use Fight and Major event; accept Encounter and Event in any case, with or without
 a colon. Preserve outside prose, unknown properties and event fields. Separate app and outside event edits
 save together with a quiet notice; same-event edits need a choice. Compare at the first difference, with
-Overwrite before destructive Reload and lose my timeline. Flags name file and line and offer shared file
-actions; a flagged day keeps its Day icon and adds a muted `Small` word after the heading with a warning icon (`⚠ Written as Day 5`). Rail conflicts use warning Timeline changed on disk; write failures
+Overwrite before destructive Reload and lose my timeline. Flags name their line (`Line 9: …`); the file line
+below the last flag starts at its words and holds `Timeline.md` with the shared file actions; a flagged day keeps its Day icon and adds a muted `Small` word after the heading with a warning icon (`⚠ Written as Day 5`). Rail conflicts use warning Timeline changed on disk; write failures
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer

@@ -3667,9 +3667,9 @@ impl Library {
                         let mut create = false;
                         if self.new_form {
                             ui.label(Type::Title.rich(ui, icons::LIBRARY).color(colors().muted));
-                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet.")).color(colors().text));
+                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet")).color(colors().text));
                         } else {
-                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet."), "Create the first entry.", |ui| {
+                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet"), "Create the first entry.", |ui| {
                                 create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
                             });
                         }

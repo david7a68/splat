@@ -4480,10 +4480,12 @@ impl Run {
         design::rule(ui);
         if let Some(path) = &self.roster_source {
             let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            let last = self.roster_faults.len().saturating_sub(1);
             for (index, fault) in self.roster_faults.iter().enumerate() {
                 let words = fault.words();
-                // One file names every unread row, so its name and actions show once.
-                if index > 0 {
+                // One file names every unread row, so its name and actions show once, after
+                // the last warning about it.
+                if index < last {
                     design::small_message(ui, Tone::Warning, &words);
                     continue;
                 }
@@ -4519,13 +4521,21 @@ impl Run {
                             );
                         });
                     } else {
-                        design::small_message(ui, Tone::Warning, &words);
-                        crate::world::entry_file_actions(
-                            ui,
-                            path.parent().unwrap_or(path),
-                            &filename,
-                            true,
-                        );
+                        // The file line starts at the warning's words, as every message's
+                        // actions do, and its name wraps whole rather than being cut.
+                        let words_left =
+                            design::small_message(ui, Tone::Warning, &words).rect.left();
+                        let inset = words_left - ui.cursor().left();
+                        ui.horizontal_top(|ui| {
+                            ui.add_space(inset);
+                            ui.vertical(|ui| {
+                                crate::encounters::file_line(
+                                    ui,
+                                    path.parent().unwrap_or(path),
+                                    &filename,
+                                );
+                            });
+                        });
                     }
                 });
             }

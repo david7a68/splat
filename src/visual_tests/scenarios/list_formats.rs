@@ -49,6 +49,29 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("No changes");
     d.expect("None chosen · 3 needed");
     d.expect("Arena Final, Bridge Ambush, Lost Patrol, Rival Team and Shrine of Cinders use its creatures.");
+    // Round 22 FD4: a fault count is a status, the warning icon and colour before the words,
+    // and it keeps its name and collapse.
+    let warning = crate::design::colors().result.warning;
+    let heading = format!("{} 1 content issue to repair", crate::design::icons::WARN);
+    let mut colours = Vec::new();
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text == heading {
+            colours = text
+                .galley
+                .job
+                .sections
+                .iter()
+                .map(|section| section.format.color)
+                .collect();
+        }
+    });
+    d.observe(
+        "iter-22-C-FD4",
+        !colours.is_empty()
+            && colours.iter().all(|colour| *colour == warning)
+            && d.in_view("1 content issue to repair"),
+        format!("The issue count paints {colours:?}"),
+    );
     d.state("campaign-package-off-in-obsidian", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), after);
 
@@ -79,8 +102,88 @@ pub fn run(d: &mut Driver<'_>) {
                 && d.has("2 content issues to repair")
         },
     );
+    // Round 22 FD1 family: Campaign's flag keeps its repair choice and file line at its words.
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            super::file_links_at_message_words(
+                d,
+                "Line 23: Combat initiative",
+                &manifest,
+                "Campaign.md",
+            )
+            .and_then(|()| {
+                let words = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Line 23: Combat initiative"))
+                    .map(|node| node.rect);
+                let choice = d.place_of("Choose in Rules and runs");
+                let left = choice.and_then(|choice| super::words_left_in(d, choice));
+                words
+                    .zip(left)
+                    .is_some_and(|(words, left)| left >= words.left() - 1.0)
+                    .then_some(())
+                    .ok_or(format!("choice words at {left:?}, message {words:?}"))
+            })
+        });
+        d.observe(
+            "iter-22-C-FD1-campaign",
+            placed.is_ok(),
+            format!("At {size:?}, the Campaign flag's choice and file line: {placed:?}"),
+        );
+    }
     d.state("campaign-flagged-rule-choice", Sizes::All);
     assert_eq!(fs::read_to_string(&manifest).unwrap(), flagged);
+    // Round 22 review: two flags about Campaign.md give one file line, after the last flag.
+    let two_flags = flagged.replace(
+        " id=00000000-0000-0000-0000-000000000002 %% |\n",
+        " id=00000000-0000-0000-0000-000000000002 %% |\n| Flanking | Imaginary flanking %% splat rule=dnd2024:rules/flanking %% |\n",
+    );
+    assert_ne!(two_flags, flagged);
+    fs::write(&manifest, &two_flags).unwrap();
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("3 content issues to repair");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            let last = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Flanking choice"))
+                .ok_or("the second flag is not shown".to_owned())?;
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Line 23: Combat initiative"))
+                .map(|node| node.rect)
+                .ok_or("the first flag is not shown".to_owned())?;
+            let files: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == manifest.display().to_string())
+                .map(|node| node.rect)
+                .collect();
+            super::file_links_at_message_words(d, &last.name, &manifest, "Campaign.md").and_then(
+                |()| {
+                    (files.len() == 1 && first.bottom() <= last.rect.top())
+                        .then_some(())
+                        .ok_or(format!(
+                            "file lines {files:?}; flags {first:?}, {:?}",
+                            last.rect
+                        ))
+                },
+            )
+        });
+        d.observe(
+            "iter-22-C-FD1-campaign-two-flags",
+            placed.is_ok(),
+            format!("At {size:?}, two Campaign flags and their file line: {placed:?}"),
+        );
+    }
+    fs::write(&manifest, &flagged).unwrap();
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("2 content issues to repair");
     d.click("Choose in Rules and runs");
     d.expect("Combat initiative choice");
     d.expect("Roll NPC initiative");
@@ -90,10 +193,22 @@ pub fn run(d: &mut Driver<'_>) {
         let placed = d.at_size(size, |d| {
             super::file_links_at_message_words(
                 d,
-                "Campaign.md, line ",
+                "Line 23: Combat initiative",
                 &campaign.path.join("Campaign.md"),
                 "Campaign.md",
             )
+            .and_then(|()| {
+                // Round 22 FD5: the file line holds the path; the warning names the line only.
+                let named: Vec<_> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name.contains("Combat initiative choice"))
+                    .map(|node| node.name)
+                    .collect();
+                (!named.is_empty() && named.iter().all(|name| !name.contains("Campaign.md")))
+                    .then_some(())
+                    .ok_or(format!("warnings {named:?} name the file"))
+            })
         });
         d.observe(
             "iter-21-B-FD3-rules",
@@ -150,6 +265,34 @@ pub fn run(d: &mut Driver<'_>) {
             "iter-10-C-AD2-summary",
             d.visible_text("2 of 3 can join"),
             "The row keeps its summary above the warning",
+        );
+        // Round 22 AD3: a flagged group's summary keeps each `·` with the words after it, and
+        // shows every fact.
+        let name = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("2 of 3 can join") && node.in_view())
+            .map(|node| node.name);
+        let mut rows = Vec::new();
+        let mut painted = String::new();
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text.contains("2 of 3 can join") {
+                painted = text.galley.job.text.replace('\u{a0}', " ");
+                rows = text
+                    .galley
+                    .rows
+                    .iter()
+                    .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect::<String>())
+                    .collect();
+            }
+        });
+        d.observe(
+            "iter-22-C-AD3",
+            !rows.is_empty()
+                && rows.iter().all(|row| !row.trim_end().ends_with('·'))
+                && !rows.concat().contains('…')
+                && name.as_deref() == Some(painted.as_str()),
+            format!("Flagged summary {name:?} paints rows {rows:?}"),
         );
     });
     d.click(NAV_ENCOUNTERS);
@@ -352,21 +495,54 @@ pub fn run(d: &mut Driver<'_>) {
     assert!(d.is_disabled("Begin combat"));
     d.expect("the change “HP lots” was not read");
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
-        let fits = d.at_size(size, |d| {
+        let (fits, placed) = d.at_size(size, |d| {
             let warning = d
                 .nodes()
                 .into_iter()
                 .find(|node| node.name.contains("the change “HP lots” was not read"));
             let header = d.place_of("Begin combat").unwrap();
-            warning.is_some_and(|node| node.rect.top() > header.bottom())
+            let fits = warning
+                .as_ref()
+                .is_some_and(|node| node.rect.top() > header.bottom())
                 && d.visible_text("Fix the unread row first.")
                 && d.in_view("Initiative for Ember Cultist 2")
-                && !d.visible_text("below, 1 needs initiative")
+                && !d.visible_text("below, 1 needs initiative");
+            // Round 22 AD2: a file line below the warning starts at its words. A wide column
+            // keeps it beside the words instead, so 960 must take the line below.
+            let file = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == roster_path.display().to_string() && node.in_view())
+                .map(|node| node.rect);
+            let placed = match (warning, file) {
+                (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
+                    super::file_links_at_message_words(
+                        d,
+                        "Ember Cultist: the change “HP lots”",
+                        &roster_path,
+                        "Shrine of Cinders.md",
+                    )
+                }
+                (Some(warning), Some(file)) if size != SMALL => (file.left()
+                    >= warning.rect.right())
+                .then_some(())
+                .ok_or(format!("file {file:?} overlaps warning {:?}", warning.rect)),
+                (warning, file) => Err(format!(
+                    "warning {:?} and file line {file:?}",
+                    warning.map(|node| node.rect)
+                )),
+            };
+            (fits, placed)
         });
         d.observe(
             "iter-5-B-FD8",
             fits,
             format!("Setup warning follows the header and keeps roster room at {size:?}"),
+        );
+        d.observe(
+            "iter-22-C-AD2",
+            placed.is_ok(),
+            format!("At {size:?}, the setup warning's file line: {placed:?}"),
         );
     }
     d.expect(
@@ -430,6 +606,56 @@ pub fn run(d: &mut Driver<'_>) {
         one_row > 0 && warnings == 2 * one_row && show_file == 1,
         format!("Two unread rows: {warnings} warnings, {show_file} Show file"),
     );
+    // Round 22 review: the one file line follows the last warning about the file, at its
+    // words (or beside them, when a wide column has room).
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            let mut faults: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.contains("the change “HP lots” was not read")
+                        && node.in_view()
+                })
+                .collect();
+            faults.sort_by(|a, b| a.rect.top().total_cmp(&b.rect.top()));
+            faults.dedup_by(|a, b| a.rect == b.rect);
+            let files: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == roster_path.display().to_string())
+                .map(|node| node.rect)
+                .collect();
+            let (Some(last), [file]) = (faults.last(), files.as_slice()) else {
+                return Err(format!("{} warnings, file lines {files:?}", faults.len()));
+            };
+            if faults.len() != 2 {
+                return Err(format!("{} warnings", faults.len()));
+            }
+            if file.top() >= last.rect.bottom() - 1.0 {
+                super::file_links_at_message_words(
+                    d,
+                    &last.name,
+                    &roster_path,
+                    "Shrine of Cinders.md",
+                )
+            } else if size != SMALL
+                && file.left() >= last.rect.right()
+                && file.top() >= last.rect.top() - 1.0
+                && file.top() < last.rect.bottom()
+            {
+                Ok(())
+            } else {
+                Err(format!("file line {file:?}, last warning {:?}", last.rect))
+            }
+        });
+        d.observe(
+            "iter-22-C-AD2-two-rows",
+            placed.is_ok(),
+            format!("At {size:?}, two unread rows and their one file line: {placed:?}"),
+        );
+    }
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 
@@ -437,7 +663,7 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();
     d.app_mut().timeline.reload();
     d.click(NAV_TIMELINE);
-    d.expect("Timeline.md, line 9: \"Day 5\" is day 1 in order.");
+    d.expect("Line 9: “Day 5” is day 1 in order.");
     d.expect("Splat renumbers it when it saves.");
     d.observe_both(
         "i20-S3",
@@ -445,10 +671,35 @@ pub fn run(d: &mut Driver<'_>) {
         |d| {
             d.has("Edit in Obsidian")
                 && d.has("Show file")
-                && d.visible_text("Timeline.md, line 9:")
+                && d.visible_text("Line 9: “Day 5”")
                 && d.visible_text("Splat renumbers it when it saves.")
         },
     );
+    // Round 22 FD1, FD5: the file line starts at the warning's words, and only it names the file.
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            super::file_links_at_message_words(d, "Line 9: ", &path, crate::timeline::FILE)
+                .and_then(|()| {
+                    let named = d
+                        .nodes()
+                        .into_iter()
+                        .filter(|node| node.name.starts_with("Line 9: "))
+                        .map(|node| node.name)
+                        .collect::<Vec<_>>();
+                    (!named.is_empty()
+                        && named
+                            .iter()
+                            .all(|name| !name.contains(crate::timeline::FILE)))
+                    .then_some(())
+                    .ok_or(format!("warnings {named:?} name the file"))
+                })
+        });
+        d.observe(
+            "iter-22-C-FD1",
+            placed.is_ok(),
+            format!("At {size:?}, the Timeline warning's file line: {placed:?}"),
+        );
+    }
     // Round 13 FD6: the flagged day keeps its Day icon and says what its heading was written as.
     d.observe_both(
         "iter-13-C-FD6",
@@ -481,6 +732,50 @@ pub fn run(d: &mut Driver<'_>) {
         },
     );
     d.state("timeline-item-edited-and-flagged-in-obsidian", Sizes::All);
+    // Round 22 FD1 edge: with two flags, one file line follows the last flag, at its words.
+    let one_flag = fs::read_to_string(&path).unwrap();
+    fs::write(
+        &path,
+        format!("{one_flag}\n## Day 9: Later\n%% splat id=t-iter22-extra %%\n"),
+    )
+    .unwrap();
+    d.app_mut().timeline.reload();
+    d.wait_for_text("“Day 9” is day 2 in order.");
+    for size in [SMALL, DEFAULT] {
+        let placed = d.at_size(size, |d| {
+            let last = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("“Day 9” is day 2 in order."))
+                .and_then(|node| {
+                    node.name
+                        .split_once(": ")
+                        .map(|(line, _)| format!("{line}: "))
+                })
+                .ok_or("the second flag is not shown".to_owned())?;
+            let files = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == path.display().to_string())
+                .count();
+            super::file_links_at_message_words(d, &last, &path, crate::timeline::FILE).and_then(
+                |()| {
+                    (files == 1 && d.visible_text("Line 9: “Day 5”"))
+                        .then_some(())
+                        .ok_or(format!("{files} file lines"))
+                },
+            )
+        });
+        d.observe(
+            "iter-22-C-FD1-two-flags",
+            placed.is_ok(),
+            format!("At {size:?}, two Timeline flags and their file line: {placed:?}"),
+        );
+    }
+    fs::write(&path, &one_flag).unwrap();
+    d.app_mut().timeline.reload();
+    d.settle();
+    assert!(!d.visible_text("“Day 9”"));
     d.app_mut().timeline.touch();
     d.app_mut().timeline.save();
     d.settle();

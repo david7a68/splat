@@ -498,15 +498,16 @@ fn plan_summary_text(group: &crate::encounter_run::RunGroup) -> String {
     }
 }
 
-fn plan_group_summary(ui: &mut egui::Ui, summary: &str) {
+/// A plan group's summary. Each separator wraps with the words after it, so no line ends with
+/// `·`. A flagged group keeps every fact (`max_rows` of `usize::MAX`).
+fn plan_group_summary(ui: &mut egui::Ui, summary: &str, max_rows: usize) {
     let mut job = egui::text::LayoutJob::simple(
         summary.replace(" · ", " ·\u{a0}"),
         Type::Small.font(ui),
         colors().muted,
         ui.available_width(),
     );
-    // Members stay whole, so a long member list can take a third line before it shortens.
-    job.wrap.max_rows = 3;
+    job.wrap.max_rows = max_rows;
     let plain = summary.replace('\u{a0}', " ");
     let response = ui.add(egui::Label::new(job).wrap());
     // The no-break spaces only steer the wrap; the name keeps plain spaces.
@@ -4503,11 +4504,9 @@ impl Sessions {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
                             let summary = plan_summary_text(group);
-                            if group.warnings.is_empty() { plan_group_summary(ui, &summary); }
-                            else {
-                                let response = ui.add(egui::Label::new(Type::Small.rich(ui, &summary).color(c.muted)).wrap());
-                                design::named(ui, &response, &summary.replace('\u{a0}', " "));
-                            }
+                            // Members stay whole, so a long member list can take a third line
+                            // before it shortens. A flagged group shows every fact.
+                            plan_group_summary(ui, &summary, if group.warnings.is_empty() { 3 } else { usize::MAX });
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                             // Name each member left out, its base and its line, beside Edit group.
                             else {
@@ -4540,7 +4539,7 @@ impl Sessions {
                 }
                 undo_group_remove |= self.removed_group_message(ui, session, planned_groups.len());
                 if !any && self.removed_group.is_none() {
-                    design::empty_state(ui, icons::SESSIONS, "Nothing planned yet.",
+                    design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
             });
@@ -7757,7 +7756,7 @@ mod tests {
             .with_size(egui::vec2(design::FORM_WIDTH / 2.0, 200.0))
             .build_state(|ctx, rect| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    *rect = ui.scope(|ui| plan_group_summary(ui, "Rivals · 3 members · XP 600 · Changed · 1 × Ember Cultist · 2 × Goblin Warrior")).response.rect;
+                    *rect = ui.scope(|ui| plan_group_summary(ui, "Rivals · 3 members · XP 600 · Changed · 1 × Ember Cultist · 2 × Goblin Warrior", 3)).response.rect;
                 });
             }, egui::Rect::NOTHING);
         design::theme::install(&harness.ctx);
