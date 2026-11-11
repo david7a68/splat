@@ -13266,6 +13266,7 @@ pub mod run_rolls {
     const TARGET: &str = "Cinder Wolf 2";
     const CASTER: &str = "Ember Cultist";
     const PLAYER: &str = "Iselle Marrowind";
+    const HERO: &str = "Brannoch Vale";
     const BITE: &str = "Bite · +4";
     const BURST: &str = "Ember Burst · DC 12";
 
@@ -13466,6 +13467,27 @@ pub mod run_rolls {
         d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
         d.press(Key::Escape);
 
+        // A tile's number is its place among all of the creature's actions. Spellcasting, which
+        // is prose, parts the cultist's third tile from the first two, and takes no number.
+        d.click_row(CASTER);
+        d.observe(
+            "T16.5",
+            d.name_starting("Scorching Sickle").contains("Ctrl+1.")
+                && d.name_starting(BURST).contains("Ctrl+2.")
+                && d.name_starting("Cinder Dart").contains("Ctrl+3."),
+            format!(
+                "The tile after the Spellcasting text says Ctrl+3, not Ctrl+1 again: {:?}",
+                d.name_starting("Cinder Dart")
+            ),
+        );
+        d.press_ctrl(Key::Num3);
+        d.observe(
+            "T16.5",
+            d.has_containing("Click a target to roll against it"),
+            "Ctrl+3 arms the tile that says Ctrl+3, the attack after the prose",
+        );
+        d.press(Key::Escape);
+
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);
         d.begin_task();
@@ -13569,6 +13591,40 @@ pub mod run_rolls {
             format!("The player's typed damage applies to the target: {before:?} then {after:?}"),
         );
         d.goal_within("T16.6", "a player's attack with their own damage", 4);
+        d.press(Key::Escape);
+
+        // Inspiration, by the campaign's rule: one die of a roll made for a player rolls again.
+        d.click_row(HERO);
+        d.click("Actions");
+        d.click_starting("Longsword");
+        d.click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            d.has("Roll for them"),
+            "The panel keeps the player's sheet and its tiles while their attack has a target",
+        );
+        d.click("Roll for them");
+        d.begin_task();
+        d.right_click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            d.has_containing("Inspiration: reroll one die") && d.has_containing(" on the d20"),
+            "The row's menu offers each die of the roll made for the player",
+        );
+        d.state("reroll-menu", Sizes::Default);
+        d.click_containing(" on 1d8");
+        d.right_click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            !d.has_containing("Inspiration: reroll one die"),
+            "The inspiration is spent, so the menu offers no second reroll",
+        );
+        d.goal_within(
+            "T16.11",
+            "reroll one die of a player's roll with inspiration",
+            3,
+        );
+        d.press(Key::Escape);
         d.press(Key::Escape);
 
         // Outside a run, a tile previews and changes nothing.

@@ -279,29 +279,36 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
+/// `text` is one part of the entry's `body`. A tile's number is its action's place in the
+/// whole body's list, which is the list Ctrl+number arms from.
 fn prose(
     ui: &mut egui::Ui,
     name: &str,
+    body: &str,
     text: &str,
     values: Option<&super::view::RunValues>,
     spell_links: &mut impl FnMut(&mut egui::Ui, &str),
 ) {
-    let mut tiles: Vec<crate::rolls::Chip> = Vec::new();
+    let all = crate::rolls::actions(body);
+    let here = crate::rolls::actions(text);
+    let mut tiles: Vec<(Option<usize>, crate::rolls::Chip)> = Vec::new();
     // Action tiles in a row. In a run, a tile shows the numbers Splat rolls, with a run's
     // attack and damage changes in them, so no line under the tiles repeats those changes.
-    let flush = |ui: &mut egui::Ui, tiles: &mut Vec<crate::rolls::Chip>| {
+    let flush = |ui: &mut egui::Ui, tiles: &mut Vec<(Option<usize>, crate::rolls::Chip)>| {
         if !tiles.is_empty() {
             crate::rolls::tiles(ui, name, tiles);
             tiles.clear();
         }
     };
-    for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
+    for (at, paragraph) in text
+        .split("\n\n")
+        .map(str::trim)
+        .enumerate()
+        .filter(|(_, s)| !s.is_empty())
+    {
         // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
-        // Spellcasting stays prose: it lists spells, with links to them.
-        if !paragraph.starts_with("Spellcasting")
-            && let Some(chip) = crate::rolls::chips(paragraph).into_iter().next()
-        {
-            tiles.push(chip);
+        if let Some((_, chip)) = here.iter().find(|(place, _)| *place == at) {
+            tiles.push((crate::rolls::place_in(&all, chip), chip.clone()));
             continue;
         }
         flush(ui, &mut tiles);
@@ -326,8 +333,8 @@ fn prose(
 }
 
 /// Rules text written by hand: its actions as tiles, the rest as prose.
-pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, text: &str) {
-    prose(ui, name, text, None, &mut |_, _| {});
+pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) {
+    prose(ui, name, body, text, None, &mut |_, _| {});
 }
 
 /// These stat rows share the reader's label column, including changed values.
@@ -831,6 +838,7 @@ pub(super) fn show(
             prose(
                 ui,
                 &entry.name,
+                &entry.body,
                 &rules_prose(entry, &body),
                 values,
                 &mut spell_links,
@@ -847,7 +855,14 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            prose(ui, &entry.name, &body, values, &mut spell_links);
+            prose(
+                ui,
+                &entry.name,
+                &entry.body,
+                &body,
+                values,
+                &mut spell_links,
+            );
         }
     }
 }

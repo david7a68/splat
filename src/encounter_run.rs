@@ -546,8 +546,13 @@ pub(crate) struct Run {
     asking: Option<rolling::Asking>,
     /// The last d20 rolled for a player, which their inspiration can reroll.
     reroll: Option<rolling::Reroll>,
-    /// Rows whose inspiration was expended without a synced sheet to send it to.
-    spent_inspiration: BTreeSet<usize>,
+    /// The DM edited Amount since the run last put a save's damage there.
+    amount_typed: bool,
+    /// Participants, by key, whose inspiration the run spent and whose sheet does not show it
+    /// yet. Saved with the run.
+    spent_inspiration: BTreeSet<String>,
+    /// What the last read of each row's sheet says about their inspiration.
+    sheet_inspiration: BTreeMap<usize, bool>,
     storage: Option<Storage>,
     recovery: Recovery,
     /// Each character's cached portrait, by D&D Beyond ID.
@@ -869,7 +874,9 @@ impl Run {
             inspiration: None,
             asking: None,
             reroll: None,
+            amount_typed: false,
             spent_inspiration: BTreeSet::new(),
+            sheet_inspiration: BTreeMap::new(),
             storage: None,
             recovery: Recovery::default(),
             portraits: BTreeMap::new(),
@@ -1527,6 +1534,14 @@ impl Run {
         }
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
+        self.apply_step(command)?;
+        // Inspiration rerolls a die immediately after the roll, not after the next step that
+        // the run takes. The step that applies a save's damage spends that damage itself.
+        self.reroll = None;
+        Ok(())
+    }
+
+    fn apply_step(&mut self, command: Command) -> Result<(), String> {
         if matches!(command, Command::Begin) {
             self.roster_stamp = None;
             self.refresh_roster_faults();
@@ -2344,18 +2359,23 @@ impl Run {
             self.close_lookup = true;
         }
     }
-    /// The character whose sheet the side panel wants, if the selection is linked.
+    /// The character whose sheet the side panel wants, if its participant is linked: the
+    /// selection, or the actor while an action is armed.
     pub fn wanted_sheet(&self) -> Option<String> {
-        remote_identity(self.state.participants.get(self.selected)?).map(|(_, id)| id)
+        remote_identity(self.state.participants.get(self.panel_row())?).map(|(_, id)| id)
     }
-    /// A sheet the shell found for the selected participant, or none.
+    /// A sheet the shell found for the panel's participant, or none.
     pub fn set_sheet(&mut self, record: Option<&splat::character::EntitySnapshot>) {
-        let unchanged = self.sheet_for == Some(self.selected)
+        let row = self.panel_row();
+        let unchanged = self.sheet_for == Some(row)
             && self.sheet.as_deref().map(|r| &r.source.content_hash)
                 == record.map(|r| &r.source.content_hash);
         if !unchanged {
             self.sheet = record.cloned().map(Arc::new);
-            self.sheet_for = Some(self.selected);
+            self.sheet_for = Some(row);
+            if let Some(record) = record {
+                self.note_sheet_inspiration(row, record.initial.inspiration);
+            }
         }
     }
     fn sync_names(&self, wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool) -> Vec<String> {
@@ -2742,6 +2762,8 @@ impl Run {
         } else if self.connected && self.keep_party_synced {
             self.start_party_sync(linked);
         }
+        // Inspiration the run spent goes to each sheet that can take it now.
+        self.settle_spent_inspiration();
         let mut changed_participants = Vec::new();
         let mut sheet_indices = Vec::new();
         let mut identities = std::collections::BTreeSet::new();
@@ -3127,6 +3149,9 @@ struct SavedRun {
     keep_party_synced: bool,
     #[serde(default)]
     stopped_players: Vec<String>,
+    /// Participants whose spent inspiration their sheet does not show yet.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    spent_inspiration: BTreeSet<String>,
 }
 struct Storage {
     path: PathBuf,
@@ -3333,6 +3358,7 @@ impl Run {
             setup_details: self.setup_details.clone(),
             keep_party_synced: self.keep_party_synced,
             stopped_players,
+            spent_inspiration: self.spent_inspiration.clone(),
         };
         let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| e.to_string())?;
         let parent = storage.path.parent().ok_or("Invalid run location")?;
@@ -3539,7 +3565,9 @@ impl Run {
             inspiration: saved.inspiration,
             asking: None,
             reroll: None,
-            spent_inspiration: BTreeSet::new(),
+            amount_typed: false,
+            spent_inspiration: saved.spent_inspiration,
+            sheet_inspiration: BTreeMap::new(),
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
                 _ => 0,
@@ -4203,6 +4231,8 @@ pub(crate) fn write_in_progress_run_with(
 ) -> Result<(), String> {
     let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
     let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    // The test campaign uses the SRD 5.2.1 package, whose inspiration rule is a reroll.
+    run.set_inspiration(Some(Inspiration::Reroll));
     run.state.random = Random::seeded(20_260_101);
     for (index, total) in initiatives.into_iter().enumerate() {
         run.apply(Command::Initiative(index, Some(total)))?;

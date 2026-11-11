@@ -338,6 +338,7 @@ impl Run {
     }
 
     pub(super) fn select(&mut self, index: usize) {
+        self.selection_left_save();
         self.clear_targets();
         if self.selected != index {
             self.selected = index;
@@ -2298,6 +2299,10 @@ impl Run {
             Density::Glance.control(),
         );
         self.amount.retain(|d| d.is_ascii_digit());
+        // Typed, cleared or typed again: the amount is the DM's until a new roll.
+        if response.changed() {
+            self.amount_typed = true;
+        }
         if std::mem::take(&mut self.focus_amount) {
             response.request_focus();
         }
