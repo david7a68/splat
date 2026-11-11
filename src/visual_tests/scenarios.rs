@@ -3447,6 +3447,8 @@ pub mod settings {
         // Each state through the same fields a real attempt sets.
         let mut words = true;
         let mut targets = Vec::new();
+        // iter-25-A FG6: where the one-line Connected status starts its icon.
+        let mut one_line_left = None;
         for (state, word) in ACCOUNT_WORDS {
             d.app_mut().settings.simulate(state);
             d.settle();
@@ -3461,6 +3463,11 @@ pub mod settings {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 // Also supplies signed-in's shared Settings image at the wide size.
                 Account::Connected => {
+                    one_line_left = d
+                        .nodes()
+                        .iter()
+                        .find(|node| node.name.ends_with(" Connected") && node.rect.left() < 100.0)
+                        .map(|node| node.rect.left());
                     d.observe(
                         "iter-23-C-FM4-connected",
                         d.visible_text("Splat stays signed in while it is open.")
@@ -3491,6 +3498,25 @@ pub mod settings {
                                     && second.rect.top() >= first.rect.bottom()
                             })
                         },
+                    );
+                    // iter-25-A FG6: the two-line status starts its icon where the one-line
+                    // status starts it.
+                    let icon_left = d
+                        .nodes()
+                        .iter()
+                        .find(|node| {
+                            node.name == crate::design::icons::WARN && node.rect.left() < 100.0
+                        })
+                        .map(|node| node.rect.left());
+                    d.observe(
+                        "iter-25-A-FG6",
+                        one_line_left
+                            .zip(icon_left)
+                            .is_some_and(|(one, two)| (one - two).abs() <= 0.5),
+                        format!(
+                            "The two-line rail status starts its icon at {icon_left:?}, as the \
+                             one-line status does at {one_line_left:?}"
+                        ),
                     );
                     // AD2: this state really takes two lines, so the target check below compares
                     // a one-line account with a two-line one at every size.

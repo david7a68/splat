@@ -153,12 +153,33 @@ pub fn page_header(ui: &mut Ui, title: &str, context: Option<&str>, actions: imp
         Layout::right_to_left(Align::Center),
         |ui| {
             ui.set_min_height(Density::Scan.control());
-            actions(ui);
+            // The title and its count go first: the actions get the width they leave, and a
+            // status link among them wraps there before the count is cut.
+            let room = (ui.available_width() - page_title_width(ui, title, context)).max(0.0);
+            ui.allocate_ui_with_layout(
+                vec2(room, Density::Scan.control()),
+                Layout::right_to_left(Align::Center),
+                |ui| {
+                    ui.set_min_height(Density::Scan.control());
+                    actions(ui);
+                },
+            );
             page_title(ui, title, context);
         },
     );
     rule(ui);
     ui.add_space(L);
+}
+
+/// The width `page_title` takes with its whole count, and the gap before the actions.
+fn page_title_width(ui: &Ui, title: &str, context: Option<&str>) -> f32 {
+    number_width(ui, title, &Type::Title.font(ui))
+        + context.map_or(0.0, |context| {
+            ui.spacing().item_spacing.x + XS + number_width(ui, context, &Type::Small.font(ui))
+        })
+        + ui.spacing().item_spacing.x
+        // Rounding must not cut the count by a fraction of a point.
+        + 1.0
 }
 
 // Keep rendering that does not depend on the caller's closure out of the generic
@@ -1113,8 +1134,8 @@ fn field_caption(ui: &mut Ui, label: &str, role: Type) {
 }
 
 fn field_feedback(ui: &mut Ui, help: Option<&str>, error: Option<&str>) {
-    if let Some(help) = help {
-        ui.label(Type::Small.rich(ui, help).color(colors().muted));
+    if let Some(text) = help {
+        self::help(ui, text);
     }
     if let Some(error) = error {
         message(ui, Tone::Error, error);
@@ -1427,14 +1448,33 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
-/// Two rail lines share the word's left edge, leaving the icon in its own column. Returns the
-/// whole status, and the rect of its first line's word.
+/// Two rail lines share the word's left edge, leaving the icon in its own column. The icon and
+/// the word start where a one-line `status` starts them: the icon at the left edge, the word
+/// after the icon and one space. Returns the whole status, and the rect of its first line's word.
 pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
     ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = S;
-        ui.add_sized(
-            vec2(Type::Body.line(), Type::Small.line()),
-            egui::Label::new(Type::Small.rich(ui, state.icon).color(state.color)),
+        ui.spacing_mut().item_spacing.x = 0.0;
+        // Where a one-line status starts its word: the glyph after the icon and one space. A
+        // galley's size rounds up to whole pixels, so the glyph's own position is the measure.
+        let column = ui.fonts_mut(|fonts| {
+            let galley = fonts.layout_no_wrap(
+                format!("{} {}", state.icon, state.word),
+                Type::Small.font(ui),
+                Color32::PLACEHOLDER,
+            );
+            let at = state.icon.chars().count() + 1;
+            galley.rows[0]
+                .glyphs
+                .get(at)
+                .map_or(galley.size().x, |glyph| glyph.pos.x)
+        });
+        ui.allocate_ui_with_layout(
+            vec2(column, Type::Small.line()),
+            Layout::left_to_right(Align::Min),
+            |ui| {
+                ui.set_min_width(column);
+                ui.label(Type::Small.rich(ui, state.icon).color(state.color))
+            },
         );
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
@@ -1924,8 +1964,17 @@ pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
     )
 }
 
-/// A message with one action beside it. Returns true when the action is used.
+/// A message with one action beside it, capped at `LIST_MEASURE` like every notice. Returns true
+/// when the action is used.
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        message_with_action_inside(ui, tone, text, action)
+    })
+    .inner
+}
+
+fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
     let button = Action::secondary(action).density(Density::Read);
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
@@ -2071,6 +2120,123 @@ pub fn message_with_actions<R>(
         .inner
     })
     .inner
+}
+
+/// Help under a field or a section: `Small` muted words that wrap at `READER_MEASURE`, so a long
+/// help line keeps the reader's measure in a wide pane.
+pub fn help(ui: &mut Ui, text: &str) -> Response {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(READER_MEASURE));
+        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap())
+    })
+    .inner
+}
+
+/// How many text lines the message space below a save row holds.
+pub const MESSAGE_SPACE_LINES: f32 = 2.0;
+
+/// The height of the message space below a save row: `MESSAGE_SPACE_LINES` body lines.
+pub fn message_space_height() -> f32 {
+    MESSAGE_SPACE_LINES * Type::Body.line()
+}
+
+/// The one message space below a save row: a `width` by two-line part at the cursor, whatever it
+/// holds. The caller picks one message: the reason when there is one, else the result. `message`
+/// is its whole text, the part's accessible name; with `None`, the space stays empty and `add`
+/// does not run. Longer words wrap and scroll inside the part (see `fixed_part`), so no message
+/// moves what is below the space. Returns what `add` returns.
+// Library, World repair and Campaign repair adopt it this round (iter-25 packages L, D and C).
+#[allow(dead_code)]
+pub fn message_space<R>(
+    ui: &mut Ui,
+    id: &str,
+    width: f32,
+    message: Option<&str>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(width, message_space_height()), Sense::hover());
+    message.map(|name| fixed_part(ui, rect, id, name, add))
+}
+
+/// One fixed part of a reserved space: a fixed rect whatever it holds. Longer words wrap and
+/// scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and nothing below
+/// moves. The part is one focusable widget named with its whole message, so Tab reaches it and a
+/// screen reader reads all of it. While it has focus, the up and down arrows scroll it by a line
+/// and Page Up and Page Down by the part; the wheel scrolls it too.
+pub fn fixed_part<R>(
+    ui: &mut Ui,
+    rect: Rect,
+    id: &str,
+    name: &str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let focus = Id::new((id, "focus"));
+    let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
+    let step = if focused {
+        // The arrows scroll the part instead of moving focus.
+        ui.ctx().memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                focus,
+                egui::EventFilter {
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+        let line = Type::Body.line();
+        ui.input_mut(|input| {
+            let mut step = 0.0;
+            for (key, by) in [
+                (egui::Key::ArrowDown, line),
+                (egui::Key::ArrowUp, -line),
+                (egui::Key::PageDown, rect.height()),
+                (egui::Key::PageUp, -rect.height()),
+            ] {
+                while input.consume_key(egui::Modifiers::NONE, key) {
+                    step += by;
+                }
+            }
+            step
+        })
+    } else {
+        0.0
+    };
+    let mut part = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::top_down(Align::Min)),
+    );
+    let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
+    let inner = egui::ScrollArea::vertical()
+        .id_salt(id)
+        .max_height(rect.height())
+        // egui's default minimum would let a short overflow grow past the part.
+        .min_scrolled_height(rect.height())
+        .auto_shrink([false, true])
+        .show(&mut part, |ui| {
+            ui.set_max_width(rect.width() - lane);
+            if step != 0.0 {
+                ui.scroll_with_delta(vec2(0.0, -step));
+            }
+            add(ui)
+        })
+        .inner;
+    let response = ui.interact(rect, focus, Sense::focusable_noninteractive());
+    // A named group that holds the message and its actions: a screen reader reads the whole
+    // message, and the group is not a second target over its own Undo.
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::GenericContainer);
+        node.set_label(name);
+    });
+    if response.has_focus() {
+        // Inside the content area, clear of the part's own scroll bar lane.
+        focus_ring(
+            ui,
+            Rect::from_min_max(rect.min, pos2(rect.right() - lane, rect.bottom())),
+        );
+    }
+    inner
 }
 
 /// The same safe-first choice for a draft whose file changed on disk.
@@ -3598,6 +3764,249 @@ mod tests {
                 );
             }
         }
+        // iter-25-A AB2: in a wide pane, the message and its action stay inside `LIST_MEASURE`,
+        // as every notice does. The words alone are wider than the measure.
+        const LONG: &str = "This is the open session, not the session you played. Changes here go to \
+            the open session's note, so go back to the played session before you add what happened.";
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1800.0, 240.0))
+            .build_ui(|ui| {
+                message_with_action(ui, Tone::Warning, LONG, "Go to the played session");
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let texts = painted_texts(&harness);
+        let words = texts
+            .iter()
+            .find(|(text, _)| text == LONG)
+            .map(|(_, rect)| *rect)
+            .expect("the words are painted");
+        use egui_kittest::kittest::Queryable;
+        let action = harness.get_by_label("Go to the played session").rect();
+        let left = words.left().min(action.left()) - S - 1.0;
+        let right = words.right().max(action.right());
+        assert!(
+            right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
+            "the message spans {left}..{right}: words {words:?}, action {action:?}"
+        );
+    }
+
+    /// iter-25-A: `help` and a field's help wrap at `READER_MEASURE` in a wide pane.
+    #[test]
+    fn iter25_a_help_keeps_the_reader_measure() {
+        const HELP: &str = "Built-in names stay as they are. A name you add here shows in every \
+            list of this campaign, and Lookup finds it by its first word or its whole name.";
+        for in_field in [false, true] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(1600.0, 240.0))
+                .build_ui(move |ui| {
+                    if in_field {
+                        field(ui, "Name", Some(HELP), None, |ui| ui.label("control"));
+                    } else {
+                        help(ui, HELP);
+                    }
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts = painted_texts(&harness);
+            let rect = texts
+                .iter()
+                .find(|(text, _)| text == HELP)
+                .map(|(_, rect)| *rect)
+                .unwrap_or_else(|| panic!("the help is painted: {texts:?}"));
+            assert!(
+                rect.width() <= READER_MEASURE + 0.5 && rect.height() > Type::Small.line(),
+                "field {in_field}: help {rect:?}"
+            );
+        }
+    }
+
+    /// iter-25-A contract: the message space is two body lines high whether it is empty, holds
+    /// one line or holds more than fits, so what follows it never moves. Empty, it draws nothing;
+    /// holding a message, it is one focusable part named with the whole message.
+    #[test]
+    fn iter25_a_message_space_keeps_what_follows_still() {
+        const LONG: &str = "Line 4 opens a list with [ that never closes. Close the list with ], \
+            or remove the [ at the start of the line. Then save the entry again to check it.";
+        let below = |message: Option<&'static str>| {
+            let ran = std::rc::Rc::new(std::cell::Cell::new(false));
+            let seen = ran.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(330.0, 400.0))
+                .build_ui(move |ui| {
+                    ui.label("Above the space");
+                    message_space(ui, "test_space", 330.0, message, |ui| {
+                        seen.set(true);
+                        message_fn(ui, message.unwrap_or_default());
+                    });
+                    ui.label("Below the space");
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let texts = painted_texts(&harness);
+            let top = |words: &str| {
+                texts
+                    .iter()
+                    .find(|(text, _)| text == words)
+                    .map(|(_, rect)| rect.top())
+                    .unwrap_or_else(|| panic!("{words} is painted: {texts:?}"))
+            };
+            use egui_kittest::kittest::{NodeT, Queryable};
+            let named = message.is_some_and(|name| {
+                harness
+                    .query_all_by_label(name)
+                    .any(|node| node.accesskit_node().role() == egui::accesskit::Role::GenericContainer)
+            });
+            (
+                top("Below the space") - top("Above the space"),
+                ran.get(),
+                named,
+            )
+        };
+        fn message_fn(ui: &mut Ui, words: &str) {
+            message(ui, Tone::Error, words);
+        }
+        let empty = below(None);
+        let short = below(Some("Typed 4 on 1d6: Fog"));
+        let long = below(Some(LONG));
+        assert!(!empty.1 && short.1 && long.1, "add runs only with a message");
+        assert!(short.2 && long.2, "the part is named with its whole message");
+        assert!(
+            (empty.0 - short.0).abs() < 0.5 && (empty.0 - long.0).abs() < 0.5,
+            "below the space: empty {}, short {}, long {}",
+            empty.0,
+            short.0,
+            long.0
+        );
+        assert!(empty.0 >= message_space_height(), "{}", empty.0);
+    }
+
+    /// iter-25-A (carried, World at 960 beside Lookup): the header's count stays whole; a status
+    /// link among the actions wraps in the width the title and count leave. Must stay true: in a
+    /// wide pane, the links stay on one line and the header keeps its height.
+    #[test]
+    fn iter25_a_page_header_keeps_its_count_whole() {
+        const COUNT: &str = "5 notes";
+        const FIXING: &str = "1 note needs fixing";
+        const UNREAD: &str = "2 notes cannot be read";
+        let mut wide_below = Vec::new();
+        for (width, actions) in [(465.0, true), (1200.0, true), (1200.0, false)] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 200.0))
+                .build_ui(move |ui| {
+                    page_header(ui, "World", Some(COUNT), |ui| {
+                        if !actions {
+                            return;
+                        }
+                        Action::secondary("New").icon(icons::ADD).show(ui);
+                        for (word, icon) in [(FIXING, icons::WARN), (UNREAD, icons::ERROR)] {
+                            status_link(
+                                ui,
+                                Status {
+                                    icon,
+                                    word,
+                                    color: colors().result.warning,
+                                },
+                            );
+                        }
+                    });
+                    ui.label("Below the header");
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let mut painted = Vec::new();
+            for shape in &harness.output().shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    painted.push((
+                        text.galley.job.text.clone(),
+                        !text.galley.elided,
+                        text.galley.rows.len(),
+                        Rect::from_min_size(text.pos, text.galley.size()),
+                    ));
+                }
+            }
+            let find = |words: &str| {
+                painted
+                    .iter()
+                    .find(|(text, ..)| text.ends_with(words))
+                    .unwrap_or_else(|| panic!("{words} is painted at {width}: {painted:?}"))
+                    .clone()
+            };
+            let count = find(COUNT);
+            if width > 1000.0 {
+                wide_below.push(find("Below the header").3.top());
+            }
+            if !actions {
+                continue;
+            }
+            let unread = find(UNREAD);
+            assert!(
+                count.1 && unread.1 && count.3.right() <= unread.3.left(),
+                "at {width}: count {count:?}, link {unread:?}"
+            );
+            if width > 1000.0 {
+                assert!(
+                    painted.iter().all(|(_, _, rows, _)| *rows == 1),
+                    "at {width}, every header text is one line: {painted:?}"
+                );
+            }
+        }
+        assert!(
+            (wide_below[0] - wide_below[1]).abs() < 0.5,
+            "a wide header keeps its height with its actions: {wide_below:?}"
+        );
+    }
+
+    /// iter-25-A FG6: a two-line rail status starts its icon and its words where a one-line
+    /// status starts them.
+    #[test]
+    fn iter25_a_two_line_status_shares_the_one_line_edges() {
+        let state = || Status {
+            icon: icons::WARN,
+            word: "Connected",
+            color: colors().result.warning,
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(200.0, 200.0))
+            .build_ui(move |ui| {
+                status(ui, state());
+                rail_status_detail(ui, state(), "Not remembered");
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        // Each painted text with the x of each of its glyphs.
+        let mut glyphs = Vec::new();
+        for shape in &harness.output().shapes {
+            if let egui::Shape::Text(text) = &shape.shape {
+                let row = &text.galley.rows[0];
+                let xs = row
+                    .glyphs
+                    .iter()
+                    .map(|glyph| (glyph.chr, text.pos.x + glyph.pos.x))
+                    .collect::<Vec<_>>();
+                glyphs.push((text.galley.job.text.clone(), xs));
+            }
+        }
+        let one_line = format!("{} Connected", icons::WARN);
+        let line = glyphs
+            .iter()
+            .find(|(text, _)| *text == one_line)
+            .expect("the one-line status is painted");
+        let icon_x = line.1[0].1;
+        let word_x = line.1.iter().find(|(chr, _)| *chr == 'C').unwrap().1;
+        let x_of = |words: &str| {
+            glyphs
+                .iter()
+                .find(|(text, _)| text == words)
+                .unwrap_or_else(|| panic!("{words} is painted: {glyphs:?}"))
+                .1[0]
+                .1
+        };
+        let (icon, word, detail) = (x_of(icons::WARN), x_of("Connected"), x_of("Not remembered"));
+        assert!(
+            (icon - icon_x).abs() <= 0.5 && (word - word_x).abs() <= 0.5 && (detail - word).abs() <= 0.5,
+            "one line: icon {icon_x}, word {word_x}; two lines: icon {icon}, word {word}, detail {detail}"
+        );
     }
 
     #[test]
