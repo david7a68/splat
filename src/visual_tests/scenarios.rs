@@ -11663,13 +11663,13 @@ pub mod encounter_groups {
         d.click("Replace Unknown creature");
         d.type_into("Replacement creature", "Ember");
         d.expect("Use Ember Cultist");
-        // iter-24-B FH3: at one width, a shorter window makes the members list scroll (its
-        // notes leave the view), and the name field, Belongs to and every member menu keep x.
-        let notes = format!("Group notes for {GROUP_LOST}");
-        let (before, fits) =
-            d.at_size(DEFAULT, |d| (member_column_xs(d, GROUP_LOST), d.in_view(&notes)));
+        // iter-24-B FH3: at one width, a tall window shows the whole members column and a short
+        // one gives it a scroll bar; the name field, Belongs to and every member menu keep x.
+        let (before, fits) = d.at_size((DEFAULT.0, 2000.0), |d| {
+            (member_column_xs(d, GROUP_LOST), !members_scroll_bar(d))
+        });
         let (after, scrolls) = d.at_size((DEFAULT.0, SMALL.1), |d| {
-            (member_column_xs(d, GROUP_LOST), !d.in_view(&notes))
+            (member_column_xs(d, GROUP_LOST), members_scroll_bar(d))
         });
         let same: Vec<_> = before
             .iter()
@@ -12213,6 +12213,28 @@ fn member_column_xs(d: &Driver<'_>, group: &str) -> Vec<(String, f32)> {
             .map(|node| (node.name, node.rect.right())),
     );
     xs
+}
+
+/// Egui's scroll bar beside a group editor's members column: an unnamed thin node with no
+/// role, just right of the member menus.
+fn members_scroll_bar(d: &Driver<'_>) -> bool {
+    let nodes = d.nodes();
+    let Some(column) = nodes
+        .iter()
+        .filter(|node| node.name.starts_with("More actions for "))
+        .map(|node| node.rect.right())
+        .reduce(f32::max)
+    else {
+        return false;
+    };
+    nodes.iter().any(|node| {
+        node.role == egui::accesskit::Role::Unknown
+            && node.name.is_empty()
+            && node.rect.width() <= crate::design::M
+            && node.rect.height() >= crate::design::XXL
+            && node.rect.left() >= column - 0.5
+            && node.rect.left() <= column + crate::design::XL
+    })
 }
 
 /// The name field and `Belongs to` share one right edge, and it is the column's edge.
