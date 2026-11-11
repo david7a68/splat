@@ -1059,7 +1059,7 @@ above and `L` below. Changed Speed uses stat-table label and value columns.
 ### Loot lists
 
 One editor holds an encounter's loot and a creature's loot in its Changes, from `loot_editor::show`. Each line is
-a row with a `row_menu` Remove and `Removed <line>.` with `Undo remove loot`. A text line edits in place. A Library
+a row with a `row_menu` Remove and `Removed <line>.`, a success message, with `Undo remove loot`. A text line edits in place. A Library
 item shows its name, the book icon and muted `Library item`. A roll shows the dice icon, `Roll`, a `number_field`
 count, `×` and the table as a `menu_button`, then muted dice and note, or a `Cannot roll` warning status with its
 reason. The add field adds the typed words on Enter. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
@@ -1306,7 +1306,7 @@ and controls, and wraps there at its spaces, never inside a word. Names include 
 Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
 group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
 Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` Every result is a success message, tied or not; the
-`Move … before …` button below a tied one shows that a choice is open. That button, the moved result and its Undo
+`Move … before …` button below a tied one shows that a choice is open. The result and that button sit in a footer pinned to the panel's bottom, below the scrolling list, so a result that comes, grows with a tie or goes moves no group row. That button, the moved result and its Undo
 name the arrival as its message does (`Move Lost Patrol before Ember Cultist`). When the roster has two groups of
 one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. The Log keeps
 `Added by hand` and `entered by the DM`.

@@ -662,6 +662,9 @@ struct CarriedHp {
     sheets: SheetValues,
     /// Fights whose runs could not be read, so their HP is not here.
     missing: Vec<String>,
+    /// Where `Use the saved HP` for this rest sits in the Undo steps: the history's length
+    /// just after it. A rest makes a new `CarriedHp`, so an older rest's use is never this one's.
+    used_at: Option<usize>,
 }
 pub(crate) struct Run {
     pub name: String,
@@ -716,6 +719,12 @@ pub(crate) struct Run {
     /// How many steps the DM has taken or taken back since this opened. A sheet's change is
     /// not one, and neither is opening a run to read it. Never saved.
     dm_steps: usize,
+    /// Counts every kept step and every Undo, so a result can name the step it belongs to.
+    /// Never saved.
+    revision: u64,
+    /// `Loot copied.`: the copy action, at the `revision` it was made. Undo and any new step
+    /// (a roll among them) end it. Never saved.
+    loot_copied: Option<u64>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -1173,6 +1182,8 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            revision: 0,
+            loot_copied: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1274,6 +1285,7 @@ impl Run {
             from: carry.from.clone(),
             sheets,
             missing: carry.missing.clone(),
+            used_at: None,
         });
         self.dirty = true;
     }
@@ -1323,6 +1335,7 @@ impl Run {
             from: "the long rest".into(),
             sheets: saved,
             missing: Vec::new(),
+            used_at: None,
         });
         self.rest_order = order;
         self.dirty = true;
@@ -1338,6 +1351,7 @@ impl Run {
         self.history.push(before);
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
+        self.revision += 1;
     }
     /// Keep a step that the DM took, which counts as play.
     fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
@@ -1362,11 +1376,14 @@ impl Run {
                         .get(*index)
                         .is_some_and(|p| p.hp == p.max_hp && p.temporary_hp == 0)
                 })
-        }) && self.last_step() != Some(SAVED_HP_STEP)
+        }) && !self.saved_hp_used()
     }
-    /// True while `Use the saved HP` is the newest step, so its result and Undo still apply.
+    /// True while this rest's `Use the saved HP` is the newest step, so its result and Undo
+    /// still apply. An older rest's use, still the newest label after a second rest, is not.
     fn saved_hp_used(&self) -> bool {
-        self.carried.as_ref().is_some_and(|carried| carried.saved)
+        self.carried
+            .as_ref()
+            .is_some_and(|carried| carried.saved && carried.used_at == Some(self.history.len()))
             && self.last_step() == Some(SAVED_HP_STEP)
     }
     /// Put back the HP the Setup had before the rest, as one named step that Undo takes back.
@@ -1392,6 +1409,10 @@ impl Run {
         self.state.log.insert(start, SAVED_HP_USED.into());
         if let Some(label) = self.history_labels.last_mut() {
             *label = SAVED_HP_STEP.into();
+        }
+        let len = self.history.len();
+        if let Some(carried) = &mut self.carried {
+            carried.used_at = Some(len);
         }
         self.state.last_change = Some(SAVED_HP_STEP.into());
         Ok(())
@@ -2523,6 +2544,7 @@ impl Run {
     }
     fn take_back(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.revision += 1;
             self.saved_steps = self.saved_steps.min(self.history.len());
             self.notice = None;
             self.dm_steps += 1;
@@ -4170,6 +4192,8 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            revision: 0,
+            loot_copied: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,

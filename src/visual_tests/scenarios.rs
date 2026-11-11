@@ -13484,10 +13484,14 @@ pub mod encounter_owned_groups {
         // The dragged group's initiative comes from the run's dice. A tie adds a notice at the
         // top of the panel, which can push the faults below a small window: the panel scrolls,
         // so bring the second fault's link into view first. With no tie, this scrolls nothing.
-        let panel = d
-            .painted_rect_in("Cannot join", egui::Rect::EVERYTHING)
+        d.painted_rect_in("Cannot join", egui::Rect::EVERYTHING)
             .expect("the panel names the groups that cannot join");
-        d.scroll_until(panel.center(), "Edit group", 5);
+        // Scroll inside the list: a tie's result is pinned below it, where the wheel would
+        // not reach the list.
+        let list = d
+            .place_of(&add_group(NEW_NAME))
+            .expect("the list shows the group that joined");
+        d.scroll_until(list.center(), "Edit group", 5);
         // iter-25-R FB5: a member fault's repair is a bordered secondary button. Below its
         // fault, its border starts at the warning text; in a wide panel, it stays beside the
         // fault on its line, after an `L` gap.
@@ -13841,6 +13845,14 @@ pub mod run_loot {
             d.observe("iter7-B-AT1", fits, format!("Roster actions and notes keep LIST_MEASURE with Add directly beside them at {size:?}"));
         }
         d.state("loot-in-the-editor", Sizes::All);
+        d.observe(
+            "T14.8",
+            d.has("Rolls on gems, the encounter loot line 2")
+                && d.has_containing("No roll table has the key “coins”.")
+                && d.has("Library item"),
+            "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
+        );
+        d.goal("add loot and a roll on a campaign table");
         // iter-25-R, Astra 4: a removed loot line is a finished change: a success message, with
         // its Undo, which puts the line back.
         let lines = |d: &Driver<'_>| {
@@ -13866,14 +13878,6 @@ pub mod run_loot {
             success && fewer + 1 == before && lines(d) == before && !d.visible_text("Removed 120 gp"),
             format!("Removed is a success message {success} ({removed:?}); lines {before} → {fewer} → {}", lines(d)),
         );
-        d.observe(
-            "T14.8",
-            d.has("Rolls on gems, the encounter loot line 2")
-                && d.has_containing("No roll table has the key “coins”.")
-                && d.has("Library item"),
-            "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
-        );
-        d.goal("add loot and a roll on a campaign table");
 
         // iter-23 FJ1 beside round 22 FD3: while a run is open, its `Next turn` is the only
         // primary, even with unsaved changes here. Closed, the draft's Save owns it; after Save,

@@ -384,9 +384,8 @@ impl Run {
             holders.into_iter().partition(|holder| holder.open);
         let left = self.unrolled(&open).len();
         let mut picks: Vec<(Holder, usize)> = Vec::new();
-        let copied_id = egui::Id::new(("loot_copied", self.id));
-        let copied =
-            ui.data(|data| data.get_temp::<usize>(copied_id)) == Some(self.state.log.len());
+        // The copy owns its result: Undo and any new step end it, whatever the Log's length.
+        let copied = self.loot_copied == Some(self.revision);
         ui.horizontal(|ui| {
             design::group_label(ui, "Loot");
             if left > 0 {
@@ -413,7 +412,7 @@ impl Run {
                         .cloned()
                         .collect();
                     ui.ctx().copy_text(self.loot_markdown(&copied));
-                    ui.data_mut(|data| data.insert_temp(copied_id, self.state.log.len()));
+                    self.loot_copied = Some(self.revision);
                 }
                 if left > 1
                     && Action::secondary(&format!("Roll all {left}"))

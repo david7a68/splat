@@ -2642,6 +2642,23 @@ impl Run {
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut add = None;
+        // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
+        // to the panel's bottom, below the scrolling list. The list keeps its top, so a result
+        // that comes, grows with a tie, or goes moves no group row. Its owner is the newest
+        // step: any new step, Undo or typed search words end it.
+        if self.arrival_result_shown() {
+            egui::TopBottomPanel::bottom(egui::Id::new(("arrival_result", self.id)))
+                .resizable(false)
+                .show_separator_line(false)
+                .frame(egui::Frame::NONE)
+                .show_inside(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = design::XS;
+                    design::rule(ui);
+                    ui.add_space(design::XS);
+                    self.arrival_result(ui);
+                    ui.add_space(design::XS);
+                });
+        }
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
             .auto_shrink([false, false])
@@ -2657,26 +2674,6 @@ impl Run {
                 // Measured once: the search field and the group list share the block.
                 let arrival = self.arrival_block(ui);
                 self.add_creature_form(ui, arrival.map(|(_, block)| block));
-                // FB1: the result has a line of its own, kept while it is empty, so a group
-                // that joins moves no row below it and a second Add lands where the first did.
-                // The result is the newest step's, so the next step ends it.
-                // A one-line message is as high as one row of Body words.
-                let line = ui
-                    .fonts_mut(|fonts| {
-                        fonts.layout_no_wrap(
-                            "Ag".into(),
-                            Type::Body.font(ui),
-                            egui::Color32::PLACEHOLDER,
-                        )
-                    })
-                    .size()
-                    .y;
-                // A row of a horizontal layout is at least the interact height.
-                let line = line.max(ui.spacing().interact_size.y);
-                ui.vertical(|ui| {
-                    ui.set_min_height(line);
-                    self.arrival_result(ui);
-                });
                 design::rule(ui);
                 add = self.group_list(ui, arrival);
             });
@@ -2685,8 +2682,20 @@ impl Run {
         }
     }
 
+    /// Whether `arrival_result` has a result to show: the newest step added an arrival while
+    /// no search words are typed, or it settled a tie.
+    fn arrival_result_shown(&self) -> bool {
+        let last = self.state.log.last();
+        (!self.history.is_empty()
+            && self.ad_hoc.query.trim().is_empty()
+            && last.is_some_and(|line| {
+                line.starts_with(super::GROUP_ADDED) || line.starts_with(super::ONE_ADDED)
+            }))
+            || last.is_some_and(|line| line.contains(" moved before "))
+    }
+
     /// The newest arrival's result: who joined and at what total, with `Move … before …` when
-    /// it tied, or the move that settled a tie.
+    /// it tied, or the move that settled a tie. `arrival_result_shown` says when it draws.
     fn arrival_result(&mut self, ui: &mut egui::Ui) {
         if let Some(previous) = self.history.last().filter(|_| {
             self.ad_hoc.query.trim().is_empty()
@@ -3150,7 +3159,7 @@ impl Run {
             }
         }
         if !totals_in_heading {
-            ui.add(egui::Label::new(Type::Small.rich(ui, totals_text).color(c.muted)).wrap());
+            ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }
         let mut add = false;
         let add_word = arrival_add_word(group);
@@ -3174,10 +3183,35 @@ impl Run {
             status.as_str()
         };
         // A status that cannot fit the member slot whole takes a full-width line above the
-        // members and controls, where it wraps at its spaces.
-        let status_above = arrival_summary(ui, status_shown, &members, width).is_none();
+        // members and controls, where it wraps at its spaces. FB1: the row decides by its
+        // widest join status too (`Added before combat`), so a join, or a second join that
+        // changes the words, never changes the row's shape: the line stays, blank before one.
+        let widest = format!(
+            "Added before combat{}",
+            if changed {
+                format!(" · {} Changed", icons::CHANGED)
+            } else {
+                String::new()
+            }
+        );
+        let widest_in_heading = totals_in_heading
+            && heading_width
+                + design::L
+                + design::number_width(
+                    ui,
+                    &format!("{widest} · {totals_text}"),
+                    &Type::Small.font(ui),
+                )
+                <= grip.rect.width();
+        let status_above = arrival_summary(ui, status_shown, &members, width).is_none()
+            || (!widest_in_heading && arrival_summary(ui, &widest, &members, width).is_none());
         if status_above {
-            ui.add(egui::Label::new(Type::Small.rich(ui, status_shown).color(c.muted)).wrap());
+            let words = if status_shown.is_empty() {
+                " "
+            } else {
+                status_shown
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
         }
         // FB1: room for a status line and a members line, so a group that joins (and gains
         // `Added in round 1`) moves no row below it.
