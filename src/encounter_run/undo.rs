@@ -208,22 +208,16 @@ impl Step {
         let rows = participants
             .iter()
             .enumerate()
-            .filter(|(at, row)| {
-                after
-                    .participants
-                    .get(*at)
-                    .is_none_or(|kept| !same_row(row, kept))
-            })
-            .map(|(at, row)| {
+            .filter_map(|(at, row)| {
+                let kept = after.participants.get(at);
+                if kept.is_some_and(|kept| same_row(row, kept)) {
+                    return None;
+                }
                 let mut row = row.clone();
-                if after
-                    .participants
-                    .get(at)
-                    .is_some_and(|kept| Arc::ptr_eq(&kept.definition, &row.definition))
-                {
+                if kept.is_some_and(|kept| Arc::ptr_eq(&kept.definition, &row.definition)) {
                     row.definition = same_definition();
                 }
-                (at, row)
+                Some((at, row))
             })
             .collect();
         Self {
@@ -317,14 +311,14 @@ pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
     let mut history = (Vec::new(), Vec::new(), Vec::new());
     let mut memory = 0;
     // The newest step is next to the current state, so the states are rebuilt from the end.
-    for step in saved.steps.into_iter().rev().take(LIMIT) {
+    for mut step in saved.steps.into_iter().rev().take(LIMIT) {
         let after = history.0.last().unwrap_or(now);
         // Each state is as large as the one after it, give or take one step.
         memory += weight(after);
         if memory > MEMORY_BYTES {
             break;
         }
-        history.1.push(step.label.clone());
+        history.1.push(std::mem::take(&mut step.label));
         history.2.push(step.from_sheet);
         let state = step.before(after)?;
         history.0.push(state);

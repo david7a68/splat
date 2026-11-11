@@ -718,8 +718,6 @@ const REST_STEP: &str = "full HP after long rest";
 const SAVED_HP_STEP: &str = "use the saved HP";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
 const END_STEP: &str = "end encounter";
-/// The one name for the action that takes an ending away, wherever it shows.
-pub(crate) const CONTINUE_FIGHT: &str = "Continue fight";
 /// The Undo step that takes an ending away.
 const CONTINUE_STEP: &str = "continue fight";
 /// The reason for an empty Undo in a run whose file is from before Splat kept Undo steps.
@@ -1077,6 +1075,12 @@ impl Run {
         self.history.push(before);
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
+    }
+    /// Keep a step of this opening. It counts as play until Undo takes it back.
+    fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
+        self.keep_step(before, label, from_sheet);
+        self.dm_steps += 1;
+        self.own_steps = (self.own_steps + 1).min(self.history.len());
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -1888,14 +1892,12 @@ impl Run {
         next.roll_results.extend(roll_results);
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
-        self.dm_steps += 1;
         self.notice = None;
         // The step keeps the save as it stood, and the save is finished: its tile disarms.
         let finished = cast.is_some();
         self.state.cast = cast;
         let before = std::mem::replace(&mut self.state, next);
-        self.keep_step(before, undo_label, false);
-        self.own_steps = (self.own_steps + 1).min(self.history.len());
+        self.keep_own_step(before, undo_label, false);
         if finished {
             self.end_cast();
         }
@@ -3074,9 +3076,7 @@ impl Run {
                 )
             };
             self.state.last_change = Some(Self::change_with_result(&self.state, &label));
-            self.keep_step(previous, label, true);
-            self.dm_steps += 1;
-            self.own_steps = (self.own_steps + 1).min(self.history.len());
+            self.keep_own_step(previous, label, true);
         }
     }
 
@@ -3639,10 +3639,8 @@ impl Run {
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
-            Some(Some((history, labels, from_sheet))) => {
-                run.history = history;
-                run.history_labels = labels;
-                run.history_from_sheet = from_sheet;
+            Some(Some(steps)) => {
+                (run.history, run.history_labels, run.history_from_sheet) = steps;
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
             // The run is whole without them. It says so, and the next save leaves them out.
@@ -4949,9 +4947,7 @@ mod tests {
             run.apply(Command::Next).unwrap();
         }
         assert_eq!(run.history.len(), undo::LIMIT);
-        let campaign = Uuid::new_v4();
-        run.configure_storage(campaign, dir, Initiative::default())
-            .unwrap();
+        let campaign = stored(&mut run, dir);
         let path = run.path().unwrap().to_path_buf();
         (run, path, campaign)
     }
@@ -5003,9 +4999,7 @@ mod tests {
         assert_eq!(run.history.len(), undo::LIMIT);
         assert_eq!(run.history_labels[0], oldest, "the oldest step went");
         assert!(run.undo_label().starts_with("Undo: D&D Beyond HP for "));
-        run.dirty = true;
-        run.save().unwrap();
-        let mut reopened = Run::open(&path, campaign).unwrap();
+        let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
         reopened.undo();
         assert_eq!(reopened.state.participants[0].hp, before.participants[0].hp);
@@ -5084,12 +5078,10 @@ mod tests {
         fs::write(path, serde_json::to_vec_pretty(&saved).unwrap()).unwrap();
     }
     fn saved_fight(dir: &Path) -> (Run, PathBuf, Uuid) {
-        let campaign = Uuid::new_v4();
         let mut run = run();
         begin(&mut run);
         run.apply(Command::Damage(0, 5)).unwrap();
-        run.configure_storage(campaign, dir, Initiative::default())
-            .unwrap();
+        let campaign = stored(&mut run, dir);
         let path = run.path().unwrap().to_path_buf();
         (run, path, campaign)
     }
@@ -7626,12 +7618,8 @@ mod tests {
         reopened
             .apply(Command::AddGroup(guard_group("Reserve", 2), None))
             .unwrap();
-        reopened.dirty = true;
-        reopened.save().unwrap();
-        assert_same_undo(
-            &reopened,
-            &Run::open(reopened.path().unwrap(), campaign).unwrap(),
-        );
+        let again = close_and_reopen(&mut reopened, campaign);
+        assert_same_undo(&reopened, &again);
     }
 
     #[test]

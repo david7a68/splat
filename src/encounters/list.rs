@@ -664,8 +664,7 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&s
             );
         });
         // The one way on from a fight that ended by mistake. Undo puts the ending back.
-        go_on = Action::secondary(crate::encounter_run::CONTINUE_FIGHT)
-            .icon(icons::RUN)
+        go_on = crate::encounter_run::view::continue_action()
             .density(Density::Read)
             .blocked(blocked)
             .show(ui)

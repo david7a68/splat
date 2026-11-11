@@ -2,8 +2,8 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    CONTINUE_FIGHT, Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase,
-    Run, SAVED_HP_USED, SHEET_SOURCE, display, mode_label,
+    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
+    SAVED_HP_USED, SHEET_SOURCE, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -5240,7 +5240,7 @@ impl Run {
             "Close run"
         }));
         if !self.undo_continues() {
-            actions += glance(Action::secondary(CONTINUE_FIGHT).icon(icons::RUN));
+            actions += glance(continue_action());
         }
         if !self.history.is_empty() {
             actions += glance(self.undo_action("Undo"));
@@ -5494,8 +5494,7 @@ impl Run {
     /// ways out of an ended fight, with the one that changes nothing last.
     fn ended_continue(&mut self, ui: &mut egui::Ui) {
         if !self.undo_continues()
-            && Action::secondary(CONTINUE_FIGHT)
-                .icon(icons::RUN)
+            && continue_action()
                 .density(Density::Glance)
                 .show(ui)
                 .clicked()
@@ -5526,6 +5525,11 @@ impl Run {
             self.return_focus = self.lookup_open;
         }
     }
+}
+
+/// The one control that takes an ending away, wherever it shows.
+pub(crate) fn continue_action() -> Action<'static> {
+    Action::secondary("Continue fight").icon(icons::RUN)
 }
 
 /// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.

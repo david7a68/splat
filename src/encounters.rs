@@ -3210,15 +3210,12 @@ impl Encounters {
             .or(settings_changed
                 .then_some("Save or discard the changes in Campaign, Rules and runs first."));
         let gap = ui.spacing().item_spacing.x;
-        let mut words = Action::quiet(RELOAD).icon(icons::REFRESH).natural_width(ui) + gap;
+        let new_button = || Action::secondary("New encounter").icon(icons::ADD);
+        let group_button = || Action::quiet("New group").icon(icons::ADD);
+        let reload_button = || Action::quiet(RELOAD).icon(icons::REFRESH);
+        let mut words = reload_button().natural_width(ui) + gap;
         if !empty {
-            words += Action::secondary("New encounter")
-                .icon(icons::ADD)
-                .natural_width(ui)
-                + Action::quiet("New group")
-                    .icon(icons::ADD)
-                    .natural_width(ui)
-                + 2.0 * gap;
+            words += new_button().natural_width(ui) + group_button().natural_width(ui) + 2.0 * gap;
         }
         let room = ui.available_width()
             - design::number_width(ui, "Encounters", &Type::Title.font(ui))
@@ -3228,13 +3225,11 @@ impl Encounters {
         let context = counts_fit.then_some(context.as_str());
         design::page_header(ui, "Encounters", context, |ui| {
             if !empty {
-                new = Action::secondary("New encounter")
-                    .icon(icons::ADD)
+                new = new_button()
                     .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
                     .show(ui)
                     .clicked();
-                new_group = Action::quiet("New group")
-                    .icon(icons::ADD)
+                new_group = group_button()
                     .blocked(group_blocked.or(loading.then_some("Still reading this campaign.")))
                     .hint("A reusable set of creatures to add to a running encounter")
                     .show(ui)
@@ -3242,8 +3237,7 @@ impl Encounters {
             }
             // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
             reload = if room >= 0.0 {
-                Action::quiet(RELOAD)
-                    .icon(icons::REFRESH)
+                reload_button()
                     .blocked(reload_blocked)
                     .hint(RELOAD_HINT)
                     .show(ui)

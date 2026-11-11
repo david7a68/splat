@@ -2155,8 +2155,12 @@ mod tests {
             steps: 1,
             ..shrine.clone()
         };
-        book.record_change(None, &shrine_opened(&shrine), session);
-        book.record_change(Some(&shrine_opened(&shrine)), &played, session);
+        let shrine_opened = RunFact {
+            steps: 0,
+            ..shrine.clone()
+        };
+        book.record_change(None, &shrine_opened, session);
+        book.record_change(Some(&shrine_opened), &played, session);
         let latest = |book: &Book| {
             party_state(&book.events, session)
                 .fights
@@ -2204,12 +2208,12 @@ mod tests {
         // Continue fight from History opens the run with that step taken: the first fact the
         // Timeline hears has one step. That is play, and Undo of it is not.
         book.record_change(None, &played, session);
-        book.record_change(Some(&played), &shrine_opened(&shrine), session);
+        book.record_change(Some(&played), &shrine_opened, session);
         let played = RunFact {
             steps: 2,
             ..shrine.clone()
         };
-        book.record_change(Some(&shrine_opened(&shrine)), &played, session);
+        book.record_change(Some(&shrine_opened), &played, session);
         assert_eq!(latest(&book), Some(shrine.id));
         book.record_change(None, &stepped, later);
         assert_eq!(latest(&book), Some(bridge.id), "opened with a step taken");
@@ -2244,12 +2248,6 @@ mod tests {
         };
         book.record_change(Some(&copy), &copy_undone, later);
         assert_eq!(latest(&book), Some(shrine.id), "Undo in the copy");
-    }
-    fn shrine_opened(shrine: &RunFact) -> RunFact {
-        RunFact {
-            steps: 0,
-            ..shrine.clone()
-        }
     }
 
     #[test]
