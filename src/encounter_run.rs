@@ -220,7 +220,9 @@ impl RunGroup {
             .iter()
             .any(|member| member.overrides.changes_creature())
         {
-            summary.push_str(" · Changed");
+            // FJ5: `Changed` keeps its muted pencil wherever a group's summary shows, as in
+            // Arrivals. The no-break space keeps the two on one line.
+            summary.push_str(&format!(" · {}\u{a0}Changed", crate::design::icons::CHANGED));
         }
         if self
             .members
@@ -1241,7 +1243,7 @@ impl Run {
         })
     }
     /// The read-aloud text and notes, and the setup's technical details, if a run has them.
-    fn prep(&self) -> (&str, Option<&str>) {
+    pub(crate) fn prep(&self) -> (&str, Option<&str>) {
         match self.setup_details.split_once(SETUP_HEADING) {
             Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
             None => (self.setup_details.trim(), None),
@@ -3404,6 +3406,28 @@ impl Run {
     /// Say which encounter this run came from. Call it before the first save.
     pub fn came_from(&mut self, encounter: Uuid) {
         self.source = Some(encounter);
+    }
+    /// The encounter this run came from, if it says.
+    pub(crate) fn source(&self) -> Option<Uuid> {
+        self.source
+    }
+    /// AB1, FB1: Save encounter gives this run, when it came from that encounter, the saved
+    /// read-aloud text and notes. Prep reads them from here. The setup's technical details, the
+    /// roster and every combat state stay. Returns whether the Prep text changed.
+    pub(crate) fn follow_prep(&mut self, encounter: Uuid, prep: &str) -> bool {
+        if self.source != Some(encounter) {
+            return false;
+        }
+        let details = match self.setup_details.split_once(SETUP_HEADING) {
+            Some((_, technical)) => format!("{}\n\n{SETUP_HEADING}{technical}", prep.trim()),
+            None => prep.trim().to_owned(),
+        };
+        if details == self.setup_details {
+            return false;
+        }
+        self.setup_details = details;
+        self.dirty = true;
+        true
     }
     pub fn configure_storage(
         &mut self,
@@ -6733,6 +6757,42 @@ mod tests {
         // An older save, or a run with no setup, has only words.
         run.setup_details = "Only words.".into();
         assert_eq!(run.prep(), ("Only words.", None));
+        // iter-24-B AB1, FB1: Save encounter gives the run from that encounter its new words.
+        // The setup and the combat state (damage, a condition, the round) stay; another
+        // encounter's save changes nothing.
+        run.setup_details = format!("Ash falls.\n\n{SETUP_HEADING}\n\n```yaml\nroster: []\n```");
+        let encounter = Uuid::new_v4();
+        run.came_from(encounter);
+        begin(&mut run);
+        run.apply(Command::Damage(0, 3)).unwrap();
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
+        let state = (
+            run.state.participants[0].hp,
+            run.state.participants[0].conditions.clone(),
+            run.state.round,
+            run.state.phase.clone(),
+        );
+        assert!(state.0.is_some() && state.1.contains(&"Prone".to_owned()));
+        run.dirty = false;
+        assert!(!run.follow_prep(Uuid::new_v4(), "Other words."));
+        assert_eq!(run.prep().0, "Ash falls.");
+        assert!(!run.dirty);
+        assert!(run.follow_prep(encounter, "The bridge groans.\n"));
+        let (prep, technical) = run.prep();
+        assert_eq!(prep, "The bridge groans.");
+        assert!(technical.unwrap().contains("roster: []"));
+        assert!(run.dirty, "the run file is written with the new words");
+        assert_eq!(
+            (
+                run.state.participants[0].hp,
+                run.state.participants[0].conditions.clone(),
+                run.state.round,
+                run.state.phase.clone(),
+            ),
+            state
+        );
+        // The same words again change nothing.
+        assert!(!run.follow_prep(encounter, "The bridge groans."));
     }
     #[test]
     fn a_later_rest_restores_saved_setup_once_with_undo_but_keeps_combat_hp() {
@@ -7344,7 +7404,10 @@ mod tests {
         );
         assert_eq!(
             group.summary(),
-            "Rivals · 3 members · XP 0 · Changed · 3 × Beast"
+            format!(
+                "Rivals · 3 members · XP 0 · {}\u{a0}Changed · 3 × Beast",
+                crate::design::icons::CHANGED
+            )
         );
     }
 

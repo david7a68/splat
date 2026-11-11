@@ -472,6 +472,36 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Display name");
     d.expect("For example: HP +5, AC +2, Speed 40 ft.");
     d.state("group-repair-changes-cell", Sizes::All);
+    // iter-24-B FB6: the change form has one right edge: Display name, Note, the Other effect
+    // row's Add and the Loot field end at one x (`Roll on a table` follows the Loot field).
+    for size in [DEFAULT, (1920.0, 1080.0)] {
+        let edges = d.at_size(size, |d| {
+            let other = d.place_of("Other effect")?;
+            let add = d
+                .nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name == "Add"
+                        && node.rect.left() >= other.right()
+                        && node.rect.top() < other.bottom()
+                        && other.top() < node.rect.bottom()
+                })
+                .map(|node| node.rect)
+                .min_by(|a, b| a.left().total_cmp(&b.left()))?
+                .right();
+            Some([
+                d.place_of("Display name")?.right(),
+                d.place_of("Note")?.right(),
+                add,
+                d.place_of("Add loot to Scout")?.right(),
+            ])
+        });
+        d.observe(
+            "iter-24-B-FB6",
+            edges.is_some_and(|edges| edges.iter().all(|x| (x - edges[0]).abs() <= 1.0)),
+            format!("At {size:?}, Display name, Note, Other effect's Add and Loot end at {edges:?}"),
+        );
+    }
     // FD2: the unread value is a warning message, and its example starts at its words.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let (tones, words, example) = d.at_size(size, |d| {

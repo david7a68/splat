@@ -1970,6 +1970,9 @@ pub struct Encounters {
     discarded_options: Option<crate::encounter_settings::Options>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
+    /// The encounter editor's last frame found that Save would refuse its changed draft, so
+    /// Ctrl+S is blocked as Save is. The editor sets it each frame it draws.
+    save_refused: bool,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
@@ -2042,9 +2045,12 @@ const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
+const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.";
 const LOOT_FIELD: &str = "Loot";
 const ENCOUNTER_LOOT_HELP: &str =
     "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
+/// The page's own gutter beyond the shell's `M`: the content keeps `L`, the header does not.
+const PAGE_GUTTER: f32 = design::L - design::M;
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -2625,7 +2631,8 @@ impl Encounters {
         {
             if self.group_draft.is_some() {
                 self.save_group_draft(ctx, &active, campaigns.modules());
-            } else {
+            } else if !self.save_refused {
+                // FC1: blocked as Save is, while the editor says Invalid.
                 self.save_draft(ctx, &active, campaigns.modules());
             }
         }
@@ -2653,6 +2660,14 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
+                // AB1, FB1: the open fight from this encounter keeps its own copy of the Prep
+                // text. The same Save gives it the new words; its combat state stays.
+                if let (Some(run), Ok(entry)) =
+                    (self.run.as_mut(), Entry::parse(&draft.path, &draft.source))
+                    && run.follow_prep(entry.id, &splat::content::list_formats::prose(&entry))
+                {
+                    run.autosave();
+                }
 
                 if std::mem::take(&mut self.plan_on_save) {
                     self.saved_for_plan = Some(draft.name.clone());
@@ -3145,10 +3160,11 @@ impl Encounters {
         story: &Story<'_>,
     ) {
         // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
-        // quiet action at its text edge (`.line_start()`) never reaches the splitter.
+        // quiet action at its text edge (`.line_start()`) never reaches the splitter. The page
+        // header gives that gutter back: its title starts at the shell's edge, as on every page.
         let room = ui.available_rect_before_wrap();
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + design::L - design::M)),
+            egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + PAGE_GUTTER)),
             |ui| self.show_page(ui, campaigns, party, story),
         );
     }
@@ -3355,6 +3371,17 @@ impl Encounters {
                 counts.join(" · ")
             })
             .unwrap_or_else(|| "Reading encounters…".into());
+        // FE4: the title starts at the shell's edge (x 148), as Library's and World's do; only
+        // the content below the header keeps the page gutter. The header is a child that the
+        // page only steps past, so the content's left edge stays where it is.
+        let room = ui.available_rect_before_wrap();
+        let mut header = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(room.with_min_x(room.min.x - PAGE_GUTTER))
+                .layout(egui::Layout::top_down(egui::Align::LEFT)),
+        );
+        {
+        let ui = &mut header;
         design::page_header(ui, "Encounters", Some(&context), |ui| {
             if !empty {
                 new = Action::secondary("New encounter")
@@ -3383,6 +3410,9 @@ impl Encounters {
                 .show(ui)
                 .clicked();
         });
+        }
+        let used = header.min_rect();
+        ui.advance_cursor_after_rect(used.with_min_x(room.min.x));
         if new {
             self.start_new_draft();
             return;
@@ -3663,8 +3693,13 @@ impl Encounters {
         let compact = ui.available_width() < 760.0;
         // The title and its actions need more room than the panes do.
         let has_run = self.has_run();
-        // A draft that Save refused, until its fault is fixed, does not own the primary.
-        let refused = self.shows_validation_error();
+        // FC1: a draft that Save refuses says Invalid with its cause, and Save and Ctrl+S are
+        // blocked. The cause is the roster check Save runs first (this frame already makes it),
+        // or the last refusal while it still holds (`refresh_validation_error` checks it again).
+        let refusal = self
+            .shows_validation_error()
+            .then(|| self.error.clone())
+            .flatten();
         let loading = self.pending.is_some();
 
         let saved_note = self.message.clone();
@@ -3685,6 +3720,8 @@ impl Encounters {
                 .ok()
                 .and_then(|entry| roster_fault_reason(&draft.path, &roster_faults(&entry, names)))
         });
+        let refusal = roster_reason.clone().or(refusal);
+        self.save_refused = dirty && refusal.is_some();
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
@@ -3789,12 +3826,16 @@ impl Encounters {
                         blocked_reason(ui, Some("Close the open run first"));
                         ui.add_space(design::L);
                     }
-                    save = if dirty && !has_run && !refused {
+                    save = if dirty && !has_run && refusal.is_none() {
                         Action::primary("Save encounter")
                     } else {
                         Action::secondary("Save encounter")
                     }
-                    .blocked_if(!dirty, "No changes to save.")
+                    .blocked(if dirty {
+                        refusal.as_deref()
+                    } else {
+                        Some("No changes to save.")
+                    })
                     .show(ui)
                     .clicked();
                 },
@@ -3802,7 +3843,10 @@ impl Encounters {
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
-            let (icon, word, color) = if dirty {
+            let (icon, word, color) = if dirty && refusal.is_some() {
+                // The message above names the cause, as Library's and World's do.
+                (icons::ERROR, "Invalid", colors().document.invalid)
+            } else if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if saved_note.is_some() {
                 (icons::OK, "Saved", colors().document.saved)
@@ -3849,11 +3893,20 @@ impl Encounters {
         });
 
         if unfinished.is_some() {
+            // FB1: the open fight from this encounter takes its read-aloud text and notes at
+            // Save; anything else waits for the next fight.
+            let follows = self
+                .run
+                .as_ref()
+                .and_then(crate::encounter_run::Run::source)
+                .is_some_and(|source| Some(source) == self.draft.as_ref().map(|draft| draft.id));
             blocked_reason(
                 ui,
-                Some(
-                    "Changes apply to the next fight. To add to this fight, use Add to fight in the run.",
-                ),
+                Some(if follows {
+                    "Save gives this fight’s Prep the new read-aloud text and notes. Other changes apply to the next fight. To add to this fight, use Add to fight in the run."
+                } else {
+                    "Changes apply to the next fight. To add to this fight, use Add to fight in the run."
+                }),
             );
         }
         if let Some((notes, faults, path)) = &unread_rows {
@@ -4318,11 +4371,18 @@ impl Encounters {
                                 )
                                 .color(colors().muted),
                         );
-                        if groups::packages_link(ui) {
-                            ui.data_mut(|data| {
-                                data.insert_temp(egui::Id::new("open_campaign_packages"), true)
-                            });
-                        }
+                        // FB4: one sentence in one size. The link is a Body link inside it, and
+                        // the full stop follows its last word.
+                        // The link and its full stop wrap together.
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            if design::link(ui, groups::PACKAGES_LINK).clicked() {
+                                ui.data_mut(|data| {
+                                    data.insert_temp(egui::Id::new("open_campaign_packages"), true)
+                                });
+                            }
+                            ui.label(Type::Body.rich(ui, ".").color(colors().muted));
+                        });
                     });
                 },
                 |_| {},
@@ -4397,6 +4457,8 @@ impl Encounters {
                     Self::sync_option(ui, draft, snapshot, party);
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
+                // FI7: what the option changes, in the form the sync option's help uses.
+                ui.add(egui::Label::new(Type::Small.rich(ui, REPEATABLE_HELP).color(colors().muted)).wrap());
                 ui.add_space(design::M);
                 Self::loot_field(ui, draft);
                 ui.add_space(design::M);
@@ -6590,6 +6652,15 @@ mod tests {
             fs::read_to_string(dir.path().join("Hero.md")).unwrap(),
             character
         );
+        // iter-24-B AB1, FB1: Save encounter writes the notes to the encounter and, in the same
+        // step, to the open run's Prep; the run's participants stay.
+        let stats = editor.run.as_ref().unwrap().participant_stats(0);
+        editor.draft.as_mut().unwrap().body = "The bridge groans.".into();
+        editor.save_draft(&egui::Context::default(), &campaign, &[]);
+        assert!(fs::read_to_string(&path).unwrap().contains("The bridge groans."));
+        let run = editor.run.as_ref().unwrap();
+        assert_eq!(run.prep().0, "The bridge groans.");
+        assert_eq!(run.participant_stats(0), stats);
         editor.run = None;
         assert!(!editor.dirty());
         fs::write(&path, format!("{original}External edit\n")).unwrap();

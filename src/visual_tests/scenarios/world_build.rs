@@ -4224,6 +4224,28 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("Undo replacement");
     d.expect("Not found. Its package entry was deleted.");
     d.expect_same("Undo replacement restores the original missing-creature rows and warning.");
+    // iter-24-B FC1: Save would refuse this changed draft (2 rows have no creature), so it says
+    // Invalid, not Unsaved, and Save and Ctrl+S are blocked: the file keeps its bytes.
+    let bridge = d
+        .app_mut()
+        .campaigns
+        .active_campaign()
+        .unwrap()
+        .path
+        .join("Encounters/Bridge Ambush.md");
+    let on_disk = fs::read(&bridge).unwrap();
+    let invalid = d.visible_text("Invalid")
+        && !d.visible_text("Unsaved")
+        && d.is_disabled(SAVE_ENCOUNTER);
+    d.press_ctrl(Key::S);
+    d.observe(
+        "iter-24-B-FC1",
+        invalid
+            && fs::read(&bridge).unwrap() == on_disk
+            && d.visible_text("Invalid")
+            && d.has_containing("2 Cinder Wolf rows have no creature."),
+        format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
+    );
     d.state("deleted-package-entry-replacement-undone", Sizes::All);
     go_library(d);
     search_library(d, "Ash Exposure");

@@ -995,7 +995,8 @@ Names that need more than two lines use `RUN_COMPACT.name` and wrap in the share
 columns never move: AC and HP keep their x on every row, so a DM can scan down HP to find who is hurt. A name
 that still needs more than three lines ends its third line in `…`; hover and the row's accessible name keep
 the whole name. Pictures align with the first name line. The fight panel and the Encounters page keep an `L`
-left gutter, so a quiet action at their text edge never reaches a splitter. A scroll area there lets that
+left gutter, so a quiet action at their text edge never reaches a splitter. The Encounters page header is outside
+that gutter: its title starts at the shared page edge, as every page title does. A scroll area there lets that
 action's press area reach `S` into the gutter.
 
 Conditions start on the second line before HP. Measure without change bonuses, shorten bonuses, remeasure, then
