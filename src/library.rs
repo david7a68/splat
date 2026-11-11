@@ -8958,11 +8958,18 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_package_rows_show_the_folder_before_clipped_details() {
+    fn duplicate_package_rows_keep_the_folder_last_and_whole() {
         let ctx = egui::Context::default();
-        let output = ctx.run(egui::RawInput::default(), |ctx| {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(256.0, 100.0),
+            )),
+            ..Default::default()
+        };
+        let output = ctx.run(input, |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                ui.set_width(280.0);
+                ui.set_width(240.0);
                 let response = entry_row(
                     ui,
                     "Cinder Wolf",
@@ -8972,10 +8979,25 @@ mod tests {
                 assert_eq!(response.rect.height(), ENTRY_ROW_HEIGHT);
             });
         });
-        assert!(output.shapes.iter().any(|shape| matches!(
-            &shape.shape,
-            egui::Shape::Text(text) if text.galley.job.text.starts_with("ashen-marches-copy/")
-        )));
+        // Round 25 FF5: the folder ends the row, as it ends the reader's kind line. The row is
+        // too narrow for the whole line, so the words before the folder shorten, never the folder.
+        let lines: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Same entry") => {
+                    Some(text.galley.job.text.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            lines.len() == 1
+                && lines[0].starts_with("Same entry")
+                && lines[0].contains('…')
+                && lines[0].ends_with(" · ashen-marches-copy/"),
+            "{lines:?}"
+        );
     }
 
     #[test]
