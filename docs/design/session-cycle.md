@@ -116,6 +116,14 @@ art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campai
 | Lookup at case B (measured) | 406 | 177: `Start fight`, and the icon | 140: `Start fight`, and the icon, with 0.4 px to spare | 107: the icon |
 | The World page at 960x640 (estimate) | 512 | 272: both words | 237: both words | 202: `Start fight`, and the icon |
 
+**Measured in P3** (the plain evening and `session-plan-scenes`): `Start fight` is 100 px wide. In Lookup at case
+B it shows beside a 13-letter title and also beside `Captain Varra Black` (19 letters), so the estimate above is
+low for wide titles; at case D it does not show beside a 13-letter title, and shows beside `Rook Ambry` (10). On
+the World page at 960x640 it shows beside `Captain Varra Black`. A portrait sits at the right end of the title's
+cell, with `Edit` after it, so beside a portrait no room is spare and `Start fight` does not show. A creature
+with its type's art (the plain campaign's creatures, `Cinder Wolf`) therefore has no `Start fight` in any reader;
+its routes are a scene row's menu and the encounter editor.
+
 **The routes that stay** when the header does not show an action. `Start fight` is a line of the menu of a
 scene row that links that NPC or creature: 2, at any width, on the Session page (F3). For any other NPC or
 creature the World page's reader is wider: `World`, the entry, `Start fight` is 3 or 4, **T T**. `Add to Log`

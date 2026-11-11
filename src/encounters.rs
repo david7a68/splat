@@ -2674,26 +2674,31 @@ impl Encounters {
                     .insert("name".into(), fight.name.clone().into());
             }
         }
+        // What a click saves: every slot as written, apart from its key and the form of its
+        // creature's reference, and the rest of the setup.
         let roster = |setup: &Setup| {
             let mut slots: Vec<_> = setup
                 .roster
                 .iter()
                 .map(|slot| {
+                    let text = |value: &Value| serde_yaml_ng::to_string(value).unwrap_or_default();
                     (
                         slot.creature
                             .as_ref()
                             .and_then(|reference| snapshot.catalogue.resolve_ref(reference).ok()),
                         slot.party_slot.clone(),
                         slot.side.clone(),
-                        slot.overrides
-                            .get("name")
-                            .and_then(Value::as_str)
-                            .map(str::to_owned),
+                        text(&slot.controller),
+                        text(&Value::Mapping(slot.initial.clone())),
+                        text(&Value::Mapping(slot.overrides.clone())),
+                        text(&Value::Mapping(slot.extra.clone())),
                     )
                 })
                 .collect();
             slots.sort();
-            slots
+            let mut rest = setup.clone();
+            rest.roster.clear();
+            (slots, serde_yaml_ng::to_string(&rest).unwrap_or_default())
         };
         let wanted = roster(&draft.setup);
         let base = format!("Fight with {}", fight.name);
@@ -6698,6 +6703,36 @@ mod tests {
         assert_eq!(run.made_up_name(), Some("Captain Varra"));
         let saved = Draft::open(dir.path(), "Encounters/Fight with Captain Varra.md").unwrap();
         assert_eq!(saved.setup.roster.len(), 1);
+
+        // An encounter of that name that holds other values is not what the click saves: a
+        // starting HP on a slot, or another setting of the fight.
+        for (name, change) in [("Scout", 0), ("Lookout", 1)] {
+            let mut other = Draft::new();
+            other.name = format!("Fight with {name}");
+            other.add(party, true);
+            other.add(bandit, false);
+            if change == 0 {
+                other.setup.roster[1].initial.insert("hp".into(), 3.into());
+            } else {
+                other.setup.repeatable = true;
+            }
+            other.save(&active, &[]).unwrap();
+            let mut encounters = fresh();
+            encounters.start_fight_with(
+                &StartFight {
+                    name: name.into(),
+                    creature: Some(bandit),
+                    npc: false,
+                },
+                &active,
+                &[],
+            );
+            assert!(encounters.run.is_some());
+            assert!(
+                encounter(&format!("Fight with {name} 2")).exists(),
+                "{name}: a new encounter, not the one with other values"
+            );
+        }
 
         // Blocked as the editor's Start fight is, with its words, and nothing is written.
         let mut encounters = fresh();

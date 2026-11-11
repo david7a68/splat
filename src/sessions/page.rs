@@ -580,14 +580,15 @@ fn compact_plan_for_reading(
                     .iter()
                     .any(|name| fight_or_group(name)) =>
             {
-                Some(task.line.trim().to_owned())
+                Some(task.line.trim_end().to_owned())
             }
             _ => None,
         })
         .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
-            if scenes.iter().any(|scene| scene == line.trim()) {
+            // A scene's line starts at the line's start; a nested copy of it is note text.
+            if scenes.iter().any(|scene| scene == line.trim_end()) {
                 return true;
             }
             let link = line
@@ -1650,6 +1651,10 @@ impl Sessions {
         // older note, or the next words typed at the table go there.
         if self.notes_open && session != self.current() {
             self.notes_open = false;
+        }
+        // The plan's scene results are the session's: another session ends them.
+        if self.selected != session {
+            self.scenes = plan::Scenes::default();
         }
         self.selected = session;
         self.caret_to_show = None;
@@ -6870,6 +6875,7 @@ mod tests {
             "- [[Ash Pack]] extra words",
             // A nested task line is not a scene, and a task line with a fight is not hidden.
             "- [ ] Meet Hobb\n  - [ ] Bring the coin",
+            "- [ ] Meet Hobb\n  - [ ] Meet Hobb",
             "- [ ] [[Bridge Ambush]]",
         ] {
             let source = format!("## Plan for tonight\n\n{lines}\n");

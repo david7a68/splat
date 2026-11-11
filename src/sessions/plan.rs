@@ -582,6 +582,18 @@ pub(super) struct Scenes {
 }
 
 impl Scenes {
+    /// An Undo ends for good at another change of the note's words or in another note, also
+    /// when the words come back to what the act left.
+    fn end_what_changed(&mut self, draft: Option<&crate::sessions::Draft>) {
+        let live = |undo: &NoteUndo| draft.is_some_and(|draft| undo.live(draft));
+        if self.added.as_ref().is_some_and(|undo| !live(undo)) {
+            self.added = None;
+        }
+        if self.removed.as_ref().is_some_and(|(.., undo)| !live(undo)) {
+            self.removed = None;
+        }
+    }
+
     /// The note moved to a new file, and the Undos follow it.
     pub(super) fn moved(&mut self, from: &Path, to: &Path) {
         if let Some(undo) = &mut self.added {
@@ -727,6 +739,7 @@ impl Sessions {
         }
         let c = colors();
         self.end_plan_results_after_edits(book);
+        self.scenes.end_what_changed(self.draft.as_ref());
         if self
             .removed_group
             .as_ref()
@@ -2324,6 +2337,33 @@ mod tests {
         harness.get_by_label("Undo scene").click();
         harness.run_steps(2);
         assert_eq!(read(), before);
+        // Another change of the words ends that Undo for good, also when the words come back.
+        harness.get_by_label("Plan a scene").focus();
+        harness.run_steps(1);
+        harness.get_by_label("Plan a scene").type_text("Cross at dawn");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert!(harness.query_by_label("Undo scene").is_some());
+        for state in ["Done", "Open"] {
+            harness.get_by_label(&format!("{state}: Pay the toll")).click();
+            harness.run_steps(2);
+        }
+        assert!(harness.query_by_label("Undo scene").is_none());
+        // So does another session.
+        harness.get_by_label("Plan a scene").focus();
+        harness.run_steps(1);
+        harness.get_by_label("Plan a scene").type_text("Rest at the ford");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert!(harness.query_by_label("Undo scene").is_some());
+        harness.state_mut().0.select(None);
+        harness.run_steps(2);
+        harness.state_mut().0.select(Some(note.id));
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Undo scene").is_none());
+        assert!(read().contains("- [ ] Cross at dawn\n- [ ] Rest at the ford\n"));
 
         // Unsaved typed words and a changed file: the act changes nothing and says why.
         {
@@ -2381,7 +2421,9 @@ mod tests {
             tasks,
             [
                 (true, "The miller is the informer".to_owned()),
-                (true, "Pay the toll".to_owned())
+                (true, "Pay the toll".to_owned()),
+                (false, "Cross at dawn".to_owned()),
+                (false, "Rest at the ford".to_owned())
             ]
         );
     }
