@@ -164,7 +164,7 @@ eye during long sessions.
 | Split button | `split_action` | Default `Action`, then a caret menu for other actions |
 | Field | `field`, `small_field` | Sentence-case muted `Small` label, control, help and error; accessible name |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Accessible name and a 26 px target; left-aligned numbers keep the caret off digits; placeholders use faint `Body` text |
-| Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
+| Editable numbers | `stepper` | A value the DM can change: − and + beside the number in a bordered well. A value without a stepper is read only, so the two never look alike. The D&D Beyond sheet panel uses it for every value Splat can send; in each of its blocks the labels share one column (the widest label plus `S`) and every well has the widest value's width, so each − and each + share an x. At a limit, − or + is disabled; when the caller gives the limit's reason, that button says it on hover and in its accessible description. An enclosing lock's reason comes first |
 | Dialog | `dialog`, `dialog_actions` | `egui::Modal`, for the brief's modal tasks only; one action line, red at the left, keep and commit at the right, commit last |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows; `quiet_section` for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and hairline for Markdown tables and sheets; no stripes; height follows text |
@@ -599,14 +599,21 @@ with the cause; Unsaved and a primary Save come only when Save would write it. S
 campaign ownership). Each repair keeps its answer and asks again only when its draft changes, so the page never
 reads the disk or parses a draft on an unchanged frame. A Save that fails on the disk (read only, missing, a write
 error) is an action-time failure: that repair's state slot says `Not saved.` with Save's reason until its next
-edit, its successful Save, a reload or another campaign. Another repair's edit, Save or failure leaves it. Each
+edit, its successful Save, a reload or another campaign. The failure shows only there: the message above stops at
+`Fix it here or in World.` While it shows, `Save repaired note` stays open for a retry but is secondary; the next
+edit gives the primary back. A refusal that Save's own check finds at Save is Invalid with its cause, never `Not
+saved.` Another repair's edit, Save or failure leaves it. Each
 repair editor's accessible name holds its file (`Note text: Notes/Broken.md`), in Campaign and World. While a repair blocks the package
 save, its reason (`Fix Notes/Broken.md first.`) sits on its own line below `Save selections` at every width, so the
 first edit in the repair moves nothing.
 
 Needed by your entries sits below packages in the left column. Its right pane has one search and list; rows
-open Lookup. Short package lists fit their rows. An off package with required entries shows None chosen, the
-needed count, an indeterminate checkbox and encounters that use its creatures.
+open Lookup. Short package lists fit their rows. A package row's count has one form: `All chosen · 2,065 entries`,
+`None chosen · 6 entries`, `3 of 6 chosen`, `5 of 6 chosen · 1 needed`. An off package with required entries shows
+`None chosen · 3 needed`, an indeterminate checkbox and encounters that use its creatures. A package whose manifest
+has a fault leads its count with the fault's icon in its tone (amber warning for a deleted manifest, red error for
+one that cannot be read), as the About row does; the message above names the fault, and the row's accessible name
+says it in words (`Manifest deleted · 5 of 6 chosen · 1 needed`).
 
 A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
@@ -659,8 +666,8 @@ Package.md or Module.md. Align the first action and the replacement's consequenc
 Campaign Packages and the Library details row say `The package manifest was deleted. Entries are still available.
 Write it again, or restore it from a backup.` and offer `Write the manifest again` for a missing file. The old
 file name is not stored. An existing file offers `Replace with a basic <file>` and warns that other fields
-will be dropped. Keep the registered identity and reload. Writes show a success message and `Undo write
-<file>`, naming the file written, including for a missing file. On reload, if that file no longer holds the
+will be dropped. Keep the registered identity and reload. Writes show the success message `<file> was written
+again.` and `Undo write <file>`, one verb for both, naming the file written, for a missing or a replaced file. On reload, if that file no longer holds the
 written text, the message and its Undo go away.
 
 ### Link and folder
@@ -1293,7 +1300,8 @@ and for accessibility.
 Session title and muted date wrap together, with Record on the title line. Below 640 px, save state and
 Details sit beside Read on the content tab row. Read and Write sit there while notes are visible. An empty
 Read view keeps only its inline Write link; hide tab-row Write until the note has content. Notes saved
-centres on the title action row. Last time is one line linking the previous session and recap, with full recap
+centres on the title action row. A saved note is the calm, usual state: `✓ Notes saved` is muted
+(`document.clean`) on the session page and in the Notes panel, also just after a write. Last time is one line linking the previous session and recap, with full recap
 on hover. Without recap, use prose under What happened and omit link-only lines; without either, show the
 session link alone. An older session warns once and links the session being played, which the list marks
 Playing. The action says Return to the session being played. When the two session numbers match, the warning
@@ -1354,7 +1362,13 @@ Ambush” and its result stay.` The book owns that message and its Undo remove, 
 and they belong to the removed event's session. They end at an edit of that session's note, plan or Timeline
 events, and when combat begins in that session (its event reaches Timeline; opening Setup does not). Another
 session's edit, opening a note, a run's new round and a reload that leaves that session alone keep them. A
-newer removal replaces them. Undo puts the event back after the event that was before it. Plan additions offer Undo add. A recording count stays muted inside its tab and
+newer removal replaces them. One step gives one result in the plan: after a removal, Delete the saved run
+replaces the removal's message there, and Timeline keeps its Undo remove until the book's removal changes.
+Undo puts the event back after the event that was before it. Plan additions offer Undo add. Every Add result
+comes from one function: `<event> added to Session 2.` names the session it went to; a restoring long rest
+then says `Everyone starts the next fight at full.` Timeline lists every session, so its result names only
+the event. A Timeline event's link update uses the Library's words: `Links now say “<name>”.` with
+`Undo link update`. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. When the second line is too long, its `Last:` part gives up whole words first (`Last: 1 damage to
@@ -1474,6 +1488,8 @@ below the sheet tabs, and its body opens under it. While closed it says the sync
 `Combat sync · Waiting for the first read` with the first-read icon and colour until Splat has read the sheet,
 then `Combat sync · On`.
 
+The Party header states the connection and the sheet's age: `Connected · Fetched 3 h ago`, never `Cached`.
+
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
 Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.
 
@@ -1491,7 +1507,10 @@ the only colour on the session page. While recording, rail status stays visible 
 audio saved, stopping when saving stops. One linked rail slot above account status opens the recording. Use
 Recording, Recording silence or Not saving audio consistently on rail and session. Silence has warning colour
 everywhere after a minute, including the run notice, and no banner. On the session page, only the icon and
-status word use warning colour; detail stays Small and muted. Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
+status word use warning colour; detail stays Small and muted. The line for a recording in another session
+does the same for Not saving audio: only its icon and word are red; time and session title stay Small and
+muted. The stall banner says `The recording of “<session>” stopped saving audio. The first <time> are kept.
+Record again starts a new file.` Rail silence omits time; hover and accessibility say `Recording silence · 2:14:05 recorded`. Put duration in row detail, outside bold status.
 
 Recordings' live row owns sound state, duration, input help and Stop recording, beside Process. Hide its
 header status; Plan and notes retains the live header line. Other tabs keep header Stop recording. A row
@@ -1511,7 +1530,7 @@ primary when no open run owns it. Unresolved recording recovery takes priority o
 input when the input is missing, otherwise Record again. A blocked action never owns primary. Audio removed
 stays visible in results after WAV deletion. A recording row's sentences (stop, failure, cancel and result
 warnings) keep READER_MEASURE; its rule, menu and events keep LIST_MEASURE; result readers
-fill the pane. The session list omits the date during recording, jobs or a processed result. State and Playing
+keep READER_MEASURE for prose and its rules. The session list omits the date during recording, jobs or a processed result. State and Playing
 share line two when they fit; otherwise Playing starts a line without a separator. Equal titles and dates show
 each note's file name on line two (it wraps at a space, and each of its lines starts at the first line's x) and in its accessible name. The rail says Processing cancelled; the list
 keeps Cancelled.
@@ -1544,10 +1563,12 @@ Opening the session acknowledges the completion notice and keeps the result and 
 session list shows the warning icon and Processed in warning colour, then ` · Playing` on the same line, as
 its sibling states do. A clean result is a status too: the check icon and Processed in the success colour, as
 on the recording row; the recording row, list hover and accessible name use Processed, with a warning. On the timeline is a success link for added events
-and transcript markers. Marker text takes its content width, capped at READER_MEASURE. One action column
+and transcript markers. Marker text takes its content width, capped at READER_MEASURE. A marker's Add
+result is not held to the rows' width: it keeps LIST_MEASURE, so Undo add follows its words. One action column
 sits an L gap after it. Add and On the timeline align left in that column. Row rules span only the combined width. The After placement line does not affect that column’s width and wraps below the facts.
 
-The viewer has back link and muted date on line one, Add to notes at the right on Summary, and left-aligned
+The viewer is one block, READER_MEASURE wide, or as wide as its view choices when they are wider. It has back
+link and muted date on line one, Add to notes at the block's right edge on Summary, and left-aligned
 view choices on line two. Use one segmented control for Summary, Clean transcript, What the check changed and
 Raw transcript; never wrap it. When tight, replace it with one dropdown naming the current view. Generated
 views share a Small draft notice: This draft was written automatically. Check it against your memory. The row
@@ -1563,6 +1584,8 @@ campaign counts belong in their list heading. With no campaigns, hide Reload fro
 repair. Account help and trust text keep READER_MEASURE in column and stacked layouts.
 
 The account form replaces status and Connect… link. Use Connect, Not connected and Signed out of D&D Beyond.
+A failed Connect says `Connect failed` with the error icon and colour, on the page and in the rail; `Not connected`
+is only the quiet idle state.
 Show one Connecting state, with Cancel aligned to the column. Connect stays at the cookie field's right edge
 and is primary when a cookie is entered, no campaign form is open and no run owns primary. Keyring warnings
 own Connect again. Put quiet Disconnect after trust text. Settings and rail share an account-status function.
@@ -1574,7 +1597,7 @@ Cancel at the left and commit at the right. An unchanged form blocks Save detail
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. Import opens below its
 chosen row with a new sibling folder filled in. Keep campaign name in its field; omit remote ID, repeated
-heading and the open row's Add action. Removal dialogs are centred. Reload from disk names the local reload
+heading and the open row's Add action. Removal dialogs use the shared `dialog` and its top anchor, as every dialog does. Reload from disk names the local reload
 action.
 
 ### Recording services
@@ -1584,7 +1607,14 @@ Recording settings clip at the tab rule, with a fixed `L` margin below tabs outs
 muted Small through small_field and small_text_field: Service, Address, Model, API key. Accessible names keep
 service context. Focused inputs scroll to the Recording heading. Speech setup first explains how to turn
 recording into text. API compatibility help sits beside custom services; Codex limits appear only when
-selected. Combat sync help uses muted Small text.
+selected. Combat sync help uses muted Small text. Help on this tab keeps READER_MEASURE, as Account help does,
+and says what a choice does, not how it works (`It cannot change your campaign files.`). The second service
+keeps one name: `Transcript and summary instructions`, `Transcript and summary API key`, and accessible names
+`Transcript and summary service`, `… address` and `… model`. A value that blocks processing says so below its
+own field in the notice's tone (`Enter the address.`, `Enter the model’s name.`). When the DM chooses a
+service that leaves such a field empty, the notice and that reason scroll into view together, once; a key
+problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;
+`keyring` stays in warnings about the keyring itself.
 
 Warnings name the saved key's service and chosen service. A key for another service keeps Save key visible
 with Paste a key first and a separate quiet remove action. A saved key for the chosen service hides Save key

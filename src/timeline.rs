@@ -42,6 +42,8 @@ pub fn fights_that_keep_hp(
 /// One removed event, until its session changes or Undo puts it back.
 #[derive(Clone)]
 struct Removal {
+    /// This removal's own identity: a new removal, even of the same event, has another.
+    action: u64,
     index: usize,
     /// The event that was before it, which it goes back after.
     after: Option<String>,
@@ -51,6 +53,9 @@ struct Removal {
     /// Its session's events once it was gone. A difference is an edit of that session.
     owned: Vec<Event>,
 }
+
+/// Each removal action gets a number unique in this run of the app, across reloaded books.
+static REMOVAL_ACTIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// An event belongs to a session's story there, and to the session that continued it.
 fn owned_by(event: &Event, session: Option<Uuid>) -> bool {
@@ -1247,6 +1252,7 @@ impl Book {
             self.touch();
             // One Undo remove at a time: a newer removal, in any session, replaces it.
             self.removed = Some(Removal {
+                action: REMOVAL_ACTIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                 index,
                 after,
                 owned: self.owned_events(event.session),
@@ -1260,6 +1266,12 @@ impl Book {
         self.removed
             .as_ref()
             .map(|removal| (removal.index, removal.label.clone()))
+    }
+
+    /// The identity of the removal that Undo would reverse. A result that follows this action
+    /// keeps it, so a later removal of the same event is told apart.
+    pub fn removal_action(&self) -> Option<u64> {
+        self.removed.as_ref().map(|removal| removal.action)
     }
 
     /// The event that Undo would put back.
