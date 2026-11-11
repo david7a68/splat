@@ -1,10 +1,10 @@
 # Maps at several scales
 
-Status: proposed. Nothing is built. This document defines the model, the file format and the checks, so that
-an engineer can write the typed model, the reader and the validator from it. It builds on
-[World and house rules](world-and-house-rules.md) and [World data](world-data.md). Its test case is the
-Heralds of the End notes (`40-59 Campaigns/42 Heralds of the End` in the vault): a planet, gates between
-worlds, cities, and an arena with levels below it.
+Status: proposed. Nothing is built. This is revision 2, after review 1. This document defines the model, the
+file format and the checks, so that an engineer can write the typed model, the reader and the validator from
+it. It builds on [World and house rules](world-and-house-rules.md) and [World data](world-data.md). Its test
+case is the Heralds of the End notes (`40-59 Campaigns/42 Heralds of the End` in the vault): a planet, gates
+between worlds, cities, and an arena with levels below it.
 
 Splat is not a virtual tabletop ([UX intent](../ux-intent.md), section 1). A map in this design is a picture
 that the DM drew, with named places on it that open notes. It has no tokens, no fog, no line of sight and no
@@ -12,33 +12,36 @@ combat grid.
 
 ## Summary
 
-- **A map is a World entry with map fields.** The entry is a map when it has the property `splat_map_scale`.
-  The fields can be on a note of their own, or on the note of the Location that the map shows.
+- **A map is a World entry with map properties.** The entry is a map when it has `splat_map_scale`. The
+  properties can be on a note of their own, or on the note of the Location that the map shows.
 - **The picture is the note's first image embed.** So Obsidian shows the picture with no plugin.
-- **Pins and routes are two Markdown tables in the note.** Their links are Obsidian links. Obsidian follows
-  them, renames them and lists them as backlinks. Each row is also a Line, so the page of each linked entry
-  shows the row.
-- **A scale is a word from an ordered ladder.** Nine scales are built in. A campaign can give its own ladder.
-- **A position is a fraction of the image.** `0, 0` is the top left corner and `1, 1` is the bottom right
+- **Pins and routes are YAML lists in the note's properties**, `splat_map_pins` and `splat_map_routes`. Serde
+  derives read each item into a typed struct. This design adds no table reader and no cell grammar.
+- **A link is an Entry reference**, in the type that Splat has: `EntryRef` (`id`, `key`, `link`). The `id` or
+  the `key` decides the target. The link text is for navigation in Obsidian. A link text that no longer leads
+  to the target is a reported fault with a repair, and it breaks nothing.
+- **A scale is a word from an ordered ladder.** Nine scales are built in. A campaign can give its own list of
+  scale words.
+- **A position is a fraction of the image.** `[0, 0]` is the top left corner and `[1, 1]` is the bottom right
   corner. A larger scan of the same picture moves no pin.
-- **A pin states its child map.** The pin's `Opens` link names the map, and the pin's position is the child's
-  extent on the parent. The child's scale must be finer.
-- **The DM states, Splat measures.** A route's stated length and time win. Splat measures a length only when
-  nothing is stated. Splat never converts a unit and never derives a time from a length.
-- **The Location tree stays the truth for "inside".** A map never changes `splat_in`. Splat reports one kind
-  of disagreement and changes nothing.
+- **A pin states its child map** with `opens`. The child's scale must be finer. This is the only rule about
+  the scales of two maps.
+- **The DM states, Splat measures.** A route's stated length and time are the DM's. Splat measures a straight
+  line only between two pins that no item of the route list names, and only on a map with a width in feet,
+  miles, metres or kilometres. Splat never converts a unit and never derives a time from a length.
+- **The first version is small:** an optional image, an optional width, named point pins, one link on each
+  pin, a child-map link, and stated routes between two pins of one map. [Later](#later) lists what is cut.
 
 ## Proposed terms for `CONTEXT.md`
 
-Add these when the design is accepted. This pull request does not change `CONTEXT.md`. The brief asks for a
-term "Region". This design names it **Area**, because `region` is the key of a built-in scale.
+Add these when the design is accepted. This pull request does not change `CONTEXT.md`.
 
 **Map**:
 A World entry with a scale, which shows one subject as one image with pins and routes.
 _Avoid_: Battle map, board, chart, canvas
 
 **Map subject**:
-The entry that a map shows: the entry its `splat_map_of` names, or the map's own entry.
+The page that a map shows: the page its `splat_map_of` names, or the map's own entry.
 _Avoid_: Map location, owner
 
 **Scale**:
@@ -58,15 +61,12 @@ The real size that a map image shows: its stated width, and the height that foll
 _Avoid_: Bounds, dimensions
 
 **Pin**:
-A named place on a map, in one row of the map's Pins table. It can have a position, and it can show entries.
+A named place on a map, in one item of the map's pin list. It can have a position, it can show one page, and
+it can open one child map.
 _Avoid_: Marker, token, point of interest
 
-**Area**:
-A pin whose position is a box or a shape, not a point.
-_Avoid_: Region (a built-in scale has that name), zone, polygon
-
 **Route**:
-A named connection between two pins of one map, in one row of the map's Routes table. It can state a length
+A named connection between two pins of one map, in one item of the map's route list. It can state a length
 and a time.
 _Avoid_: Path, road, edge, Travel event
 
@@ -74,24 +74,26 @@ _Avoid_: Path, road, edge, Travel event
 A map that a pin of another map opens. The other map is its **parent map**.
 _Avoid_: Submap, inset, nested map
 
-**Stated length** and **measured length**:
-A stated length is a number and a unit that the DM wrote. A measured length is a number that Splat computes
-from positions and the map's width.
-_Avoid_: Distance (for one of the two only), estimate
+**Stated length** and **measured distance**:
+A stated length is a number and a unit that the DM wrote on a route. A measured distance is a number that
+Splat computes from two positions and the map's width.
+_Avoid_: Estimate, range
+
+The brief asks for a term "Region" for a named area. The first version has point pins only, so it has no such
+term. [Later](#later) names it **Area**, because `region` is the key of a built-in scale.
 
 How each term differs from the terms that exist:
 
-| Term | Not a Location | Not a World entry | Not a Line |
+| Term | Against Location | Against World entry | Against Line |
 |---|---|---|---|
-| Map | A Location is a place. A map is a picture of a subject. One Location can have many maps or none | A map is a World entry. It adds fields to one | A map is a note. Its rows are Lines |
-| Map subject | It is often a Location. It can be any entry | It is a World entry or a World note | Not applicable |
-| Scale | A Location has no scale. Only a map has one | A scale is a word in a property. It has no note | Not applicable |
+| Map | A Location is a place. A map is a picture of a subject. One Location can have many maps or none | A map is a World entry. It adds properties to one | A map's note has Lines in its text, as each note has. Its pins are not Lines |
+| Map subject | It is often a Location. It can be another World entry or a World note | It is a page, not a new thing | Not applicable |
+| Scale | A Location has no scale. Only a map has one | A word in a property. It has no note | Not applicable |
 | Map image | A file, not a place | A file with no identity. Its file name finds it | Not applicable |
 | Extent | A statement about one image, not the size of a place | A value in a property | Not applicable |
-| Pin | A pin is a row of one map. It can show a Location. A Location can be on many maps or none | A pin has no note and no UUID. Its map and its name identify it | A pin row is a Line. A pin adds a name and a position to it |
-| Area | The same as a pin | The same as a pin | The same as a pin |
-| Route | A route is not a place. It can show a Location, such as a road | A row, with no note and no UUID | A route row is a Line. A route adds two ends, a length and a time |
-| Child map | `splat_in` puts a place inside a place. `Opens` puts a picture inside a picture. They are separate statements | Both maps are World entries. The relation is a link in a row | Not applicable |
+| Pin | A pin is an item of one map. It can show a Location. A Location can be on many maps or none | A pin has no note and no UUID. Its map and its name identify it | A pin is data in a property, not text. Splat gives the page that a pin shows one Line for it. See [What the Line index must do](#what-the-line-index-must-do) |
+| Route | A route is not a place | An item of one map, with no note and no UUID | A route gives no Line |
+| Child map | `splat_in` puts a place inside a place. `opens` leads from a picture to a picture. They are separate statements | Both maps are World entries. The relation is a link in a pin | Not applicable |
 
 A route is also not a Timeline event of kind Travel. A route says how far two pins are apart. A Travel event
 says that the party made a journey.
@@ -100,14 +102,13 @@ says that the party made a journey.
 
 ```mermaid
 flowchart LR
-    L[Location<br/>or other entry] -- "splat_in" --> L2[Location]
+    L[Location<br/>or other page] -- "splat_in" --> L2[Location]
     M[Map<br/>World entry with splat_map_scale] -- "splat_map_of" --> L
     M -- "first image embed" --> I[Map image file]
-    M -- "Pins table" --> P[Pin: name, position]
-    M -- "Routes table" --> R[Route: two pins, length, time]
-    P -- "Shows" --> E[Entries, notes, roll tables]
-    P -- "Opens" --> C[Child map]
-    R -- "Shows" --> E
+    M -- "splat_map_pins" --> P[Pin: name, position]
+    M -- "splat_map_routes" --> R[Route: two pins, length, time]
+    P -- "shows" --> E[One page]
+    P -- "opens" --> C[Child map]
 ```
 
 ### What a map is in files
@@ -115,76 +116,73 @@ flowchart LR
 **A map is a World entry (`splat_kind: world`) that has the property `splat_map_scale`.** No other test
 exists. `splat_type` stays a label, as [World data](world-data.md) says: fields give behaviour.
 
-The map fields are legal on every World entry. This gives two layouts, and both follow the one rule above.
+The map properties are legal on every World entry. This gives two layouts, and both follow the one rule above.
 
 | Layout | When | Example |
 |---|---|---|
 | A note of its own, with `splat_type: map` and `splat_map_of` | The normal case. Necessary when a subject has two maps or more | `Thaorivel map.md` shows the Location `Thaorivel` |
-| The Location's own note has the map fields | A place with one map, whose note already holds the picture | `Undercroft.md` is a Location and a map |
+| The Location's own note has the map properties | A place with one map, whose note already holds the picture | `Undercroft.md` is a Location and a map |
 
-Why the fields are on an entry, and not a new kind of note:
+A plain World note cannot be a map. It has no `splat_kind: world`, and the note scan drops a plain note that
+has a `splat_` property (`role_of` in `src/world.rs`). The DM first makes the note a World entry. That action
+exists: [World and house rules](world-and-house-rules.md) calls it **Make world entry**, and in the app it is
+the section **Give this note a type** on a plain note's page, with the buttons **NPC**, **Location** and
+**Make {type}** (`make_entry` in `src/world.rs`). It adds `splat_schema`, `splat_id`, `splat_kind`,
+`splat_name` and `splat_type`. Then the DM adds `splat_map_scale`. So the Undercroft note becomes a map in two
+steps, not with one property. This design adds no rule for a plain note that has only `splat_map_scale`: it
+leaves the World note scan, as each plain note with a `splat_` property does today.
+
+Why the properties are on an entry, and not a new kind of note:
 
 - A map needs an identity, because pins on other maps point at it. A World entry has one.
-- A subject can have several maps, and a map can have no Location. Fields on a Location only cannot do
+- A subject can have several maps, and a map can have no Location. Properties on a Location only cannot do
   either. An entry of its own can do both.
-- The Heralds notes already keep `![[Undercroft Map.png]]` in the Undercroft note. That note becomes a map
-  when it gets one property. No file moves.
-- World entries already have Lookup, the World page, links, Lines, repair of duplicate identities and
-  `splat check`. A map uses all of them with no new owner.
+- World entries already have Lookup, the World page, links, repair of duplicate identities and `splat check`.
+  A map uses all of them with no new owner.
 
 ### The subject
 
-A map has exactly one **subject**:
+A map has exactly one **subject**, or none:
 
 1. If the map has no `splat_map_of`, the subject is the map's own entry.
-2. If `splat_map_of` resolves to exactly one World entry or World note, the subject is that entry or note.
-3. In each other case, the map has no subject, and Splat reports fault M5, M6, M7 or M11.
+2. If `splat_map_of` resolves to a World entry or a World note, the subject is that page.
+3. In each other case, the map has no subject, and Splat reports a fault.
 
-`splat_map_of` holds one link in the forms of [Link cells](#link-cells), and it resolves by rule 3 of that
-section. So an `id` term decides when the link has one. This differs from `splat_in` today, which resolves
-the words of the link and does not read the term (`world_value_target` in `src/lookup.rs`).
-
-The **maps of an entry** are all maps whose subject is that entry. A Location that is a map is one of its own
-maps. Splat lists the maps of an entry in this order: scale rank (coarsest first, a map with no rank last),
-then `splat_map_level` (maps that have one first, lowest first), then name (in the order that
-[Names](#names) defines), then `splat_id`.
+The **maps of a page** are all maps whose subject is that page. A Location that is a map is one of its own
+maps. Splat lists the maps of a page in this order: scale rank (coarsest first, a map with no rank last), then
+name (in the order that [Names](#names) defines), then `splat_id`.
 
 | Case | In files | What Splat does |
 |---|---|---|
-| A location with several maps | Each map is a note of its own with `splat_map_of: "[[The Tower]]"`. A political map and a travel map have one scale and different names. Each floor has the scale `floor` and its own `splat_map_level` | The Location's page lists them in the order above |
+| A location with several maps | Each map is a note of its own with `splat_map_of: "[[The Tower]]"`. A political map and a travel map have one scale and different names. Each floor is a map with the scale `floor` | The Location's page lists them in the order above |
 | A map with no location | The map has no `splat_map_of` | The subject is the map itself. The map still has a page, a place in Lookup, and it can be a child map |
-| A location with no map | Nothing | Nothing. The Location can still be on a pin of any map |
+| A location with no map | Nothing | Nothing. A pin of any map can still show the Location |
 
 ### How a map relates to the Location tree
 
-`splat_in` is the only statement that one place is inside another. The rules are:
+`splat_in` is the only statement that one place is inside another. `splat_map_of` says what a picture shows.
+`opens` says which picture a pin leads to. The three do not depend on each other.
 
 1. **A pin does not put a place in the tree.** A pin that shows Ixdoash on the map of Thaorivel says where
    Ixdoash is on that picture. It does not set `splat_in`. A map can show a place that is outside its subject,
    such as a neighbour's capital.
 2. **A map does not need the tree.** A map is valid when its subject has no `splat_in`.
-3. **The nesting rule ties the scales to the tree.** Let map A have subject X and map B have subject Y, where
-   X and Y are different, and both maps have a rank. If Y is an ancestor of X, then A must not be coarser than
-   B. Y is an ancestor of X when Splat reaches Y by following `splat_in` from X one step or more. The chain
-   ends at an entry whose `splat_in` is absent or does not resolve to exactly one entry. It also ends before
-   an entry that it already holds, so a `splat_in` loop ends it.
-4. **When the tree and the maps disagree, Splat reports and changes nothing.** A break of the nesting rule is
-   fault T1 on map A, once for each pair of A and B. Both maps stay open, and both keep all their behaviour. The DM changes a scale or
-   changes `splat_in`.
-
-Example: The Arena is in Ixdoash. A map of Ixdoash has the scale `city`. A map of The Arena with the scale
-`building` obeys the rule, and so does one with the scale `city`. A map of The Arena with the scale `region`
-breaks it.
+3. **No rule compares a map's scale with the tree.** The only rule about scales is between a pin's map and
+   the child map that the pin opens ([The ordering rule](#the-ordering-rule)).
+4. **When the tree and the maps disagree, Splat does nothing and reports nothing.** A map of an inner place
+   can be coarser than a map of the place around it. Revision 1 had a check for this (T1). Review 1 showed that
+   it gives false faults: a tower with a `building` map and a `floor` map, and a Location inside it with its
+   own `building` map, is correct and would fail. So the check is removed.
 
 ## Scale
 
 ### The built-in ladder
 
-The ladder is an ordered list. The **rank** of a scale is its position in the list, and the first scale has
-rank 0. Scale S is **finer** than scale T when the rank of S is greater. S is **coarser** when its rank is
-less.
+The ladder is an ordered list of scale keys. The **rank** of a scale is its position in the list, and the
+first scale has rank 0. Scale S is **finer** than scale T when the rank of S is greater. S is **coarser** when
+its rank is less.
 
-| Rank | Key | Name | Default unit | Typical width |
+| Rank | Key | Shown as | Width form offers | Typical width |
 |---|---|---|---|---|
 | 0 | `planet` | Planet | `miles` | 25,000 miles |
 | 1 | `continent` | Continent | `miles` | 3,000 miles |
@@ -196,110 +194,109 @@ less.
 | 7 | `floor` | Floor | `ft` | 150 ft |
 | 8 | `room` | Room | `ft` | 40 ft |
 
-- **The key** is the word in files. **The name** is the word the app shows.
-- **The default unit** has one use: Splat's forms offer it first when the DM states a width or a length. No
-  file relies on it. A stated width or length always has its unit beside it, so a change of the default unit
-  changes no stored length.
+- **The key** is the word in files.
+- **Shown as** is the key with each `_` as a space and its first letter in upper case. This rule also gives
+  the shown name of a campaign's own scale.
+- **Width form offers** is the unit that Splat's width form offers first for a built-in scale. For a campaign's
+  own scale, the form offers no unit. No file relies on this column: a stated width or length always has its
+  unit beside it.
 - **The typical width** helps the DM to choose a scale. No check reads it.
 - A `building` map shows a building from outside, or in section. A `floor` map shows one level of it. They can
   have the same width. The rank says which opens which.
 
-### A campaign's own ladder
+### A campaign's own scale words
 
-A campaign manifest can have `splat_map_scales`. **When it is present and valid, it is the whole ladder, in
-its list order.** The built-in ladder is then not used. When it is absent, or when it has fault L1, L2 or
-L3, the built-in ladder is the ladder.
+A campaign manifest can have `splat_map_scales`: a list of scale keys. **When it is present and has no fault,
+it is the whole ladder, in its list order.** The built-in ladder is then not used. When it is absent, or when
+it has a fault, the built-in ladder is the ladder.
 
 ```yaml
-splat_map_scales:
-- {scale: network, name: Gate network, unit: hops}
-- {scale: planet}
-- {scale: continent}
-- {scale: region, name: Province}
-- {scale: city, unit: km}
-- {scale: district}
-- {scale: complex}
-- {scale: building}
-- {scale: deck, name: Deck, unit: ft}
-- {scale: room}
+splat_map_scales: [network, planet, continent, region, city, district, complex, building, deck, room]
 ```
 
-| Field | Type | Required | Default |
-|---|---|---|---|
-| `scale` | A key: a lower-case letter, then 0 to 39 lower-case letters, digits or `_` | Yes | None |
-| `name` | One line of text | No | For a built-in key, the built-in name. For a new key, the key with its first letter in upper case and each `_` as a space |
-| `unit` | One [unit](#units) word | No | For a built-in key, the built-in default unit. For a new key, none |
-
+- A **key** is a lower-case letter, then 0 to 39 lower-case letters, digits or `_`.
 - **To add a scale,** write the full list with the new key in its place. The example adds `network` above
   `planet` and puts `deck` where `floor` was.
-- **To rename a scale for display,** give its `name`. The example shows `region` as "Province". The key in map
-  notes does not change.
 - **To remove a scale,** leave it out. The example has no `floor`. A map that still says `floor` gets fault M3.
 - **To change a key,** change it in the list and in each map note. Keys are plain words, so find and replace
   does this.
-- The ladder belongs to the campaign. In the app, each map is read against the ladder of the active campaign,
-  and that includes a map from a package. In `splat check`, a map is read against the ladder of the campaign
-  whose folder holds the map's note: the nearest folder, at the note or above it, that holds a campaign
-  manifest. A map in no campaign folder is read against the built-in ladder.
-
-Splat writes `splat_map_scales` as a marked YAML block in the manifest's Splat data callout, as
-[Markdown layout](markdown-layout.md) says for a field with no readable form.
+- The list is data in a file. It is a list of text, so Obsidian's Properties view can edit it. Splat has no
+  editor for it in the first version.
+- In the app, each map is read against the ladder of the active campaign, and that includes a map from a
+  package. In `splat check`, a map is read against the ladder of the campaign whose folder holds the map's
+  note: the nearest folder, at the note or above it, that holds a campaign manifest. A map in no campaign
+  folder is read against the built-in ladder.
 
 ### The ordering rule
 
-**A child map's scale must be finer than its parent map's scale. An equal scale is not allowed.**
+**A child map's scale must be finer than its parent map's scale. An equal scale is not allowed.** The rule
+tests one pair only: the map that has the pin, and the map that the pin opens.
 
 Why equal is not allowed:
 
 - With a strict order, each step from a parent to a child goes down the ladder. So a chain of child maps is
   never longer than the ladder, and "open the child" always ends.
-- Two maps with one scale are peers. An area on one that covers the other is an overlap between neighbours,
-  not containment. A plain link says that: put the other map in the pin's `Shows` cell.
-- The DM who needs more depth adds a scale to the ladder, such as `province` between `continent` and
-  `region`. That is one line, and it makes the order explicit.
+- Two maps with one scale are peers. A link between peers is navigation, and `shows` does that: stairs
+  between two `floor` maps are a pin that shows the other floor's map.
+- The DM who needs more depth adds a scale word to the ladder, such as `province` between `continent` and
+  `region`.
 
-A link in `Shows` to a map with an equal or a coarser scale is always allowed. It is navigation only. Stairs
-between two `floor` maps use it.
+### Quantities and units
 
-### Units
+A **quantity** is text of this form: a number, then one or more spaces or tabs, then one unit word.
 
-A **unit** is one word, with no white space in it. Splat first compares the word with the spellings in this
-table, which give the four length units that Splat knows. Each other word is a **counting unit**, such as
-`hops`, `jumps` or `hexes`.
+- **The number** is one or more ASCII digits, then optionally `.` and one or more ASCII digits. It has no
+  sign, no exponent and no thousands separator. `0.25`, `2400` and `060.00` are numbers. `.5`, `1e3`, `2,400`
+  and `-1` are not.
+- **The unit** is one word with no white space.
 
-| Canonical unit | Spellings that Splat reads (in any letter case, with or without a final `.`) |
+A unit word is of one of three kinds. Splat tests them in this order.
+
+| Kind | Test | Canonical form |
+|---|---|---|
+| Length unit | The word, in lower case and with a final `.` removed, is in the table below | The first column of that table |
+| Time word | If not: the word, in lower case and with one final `s` removed, is `minute`, `hour`, `day`, `week`, `month` or `year` | None. It is not a unit |
+| Counting unit | Each other word, such as `hops`, `jumps` or `hexes` | The word in lower case, with one final `s` removed when the word has two letters or more |
+
+| Length unit | Spellings |
 |---|---|
 | `ft` | `ft`, `foot`, `feet` |
 | `miles` | `mi`, `mile`, `miles` |
 | `m` | `m`, `metre`, `metres`, `meter`, `meters` |
 | `km` | `km`, `kilometre`, `kilometres`, `kilometer`, `kilometers` |
 
-- **The canonical form of a counting unit** is the word in lower case, with one final `s` removed when the
-  word has two letters or more. So `hop` and `Hops` are one unit. `hex` and `hexes` are two units (`hex` and
-  `hexe`), which is a stated limit: write `1 hexes`.
-- **Two units are the same unit** when both are length units with one canonical form, or both are counting
-  units with one canonical form. A counting unit is never the same unit as a length unit: `kms` is a counting
-  unit, and it is not `km`.
-- **A time word is not a unit.** A word whose canonical form is `minute`, `hour`, `day`, `week`, `month` or
-  `year` is a fault in a length. A time goes in a route's `Time` cell.
-- **Splat does not convert.** It never changes feet to miles, metres to kilometres, or one system to the
-  other. It shows a length with the number and the unit that it has. No rule in this design adds two lengths.
-  A feature that compares or adds lengths must first test that they are the same unit, and must stop when they
-  are not.
+Which kinds each field allows:
 
-A **length** in a file is a number greater than zero, then one or more spaces or tabs, then one unit:
-`300 miles`, `150 ft`, `1 hop`. The number grammar is in [Numbers](#numbers). So `0 ft`, `300` and
-`300 sea miles` are not lengths.
+| Field | Length unit | Counting unit | Time word |
+|---|---|---|---|
+| `splat_map_width` | Yes | No | No |
+| A route's `length` | Yes | Yes | No |
+
+**A quantity is checked in three steps, in this order. The first step that fails gives the fault, and the
+later steps are not tested.**
+
+1. **Form.** The value is text in the form above.
+2. **Number.** The number is more than 0 and at most 1,000,000,000.
+3. **Unit.** The unit is of a kind that the field allows.
+
+So `3 days` in a width passes steps 1 and 2 and fails step 3 as a time word. `forty miles` fails step 1.
+
+- **Two units are the same unit** when both are length units with one canonical form, or both are counting
+  units with one canonical form. A counting unit is never the same unit as a length unit. `hex` and `hexes`
+  are two counting units (`hex` and `hexe`), which is a stated limit.
+- **Splat does not convert.** It never changes feet to miles, metres to kilometres, or one system to the
+  other. No rule in this design adds two quantities. A feature that compares quantities must first test that
+  they are the same unit, and must stop when they are not.
 
 ## Coordinates
 
 ### One coordinate system: fractions of the image
 
-A **point** is two numbers, `x, y`. Each is from 0 to 1.
+A **position** is a list of two numbers, `[x, y]`. Each is from 0 to 1.
 
 - `x` is the distance from the left edge of the image, as a fraction of the image's width.
 - `y` is the distance from the top edge of the image, as a fraction of the image's height.
-- `0, 0` is the top left corner. `1, 1` is the bottom right corner. `0.5, 0.5` is the centre.
+- `[0, 0]` is the top left corner. `[1, 1]` is the bottom right corner. `[0.5, 0.5]` is the centre.
 
 Why fractions:
 
@@ -313,217 +310,287 @@ The condition for a replacement: the new image must show the same picture with t
 image has another crop or another shape, the pins are in the wrong places. Splat cannot see that, and the DM
 places them again. This is a stated limit.
 
-### Positions
-
-A pin's position is in its `At` cell. The cell is empty, or it has 1 to 256 points with `;` between them.
-
-| Points | The position is | The pin is |
-|---|---|---|
-| None | No position | A pin that shows in lists and not on the image |
-| 1 | That point | A pin |
-| 2 | A **box**: the rectangle with those two points as opposite corners, in any order | An area |
-| 3 to 256 | A **shape**: the closed polygon through the points in order, with a last side from the last point to the first | An area |
-
-- A point is a number, a comma and a number. White space is allowed on each side of the comma and of each
-  `;`. The cell can hold nothing else: a `;` at the end is a fault.
-- A box must have area: its two points must differ in `x` and in `y`.
-- Splat does not check that the sides of a shape do not cross.
-- The **anchor** of a position is the one point that stands for it. The anchor of a point is the point. The
-  anchor of a box or a shape is the centre of its bounding box:
-  `((least x + greatest x) / 2, (least y + greatest y) / 2)`.
-- A position has no effect while the map has no image. Splat keeps it.
+A pin's position is a point. A pin with no `at` has no position: it shows in lists and not on the image. A
+position has no effect while the map has no image, and Splat keeps it.
 
 ### Extent and distance
 
-`splat_map_width` states the real distance that **the full width of the image file** shows, as a length. The
-image's margins and legend are part of that width.
+`splat_map_width` states the real distance that **the full width of the image file** shows. The image's
+margins and legend are part of that width. A map with a valid width and a readable image is **calibrated**.
 
-Let `W` be the number in `splat_map_width`. Let `pw` and `ph` be the width and the height of the decoded
-map image file in pixels. They do not change with the size of the window. Then:
+Let `W` be the number in `splat_map_width`. Let `pw` and `ph` be the width and the height of the decoded map
+image file in pixels. They do not change with the size of the window. Then:
 
 - **Extent.** The map shows `W` units from left to right and `W × ph / pw` units from top to bottom.
-- **Measured length between two points** `(x1, y1)` and `(x2, y2)`:
+- **Measured distance between two positions** `[x1, y1]` and `[x2, y2]`:
 
   ```text
   d = W × sqrt( (x2 − x1)² + ((y2 − y1) × ph / pw)² )
   ```
 
-- **Measured length of a line** through several points is the sum of `d` for each pair of neighbours.
-- The unit of a measured length is the unit of `splat_map_width`.
+- The unit of a measured distance is the unit of `splat_map_width`, which is always a length unit. So Splat
+  never measures in a counting unit. A diagram of gates has no width, and on it only routes give a length.
 
-A measured length exists only when the map has `splat_map_width` with no fault, an image that Splat can read,
-and a position for each end. In all other cases it does not exist, and Splat shows no number.
+A measured distance exists only when the map is calibrated and both pins have a position. In all other cases
+it does not exist, and Splat shows no number.
 
 Example: the image is 1000 by 800 pixels, and the width is `300 miles`. The map shows 300 miles by 240 miles.
-From `0.2, 0.5` to `0.6, 0.25`: `300 × sqrt(0.4² + (−0.25 × 0.8)²) = 300 × sqrt(0.16 + 0.04) = 134.16`. Splat
-shows "about 130 miles".
+From `[0.2, 0.5]` to `[0.6, 0.25]`: `300 × sqrt(0.4² + (−0.25 × 0.8)²) = 300 × sqrt(0.16 + 0.04) = 134.16`.
+Splat shows "about 130 miles".
 
 **A scale bar is a way to enter the width, not a second stored value.** The DM marks the two ends of the bar on
-the image and types its length, such as `50 miles`. Let `b` be the measured length between the two marks with
-`W = 1`. The two marks must differ. Splat stores `splat_map_width` as `50 / b`, with the unit that the DM typed. A grid gives the same
-number with no tool: a map that is 30 tiles wide with 5 ft tiles has the width `150 ft`.
+the image and types its length, such as `50 miles`. The two marks must differ. Let `b` be the measured
+distance between the two marks with `W = 1`. Splat stores `splat_map_width` as `50 / b`, with the unit that
+the DM typed. A grid gives the same number with no tool: tiles of 5 ft that are 30 pixels wide, on an image
+952 pixels wide, give `952 / 30 × 5 = 158.7 ft`.
 
-### How a pin says "this area is that child map"
+### How a pin says "this place is that child map"
 
-**Map C is a child map of map P when a pin of P has an `Opens` cell whose target is C, and that cell breaks
-none of the rules P14 to P20.** No other statement makes a child map.
+**Map C is a child map of map P when a pin of P has `opens`, the target of `opens` is C, and that link breaks
+none of the rules X1 to X4 and O1 to O5.** No other statement makes a child map.
 
-A pin's `Opens` cell holds one link to a map. That row says two things:
-
-1. The linked map is a child map of this map.
-2. The pin's position is the child's extent on this map. A point says that the child is too small to draw at
-   this scale. A box or a shape draws the area that the child shows.
-
-How the child's extent sits inside the parent:
-
-- The pin's position is inside the parent image, because each of its numbers is from 0 to 1.
-- At most one pin of a parent opens a given child, so the child has one extent on that parent.
+- The pin's position is where the child is on the parent's image. The first version has points only, so the
+  parent shows where the child is and not how large it is.
+- At most one pin of a parent opens a given child, so the child has one place on that parent.
 - A child can have several parents. A city map can be a child of a political map and of a travel map.
-- **Splat does not fit the child's image to the pin's box.** No rule maps a point on the child to a point on
-  the parent, and no rule compares the child's width with the size of the box. A drawn city map is not an
-  exact crop of a drawn continent map: it can be turned, and it can have another projection.
+- **Splat does not fit the child's image to the parent's image.** No rule maps a point on the child to a point
+  on the parent. A drawn city map is not an exact crop of a drawn continent map.
 
-### Numbers
+### Number types, rounding and limits
 
-- **A number in a file** is one or more ASCII digits, then optionally `.` and one or more ASCII digits. It has
-  no sign, no exponent and no thousands separator. `0.25`, `1`, `2400` and `0.5000` are numbers. `.5`, `1e3`,
-  `2,400` and `-1` are not.
-- **Reading a coordinate.** Splat reads all the digits. It keeps the cell text of a row that it does not
-  change.
+| Value | Type | Limits |
+|---|---|---|
+| A coordinate | A YAML number, read by serde as a 64-bit float (`f64`) | Finite, and from 0 to 1. A number outside that range is fault P6. A value that is not a YAML number, also a number in quotes, makes the pin not read (P2) |
+| The number of a stated quantity | The digits of the quantity's text, read as `f64` | More than 0, and at most 1,000,000,000. A number above the limit is a fault, however many digits it has, so no value overflows |
+| A stated quantity | The text as the DM wrote it, the `f64` value, and the unit | Splat shows the text as written: `060.00 ft` shows as `060.00 ft`. The `f64` value is for a feature that compares |
+| A measured distance | `f64`, computed with the formula above | Zero or more. It is zero when the two positions are equal. With a width of at most 1,000,000,000 and coordinates from 0 to 1, the result is finite. If a result is not finite, the measured distance does not exist |
+| A stated time | The text as the DM wrote it, and whole minutes from `read_duration` | 1 minute or more |
+
 - **Writing a coordinate.** When Splat places or moves a pin, it limits each coordinate to the range 0 to 1.
-  It multiplies by 10,000, rounds to the nearest whole number with a half going up, and writes four decimal
-  places: `0.4120`, `1.0000`. One step is 1/10,000 of the image, which is less than a pixel on a scan 8,000
-  pixels wide.
+  It multiplies by 10,000, rounds to the nearest whole number with a half going up, and divides by 10,000.
+  It writes that value as a YAML number: `[0.412, 1.0]`. One step is 1/10,000 of the image, which is less than
+  a pixel on a scan 8,000 pixels wide. Splat does not change the value of a coordinate that the DM did not
+  change in Splat.
 - **Writing a width from a scale bar.** Splat rounds to four significant digits, with a half going up. It
   writes the number in plain decimal, with no exponent and with no zero at the end after a decimal point:
   `158.7 ft`, `150 ft`, `0.4521 miles`.
-- **Showing a measured length.** Splat rounds to two significant digits, with a half going up, and shows the
+- **Showing a measured distance.** Splat rounds to two significant digits, with a half going up, and shows the
   word "about" before it. For `d > 0`: let `k = floor(log10(d))` and `q = 10^(k − 1)`. The shown number is
-  `round(d / q) × q`. So 134.16 shows as 130, 7.44 as 7.4, 995 as 1000, and 0.0456 as 0.046. A length of 0
-  shows as 0. Splat writes the shown number as it writes a width: `7`, not `7.0`. A hand-drawn map is not more exact than this.
-- **A stated length** shows exactly as the DM wrote it, with no "about".
+  `round(d / q) × q`, formatted to two significant digits in plain decimal, with no zero at the end after a
+  decimal point. So 134.16 shows as 130, 7.44 as 7.4, 995 as 1000, 3.3 as 3.3 and 0.0456 as 0.046. A distance
+  of 0 shows as 0. The unit follows the number in its canonical form: "about 130 miles", "about 0 ft". A
+  hand-drawn map is not more exact than this.
 
 ### Cases that are not a flat rectangle
 
 | Case | What the model does | What the model refuses |
 |---|---|---|
-| A planet | One flat image in any projection, with fractions on it. The DM leaves `splat_map_width` out when the picture is not true to scale. Then only stated routes give a length | Great-circle distance. A route across the edge of the image that wraps to the other side. Latitude and longitude |
+| A planet | One flat image in any projection, with fractions on it. The DM leaves `splat_map_width` out when the picture is not true to scale. Then only stated routes give a length | Great-circle distance. Wrap at the edge of the image. Latitude and longitude |
 | An image that is not a rectangle (a round map, clear corners) | Fractions are of the file's rectangle | A check that a pin is on the drawn part |
-| A tower with floors | Each floor is a map with the scale `floor`, the same subject and its own `splat_map_level`. Stairs are a pin that shows the other floor's map | A length between two maps. A route between pins of two maps. Height |
-| A ship that moves | The ship is a Location. Its deck plans are maps of it. On the sea map, a pin shows the ship, and the DM moves that pin. The ship's `splat_in` and its Log record where it is, as for any entry | A position that changes with the campaign clock. A history of positions |
+| A tower with floors | Each floor is a map with the scale `floor` and the same subject. Stairs are a pin that shows the other floor's map | A distance between two maps. A route between pins of two maps. Height |
+| A ship that moves | The ship is a Location. Its deck plans are maps of it. On the sea map, a pin shows the ship, and the DM edits that pin's position. The ship's `splat_in` and its Log record where it is, as for any entry | A position that changes with the campaign clock. A history of positions |
 | Day and night, or layers | Two maps with one subject | Two images in one map |
 | North | Nothing | Bearings and compass directions |
 
 ## Links
 
-### Link cells
+### One reference type
 
-A pin's `Shows` and `Opens` cells and a route's `Shows` cell hold **links**. A link names one target. These
-are the forms. Schema 2 already uses them in roster and group tables, except the `table` pair, which is new:
+Each link in a map is an **Entry reference** (`CONTEXT.md`: "a reference to a particular entry by UUID or
+resource key, optionally accompanied by an Obsidian link for navigation"). The typed form exists: `EntryRef`
+in `src/content_workspace.rs`, with the optional fields `id`, `key` and `link` and no other field. This design
+uses that type for `splat_map_of`, for a pin's `shows` and for a pin's `opens`. It defines no second type.
 
-| Form | Example | The target is |
+| Written as | Example | Read as |
 |---|---|---|
-| An Obsidian link | `[[Ixdoash]]`, `[[Places/Ixdoash]]`, `[[The Arena\|the Galleries]]`, `[[Gate Mechanics#Connections]]` | The page that the Reader opens for that link. The heading and the words after `\|` do not change the target |
-| A package link | `[Goblin Boss](splat:dnd2024:creatures/goblin_boss)` | The entry with that resource key |
-| An Obsidian link and a Splat term | `[[Ixdoash]] %% splat id=2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c %%` | The entry with that `splat_id`. The link is then for navigation only |
-| | `[[Old Mill]] %% splat key=heralds:encounters/old_mill %%` | The entry with that resource key |
-| | `[[Undercroft Tables#Rival Track]] %% splat table=rival-track %%` | The roll table with that key |
+| A quoted Obsidian link | `shows: "[[Ixdoash]]"` | `EntryRef` with `link` only |
+| A mapping with `id` and `link` | `shows: {id: 2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c, link: "[[Ixdoash]]"}` | `EntryRef` with `id` and `link` |
+| A mapping with `key`, with or without `link` | `shows: {key: "dnd2024:creatures/goblin_boss"}` | `EntryRef` with `key` |
+| The flat text that Splat writes for flat World properties | `"[[Ixdoash]] %% splat id=2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c %%"` | `EntryRef` with `id` and `link` |
 
-Rules:
+Reading rules. Splat reads the value of `splat_map_of`, `shows` and `opens` in these steps, before and apart
+from the derive of the pin that holds it:
 
-1. In a table cell, Obsidian needs `\|` for the bar inside a link. Splat reads `\|` as `|`.
-2. A **Splat term** is the comment `%% splat … %%` directly after a link, with only white space between
-   them. It belongs to that link. The comment holds one pair or more of the form `name=value`, with white
-   space between the pairs, as the roster reader reads it (`machine` in
-   `crates/core/src/content/list_formats.rs`). A value has no white space. Splat reads the pairs `id`, `key`
-   and `table`. It keeps a pair with another name and does not read it. A link can have `id` and `key`
-   together, as Splat writes them today, and then `id` decides. A `table` pair with an `id` pair or a `key`
-   pair is a fault.
-3. **Resolution has one order.** With a `table` pair, the target is that roll table. If not, with an `id`
-   pair, it is the entry with that UUID. If not, with a `key` pair, it is the entry with that resource key. If
-   not, for a package link, it is the entry with the resource key in the link. If not, it is the one page that
-   the Reader opens for the link.
-4. A plain link with no page is not a map fault. The row is a Line, so the existing World check "A link with
-   no page" counts it. This lets the DM pin a place before its page exists. That check counts each link of a
-   Line, so it also counts such a link in `Opens`, beside fault P15.
-5. A plain link that matches two pages or more resolves to nothing. The Reader shows the choices and does not
-   guess, as it does for all links.
-6. A term or a package link that finds nothing is a fault, because each is an exact identity.
-7. When Splat writes a link to an entry, it writes the Obsidian link and the `id` term, as it does in a roster
-   row. A link that the DM writes by hand needs no term.
+1. A key with no value is absent.
+2. YAML reads an unquoted `[[Ixdoash]]` as a list in a list. Splat replaces a list of one list of one text
+   with the text `[[Ixdoash]]`, as it does for `splat_part_of` today. It reports nothing.
+3. Splat replaces a text value with `formats::model_reference(value)` (`crates/core/src/content/formats.rs`),
+   as it does for `splat_in` today. So text that is a UUID becomes a mapping with `id`, text that is a
+   resource key becomes a mapping with `key`, and the flat text of the last row becomes a mapping with `id`
+   or `key` and `link`. The flat text is legal because that one function reads all three fields. Splat does
+   not write it in a pin.
+4. Splat replaces a value that is still text with the mapping `{link: text}`.
+5. Splat reads the mapping into `EntryRef` with its derive. A value that does not read gives fault X1: a
+   number, a list, a mapping with a key that `EntryRef` does not know, or an `id` that is not a UUID. The pin
+   that holds the value still reads.
 
-### What a pin or a route can show
+A `link` is an Obsidian link: `[[Ixdoash]]`, `[[Places/Ixdoash]]`, `[[The Arena|the Galleries]]` or
+`[[Undercroft Tables#Rival Track]]`. The words after `|` and the heading after `#` do not change the target. A
+`link` with no `[[ ]]` goes to the resolver as it is, so a bare name works when `resolve_link` finds it.
 
-A `Shows` cell holds zero links or more. Commas and white space between the links are allowed and have no
-meaning. Splat writes `, ` between two links. All the links are equal: none is the "main" one. A target can be:
+For `splat_map_of`, Splat writes what it writes for `splat_in` today (`stored_link` in `src/world.rs`): the
+entry's key when it has one, and if not a quoted link. For a pin, Splat writes a mapping with the entry's `id`
+or `key` and a `link`. For a target that has neither, such as a World note or a heading in one, Splat writes
+the quoted link only.
 
-| Target | Link form | What Splat does with it |
-|---|---|---|
-| A Location, an NPC, a group, an event or other World entry | Obsidian link, with or without an `id` term | Opens its page. Its page shows the row as a Line |
-| A World note | Obsidian link | Opens it, at the heading if the link has one |
-| An encounter or an encounter group | Obsidian link to its UUID file name, with or without an `id` term | Opens it. The encounter's page has Start fight, as today |
-| A creature or other package entry | Package link | Opens it |
-| A roll table | Obsidian link to its note and heading, with a `table` term | Opens the note there, where the table has **Roll** |
-| Another map | Obsidian link | Opens that map. It is not a child map unless the link is in `Opens` |
+### Which page a reference names
 
-An entry is **on a map** when a pin of that map has a link in `Shows` that resolves to it.
+**The `id` or the `key` decides. The link text decides only when the reference has neither.**
 
-### What Obsidian shows with no plugin
+1. If the reference has an `id` or a `key`, `EntryRef::reference()` gives a `Reference`, and
+   `ContentIndex::position_of` finds the entry. That entry is the target, whatever the link says. There is one
+   exception: an `id` that two notes have finds no entry, although `position_of` gives one of them. If no
+   entry has that `id` or `key`, the reference has no target. Splat does not then try the link.
+2. If the reference has only a `link`, Splat calls `ContentIndex::resolve_link` with the link's text and with
+   the map's entry as `from`. That is the rule that the Reader uses for each link in a note. The target is the
+   page of a `Go::Item` result. Each other result gives no target: no page, two pages or more, or a Timeline
+   event. A link with only a heading, such as `[[#Rooms]]`, gives the map's own page.
+3. **A stale link.** When rule 1 finds entry E, and the reference also has a `link`, Splat resolves the `link`
+   by rule 2. If the link does not give E, the link is stale. The target is still E. Splat reports fault X5.
+   The repair **Update link** changes the page part of the link, which is the text from `[[` to the first
+   `#`, `|` or `]]`. The new page part is the page part of the link that `ContentIndex::link_to` gives for E.
+   The heading and the words after `|` stay. The repair changes nothing else.
 
-In Reading view, a map note shows:
+Rule 1 differs from `splat_in` today. `world_value_target` in `src/lookup.rs` resolves the link's words first
+and does not read the `id`. This design does not change `splat_in`. [Open question](#open-questions-for-the-user)
+5 asks whether it should follow.
 
-- its properties: the scale and the width as text, and the subject as Obsidian shows `splat_in` today;
-- the map image, because it is an ordinary embed;
-- the Pins table and the Routes table, with each link in `Shows` and `Opens` as a working link. Obsidian hides
-  each `%% splat … %%` term. The numbers in `At` and `Via` show as text.
+The faults of a reference are the same for the three fields. `{where}` is `splat_map_of`, or
+`Pin {number} “{name}”: shows`, or `Pin {number} “{name}”: opens`. Splat tests X1, then X2, then X3 and X4.
+X5 is tested only when X1 and X2 pass.
 
-Obsidian's Backlinks pane on a Location lists each map that pins it. A rename in Obsidian updates the links
-in both tables and the image embed. Obsidian draws no pin on the image.
+| ID | Rule | Message | Effect |
+|---|---|---|---|
+| X1 | The value reads into `EntryRef` by the reading rules above. It has an `id`, a `key` or a `link`, and not both an `id` and a `key`. An `id` is a UUID that is not nil. A `key` is a resource key | `{where}: write a link, or one of id and key.` | No target |
+| X2 | An `id` or a `key` finds exactly one entry | `{where}: no entry has the ID {id}.` or `{where}: no entry has the key {key}.` or `{where}: two notes have the ID {id}.` | No target |
+| X3 | A reference with only a `link` finds a page | `{where}: {link} was not found.` | No target |
+| X4 | A reference with only a `link` finds one page only | `{where}: {link} matches {count} notes. Write the folder in the link.` | No target |
+| X5 | The `link` of a reference with an `id` or a `key` leads to the target | `{where}: the link {link} does not lead to {target name}. Splat uses {target name}.` | None. **Update link** repairs it |
+
+### What a pin can show
+
+A pin's `shows` holds one reference. Its target can be each page that the resolver gives: an entry of any
+kind, a World note or a session note. Examples are a Location, an NPC, a group, an event, an encounter, an
+encounter group, a creature and another map. A click on the pin opens
+that page, at the heading if the link has one. An encounter's page has Start fight, as today.
+
+- A roll table is not an entry. A pin reaches one with a link to its note and heading, such as
+  `[[Undercroft Tables#Rival Track]]`. The table there has **Roll**.
+- A pin that shows another map only opens that map's page. It is not a child map unless the link is in `opens`.
+- A page is **on a map** when a pin of that map has a `shows` whose target is that page.
+
+### What the Line index must do
+
+A pin is data in a property. It is not text in the note, so the Line reader (`src/world/lines.rs`) does not see
+it, and `find_mentions` in `src/lookup.rs` does not match its words. Review 1 showed the risk: a Line that is
+found by link text can go to one page while the map resolves another. So the rule is:
+
+**For each pin whose `shows` has a target that can have Lines, the index gives the target's page exactly one
+Line. The Line's source is the map, and its words are the pin's name, and then `: ` and the pin's `note` when
+the note is not empty. The index attaches the Line by the resolved target, never by the link text and never
+by a name match.**
+
+- The pages that can have Lines are the pages that have them today: a World entry, a World note and a
+  session note (`find_mentions` in `src/lookup.rs`). A pin that shows a page of another kind, such as an
+  encounter or a creature, gives no Line.
+- A pin that shows its own map gives no Line, as a note gives itself none today.
+- The index adds these Lines where it builds the Lines of each page (`find_mentions`, which fills what
+  `lines_about` returns), with the target that
+  [Which page a reference names](#which-page-a-reference-names) gives.
+- A pin with a stale link (X5) gives its Line to the target of the `id` or `key`. The page that the stale
+  text names gets nothing.
+- A pin with no target gives no Line. A route gives no Line. `opens` gives no Line.
+- No name match runs over pin names or pin notes. A note that names Ixdoash in plain words does not make a
+  second Line.
+- The Lines group by the type of their page, as other Lines do. So a Location's page shows its pins under the
+  group for `map`, or for the type of the note that holds the map.
+
+### What Obsidian shows, and what is not verified
+
+In Reading view, a map note shows the map image, because it is an ordinary embed, and the text that the DM
+wrote. The pins and routes are in the note's properties.
+
+What Obsidian's own pages state, read on 2026-11-11:
+
+| Statement | Source |
+|---|---|
+| "Text properties can contain URLs and internal links using the `[[Link]]` syntax", and such a link "must be surrounded with quotes". List values can also hold quoted internal links | Obsidian Help, [Properties](https://obsidian.md/help/properties) |
+| Under "Not supported": "Nested properties: To view nested properties, we recommend using the source mode" | Obsidian Help, [Properties](https://obsidian.md/help/properties) |
+| "Fixed links in properties not getting renamed updated when the file is renamed" | Changelog, [Obsidian 1.5.7 Desktop](https://obsidian.md/changelog/2024-02-20-desktop-v1.5.7/), 2024-02-20 |
+| The metadata cache has `frontmatterLinks`, added in 1.4.0. Its `key` field has no description, so the page does not say whether a link inside a nested value is in it | Developer docs, [frontmatterLinks](https://docs.obsidian.md/Reference/TypeScript+API/CachedMetadata/frontmatterLinks) |
+
+What follows, and what does not:
+
+- **Established:** a top-level text or list property can hold a quoted link, and Obsidian 1.5.7 or later
+  renames such a link when the file is renamed. So `splat_map_of: "[[Ixdoash]]"` is a link that Obsidian
+  follows and renames.
+- **Established:** Obsidian's Help lists nested properties as not supported, and recommends Source mode to
+  view them. So the DM reads and edits `splat_map_pins` and `splat_map_routes` in Source mode, or in Splat.
+- **Not verified:** whether Obsidian renames a quoted link inside a list of mappings, and whether it counts
+  that link for backlinks and the graph. No page above says so. One forum report from October 2023, with no
+  version, saw a backlink row with the text "[object Object]" for a link under a nested mapping
+  ([thread](https://forum.obsidian.md/t/backlink-nested-yaml-frontmatter/69764)). That is one user's report
+  and not a statement by Obsidian. No test was run in Obsidian for this design.
+- **Not verified:** whether the Help page's statements about text and list properties also cover backlinks
+  and the graph. The page does not name them.
+
+**The rule that makes Splat correct in each case:** Splat writes each pin link to an entry with an `id` or a
+`key` beside the link text. The `id` or `key` decides the target. If Obsidian renames the text, the text stays
+right. If Obsidian does not, the text goes stale, the target does not change, `splat check` reports X5, and
+**Update link** writes the text again. A pin link that the DM wrote by hand with no `id` breaks only as each
+hand-written link breaks: X3 names it. `splat_map_of` is a top-level text property, so the established
+rename covers its quoted link, and a rename outside Obsidian gives X3.
 
 ## Distance and travel time
 
 This is the smallest rule that lets another feature ask "how far and how long from A to B on this map?". The
 feature that asks is a Travel event, which is not part of this design.
 
-### The questions
+### The limit of the contract
 
-**Question 1: where is this entry on this map?** Input: a map and an entry. Answer: each pin of the map on
-which the entry is, in table order. The caller uses the pin when there is exactly one, and asks the DM in all
-other cases.
+**An answer exists only for two ends that are pins of one map.** The caller gives the map and the two pins.
 
-**Question 2: which maps can answer for these two entries?** Input: two entries, and optionally a scale.
-Answer: each map on which each of the two entries is on exactly one pin, and the two pins differ. With a
-scale, only maps with that scale. The order is the finest scale first, with a map with no rank last, then name (in the order
-that [Names](#names) defines), then `splat_id`. Splat does
-not choose one. The caller uses the map when there is exactly one, and asks the DM in all other cases.
+- A page that no pin of that map shows has no end on that map. Splat does not look for it through `splat_in`,
+  and it does not look through child maps or parent maps. The Undercroft is on no pin of the planet map, so
+  "Undercroft to Kabrigar" has no answer on the planet map. The DM asks for Ixdoash to Kabrigar.
+- A lookup through ancestors or child maps is later work ([Later](#later)).
+- The map never chooses a map for the caller.
 
-**Question 3: how far and how long between these two pins?** Input: a map and two different pins of it, which
-each have a name that only one pin has. Answer: a list of one **answer** or more, by rules D1 to D4.
+One helper finds an end: **the pins of a map on which a page is**, in list order. The caller uses the pin
+when there is exactly one, and asks the DM in all other cases.
 
-An answer has these parts:
+### The answer
 
-| Part | Meaning |
+Input: a map, a pin to start from and a pin to go to. The two pins are different, and each has a name that
+only one pin of the map has. Output: a list of answers, by rules D1 to D5.
+
+| Kind of answer | Parts |
 |---|---|
-| `route` | The name of the route, or nothing for a straight line |
-| `length` | A number and a unit, or nothing |
-| `length_is` | `stated` or `measured`, or nothing when `length` is nothing |
-| `time` | A count of minutes and the text that the DM wrote, or nothing |
-| `shows` | The links of the route's `Shows` cell, or nothing for a straight line |
+| Route answer | `route`: the route's name. `length`: the route's stated length, or nothing. `time`: the route's stated time, or nothing. `one_way`: yes or no. `note`: the route's note |
+| Straight answer | `distance`: the measured distance between the two pins, or nothing |
 
-### The rules
+- **D1. A usable route** is an item that reads (R2) and has none of the faults R4 to R9: it has a name that
+  only it has, and two ends that exist and differ. A fault in its `length` or `time` does not make it
+  unusable.
+- **D2. An item names the pins** when it is a YAML mapping in `splat_map_routes` whose `from` and `to` are
+  text, and those two texts equal the names of the two pins, in either order. Splat tests this on the item as
+  YAML, so an item with any fault can name the pins, also an item that did not read. **A route allows the
+  journey** when it is usable, it names the pins, and it is not one-way or its `from` is the start pin.
+- **D3. Routes first.** If one item or more names the pins, the list has one route answer for each route that
+  allows the journey, in list order. It has no straight answer. The list is empty when items name the pins
+  and no route allows the journey: the DM stated a route that Splat could not use, or stated that no way goes
+  in that direction.
+- **D4. No route.** If no item names the pins, the list has one straight answer. There is one exception: when
+  `splat_map_routes` has fault R1, Splat cannot know what the DM stated, and the list is empty.
+- **D5. What the map never does.** It never measures a route. It never derives a time from a length. It never
+  converts a unit. It never adds two routes to make a journey through a third pin.
 
-- **D1. Routes first.** Take each route of the map that has no fault in its ends and whose two ends are the
-  two pins, in either order. If there is one such route or more, the answer list has one answer for each, in
-  table order, and it has no straight line.
-- **D2. A route's answer.** `length` is the route's stated `Length`. If the route states none, `length` is the
-  measured length of the route's line, when that exists. The line goes from the anchor of `From`, through the
-  `Via` points in order, to the anchor of `To`. `time` is the route's stated `Time`, or nothing.
-- **D3. No route.** If no route joins the two pins, the list has one answer. Its `length` is the measured
-  length between the two anchors, when that exists. Its `time` is nothing.
-- **D4. What the map never does.** It never derives a time from a length. It never converts a unit. It never
-  adds two routes to make a journey through a third pin.
-
-So a stated length wins over a measured length for the same route, and a route wins over a straight line.
+**Absent and invalid are different.** A route with no `length` has no stated length, and that is not a
+fault. A route with a `length` that Splat cannot read has fault R10, and its answer also has no length. In
+both cases the item still names its pins, so by D3 Splat gives no straight answer and measures nothing. The
+same holds for an item with each other fault: a wrong type, a name that two routes have, or a wrong
+`one_way`. A typing error in a route can put a measured number in the place of the DM's number in one case
+only: a wrong spelling of `from` or `to`, because the item then names other pins, and Splat reports R7.
 
 ### What is stated and what is derived
 
@@ -531,40 +598,44 @@ So a stated length wins over a measured length for the same route, and a route w
 |---|---|---|
 | A map's scale | `splat_map_scale` | The rank, from the ladder |
 | A map's width | `splat_map_width`, typed or entered once with a scale bar | The height, from the image's shape |
-| A pin's position | `At` | The anchor of a box or a shape |
-| A route's length | `Length`, when the DM knows it | A measured length along the route's line, only when `Length` is empty |
-| A route's time | `Time`, when the DM knows it | Never |
-| A straight-line length | Never | A measured length, only when no route joins the two pins |
+| A pin's position | `at` | Never |
+| A route's length | `length`, when the DM knows it | Never |
+| A route's time | `time`, when the DM knows it | Never |
+| A straight-line distance | Never | A measured distance, only when no item of the route list names the two pins and the map is calibrated |
 | A journey's time from a length | Never in a map | The Travel feature, from a travel pace |
-| That a map opens a child | `Opens` | The list "Shown on" on the child's page |
-| The maps of an entry | `splat_map_of` on each map | The list on the entry's page |
+| That a map opens a child | `opens` | The list "Shown on" on the child's page |
+| The maps of a page | `splat_map_of` on each map | The list on the page |
 
 **Travel pace is a rule choice, not map data.** A pace such as "24 miles a day" belongs to a `rule` entry that
-the campaign chooses, as it chooses other rules. No map, pin or route holds a pace. A stated `Time` is the
+the campaign chooses, as it chooses other rules. No map, pin or route holds a pace. A stated `time` is the
 DM's ruling for that route, and no pace changes it.
 
 How a Travel event can use an answer, as a boundary for that later design:
 
-1. If the answer has a `time`, offer its text as the event's `duration`. The campaign clock reads that text
-   with the reader that it has (`read_duration`), so `20 days` moves the clock 20 days.
-2. If the answer has only a `length`, apply the campaign's pace rule to it. The pace rule names its unit. When
-   the answer's unit is not the same unit, give no time, and let the DM type one.
-3. Take the roll tables for the journey from the answer's `shows`: each link with a `table` term.
+1. For a route answer with a `time`, offer its text as the event's `duration`. The campaign clock reads that
+   text with the reader that it has (`read_duration`), so `20 days` moves the clock 20 days.
+2. For an answer with only a length or a distance, apply the campaign's pace rule. The pace rule names its
+   unit. When the answer's unit is not the same unit, give no time, and let the DM type one.
+3. Show the route's `note` beside the offer, so that the DM sees "One way" or "By sea" before the DM accepts.
 4. Write nothing until the DM confirms. Splat records and rolls, and the DM rules.
 
 ## The schema
 
 ### Properties of a map
 
-These are flat properties in the note's front matter, as the other World properties are. In the note model
-they are the `splat_world` fields `map_scale`, `map_of`, `map_width` and `map_level`.
+These are properties in the note's front matter. In the note model they are the `splat_world` fields
+`map_scale`, `map_of`, `map_width`, `map_pins` and `map_routes`, beside the fields that `WORLD_FIELDS` lists
+today.
 
 | Property | Type | Required | Default | Meaning |
 |---|---|---|---|---|
 | `splat_map_scale` | Text: a key of the ladder | Yes, for a map. Its presence makes the entry a map | None | The map's scale |
-| `splat_map_of` | One text value that holds one link, in the forms of [Link cells](#link-cells) | No | The map's own entry | The map's subject |
-| `splat_map_width` | Text: a length | No | None. The map then has no measured lengths | The real distance across the full width of the image |
-| `splat_map_level` | YAML integer from -999 to 999 | No | None | The order of this map among the maps of its subject, such as the floor number |
+| `splat_map_of` | One reference (`EntryRef`) | No | The map's own entry | The map's subject |
+| `splat_map_width` | Text: a quantity with a length unit | No | None. The map is then not calibrated | The real distance across the full width of the image |
+| `splat_map_pins` | A list of Pin | No | An empty list | The map's pins, in list order |
+| `splat_map_routes` | A list of Route | No | An empty list | The map's routes, in list order |
+
+A property with no value (`splat_map_pins:` and nothing after it) is an empty list.
 
 ### The map image
 
@@ -580,225 +651,233 @@ embed of a note is not an image embed. A Markdown image `![words](path)` is not 
   still state lengths and times. A diagram of gates between planets can start this way.
 - A map has one image. Other embeds in the note are ordinary pictures.
 
-### The Pins table
+### A pin
 
-In a map, the Pins table is the first Markdown table after the first heading whose text is `Pins`, before the
-next heading. The heading can have any level, and its text is compared in any letter case. A map with no such
-heading, or with no table under it, has no pins, and that is not a fault. In a note that is not a map, the
-heading and the table are ordinary text. A cell is the text between two `|` as Markdown reads the row, with
-white space at each end removed, and `\|` in a cell is the character `|`. The table's header row must be
-exactly these five cells, in this order, compared in any letter case:
-
-```markdown
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| Ixdoash | 0.412, 0.305 | [[Ixdoash]] | [[Ixdoash map]] | Capital of Verori |
+```yaml
+splat_map_pins:
+- name: Ixdoash
+  at: [0.412, 0.305]
+  shows: {id: 2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c, link: "[[Ixdoash]]"}
+  opens: "[[Ixdoash map]]"
+  note: Capital of Verori
 ```
 
-| Column | Type | Required | Default | Meaning |
+| Field | Type | Required | Default | Meaning |
 |---|---|---|---|---|
-| `Pin` | Plain text | Yes | None | The pin's name. It must differ from the name of each other pin of this map |
-| `At` | Empty, or 1 to 256 points with `;` between them. A point is `x, y` | No | No position | The pin's [position](#positions) |
-| `Shows` | Zero links or more | No | No links | What the pin shows |
-| `Opens` | Empty, or exactly one link | No | No child map | The child map that this pin opens |
-| `Note` | Markdown text | No | Empty | Words for the DM. Links in it work, and they are not in `Shows` |
+| `name` | Text | Yes | None | The pin's name. It must differ from the name of each other pin of this map |
+| `at` | A list of exactly two numbers | No | No position | The pin's position, `[x, y]` |
+| `shows` | One reference (`EntryRef`) | No | Nothing | The page that the pin shows |
+| `opens` | One reference (`EntryRef`) | No | No child map | The child map that this pin opens |
+| `note` | Text | No | Empty | Words for the DM |
 
-The order of the rows is the order of the pins in lists, and the order in which Splat draws them.
+### A route
 
-### The Routes table
-
-The Routes table is found in the same way, under the first heading whose text is `Routes`. Its header row must
-be exactly these eight cells, in this order:
-
-```markdown
-## Routes
-
-| Route | From | To | Length | Time | Via | Shows | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Thaor crossing | Ixdoash | Kabrigar | 2400 miles | 20 days | 0.50, 0.33; 0.62, 0.37 | [[The Thaor]] | By sea |
+```yaml
+splat_map_routes:
+- name: Thaor crossing
+  from: Ixdoash
+  to: Kabrigar
+  length: 2400 miles
+  time: 20 days
+  note: By sea
 ```
 
-| Column | Type | Required | Default | Meaning |
+| Field | Type | Required | Default | Meaning |
 |---|---|---|---|---|
-| `Route` | Plain text | Yes | None | The route's name. It must differ from the name of each other route of this map |
-| `From` | Plain text: the name of a pin of this map | Yes | None | One end |
-| `To` | Plain text: the name of another pin of this map | Yes | None | The other end |
-| `Length` | Empty, or a length | No | No stated length | The stated length of the route |
-| `Time` | Empty, or text that the campaign clock's reader (`read_duration` in `src/timeline.rs`) reads as 1 minute or more | No | No stated time | The stated time to travel the route |
-| `Via` | Empty, or 1 to 64 points with `;` between them | No | A straight line | The points that the route's line goes through, from `From` to `To` |
-| `Shows` | Zero links or more | No | No links | What the route shows, such as a road's Location or a roll table for the journey |
-| `Note` | Markdown text | No | Empty | Words for the DM |
+| `name` | Text | Yes | None | The route's name. It must differ from the name of each other route of this map |
+| `from` | Text: the name of a pin of this map | Yes | None | One end |
+| `to` | Text: the name of another pin of this map | Yes | None | The other end |
+| `length` | Text: a quantity with a length unit or a counting unit | No | No stated length | The stated length of the route |
+| `time` | Text that `read_duration` (`src/timeline.rs`) reads as 1 minute or more | No | No stated time | The stated time to travel the route |
+| `one_way` | `true` or `false` | No | `false` | With `true`, the route goes from `from` to `to` only |
+| `note` | Text | No | Empty | Words for the DM. The answer carries it |
 
-- A route has no direction. `From` and `To` can change places with no change of meaning, except that `Via`
-  runs from `From` to `To`.
-- Two routes can join the same two pins, such as a road and a river. Each has its own name.
+- Two routes can join the same two pins, such as a road and a river, or two one-way gates. Each has its own
+  name.
 - A route joins two pins of one map. It cannot end on a pin of another map.
-- `Time` uses the campaign clock's reader and no second grammar. So a route's time and a Timeline event's
+- `time` uses the campaign clock's reader and no second grammar. So a route's time and a Timeline event's
   `duration` always read alike. Examples: `3 days`, `an hour`, `90 minutes`.
+- A route has no line on the image of its own. Splat draws a straight line between its two pins when both
+  have a position.
 
 ### Names
 
-A pin's name and a route's name are plain text: the cell must not contain `[[`, `](` or `%%`. Two names are
-**equal** when they are the same after these three steps: remove white space at each end, replace each run of
-white space with one space, and change to Unicode lower case. So `The  Pit` and `the pit` are equal. Names
-are **ordered** by the Unicode code points of the result of those three steps. Pins and routes
-have separate sets of names: a pin and a route can have one name.
+Two names are **equal** when they are the same after these three steps: remove white space at each end,
+replace each run of white space with one space, and change to Unicode lower case. So `The  Pit` and `the pit`
+are equal. Names are **ordered** by the Unicode code points of the result of those three steps. Pins and
+routes have separate sets of names: a pin and a route can have one name.
 
 ### The typed model
 
-| Type | Fields |
-|---|---|
-| Map | `scale`: key. `rank`: number or none. `subject`: World entry, World note or none. `width`: Length or none. `level`: whole number or none. `image`: file path or none. `pins`: list of Pin. `routes`: list of Route |
-| Pin | `name`: text. `position`: none, Point, Box (two Points) or Shape (3 to 256 Points). `shows`: list of Link. `opens`: Link or none. `note`: text. `line`: number |
-| Route | `name`: text. `from`, `to`: pin names. `length`: Length or none. `time`: minutes and text, or none. `via`: list of 0 to 64 Points. `shows`: list of Link. `note`: text. `line`: number |
-| Point | `x`, `y`: numbers from 0 to 1 |
-| Length | `number`: greater than zero. `unit`: the word as written, and its canonical form |
-| Link | `text`: the link as written. `id`, `key`, `table`: the value of each pair, or none. `target`: entry, note, roll table or none |
-| Scale | `key`, `name`, `unit` or none, `rank` |
+Serde derives read these structs. `Pin` and `Route` each keep the keys that they do not know, in the way that
+`timeline::Event` keeps its `extra` mapping, so that a save does not drop them.
+
+| Struct | Field | Rust type | When the key is absent |
+|---|---|---|---|
+| `Pin` | `name` | `String` | The item does not read |
+| | `at` | `Option<[f64; 2]>` | `None` |
+| | `shows` | `Option<EntryRef>` | `None` |
+| | `opens` | `Option<EntryRef>` | `None` |
+| | `note` | `String` | Empty |
+| | other keys | A YAML mapping | Empty |
+| `Route` | `name`, `from`, `to` | `String` | The item does not read |
+| | `length` | `Option<String>` | `None` |
+| | `time` | `Option<String>` | `None` |
+| | `one_way` | `bool` | `false` |
+| | `note` | `String` | Empty |
+| | other keys | A YAML mapping | Empty |
+
+- Splat reads `splat_map_pins` as a YAML list and reads each item alone. So one item that does not read does
+  not remove the other pins. The same holds for routes.
+- **Before the derive, Splat changes the item in three ways.** It removes each key that has no value, so that
+  key is absent. In the text fields (`name`, `note`, `from`, `to`, `length`, `time`), it replaces a YAML
+  number or a YAML boolean with the text that `serde_yaml_ng` writes for it, so `name: 12` is the name `12`
+  and `length: 40` is the text `40`, which then gets R10. It takes `shows` and `opens` out of the item and
+  reads each by the reading rules of [One reference type](#one-reference-type).
+- **An item does not read (P2 or R2)** when it is not a mapping, when a required field is absent, when a text
+  field holds a list or a mapping, when `at` is not a list of exactly two YAML numbers, or when `one_way` is
+  not a YAML boolean. `at: ["0.5", 0.5]`, `at: [0.5]` and `one_way: yes` are such values.
+- For the top-level properties: `splat_map_of`, `splat_map_width`, `splat_map_pins` or `splat_map_routes`
+  with no value is absent. `splat_map_scale` with no value makes the entry a map with fault M2.
+- After the derive, Splat checks the values by the rules below. The derive gives the shape. It gives no link
+  resolution and no check of meaning.
 
 ### Validation
 
 A **fault** is a rule that a file breaks. A fault never stops a note from opening, and a fault never changes a
-file. Each fault has an ID, a line, a message and an effect. In a message, `{…}` stands for a value, and a
-value in `“ ”` is quoted as other schema-2 messages quote it. `splat check` prints `{path}:{line}: {message}`,
-so each report names the note and the line. In the app, the fault shows on the note's page with its line, and
-in the **Problems** row of the World page. That row opens the note.
+file. Each fault has an ID, a message and an effect.
 
-**Properties.** The line is the line of the property.
+- **The line** of each fault of a property is the line of that property's key, such as the line of
+  `splat_map_pins:`. The message names the pin or the route by its number in the list, from 1, and by its name
+  when it has one. The line of an image fault is the line of the embed.
+- In a message, `{…}` stands for a value, and a value in `“ ”` is quoted as other schema-2 messages quote it.
+- `splat check` prints `{path}:{line}: {message}`, so each report names the note and the line. In the app, the
+  fault shows on the note's page with its line, and in the **Problems** row of the World page. That row opens
+  the note.
+
+**The order of the checks.** Splat tests in the order of the tables below. A rule is tested only on a value
+that passed the rules before it in its own table. A rule that **stands alone** is the exception: Splat tests
+it whatever the other rules of its table give, and its fault does not stop the rules after it. So one value
+gets at most one fault from the rules that do not stand alone.
+
+**The map and its properties.**
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
-| M1 | `splat_map_scale` is only on a note with `splat_kind: world` | `splat_map_scale: only a World entry can be a map.` | The note is not a map |
+| M1 | `splat_map_scale` is only on a note with `splat_kind: world` | `splat_map_scale: only a World entry can be a map. Remove this property.` | The note is not a map. Splat tests no other rule of this document on it, also not M4 |
 | M2 | `splat_map_scale` is a YAML text value that is not empty. A number, a list, a mapping, an empty value and empty text all break this rule | `splat_map_scale has no scale. Write one word, for example city.` | The entry is a map with no rank |
 | M3 | `splat_map_scale`, with white space at each end removed, is exactly a key of the ladder | `splat_map_scale: “{value}” is not a scale of this campaign. Use one of: {keys}.` | The entry is a map with no rank |
-| M4 | `splat_map_of`, `splat_map_width` and `splat_map_level` are only on a map | `{property} needs splat_map_scale. Without a scale, this note is not a map.` | The property is not used |
-| M5 | `splat_map_of` is one text value that holds exactly one link, with its Splat term or without one, and nothing else. A `table` pair breaks this rule | `splat_map_of: write one link, for example "[[Ixdoash]]".` | The map has no subject |
-| M6 | The link in `splat_map_of` finds a target: its term or its package link finds an entry, or its words find a page | `splat_map_of: {value} was not found.` | The map has no subject |
-| M7 | A link in `splat_map_of` with no term and no package key finds only one page | `splat_map_of: {value} matches {count} notes. Write the folder in the link.` | The map has no subject |
-| M8 | `splat_map_width` is a text value that is a length, as [Units](#units) defines one | `splat_map_width: “{value}” was not read. Write a number and a unit, for example 300 miles.` | The map has no width |
-| M9 | The unit of `splat_map_width` is not a time word | `splat_map_width: “{unit}” is a time. Write a length, for example 300 miles.` | The map has no width |
-| M10 | `splat_map_level` is a YAML integer from -999 to 999. Quoted text and a number with a decimal point break this rule | `splat_map_level: “{value}” was not read. Write a whole number from -999 to 999.` | The map has no level |
-| M11 | The target of `splat_map_of` is a World entry or a World note | `splat_map_of: {name} is not a World entry or a World note.` | The map has no subject |
+| M4 | `splat_map_of`, `splat_map_width`, `splat_map_pins` and `splat_map_routes` are only on a map. Stands alone, once for each such property | `{property} needs splat_map_scale. Without a scale, this note is not a map.` | The property is not used, and no other rule tests it |
+| M5 | The target of `splat_map_of` is a World entry or a World note. Tested after X1 to X4 | `splat_map_of: {name} is not a World entry or a World note.` | The map has no subject |
 
-A map with no rank still shows. Rules P19 and T1 do not test it. A value of `splat_map_of` that resolves to
-the map's own entry means the same as no value, and it is not a fault.
+A map with no rank still shows. Rule O4 does not test it. A `splat_map_of` whose target is the map's own
+entry means the same as no value, and it is not a fault. X1 to X4 on `splat_map_of` give "no subject".
 
-Which of these faults go together: on a note with M1, Splat reports no other fault of this document. A
-property with M4 is not tested by M5 to M11. M3 is tested only when M2 passes. M6 and M7 are tested only when
-M5 passes, and M11 only when M6 and M7 pass. M9 is tested only when M8 passes.
+**The width.** The three steps of a quantity, and then the kind of unit.
 
-**Image.** The line is the line of the embed.
+| ID | Rule | Message | Effect |
+|---|---|---|---|
+| W1 | Step 1: `splat_map_width` is text in the form of a quantity | `splat_map_width: “{value}” was not read. Write a number and a unit, for example 300 miles.` | The map is not calibrated |
+| W2 | Step 2: the number is more than 0 and at most 1,000,000,000 | `splat_map_width: the number must be more than 0 and at most 1,000,000,000.` | The map is not calibrated |
+| W3 | Step 3: the unit is not a time word | `splat_map_width: “{unit}” is a time. Write a length, for example 300 miles.` | The map is not calibrated |
+| W4 | Step 3: the unit is a length unit | `splat_map_width: Splat cannot measure in “{unit}”. Use ft, miles, m or km, or remove the width.` | The map is not calibrated |
+
+**The image.**
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
 | I1 | The image embed names a file that exists | `Map image not found: {target}.` | The map has no image. Positions stay in the file |
-| I2 | Only one image file has that name | `{count} images are named {name}. This map uses {path}. Rename the others.` | None. The map uses the file that the message names |
+| I2 | Only one image file has that name. Stands alone | `{count} images are named {name}. This map uses {path}. Rename the others.` | None. The map uses the file that the message names |
 | I3 | Splat can read the image and its size | `Map image could not be read: {path}.` | The map has no image |
 
-**Pins.** The line is the line of the row, except where the table says another line. `{pin}` is the pin's
-name.
+**Pins.** `{pin}` is `Pin {number}` and then the name in `“ ”` when the pin has one, such as `Pin 3 “Lever”`.
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
-| P1 | The header row is `Pin`, `At`, `Shows`, `Opens`, `Note` (line of the header) | `The Pins table needs these columns in this order: Pin, At, Shows, Opens, Note.` | The map has no pins. Splat does not edit the table |
-| P2 | The note has one `Pins` heading (reported at each `Pins` heading after the first) | `This note has more than one Pins heading. Splat reads the first, at line {line}.` | Each later one is ordinary text |
-| P3 | A row has five cells | `This row has {count} cells. A Pins row has 5.` | The row is not a pin |
-| P4 | The `Pin` cell is not empty | `This pin has no name. Write a name in the Pin column.` | The row is not a pin |
-| P5 | The `Pin` cell is plain text | `Pin “{cell}”: write the name as plain words. Put a link in Shows.` | The row is not a pin |
-| P6 | No two pins of a map have equal names. Reported on each of the rows | `{count} pins are named “{pin}”, at lines {lines}. Give each pin its own name.` | All of them show. No route can use the name. Splat does not move or rename them |
-| P7 | `At` is empty, or points in the point grammar | `Pin “{pin}”: At “{cell}” was not read. Write x, y as two numbers from 0 to 1, for example 0.25, 0.6. Put ; between the points of an area.` | The pin has no position |
-| P8 | Each number in `At` is from 0 to 1 | `Pin “{pin}”: {number} is outside the map. Each number in At is from 0 to 1.` | The pin has no position |
-| P9 | The two points of a box differ in `x` and in `y` | `Pin “{pin}”: the two corners of a box need a different x and a different y.` | The pin has no position |
-| P10 | `At` has at most 256 points | `Pin “{pin}”: an area has at most 256 points. This one has {count}.` | The pin has no position |
-| P11 | `Shows` has only links, commas and white space | `Pin “{pin}”: Shows “{text}” is not a link. Write a link such as [[Ixdoash]], or move the words to Note.` | The links in the cell are still used |
-| P12 | In `Shows`, each Splat term and each package link finds its target | `Pin “{pin}”: no entry has the ID {value}.` or `Pin “{pin}”: no entry has the key {value}.` or `Pin “{pin}”: no roll table has the key {value}.` | That link has no target |
-| P13 | In `Shows`, a link with a `table` pair has no `id` pair and no `key` pair | `Pin “{pin}”: a link to a roll table has the table key only, with no id and no key.` | That link has no target |
-| P14 | `Opens` is empty, or exactly one link, with its Splat term or without one, and nothing else | `Pin “{pin}”: Opens takes one link to a map.` | The pin opens no map |
-| P15 | The link in `Opens` finds exactly one target. A term or a package link that finds nothing, a `table` pair with an `id` pair or a `key` pair, and words that find no page all give the first message | `Pin “{pin}”: Opens {link} was not found.` or `Pin “{pin}”: Opens {link} matches {count} notes. Write the folder in the link.` | The pin opens no map |
-| P16 | The target of `Opens` is a map | `Pin “{pin}”: {name} is not a map. A map has the property splat_map_scale.` | The pin opens no map |
-| P17 | The target of `Opens` is not this map | `Pin “{pin}”: a map cannot open itself.` | The pin opens no map |
-| P18 | At most one pin of a map opens a given map. Reported on each of the rows | `{count} pins open {name}: {pins}. Only one pin of a map opens a child map.` | None of those pins opens the map |
-| P19 | For an `Opens` link that breaks none of P14 to P18: when this map and the target both have a rank, the target's scale is finer | `Pin “{pin}”: {name} has the scale {child}. This map has the scale {parent}. A pin opens a map with a finer scale. To link two maps of one scale, put the link in Shows.` | The pin opens no map |
-| P20 | No chain of `Opens` links leads from the target back to this map. Reported on each row in the chain | `Pin “{pin}”: {name} leads back to this map: {chain}. Remove one of these Opens links.` | None of the pins in the chain opens a map |
+| P1 | `splat_map_pins` is a YAML list | `splat_map_pins was not read. Write a list of pins, each with a name.` | The map has no pins. Splat does not edit the property |
+| P2 | Each item reads into `Pin`. Stands alone for each item | `Pin {number} was not read: {detail}. A pin has name, at, shows, opens and note.` | The item is not a pin |
+| P3 | A pin has no key that Splat does not know. Stands alone, on an item that passes P2 and P4 | `{pin}: the key “{key}” is not read.` | None. The key stays in the file |
+| P4 | `name` is not empty after white space at each end is removed | `Pin {number} has no name. Write a name.` | The item is not a pin |
+| P5 | No two pins of a map have equal names. Stands alone. Reported once, with all of them | `{count} pins are named “{name}”: pins {numbers}. Give each pin its own name.` | All of them show. No route can use the name. Splat does not move or rename them |
+| P6 | Each number of `at` is finite and from 0 to 1. Stands alone, on an item that passes P2 and P4 | `{pin}: {number} is outside the map. Each number in at is from 0 to 1.` | The pin has no position |
 
-Notes on these rules:
+In P2, `{detail}` is the text of the serde error for that item. This document does not fix that text, and a
+test checks the rest of the message. In P5, `{numbers}` is the list numbers in rising order with `, ` between
+them. `{name}` is the name of the first of those pins, as its file writes it. R5 uses the same two rules.
 
-- P12 and P13 test `Shows` cells only. In `Opens`, P15 covers those cases.
-- In P6 and R6, `{lines}` is the line of each row with that name, in rising order, with `, ` between them. In
-  P18, `{pins}` is the name of each such pin in table order, each in `“ ”`, with `, ` between them.
-- P19 and P20 each test the `Opens` links that break none of P14 to P18. P20 does not look at P19. So a cycle
-  between maps that all have a rank gets P19 on one row or more, and P20 on each row of the cycle.
-- In P20, `{chain}` is map names with ` → ` between them, such as `Cellar → Vault → Cellar`. It starts with
+On each pin that passes P2 and P4, `shows` is tested with X1 to X5, and `opens` is tested with X1 to X5 and
+then with these rules. O1 is tested only when the `opens` link has a target.
+
+| ID | Rule | Message | Effect |
+|---|---|---|---|
+| O1 | The target of `opens` is a map | `{pin}: {name} is not a map. A map has the property splat_map_scale.` | The pin opens no map |
+| O2 | The target of `opens` is not this map | `{pin}: a map cannot open itself.` | The pin opens no map |
+| O3 | At most one pin of a map opens a given map. Reported once, with all of them | `{count} pins open {name}: pins {numbers}. Only one pin of a map opens a child map.` | None of those pins opens the map |
+| O4 | When this map and the target both have a rank, the target's scale is finer | `{pin}: {name} has the scale {child}. This map has the scale {parent}. A pin opens a map with a finer scale. To link two maps of one scale, use shows.` | The pin opens no map |
+| O5 | No chain of `opens` links leads from the target back to this map. Stands alone, and reported on each pin of the chain | `{pin}: {name} leads back to this map: {chain}. Remove one of these opens links.` | None of the pins in the chain opens a map |
+
+- O4 and O5 each test the `opens` links that break none of X1 to X4 and O1 to O3. O5 does not look at O4. So
+  a cycle between maps that all have a rank gets O4 on one pin or more, and O5 on each pin of the cycle.
+- In O5, `{chain}` is map names with ` → ` between them, such as `Cellar → Vault → Cellar`. It starts with
   this map, then the target, then the shortest sequence of maps that leads back to this map. When two
   sequences are equally short, Splat takes the first one that it finds when it searches breadth-first and
-  follows the pins of each map in table order.
-- When a pin "opens no map", the link in its cell is still a link that the DM can follow.
+  follows the pins of each map in list order.
+- When a pin "opens no map", its `opens` is still a link that the DM can follow.
 
-**Routes.** The line is the line of the row. `{route}` is the route's name.
+**Routes.** `{route}` is `Route {number}` and then the name in `“ ”` when the route has one.
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
-| R1 | The header row is `Route`, `From`, `To`, `Length`, `Time`, `Via`, `Shows`, `Note` (line of the header) | `The Routes table needs these columns in this order: Route, From, To, Length, Time, Via, Shows, Note.` | The map has no routes. Splat does not edit the table |
-| R2 | The note has one `Routes` heading (reported at each `Routes` heading after the first) | `This note has more than one Routes heading. Splat reads the first, at line {line}.` | Each later one is ordinary text |
-| R3 | A row has eight cells | `This row has {count} cells. A Routes row has 8.` | The row is not a route |
-| R4 | The `Route` cell is not empty | `This route has no name. Write a name in the Route column.` | The row is not a route |
-| R5 | The `Route` cell is plain text | `Route “{cell}”: write the name as plain words. Put a link in Shows.` | The row is not a route |
-| R6 | No two routes of a map have equal names. Reported on each of the rows | `{count} routes are named “{route}”, at lines {lines}. Give each route its own name.` | All of them stay in use. Splat does not rename them |
-| R7 | `From` and `To` are not empty | `Route “{route}”: {column} needs the name of a pin on this map.` | The route is not drawn and gives no answer |
-| R8 | `From` and `To` each equal the name of a pin of this map | `Route “{route}”: no pin on this map is named “{name}”.` | The route is not drawn and gives no answer |
-| R9 | The pin name in `From` or `To` belongs to only one pin | `Route “{route}”: two pins are named “{name}”.` | The route is not drawn and gives no answer |
-| R10 | `From` and `To` are different pins | `Route “{route}”: From and To are the same pin.` | The route is not drawn and gives no answer |
-| R11 | `Length` is empty, or a length as [Units](#units) defines one | `Route “{route}”: Length “{cell}” was not read. Write a number and a unit, for example 40 miles.` | The route has no stated length |
-| R12 | The unit of `Length` is not a time word | `Route “{route}”: “{unit}” is a time. Write it in Time.` | The route has no stated length |
-| R13 | `Time` is empty, or `read_duration` reads it as 1 minute or more | `Route “{route}”: Time “{cell}” was not read. Write a number and minutes, hours, days, weeks, months or years, for example 3 days.` | The route has no stated time |
-| R14 | `Via` is empty, or 1 to 64 points, each number from 0 to 1 | `Route “{route}”: Via “{cell}” was not read. Write points as x, y with ; between them. Each number is from 0 to 1, and a route has at most 64 points.` | The route has no line. It is not drawn and has no measured length. Its stated length and time still answer |
-| R15 | `Shows` obeys P11, P12 and P13 | The messages of P11, P12 and P13, with `Route “{route}”` in place of `Pin “{pin}”` | As P11, P12 and P13 |
+| R1 | `splat_map_routes` is a YAML list | `splat_map_routes was not read. Write a list of routes, each with name, from and to.` | The map has no routes. Splat does not edit the property |
+| R2 | Each item reads into `Route`. Stands alone for each item | `Route {number} was not read: {detail}. A route has name, from, to, length, time, one_way and note.` | The item is not a route |
+| R3 | A route has no key that Splat does not know. Stands alone, on an item that passes R2 and R4 | `{route}: the key “{key}” is not read.` | None. The key stays in the file |
+| R4 | `name` is not empty after white space at each end is removed | `Route {number} has no name. Write a name.` | The item is not a route |
+| R5 | No two routes of a map have equal names. Stands alone. Reported once, with all of them | `{count} routes are named “{name}”: routes {numbers}. Give each route its own name.` | None of them is usable |
+| R6 | `from` and `to` are not empty after white space at each end is removed | `{route}: {field} needs the name of a pin of this map.` | The route is not usable |
+| R7 | `from` and `to` each equal the name of a pin of this map | `{route}: no pin of this map is named “{name}”.` | The route is not usable |
+| R8 | The pin name in `from` or `to` belongs to only one pin | `{route}: {count} pins are named “{name}”.` | The route is not usable |
+| R9 | `from` and `to` are different pins | `{route}: from and to are the same pin.` | The route is not usable |
+| R10 | `length`, when present, is a quantity. Stands alone, on an item that passes R2 and R4. The three steps give three messages | Step 1: `{route}: length “{value}” was not read. Write a number and a unit, for example 40 miles.` Step 2: `{route}: the number in length must be more than 0 and at most 1,000,000,000.` Step 3: `{route}: “{unit}” is a time. Write it in time.` | The route has no stated length. It still joins its pins, so Splat measures nothing between them |
+| R11 | `time`, when present, is text that `read_duration` reads as 1 minute or more. Stands alone, on an item that passes R2 and R4 | `{route}: time “{value}” was not read. Write a number and minutes, hours, days, weeks, months or years, for example 3 days.` | The route has no stated time |
+
+A route that is "not usable" is not drawn and gives no route answer. R6 to R9 are tested on each item that
+passes R2 and R4, also on a route with R5. Splat tests R6, R7 and R8 on `from`, then R6, R7 and R8 on `to`,
+then R9. The first test that fails gives the route's one fault of that group, and the later tests are not
+made. So `from: Nowhere` with an empty `to` gives R7 for `from`.
 
 **The ladder.** The line is the line of `splat_map_scales` in the campaign manifest.
 
 | ID | Rule | Message | Effect |
 |---|---|---|---|
-| L1 | `splat_map_scales` is a list of one item or more, and each item is a mapping with `scale` | `splat_map_scales was not read. Write a list of scales, or remove it to use the built-in scales.` | The built-in ladder is the ladder |
-| L2 | Each `scale` is a key | `splat_map_scales: “{value}” is not a scale key. Use lower-case letters, digits and _, with a letter first.` | The built-in ladder is the ladder |
+| L1 | `splat_map_scales` is a list of one value or more, and each value is YAML text. `[city, 5]` breaks this rule | `splat_map_scales was not read. Write a list of scale words, or remove it to use the built-in scales.` | The built-in ladder is the ladder |
+| L2 | Each value is a key | `splat_map_scales: “{value}” is not a scale key. Use lower-case letters, digits and _, with a letter first.` | The built-in ladder is the ladder |
 | L3 | No key is in the list twice | `splat_map_scales: “{key}” is in the list twice.` | The built-in ladder is the ladder |
-| L4 | `unit`, when present, is one word that is not a time word | `splat_map_scales: the unit of “{key}” was not read. Write one word, for example miles.` | That scale has no default unit |
-| L5 | `name`, when present, is one line of text that is not empty | `splat_map_scales: the name of “{key}” was not read. Write one line of text.` | That scale has its default name |
-
-An unknown field in an item of the list stays in the file. It is not read, and it is not a fault.
-
-**The tree.** The line is the line of `splat_map_scale` on map A. Splat reports T1 once for each pair of maps
-A and B that breaks the rule.
-
-| ID | Rule | Message | Effect |
-|---|---|---|---|
-| T1 | The nesting rule, in [How a map relates to the Location tree](#how-a-map-relates-to-the-location-tree) | `{A} shows {X}, which is in {Y}. Its scale, {a}, is coarser than {b}, the scale of {B}. Change a scale, or change where {X} is.` | None. Splat reports only |
 
 ### What survives a save
 
-- **Reading writes nothing.**
-- **A save changes only what the DM changed.** Splat sets a property with the lossless property patch that
-  World properties use (`src/world/fields.rs`). In a table, Splat rewrites only the cells whose value
-  changed, adds a row at the end, or removes a row. All other text stays the same, byte for byte.
-- **Unknown data stays.** An unknown property stays. A `splat_` property that Splat does not know also gets the
-  existing report for an unknown field. A cell that Splat could not read stays as written until the DM changes
-  that cell. A table with a fault in its header (P1, R1) is not edited. Text, headings and tables that Splat
-  does not read stay.
-- **Where Splat adds a table.** When a map has no `Pins` or `Routes` heading and the DM adds the first pin or
-  route in Splat, Splat adds the heading at level 2 and the table. They go before a `## Log` heading when the
-  note has one, and at the end of the note when it has none.
+- **Reading writes nothing.** A save with no change writes nothing.
+- **A save changes one property.** Splat sets a property with the lossless property patch that World
+  properties use (`src/world/fields.rs`). The note's text and each other property stay the same, byte for
+  byte.
+- **Inside `splat_map_pins` or `splat_map_routes`,** Splat writes the whole value of the property again when
+  one item changes. Each other item keeps its values as YAML values: a number stays the same number, and a
+  text stays the same text, so `060.00 ft` stays. The layout can change: quotes, the spelling of a number
+  (`0.50` can become `0.5`), and the order of keys. A YAML comment inside the property is lost. This is a
+  stated limit. Splat writes the keys in the order of the tables above, then the keys that it does not know.
+- **Unknown data stays.** An unknown property stays. A key that Splat does not know in a pin or a route stays,
+  with fault P3 or R3.
+- **A list that did not read is not edited.** With P1 or R1, Splat's map actions for that list are off, and
+  they say why. With P2 or R2 on an item, Splat writes that item again with the YAML values that it has, when
+  it writes the list.
 
 ### What `splat check` reports
 
 `splat check <folder>` reports each fault in this document as `{path}:{line}: {message}`, with the other
 flags that it reports today. A fault counts as a flag, so the exit status is 1 when a file has one.
 
-- Faults M1, M2, M4, M5, M8 to M10, P1 to P11, P13, P14, R1 to R14, R15 (for P11 and P13) and L1 to L5 need
-  one file only.
-- Faults M3, M6, M7, M11, I1 to I3, P12, P15 to P20, R15 (for P12) and T1 need the other notes of the campaign,
-  the ladder or the image files. `splat check` loads them for the folder that it checks.
-- A plain link with no page is not printed as a map fault. It is in the World page's Problems row, as today.
+- Faults M1, M2, M4, W1 to W4, P1 to P6, R1 to R11, X1 and L1 to L3 need one file only.
+- Faults M3, M5, I1 to I3, X2 to X5 and O1 to O5 need the other notes of the campaign, the ladder or the image
+  files. `splat check` loads them for the folder that it checks.
 - `splat check` prints no fault for a map with no image, no pins, no routes or no width.
 
 ## Examples
@@ -807,24 +886,14 @@ These five notes nest: gate network, planet, city, building, floor. They pass ev
 with this ladder in the campaign manifest: `network`, and then the nine built-in scales.
 
 ```yaml
-splat_map_scales:
-- {scale: network, name: Gate network, unit: hops}
-- {scale: planet}
-- {scale: continent}
-- {scale: region}
-- {scale: city}
-- {scale: district}
-- {scale: complex}
-- {scale: building}
-- {scale: floor}
-- {scale: room}
+splat_map_scales: [network, planet, continent, region, city, district, complex, building, floor, room]
 ```
 
-The UUIDs, the positions and the planet Ashfall are invented. The pages, the encounter, the roll table and
-the image files that the notes name are assumed to exist. The Arena is in Ixdoash by `splat_in`, and the
-Undercroft is in The Arena.
+The UUIDs and the planet Ashfall are invented. The pages and the encounter that the notes name are assumed to
+exist. Four of the image files are invented, and their sizes are stated where a number depends on them. The
+fifth, `Undercroft Map.png`, is the real file in the Heralds notes.
 
-### Scale `network`: a map with no image and no location
+### Scale `network`: no image, no location, one-way routes
 
 ```markdown
 ---
@@ -834,30 +903,43 @@ splat_kind: world
 splat_name: Gate network
 splat_type: map
 splat_map_scale: network
+splat_map_pins:
+- name: Thaorivel
+  shows: "[[Thaorivel]]"
+  opens: "[[Thaorivel map]]"
+  note: The home planet. Its real gate is broken.
+- name: Ashfall
+  shows: "[[Ashfall]]"
+  note: The first world that the party reaches.
+splat_map_routes:
+- name: Field gate to Ashfall
+  from: Thaorivel
+  to: Ashfall
+  length: 1 hop
+  time: 1 minute
+  one_way: true
+  note: Matter goes one way. To return, open a connection at Ashfall.
+- name: Ashfall gate home
+  from: Ashfall
+  to: Thaorivel
+  length: 1 hop
+  time: 1 minute
+  one_way: true
+  note: Costs fuel at the Ashfall gate.
 ---
 
 # Gate network
 
 The gates that the party knows, and the worlds that they reach.
-
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| Thaorivel |  | [[Thaorivel]], [[The Broken Gate]] | [[Thaorivel map]] | The home planet. Its real gate is broken |
-| Ashfall |  | [[Ashfall]] |  | The first world that the party reaches |
-
-## Routes
-
-| Route | From | To | Length | Time | Via | Shows | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Field gate to Ashfall | Thaorivel | Ashfall | 1 hop | 1 minute |  | [[Gate Mechanics#Connections]] | Matter goes one way for each connection |
 ```
 
-The map has no subject link, so its subject is itself. It has no image, so its pins need no position.
-Question 3 for Thaorivel and Ashfall gives one answer: the route, `1 hop`, stated, 1 minute.
+The map has no `splat_map_of`, so its subject is itself. It has no image and no width, so it is not
+calibrated and its pins need no position. From Thaorivel to Ashfall, the answer list has one route answer:
+`Field gate to Ashfall`, `1 hop`, `1 minute`, one-way, with its note. From Ashfall to Thaorivel, the list has
+one route answer: `Ashfall gate home`. If the second route did not exist, the list from Ashfall to Thaorivel
+would be empty, by D3.
 
-### Scale `planet`: a map with stated routes and no width
+### Scale `planet`: stated routes and no width
 
 ```markdown
 ---
@@ -868,6 +950,26 @@ splat_name: Thaorivel map
 splat_type: map
 splat_map_scale: planet
 splat_map_of: "[[Thaorivel]]"
+splat_map_pins:
+- name: Ixdoash
+  at: [0.412, 0.305]
+  shows: {id: 2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c, link: "[[Ixdoash]]"}
+  opens: "[[Ixdoash map]]"
+  note: Capital of Verori
+- name: Kabrigar
+  at: [0.731, 0.388]
+  shows: "[[Kabrigar]]"
+  note: Capital of Kaun
+- name: The Broken Gate
+  at: [0.506, 0.552]
+  shows: "[[The Broken Gate]]"
+splat_map_routes:
+- name: Thaor crossing
+  from: Ixdoash
+  to: Kabrigar
+  length: 2400 miles
+  time: 20 days
+  note: By sea
 ---
 
 # Thaorivel map
@@ -875,27 +977,17 @@ splat_map_of: "[[Thaorivel]]"
 The home planet, with the three continents around the Thaor.
 
 ![[Thaorivel.png]]
-
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| Verori | 0.22, 0.08; 0.55, 0.42 | [[Verori]] |  | The northern continent |
-| Ixdoash | 0.412, 0.305 | [[Ixdoash]] | [[Ixdoash map]] | Capital of Verori |
-| Kabrigar | 0.731, 0.388 | [[Kabrigar]] |  | Capital of Kaun |
-| The Broken Gate | 0.506, 0.552 | [[The Broken Gate]], [[Lotha]] |  |  |
-
-## Routes
-
-| Route | From | To | Length | Time | Via | Shows | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Thaor crossing | Ixdoash | Kabrigar | 2400 miles | 20 days | 0.50, 0.33; 0.62, 0.37 | [[The Thaor]] | By sea |
 ```
 
-The picture is a projection, so the note states no width. Between Ixdoash and The Broken Gate no route
-exists and no measured length exists, so the answer has no length and no time. Verori is an area: a box.
+The picture is a projection, so the note states no width and the map is not calibrated. From Kabrigar to
+Ixdoash, the answer is the route `Thaor crossing`, `2400 miles`, `20 days`, because the route is not one-way.
+Between Ixdoash and The Broken Gate no route exists, so the list has one straight answer, and its distance is
+nothing. The first pin's `shows` has an `id`: the entry with that UUID is the target, and the link text is
+for Obsidian.
 
-### Scale `city`: a map with a width, an area and a measured length
+### Scale `city`: a width and a measured distance
+
+`Ixdoash.png` is 2000 by 1500 pixels in this example.
 
 ```markdown
 ---
@@ -905,8 +997,26 @@ splat_kind: world
 splat_name: Ixdoash map
 splat_type: map
 splat_map_scale: city
-splat_map_of: "[[Ixdoash]] %% splat id=2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c %%"
+splat_map_of: "[[Ixdoash]]"
 splat_map_width: 3 miles
+splat_map_pins:
+- name: The Arena
+  at: [0.47, 0.55]
+  shows: "[[The Arena]]"
+  opens: "[[Arena section]]"
+  note: The Tournament starts here.
+- name: Veterans' Hall
+  at: [0.3015, 0.612]
+  shows: "[[Veterans' Hall]]"
+  note: The Old Guard meets here.
+- name: North causeway gate
+  at: [0.47, 0.04]
+  note: Floods each spring.
+splat_map_routes:
+- name: Grand Causeway
+  from: North causeway gate
+  to: The Arena
+  note: The main road. Crowded on race days.
 ---
 
 # Ixdoash map
@@ -914,26 +1024,16 @@ splat_map_width: 3 miles
 The causeways and the lower streets of Ixdoash.
 
 ![[Ixdoash.png]]
-
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| The Arena | 0.44, 0.52; 0.50, 0.58 | [[The Arena\|The arena]] | [[Arena section]] | The [[Tournament]] starts here |
-| Veterans' Hall | 0.3015, 0.6120 | [[Veterans' Hall]], [[Haltha]] |  | The Old Guard meets here |
-| North causeway gate | 0.4700, 0.0400 |  |  | Floods each spring |
-
-## Routes
-
-| Route | From | To | Length | Time | Via | Shows | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Grand Causeway | North causeway gate | The Arena |  |  | 0.47, 0.20; 0.45, 0.40 | [[Ixdoash#The city]] |  |
 ```
 
-The Grand Causeway states no length, so its length is measured along its line from the gate, through the two
-`Via` points, to the anchor of The Arena, which is `0.47, 0.55`. Its time is nothing.
+- The map is calibrated: it shows 3 miles by `3 × 1500 / 2000 = 2.25` miles.
+- From North causeway gate to The Arena, the answer is the route `Grand Causeway` with no length and no time.
+  Splat does not measure a route.
+- From Veterans' Hall to The Arena, no route joins the pins, so the answer is a straight answer:
+  `3 × sqrt((0.47 − 0.3015)² + ((0.55 − 0.612) × 1500 / 2000)²) = 3 × sqrt(0.02839 + 0.00216) = 0.5244`. Splat
+  shows "about 0.52 miles".
 
-### Scale `building`: a map whose pin opens a Location that is a map
+### Scale `building`: a pin opens a Location that is a map
 
 ```markdown
 ---
@@ -944,7 +1044,19 @@ splat_name: Arena section
 splat_type: map
 splat_map_scale: building
 splat_map_of: "[[The Arena]]"
-splat_map_width: 420 ft
+splat_map_pins:
+- name: Galleries
+  at: [0.5, 0.21]
+  shows: "[[Office Challenges]]"
+  note: Crowd balconies
+- name: Undercroft
+  at: [0.5, 0.665]
+  shows: "[[Undercroft]]"
+  opens: "[[Undercroft]]"
+  note: The race runs here.
+- name: State Reliquary
+  at: [0.62, 0.88]
+  shows: "[[State Reliquary]]"
 ---
 
 # Arena section
@@ -952,17 +1064,18 @@ splat_map_width: 420 ft
 The arena from the side, with the levels below it.
 
 ![[Arena section.png]]
-
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| Galleries | 0.10, 0.12; 0.90, 0.30 | [[The Arena\|the Galleries]], [[Office Challenges]] |  | Crowd balconies |
-| Undercroft | 0.15, 0.55; 0.85, 0.78 | [[Undercroft]] | [[Undercroft]] | The race runs here |
-| State Reliquary | 0.6200, 0.8800 | [[State Reliquary]] |  | Below the arena |
 ```
 
 ### Scale `floor`: a Location's own note is the map
+
+The real `Undercroft.md` is a plain note today. The DM first makes it a World entry with the button
+**Location** under **Give this note a type**, which adds the first five properties below. Then the DM adds
+the map properties.
+
+The real `Undercroft Map.png` is 952 by 1162 pixels. Its grid is 30 by 30 tiles, each 30 pixels wide, from
+pixel 26 to pixel 926 in each direction. A legend is below the grid. A tile is 5 ft, so the full width of the
+image is `952 / 30 × 5 = 158.7 ft`. The centre of tile `(c, r)` is at pixel `(26 + (c − 0.5) × 30,
+26 + (r − 0.5) × 30)`.
 
 ```markdown
 ---
@@ -973,8 +1086,26 @@ splat_name: Undercroft
 splat_type: location
 splat_in: "[[The Arena]]"
 splat_map_scale: floor
-splat_map_width: 150 ft
-splat_map_level: -1
+splat_map_width: 158.7 ft
+splat_map_pins:
+- name: "D: The Prison Block"
+  at: [0.1849, 0.4096]
+  shows: {id: 5d2c8e1a-9f47-4b30-a6c5-0e1f2a3b4c5d, link: "[[5d2c8e1a-9f47-4b30-a6c5-0e1f2a3b4c5d|Room D: Prison]]"}
+  note: Gate 1 opens here.
+- name: "E: The Pit"
+  at: [0.5, 0.4096]
+  shows: "[[Undercroft Tables#Rival Track]]"
+  note: A 20-ft pit with a bridge.
+- name: Lever
+  at: [0.1691, 0.3451]
+  note: Opens all the cages.
+splat_map_routes:
+- name: Prison door
+  from: "D: The Prison Block"
+  to: "E: The Pit"
+  length: 50 ft
+  time: 10 minutes
+  note: Entering a new room takes 10 minutes of the race clock.
 ---
 
 # Undercroft
@@ -982,24 +1113,18 @@ splat_map_level: -1
 The arena for the [[Tournament]]. The map is 30 by 30 tiles, and each tile is 5 ft.
 
 ![[Undercroft Map.png]]
-
-## Pins
-
-| Pin | At | Shows | Opens | Note |
-| --- | --- | --- | --- | --- |
-| D: The Prison Block | 0.03, 0.40; 0.33, 0.67 | [[5d2c8e1a-9f47-4b30-a6c5-0e1f2a3b4c5d\|Room D: Prison]] %% splat id=5d2c8e1a-9f47-4b30-a6c5-0e1f2a3b4c5d %% |  | Gate 1 opens here |
-| E: The Pit | 0.37, 0.37; 0.67, 0.67 | [[Undercroft Tables#Rival Track]] %% splat table=rival-track %% |  | A 20-ft pit with a bridge |
-| Lever | 0.1667, 0.4333 |  |  | Opens all the cages |
-
-## Routes
-
-| Route | From | To | Length | Time | Via | Shows | Note |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Prison door | D: The Prison Block | E: The Pit | 60 ft |  |  |  | Entering a new room takes 10 minutes of the race clock |
 ```
 
-The note has no `splat_map_of`, so the Undercroft is the subject of its own map. The first pin shows an
-encounter by its UUID file name. The second shows a roll table.
+- The names with `: ` in them are in quotes, because YAML needs that.
+- The lever is drawn in tile (5, 13). Its centre is pixel (161, 401), which is
+  `[161 / 952, 401 / 1162] = [0.1691, 0.3451]`.
+- Room D is tiles 2 to 9 by 11 to 20. Its centre is pixel (176, 476), which is `[0.1849, 0.4096]`. Room E is
+  tiles 11 to 20 by 11 to 20. Its centre is pixel (476, 476), which is `[0.5, 0.4096]`.
+- From Lever to E: The Pit, no route joins the pins. The measured distance is
+  `158.7 × sqrt((0.5 − 0.1691)² + ((0.4096 − 0.3451) × 1162 / 952)²) = 158.7 × sqrt(0.10949 + 0.00620) = 53.98`.
+  Splat shows "about 54 ft". In tiles, that is 10.5 across and 2.5 down: `sqrt(10.5² + 2.5²) × 5 = 53.97 ft`.
+- From D: The Prison Block to E: The Pit, the answer is the route `Prison door`, `50 ft`, `10 minutes`.
+- The first pin shows an encounter by its `id`. The second shows a note at the heading of a roll table.
 
 ## Identity and change
 
@@ -1010,32 +1135,31 @@ encounter by its UUID file name. The second shows a roll table.
 | A pin | Its map, and its name as [Names](#names) compares names | This design |
 | A route | Its map, and its name as [Names](#names) compares names | This design |
 | A scale | Its key | This design |
-| A link's target | The `id`, `key` or `table` term when the link has one. With no term, the page that the link's text finds | The existing rule for an entry reference |
+| A reference's target | The `id` or the `key` when the reference has one. With neither, the page that the link's text finds | The Entry reference in `CONTEXT.md`, and [Which page a reference names](#which-page-a-reference-names) |
 
 **No other file stores a pin's name or a route's name.** A route names pins of its own map only. A feature
-that needs a place stores the entry, and finds the pin with Question 1. So a rename of a pin or a route is
-always an edit to one file.
+that needs a place stores the entry, and finds the pin with the helper in
+[The limit of the contract](#the-limit-of-the-contract). So a rename of a pin or a route is always an edit to
+one file.
 
 | Change | What happens |
 |---|---|
-| The map's file moves or gets a new name | The map keeps its `splat_id`. A link with an `id` term still finds it. Obsidian updates a link with no term when the move is made in Obsidian. After a move outside Obsidian, a link with no term has no page: P15 for `Opens`, M6 for `splat_map_of`, and the World check "A link with no page" for `Shows` |
-| The image is renamed in Obsidian | Obsidian updates the embed. Nothing else changes |
+| A page that a reference names is moved or renamed | A reference with an `id` or a `key` still finds it. If its link text no longer leads there, fault X5 says so, and **Update link** repairs the text. A reference with only a link finds the page again only if something rewrote the link. If not, fault X3 names it |
+| The image is renamed in Obsidian | Obsidian updates the embed in the body, as it does for each embed. Nothing else changes |
 | The image is renamed outside Obsidian | Fault I1. The pins keep their positions, and they show again when the embed names the file |
-| The image is replaced by a larger scan of the same picture | Nothing changes. Positions are fractions, and the measured lengths are the same when the shape is the same |
+| The image is replaced by a larger scan of the same picture | Nothing changes. Positions are fractions, and each measured distance is the same when the shape is the same |
 | The image is replaced by a picture with another crop or shape | Splat reports nothing. The pins are in the wrong places, and the DM places them again |
 | A second image file gets the same name | Fault I2. The map keeps the file that the Reader uses |
-| A Location is renamed | As for the map's file: a link with an `id` term still finds it, and Obsidian updates the others |
-| A pin is renamed in Splat | Splat changes the `Pin` cell and each `From` and `To` cell that had the old name, in one save with one Undo |
-| A pin is renamed by hand | A route that still has the old name gets fault R8 |
-| A pin's row is removed | A route that names it gets fault R8. In Splat, the removal says how many routes use the pin, and removes nothing else |
-| A map note is removed | Each pin that opens it gets fault P15 |
-| A map loses `splat_map_scale` | The entry is no longer a map. Each pin that opens it gets fault P16. Its tables stay in the file as ordinary tables |
-| Two notes have one `splat_id` | This is the existing identity conflict. Both notes stay visible with a warning, and the DM uses the existing repair. For a map's links, this design adds one rule: until the repair, a link with that `id` finds nothing. That is P12 in `Shows`, P15 in `Opens` and M6 in `splat_map_of` |
+| A pin is renamed in Splat | Splat changes the pin's `name` and each route's `from` and `to` that had the old name, in one save with one Undo |
+| A pin is renamed by hand | A route that still has the old name gets fault R7 |
+| A pin is removed | A route that names it gets fault R7. In Splat, the removal says how many routes use the pin, and removes nothing else |
+| A map note is removed | Each `opens` that names it gets fault X2 or X3 |
+| A map loses `splat_map_scale` | The entry is no longer a map. Each pin that opens it gets fault O1. Its other map properties get fault M4 and stay in the file |
+| Two notes have one `splat_id` | This is the existing identity conflict. Both notes stay visible with a warning, and the DM uses the existing repair. For a map's references, this design adds one rule: until the repair, that `id` finds no entry (X2) |
 | Two maps name one image file | Allowed. Each map has its own pins |
 | Two maps have one subject and one scale | Allowed. They are two maps of one subject |
-| A scale's name changes in the ladder | Nothing changes in map notes |
 | A scale's key changes or is removed | Each map with the old key gets fault M3 |
-| **Copy to…** copies a map | The copy gets a new `splat_id`, as each copy does. Links with no term are not redirected, which is the limit that `splat_part_of` has |
+| **Copy to…** copies a map | The copy gets a new `splat_id`, as each copy does. A reference with an `id` or a `key` still names the original target. A reference with only a link is not redirected, which is the limit that `splat_part_of` has |
 
 ## Invariants
 
@@ -1045,56 +1169,86 @@ Each invariant is a test. "Valid" passes with no fault. "Invalid" gives the faul
    `splat_map_scale: town` (M3).
 2. **Only a World entry is a map.** Valid: `splat_kind: world` with `splat_map_scale: city`. Invalid:
    `splat_kind: creature` with `splat_map_scale: city` (M1).
-3. **A map has at most one subject, and the subject exists.** Valid: `splat_map_of: "[[Ixdoash]]"` where one
-   note is named Ixdoash. Invalid: the same value where no note is named Ixdoash (M6).
-4. **A width is a positive number and a unit that is not a time.** Valid: `splat_map_width: 300 miles`.
-   Invalid: `splat_map_width: 300` (M8), and `splat_map_width: 3 days` (M9).
-5. **A pin has a name that no other pin of its map has.** Valid: `The Pit` and `The Ring`. Invalid: `The Pit`
-   and `the  pit` (P6).
-6. **A pin lies inside its map.** Valid: `At` is `0, 1`. Invalid: `At` is `0.5, 1.2` (P8).
-7. **A box has area.** Valid: `0.1, 0.1; 0.4, 0.3`. Invalid: `0.1, 0.1; 0.4, 0.1` (P9).
-8. **A pin opens at most one map, and that target is a map.** Valid: `Opens` is `[[Ixdoash map]]`, which has
-   `splat_map_scale`. Invalid: `Opens` is `[[Ixdoash]]`, a Location with no `splat_map_scale` (P16).
-9. **A map does not open itself.** Valid: the map `Arena section` has a pin that opens `Undercroft`. Invalid:
-   the map `Undercroft` has a pin that opens `Undercroft` (P17).
-10. **At most one pin of a parent opens a given child.** Valid: one pin of `Thaorivel map` opens
-    `Ixdoash map`. Invalid: the pins `Ixdoash` and `Capital` of `Thaorivel map` both open `Ixdoash map` (P18).
-11. **A child map's scale is finer.** Valid: a `planet` map opens a `city` map. Invalid: a `floor` map opens a
-    `floor` map, and a `city` map opens a `region` map (P19).
-12. **The child-map relation has no cycle.** When each map has a rank, invariant 11 already forbids a cycle.
-    This invariant is tested apart, because invariant 11 does not test a map with no rank. Valid: `Cellar`
+3. **A subject is a World entry or a World note.** Valid: `splat_map_of: "[[Ixdoash]]"` where Ixdoash is a
+   Location. Invalid: `splat_map_of` names a creature entry by its key (M5).
+4. **A reference has a link, or one of `id` and `key`.** Valid: `{id: 2b7d4c90-6e1a-4f38-a5c2-7d8e9f0a1b2c,
+   link: "[[Ixdoash]]"}`. Invalid: the same with `key: "heralds:locations/ixdoash"` added (X1).
+5. **The `id` decides, and a stale link is reported.** Valid: `{id: <the UUID of New Mill>, link: "[[New
+   Mill]]"}`. Invalid: `{id: <the UUID of New Mill>, link: "[[Old Mill]]"}` where Old Mill is another page: the
+   target is New Mill, and the fault is X5.
+6. **A pin's Line follows its target.** Valid test: with the invalid reference of invariant 5 in a pin's
+   `shows`, the page of New Mill has the pin's Line. Invalid result: the page of Old Mill has it.
+7. **A width is a positive quantity in a length unit.** Valid: `splat_map_width: 300 miles`. Invalid:
+   `splat_map_width: 300` (W1), `0 miles` (W2), `3 days` (W3), and `10 hops` (W4).
+8. **A pin has a name that no other pin of its map has.** Valid: `The Pit` and `The Ring`. Invalid: `The Pit`
+   and `the  pit` (P5).
+9. **A pin lies inside its map.** Valid: `at: [0, 1]`. Invalid: `at: [0.5, 1.2]` (P6).
+10. **A pin opens only a map.** Valid: `opens: "[[Ixdoash map]]"`, which has `splat_map_scale`. Invalid:
+    `opens: "[[Ixdoash]]"`, a Location with no `splat_map_scale` (O1).
+11. **A map does not open itself.** Valid: the map `Arena section` has a pin that opens `Undercroft`. Invalid:
+    the map `Undercroft` has a pin that opens `Undercroft` (O2).
+12. **At most one pin of a parent opens a given child.** Valid: one pin of `Thaorivel map` opens
+    `Ixdoash map`. Invalid: pins 1 and 4 of `Thaorivel map` both open `Ixdoash map` (O3).
+13. **A child map's scale is finer.** Valid: a `planet` map opens a `city` map. Invalid: a `floor` map opens a
+    `floor` map, and a `city` map opens a `region` map (O4).
+14. **The child-map relation has no cycle.** When each map has a rank, invariant 13 already forbids a cycle.
+    This invariant is tested apart, because invariant 13 does not test a map with no rank. Valid: `Cellar`
     opens `Vault`, and `Vault` opens nothing. Invalid: `Cellar` and `Vault` both have `splat_map_scale: zone`,
-    which is not in the ladder, `Cellar` opens `Vault`, and `Vault` opens `Cellar` (P20 on both rows, and M3 on
+    which is not in the ladder, `Cellar` opens `Vault`, and `Vault` opens `Cellar` (O5 on both pins, and M3 on
     both maps).
-13. **A route has a name that no other route of its map has.** Valid: `Coast road` and `River`. Invalid:
-    `Coast road` twice (R6).
-14. **A route's ends exist, each is one pin, and they differ.** Valid: `From` is `Ixdoash` and `To` is
-    `Kabrigar`, and both are pins of the map. Invalid: `To` is `Kabrigor` (R8), and `From` and `To` are both
-    `Ixdoash` (R10).
-15. **A route's length is a length, and its time is a time.** Valid: `Length` is `40 miles` and `Time` is
-    `3 days`. Invalid: `Length` is `3 days` (R12), and `Time` is `a while` (R13).
-16. **A route's line lies inside its map.** Valid: `Via` is `0.5, 0.33; 0.62, 0.37`. Invalid: `Via` is
-    `0.5, 1.33` (R14).
-17. **A Splat term names something that exists.** Valid: `%% splat table=rival-track %%` where a roll table
-    has the key `rival-track`. Invalid: the same term where no roll table has that key (P12).
-18. **A campaign's ladder has each key once.** Valid: the list in
-    [A campaign's own ladder](#a-campaigns-own-ladder). Invalid: a list with `city` twice (L3); the built-in
-    ladder then applies.
-19. **A map of an inner place is not coarser than a map of the place around it.** Valid: The Arena is in
-    Ixdoash, a map of The Arena has the scale `building`, and a map of Ixdoash has the scale `city`. Invalid:
-    the map of The Arena has the scale `region` (T1).
-20. **A stated value wins.** Valid test: a route with `Length` `60 ft` and a line that measures 85 ft answers
-    `60 ft`, stated. Invalid result: an answer of `85 ft`, or an answer list that also has a straight line.
-21. **A map never gives a time from a length.** Valid test: a route with `Length` `40 miles` and no `Time`
+15. **A route has a name that no other route of its map has.** Valid: `Coast road` and `River`. Invalid:
+    `Coast road` twice (R5).
+16. **A route's ends exist, each is one pin, and they differ.** Valid: `from: Ixdoash` and `to: Kabrigar`, and
+    both are pins of the map. Invalid: `to: Kabrigor` (R7), and `from: Ixdoash` with `to: Ixdoash` (R9).
+17. **A route's length is a positive quantity that is not a time.** Valid: `length: 40 miles` and
+    `length: 1 hop`. Invalid: `length: forty miles` (R10, step 1), `length: 0 ft` (R10, step 2), and
+    `length: 3 days` (R10, step 3).
+18. **A route's time is a time.** Valid: `time: 3 days`. Invalid: `time: a while` (R11).
+19. **A route is not measured, and an invalid length does not let Splat measure.** Valid test: on a
+    calibrated map, a route with `length: forty miles` between two pins with positions gives one route answer
+    with no length. Invalid result: a straight answer, or a length in the route answer.
+20. **A one-way route answers in one direction.** Valid test: with only the route `Field gate to Ashfall`,
+    the list from Thaorivel to Ashfall has that route, and the list from Ashfall to Thaorivel is empty. Invalid
+    result: an answer from Ashfall to Thaorivel.
+21. **An answer carries the route's note.** Valid test: the answer for `Thaor crossing` has the note
+    `By sea`. Invalid result: an answer with no note.
+22. **A map never gives a time from a length.** Valid test: a route with `length: 40 miles` and no `time`
     answers with no time. Invalid result: an answer that has a time.
-22. **A larger scan moves no pin.** Valid test: with the image replaced by one of twice the width and twice
-    the height, each pin has the same position and each measured length is the same. Invalid result: a
-    position or a length that changed.
-23. **A read and a save with no change leave the file the same, byte for byte.** Valid test: open each
-    example note and save it with no change; the file's bytes are the same. Invalid result: a changed byte,
-    such as a rewritten `0.412` as `0.4120`.
-24. **A move of one pin changes one cell.** Valid test: move the pin `Lever`; only the `At` cell of that row
-    differs. Invalid result: a difference in another cell, in a property or in the text.
+23. **A stated length is positive, and a measured distance can be zero.** Valid test: two pins at
+    `[0.5, 0.5]` on a calibrated map with no route give a straight answer with the distance 0. Invalid result:
+    a fault, or no distance.
+24. **A stated value keeps the DM's spelling.** Valid test: `length: 060.00 ft` shows as `060.00 ft`. Invalid
+    result: `60 ft`.
+25. **A larger scan moves no pin.** Valid test: with the image replaced by one of twice the width and twice
+    the height, each pin has the same position and each measured distance is the same. Invalid result: a
+    position or a distance that changed.
+26. **A save changes one property.** Valid test: move the pin `Lever` in Splat; the note's text and each
+    property other than `splat_map_pins` are the same, byte for byte, and each other pin has equal values.
+    Invalid result: a changed byte outside `splat_map_pins`, or a changed value of another pin.
+27. **A campaign's ladder has each key once.** Valid: the list in
+    [A campaign's own scale words](#a-campaigns-own-scale-words). Invalid: a list with `city` twice (L3); the
+    built-in ladder then applies.
+28. **One item that does not read does not remove the others.** Valid test: a pin list of three items whose
+    second has `at: north` gives P2 for pin 2 and two pins. Invalid result: no pins.
+
+## Later
+
+These parts are cut from the first version. They are not rejected. Each needs its own decision first.
+
+| Part | What it would add | What must be decided first |
+|---|---|---|
+| Boxes and general shapes (an **Area**) | A pin whose position is a box or an outline, so that the parent shows how large a child map is | How the DM draws and edits an outline, and which point of a shape stands for it in a distance |
+| Route polylines | A route's line that follows the road on the image, and a measured length along it | Whether a measured route length is ever shown beside a stated one, and how many points a line can have |
+| Measurement in counting units | A width such as `10 hops` | What a distance on an image means when the unit counts connections. Review 1 showed that it gives "5 hops" between two gates that no route joins |
+| A ladder editor | A form to add, name and order scales, with a shown name and a default unit for each | Whether a scale needs more than its key in the file |
+| A movable party pin | A mark for where the party is | Whether this is a step toward token tracking, which Splat refuses, and whether the Timeline's `place` already says it |
+| Travel ends through `splat_in` or child maps | "Undercroft to Kabrigar" answered on the planet map through the pin of Ixdoash | Which ancestor or parent stands for a place when it has several, and what the answer says about the part of the journey that it ignores |
+| A journey over several routes | One answer for a journey through a third pin | Which path is best when some routes state no length and some state no time |
+| A link on a route, and a roll table as a target | The roll table for random encounters on a route | Whether a roll table's key becomes a kind of reference |
+| Several links on one pin | A room pin that shows its Location and its encounter | Which of them the helper "on a map" and the Line use |
+| A level number for the maps of one subject | Floors listed in their order | Whether names such as `Floor 02` are enough |
+| Unit conversion | Feet shown as miles | Nothing in the files changes. The decision is only whether a silent conversion is wanted |
+| Setting `splat_in` from a pin | One action to say that a pinned place is in the map's subject | How to refuse it for a place that is only shown beside the subject |
 
 ## Out of scope
 
@@ -1103,97 +1257,95 @@ Each invariant is a test. "Valid" passes with no fault. "Invalid" gives the faul
 | Tokens, fog of war, line of sight and a combat grid | Splat is not a virtual tabletop ([UX intent](../ux-intent.md), section 1). A run stays a list of participants |
 | Drawing or painting a map, and generating one | The DM draws maps in other tools. Splat shows the image |
 | A view for players, and secret pins | Splat is one DM's tool and has no visibility model ([World data](world-data.md), Limits) |
-| A journey over two routes or more | It needs a rule for which path is best when some routes state no length and some state no time. A DM also plays a journey one leg at a time. The DM adds a Travel event for each leg, or states one route for the whole journey |
-| One-way routes | A gate connection goes one way, and the party opens another to return. A direction on each route adds a rule to each answer for that one case. The `Note` cell says it |
 | A route between pins of two maps | A length across two scales and two images has no meaning. The pins of a coarser map join the two places |
-| A fit between a child's image and its area on the parent | A drawn child map is not an exact crop of its parent. A fit would give wrong positions that look exact |
-| Unit conversion | Each conversion table invites a silent wrong number. The DM writes the unit that the DM wants to read |
+| A fit between a child's image and its parent's image | A drawn child map is not an exact crop of its parent. A fit would give wrong positions that look exact |
 | Great-circle distance, latitude and longitude, wrap at the image edge | They need a projection for each image. A stated route does the same work for a planet |
-| Height, and lengths between floors | They need a third coordinate. Floors are separate maps |
-| A position that changes with the campaign clock | It needs a position history and a replay rule. The DM moves a pin |
+| Height, and distances between floors | They need a third coordinate. Floors are separate maps |
+| A position that changes with the campaign clock | It needs a position history and a replay rule |
 | A hex grid or a tile grid as data | Nothing in this design reads a grid. A fenced tile map still shows as code, as today |
 | Two images or layers in one map | Two maps with one subject do this with no new rule |
 | Images of other formats, such as SVG and PDF | The Reader shows `webp`, `png`, `jpg` and `jpeg` only |
-| Setting `splat_in` from a pin | A pin can show a place that is outside the map's subject. A later step can offer it as an action that the DM confirms |
-| The party's position | It is a pin that the DM moves, or a later design that reads the Timeline's `place` |
 
 This design changes the line "Maps/geometry/pathfinding" in [the schema README](README.md), under "What is
 deliberately outside this schema version". When step 1 is built, that line becomes "Geometry and
-pathfinding", and maps link to this document.
+pathfinding", and maps link to this document. The line "Maps and geometry are out of scope" in
+[UX intent](../ux-intent.md), section 1, changes in the same way: tokens, geometry and a combat grid stay out,
+and a map as a picture with pins comes in.
 
 ## Build order
 
 Each step is useful alone. No step needs a later step.
 
-1. **Read, check and show.** Splat reads `splat_map_scale`, `splat_map_of`, `splat_map_level`, the map image
-   and the Pins table. It reads `splat_map_scales` from the manifest, with no editor. The page of a map shows
-   the image, fitted to the page, with each pin at its position and each area as an outline. A click on a pin
-   opens what it shows, or lists its links when it has several. The page of an entry lists its maps. The
-   pointer's position shows as `x, y` beside the image, and a click on an empty place copies it, so that the DM
-   can paste it into the `At` cell in Obsidian. `splat check` and the World page's Problems row report the
-   faults M1 to M7, M10, M11, I1 to I3, P1 to P13, L1 to L5 and T1. The `Opens` cell shows as a plain link, and
-   no fault tests it. Splat registers `splat_map_width` as a known property, keeps it, and does not read it
-   yet. A Routes table is ordinary text until step 5.
+1. **Read, check and show.** Splat reads `splat_map_scale`, `splat_map_of`, the map image and
+   `splat_map_pins`, and it reads `splat_map_scales` from the manifest. The page of a map shows the image,
+   fitted to the page, with each pin at its position. A click on a pin opens the page that it shows. The page
+   of a page that a pin shows has the pin's Line, and it lists its maps. The pointer's position shows as
+   `[x, y]` beside the image, rounded as Splat writes a coordinate, and a click on an empty place copies it,
+   so that the DM can paste it into `at`.
+   `splat check` and the World page's Problems row report M1 to M5, I1 to I3, P1 to P6, L1 to L3, and X1 to X5
+   for `splat_map_of` and `shows`. Splat registers `splat_map_width` and `splat_map_routes` as known
+   properties, keeps them, and does not read them yet. It keeps `opens` and shows it as a plain link.
    *Changes:* `WORLD_FIELDS` and the World note reader in `crates/core/src/content/formats.rs`, a new
-   `src/world/maps.rs`, `src/world/page.rs`, `src/folder_check.rs`. *Done when:* the five examples in this
-   document open with no fault, and each invalid example of invariants 1 to 3, 5 to 7 and 17 to 19 gives its
-   fault.
-2. **Child maps.** A pin with a valid `Opens` has **Open map**. A child's page shows **Shown on** with each
-   parent and its pin. Faults P14 to P20. *Done when:* the DM goes from the gate network to the Undercroft in
-   four clicks and back in four.
+   `src/world/maps.rs`, `src/world/page.rs`, `ContentIndex` in `src/lookup.rs`, `src/folder_check.rs`. *Done
+   when:* the five examples in this document open with no fault, and each invalid example of invariants 1 to
+   6, 8, 9, 27 and 28 gives its fault.
+2. **Child maps.** A pin with a valid `opens` has **Open map**. A child's page shows **Shown on** with each
+   parent and its pin. Faults X1 to X5 for `opens`, and O1 to O5. *Done when:* the DM goes from the gate
+   network to the Undercroft in four clicks and back in four.
 3. **Place pins in Splat.** **Make map** on a World entry sets the scale. **Add pin** places a pin with a
-   click. The DM can drag a pin, draw a box, rename a pin and remove one, each with an Undo. Invariants 23 and
-   24 are its tests.
-4. **Width and measuring.** `splat_map_width`, the scale bar tool, and "about 130 miles" between two pins that
-   the DM selects. Faults M8 and M9.
-5. **Routes.** Splat reads and draws the Routes table and reports R1 to R15. A pin's panel lists its routes
-   with their answers. Questions 1 to 3 exist as functions. Invariants 20 to 22 are its tests.
-6. **Travel.** A Travel event's form asks Question 2 and Question 3 and offers the answer. This step belongs
-   to the Travel design and needs the pace rule.
-7. **The ladder editor.** Campaign settings get a list of scales to add, rename and reorder.
+   click. The DM can drag a pin, rename it and remove it, each with an Undo. **Update link** repairs X5.
+   Invariant 26 is its test.
+4. **Routes.** Splat reads `splat_map_routes`, draws each route as a straight line between its pins, and
+   reports R1 to R11. A pin's panel lists its routes with their answers. The answer of
+   [Distance and travel time](#distance-and-travel-time) exists as a function. Until step 5, no map is
+   calibrated, so each straight answer has no distance. Invariants 20 to 22 and 24 are its tests.
+5. **Width and measuring.** `splat_map_width`, the scale bar tool, and "about 54 ft" between two pins that the
+   DM selects, by the same function. So Splat never measures between two pins that an item of the route list
+   names. Faults W1 to W4. Invariants 19, 23 and 25 are its tests.
+6. **Travel.** A Travel event's form asks for an answer and offers it. This step belongs to the Travel design
+   and needs the pace rule.
 
 **Step 1 is the first step that is worth building.** After it, a DM can do this at the table: open the
 Undercroft from Lookup, look at the map beside a run, and click room D to read its encounter, with no search
-for a room name. At the desk, the DM can put the planet, a city and a building on maps with a text editor,
-and see in Splat which places have no page yet.
+for a room name. At the desk, the DM writes pins in Source mode in Obsidian, with positions copied from
+Splat, and sees on each Location's page which maps show it.
 
 ## Alternatives rejected
 
 | Alternative | Why not |
 |---|---|
-| GeoJSON | Its coordinates are positions on the Earth or free numbers with no image behind them. Obsidian shows it as code, and its links are not Obsidian links |
+| Pins and routes as Markdown tables in the note (revision 1) | They need a table reader that keeps the source, a cell grammar for points and links, and a rule for each odd row. The project owner prefers generated code, and serde reads YAML into typed structs with none of that. The cost is that Obsidian's Properties view does not show the two lists |
+| Pins as a YAML block in the note's text | The other World properties are in the front matter. A second place for properties needs a second reader |
+| GeoJSON | Its coordinates are positions on the Earth or free numbers with no image behind them, and it has no Entry reference |
 | An SVG overlay as the source of truth | A change needs a drawing tool or hand-written path data. Splat would have to read all of SVG to find a few pins |
 | An Obsidian Leaflet code block | The format belongs to a plugin that can change it. A DM with no plugin sees a code block |
 | An Obsidian Canvas file | Its positions are canvas units that do not follow the image when the image is resized. It has no scale, no route and no typed link |
 | Pixel coordinates | A larger scan of the same picture would move each pin |
 | World-unit coordinates | They need a correct scale and an origin before the first pin, and a corrected scale moves each pin |
 | A new `splat_kind: map` | It needs its own reader, page, Lookup rows and repair. A World entry has them |
-| Map fields on a Location only | A Location could have one map only, and a map with no Location could not exist |
+| Map properties on a Location only | A Location could have one map only, and a map with no Location could not exist |
 | The image as a property | Obsidian would show a link and not the picture |
-| Pins as nested YAML in the properties | Obsidian's Properties view cannot edit nested data, and a link in it is not a link that Obsidian renames |
-| Pins as a YAML block in the body | Obsidian shows code. It does not follow, rename or list the links in it, so a rename of a note breaks pins silently |
-| The `splat:map` marker for the tables | That marker exists and means a keyed mapping ([Markdown layout](markdown-layout.md)). A map's tables are found by their heading and columns, as roster and member tables are |
-| A separate Areas table | An area differs from a pin only in its position. One table has one set of rules |
-| The parent stated on the child (`splat_map_parent` with a box) | The box is a position on the parent's image, so it belongs with the parent's pins. A child can also have two parents |
+| A new reference type for map links | `EntryRef` exists and has the three fields that a map link needs |
+| The link text decides, with the `id` as a spare | A rename outside Obsidian would change a pin's target to nothing, or to another page with the old name |
+| The parent stated on the child (`splat_map_parent`) | The pin's position is on the parent's image, so the statement belongs with the parent's pins. A child can also have two parents |
 | The child relation derived from `splat_map_of` (a pin that shows Ixdoash opens each map of Ixdoash) | Stairs between two floors of one tower would make each floor the other's child. The relation would need exceptions for equal scales and for a map's own subject |
+| A check of each map's scale against the Location tree (T1 in revision 1) | It gives false faults, and a new map of one place can make a correct map of another place invalid |
 | A scale as a number, such as metres for each image width | A diagram of gates has no metres. A number also gives no shared words for "city" and "floor" |
 | Equal scales for a parent and a child | See [The ordering rule](#the-ordering-rule) |
-| A default unit that a file relies on | A change of the ladder would change stored lengths with no edit to the notes |
-| The shortest path over several routes | See Out of scope |
+| A measured length for a route with no stated length | A road is not a straight line, so the number would be wrong and would look like the DM's |
 
 ## Open questions for the user
 
-1. **Tables or YAML for pins and routes?** Default: Markdown tables, because Obsidian then follows, renames
-   and lists each link, and each row is a Line. The cost is a small cell reader for points and links, where a
-   YAML block would need only serde. The table form follows the roster and member tables of schema 2.
-2. **Can a Location's own note be its map?** Default: yes. `Undercroft.md` becomes a map with one property,
-   and the rule "an entry with `splat_map_scale` is a map" has no exception. The other choice is that a map is
-   always a note of its own, which gives one layout and one more file for each place.
-3. **Must a child map's scale be strictly finer?** Default: yes. A DM who needs an inset at one scale adds a
-   scale to the ladder, or uses a plain link in `Shows`. The other choice allows an equal scale and relies on
-   the cycle check only.
-4. **Should Splat convert between feet and miles, and between metres and kilometres?** Default: no conversion
-   at all. Those two conversions are exact and could be added later with no change to files.
-5. **Should a journey over several routes be in the first version of routes?** Default: no. Question 3
-   answers for a direct route or a straight line only. The other choice needs one more rule: the path with the
-   fewest routes, with table order as the tie-break.
+1. **Can a Location's own note be its map?** Default: yes. The rule "a World entry with `splat_map_scale` is
+   a map" then has no exception. The other choice is that a map is always a note of its own, which gives one
+   layout and one more file for each place.
+2. **Must a child map's scale be strictly finer?** Default: yes. A DM who needs more depth adds a scale word
+   to the ladder, or uses `shows`. The other choice allows an equal scale and relies on the cycle check only.
+3. **Is a link with no page a fault?** Default: yes, X3, for `shows`, `opens` and `splat_map_of` alike. The
+   other choice puts a `shows` link with no page in the World page's list "A link with no page", so that the
+   DM can pin a place before its page exists and `splat check` stays clean.
+4. **Is an unknown key in a pin a fault?** Default: yes, P3, so that a wrong spelling such as `shws` is not
+   silent. The other choice lets the DM keep private keys in a pin with no report.
+5. **Should `splat_in` and `splat_part_of` also let the `id` decide?** Default: not in this work. Map links
+   use the `id` first from step 1. A separate change can move `world_value_target` to the same rule, so that
+   the World page and the maps never disagree about one reference.
