@@ -2391,8 +2391,9 @@ fn reader_pane(d: &Driver<'_>) -> egui::Rect {
 /// Astra re-check 2: a fixed part below Edit Markdown's save row whose message is longer than
 /// the part. Tab reaches the part (one widget named with the whole message), Down scrolls its
 /// words up, and the wheel does too. Returns (Tab reached it, a key scrolled it, the wheel
-/// scrolled it), each from a changed painted position.
-fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool) {
+/// scrolled it), each from a changed painted position, and whether its focus ring keeps clear of
+/// every scroll bar and splitter at 960, 1200 and 1920.
+fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [bool; 3]) {
     let top = |d: &Driver<'_>| {
         let mut found = None;
         d.each_painted_text(|text, clip| {
@@ -2406,6 +2407,22 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool) {
         found
     };
     let tabbed = d.tab_to(message);
+    // Astra re-check 3: the part's focus ring keeps clear of its own scroll bar at each size.
+    let ring_clear = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let lanes = d.chrome_lanes();
+            let rings = d.focus_rings();
+            !rings.is_empty()
+                && rings
+                    .iter()
+                    // Painted over: an overlap with area, not a shared edge.
+                    .all(|(ring, _)| {
+                        lanes
+                            .iter()
+                            .all(|lane| !lane.intersect(*ring).is_positive())
+                    })
+        })
+    });
     // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
     // part's top.
     d.press(egui::Key::PageUp);
@@ -2431,7 +2448,7 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool) {
         }
         _ => false,
     };
-    (tabbed, key_scrolled, wheel_scrolled)
+    (tabbed, key_scrolled, wheel_scrolled, ring_clear)
 }
 
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
@@ -3243,7 +3260,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // Astra re-check 2: B's long result scrolls by keyboard and by wheel, and its Undo keeps
     // clear of every scroll bar, splitter and other target at 960, 1200 and 1920.
     let b_message = format!("Links now say “{LAMP}”.");
-    let (tabbed, keyed, wheeled) = fixed_part_scrolls(d, &b_message);
+    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &b_message);
     let undo_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -3260,9 +3277,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
     });
     d.observe(
         "iter-24-L-part-keyboard-result",
-        tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear),
+        tabbed && keyed && wheeled && undo_clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}"
+            "B's result part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, Undo clear at 960, 1200, 1920 {undo_clear:?}, its focus ring clear {ring:?}"
         ),
     );
     d.observe(
@@ -3365,6 +3382,51 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let second_offer = d.has_containing(&format!(
         "Change links from “{LAMP}” to “Veilglass Beacon”."
     ));
+    // Astra re-check 3: the entry is renamed outside Splat at the last moment, after the scan and
+    // after each linking file is checked, directly before the write. Update writes nothing and
+    // says why.
+    let hooked = std::rc::Rc::new(std::cell::Cell::new(false));
+    {
+        let hooked = hooked.clone();
+        let owner = lantern_path.clone();
+        crate::content_workspace::before_next_write(move || {
+            let text = fs::read_to_string(&owner).unwrap();
+            let name = splat::content::Entry::parse("Item.md", &text).unwrap().name;
+            fs::write(
+                &owner,
+                crate::content_workspace::patch_fields(
+                    &text,
+                    &[("splat_name", Some("Veilglass Torch".into()))],
+                )
+                .unwrap()
+                .replace(&format!("# {name}"), "# Veilglass Torch"),
+            )
+            .unwrap();
+            hooked.set(true);
+        });
+    }
+    let pressed = d.has("Update 1 link");
+    if pressed {
+        d.click("Update 1 link");
+    }
+    d.settle();
+    // A hook that did not run must not fire on a later write.
+    crate::content_workspace::before_next_write(|| {});
+    let last_moment_kept = pressed
+        && hooked.get()
+        && fs::read(&wraith).unwrap() == linking
+        && d.has_containing(crate::library::LINKS_NOT_CHANGED);
+    // Back to a fresh offer: B named LAMP on disk, reloaded, then renamed in Splat again.
+    rename_outside(LAMP);
+    d.click("Packages");
+    d.click("Reload from disk");
+    d.settle();
+    search_library(d, "Veilglass");
+    d.click_starting(&format!("{LAMP} · "));
+    rename_b(d, LAMP, "Veilglass Beacon");
+    let third_offer = d.has_containing(&format!(
+        "Change links from “{LAMP}” to “Veilglass Beacon”."
+    ));
     // Astra re-check 2: renamed outside Splat with no reload, Update reads the entry's file
     // first, writes nothing and says why.
     rename_outside("Veilglass Torch");
@@ -3389,11 +3451,13 @@ pub fn package_rename(d: &mut Driver<'_>) {
         first_offer
             && second_rename_gone
             && second_offer
+            && last_moment_kept
+            && third_offer
             && no_reload_kept
             && outside_gone
             && bytes_kept,
         format!(
-            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, Update after an outside rename with no reload writes nothing {no_reload_kept}, gone after reload {outside_gone}; the linking file kept its bytes {bytes_kept}"
+            "A stale offer goes: first offer {first_offer}, gone after a rename to a taken name {second_rename_gone}, second offer {second_offer}, Update after an outside rename directly before the write writes nothing {last_moment_kept}, third offer {third_offer}, Update after an outside rename with no reload writes nothing {no_reload_kept}, gone after reload {outside_gone}; the linking file kept its bytes {bytes_kept}"
         ),
     );
     // The later steps compare with the package before B's renames: give B and Ash Wraith their
@@ -3804,7 +3868,7 @@ pub fn package_about(d: &mut Driver<'_>) {
             sizes.push((text.pos, text.galley.size(), clip));
         }
     });
-    let (tabbed, keyed, wheeled) = fixed_part_scrolls(d, &message);
+    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &message);
     let clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -3822,9 +3886,9 @@ pub fn package_about(d: &mut Driver<'_>) {
     });
     d.observe(
         "iter-24-L-part-keyboard-reason",
-        tabbed && keyed && wheeled && clear.iter().all(|clear| *clear),
+        tabbed && keyed && wheeled && clear.iter().all(|clear| *clear) && ring.iter().all(|r| *r),
         format!(
-            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}; painted {sizes:?}"
+            "The reason part: Tab {tabbed}, a key scrolls it {keyed}, the wheel scrolls it {wheeled}, its words clear of bars and splitters at 960, 1200, 1920 {clear:?}, its focus ring clear {ring:?}; painted {sizes:?}"
         ),
     );
     d.click("Discard");

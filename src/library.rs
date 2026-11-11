@@ -1857,7 +1857,11 @@ fn fixed_part<R>(
         node.set_label(name);
     });
     if response.has_focus() {
-        design::focus_ring(ui, rect);
+        // Inside the content area, clear of the part's own scroll bar lane.
+        design::focus_ring(
+            ui,
+            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right() - lane, rect.bottom())),
+        );
     }
     inner
 }
@@ -4683,9 +4687,10 @@ impl Library {
             let offer = self.renamed_links.remove(at);
             // The offer is checked again before the write: its entry still has the new name, and
             // neither name names another entry. A stale offer goes and writes nothing.
-            let holds = loaded.offer_holds(&offer) && loaded.offer_holds_on_disk(&offer);
-            let LinkOffer { owner, old, new } = offer;
-            if !holds {
+            // The offer is checked against the loaded notes first, then, directly before the
+            // write (after the scan and after each linking file is checked against the disk),
+            // against the entry's own file on disk. A stale offer goes and writes nothing.
+            if !loaded.offer_holds(&offer) {
                 self.error = Some(LINKS_NOT_CHANGED.into());
             } else {
                 let files: Vec<_> = loaded
@@ -4694,7 +4699,7 @@ impl Library {
                     .filter_map(|note| {
                         let root = note.owner.root()?;
                         let (after, changed) =
-                            crate::world::rename_note_links(&note.text, &old, &new);
+                            crate::world::rename_note_links(&note.text, &offer.old, &offer.new);
                         (changed > 0).then(|| {
                             (
                                 root.to_path_buf(),
@@ -4705,7 +4710,15 @@ impl Library {
                         })
                     })
                     .collect();
-                match crate::content_workspace::ContentEdits::write(files) {
+                let written = crate::content_workspace::ContentEdits::write_checked(files, || {
+                    if loaded.offer_holds_on_disk(&offer) {
+                        Ok(())
+                    } else {
+                        Err(LINKS_NOT_CHANGED.into())
+                    }
+                });
+                let LinkOffer { owner, new, .. } = offer;
+                match written {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
                         self.link_edits.retain(|result| result.owner != owner);
