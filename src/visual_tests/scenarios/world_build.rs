@@ -2836,6 +2836,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("Cinder Bite");
+    d.expect_same("The disk edit renames the Bite action, and only its tile's name changes.");
     d.state("package-edit-round-trip", Sizes::All);
     look_up(d, "Cinder Wolf");
     d.wait_for_text("Cinder Bite");
