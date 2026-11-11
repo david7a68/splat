@@ -493,6 +493,15 @@ pub fn broken(d: &mut Driver<'_>) {
         fs::read(&path).unwrap() == unreadable,
         "Opening and cancelling leave the file's bytes as they were",
     );
+    // Another note's row takes the pane, as it does from an open repair.
+    d.click_starting("Notes/Broken.md · ");
+    d.expect(headline);
+    d.click("Gate Mechanics · ");
+    d.observe(
+        "iter-18-D-row-yields",
+        !d.has(headline) && !d.has("Try again") && d.has_label("Gate Mechanics"),
+        "A note row opens that note in the reader and ends the unreadable pane",
+    );
     // The longest path wraps in the list at 960, whole, with its cause below it.
     let long_row = format!("{long_path} · Text format cannot be read");
     let whole = d.at_size(SMALL, |d| {

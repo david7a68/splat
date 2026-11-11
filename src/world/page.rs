@@ -213,6 +213,10 @@ impl WorldPage {
         self.view = View::Reader;
         self.keep_repair();
         self.leave_card();
+        // The note takes the pane, as it does from an open repair.
+        if matches!(self.error, Some(PageError::Unread(_))) {
+            self.error = None;
+        }
     }
 
     /// Another view takes the pane. A held NPC keeps its row; the Undo for a discarded NPC
@@ -765,7 +769,7 @@ impl WorldPage {
                 ui.add(
                     egui::Label::new(
                         Type::Body
-                            .rich(ui, format!("{} Then choose Try again.", fault.recovery()))
+                            .rich(ui, fault.recovery_with_try_again())
                             .color(colors().text),
                     )
                     .wrap(),

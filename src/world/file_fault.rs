@@ -77,23 +77,43 @@ impl FileFault {
         }
     }
 
-    /// How the DM recovers. Splat has not changed the file.
-    pub fn recovery(&self) -> &'static str {
+    /// The recovery's steps, and whether its last step is to try again. Such a step ends
+    /// with the retry (`…, then try again.`), so the pane can name its Try again choice there
+    /// instead of saying it twice.
+    fn steps(&self) -> (&'static str, bool) {
         match self.kind {
-            Kind::NotText => {
+            Kind::NotText => (
                 "Splat reads notes as UTF-8 text. Open the file in a text editor and save it as \
-                 UTF-8 text, or restore it from a backup."
-            }
-            Kind::ReadDenied => "Give your user account permission to read the file.",
-            Kind::WriteDenied => {
-                "Give your user account permission to change the file and its folder."
-            }
-            Kind::Gone => "It was moved or deleted outside Splat.",
-            Kind::Exists => "Choose another name.",
-            Kind::DiskFull => "Free some space on the disk, then try again.",
+                 UTF-8 text, or restore it from a backup.",
+                false,
+            ),
+            Kind::ReadDenied => ("Give your user account permission to read the file.", false),
+            Kind::WriteDenied => (
+                "Give your user account permission to change the file and its folder.",
+                false,
+            ),
+            Kind::Gone => ("It was moved or deleted outside Splat.", false),
+            Kind::Exists => ("Choose another name.", false),
+            Kind::DiskFull => ("Free some space on the disk", true),
             Kind::CannotRead | Kind::CannotWrite => {
-                "Check that the disk that holds it is connected, then try again."
+                ("Check that the disk that holds it is connected", true)
             }
+        }
+    }
+
+    /// How the DM recovers. Splat has not changed the file.
+    pub fn recovery(&self) -> String {
+        match self.steps() {
+            (steps, true) => format!("{steps}, then try again."),
+            (steps, false) => steps.to_owned(),
+        }
+    }
+
+    /// The recovery in a pane that offers Try again: the retry is named once, as that choice.
+    pub fn recovery_with_try_again(&self) -> String {
+        match self.steps() {
+            (steps, true) => format!("{steps}, then choose Try again."),
+            (steps, false) => format!("{steps} Then choose Try again."),
         }
     }
 
@@ -231,6 +251,32 @@ mod tests {
     }
 
     #[test]
+    fn iter18_d_the_pane_names_try_again_once() {
+        let error = io::Error::new(io::ErrorKind::Interrupted, "raw");
+        let fault = FileFault::read("Notes/Broken.md", &error);
+        assert_eq!(fault.kind, Kind::CannotRead);
+        assert_eq!(
+            fault.recovery_with_try_again(),
+            "Check that the disk that holds it is connected, then choose Try again.",
+            "pane-cannot-read"
+        );
+        assert_eq!(
+            fault.recovery(),
+            "Check that the disk that holds it is connected, then try again."
+        );
+        let not_text = FileFault::read(
+            "Notes/Broken.md",
+            &io::Error::new(io::ErrorKind::InvalidData, "raw"),
+        );
+        assert_eq!(
+            not_text.recovery_with_try_again(),
+            "Splat reads notes as UTF-8 text. Open the file in a text editor and save it as \
+             UTF-8 text, or restore it from a backup. Then choose Try again.",
+            "pane-not-text"
+        );
+    }
+
+    #[test]
     fn iter18_d_every_kind_names_its_file_and_a_recovery() {
         let cases = [
             (io::ErrorKind::InvalidData, true, Kind::NotText),
@@ -256,6 +302,12 @@ mod tests {
             assert!(message.contains("NPCs/Rook.md"), "{message}");
             assert!(!message.contains("os error"), "{message}");
             assert!(!fault.recovery().is_empty());
+            let pane = fault.recovery_with_try_again();
+            assert_eq!(
+                pane.to_lowercase().matches("try again").count(),
+                1,
+                "pane-one-retry: {pane}"
+            );
             assert_eq!(fault.system, "raw system words (os error 99)");
         }
     }
