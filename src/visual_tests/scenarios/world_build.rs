@@ -650,9 +650,33 @@ pub fn broken(d: &mut Driver<'_>) {
     let (counts, detail) = d.at_size(LARGE, |d| world_fault_marks(d, true));
     d.observe("iter-24-D-FG1", counts, detail);
     d.state("repair-cannot-open", Sizes::All);
-    // The warning note served the check above. With both header counts beside Lookup at 960,
-    // the page header cuts its note count (a shared header fault, reported in the PR), so the
-    // later Lookup step runs without it, as before.
+    // iter-25-A (carried): with both header counts beside Lookup at 960, the page header keeps
+    // its note count whole; the counts' links wrap in the width it leaves.
+    d.click(NAV_LOOKUP);
+    let count = d.at_size(SMALL, |d| {
+        let header = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(" notes") && node.rect.top() < 60.0);
+        let links = d.has("1 note needs fixing") && d.has("2 notes cannot be read");
+        header.map(|node| {
+            (
+                node.name.clone(),
+                d.painted_in(node.rect.expand(1.0)),
+                links,
+            )
+        })
+    });
+    d.observe(
+        "iter-25-A-world-header-count",
+        count
+            .as_ref()
+            .is_some_and(|(name, painted, links)| *links && painted.contains(name.as_str())),
+        format!("Beside Lookup at 960, the header's count is painted whole: {count:?}"),
+    );
+    d.state("both-counts-beside-lookup", Sizes::Small);
+    d.click("Close Lookup");
+    // The warning note served the checks above, so the later Lookup step runs without it.
     fs::remove_file(root(d).join("NPCs/Lost Scout.md")).unwrap();
     reload(d);
     d.click("Technical details");
