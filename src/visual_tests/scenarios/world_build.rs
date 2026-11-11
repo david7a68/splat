@@ -6362,6 +6362,18 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     go_library(d);
     d.settle();
     let switch_ended = !in_other && !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    // Astra re-check 2: the same round trip while the Library is hidden. The switch itself ends
+    // the Undo; coming back to the first campaign does not bring it back.
+    gone_draft(d);
+    let hidden_offered = removed(d);
+    go_encounters(d);
+    switch_campaign(d, QUIET_CAMPAIGN);
+    d.settle();
+    switch_campaign(d, CAMPAIGN);
+    d.settle();
+    go_library(d);
+    d.settle();
+    let hidden_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
     d.observe(
         "iter-25-L-undo-remove-owner",
         lookup_offered
@@ -6369,9 +6381,11 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
             && list_offered
             && list_ended
             && switch_offered
-            && switch_ended,
+            && switch_ended
+            && hidden_offered
+            && hidden_ended,
         format!(
-            "Undo remove offered then ended by Lookup ({lookup_offered}, {lookup_ended}), the list ({list_offered}, {list_ended}) and a campaign switch ({switch_offered}, shown in the other campaign {in_other}, {switch_ended})"
+            "Undo remove offered then ended by Lookup ({lookup_offered}, {lookup_ended}), the list ({list_offered}, {list_ended}), a campaign switch ({switch_offered}, shown in the other campaign {in_other}, {switch_ended}) and a switch there and back with the Library hidden ({hidden_offered}, {hidden_ended})"
         ),
     );
 }

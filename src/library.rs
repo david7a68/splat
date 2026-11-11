@@ -3621,15 +3621,24 @@ impl Library {
                 .is_some_and(|n| matches!(n.owner, Owner::Campaign(_)))
     }
     /// Remove's Undo (and the draft it keeps) belongs to the removed entry in the campaign that was
-    /// open. It ends when another campaign opens, and when any entry is selected, however the
-    /// selection was made: the list, the About row, `reveal` (Lookup and other pages), Back or
-    /// Forward, or `open_entry`. Its own Undo selects the entry it gives back after taking it.
-    fn end_remove_on_owner_change(&mut self, campaign: Option<Uuid>) {
+    /// open. The app tells the Library the open campaign on every frame, whichever page shows, so
+    /// the Undo ends at the switch itself, even while the Library is hidden: a switch there and
+    /// back never brings it back.
+    pub fn note_campaign(&mut self, campaign: Option<Uuid>) {
         let Some(gone) = &mut self.discarded_note else {
             return;
         };
-        let owner = *gone.campaign.get_or_insert(campaign);
-        if owner != campaign || self.selected.is_some() {
+        if *gone.campaign.get_or_insert(campaign) != campaign {
+            self.discarded_note = None;
+            self.discarded = None;
+        }
+    }
+
+    /// Remove's Undo also ends when any entry is selected, however the selection was made: the
+    /// list, the About row, `reveal` (Lookup and other pages), Back or Forward, or `open_entry`.
+    /// Its own Undo selects the entry it gives back after taking it.
+    fn end_remove_on_selection(&mut self) {
+        if self.discarded_note.is_some() && self.selected.is_some() {
             self.discarded_note = None;
             self.discarded = None;
         }
@@ -3870,7 +3879,7 @@ impl Library {
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         self.end_repair_on_owner_change();
-        self.end_remove_on_owner_change(campaigns.active_campaign().map(|campaign| campaign.id));
+        self.end_remove_on_selection();
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
         });
