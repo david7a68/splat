@@ -13368,6 +13368,7 @@ pub mod encounter_owned_groups {
         d.open_combo_at(BELONGS_DROPDOWN);
         // FB8: the open menu's painted frame is as wide as its control at 960, 1200 and 1920,
         // and back at 960, while it stays open through each resize.
+        const BELONGS_TO_LABEL: &str = "Belongs to";
         const CONTROL: &str = "Belongs to: Any encounter";
         for size in [SMALL, DEFAULT, LARGE, SMALL] {
             let (control, frame) = d.at_size(size, |d| {
@@ -13396,39 +13397,47 @@ pub mod encounter_owned_groups {
                 ),
             );
         }
-        // A proof aside (revision 17 menu checks). Mouse open, then Escape: the menu closes with
-        // nothing chosen, and egui leaves no control focused. Keyboard: Tab reaches the control,
-        // Enter opens it, Escape closes it; Tab leaves and Shift+Tab comes back to it. The
-        // group stays unchanged throughout, and the menu is opened once more for the capture.
+        // A proof aside (revision 17 menu checks): the control owns its menu, and the focus
+        // comes back to it when the menu closes. Mouse open (above), then Escape; Enter opens it
+        // by the keys, then Escape; Tab leaves and Shift+Tab comes back; a click on an outside
+        // field closes it and the focus stays on that field. The group stays unchanged, and the
+        // menu is opened once more for the capture. A choice is checked after the capture.
+        const NOTES: &str = "Group notes for Watch Detail";
         d.aside(|d| {
             d.press(Key::Escape);
             let closed = !d.has(RUN_ARENA) && d.has(CONTROL);
             let after_escape = d.focused_name();
-            let reached = d.tab_to(CONTROL);
             d.press(Key::Enter);
             let opened = d.has(RUN_ARENA);
             d.press(Key::Escape);
             let closed_again = !d.has(RUN_ARENA);
-            let reached_again = d.tab_to(CONTROL);
+            let after_keys = d.focused_name();
             d.press(Key::Tab);
             let after_tab = d.focused_name();
             d.press_shift(Key::Tab);
             let back = d.focused_name();
+            d.open_combo_at(BELONGS_DROPDOWN);
+            let reopened = d.has(RUN_ARENA);
+            d.click(NOTES);
+            let outside = d.focused_name();
+            let closed_by_click = !d.has(RUN_ARENA);
             let clean = !d.visible_text("Unsaved");
             d.observe(
                 "iter-25-B-FB8-escape",
                 closed
-                    && after_escape.is_none()
-                    && reached
+                    && after_escape.as_deref() == Some(CONTROL)
                     && opened
                     && closed_again
-                    && reached_again
+                    && after_keys.as_deref() == Some(CONTROL)
                     && after_tab.is_some()
                     && after_tab.as_deref() != Some(CONTROL)
                     && back.as_deref() == Some(CONTROL)
+                    && reopened
+                    && closed_by_click
+                    && outside.as_deref() == Some(NOTES)
                     && clean,
                 format!(
-                    "Escape closes {closed} (focus {after_escape:?}); Tab reaches it {reached}, Enter opens {opened}, Escape closes {closed_again}; Tab {after_tab:?}, Shift+Tab {back:?}; unchanged {clean}"
+                    "Escape closes {closed} (focus {after_escape:?}); Enter opens {opened}, Escape closes {closed_again} (focus {after_keys:?}); Tab {after_tab:?}, Shift+Tab {back:?}; a click on the notes closes {closed_by_click} (focus {outside:?}); unchanged {clean}"
                 ),
             );
             d.open_combo_at(BELONGS_DROPDOWN);
@@ -13436,6 +13445,13 @@ pub mod encounter_owned_groups {
         d.state("belongs-to-open", Sizes::Default);
         d.click(RUN_ARENA);
         d.expect("Only runs of this encounter offer this group.");
+        // A choice closes the menu and gives the focus back to its control.
+        let after_choice = d.focused_name();
+        d.observe(
+            "iter-25-B-FB8-choice",
+            after_choice.as_deref() == Some(&format!("{BELONGS_TO_LABEL}: {RUN_ARENA}")[..]),
+            format!("After a choice the focus is on {after_choice:?}"),
+        );
         d.click("Save group");
         d.expect("Saved");
         d.click("Back to encounters");

@@ -1294,6 +1294,7 @@ fn belongs_to(
             ui.ctx().memory_mut(egui::Memory::reset_areas);
         }
         ui.data_mut(|data| data.insert_temp(last_id, key));
+        let was_open = egui::Popup::is_id_open(ui.ctx(), popup);
         let combo = egui::ComboBox::from_id_salt("group_encounter")
             .icon(design::combo_icon)
             .width(width)
@@ -1308,21 +1309,28 @@ fn belongs_to(
                 ui.set_min_width(inner);
                 ui.set_max_width(inner);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                if ui
-                    .selectable_label(current.is_none(), ANY_ENCOUNTER)
-                    .clicked()
-                {
+                let any = ui.selectable_label(current.is_none(), ANY_ENCOUNTER);
+                crate::rolls::menu_choice_focus(ui, &any);
+                if any.clicked() {
                     draft.setup.encounter = None;
                 }
                 for (id, name) in &choices {
                     // The same choice again keeps a link that the note gives.
-                    if ui.selectable_label(current == Some(*id), *name).clicked()
-                        && current != Some(*id)
-                    {
+                    let choice = ui.selectable_label(current == Some(*id), *name);
+                    crate::rolls::menu_choice_focus(ui, &choice);
+                    if choice.clicked() && current != Some(*id) {
                         draft.setup.encounter = Some(EntryRef::id(*id));
                     }
                 }
             });
+        // The menu's focus model (the run's menus use it too): the control owns its menu while it
+        // is open, and when the menu closes by the keys or a choice the focus comes back to it;
+        // a click on another control keeps the focus there.
+        crate::rolls::keep_menu_owner(&combo.response);
+        if !was_open && egui::Popup::is_id_open(ui.ctx(), popup) {
+            let by_mouse = ui.ctx().input(|input| input.pointer.any_click());
+            crate::rolls::own_menu(&combo.response, !by_mouse);
+        }
         design::named(ui, &combo.response, &format!("{BELONGS_TO}: {shown}"));
     });
     // In an encounter's editor, belonging to it goes without saying.
