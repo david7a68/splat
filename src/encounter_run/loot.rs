@@ -222,7 +222,7 @@ impl Run {
                 let roll = match self.content.as_ref() {
                     Some(index) => index.roll_table(&key),
                     None => Err(
-                        "The campaign's notes are still loading. Roll again in a moment.".into(),
+                        "The campaign’s notes are still loading. Roll again in a moment.".into(),
                     ),
                 }?;
                 Ok(LootRoll {

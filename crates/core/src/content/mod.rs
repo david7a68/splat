@@ -818,7 +818,7 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
             {
                 error(
                     &e.path,
-                    format!("A group's encounter {owner} must reference an encounter entry"),
+                    format!("A group’s encounter {owner} must reference an encounter entry"),
                 );
             }
         }

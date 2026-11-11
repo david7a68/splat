@@ -375,7 +375,7 @@ impl EditDraft {
         if let Some(super::fields::Unread { line, .. }) = &theirs.groups_unread {
             effects.push((
                 "Part of",
-                format!("Overwrite keeps the note's groups. They could not be read (line {line})."),
+                format!("Overwrite keeps the note’s groups. They could not be read (line {line})."),
             ));
         } else if self.now.groups != theirs.groups {
             let saved = self.start.overwritten_groups(&self.now, theirs, index);
@@ -425,7 +425,7 @@ impl EditDraft {
                 parts.push(format!("keeps {} from the note", names(outside)));
             }
             if parts.is_empty() {
-                parts.push("keeps the note's groups".into());
+                parts.push("keeps the note’s groups".into());
             }
             let last = parts.pop().unwrap_or_default();
             let words = if parts.is_empty() {
@@ -441,7 +441,7 @@ impl EditDraft {
                 if changed.text {
                     "Overwrite saves your text. The lines that differ are below.".into()
                 } else {
-                    "Overwrite keeps the note's text. The lines that differ are below.".into()
+                    "Overwrite keeps the note’s text. The lines that differ are below.".into()
                 },
             ));
         }

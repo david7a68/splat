@@ -8782,7 +8782,7 @@ pub mod session_recording {
         d.state_prepared("failed-elsewhere-with-unprocessed-row", Sizes::All, |d| {
             d.expect("Session 2: Unprocessed recording");
             d.expect("Not processed");
-            d.expect("Processing Session 1: Failed processing failed");
+            d.expect("Processing “Session 1: Failed processing” failed");
             assert!(
                 d.nodes()
                     .iter()
@@ -8793,7 +8793,7 @@ pub mod session_recording {
             check_choices_at_text(
                 d,
                 "iter-15-C-FD5",
-                "Processing Session 1: Failed processing failed",
+                "Processing “Session 1: Failed processing” failed",
                 &[
                     "Continue processing",
                     "Open the session",
@@ -8817,7 +8817,7 @@ pub mod session_recording {
             .simulate_recorder_health(Health::Stopped("microphone stopped".to_owned()));
         d.settle();
         d.state_prepared("failed-processing-and-stopped-recording", Sizes::All, |d| {
-            d.expect("Processing Session 1: Failed processing failed");
+            d.expect("Processing “Session 1: Failed processing” failed");
             d.expect("microphone stopped");
             assert!(!d.app_mut().encounters.has_run());
             assert!(d.in_view("Continue processing") && !d.is_disabled("Continue processing"));
@@ -8828,7 +8828,7 @@ pub mod session_recording {
         d.click("Record again");
         d.expect("Stop recording");
         d.click("Stop recording");
-        d.expect("Processing Session 1: Failed processing failed");
+        d.expect("Processing “Session 1: Failed processing” failed");
         // Restore B's original plain recording for the existing blocked-retry checks.
         for recording in crate::sessions::list_recordings(&folder, second) {
             if !original_recordings.contains(&recording.path) {
@@ -8883,7 +8883,7 @@ pub mod session_recording {
         d.state_prepared("stalled-elsewhere-with-unprocessed-row", Sizes::All, |d| {
             d.expect("Session 2: Unprocessed recording");
             d.expect("Not processed");
-            d.expect("The recording of Session 1: Failed processing is not saving audio");
+            d.expect("The recording of “Session 1: Failed processing” is not saving audio");
             assert!(
                 d.nodes()
                     .iter()
@@ -9384,7 +9384,7 @@ pub mod session_recording {
         d.state("record-consent", Sizes::Default);
         d.observe(
             "T11.5",
-            d.has_containing(&format!("Record Session 1: {TITLE}.")),
+            d.has_containing(&format!("Record “Session 1: {TITLE}”.")),
             "The step names the session the audio goes to",
         );
         d.observe(
@@ -9556,7 +9556,7 @@ pub mod session_recording {
         );
         d.click("Save an OpenAI key in Settings");
         d.expect("SPEECH SERVICE");
-        d.expect("Before you can process: save an OpenAI key under Speech service.");
+        d.expect("You cannot process yet. Save an OpenAI key under Speech service.");
         d.observe_both(
             "iter-18-A-key",
             "The speech key is focused and in view",
@@ -9564,7 +9564,7 @@ pub mod session_recording {
                 d.focused_name().as_deref() == Some("Speech API key")
                     && d.in_view("Speech API key")
                     && d.in_view_containing(
-                        "Before you can process: save an OpenAI key under Speech service.",
+                        "You cannot process yet. Save an OpenAI key under Speech service.",
                     )
             },
         );
@@ -10386,7 +10386,7 @@ pub mod encounter_groups {
     const LIST_HEADING: &str = "GROUPS";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
-    const SAVED_NOTE: &str = "Group saved.";
+    const SAVED_NOTE: &str = "Saved";
     const FIND: &str = FIND_CREATURE;
     const CHANGES: &str = "Changes for Ember Cultist";
     const FIRST_GOBLIN: &str = "Goblin Warrior 1";
@@ -10401,7 +10401,7 @@ pub mod encounter_groups {
         // in the editor and Arrivals; the member that is not in the packages stays a warning.
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign's packages"),
+            tones_beside(d, "not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-list",
@@ -10708,7 +10708,7 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             d.visible_text("XP 50")
-                && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
+                && d.has_containing("Member 1, Unknown creature: not in this campaign’s packages")
                 && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
@@ -10720,13 +10720,13 @@ pub mod encounter_groups {
         d.observe(
             "T13.1",
             d.visible_text("1 of 3 can join")
-                && d.has_containing("not in this campaign's packages")
+                && d.has_containing("not in this campaign’s packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );
         let tones = (
             tones_beside(d, "would become −28"),
-            tones_beside(d, "not in this campaign's packages"),
+            tones_beside(d, "not in this campaign’s packages"),
         );
         d.observe(
             "iter-22-B-FT1-arrivals",
@@ -11264,7 +11264,7 @@ pub mod encounter_owned_groups {
         d.click(RUN_ARENA);
         d.expect("Only runs of this encounter offer this group.");
         d.click("Save group");
-        d.expect("Group saved.");
+        d.expect("Saved");
         d.click("Back to encounters");
 
         // At the table: its own first, then those for any encounter.
@@ -11631,7 +11631,7 @@ pub mod run_loot {
         d.observe(
             "T14.8",
             d.has("Rolls on gems, the encounter loot line 2")
-                && d.has_containing("No roll table has the key coins.")
+                && d.has_containing("No roll table has the key “coins”.")
                 && d.has("Library item"),
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
@@ -12182,7 +12182,7 @@ pub mod session_plan_groups {
         d.click(NAV_ENCOUNTERS);
         resume_run(d, RUN);
         open_arrivals(d);
-        d.expect("IN TONIGHT'S PLAN");
+        d.expect("IN TONIGHT’S PLAN");
         d.state("arrivals-tonight-first", Sizes::All);
         d.observe(
             "T14.6",
@@ -12211,7 +12211,7 @@ pub mod session_plan_groups {
         );
         d.state("plan-groups-fight-open", Sizes::All);
         d.click(&route);
-        d.expect("IN TONIGHT'S PLAN");
+        d.expect("IN TONIGHT’S PLAN");
         d.observe(
             "T14.6",
             d.has(&format!("Add {GROUP_RIVALS} to the initiative list")),
@@ -12266,6 +12266,34 @@ pub mod session_plan_groups {
                     && !d.visible_text(&missing_id)
             },
         );
+        // FA6: the dependency issue is a warning message, and its repair link starts at its
+        // words, as the Campaign.md flag's choice does.
+        for size in [SMALL, DEFAULT] {
+            let (tones, words, link) = d.at_size(size, |d| {
+                let words = d
+                    .painted_rect_in(
+                        "Lost Patrol needs a creature that cannot be found.",
+                        egui::Rect::EVERYTHING,
+                    )
+                    .map(|rect| rect.left());
+                let link = d
+                    .place_of("Repair Lost Patrol")
+                    .and_then(|rect| words_left_in(d, rect));
+                (
+                    tones_beside(d, "Lost Patrol needs a creature that cannot be found."),
+                    words,
+                    link,
+                )
+            });
+            d.observe(
+                "iter-23-Q-FA6",
+                tones == ["warning"]
+                    && words
+                        .zip(link)
+                        .is_some_and(|(words, link)| (words - link).abs() <= 1.0),
+                format!("At {size:?}: tones {tones:?}, words at {words:?}, link at {link:?}"),
+            );
+        }
         d.state("missing-group-member", Sizes::All);
         d.click("Technical details");
         d.expect(&missing_id);
@@ -13097,7 +13125,7 @@ pub mod session_plan {
             format!("Setup says where HP came from: {}", kestrel(d)),
         );
         d.begin_task();
-        d.click("Use the sheets' HP");
+        d.click("Use the sheets’ HP");
         d.goal_within("T12.2", "go back to the sheets' HP", 1);
         d.observe(
             "T12.2",
@@ -13367,7 +13395,7 @@ pub mod session_plan {
         d.state("party-from-tonight", Sizes::All);
         d.observe(
             "T12.2",
-            d.has_containing("from tonight's fights"),
+            d.has_containing("from tonight’s fights"),
             "Party says its HP is from tonight",
         );
         d.observe(
