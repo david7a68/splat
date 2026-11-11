@@ -943,7 +943,8 @@ replaces it. The outcome comes from the run file, so it is the same after a clos
 session plan and the Encounters lists follow the run each way.
 
 Continue fight is for the fight that was played last. Splat offers it when it can read `Timeline.md`, and no
-fight and no long rest that restored the party has a later place in the order of play than this fight's event. For
+fight and no long rest has a later place in the order of play than this fight's event. A long rest counts whatever
+it restored, because you can still change that ruling. For
 that fight, neither Continue fight nor its **Undo** changes which fight was played last, so the next fight still
 starts each player from the right HP, and Timeline has no order to put back. For any other ended run the control
 is not offered, and one sentence stands in its place: **A later fight or rest was played. Start a new run to play

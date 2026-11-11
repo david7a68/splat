@@ -637,7 +637,7 @@ reading the code, not from a test run.
 | T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
 | T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
 | T17.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
-| T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or a long rest that restored the party, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
+| T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or long rest, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

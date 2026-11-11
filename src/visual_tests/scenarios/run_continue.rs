@@ -253,17 +253,27 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
     close_lookup(d);
-    // The DM rules that the rest restored nobody. The fight is the last again.
+    // The rest keeps its place whatever it restored, because the DM can change that ruling.
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.click("Long rest");
     d.click("Mark not at full");
-    d.click("Long rest");
+    d.click(BACK_TO_RUN);
+    d.observe(
+        "T17.8",
+        !d.has(CONTINUE) && d.visible_passage(LATER),
+        "A rest that restored nobody is still later: no Continue fight",
+    );
+    // The DM takes the rest away. The fight is the last again.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click("More actions for Long rest");
+    d.click("Remove this event");
     d.click(BACK_TO_RUN);
     d.observe(
         "T17.8",
         d.has(CONTINUE) && !d.visible_passage(LATER),
-        "With no later fight or restoring rest, Continue fight is offered again",
+        "With no later fight or rest, Continue fight is offered again",
     );
     // An outside edit makes Timeline.md unreadable. Splat cannot tell which fight was played
     // last, so the ended view says that. When the file can be read again, the control is back.

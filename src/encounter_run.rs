@@ -859,7 +859,8 @@ const CONTINUE_NEEDS_TIMELINE: &str =
 /// Timeline needs no order to restore. For any other ended fight the DM starts a new run.
 ///
 /// The order is the one carried HP follows: each event's place, and the story's order where
-/// places are equal. Only fights and long rests that restore the party have a place in it.
+/// places are equal. Only fights and long rests have a place in it. A long rest counts whatever
+/// it restored, because the DM can still change that ruling.
 pub(crate) fn continue_blocked(
     events: &[crate::timeline::Event],
     readable: bool,
@@ -874,9 +875,7 @@ pub(crate) fn continue_blocked(
     let last = events
         .iter()
         .enumerate()
-        .filter(|(_, event)| {
-            event.run.is_some() || (event.kind == crate::timeline::Kind::LongRest && event.restores)
-        })
+        .filter(|(_, event)| event.run.is_some() || event.kind == crate::timeline::Kind::LongRest)
         .max_by_key(|(at, event)| (event.played_order, *at))
         .and_then(|(_, event)| event.run);
     (last != Some(run)).then_some(CONTINUE_LATER)
@@ -7961,15 +7960,19 @@ mod tests {
             continue_blocked(&book.events, true, Uuid::new_v4()),
             Some(CONTINUE_NO_EVENT)
         );
-        // A long rest that restored the party is later than B. One that did not has no place.
+        // A long rest is later than B, whatever it restored: the DM can change that ruling.
         let rest = book.add_long_rest(session);
         assert_eq!(
             continue_blocked(&book.events, true, b.id),
             Some(CONTINUE_LATER)
         );
         book.set_restores(&rest, false);
-        assert_eq!(continue_blocked(&book.events, true, b.id), None);
+        assert_eq!(
+            continue_blocked(&book.events, true, b.id),
+            Some(CONTINUE_LATER)
+        );
         book.reload();
+        assert_eq!(continue_blocked(&book.events, true, b.id), None);
         // A run that is told the reason does not go on.
         let mut refused = Run::open(b.path().unwrap(), campaign).unwrap();
         refused.continue_blocked = Some(CONTINUE_LATER);

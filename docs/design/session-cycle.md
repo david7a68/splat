@@ -1278,7 +1278,7 @@ surface to it.
 | Undo after **Close run**, **Resume** and a restart | The run file keeps the Undo steps (at most 100). `Undo` names and takes back the same step |
 | A fight that ended by mistake, in the same opening | `Undo: end encounter`, as on `main` |
 | **Continue fight** | It is offered only for the fight that was played last: the Timeline can be read, and no fight and no rest has a later place in the order of play than this fight's event. It is one named step, `Undo: continue fight`. Play returns to the turn the fight ended on, with the loot results kept |
-| Any other ended run | No `Continue fight`. Its place says why: `A later fight or rest was played. Start a new run to play this one again.` The build may change these words |
+| Any other ended run | No `Continue fight`. Its place says why: `A later fight or rest was played. Start a new run to play this one again.` A long rest counts whatever it restored. While `Timeline.md` cannot be read, the sentence is `Splat cannot read Timeline.md. Fix that on the Timeline page first.` For a fight whose event was removed from Timeline, it is `This fight is not on the Timeline. Start a new run to play it again.` |
 | An old run file | It loads with no steps: `Nothing to undo since reopening`, as before |
 | Steps that this version cannot read | The run loads and drops only the steps. A warning says so once, with `Dismiss` |
 
