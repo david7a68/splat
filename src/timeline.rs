@@ -1118,16 +1118,20 @@ impl Book {
     }
 
     /// Read the file again if it changed on disk. The poll does this once a second, and an act
-    /// that needs the newest events does it first. An edit waiting for its pause is newer.
-    pub fn read_if_changed(&mut self) {
+    /// that needs the newest events does it first. An edit waiting for its pause is newer, so
+    /// the file is not read over it: false says that the file changed under that edit, and
+    /// the events may lack what it holds until the save settles it.
+    pub fn read_if_changed(&mut self) -> bool {
+        if self.dirty {
+            return self.path.as_ref().and_then(|path| fs::read(path).ok()) == self.baseline;
+        }
         // A file that went is looked for again only once it is back.
-        if self.dirty
-            || !self
-                .path
-                .as_ref()
-                .is_some_and(|path| !self.gone || path.exists())
+        if !self
+            .path
+            .as_ref()
+            .is_some_and(|path| !self.gone || path.exists())
         {
-            return;
+            return true;
         }
         self.check_copies();
         let current = self.path.as_ref().and_then(|path| fs::read(path).ok());
@@ -1140,6 +1144,7 @@ impl Book {
                 self.apply_run_keeping_removal(&fact, session, played);
             }
         }
+        true
     }
 
     /// Add after the session's last event, or at the end. A rest found in an old recording

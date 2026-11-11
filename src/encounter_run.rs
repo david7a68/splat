@@ -861,6 +861,10 @@ const CONTINUE_NO_EVENT: &str =
 /// Why Continue fight is not offered: the Timeline cannot say which fight was played last.
 const CONTINUE_NEEDS_TIMELINE: &str =
     "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
+/// Why the act refused: `Timeline.md` changed on disk under an edit that is not saved yet, so
+/// Splat cannot be sure which fight was played last.
+const CONTINUE_DISK_CHANGED: &str =
+    "Timeline.md changed on disk. Settle that on the Timeline page first.";
 
 /// Why Continue fight is not offered for this ended fight, if it is not.
 ///
@@ -1797,7 +1801,8 @@ impl Run {
         self.continue_blocked.filter(|_| self.undo_unends_saved())
     }
     /// Make this ended fight live again, if `continue_blocked` allows it now, with the
-    /// Timeline read first if it changed on disk. Continue fight takes the ending away as one
+    /// Timeline read first if it changed on disk. If it changed under a Timeline edit that is
+    /// not saved yet, the act refuses until that save settles it. Continue fight takes the ending away as one
     /// named step that Undo puts back; Undo takes back an ending from the run file. Play goes
     /// on from the turn the fight ended on, and sync starts again by the rule for a resumed
     /// run. Otherwise the run says why and stays ended.
@@ -1805,9 +1810,11 @@ impl Run {
         if !self.ended() {
             return;
         }
-        timeline.read_if_changed();
-        self.continue_blocked =
-            continue_blocked(&timeline.events, timeline.unreadable.is_none(), self.id);
+        self.continue_blocked = if timeline.read_if_changed() {
+            continue_blocked(&timeline.events, timeline.unreadable.is_none(), self.id)
+        } else {
+            Some(CONTINUE_DISK_CHANGED)
+        };
         if let Some(reason) = self.continue_blocked {
             self.error = Some(reason.into());
             return;
@@ -5203,16 +5210,9 @@ mod tests {
         let mut run = run();
         // A name and notes with straight marks, and a note with the grouping phrase.
         run.state.participants[2].name = "Ka'ar".into();
-        begin(&mut run);
-        run.apply(Command::Damage(0, 5)).unwrap();
-        run.apply(Command::Next).unwrap();
-        run.apply(Command::Note(0, "Wait until Bob's turn.".into()))
-            .unwrap();
-        let grouping = Grouping::Explicit.label().replace('’', "'");
-        run.apply(Command::Note(2, format!("Roll {grouping} next time.")))
-            .unwrap();
         // A flag saved by an older Splat holds its line in its own words; a new flag starts with
-        // it. Both come back as they were saved, each naming its line once.
+        // it. Both come back as they were saved, each naming its line once. The definition is
+        // what the creature is, the same before and after each step.
         let old_words = "Hit Points “about twenty” not read (line 19). Start with a number, such as 22 (4d8 + 4).";
         let new_words = "Line 19: Hit Points “about twenty” was not read. Start with a number, such as 22 (4d8 + 4).";
         Arc::make_mut(&mut run.state.participants[0].definition).flags = vec![
@@ -5225,6 +5225,14 @@ mod tests {
                 "Start with a number, such as 22 (4d8 + 4).",
             ),
         ];
+        begin(&mut run);
+        run.apply(Command::Damage(0, 5)).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Note(0, "Wait until Bob's turn.".into()))
+            .unwrap();
+        let grouping = Grouping::Explicit.label().replace('’', "'");
+        run.apply(Command::Note(2, format!("Roll {grouping} next time.")))
+            .unwrap();
         run.configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         let path = run.storage.as_ref().unwrap().path.clone();
@@ -8283,12 +8291,35 @@ mod tests {
         // disk since. The act reads the Timeline first, so B stays ended.
         let mut other = Book::default();
         other.open(Some(temp.path()));
+        // A third copy has a note that waits for its save, so it does not read the file over it.
+        let mut noted = Book::default();
+        noted.open(Some(temp.path()));
+        noted.events[0].notes = "A note waiting to save".into();
+        noted.touch();
         other.add_long_rest(session);
         other.save();
         let mut again = Run::open(b.path().unwrap(), campaign).unwrap();
         again.unend(Unend::Continue, &mut book);
         assert!(again.ended(), "the act must read the disk first");
         assert_eq!(again.error.as_deref(), Some(CONTINUE_LATER));
+        // The file changed under the note, so that copy cannot be sure which fight was played
+        // last. The act refuses and keeps the note; the Timeline's save settles it.
+        again.unend(Unend::Continue, &mut noted);
+        assert!(
+            again.ended(),
+            "an unsaved note must not skip a later rest on disk"
+        );
+        assert_eq!(again.error.as_deref(), Some(CONTINUE_DISK_CHANGED));
+        assert_eq!(noted.events[0].notes, "A note waiting to save");
+        noted.save();
+        again.unend(Unend::Continue, &mut noted);
+        assert!(again.ended());
+        assert_eq!(again.error.as_deref(), Some(CONTINUE_LATER));
+        assert!(
+            fs::read_to_string(&timeline)
+                .unwrap()
+                .contains("A note waiting to save")
+        );
     }
     #[test]
     fn loot_rolls_after_the_end_and_keeps_each_lines_results_apart() {

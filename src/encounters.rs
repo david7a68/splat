@@ -2002,8 +2002,9 @@ pub struct Encounters {
     /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
     history_blocked: Option<&'static str>,
     /// What the rule's answers were worked out from: the Timeline's count of changes, the
-    /// open run if it is ended, and the fight read in History.
-    continue_key: Option<(u64, Option<uuid::Uuid>, Option<std::path::PathBuf>)>,
+    /// open run if it is ended, and the ID of the fight read in History. Not its path: another
+    /// run can take the file at that path.
+    continue_key: Option<(u64, Option<uuid::Uuid>, Option<uuid::Uuid>)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -2439,14 +2440,11 @@ impl Encounters {
             .as_ref()
             .filter(|run| run.ended())
             .map(|run| run.id());
-        let read = self.history_read.as_ref().map(|(path, _)| path.as_path());
-        if self
-            .continue_key
-            .as_ref()
-            .is_some_and(|(changes, run, path)| {
-                *changes == timeline.changes() && *run == ended && path.as_deref() == read
-            })
-        {
+        let read = self.history_read.as_ref().and_then(|(path, _)| {
+            let runs = &self.snapshot.as_ref()?.runs;
+            runs.iter().find(|run| run.path == *path)?.id
+        });
+        if self.continue_key == Some((timeline.changes(), ended, read)) {
             return;
         }
         let rule = |id| {
@@ -2459,14 +2457,8 @@ impl Encounters {
         if let Some(run) = self.run.as_mut().filter(|run| run.ended()) {
             run.continue_blocked = rule(run.id());
         }
-        let runs = self
-            .snapshot
-            .as_ref()
-            .map_or(&[][..], |snapshot| &snapshot.runs);
-        self.history_blocked = read
-            .and_then(|read| runs.iter().find(|run| run.path == read)?.id)
-            .and_then(rule);
-        self.continue_key = Some((timeline.changes(), ended, read.map(Into::into)));
+        self.history_blocked = read.and_then(rule);
+        self.continue_key = Some((timeline.changes(), ended, read));
     }
     /// The newest unfinished save is one click away from any page.
     pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
@@ -7327,6 +7319,38 @@ mod tests {
         assert!(!editor.go_to_run);
         assert!(editor.history_read.as_ref().unwrap().1.ended);
         assert_eq!(fs::read(&path).unwrap(), bytes);
+        // History says why an older fight cannot go on, and keeps that answer only while the
+        // same run is at this path. Outside Splat, the fight that was played last takes the
+        // file; once the list is read again, History offers Continue fight for it.
+        let fact = || {
+            crate::encounter_run::Run::open(&path, campaign.id)
+                .unwrap()
+                .timeline_fact()
+        };
+        let mut later = fact();
+        later.id = uuid::Uuid::new_v4();
+        let mut played = crate::timeline::Book::default();
+        played.open(Some(dir.path()));
+        played.record_run(&fact(), None, true);
+        played.record_run(&later, None, true);
+        editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        editor.follow_continue_rule(&played);
+        assert_eq!(
+            editor.history_blocked,
+            Some(crate::encounter_run::CONTINUE_LATER)
+        );
+        let mut taken = saved.clone();
+        taken["id"] = serde_json::json!(later.id);
+        fs::write(&path, serde_json::to_vec_pretty(&taken).unwrap()).unwrap();
+        editor.read_runs_again(&campaign);
+        editor.open_saved_run(&path, &campaign);
+        editor.follow_continue_rule(&played);
+        assert_eq!(
+            editor.history_blocked, None,
+            "the run now at this path is the fight played last"
+        );
+        fs::write(&path, &bytes).unwrap();
+        editor.snapshot = None;
 
         editor.run = Some(editor.start_run(&campaign, &[]).unwrap());
         let current = editor.run().unwrap().live_info().unwrap().id;
