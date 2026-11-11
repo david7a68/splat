@@ -1058,16 +1058,9 @@ pub(super) fn of_encounter(
             .filter(|group| group.belongs_to(draft.id))
             .count(),
     );
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(
-                    ui,
-                    "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
-                )
-                .color(colors().muted),
-        )
-        .wrap(),
+    design::help(
+        ui,
+        "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
     );
     ui.add_space(design::XS);
     let reveal = std::mem::take(&mut draft.reveal_group);
@@ -1316,7 +1309,7 @@ fn belongs_to(
         }
         Some(_) => "Only runs of this encounter offer this group.",
     };
-    ui.add(egui::Label::new(Type::Small.rich(ui, help).color(colors().muted)).wrap());
+    design::help(ui, help);
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
@@ -2038,7 +2031,9 @@ impl Encounters {
         // has one place, chosen as if both were shown, and the lines below are reserved, so a
         // reason that comes or goes moves no field.
         let empty = draft.setup.members.is_empty();
-        let mut below: Vec<(&'static str, bool)> = Vec::new();
+        // Each reason: the words its place is measured by (the longest form), and the words it
+        // shows now, if any.
+        let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             let (icon, word, color) = if dirty && (empty || refused) {
@@ -2071,18 +2066,28 @@ impl Encounters {
             // Save's own reason first: it stays beside Save while there is room. A dirty group
             // blocks the campaign switch wherever it is open, so it says so, as the encounter
             // editor does.
-            let mut beside = |reason: &'static str, shown: bool| {
-                let width = design::number_width(ui, reason, &font) + gap;
+            let mut beside = |measure: &'static str, shown: Option<&'static str>| {
+                let width = design::number_width(ui, measure, &font) + gap;
                 if width <= room {
                     room -= width;
-                    shown.then_some(reason)
+                    shown
                 } else {
-                    below.push((reason, shown));
+                    below.push((measure, shown));
                     None
                 }
             };
-            let empty = beside(EMPTY_REASON, empty);
-            let switch = beside(super::draft_switch_reason(), dirty);
+            let empty_reason = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON));
+            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that.
+            let switch = beside(
+                super::draft_switch_reason(),
+                dirty.then(|| {
+                    if empty {
+                        super::blocked_draft_switch_reason()
+                    } else {
+                        super::draft_switch_reason()
+                    }
+                }),
+            );
             super::blocked_reason(ui, switch);
             ui.allocate_ui_with_layout(
                 egui::vec2(
@@ -2092,7 +2097,7 @@ impl Encounters {
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
                     save = button.show(ui).clicked();
-                    super::blocked_reason(ui, empty);
+                    super::blocked_reason(ui, empty_reason);
                 },
             );
         });
@@ -2108,9 +2113,7 @@ impl Encounters {
                 )
                 .size()
                 .y;
-            if shown {
-                super::blocked_reason(ui, Some(reason));
-            }
+            super::blocked_reason(ui, shown);
             let used = ui.cursor().top() - top;
             ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
         }
@@ -2261,16 +2264,9 @@ fn add_pane(
     if !compact {
         design::group_heading(ui, "Add creatures", 0);
     }
-    ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(
-                    ui,
-                    "From this campaign and the packages it uses. Party members go on an encounter’s roster.",
-                )
-                .color(colors().muted),
-        )
-        .wrap(),
+    design::help(
+        ui,
+        "From this campaign and the packages it uses. Party members go on an encounter’s roster.",
     );
     let summary = if compact {
         draft_member_summary(draft, snapshot)
@@ -2366,11 +2362,7 @@ fn group_fields(
         super::side_control(ui, &name, &mut draft.setup.side, &[]);
     });
     if open.is_none() {
-        ui.label(
-            Type::Small
-                .rich(ui, "Party, enemies, or any other name, such as rivals.")
-                .color(colors().muted),
-        );
+        design::help(ui, "Party, enemies, or any other name, such as rivals.");
         ui.add_space(design::S);
     }
     if open.is_none_or(|(id, _)| !draft.belongs_to(id)) {

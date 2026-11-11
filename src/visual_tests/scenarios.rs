@@ -2949,6 +2949,25 @@ pub mod encounter_build {
         );
         d.click(SYNC_OPTION);
         d.expect(PARTY_NOW);
+        // AD1: the help under Sync party and Keep in Ready wraps at the reader measure at 1920.
+        let widths = d.at_size(LARGE, |d| {
+            ["The party starts with the HP", "Lists this encounter under Ready"].map(|words| {
+                let mut width = None;
+                d.each_painted_text(|text, _| {
+                    if text.galley.job.text.starts_with(words) {
+                        width = Some(text.galley.size().x);
+                    }
+                });
+                width
+            })
+        });
+        d.observe(
+            "iter-25-B-AD1",
+            widths.iter().all(|width| {
+                width.is_some_and(|width| width <= crate::design::READER_MEASURE + 0.5)
+            }),
+            format!("At 1920, the Sync party and Keep in Ready help widths: {widths:?}"),
+        );
 
         // Another program changes the encounter while the DM edits it. The choices start at the
         // message text: the safe one first, then exactly `L` before the red one.
@@ -14315,8 +14334,10 @@ pub mod session_plan_groups {
             "iter-25-B-AH1",
             d.visible_text("Invalid")
                 && !d.visible_text("Unsaved")
-                && d.has("Add a creature first"),
-            "An empty new group says Invalid beside its blocked Save",
+                && d.has("Add a creature first")
+                && d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                && !d.visible_text(crate::encounters::draft_switch_reason()),
+            "An empty new group says Invalid beside its blocked Save, and Discard is the way to switch (FB6)",
         );
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
@@ -14328,7 +14349,8 @@ pub mod session_plan_groups {
             !d.has("Add a creature first")
                 && empty.iter().all(Option::is_some)
                 && empty == assembled
-                && d.visible_text("Unsaved"),
+                && d.visible_text("Unsaved")
+                && d.visible_text(crate::encounters::draft_switch_reason()),
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);

@@ -4180,8 +4180,16 @@ impl Encounters {
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
             }
+            // FB6: while Save is blocked, Discard is the one way out.
             if dirty {
-                blocked_reason(ui, Some(draft_switch_reason()));
+                blocked_reason(
+                    ui,
+                    Some(if refusal.is_some() {
+                        blocked_draft_switch_reason()
+                    } else {
+                        draft_switch_reason()
+                    }),
+                );
             }
             if let Some(run) = &unfinished {
                 design::status(
@@ -4440,9 +4448,7 @@ impl Encounters {
             design::group_heading(ui, "Add participants", 0);
         }
         if draft.add_to.is_none() {
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, PARTY_SOURCE).color(colors().muted)).wrap(),
-            );
+            design::help(ui, PARTY_SOURCE);
         }
         groups::add_target(ui, draft, snapshot);
         if draft.target_group().is_some() {
@@ -4768,7 +4774,7 @@ impl Encounters {
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 // FI7: what the option changes, in the form the sync option's help uses.
-                ui.add(egui::Label::new(Type::Small.rich(ui, REPEATABLE_HELP).color(colors().muted)).wrap());
+                design::help(ui, REPEATABLE_HELP);
                 ui.add_space(design::M);
                 Self::loot_field(ui, draft);
                 ui.add_space(design::M);
@@ -4803,14 +4809,7 @@ impl Encounters {
             );
             return;
         }
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, ENCOUNTER_LOOT_HELP)
-                    .color(colors().muted),
-            )
-            .wrap(),
-        );
+        design::help(ui, ENCOUNTER_LOOT_HELP);
         crate::loot_editor::show(ui, draft.id, "the encounter", &mut draft.loot, false);
     }
 
@@ -4823,7 +4822,8 @@ impl Encounters {
         } else {
             "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
         };
-        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+        // AD1: help under an option keeps the reader measure.
+        design::help(ui, words);
         if !draft.setup.combat_sync {
             return;
         }
@@ -5128,17 +5128,13 @@ impl Encounters {
                             }
                         }
                     });
-                    ui.label(
-                        Type::Small
-                            .rich(
-                                ui,
-                                if synced {
-                                    "D&D Beyond decides this player’s HP while this encounter syncs."
-                                } else {
-                                    "With a value off, the creature’s own starting state applies."
-                                },
-                            )
-                            .color(colors().muted),
+                    design::help(
+                        ui,
+                        if synced {
+                            "D&D Beyond decides this player’s HP while this encounter syncs."
+                        } else {
+                            "With a value off, the creature’s own starting state applies."
+                        },
                     );
                     if let Some(entry) = definition {
                         let done = groups::overrides_form(
@@ -5307,11 +5303,7 @@ impl Encounters {
                     design::named(ui, &combo.response, "Inspiration rule");
                 });
                 if snapshot.options.inspiration().is_none() {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.")
-                            .color(colors().muted),
-                    );
+                    design::help(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.");
                 }
             }
             let changed = snapshot.options != snapshot.saved_options;
@@ -5403,7 +5395,15 @@ impl Encounters {
                     snapshot.options = options;
                 }
                 if snapshot.options != snapshot.saved_options {
-                    design::blocked_reason(ui, Some(draft_switch_reason()));
+                    // FB6: while Save is blocked, Discard is the one way out.
+                    design::blocked_reason(
+                        ui,
+                        Some(if blocked.is_some() {
+                            blocked_draft_switch_reason()
+                        } else {
+                            draft_switch_reason()
+                        }),
+                    );
                 }
                             },
                         );
@@ -5453,6 +5453,12 @@ use list::{
 
 pub(crate) fn draft_switch_reason() -> &'static str {
     "Save or discard to switch campaign."
+}
+
+/// The campaign switch lock of a draft whose Save is blocked: Discard is the one way out, so
+/// the reason does not name Save (round 25 FB6).
+pub(crate) fn blocked_draft_switch_reason() -> &'static str {
+    "Discard to switch campaign."
 }
 
 fn roster_detail(detail: &str) -> String {
