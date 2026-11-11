@@ -200,13 +200,13 @@ changes`. `No changes to save.` belongs only to blocked Save's hover text and ac
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
-reason and disables campaign choices. Package, encounter, repair and run-settings drafts keep their campaign-switch
+reason and disables campaign choices. Package, encounter, group, repair and run-settings drafts keep their campaign-switch
 reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (`Undo heading
-change`, `Undo replacement`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+change`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. In a

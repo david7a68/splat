@@ -1346,6 +1346,17 @@ fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option
 struct ReplacementUndo {
     before: Vec<Slot>,
     after: Vec<Slot>,
+    /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
+    words: String,
+}
+
+/// The replacement's result for its Undo message.
+fn replacement_words(old: &str, rows: usize, new: &str) -> String {
+    if rows > 1 {
+        format!("{rows} {old} rows replaced with {new}.")
+    } else {
+        format!("{old} replaced with {new}.")
+    }
 }
 
 fn replace_roster(
@@ -2820,7 +2831,7 @@ impl Encounters {
         story: &Story<'_>,
     ) {
         // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
-        // quiet action at its text edge, such as `Undo replacement`, never reaches the splitter.
+        // quiet action at its text edge (`.line_start()`) never reaches the splitter.
         let room = ui.available_rect_before_wrap();
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + design::L - design::M)),
@@ -3730,7 +3741,7 @@ impl Encounters {
                     }
                 });
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so
-                // a quiet action there (`Undo replacement`) keeps its whole press area.
+                // a line-start quiet action there keeps its whole press area.
                 let rest = ui.available_rect_before_wrap();
                 let mut roster_ui = ui.new_child(
                     egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
@@ -4066,7 +4077,7 @@ impl Encounters {
         tabbed: bool,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
-        // A quiet action at the text edge (`Undo replacement`) reaches `S` into the page's
+        // A line-start quiet action reaches `S` into the page's
         // gutter. The scroll area starts there too, so it shows the whole target, and its margin
         // keeps the text where it was.
         let area = ui.available_rect_before_wrap();
@@ -4214,13 +4225,9 @@ impl Encounters {
             .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
         if let Some(undo) = undo {
             if undo.after == draft.setup.roster {
-                // Outside a message, a line-start action has no icon: its words start at the
-                // slot rows' words.
-                if Action::quiet("Undo replacement")
-                    .line_start()
-                    .show(ui)
-                    .clicked()
-                {
+                // The result is a message, so its Undo keeps the undo icon as every other
+                // Undo does.
+                if design::undo_message(ui, Tone::Info, &undo.words, "Undo replacement") {
                     draft.setup.roster = undo.before;
                 }
             } else {
@@ -4465,12 +4472,24 @@ impl Encounters {
         if let Some((selected, creature, all)) = replacement {
             let before = draft.setup.roster.clone();
             replace_roster(&mut draft.setup.roster, selected, creature, all, snapshot);
+            let old = roster_name(&before[selected], None, &snapshot.known_creature_names);
+            let rows = before
+                .iter()
+                .zip(&draft.setup.roster)
+                .filter(|(was, now)| was.creature != now.creature)
+                .count();
+            let new = snapshot
+                .catalogue
+                .entries
+                .get(&creature)
+                .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
             ui.ctx().data_mut(|data| {
                 data.insert_temp(
                     undo_key,
                     ReplacementUndo {
                         before,
                         after: draft.setup.roster.clone(),
+                        words: replacement_words(&old, rows, &new),
                     },
                 )
             });
@@ -5087,6 +5106,19 @@ mod tests {
         assert!(
             notes.width() <= design::LIST_MEASURE,
             "iter7-B-AT1: {notes:?}"
+        );
+    }
+
+    /// The replacement result names what changed, with a count when it replaced several rows.
+    #[test]
+    fn iter18_b_replacement_words_name_the_rows() {
+        assert_eq!(
+            replacement_words("Cinder Wolf", 2, "Guard"),
+            "2 Cinder Wolf rows replaced with Guard."
+        );
+        assert_eq!(
+            replacement_words("Cinder Wolf", 1, "Guard"),
+            "Cinder Wolf replaced with Guard."
         );
     }
 

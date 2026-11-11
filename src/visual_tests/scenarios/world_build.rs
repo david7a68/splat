@@ -3181,40 +3181,29 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
-    // iter-17-B: Undo replacement starts its line above the slot rows. Their words start at the
-    // row edge, so the action uses `line_start` with no icon (it is outside a message): its words
-    // start at the rows' words, and its press area reaches `S` into the page's gutter, never
-    // into the navigation splitter.
+    // iter-18-B: the replacement's result is a short message, so its Undo keeps the undo icon as
+    // every other Undo does, and its press area stays clear of the splitter.
+    d.observe_both(
+        "iter-18-B-replacement-message",
+        "The replacement says what changed, with Undo replacement beside it",
+        |d| d.has_containing("2 Cinder Wolf rows replaced with Guard."),
+    );
     for size in [SMALL, DEFAULT, LARGE] {
-        let (undo, slot, clear) = d.at_size(size, |d| {
-            let slot = d
-                .nodes()
-                .into_iter()
-                .find(|node| node.name.starts_with("1. ") && node.in_view())
-                .map(|node| node.rect);
-            let mut words = None::<f32>;
-            d.each_painted_text(|text, _| {
-                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                if slot.is_some_and(|slot| slot.contains(rect.center())) {
-                    words = Some(words.map_or(rect.left(), |left| left.min(rect.left())));
-                }
-            });
+        let (icon, clear) = d.at_size(size, |d| {
+            let target = d.place_of("Undo replacement");
             (
-                super::words_left(d, "Undo replacement"),
-                words,
-                d.place_of("Undo replacement").map_or_else(
+                target.map(|rect| d.painted_in(rect)),
+                target.map_or_else(
                     || Err("Undo replacement is not in view".to_owned()),
                     |target| super::press_area_clear(d, target, "Undo replacement", None),
                 ),
             )
         });
         d.observe(
-            "iter-17-B-undo-replacement",
-            undo.zip(slot)
-                .is_some_and(|(undo, slot)| (undo - slot).abs() <= 1.0),
-            format!(
-                "At {size:?}, Undo replacement starts at {undo:?}, the slot rows' words at {slot:?}"
-            ),
+            "iter-18-B-undo-replacement-icon",
+            icon.as_deref()
+                .is_some_and(|painted| painted.contains(crate::design::icons::UNDO)),
+            format!("At {size:?}, Undo replacement paints {icon:?}"),
         );
         d.observe(
             "iter-17-B-undo-replacement-clear",
