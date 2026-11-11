@@ -1236,20 +1236,39 @@ fn belongs_to(
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
+fn shown_changes(
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+) -> Option<splat::content::overrides::Resolved> {
+    Overrides::parse(block)
+        .ok()
+        .filter(|overrides| !overrides.is_empty())
+        .and_then(|overrides| overrides.resolve_for(entry, side).ok())
+}
+
 pub(super) fn shown_detail(
     block: &Mapping,
     entry: &Entry,
     side: &str,
     creature: &Creature,
 ) -> String {
-    Overrides::parse(block)
-        .ok()
-        .filter(|overrides| !overrides.is_empty())
-        .and_then(|overrides| overrides.resolve_for(entry, side).ok())
-        .map_or_else(
-            || creature.detail.clone(),
-            |resolved| super::creature_detail(entry, creature.party, Some(&resolved)),
-        )
+    shown_changes(block, entry, side).map_or_else(
+        || creature.detail.clone(),
+        |resolved| super::creature_detail(entry, creature.party, Some(&resolved)),
+    )
+}
+
+/// The member has no hit points after its changes, so `shown_detail` shows the HP fault.
+pub(super) fn shown_hp_missing(
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+    creature: &Creature,
+) -> bool {
+    shown_changes(block, entry, side).map_or(creature.hp_missing, |resolved| {
+        super::max_hp(entry, Some(&resolved)).is_none()
+    })
 }
 
 /// One presentation for validation errors in the editor and Arrivals.
@@ -2342,19 +2361,19 @@ fn members(
             } else {
                 name
             };
-            let detail = entry
+            let (detail, hp_missing) = entry
                 .and_then(|entry| {
                     let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
                     let mut detail = shown_detail(&member.overrides, entry, &side, creature);
                     if member.overrides.contains_key("name") { detail.push_str(&format!(" · as {}", entry.name)); }
-                    Some(detail)
+                    Some((detail, shown_hp_missing(&member.overrides, entry, &side, creature)))
                 })
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
             let member_row = ui.label(Type::Strong.rich(ui, format!("{number}. {name}")).color(colors().text)).on_hover_text(&name).rect;
             if !detail.is_empty() {
-                let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
+                let response = ui.add(egui::Label::new(super::detail_text(ui, &super::stat_line(&detail), hp_missing)).wrap());
                 design::named(ui, &response, &detail);
             }
             ui.horizontal(|ui| {
@@ -2504,9 +2523,10 @@ fn unread_member(
     let count = member
         .count
         .map_or_else(|| "Count not read".into(), |count| format!("Count {count}"));
-    let mut detail = entry
-        .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id))
-        .map_or_else(String::new, |creature| creature.detail.clone());
+    let creature =
+        entry.and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id));
+    let hp_missing = creature.is_some_and(|creature| creature.hp_missing);
+    let mut detail = creature.map_or_else(String::new, |creature| creature.detail.clone());
     if member.count.is_none() {
         detail = if detail.is_empty() {
             count.clone()
@@ -2518,15 +2538,21 @@ fn unread_member(
         detail.push_str(&format!(" · as {base_name}"));
     }
     let summary = ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(ui, super::stat_line(&detail))
-                .color(colors().muted),
-        )
+        egui::Label::new(super::detail_text(
+            ui,
+            &super::stat_line(&detail),
+            hp_missing,
+        ))
         .wrap(),
     );
     design::named(ui, &summary, &detail);
-    design::message(
+    let blocked = if splat::content::list_formats::changes(&raw, "", "").is_err() {
+        "This member cannot join a fight until its Changes cell is fixed. Other members can join."
+    } else {
+        "This member cannot join a fight until this row is fixed. Other members can join."
+    };
+    // What the fault blocks, the file's path and its links start at the message words.
+    design::message_with_actions(
         ui,
         Tone::Warning,
         &format!(
@@ -2534,14 +2560,11 @@ fn unread_member(
             member.flag.line,
             member.flag.message.trim_end_matches('.').to_owned() + "."
         ),
+        |ui| {
+            ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
+            super::file_line(ui, &snapshot.campaign_root, &draft.path);
+        },
     );
-    let blocked = if splat::content::list_formats::changes(&raw, "", "").is_err() {
-        "This member cannot join a fight until its Changes cell is fixed. Other members can join."
-    } else {
-        "This member cannot join a fight until this row is fixed. Other members can join."
-    };
-    ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
-    crate::world::entry_file_actions(ui, &snapshot.campaign_root, &draft.path, true);
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {

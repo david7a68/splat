@@ -21,19 +21,39 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
         .show(add);
 }
 
+fn menu_icon(word: &str) -> Option<&'static str> {
+    match word {
+        "Move up" => Some(icons::MOVE_UP),
+        "Move down" => Some(icons::MOVE_DOWN),
+        "Remove" | "Delete the saved run" => Some(icons::REMOVE),
+        _ => None,
+    }
+}
+
+/// A line under a menu choice: why it is blocked, or what it does. It starts at the choice's
+/// words, after the quiet action's padding and any icon.
+pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
+    if note.is_none() {
+        return;
+    }
+    let inset = design::S + menu_icon(word).map_or(0.0, |_| design::ICON_SLOT);
+    ui.horizontal(|ui| {
+        ui.add_space(inset);
+        blocked_reason(ui, note);
+    });
+}
+
 pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) -> bool {
-    let action = match word {
-        "Move up" => Action::quiet(word).icon(icons::MOVE_UP),
-        "Move down" => Action::quiet(word).icon(icons::MOVE_DOWN),
-        "Remove" | "Delete the saved run" => Action::quiet(word).icon(icons::REMOVE),
-        _ => Action::quiet(word),
+    let action = match menu_icon(word) {
+        Some(icon) => Action::quiet(word).icon(icon),
+        None => Action::quiet(word),
     };
     let pressed = action
         .density(Density::Read)
         .blocked(blocked)
         .show(ui)
         .clicked();
-    blocked_reason(ui, blocked);
+    choice_note(ui, word, blocked);
     if pressed {
         ui.close();
     }

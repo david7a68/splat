@@ -233,10 +233,63 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
         .collect()
 }
 
+/// What the DM does about unread roster rows before a fight.
+fn fix_roster_rows(count: usize) -> &'static str {
+    if count == 1 {
+        "Fix this roster row or remove it in Obsidian before starting the fight."
+    } else {
+        "Fix these roster rows or remove them in Obsidian before starting the fight."
+    }
+}
+
+/// A warning's file line: the path, whole, then `Edit in Obsidian` and `Show file`. A path too
+/// long to share the line with its links wraps on lines of its own above them; it is never cut.
+pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &str) {
+    let links = crate::world::entry_file_links_width(ui, true);
+    let budget = ui.available_width() - links - design::L;
+    if design::number_width(ui, relative, &Type::Small.font(ui)) <= budget {
+        crate::world::entry_file_actions(ui, root, relative, true);
+        return;
+    }
+    let path = root.join(relative);
+    let response =
+        ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
+    design::named(ui, &response, &path.display().to_string());
+    response.on_hover_text(path.display().to_string());
+    ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
+}
+
+/// The encounter file's unread rows, one warning each. The last warning says what to do, and the
+/// file's path and links start at its words, as every message's actions do.
+fn unread_roster_rows(
+    ui: &mut egui::Ui,
+    root: &std::path::Path,
+    path: &str,
+    notes: &[String],
+    faults: usize,
+) {
+    let Some((last, before)) = notes.split_last() else {
+        return;
+    };
+    for note in before {
+        design::message(ui, Tone::Warning, note);
+    }
+    if faults == 0 {
+        design::message(ui, Tone::Warning, last);
+        return;
+    }
+    design::message_with_actions(
+        ui,
+        Tone::Warning,
+        &format!("{last} {}", fix_roster_rows(faults)),
+        |ui| file_line(ui, root, path),
+    );
+}
+
 fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
     (!faults.is_empty()).then(|| {
         format!(
-            "{}: {}. Fix these roster rows or remove them in Obsidian before starting the fight.",
+            "{}: {}. {}",
             path,
             faults
                 .iter()
@@ -249,7 +302,8 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
                     )
                 })
                 .collect::<Vec<_>>()
-                .join("; ")
+                .join("; "),
+            fix_roster_rows(faults.len())
         )
     })
 }
@@ -880,6 +934,8 @@ struct Creature {
     lower: String,
     /// CR, HP and AC, from fields the entry already has.
     detail: String,
+    /// The stat block has no hit points, so `detail` shows the `HP not set` fault.
+    hp_missing: bool,
     /// The package it came from. A party copy says so in `detail` instead.
     source: Option<String>,
     party: bool,
@@ -898,21 +954,27 @@ const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
-pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
-    if detail.contains("HP not set") {
+/// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
+pub(crate) fn detail_columns(
+    ui: &mut egui::Ui,
+    detail: &str,
+    source: Option<&str>,
+    hp_missing: bool,
+) {
+    if hp_missing {
         ui.horizontal_wrapped(|ui| {
-            for part in detail.split(" · ") {
-                if part.contains("HP not set") {
+            for part in detail_parts(detail, hp_missing) {
+                if part.hp_fault {
                     design::status(
                         ui,
                         design::Status {
                             icon: design::icons::WARN,
-                            word: "HP not set",
-                            color: colors().result.warning,
+                            word: HP_NOT_SET,
+                            color: part.color(),
                         },
                     );
                 } else {
-                    ui.label(Type::Small.rich(ui, part).color(colors().muted));
+                    ui.label(Type::Small.rich(ui, part.words).color(part.color()));
                 }
             }
         });
@@ -1021,6 +1083,21 @@ pub(crate) fn creature_name_link(ui: &mut egui::Ui, name: &str) -> egui::Respons
 }
 
 /// `changed` holds this creature's values when a slot or member changes them.
+/// The creature's hit points, after its changes. None is the `HP not set` fault.
+pub(crate) fn max_hp(entry: &Entry, changed: Option<&Resolved>) -> Option<i64> {
+    changed.map_or_else(
+        || {
+            entry
+                .fields
+                .get("splat_stats")?
+                .get("max_hp")?
+                .get("value")?
+                .as_i64()
+        },
+        |changed| changed.max_hp,
+    )
+}
+
 fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> String {
     let stat = |name: &str| {
         entry
@@ -1039,10 +1116,10 @@ fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> St
     if let Some(cr) = cr {
         parts.push(format!("CR {cr}"));
     }
-    if let Some(hp) = changed.map_or_else(|| stat("max_hp"), |changed| changed.max_hp) {
+    if let Some(hp) = max_hp(entry, changed) {
         parts.push(format!("HP {hp}"));
     } else {
-        parts.push(format!("{} HP not set", design::icons::WARN));
+        parts.push(format!("{} {HP_NOT_SET}", design::icons::WARN));
     }
     if let Some(ac) = changed.map_or_else(|| stat("armor_class"), |changed| changed.armor_class) {
         parts.push(format!("AC {ac}"));
@@ -1109,32 +1186,42 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
     parts.join(" · ")
 }
 /// Keep a stat label with its value. A second line can break between facts.
-fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String {
+/// The detail that fits before the change link, and whether it still holds the HP fault. The fault
+/// is shortened as late as the hit points it stands for.
+fn changed_detail_parts(
+    ui: &egui::Ui,
+    detail: &str,
+    word: &str,
+    width: f32,
+    hp_missing: bool,
+) -> (String, bool) {
     let font = Type::Small.font(ui);
     let reserved = design::number_width(ui, word, &font)
         + design::number_width(ui, " · ", &font)
         + design::XS * 2.0;
     let width = (width - reserved).max(0.0);
+    let mut parts = detail_parts(detail, hp_missing);
+    let kept = |parts: &[DetailPart<'_>]| parts.iter().any(|part| part.hp_fault);
     if design::number_width(ui, detail, &font) <= width {
-        return detail.into();
+        return (detail.into(), kept(&parts));
     }
-    let mut parts: Vec<_> = detail.split(" · ").collect();
     while !parts.is_empty() {
-        let priority = |part: &str| {
-            if part.starts_with("as ") {
+        let priority = |part: &DetailPart<'_>| {
+            let words = part.words;
+            if words.starts_with("as ") {
                 6
-            } else if !(["CR ", "HP ", "AC "]
+            } else if part.hp_fault || words.starts_with("HP ") {
+                4
+            } else if !(["CR ", "AC "]
                 .iter()
-                .any(|prefix| part.starts_with(prefix)))
-                && !["Enemies", "Party", "Rivals"].contains(&part)
+                .any(|prefix| words.starts_with(prefix)))
+                && !["Enemies", "Party", "Rivals"].contains(&words)
             {
                 1
-            } else if part.starts_with("CR ") {
+            } else if words.starts_with("CR ") {
                 2
-            } else if part.starts_with("AC ") {
+            } else if words.starts_with("AC ") {
                 3
-            } else if part.starts_with("HP ") {
-                4
             } else {
                 5
             }
@@ -1146,12 +1233,75 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
             .map(|(at, _)| at)
             .unwrap();
         parts.remove(remove);
-        let text = parts.join(" · ");
+        let text = parts
+            .iter()
+            .map(|part| part.words)
+            .collect::<Vec<_>>()
+            .join(" · ");
         if design::number_width(ui, &text, &font) <= width {
-            return text;
+            return (text, kept(&parts));
         }
     }
-    String::new()
+    (String::new(), false)
+}
+
+/// The detail part of a creature without hit points.
+const HP_NOT_SET: &str = "HP not set";
+
+/// One part of a creature's detail line, and whether it is the `HP not set` fault.
+pub(crate) struct DetailPart<'a> {
+    pub(crate) words: &'a str,
+    pub(crate) hp_fault: bool,
+}
+
+impl DetailPart<'_> {
+    /// The fault has the warning status colour, icon and words; every other part is muted.
+    pub(crate) fn color(&self) -> egui::Color32 {
+        if self.hp_fault {
+            colors().result.warning
+        } else {
+            colors().muted
+        }
+    }
+}
+
+/// The parts of a detail line. The fault comes from the creature's data (`hp_missing`), not from
+/// the words: only then is the HP slot marked. `creature_detail` writes that slot before any name
+/// the DM chose (a package, an `as` name), so it is the first part with the fault's text.
+pub(crate) fn detail_parts(detail: &str, hp_missing: bool) -> Vec<DetailPart<'_>> {
+    let fault = format!("{} {HP_NOT_SET}", design::icons::WARN);
+    let kept = stat_line(&fault);
+    let mut marked = !hp_missing;
+    detail
+        .split(" · ")
+        .map(|words| {
+            let hp_fault = !marked && (words == fault || words == kept);
+            marked |= hp_fault;
+            DetailPart { words, hp_fault }
+        })
+        .collect()
+}
+
+/// A detail line as one label: muted, with the HP fault part, if any, in the warning colour.
+/// Without the fault it is drawn exactly as before.
+pub(crate) fn detail_text(ui: &egui::Ui, detail: &str, hp_missing: bool) -> egui::WidgetText {
+    let parts = detail_parts(detail, hp_missing);
+    if !parts.iter().any(|part| part.hp_fault) {
+        return Type::Small.rich(ui, detail).color(colors().muted).into();
+    }
+    let mut job = egui::text::LayoutJob::default();
+    for (at, part) in parts.iter().enumerate() {
+        let format = |color| egui::TextFormat {
+            font_id: Type::Small.font(ui),
+            color,
+            ..Default::default()
+        };
+        if at > 0 {
+            job.append(" · ", 0.0, format(colors().muted));
+        }
+        job.append(part.words, 0.0, format(part.color()));
+    }
+    job.into()
 }
 
 fn stat_line(text: &str) -> String {
@@ -1262,7 +1412,7 @@ fn creature_result_row(
                     },
                 );
             } else {
-                detail_columns(ui, &c.detail, c.source.as_deref());
+                detail_columns(ui, &c.detail, c.source.as_deref(), c.hp_missing);
             }
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1598,6 +1748,7 @@ impl Snapshot {
                     lower: e.entry.name.to_lowercase(),
                     facets: Facets::of(&e.entry),
                     detail: creature_detail(&e.entry, party, None),
+                    hp_missing: max_hp(&e.entry, None).is_none(),
                     origin: crate::lookup::entry_origin(Some(&e.entry), e.private),
                     source: match (party, e.private) {
                         (true, _) => None,
@@ -1654,6 +1805,7 @@ impl Snapshot {
                         || unavailable.clone().unwrap_or_default(),
                         |stat| format!("NPC · as {} · {}", stat.name, stat.detail),
                     ),
+                    hp_missing: stat.is_some_and(|stat| stat.hp_missing),
                     facets: stat.and_then(|stat| stat.facets.clone()),
                     origin: crate::lookup::entry_origin(Some(npc), entry.private),
                     source: None,
@@ -1725,6 +1877,7 @@ impl Snapshot {
                             &creature.detail,
                             creature.source.as_deref(),
                         ),
+                        hp_missing: creature.hp_missing,
                     })
                 })
                 .collect(),
@@ -3467,27 +3620,25 @@ impl Encounters {
             .as_ref()
             .map(|snapshot| &snapshot.known_creature_names)
             .unwrap_or(&no_names);
-        if let Some(draft) = &self.draft {
+        // Drawn below the header, so a fault does not move the name field or its actions.
+        let unread_rows = self.draft.as_ref().map(|draft| {
             let faults = Entry::parse(&draft.path, &draft.source)
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
-            for flag in &draft.flags {
-                let name = faults
-                    .iter()
-                    .find(|fault| fault.line == flag.line)
-                    .map(|fault| format!("{} · ", fault.name))
-                    .unwrap_or_default();
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message),
-                );
-            }
-            if !faults.is_empty() {
-                crate::world::entry_file_actions(ui, &active.path, &draft.path, true);
-                ui.label(Type::Small.rich(ui, "Fix these roster rows or remove them in Obsidian before starting the fight.").color(colors().muted));
-            }
-        }
+            let notes: Vec<String> = draft
+                .flags
+                .iter()
+                .map(|flag| {
+                    let name = faults
+                        .iter()
+                        .find(|fault| fault.line == flag.line)
+                        .map(|fault| format!("{} · ", fault.name))
+                        .unwrap_or_default();
+                    format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message)
+                })
+                .collect();
+            (notes, faults.len(), draft.path.clone())
+        });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
         let mut back = false;
@@ -3686,6 +3837,9 @@ impl Encounters {
                     "Changes apply to the next fight. To add to this fight, use Add to fight in the run.",
                 ),
             );
+        }
+        if let Some((notes, faults, path)) = &unread_rows {
+            unread_roster_rows(ui, &active.path, path, notes, *faults);
         }
         design::rule(ui);
         if back {
@@ -4365,6 +4519,14 @@ impl Encounters {
                 let creature =
                     resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
                 let synced = live.is_some() && creature.is_some_and(|c| c.party);
+                // A party sheet always has hit points; otherwise the stats and changes say.
+                let hp_missing = live
+                    .zip(creature)
+                    .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?))
+                    .is_none()
+                    && creature.zip(definition).is_some_and(|(creature, entry)| {
+                        groups::shown_hp_missing(&slot.overrides, entry, &slot.side, creature)
+                    });
                 let detail = live
                     .zip(creature)
                     .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?))
@@ -4419,7 +4581,7 @@ impl Encounters {
                             if menu_action(ui, "Duplicate", None) { duplicate = Some(i); }
                             if creature.is_some_and(|c| !c.party) {
                                 if menu_action(ui, "Make it yours", None) { *make_yours = Some(i); }
-                                ui.add(egui::Label::new(Type::Small.rich(ui, "Edit a copy in this campaign.").color(colors().muted)).wrap());
+                                choice_note(ui, "Make it yours", Some("Edit a copy in this campaign."));
                             }
                             if menu_action(ui, "Remove", None) { remove = Some(i); }
                         });
@@ -4466,8 +4628,8 @@ impl Encounters {
                                         ui.spacing_mut().item_spacing.x = design::XS;
                                         let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
                                         let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
-                                        let fitted = changed_detail(ui, &detail, &word, ui.available_width());
-                                        let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
+                                        let (fitted, fault_kept) = changed_detail_parts(ui, &detail, &word, ui.available_width(), hp_missing);
+                                        let detail_rect = ui.label(detail_text(ui, &stat_line(&fitted), fault_kept)).on_hover_text(&detail).rect;
                                         let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
                                         let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
@@ -4483,12 +4645,12 @@ impl Encounters {
                                 ui.spacing_mut().interact_size.y = 0.0;
                                 ui.horizontal_wrapped(|ui| {
                                     ui.spacing_mut().item_spacing.x = 0.0;
-                                    for (at, part) in detail.split(" · ").enumerate() {
+                                    for (at, part) in detail_parts(&detail, hp_missing).iter().enumerate() {
                                         if at > 0 { ui.label(Type::Small.rich(ui, " · ").color(colors().muted)); }
-                                        if part == "Bloodied" {
-                                            design::status(ui, Status { icon: icons::BLOODIED, word: part, color: colors().hp.bloodied });
+                                        if part.words == "Bloodied" {
+                                            design::status(ui, Status { icon: icons::BLOODIED, word: part.words, color: colors().hp.bloodied });
                                         } else {
-                                            ui.label(Type::Small.rich(ui, stat_line(part)).color(colors().muted));
+                                            ui.label(Type::Small.rich(ui, stat_line(part.words)).color(part.color()));
                                         }
                                     }
                                 });
@@ -4669,11 +4831,16 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
-            for flag in &rule_flags {
-                design::message(ui, Tone::Warning, &format!("Campaign.md, line {}: {}", flag.line, flag.message));
-            }
-            if !rule_flags.is_empty() {
-                crate::world::file_actions(ui, &active, "Campaign.md");
+            // The file's path and links start at the last warning's words.
+            for (at, flag) in rule_flags.iter().enumerate() {
+                let text = format!("Campaign.md, line {}: {}", flag.line, flag.message);
+                if at + 1 == rule_flags.len() {
+                    design::message_with_actions(ui, Tone::Warning, &text, |ui| {
+                        file_line(ui, &active.path, "Campaign.md");
+                    });
+                } else {
+                    design::message(ui, Tone::Warning, &text);
+                }
             }
             design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
@@ -4841,8 +5008,8 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 use list::{
-    blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,
-    side_control,
+    blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
+    ready_list, row_menu, side_control,
 };
 
 pub(crate) fn draft_switch_reason() -> &'static str {
@@ -4971,13 +5138,147 @@ mod tests {
         });
     }
 
+    /// FD3 edge content: unread rows that are not roster rows get no file line; one roster row
+    /// and two roster rows with a long path in a narrow column each end with the right sentence,
+    /// and the file line starts at the last warning's words with its links whole. The path is
+    /// painted whole inside the column: a long one wraps above its links, never cut.
+    #[test]
+    fn iter21_b_fd3_unread_roster_rows_end_with_one_file_line_at_the_last_words() {
+        let long = "Encounters/The Emberfall Marches, Act Two/Shrine of Cinders beneath the Ashen Reaches.md";
+        for (notes, faults, path, sentence) in [
+            (
+                vec!["Campaign.md, line 3: the date was not read."],
+                0,
+                "Campaign.md",
+                None,
+            ),
+            (
+                vec!["Ember Cultist · Encounters/Shrine.md, line 20: the change was not read."],
+                1,
+                "Encounters/Shrine.md",
+                Some(fix_roster_rows(1)),
+            ),
+            (
+                vec![
+                    "Ember Cultist · line 20: the change “HP lots” was not read.",
+                    "Row on line 21 · line 21: the creature cell is empty.",
+                ],
+                2,
+                long,
+                Some(fix_roster_rows(2)),
+            ),
+        ] {
+            let notes: Vec<String> = notes.into_iter().map(str::to_owned).collect();
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let mut bounds = egui::Rect::NOTHING;
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    // The encounter editor's column at 960.
+                    let column =
+                        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(440.0, 2000.0));
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                        bounds = ui.max_rect();
+                        unread_roster_rows(
+                            ui,
+                            std::path::Path::new("/campaign"),
+                            path,
+                            &notes,
+                            faults,
+                        );
+                    });
+                });
+            });
+            assert!(bounds.width() <= 440.0 + 0.5, "{bounds:?}");
+            let painted: Vec<(String, egui::Rect)> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some((
+                        text.galley.job.text.clone(),
+                        egui::Rect::from_min_size(text.pos, text.galley.size()),
+                    )),
+                    _ => None,
+                })
+                .collect();
+            let find = |words: &str| -> Vec<&(String, egui::Rect)> {
+                painted
+                    .iter()
+                    .filter(|(text, _)| text.starts_with(words))
+                    .collect()
+            };
+            let links = find("Edit in Obsidian").len() + find("Show file").len();
+            let Some(sentence) = sentence else {
+                assert_eq!(
+                    links, 0,
+                    "a fault that is not a roster row has no file line"
+                );
+                assert_eq!(find(&notes[0]).len(), 1);
+                continue;
+            };
+            assert_eq!(
+                links, 2,
+                "one file line for every unread roster row together"
+            );
+            let ended: Vec<_> = painted
+                .iter()
+                .filter(|(text, _)| text.ends_with(sentence))
+                .collect();
+            assert_eq!(ended.len(), 1, "only the last warning says what to do");
+            let last = ended[0].1;
+            assert!(ended[0].0.starts_with(notes.last().unwrap().as_str()));
+            for note in &notes[..notes.len() - 1] {
+                let found = find(note);
+                assert_eq!(
+                    found.len(),
+                    1,
+                    "each earlier warning is painted once: {note}"
+                );
+                let (text, rect) = found[0];
+                assert!(
+                    !text.contains(sentence) && rect.bottom() <= last.top(),
+                    "an earlier warning comes first and has no instruction: {text}"
+                );
+            }
+            let shown = find(path);
+            assert_eq!(shown.len(), 1, "the path is painted once");
+            let (text, place) = shown[0];
+            assert_eq!(text, path, "the path is whole, with no ellipsis");
+            assert!(
+                (place.left() - last.left()).abs() <= 0.5
+                    && place.top() >= last.bottom()
+                    && place.right() <= bounds.right() + 0.5,
+                "the path starts at the words and stays in the column: {place:?} in {bounds:?}"
+            );
+            for link in ["Edit in Obsidian", "Show file"] {
+                let (text, rect) = find(link)[0];
+                assert_eq!(text, link, "the link is whole");
+                assert!(rect.left() >= last.left() - 0.5 && rect.top() >= last.bottom());
+                assert!(
+                    rect.right() <= bounds.right() + 0.5
+                        && (rect.left() >= place.right() || rect.top() >= place.bottom()),
+                    "{link} follows the path inside the column: {rect:?}, path {place:?}"
+                );
+            }
+            let first_on_file_line = painted
+                .iter()
+                .filter(|(_, rect)| rect.top() >= last.bottom())
+                .map(|(_, rect)| rect.left())
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                (first_on_file_line - last.left()).abs() <= 0.5,
+                "the file line starts at the words"
+            );
+        }
+    }
+
     #[test]
     fn creature_detail_columns_reserve_room_for_their_widest_values() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let output = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"));
+                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"), false);
             });
         });
         let bounds = |word| {
@@ -5345,10 +5646,31 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
-                let fitted = changed_detail(ui, detail, "Changed · 1 to add by hand", 400.0);
+                let fitted = changed_detail_parts(ui, detail, "Changed · 1 to add by hand", 400.0, false).0;
                 assert!(!fitted.contains("Ashen Marches"));
                 assert!(!fitted.contains('…'), "iter8-B-FT8: {fitted}");
                 assert!(fitted.contains("as Ember Cultist"));
+                // iter21-B-FD1: the HP fault is data. Shortened, it outlasts a package that has
+                // its words; with hit points, those words are only a package name.
+                let fault = format!("{} {HP_NOT_SET}", design::icons::WARN);
+                let missing = format!(
+                    "Enemies · CR 2 · {fault} · AC 15 · {fault} · as Ember Cultist"
+                );
+                let (fitted, kept) =
+                    changed_detail_parts(ui, &missing, "Changed · 1 to add by hand", 500.0, true);
+                assert!(kept, "iter21-B-FD1: {fitted}");
+                assert_eq!(fitted.matches(fault.as_str()).count(), 1, "iter21-B-FD1: {fitted}");
+                let parts = detail_parts(&fitted, kept);
+                assert_eq!(
+                    parts.iter().position(|part| part.hp_fault),
+                    Some(2),
+                    "iter21-B-FD1: the HP slot is the fault: {fitted}"
+                );
+                let healthy = format!("Enemies · CR 2 · HP 43 · AC 15 · {fault}");
+                let (fitted, kept) =
+                    changed_detail_parts(ui, &healthy, "Changed", 400.0, false);
+                assert!(!kept && fitted.contains(fault.as_str()), "iter21-B-FD1: {fitted}");
+                assert!(detail_parts(&healthy, false).iter().all(|part| !part.hp_fault));
             });
         });
     }
@@ -5400,7 +5722,7 @@ mod tests {
                 let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
                 let word = "Changed · 1 to add by hand";
                 for width in [280.0, 320.0, 356.0, 400.0] {
-                    let fitted = changed_detail(ui, detail, word, width);
+                    let fitted = changed_detail_parts(ui, detail, word, width, false).0;
                     assert!(fitted.contains("as Ember Cultist"), "{fitted}");
                     assert!(!fitted.contains("Ashen Marches"), "{fitted}");
                     assert!(!fitted.contains(word));

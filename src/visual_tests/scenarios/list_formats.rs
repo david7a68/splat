@@ -85,6 +85,22 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Combat initiative choice");
     d.expect("Roll NPC initiative");
     d.state("rules-and-runs-flagged-choice", Sizes::All);
+    // FD3 family: the file line starts at the warning's words.
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            super::file_links_at_message_words(
+                d,
+                "Campaign.md, line ",
+                &campaign.path.join("Campaign.md"),
+                "Campaign.md",
+            )
+        });
+        d.observe(
+            "iter-21-B-FD3-rules",
+            placed.is_ok(),
+            format!("At {size:?}, the Rules and runs warning's file line: {placed:?}"),
+        );
+    }
     d.click("Roll NPC initiative");
     d.click("Individually");
     d.click("Save run settings");
@@ -173,11 +189,55 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Show file");
     d.expect("Changes for Scout");
     d.state("group-flagged-changes-cell", Sizes::All);
+    // FD3 family: what the fault blocks and the file line start at the warning's words.
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let placed = d.at_size(size, |d| {
+            let words = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Line 15: the change") && node.in_view())
+                .map(|node| node.rect);
+            let blocked = super::glyph_spans(d, "This member cannot join a fight", "This member");
+            let blocked_at = words
+                .zip(blocked.first())
+                .is_some_and(|(words, (left, _, _))| (left - words.left()).abs() <= 1.0);
+            super::file_links_at_message_words(
+                d,
+                "Line 15: the change",
+                &campaign.path.join("Encounter Groups/Bridge guards.md"),
+                "Encounter Groups/Bridge guards.md",
+            )
+            .and_then(|()| {
+                blocked_at
+                    .then_some(())
+                    .ok_or(format!("blocked line {blocked:?}, message words {words:?}"))
+            })
+        });
+        d.observe(
+            "iter-21-B-FD3-group",
+            placed.is_ok(),
+            format!("At {size:?}, the group member warning's lines: {placed:?}"),
+        );
+    }
     let text = fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert!(text.contains("HP lots | Keep this row"));
     d.click("More actions for Scout");
     d.expect("Remove member");
     d.state("flagged-member-menu", Sizes::All);
+    // FT2: the group editor's menu uses the same note helper as the roster menu.
+    d.press(Key::Escape);
+    d.click("More actions for Goblin Warrior");
+    d.expect("Already last.");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let note = d.at_size(size, |d| {
+            super::note_starts_at_choice_words(d, "Move down", "Already last.")
+        });
+        d.observe(
+            "iter-21-B-FT2-group",
+            note.is_ok(),
+            format!("At {size:?}, the group member menu's note: {note:?}"),
+        );
+    }
     d.press(Key::Escape);
     d.click("Changes for Scout");
     d.expect("Display name");
@@ -207,6 +267,21 @@ pub fn run(d: &mut Driver<'_>) {
         .unwrap();
     let roster_path = campaign.path.join(&encounter.entry.path);
     let roster_text = fs::read_to_string(&roster_path).unwrap();
+    // FD3: the header's place without a fault, to compare with the flagged roster below.
+    let header = |d: &Driver<'_>| {
+        [
+            "Encounter name: Shrine of Cinders",
+            "Save encounter",
+            "Start fight",
+        ]
+        .map(|name| d.place_of(name).map(|rect| rect.top()))
+    };
+    let sizes = [SMALL, DEFAULT, (1920.0, 1080.0)];
+    open_saved_encounter(d, "Shrine of Cinders");
+    d.expect("Encounter name: Shrine of Cinders");
+    assert!(!d.has_containing("was not read"));
+    let clean = sizes.map(|size| d.at_size(size, header));
+    d.click("Back to encounters");
     let mut flagged_roster = roster_text.clone();
     let table = splat::content::layout::Document::new(&roster_text)
         .table(splat::content::list_formats::ROSTER)
@@ -221,6 +296,46 @@ pub fn run(d: &mut Driver<'_>) {
     assert!(!d.app_mut().encounters.has_run());
     d.expect("Edit in Obsidian");
     d.expect("Show file");
+    for (size, clean) in sizes.into_iter().zip(clean) {
+        let (flagged, placed) = d.at_size(size, |d| {
+            let flagged = header(d);
+            let message = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Ember Cultist · ") && node.in_view())
+                .map(|node| node.rect);
+            let below = message
+                .zip(d.place_of("Save encounter"))
+                .is_some_and(|(message, save)| message.top() >= save.bottom());
+            let placed = super::file_links_at_message_words(
+                d,
+                "Ember Cultist · ",
+                &roster_path,
+                &encounter.entry.path,
+            )
+            .and_then(|()| {
+                (below && d.visible_text("Fix this roster row or remove it in Obsidian"))
+                    .then_some(())
+                    .ok_or(format!(
+                        "message {message:?} is above the header or has no instruction"
+                    ))
+            });
+            (flagged, placed)
+        });
+        let kept = clean.iter().all(Option::is_some)
+            && clean.iter().zip(&flagged).all(|(clean, flagged)| {
+                clean
+                    .zip(*flagged)
+                    .is_some_and(|(a, b)| (a - b).abs() <= 0.5)
+            });
+        d.observe(
+            "iter-21-B-FD3",
+            kept && placed.is_ok(),
+            format!(
+                "At {size:?}, header tops without a fault {clean:?}, with one {flagged:?}; warning: {placed:?}"
+            ),
+        );
+    }
     d.state("flagged-roster-at-start-fight", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     fs::write(&roster_path, &roster_text).unwrap();

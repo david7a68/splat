@@ -7520,6 +7520,7 @@ mod tests {
             entry: Arc::new(entry),
             lower: "wolf".into(),
             detail: "A wolf".into(),
+            hp_missing: false,
         })
     }
     fn form(query: &str, hp: &str) -> ad_hoc::AdHoc {
@@ -7609,6 +7610,7 @@ mod tests {
                 entry: Arc::new(creature()),
                 lower: name.into(),
                 detail: String::new(),
+                hp_missing: false,
             })
         };
         let known = [
@@ -7655,6 +7657,7 @@ mod tests {
             entry: Arc::new(blank),
             lower: "blank".into(),
             detail: String::new(),
+            hp_missing: false,
         })];
         let mut no_hp = form("", "");
         no_hp.picked = Some(unknown[0].clone());

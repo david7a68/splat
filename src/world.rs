@@ -1126,12 +1126,7 @@ pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str,
 
 pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     let path = root.join(relative);
-    let action_width = design::number_width(ui, "Show file", &Type::Body.font(ui))
-        + if obsidian {
-            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui)) + design::S
-        } else {
-            0.0
-        };
+    let action_width = entry_file_links_width(ui, obsidian);
     let budget = (ui.available_width() - action_width - design::L).max(0.0);
     let font = Type::Small.font(ui);
     let mut shown = relative.to_owned();
@@ -1152,14 +1147,29 @@ pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, o
     let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
     design::named(ui, &response, &path.display().to_string());
     response.on_hover_text(path.display().to_string());
+    entry_file_links(ui, &path, obsidian);
+}
+
+/// The width of a file line's links, with the gap between them.
+pub(crate) fn entry_file_links_width(ui: &egui::Ui, obsidian: bool) -> f32 {
+    design::number_width(ui, "Show file", &Type::Body.font(ui))
+        + if obsidian {
+            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui)) + design::S
+        } else {
+            0.0
+        }
+}
+
+/// `Edit in Obsidian` and `Show file` for a file at this full path.
+pub(crate) fn entry_file_links(ui: &mut egui::Ui, path: &Path, obsidian: bool) {
     if obsidian && design::link(ui, "Edit in Obsidian").clicked() {
         ui.ctx()
-            .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
+            .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
     }
     if design::link(ui, "Show file").clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
             "file://{}",
-            encode_path(&path)
+            encode_path(path)
         )));
     }
 }

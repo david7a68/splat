@@ -27,6 +27,8 @@ pub(crate) struct RunCreature {
     pub entry: Arc<Entry>,
     pub lower: String,
     pub detail: String,
+    /// The stat block has no hit points, so `detail` shows the `HP not set` fault.
+    pub hp_missing: bool,
 }
 
 /// The form in the run's Arrivals panel. Never saved.
@@ -325,7 +327,12 @@ impl Run {
                                 .iter()
                                 .any(|prefix| part.starts_with(prefix))
                         });
-                        crate::encounters::detail_columns(&mut words, &creature.detail, source);
+                        crate::encounters::detail_columns(
+                            &mut words,
+                            &creature.detail,
+                            source,
+                            creature.hp_missing,
+                        );
                     } else {
                         ui.skip_ahead_auto_ids(1);
                     }
