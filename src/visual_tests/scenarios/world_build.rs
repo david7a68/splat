@@ -285,27 +285,36 @@ pub fn broken(d: &mut Driver<'_>) {
     // clear of its scroll bar at every size, and none of it moves the editor.
     let part_reachable = |d: &mut Driver<'_>, message: &str, state: &str| {
         let before = editor_tops(d);
-        let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, message);
-        let owner = d.focused_name();
-        d.observe(
-            "iter-25-D-FD1-part-focus",
-            tabbed && owner.as_deref() == Some(message),
-            format!("{state}: Tab reaches the part named {message:?}; focus is on {owner:?}"),
-        );
-        d.observe(
-            "iter-25-D-FD1-part-scroll",
-            keyed && wheeled,
-            format!("{state}: the part scrolls by key {keyed} and by wheel {wheeled}"),
-        );
-        d.observe(
-            "iter-25-D-FD1-part-ring",
-            ring.iter().all(|clear| *clear),
-            format!(
-                "{state}: the focus ring keeps clear of the scroll bar at 960, 1200, 1920: {ring:?}"
-            ),
-        );
-        // Back to the part's top, so its Undo is in view again.
-        d.press(Key::PageUp);
+        // Re-check 1: the gestures themselves run at each size, with the window at that size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            d.set_base(size);
+            let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, message);
+            let owner = d.focused_name();
+            d.observe(
+                "iter-25-D-FD1-part-focus",
+                tabbed && owner.as_deref() == Some(message),
+                format!(
+                    "{state} at {size:?}: Tab reaches the part named {message:?}; focus is on {owner:?}"
+                ),
+            );
+            d.observe(
+                "iter-25-D-FD1-part-scroll",
+                keyed && wheeled,
+                format!(
+                    "{state} at {size:?}: the part scrolls by key {keyed} and by wheel {wheeled}"
+                ),
+            );
+            d.observe(
+                "iter-25-D-FD1-part-ring",
+                ring.iter().all(|clear| *clear),
+                format!(
+                    "{state} at {size:?}: the focus ring keeps clear of the scroll bar at 960, 1200, 1920: {ring:?}"
+                ),
+            );
+            // Back to the part's top, so its Undo is in view again.
+            d.press(Key::PageUp);
+        }
+        d.set_base(DEFAULT);
         let after = editor_tops(d);
         d.observe(
             "iter-25-D-FD1-part-editor",
