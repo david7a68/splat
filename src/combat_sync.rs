@@ -50,6 +50,29 @@ const MAX_HP_BONUS: i64 = 999;
 /// The largest count Splat sends for a coin, an item or a use.
 const MAX_COUNT: i64 = 1_000_000;
 type Groups = BTreeMap<String, Value>;
+/// The values Splat would send, with a revision that every change bumps. Code outside the
+/// panel's steppers writes through `write`; the panel compares what its steppers drew and calls
+/// `touch` when one changed a value. The stepper wells (`Wells`) are kept per revision.
+#[derive(Default)]
+struct Sheet {
+    groups: Groups,
+    revision: u64,
+}
+impl std::ops::Deref for Sheet {
+    type Target = Groups;
+    fn deref(&self) -> &Groups {
+        &self.groups
+    }
+}
+impl Sheet {
+    fn write(&mut self) -> &mut Groups {
+        self.touch();
+        &mut self.groups
+    }
+    fn touch(&mut self) {
+        self.revision += 1;
+    }
+}
 /// One class's hit dice, for a short rest.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HitDice {
@@ -821,7 +844,13 @@ pub struct CombatSync {
     pub enabled: bool,
     scope: Option<(u64, String, String)>,
     remote: Option<Remote>,
-    desired: Groups,
+    desired: Sheet,
+    /// The stepper wells, and what they were measured from.
+    wells: Option<(WellsKey, Wells)>,
+    /// How often frames asked for the wells, and how often the values were read to measure
+    /// them (`CachedWork` in tests).
+    #[cfg(test)]
+    pub(crate) well_counts: (usize, usize),
     blocked: BTreeMap<String, String>,
     pending: Option<Pending>,
     gate: Option<Arc<AtomicBool>>,
@@ -875,10 +904,11 @@ impl CombatSync {
             return sync;
         }
         let read = simulated_sheet(character, max_hp, damage, state != SyncState::ReadOnly);
-        sync.desired = read.groups.clone();
+        *sync.desired.write() = read.groups.clone();
         sync.remote = Some(read);
         if state == SyncState::Pending {
-            sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 1).into();
+            sync.desired.write().get_mut("hp").expect("HP group")["removedHitPoints"] =
+                (damage + 1).into();
         }
         if state == SyncState::Error {
             sync.error = Some("Could not read this character from D&D Beyond.".into());
@@ -895,8 +925,9 @@ impl CombatSync {
         sync.enabled = true;
         sync.simulated = true;
         sync.remote = Some(read.clone());
-        sync.desired = read.groups.clone();
-        sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 4).into();
+        *sync.desired.write() = read.groups.clone();
+        sync.desired.write().get_mut("hp").expect("HP group")["removedHitPoints"] =
+            (damage + 4).into();
         let mut changed = read;
         changed.groups.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 9).into();
         sync.accept_read(changed);
@@ -1053,7 +1084,7 @@ impl CombatSync {
         if let Some(remote) = self.remote.take() {
             self.matched = Some(remote.groups);
         }
-        self.desired.clear();
+        self.desired.write().clear();
         self.blocked.clear();
         self.next = None;
         self.error = None;
@@ -1065,7 +1096,7 @@ impl CombatSync {
     pub fn dirty(&self) -> bool {
         self.remote
             .as_ref()
-            .is_some_and(|r| r.groups != self.desired)
+            .is_some_and(|r| r.groups != *self.desired)
     }
     pub fn record(&self) -> Option<&EntitySnapshot> {
         if self.enabled {
@@ -1082,7 +1113,7 @@ impl CombatSync {
     }
     pub fn set_group(&mut self, key: &str, value: Value) {
         if self.ready() && self.desired.contains_key(key) && self.desired.get(key) != Some(&value) {
-            self.desired.insert(key.into(), value);
+            self.desired.write().insert(key.into(), value);
             self.changed = Some(Instant::now());
         }
     }
@@ -1147,7 +1178,7 @@ impl CombatSync {
                         }
                         self.error = Some(error);
                         if let Some(remote) = &self.remote {
-                            for (key, value) in &self.desired {
+                            for (key, value) in self.desired.iter() {
                                 if remote.groups.get(key) != Some(value) {
                                     self.blocked.insert(key.clone(),"Write status is uncertain. Refresh and review before retrying.".into());
                                 }
@@ -1273,20 +1304,20 @@ impl CombatSync {
     }
     /// The run's value and the sheet's differ, and the DM changed the run's: their choice.
     pub fn hold_conflict(&mut self, key: &str, local: Value) {
-        self.desired.insert(key.into(), local);
+        self.desired.write().insert(key.into(), local);
         self.blocked.insert(key.into(), DIFFER_AFTER_READ.into());
     }
     /// A change the DM recorded while sync was off. It cannot be sent yet, and it counts.
     pub fn note_while_stopped(&mut self, key: &str, local: Value) {
-        self.desired.insert(key.into(), local);
+        self.desired.write().insert(key.into(), local);
     }
     pub fn use_remote(&mut self, key: &str) {
         self.chose_remote = true;
         self.updated = true;
         if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
-            self.desired.insert(key.to_owned(), value.clone());
+            self.desired.write().insert(key.to_owned(), value.clone());
         } else {
-            self.desired.remove(key);
+            self.desired.write().remove(key);
         }
         self.blocked.remove(key);
     }
@@ -1337,7 +1368,7 @@ impl CombatSync {
                     && !self.blocked.contains_key(key)
                     && (previous.get(key) == sent.get(key) || sent.get(key) == Some(value)))
             {
-                self.desired.insert(key.clone(), value.clone());
+                self.desired.write().insert(key.clone(), value.clone());
             } else if local.as_ref() == Some(value) {
                 self.blocked.remove(key);
             } else if previous.get(key) != Some(value)
@@ -1362,7 +1393,7 @@ impl CombatSync {
                     "This resource is no longer on the sheet.".into(),
                 );
             } else {
-                self.desired.remove(key);
+                self.desired.write().remove(key);
             }
         }
         self.blocked.extend(outcome.blocked);
@@ -1373,6 +1404,8 @@ impl CombatSync {
             }
         }
         self.remote = Some(outcome.remote);
+        // A new read can add or drop the items and resources the wells measure.
+        self.desired.touch();
         self.error = None;
         self.updated = true;
     }
@@ -1590,17 +1623,19 @@ impl CombatSync {
                 self.action_notice = None;
             }
         }
-        let before = self.desired.clone();
+        let wells = self.wells(ui, max_hp);
+        let before = self.desired.groups.clone();
         ui.add_enabled_ui(writable, |ui| {
-            self.life(ui, max_hp);
+            self.life(ui, max_hp, wells);
             self.rests(ui, max_hp);
-            self.sheet_conditions(ui);
-            self.spending(ui);
-            self.purse(ui);
-            self.inventory(ui);
-            self.companions(ui);
+            self.sheet_conditions(ui, wells);
+            self.spending(ui, wells);
+            self.purse(ui, wells);
+            self.inventory(ui, wells);
+            self.companions(ui, wells);
         });
-        if self.desired != before {
+        if self.desired.groups != before {
+            self.desired.touch();
             self.changed = Some(Instant::now());
         }
         ui.label(
@@ -1620,27 +1655,108 @@ impl CombatSync {
             None => group_label(key).into(),
         }
     }
-    /// HP, temporary HP, the maximum HP modifier, death saves and inspiration.
-    fn life(&mut self, ui: &mut egui::Ui, max_hp: i64) {
-        use crate::design;
-        ui.add_space(design::XS);
-        design::group_label(ui, "Hit points");
-        let well = well_width(
-            ui,
-            [
+    /// The stepper wells for this frame: kept until a value, the maximum HP or the type size
+    /// changes, so an unchanged frame or a resize reads no values.
+    fn wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
+        use crate::design::Type;
+        #[cfg(test)]
+        {
+            self.well_counts.0 += 1;
+        }
+        let key = (
+            self.desired.revision,
+            max_hp,
+            Type::Small.font(ui).size.to_bits(),
+            ui.style()
+                .drag_value_text_style
+                .resolve(ui.style())
+                .size
+                .to_bits(),
+        );
+        if let Some((cached, wells)) = self.wells
+            && cached == key
+        {
+            return wells;
+        }
+        let wells = self.measure_wells(ui, max_hp);
+        self.wells = Some((key, wells));
+        wells
+    }
+    /// Reads every value the panel shows to find each block's widest. Only `wells` calls it.
+    fn measure_wells(&mut self, ui: &egui::Ui, max_hp: i64) -> Wells {
+        #[cfg(test)]
+        {
+            self.well_counts.1 += 1;
+        }
+        let digit = digit_width(ui);
+        let well = |values: &mut dyn Iterator<Item = i64>| {
+            well_for(ui, digit, values.map(digits).max().unwrap_or(1))
+        };
+        let groups = &self.desired.groups;
+        let field = |key: &str, field: &str| groups.get(key).and_then(|g| g[field].as_i64());
+        let named = |prefix: &'static str| {
+            self.remote
+                .iter()
+                .flat_map(move |remote| remote.named(prefix))
+                .filter_map(|(key, _, _)| groups.get(key))
+        };
+        let life = well(
+            &mut [
                 Some(max_hp),
-                self.desired
-                    .get("hp")
-                    .and_then(|hp| hp["temporaryHitPoints"].as_i64()),
-                self.desired
-                    .get("hp_bonus")
-                    .and_then(|bonus| bonus["bonusHitPoints"].as_i64()),
+                field("hp", "temporaryHitPoints"),
+                field("hp_bonus", "bonusHitPoints"),
             ]
             .into_iter()
             .flatten(),
         );
-        sheet_grid(ui, "sheet_life", well, |ui| {
-            if let Some(hp) = self.desired.get_mut("hp") {
+        let slots = well(
+            &mut ["slots", "pact"]
+                .into_iter()
+                .filter_map(|key| groups.get(key))
+                .flat_map(|slots| {
+                    (1..=9).filter_map(|level| slots[format!("level{level}")].as_i64())
+                }),
+        );
+        let limited = well(&mut named("limited/").filter_map(|group| group["uses"].as_i64()));
+        let currency = well(
+            &mut COINS
+                .iter()
+                .filter_map(|(coin, _, _)| field("currency", coin)),
+        );
+        let exhaustion = well(&mut field("conditions", "4").into_iter());
+        let inventory = well(&mut named("item/").flat_map(|item| {
+            [
+                item["quantity"].as_i64(),
+                item.get("charges").and_then(Value::as_i64),
+            ]
+            .into_iter()
+            .flatten()
+        }));
+        let companions = well(&mut named("creature/").flat_map(|creature| {
+            [
+                creature["removedHitPoints"].as_i64(),
+                creature["temporaryHitPoints"].as_i64(),
+            ]
+            .into_iter()
+            .flatten()
+        }));
+        Wells {
+            life,
+            slots,
+            limited,
+            currency,
+            exhaustion: Column::new(ui, &["Exhaustion level"], exhaustion),
+            inventory: Column::new(ui, &["Quantity", "Charges spent"], inventory),
+            companions: Column::new(ui, &["Damage taken", "Temporary HP"], companions),
+        }
+    }
+    /// HP, temporary HP, the maximum HP modifier, death saves and inspiration.
+    fn life(&mut self, ui: &mut egui::Ui, max_hp: i64, wells: Wells) {
+        use crate::design;
+        ui.add_space(design::XS);
+        design::group_label(ui, "Hit points");
+        sheet_grid(ui, "sheet_life", wells.life, |ui| {
+            if let Some(hp) = self.desired.groups.get_mut("hp") {
                 let mut current = current_hp(hp, max_hp);
                 let note = Some(format!("of {max_hp}"));
                 if edit_row(ui, "Current HP", &mut current, 0..=max_hp, note) {
@@ -1650,13 +1766,13 @@ impl CombatSync {
                     edit_row(ui, "Temporary HP", n, 0..=MAX_HP_BONUS, None)
                 });
             }
-            if let Some(bonus) = self.desired.get_mut("hp_bonus") {
+            if let Some(bonus) = self.desired.groups.get_mut("hp_bonus") {
                 step_field(bonus, "bonusHitPoints", |n| {
                     let range = -MAX_HP_BONUS..=MAX_HP_BONUS;
                     edit_row(ui, "Maximum HP modifier", n, range, None)
                 });
             }
-            if let Some(death) = self.desired.get_mut("death") {
+            if let Some(death) = self.desired.groups.get_mut("death") {
                 for (field, label) in [
                     ("successCount", "Death save successes"),
                     ("failCount", "Death save failures"),
@@ -1664,7 +1780,7 @@ impl CombatSync {
                     step_field(death, field, |n| edit_row(ui, label, n, 0..=3, None));
                 }
             }
-            if let Some(inspiration) = self.desired.get_mut("inspiration") {
+            if let Some(inspiration) = self.desired.groups.get_mut("inspiration") {
                 row_label(ui, "Inspiration");
                 let mut on = inspiration["inspiration"] == true;
                 if ui.checkbox(&mut on, "Has inspiration").changed() {
@@ -1767,7 +1883,8 @@ impl CombatSync {
                                 .rich(ui, "Hit dice to spend")
                                 .color(colors().muted),
                         );
-                        let well = well_width(ui, hit_dice.values().copied());
+                        // A class has at most 20 hit dice: two digits, with no scan.
+                        let well = well_for(ui, digit_width(ui), 2);
                         sheet_grid(ui, "sheet_short_rest", well, |ui| {
                             for dice in self.hit_dice() {
                                 let left = (dice.level - dice.used).max(0);
@@ -1814,9 +1931,9 @@ impl CombatSync {
             }
         }
     }
-    fn sheet_conditions(&mut self, ui: &mut egui::Ui) {
+    fn sheet_conditions(&mut self, ui: &mut egui::Ui, wells: Wells) {
         crate::design::section(ui, "Sheet conditions", |ui| {
-            if let Some(Value::Object(conditions)) = self.desired.get_mut("conditions") {
+            if let Some(Value::Object(conditions)) = self.desired.groups.get_mut("conditions") {
                 ui.horizontal_wrapped(|ui| {
                     for (id, name) in CONDITIONS {
                         let key = id.to_string();
@@ -1836,10 +1953,9 @@ impl CombatSync {
                 // On its own line: a stepper inside a wrapping row can run off a narrow column.
                 if let Some(level) = conditions.get_mut("4") {
                     let mut n = level.as_i64().unwrap_or(1);
-                    let column = Column::new(ui, &["Exhaustion level"], [n]);
                     if labelled_stepper(
                         ui,
-                        column,
+                        wells.exhaustion,
                         "Exhaustion level",
                         "Exhaustion level",
                         &mut n,
@@ -1853,18 +1969,13 @@ impl CombatSync {
         });
     }
     /// Spell slots and limited uses spent.
-    fn spending(&mut self, ui: &mut egui::Ui) {
+    fn spending(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
-        let slots = ["slots", "pact"]
-            .iter()
-            .filter_map(|key| self.desired.get(*key))
-            .flat_map(|slots| (1..=9).map(move |level| &slots[format!("level{level}")]));
-        let well = well_width(ui, slots.filter_map(Value::as_i64));
         design::section(ui, "Spell slots spent", |ui| {
-            sheet_grid(ui, "sheet_slots", well, |ui| {
+            sheet_grid(ui, "sheet_slots", wells.slots, |ui| {
                 for (key, label, levels) in [("slots", "Spell slots", 9), ("pact", "Pact slots", 5)]
                 {
-                    let Some(slots) = self.desired.get_mut(key) else {
+                    let Some(slots) = self.desired.groups.get_mut(key) else {
                         continue;
                     };
                     for level in 1..=levels {
@@ -1877,15 +1988,10 @@ impl CombatSync {
             });
         });
         let remote = self.remote.as_ref();
-        let uses = remote
-            .into_iter()
-            .flat_map(|r| r.named("limited/"))
-            .filter_map(|(key, _, _)| self.desired.get(key)?["uses"].as_i64());
-        let well = well_width(ui, uses);
         design::section(ui, "Limited uses spent", |ui| {
-            sheet_grid(ui, "sheet_limited", well, |ui| {
+            sheet_grid(ui, "sheet_limited", wells.limited, |ui| {
                 for (key, label, _) in remote.into_iter().flat_map(|r| r.named("limited/")) {
-                    if let Some(resource) = self.desired.get_mut(key) {
+                    if let Some(resource) = self.desired.groups.get_mut(key) {
                         step_field(resource, "uses", |n| {
                             edit_row(ui, label, n, 0..=MAX_COUNT, None)
                         });
@@ -1894,18 +2000,12 @@ impl CombatSync {
             });
         });
     }
-    fn purse(&mut self, ui: &mut egui::Ui) {
-        let Some(purse) = self.desired.get_mut("currency") else {
+    fn purse(&mut self, ui: &mut egui::Ui, wells: Wells) {
+        let Some(purse) = self.desired.groups.get_mut("currency") else {
             return;
         };
-        let well = well_width(
-            ui,
-            COINS
-                .iter()
-                .filter_map(|(field, _, _)| purse[*field].as_i64()),
-        );
         crate::design::section(ui, "Currency", |ui| {
-            sheet_grid(ui, "sheet_currency", well, |ui| {
+            sheet_grid(ui, "sheet_currency", wells.currency, |ui| {
                 for (field, _, name) in COINS {
                     step_field(purse, field, |n| edit_row(ui, name, n, 0..=MAX_COUNT, None));
                 }
@@ -1913,7 +2013,7 @@ impl CombatSync {
         });
     }
     /// Each item's quantity, and the charges spent where it has charges.
-    fn inventory(&mut self, ui: &mut egui::Ui) {
+    fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design::{self, Type, colors};
         let Some(remote) = &self.remote else {
             return;
@@ -1924,16 +2024,7 @@ impl CombatSync {
         }
         // One label column and one well width for every item, so each − and each + of the
         // section sits on one x (round 24 FK4).
-        let values = items
-            .iter()
-            .filter_map(|(key, _, _)| self.desired.get(*key))
-            .flat_map(|item| {
-                [
-                    item["quantity"].as_i64(),
-                    item.get("charges").and_then(Value::as_i64),
-                ]
-            });
-        let column = Column::new(ui, &["Quantity", "Charges spent"], values.flatten());
+        let column = wells.inventory;
         // The title holds the count, so the section keeps its own id as items come and go.
         design::section_with_id(
             ui,
@@ -1941,7 +2032,7 @@ impl CombatSync {
             format!("Inventory · {} items", items.len()),
             |ui| {
                 for (key, name, max) in items {
-                    let Some(item) = self.desired.get_mut(key) else {
+                    let Some(item) = self.desired.groups.get_mut(key) else {
                         continue;
                     };
                     // The name on its own line, and each value on a line under it, so a narrow
@@ -1982,7 +2073,7 @@ impl CombatSync {
         );
     }
     /// Companion and summon HP, as damage taken: the sheet works their maximum out itself.
-    fn companions(&mut self, ui: &mut egui::Ui) {
+    fn companions(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
         let Some(remote) = &self.remote else {
             return;
@@ -1991,19 +2082,10 @@ impl CombatSync {
         if creatures.is_empty() {
             return;
         }
-        let values = creatures
-            .iter()
-            .filter_map(|(key, _, _)| self.desired.get(*key))
-            .flat_map(|creature| {
-                [
-                    creature["removedHitPoints"].as_i64(),
-                    creature["temporaryHitPoints"].as_i64(),
-                ]
-            });
-        let column = Column::new(ui, &["Damage taken", "Temporary HP"], values.flatten());
+        let column = wells.companions;
         design::section(ui, "Companions and summons", |ui| {
             for (key, name, max) in creatures {
-                let Some(creature) = self.desired.get_mut(key) else {
+                let Some(creature) = self.desired.groups.get_mut(key) else {
                     continue;
                 };
                 row_label(ui, name);
@@ -2059,13 +2141,13 @@ fn labelled_stepper(
 }
 /// One block of labelled steppers: its label column (the widest label plus `S`) and one well
 /// width (the widest value), so every − and every + of the block share an x.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Column {
     label: f32,
     well: f32,
 }
 impl Column {
-    fn new(ui: &egui::Ui, labels: &[&str], values: impl IntoIterator<Item = i64>) -> Self {
+    fn new(ui: &egui::Ui, labels: &[&str], well: f32) -> Self {
         use crate::design::{self, Type};
         let font = Type::Small.font(ui);
         let label = labels
@@ -2083,23 +2165,36 @@ impl Column {
             })
             .fold(0.0, f32::max)
             + design::S;
-        Self {
-            label,
-            well: well_width(ui, values),
-        }
+        Self { label, well }
     }
 }
-/// The width of a stepper's well that holds the widest of `values`: its digit count times the
-/// widest digit, plus the well's padding, never below the usual control width. Constant text
-/// work, whatever the number of values.
-fn well_width(ui: &egui::Ui, values: impl IntoIterator<Item = i64>) -> f32 {
-    let digits = values
-        .into_iter()
-        .map(|value| value.unsigned_abs().to_string().len() + usize::from(value < 0))
-        .max()
-        .unwrap_or(1);
+/// Every block's well width and label column. `CombatSync::wells` keeps them until a value, the
+/// maximum HP or the type size changes; only `CombatSync::measure_wells` reads the values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Wells {
+    life: f32,
+    slots: f32,
+    limited: f32,
+    currency: f32,
+    exhaustion: Column,
+    inventory: Column,
+    companions: Column,
+}
+/// What the wells were measured from: the values' revision, the maximum HP, and the label and
+/// number type sizes.
+type WellsKey = (u64, i64, u32, u32);
+/// The characters a whole number shows: its digits, and a minus sign when it is negative.
+fn digits(value: i64) -> usize {
+    value
+        .unsigned_abs()
+        .checked_ilog10()
+        .map_or(1, |log| log as usize + 1)
+        + usize::from(value < 0)
+}
+/// The widest digit in the stepper's number type.
+fn digit_width(ui: &egui::Ui) -> f32 {
     let font = ui.style().drag_value_text_style.resolve(ui.style());
-    let digit = ('0'..='9')
+    ('0'..='9')
         .map(|digit| {
             ui.fonts_mut(|fonts| {
                 fonts.layout_no_wrap(digit.to_string(), font.clone(), egui::Color32::PLACEHOLDER)
@@ -2107,7 +2202,11 @@ fn well_width(ui: &egui::Ui, values: impl IntoIterator<Item = i64>) -> f32 {
             .size()
             .x
         })
-        .fold(0.0, f32::max);
+        .fold(0.0, f32::max)
+}
+/// A stepper's well that holds `digits` characters: their width plus the well's padding, never
+/// below the usual control width.
+fn well_for(ui: &egui::Ui, digit: f32, digits: usize) -> f32 {
     (digit * digits as f32 + 2.0 * ui.spacing().button_padding.x).max(ui.spacing().interact_size.x)
 }
 /// A row label in a sheet grid.
@@ -2350,8 +2449,8 @@ mod tests {
         let mut sync = CombatSync::default();
         sync.enabled = true;
         sync.remote = Some(read_only.clone());
-        sync.desired = read_only.groups.clone();
-        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        *sync.desired.write() = read_only.groups.clone();
+        sync.desired.write().get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
         assert!(sync.dirty());
         assert!(
             !sync.unconfirmed(),
@@ -2398,8 +2497,8 @@ mod tests {
         sync.enabled = true;
         sync.enter_scope((1, "1".into(), "123".into()));
         sync.remote = Some(remote());
-        sync.desired = remote().groups;
-        sync.desired.get_mut("slots").unwrap()["level1"] = 9.into();
+        *sync.desired.write() = remote().groups;
+        sync.desired.write().get_mut("slots").unwrap()["level1"] = 9.into();
         sync.enter_scope((1, "1".into(), "456".into()));
         assert!(sync.unsent.is_empty(), "these are the other character's");
         assert_eq!(sync.take_matched(), None);
@@ -2410,8 +2509,8 @@ mod tests {
         sync.keep_all_unsent();
         sync.enabled = true;
         sync.remote = Some(remote());
-        sync.desired = remote().groups;
-        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        *sync.desired.write() = remote().groups;
+        sync.desired.write().get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
         sync.stop();
         sync.start();
         sync.accept_read(remote());
@@ -2597,8 +2696,8 @@ mod tests {
             "hp".into(),
             json!({"removedHitPoints":5,"temporaryHitPoints":0}),
         );
-        sync.desired = sent.clone();
-        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        *sync.desired.write() = sent.clone();
+        sync.desired.write().get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
         let mut confirmed = old;
         confirmed.groups = sent.clone();
         sync.accept(
@@ -2617,7 +2716,7 @@ mod tests {
         let old = remote();
         let mut sync = CombatSync::default();
         sync.enabled = true;
-        sync.desired = old.groups.clone();
+        *sync.desired.write() = old.groups.clone();
         sync.remote = Some(old.clone());
         let (_tx, rx) = mpsc::channel();
         sync.pending = Some(Pending {
@@ -2652,8 +2751,8 @@ mod tests {
         let old = remote();
         let mut sync = CombatSync::default();
         sync.remote = Some(old.clone());
-        sync.desired = old.groups.clone();
-        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        *sync.desired.write() = old.groups.clone();
+        sync.desired.write().get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
         let sent = sync.desired.clone();
         sync.accept(
             Outcome {
@@ -2662,7 +2761,7 @@ mod tests {
             },
             &sent,
         );
-        assert_eq!(sync.desired, sent);
+        assert_eq!(*sync.desired, sent);
         let mut changed = old;
         changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = 12.into();
         sync.accept(
@@ -2672,7 +2771,7 @@ mod tests {
             },
             &sent,
         );
-        assert_eq!(sync.desired, sent);
+        assert_eq!(*sync.desired, sent);
         assert!(sync.blocked.contains_key("hp"));
     }
     #[test]
@@ -2680,7 +2779,7 @@ mod tests {
         let remote = remote();
         let mut sync = CombatSync::default();
         sync.enabled = true;
-        sync.desired = remote.groups.clone();
+        *sync.desired.write() = remote.groups.clone();
         sync.remote = Some(remote);
         let ctx = egui::Context::default();
         let before = sync.desired.clone();
@@ -2697,7 +2796,7 @@ mod tests {
             },
         );
         assert!(!out.shapes.is_empty());
-        assert_eq!(sync.desired, before);
+        assert_eq!(*sync.desired, before);
     }
     fn full_remote(can_edit: bool) -> Remote {
         Remote::from_raw(
@@ -2940,16 +3039,17 @@ mod tests {
         let r = full_remote(true);
         let mut sync = CombatSync::default();
         sync.enabled = true;
-        sync.desired = r.groups.clone();
+        *sync.desired.write() = r.groups.clone();
         sync.remote = Some(r.clone());
         let long = SheetAction::LongRest {
             reset_max_hp_bonus: false,
             reduce_exhaustion: true,
         };
         sync.desired
+            .write()
             .insert("inspiration".into(), json!({"inspiration": true}));
         assert!(sync.request(long.clone()).is_err());
-        sync.desired = r.groups.clone();
+        *sync.desired.write() = r.groups.clone();
         sync.blocked.insert("hp".into(), "conflict".into());
         assert!(sync.request(long.clone()).is_err());
         sync.blocked.clear();
@@ -2976,7 +3076,7 @@ mod tests {
         let remote = full_remote(true);
         let mut sync = CombatSync::default();
         sync.enabled = true;
-        sync.desired = remote.groups.clone();
+        *sync.desired.write() = remote.groups.clone();
         sync.remote = Some(remote);
         let ctx = egui::Context::default();
         let before = sync.desired.clone();
@@ -3006,7 +3106,7 @@ mod tests {
             );
             assert!(!out.shapes.is_empty());
         }
-        assert_eq!(sync.desired, before);
+        assert_eq!(*sync.desired, before);
     }
     #[test]
     fn a_stepper_never_changes_a_value_outside_its_range_by_itself() {

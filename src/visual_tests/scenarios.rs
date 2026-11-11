@@ -7114,23 +7114,27 @@ pub mod signed_in {
                 format!("At {size:?} the tabs come before the Combat sync heading, and its body follows it: {places:?}"),
             );
         }
+        // Round 24 review: the stepper wells are measured once per change of the values. The
+        // count of value reads lives in `measure_wells`, the count of frames in `wells`.
+        let wells = crate::test_support::CachedWork::start("Sync wells", d, |d| {
+            let (reached, work) = d.app_mut().party.sync_well_counts();
+            crate::test_support::Counts { reached, work }
+        });
         // After a read, every value Splat can send has − and + beside it.
-        d.app_mut().party.simulate_sheet_read(
-            62,
-            &serde_json::json!({
-                "id": 9100001, "canEdit": true, "removedHitPoints": 4, "temporaryHitPoints": 5,
-                "inspiration": true, "bonusHitPoints": 0,
-                "deathSaves": {"successCount": 0, "failCount": 0}, "conditions": [],
-                "currencies": {"cp": 12, "sp": 30, "ep": 0, "gp": 145, "pp": 2},
-                "actions": {"class": [{"id": 1, "entityTypeId": 2, "name": "Second Wind", "limitedUse": {"numberUsed": 1}}]},
-                "inventory": [
-                    {"id": 3, "quantity": 18, "definition": {"name": "Crossbow Bolts"}},
-                    {"id": 4, "quantity": 1, "limitedUse": {"maxUses": 3, "numberUsed": 1}, "definition": {"name": "Wand of Web"}}
-                ],
-                "creatures": [{"id": 5, "name": "Grit", "removedHitPoints": 2, "temporaryHitPoints": 0, "definition": {"name": "Mastiff", "averageHitPoints": 5}}],
-                "classes": [{"id": 6, "level": 6, "hitDiceUsed": 2, "definition": {"name": "Fighter", "hitDice": 10}}]
-            }),
-        );
+        let sheet = serde_json::json!({
+            "id": 9100001, "canEdit": true, "removedHitPoints": 4, "temporaryHitPoints": 5,
+            "inspiration": true, "bonusHitPoints": 0,
+            "deathSaves": {"successCount": 0, "failCount": 0}, "conditions": [],
+            "currencies": {"cp": 12, "sp": 30, "ep": 0, "gp": 145, "pp": 2},
+            "actions": {"class": [{"id": 1, "entityTypeId": 2, "name": "Second Wind", "limitedUse": {"numberUsed": 1}}]},
+            "inventory": [
+                {"id": 3, "quantity": 18, "definition": {"name": "Crossbow Bolts"}},
+                {"id": 4, "quantity": 1, "limitedUse": {"maxUses": 3, "numberUsed": 1}, "definition": {"name": "Wand of Web"}}
+            ],
+            "creatures": [{"id": 5, "name": "Grit", "removedHitPoints": 2, "temporaryHitPoints": 0, "definition": {"name": "Mastiff", "averageHitPoints": 5}}],
+            "classes": [{"id": 6, "level": 6, "hitDiceUsed": 2, "definition": {"name": "Fighter", "hitDice": 10}}]
+        });
+        d.app_mut().party.simulate_sheet_read(62, &sheet);
         d.settle();
         d.observe(
             "T7.3",
@@ -7176,6 +7180,66 @@ pub mod signed_in {
             },
         );
         d.state("party-sync-editable", Sizes::All);
+        let shown = d.has("Increase Gold") && d.has("Increase Grit temporary HP");
+        let result = wells.warm(d, shown, 1);
+        d.observe(
+            "iter-24-C-FK4-measured",
+            result.is_ok(),
+            format!("{result:?}"),
+        );
+        // Unchanged frames and a resize read no values, with the blocks open and with them
+        // closed.
+        for open in [true, false] {
+            if !open {
+                for section in ["Currency", "Inventory", "Companions and summons"] {
+                    d.click_containing(section);
+                }
+            }
+            let steady = wells.steady(d, |d| {
+                d.settle();
+                let small = d.at_size(SMALL, |d| d.has("Increase Gold") == open);
+                d.settle();
+                small && d.has("Increase Gold") == open && d.has_containing(SYNC_SECTION)
+            });
+            d.observe(
+                if open {
+                    "iter-24-C-FK4-steady-open"
+                } else {
+                    "iter-24-C-FK4-steady-closed"
+                },
+                steady.is_ok(),
+                format!("{steady:?}"),
+            );
+        }
+        for section in ["Currency", "Inventory", "Companions and summons"] {
+            d.click_containing(section);
+        }
+        // A new read that widens Gold measures again: every coin's + moves to the new edge.
+        let plus = |d: &Driver<'_>, coin: &str| {
+            d.place_of(&format!("Increase {coin}"))
+                .map(|rect| rect.left())
+        };
+        let before = plus(d, "Gold");
+        let mut wider = sheet.clone();
+        wider["currencies"]["gp"] = 14_500.into();
+        let refreshed = wells.refresh(d, 1, |d| {
+            d.app_mut().party.simulate_sheet_read(62, &wider);
+            d.settle();
+            let after = plus(d, "Gold");
+            before
+                .zip(after)
+                .is_some_and(|(before, after)| after > before)
+                && ["Platinum", "Electrum", "Silver", "Copper"]
+                    .iter()
+                    .all(|coin| plus(d, coin) == after)
+        });
+        d.observe(
+            "iter-24-C-FK4-refresh",
+            refreshed.is_ok(),
+            format!("{refreshed:?}"),
+        );
+        d.app_mut().party.simulate_sheet_read(62, &sheet);
+        d.settle();
         go_library(d);
         let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);

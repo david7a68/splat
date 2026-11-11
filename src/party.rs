@@ -141,6 +141,13 @@ impl Party {
             .simulate_sheet(id.expect("a selected character"), max_hp, sheet);
     }
 
+    /// How often the sync panel asked for its stepper wells, and how often it read the values
+    /// to measure them.
+    #[cfg(test)]
+    pub fn sync_well_counts(&self) -> (usize, usize) {
+        self.combat.well_counts
+    }
+
     /// A change made on this page has not reached D&D Beyond.
     pub fn unconfirmed(&self) -> bool {
         self.combat.unconfirmed()
