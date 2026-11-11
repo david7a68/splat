@@ -13436,19 +13436,23 @@ pub mod run_rolls {
         d.press(Key::Escape);
 
         // A tile's number is its place among all of the creature's actions. Spellcasting, which
-        // is prose, parts the cultist's two tiles, and takes no number.
+        // is prose, parts the cultist's third tile from the first two, and takes no number.
         d.click_row(CASTER);
         d.observe(
             "T16.5",
-            d.name_starting("Scorching Sickle").ends_with("Ctrl+1.")
-                && d.name_starting(BURST).ends_with("Ctrl+2."),
-            "The tile after the Spellcasting text says Ctrl+2, not Ctrl+1 again",
+            d.name_starting("Scorching Sickle").contains("Ctrl+1.")
+                && d.name_starting(BURST).contains("Ctrl+2.")
+                && d.name_starting("Cinder Dart").contains("Ctrl+3."),
+            format!(
+                "The tile after the Spellcasting text says Ctrl+3, not Ctrl+1 again: {:?}",
+                d.name_starting("Cinder Dart")
+            ),
         );
-        d.press_ctrl(Key::Num2);
+        d.press_ctrl(Key::Num3);
         d.observe(
             "T16.5",
-            d.has_containing("Click each target"),
-            "Ctrl+2 arms the tile that says Ctrl+2, the save",
+            d.has_containing("Click a target to roll against it"),
+            "Ctrl+3 arms the tile that says Ctrl+3, the attack after the prose",
         );
         d.press(Key::Escape);
 

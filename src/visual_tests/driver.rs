@@ -869,11 +869,12 @@ impl<'a> Driver<'a> {
         self.nodes().iter().any(|node| node.name == name)
     }
 
-    /// The whole name of the visible control whose name starts with these words, or nothing.
+    /// The whole name of the control whose name starts with these words, in view or
+    /// scrolled out of it, or nothing.
     pub fn name_starting(&self, words: &str) -> String {
         self.nodes()
             .into_iter()
-            .find(|node| node.name.starts_with(words) && Self::is_control(node) && node.in_view())
+            .find(|node| node.name.starts_with(words) && Self::is_control(node))
             .map(|node| node.name)
             .unwrap_or_default()
     }

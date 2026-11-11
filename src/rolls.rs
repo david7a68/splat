@@ -1525,20 +1525,32 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
         ui.set_height(BAR_BUTTONS);
         ui.spacing_mut().item_spacing.x = design::XS;
         ui.add_space(design::S);
-        for chip in chips {
-            if ui.available_width() < 80.0 {
-                break;
-            }
+        for (at, chip) in chips.iter().enumerate() {
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let shown = with_changes(&chip.link, changes);
             let label = Chip::new(shown.clone(), chip.text.clone())
                 .map_or_else(|| chip.label.clone(), |shown| shown.label);
             let words = format!("{} {label}", icon(&chip.link));
-            let response = Action::secondary(&words)
+            let action = Action::secondary(&words)
                 .name(&label)
                 .density(Density::Read)
-                .selected(lit)
-                .show(ui);
+                .selected(lit);
+            // A button shows whole or not at all. The actions with no room are counted, and
+            // Ctrl+number still arms them.
+            let left = chips.len() - at;
+            let more = format!("+{left}");
+            let more_width = design::number_width(ui, &more, &Type::Small.font(ui)) + design::S;
+            let room = ui.available_width() - if left > 1 { more_width } else { 0.0 };
+            if action.natural_width(ui) > room {
+                let hint = format!(
+                    "{}. Close Lookup to see them, or press Ctrl and an action's number.",
+                    design::count(left, "more action", "more actions")
+                );
+                ui.label(Type::Small.rich(ui, more).color(colors().muted))
+                    .on_hover_text(hint);
+                break;
+            }
+            let response = action.show(ui);
             let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
             press(ui, &response, &chip.link);
         }
