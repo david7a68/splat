@@ -14,6 +14,7 @@ const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
 const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
+const NO_TIMELINE: &str = "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
 
 /// The Undo control's whole action, which its accessible name keeps when its words are cut.
 fn undo_step(d: &Driver<'_>) -> String {
@@ -264,6 +265,47 @@ pub fn run(d: &mut Driver<'_>) {
         d.has(CONTINUE) && !d.visible_passage(LATER),
         "With no later fight or restoring rest, Continue fight is offered again",
     );
+    // An outside edit makes Timeline.md unreadable. Splat cannot tell which fight was played
+    // last, so the ended view says that. When the file can be read again, the control is back.
+    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+    let timeline = crate::sessions::folder(&campaign)
+        .unwrap()
+        .join(crate::timeline::FILE);
+    d.app_mut().timeline.save();
+    let valid = std::fs::read(&timeline).unwrap();
+    std::fs::write(&timeline, "---\ntimeline_version: [broken\n---\n").unwrap();
+    d.app_mut().timeline.reload();
+    d.settle();
+    d.observe(
+        "T15.8",
+        !d.has(CONTINUE) && d.visible_passage(NO_TIMELINE),
+        "While Timeline.md cannot be read, the ended view offers no Continue fight and says why",
+    );
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The ended view while Timeline.md cannot be read",
+        &[CLOSE_RUN, NO_TIMELINE],
+        "Ended · Round 2",
+    );
+    d.state("ended-timeline-unreadable", Sizes::All);
+    open_lookup(d);
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The ended view while Timeline.md cannot be read, beside Lookup",
+        &[CLOSE_RUN, NO_TIMELINE],
+        "Ended · Round 2",
+    );
+    close_lookup(d);
+    std::fs::write(&timeline, &valid).unwrap();
+    d.app_mut().timeline.reload();
+    d.settle();
+    d.observe(
+        "T15.8",
+        d.has(CONTINUE) && !d.visible_passage(NO_TIMELINE),
+        "When Timeline.md can be read again, Continue fight is offered again",
+    );
     let told = story(d);
     d.observe(
         "T15.4",
@@ -472,10 +514,6 @@ pub fn run(d: &mut Driver<'_>) {
     // Close run writes the fight's last result to Timeline.md at once, and not after the
     // pause before a save: a closed run cannot say it again after a crash. The file is read
     // here before anything else can save it.
-    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
-    let timeline = crate::sessions::folder(&campaign)
-        .unwrap()
-        .join(crate::timeline::FILE);
     let before = std::fs::read_to_string(&timeline).unwrap_or_default();
     close_run(d);
     let after = std::fs::read_to_string(&timeline).unwrap_or_default();

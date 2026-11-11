@@ -805,7 +805,7 @@ const CONTINUE_NO_EVENT: &str =
     "This fight is not on the Timeline. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline cannot say which fight was played last.
 const CONTINUE_NEEDS_TIMELINE: &str =
-    "Splat cannot read Timeline.md. Repair it to go on with this fight.";
+    "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
 
 /// Why Continue fight is not offered for this ended fight, if it is not.
 ///
