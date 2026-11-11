@@ -8334,6 +8334,15 @@ pub mod session_notes {
                 })
             })
             .collect();
+        // iter-21-T-FT1: the New actions keep the letters the DM typed; with no capital typed,
+        // only the first letter becomes one.
+        d.observe(
+            "iter-21-T-FT1",
+            d.has("New NPC “Toll at the old mill”")
+                && d.has("New location “Toll at the old mill”")
+                && !d.has_containing("“Toll At The Old Mill”"),
+            "Lookup offers New NPC “Toll at the old mill” for the typed toll at the old mill",
+        );
         d.state("lookup-written-card-link", Sizes::Default);
         look_up_again(d, "bless");
         d.wait_for_text("Spell · Level 1 · Campaign");
@@ -14186,6 +14195,52 @@ pub mod run_rolls {
                 .iter()
                 .all(|width| width.is_some_and(|width| width > 2.0 * 208.0)),
             format!("The Library's lone Bite tile takes the line at 1200 and 1920: {widths:?}"),
+        );
+        // iter-21-T-FT3: the preview's totals read `11 to hit · 5 damage: …`, with one muted
+        // `·` between them, on the line of the damage words. At 960 the line is below the fold;
+        // `rolls::a_preview_has_one_muted_separator…` checks narrow lines.
+        let muted = crate::design::colors().muted;
+        let totals = [DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let below = tile(d, BITE)?.rect.bottom();
+                let mut texts = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let Some(row) = text.galley.rows.first() else {
+                        return;
+                    };
+                    let rect = row
+                        .rect_without_leading_space()
+                        .translate(text.pos.to_vec2());
+                    if rect.top() > below && clip.intersects(rect) {
+                        let color = text.galley.job.sections.first().map(|s| s.format.color);
+                        texts.push((text.galley.job.text.clone(), rect, color));
+                    }
+                });
+                let hit = texts
+                    .iter()
+                    .position(|(words, ..)| words.ends_with(" to hit"))?;
+                let [_, (dot, dot_rect, color), (damage, damage_rect, _)] =
+                    texts.get(hit..hit + 3)?
+                else {
+                    return None;
+                };
+                let joined = dot == "·"
+                    && *color == Some(muted)
+                    && damage.contains(" damage")
+                    && dot_rect.right() < damage_rect.left()
+                    && (damage_rect.top()..damage_rect.bottom()).contains(&dot_rect.center().y);
+                Some((format!("{} {dot} {damage}", texts[hit].0), joined))
+            })
+        });
+        d.observe(
+            "iter-21-T-FT3",
+            totals
+                .iter()
+                .all(|found| found.as_ref().is_some_and(|(_, joined)| *joined)),
+            format!(
+                "At 1200 and 1920, the preview has one muted `·` between its totals, on the \
+                 damage's line: {totals:?}"
+            ),
         );
         d.state("library-preview", Sizes::All);
 

@@ -620,7 +620,10 @@ A result takes the place of its button, the saved run keeps it, and Undo takes i
 end, because that is when the party searches. **Copy loot** copies the list, with the results, as Markdown for the
 session note. Loot on creatures still standing is under **more creatures carry loot**.
 
-**New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
+**New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. The name keeps
+the letters you typed. When you typed no capital, only its first letter becomes one: `toll at the old mill` gives
+`Toll at the old mill`, and `McTavish` stays `McTavish`. The note's saved name and its file name keep the same letters.
+**Make world
 entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a
 word of your own), and can have `aliases`, `status`, `in` (the place it is in) and `creature` (a stat block):
 
