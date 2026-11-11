@@ -31,6 +31,43 @@ pub(crate) use view::{change_preview, change_rows};
 
 /// The words after a name in a sheet change's summary. The run header shortens them to `:`.
 pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
+/// The words after a name in the log line of a new turn.
+const TURN: &str = "’s turn.";
+
+/// The log's generated phrases are curly on screen and straight in the run file, as file
+/// content is. Only these phrases change, so names and typed words keep their own marks, and
+/// a run saved before curly marks reads the same way.
+mod stored_words {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// Every generated phrase in the log that has a curly mark.
+    fn phrases() -> impl Iterator<Item = &'static str> {
+        std::iter::once(super::TURN)
+            .chain(super::Grouping::ALL.iter().map(|grouping| grouping.label()))
+            .filter(|phrase| phrase.contains('’'))
+    }
+    pub(super) fn to_file(line: &str) -> String {
+        phrases().fold(line.to_owned(), |line, phrase| {
+            line.replace(phrase, &phrase.replace('’', "'"))
+        })
+    }
+    pub(super) fn from_file(line: &str) -> String {
+        phrases().fold(line.to_owned(), |line, phrase| {
+            line.replace(&phrase.replace('’', "'"), phrase)
+        })
+    }
+    pub(super) mod lines {
+        use super::*;
+        pub fn serialize<S: Serializer>(lines: &[String], s: S) -> Result<S::Ok, S::Error> {
+            let stored: Vec<String> = lines.iter().map(|line| to_file(line)).collect();
+            stored.serialize(s)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+            let stored = Vec::<String>::deserialize(d)?;
+            Ok(stored.iter().map(|line| from_file(line)).collect())
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
@@ -577,6 +614,7 @@ struct State {
     cursor: usize,
     round: u64,
     phase: Phase,
+    #[serde(with = "stored_words::lines")]
     log: Vec<String>,
     #[serde(default)]
     last_change: Option<String>,
@@ -1742,7 +1780,7 @@ impl Run {
                 next.round = 1;
                 next.phase = Phase::Running;
                 format!(
-                    "Round 1: {}’s turn.",
+                    "Round 1: {}{TURN}",
                     next.participants[next.order[next.cursor]].name
                 )
             }
@@ -1755,7 +1793,7 @@ impl Run {
                 }
                 Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
-                    "Round {}: {}’s turn.",
+                    "Round {}: {}{TURN}",
                     next.round, next.participants[next.order[next.cursor]].name
                 )
             }
@@ -4802,6 +4840,22 @@ mod tests {
             run.state.participants[0].hp
         );
         assert_eq!(reopened.state.log, run.state.log);
+        // Astra review of PR 235: the run file keeps straight marks in the log's generated
+        // phrases, and the shown log has curly ones, also for a run saved before them.
+        let stored = fs::read_to_string(&path).unwrap();
+        assert!(stored.contains("'s turn."), "{stored}");
+        assert!(!stored.contains('’'), "{stored}");
+        let turns = |log: &[String]| log.iter().filter(|line| line.ends_with("’s turn.")).count();
+        assert_eq!(turns(&run.state.log), 2, "{:?}", run.state.log);
+        assert_eq!(turns(&reopened.state.log), 2, "{:?}", reopened.state.log);
+        // The grouping phrase does the same. A name keeps its own straight mark.
+        let line = format!("NPC initiative — {}. Ka'ar 12", Grouping::Explicit.label());
+        let filed = stored_words::to_file(&line);
+        assert_eq!(
+            filed,
+            "NPC initiative — In the encounter's initiative groups. Ka'ar 12"
+        );
+        assert_eq!(stored_words::from_file(&filed), line);
         assert!(!reopened.needs_save());
         reopened.apply(Command::Next).unwrap();
         reopened.save().unwrap();

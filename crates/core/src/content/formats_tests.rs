@@ -1225,6 +1225,25 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
             .next(),
         Some('|')
     );
+    // Astra review of PR 235: a lowercase heading and a row without an id. The reader takes
+    // the heading in any case, so the flag is a rule choice by its kind whatever the words
+    // say, and the id-less row's own flag gives way to it.
+    let lowercase = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| combat initiative | Imaginary initiative |\n").text();
+    let mut entry = Entry::parse("Campaign.md", &lowercase).unwrap();
+    assert_eq!(
+        entry.flags.iter().map(|flag| flag.kind).collect::<Vec<_>>(),
+        [super::layout::FlagKind::RuleChoiceId]
+    );
+    super::list_formats::resolve(&mut entry, &[], &lowercase);
+    assert_eq!(entry.flags.len(), 1, "{:?}", entry.flags);
+    assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
+    assert!(
+        entry.flags[0]
+            .message
+            .starts_with("combat initiative choice “Imaginary initiative”"),
+        "{}",
+        entry.flags[0].message
+    );
 }
 
 #[test]

@@ -25,6 +25,8 @@ pub enum FlagKind {
     Plain,
     /// A `Rule choices` row of a campaign that names no single rule. Rules and runs repairs it.
     RuleChoice,
+    /// A `Rule choices` row without a readable id. Reading the row by its rule name replaces it.
+    RuleChoiceId,
 }
 
 impl FlagKind {

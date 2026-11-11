@@ -461,9 +461,10 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
         let mut choices = Mapping::new();
         if let Some(table) = table(text, "Rule choices", RULES) {
             for row in table.rows {
+                let line = row.first().map_or(1, |c| c.line);
                 let parsed = (|| {
                     if row.len() != 2 {
-                        return Err("Rule: missing or extra cells".into());
+                        return Err(Flag::new(line, "Rule: missing or extra cells".into()));
                     }
                     let slot = machine(&row[1].value, "rule").unwrap_or_else(|| {
                         if row[0].value.eq_ignore_ascii_case("Combat initiative") {
@@ -473,18 +474,24 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                         }
                     });
                     if !super::resource_key(&slot) {
-                        return Err("Rule not found; default used".into());
+                        return Err(Flag::new(line, "Rule not found; default used".into()));
                     }
-                    let id = machine(&row[1].value, "id").ok_or("Rule choice id not found")?;
-                    Uuid::parse_str(&id).map_err(|_| "Rule choice id not found")?;
+                    let Some(id) =
+                        machine(&row[1].value, "id").filter(|id| Uuid::parse_str(id).is_ok())
+                    else {
+                        return Err(Flag {
+                            kind: FlagKind::RuleChoiceId,
+                            ..Flag::new(line, "Rule choice id not found".into())
+                        });
+                    };
                     if choices.contains_key(slot.as_str()) {
-                        return Err("Duplicate rule choice".into());
+                        return Err(Flag::new(line, "Duplicate rule choice".into()));
                     }
                     choices.insert(slot.into(), map(&[("id", id.into())]));
-                    Ok::<_, String>(())
+                    Ok(())
                 })();
-                if let Err(message) = parsed {
-                    flags.push(Flag::new(row.first().map_or(1, |c| c.line), message));
+                if let Err(flag) = parsed {
+                    flags.push(flag);
                 }
             }
         }
@@ -1820,7 +1827,7 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                 let line = row[1].line + entry.body_line.saturating_sub(1);
                 entry
                     .flags
-                    .retain(|flag| flag.line != line || flag.message != "Rule choice id not found");
+                    .retain(|flag| flag.line != line || flag.kind != FlagKind::RuleChoiceId);
                 let visible = row[1].value.split("%%").next().unwrap_or("").trim();
                 let resolved = if Uuid::parse_str(visible).is_ok() {
                     Err("Use a rule name".into())

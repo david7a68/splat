@@ -4830,7 +4830,8 @@ impl Encounters {
             .get(&active.id)
             .into_iter()
             .flat_map(|item| &item.entry.flags)
-            .filter(|flag| flag.message.starts_with("Combat initiative choice "))
+            // Every flag Campaign sends here with its repair link, by its kind, never its words.
+            .filter(|flag| flag.kind == splat::content::layout::FlagKind::RuleChoice)
             .collect();
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
