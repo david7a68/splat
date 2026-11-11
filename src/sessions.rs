@@ -52,7 +52,7 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
         .components()
         .any(|c| matches!(c, std::path::Component::ParentDir))
     {
-        return Err("Session folders cannot contain '..'.".into());
+        return Err("Session folders cannot contain “..”.".into());
     }
     Ok(if path.is_absolute() {
         path.into()
@@ -61,9 +61,10 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
-pub(crate) fn missing_folder(folder: &Path) -> String {
+/// One wording for a folder that is gone, whatever it holds (`Session`, `Run`).
+pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
     format!(
-        "Session folder not found: {}. It may have been moved or renamed.",
+        "{what} folder not found: {}. It may have been moved or renamed.",
         folder.display()
     )
 }
@@ -73,7 +74,7 @@ pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(missing_folder(&path));
+        return Err(missing_folder("Session", &path));
     }
     Ok(path)
 }

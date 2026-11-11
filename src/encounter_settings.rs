@@ -37,7 +37,7 @@ impl Grouping {
             Self::Identical => "In groups of identical NPCs (D&D default)",
             Self::Individual => "Individually",
             Self::BySide => "In one group per side",
-            Self::Explicit => "In the encounter's initiative groups",
+            Self::Explicit => "In the encounter’s initiative groups",
         }
     }
     /// How an encounter group takes its initiative under this rule. A typed total is the
@@ -47,7 +47,7 @@ impl Grouping {
             Self::Identical => {
                 "A group rolls once, with the first member’s bonus, even with different creatures."
             }
-            Self::Individual => "Each member of a group rolls alone, by the campaign's rule.",
+            Self::Individual => "Each member of a group rolls alone, by the campaign’s rule.",
             Self::BySide => {
                 "A group takes the initiative its side already has. A side with none rolls once."
             }
@@ -208,7 +208,7 @@ impl Options {
             .components()
             .any(|c| matches!(c, std::path::Component::ParentDir))
         {
-            return Err("Run folders cannot contain '..'.".into());
+            return Err("Run folders cannot contain “..”.".into());
         }
         Ok(if path.is_absolute() {
             path.into()

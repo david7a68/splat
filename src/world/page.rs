@@ -446,7 +446,7 @@ impl WorldPage {
                 ui,
                 icons::WORLD,
                 "No world notes yet",
-                "World notes are the Markdown files in this campaign's World folder.",
+                "World notes are the Markdown files in this campaign’s World folder.",
                 |ui| {
                     create = new_menu(ui);
                 },
@@ -1009,7 +1009,7 @@ impl WorldPage {
             design::reader::title(ui, "Open questions");
             design::reader::subtitle(
                 ui,
-                "Each unticked task line in the world's notes. Tick it in the note when you decide.",
+                "Each unticked task line in the world’s notes. Tick it in the note when you decide.",
             );
             ui.add_space(design::S);
             by_page(ui, &checks.questions);
@@ -1024,7 +1024,7 @@ impl WorldPage {
             design::reader::section_heading(ui, "Dates outside events");
             note(
                 ui,
-                "A date in words belongs on an event's note. An event has a date that Splat can put in order.",
+                "A date in words belongs on an event’s note. An event has a date that Splat can put in order.",
             );
             by_page(ui, &checks.loose_dates);
         }

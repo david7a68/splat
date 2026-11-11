@@ -806,7 +806,7 @@ impl ProcessingSettings {
             let problem = if problem.starts_with("Save an API key for this speech service") {
                 let host = super::host(&self.config.speech_url);
                 format!(
-                    "save an {} key under Speech service.",
+                    "Save an {} key under Speech service.",
                     if host == "api.openai.com" {
                         "OpenAI"
                     } else {
@@ -819,7 +819,7 @@ impl ProcessingSettings {
             design::message(
                 ui,
                 Tone::Info,
-                &format!("Before you can process: {problem}"),
+                &format!("You cannot process yet. {problem}"),
             );
         }
         ui.add_space(design::L);
