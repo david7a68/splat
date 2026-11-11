@@ -11765,6 +11765,53 @@ pub mod run_loot {
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
         d.goal("add loot and a roll on a campaign table");
+
+        // iter-23 FJ1 beside round 22 FD3: while a run is open, its `Next turn` is the only
+        // primary, even with unsaved changes here. Closed, the draft's Save owns it; after Save,
+        // and after Discard, Resume does. A draft that Save refused does not own it.
+        let primaries = |d: &Driver<'_>| super::session_recording::accent_filled(d);
+        let dirty = d.has("Discard");
+        d.click_starting("Paused run ·");
+        d.expect(NEXT_TURN);
+        d.click(NAV_ENCOUNTERS);
+        let open = primaries(d);
+        d.click("Back to run");
+        close_run(d);
+        if !d.has("Save encounter") {
+            d.click(NAV_ENCOUNTERS);
+        }
+        d.expect("Save encounter");
+        let closed = primaries(d);
+        d.observe(
+            "iter-23-B-FJ1-run",
+            dirty && open == [NEXT_TURN] && closed == ["Save encounter"],
+            format!("Unsaved draft: run open {open:?}, run closed {closed:?}"),
+        );
+        d.click("Save encounter");
+        d.settle();
+        let saved = primaries(d);
+        d.type_into(ADD, "A rope ladder");
+        d.press(Key::Enter);
+        d.expect("Discard");
+        d.click("Discard");
+        d.settle();
+        let discarded = (primaries(d), d.has("Discard"));
+        d.observe(
+            "iter-23-B-FJ1-resume",
+            saved == ["Resume"] && discarded == (vec!["Resume".to_owned()], false),
+            format!("Resume after Save {saved:?}, after Discard {discarded:?}"),
+        );
+        d.type_into(&format!("Encounter name: {RUN}"), " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        d.click("Save encounter");
+        d.expect("Enter an encounter name.");
+        let refused = primaries(d);
+        d.observe(
+            "iter-23-B-FJ1-refused",
+            !refused.iter().any(|name| name == "Save encounter"),
+            format!("A draft that Save refused: primaries {refused:?}"),
+        );
     }
 }
 
@@ -12427,6 +12474,22 @@ pub mod session_plan_groups {
         d.click("Technical details");
         d.expect(&missing_id);
         d.state("missing-member-technical-details", Sizes::All);
+        // A lookalike: the notes mention the missing id before its member row, in words only.
+        let lost = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Encounter Groups/Lost Patrol.md");
+        let lost_text = std::fs::read_to_string(&lost).unwrap();
+        let with_note = lost_text.replacen(
+            "\n## Members",
+            &format!("\nScouts last saw {missing_id} at the ford.\n\n## Members"),
+            1,
+        );
+        assert_ne!(with_note, lost_text);
+        std::fs::write(&lost, &with_note).unwrap();
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
         d.observe(
@@ -12436,29 +12499,85 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
-        // The editor names the missing link at its line, and keeps it while the draft holds it.
-        let line = d.editor_text().and_then(|text| {
-            text.lines()
-                .position(|line| line.contains(&missing_id))
-                .map(|at| at + 1)
-        });
-        let named = line
+        // The notice and the caret go to the member row that links the id, not to the notes.
+        let place = |d: &Driver<'_>, wanted: fn(&str) -> bool| {
+            d.editor_text().and_then(|text| {
+                text.lines()
+                    .position(|line| line.contains(&missing_id) && wanted(line))
+                    .map(|at| at + 1)
+            })
+        };
+        let row = place(d, |line| line.trim_start().starts_with('|'));
+        let notes = place(d, |line| !line.trim_start().starts_with('|'));
+        let named = row
             .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
+        let caret = d.editor_caret_line();
         d.observe(
             "iter-23-B-FK1",
-            named.as_deref().is_some_and(|named| d.visible_text(named)),
-            format!("The repair names the missing link's line: {named:?}"),
+            notes.zip(row).is_some_and(|(notes, row)| notes < row)
+                && named.as_deref().is_some_and(|named| d.visible_text(named))
+                && caret == row,
+            format!(
+                "The repair names the member row {named:?}; caret {caret:?}; notes line {notes:?}"
+            ),
         );
-        d.press_ctrl(Key::A);
-        d.type_text("Lost Patrol");
-        let gone = !d.visible_text("needs a creature that cannot be found. Replace the link");
+        // Repair A stays through an unrelated edit B and a Save that fails on the disk; the
+        // failure shows Save's reason in the state slot until the next edit.
+        d.press_ctrl(Key::End);
+        d.type_text("Arrive at dusk.");
+        let mut permissions = std::fs::metadata(&lost).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&lost, permissions.clone()).unwrap();
+        d.press_ctrl(Key::S);
+        let failed = (
+            // In the state slot: the error icon, then Save's reason.
+            d.has_label(&format!(
+                "{} This file is read only.",
+                crate::design::icons::ERROR
+            )),
+            named.as_deref().is_some_and(|named| d.visible_text(named)),
+            d.editor_text()
+                .is_some_and(|text| text.contains("Arrive at dusk.")),
+            std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
+        );
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&lost, permissions).unwrap();
+        d.type_text(" ");
+        d.observe(
+            "iter-23-B-FK1-save-failed",
+            failed == (true, true, true, true) && !d.visible_text("This file is read only."),
+            format!(
+                "After a failed Save (reason shown, guidance kept, B kept, file unchanged): {failed:?}; the next edit ends the reason"
+            ),
+        );
+        // Replace only the member link: the notice ends though the notes still name the id.
+        d.press_ctrl(Key::Home);
+        for _ in 0..40 {
+            if d.editor_caret_line() >= row {
+                break;
+            }
+            d.press(Key::ArrowDown);
+        }
+        d.press(Key::Home);
+        d.press_shift(Key::End);
+        d.type_text("| 1 | [[Goblin Warrior]] |  |  |  |");
+        let replaced = d.editor_text();
+        let gone = replaced.as_deref().is_some_and(|text| {
+            !text
+                .lines()
+                .any(|line| line.trim_start().starts_with('|') && line.contains(&missing_id))
+                && text.contains(&format!("Scouts last saw {missing_id}"))
+        }) && !d.visible_text("needs a creature that cannot be found. Replace the link");
         d.click("Discard");
         d.expect("Markdown editor");
         d.observe(
             "iter-23-B-FK1-lifetime",
             gone && named.as_deref().is_some_and(|named| d.visible_text(named)),
-            "The notice goes with the link and comes back with Discard",
+            format!(
+                "The notice goes with the member link, not the notes' mention, and comes back with Discard: {replaced:?}"
+            ),
         );
+        std::fs::write(&lost, &lost_text).unwrap();
 
         // Astra review of PR 231: a plan group none of whose members can join keeps each member
         // fault's own tone, then says so as a warning. In another group, a member named like

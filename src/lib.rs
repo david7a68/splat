@@ -2023,9 +2023,11 @@ impl Splat {
                 self.page = Page::World;
             } else {
                 let link = ctx.data_mut(|data| {
-                    data.remove_temp::<(String, String)>(egui::Id::new("open_library_repair_link"))
+                    data.remove_temp::<Option<(splat::content::Reference, String)>>(egui::Id::new(
+                        "open_library_repair_link",
+                    ))
                 });
-                self.library.repair_file_link(path, link);
+                self.library.repair_file_link(path, link.flatten());
                 self.page = Page::Library;
             }
         }

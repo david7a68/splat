@@ -808,6 +808,8 @@ fn needed_by(names: &BTreeSet<String>) -> String {
 #[derive(Default)]
 pub struct MissingDependency {
     pub reference: String,
+    /// The same reference, typed, so a repair finds the row that holds it.
+    pub target: Option<Reference>,
     pub owners: BTreeSet<Uuid>,
     pub message: String,
     names: BTreeSet<String>,
@@ -1539,6 +1541,7 @@ impl Catalogue {
                                     let issue =
                                         missing_entries.entry(reference.to_string()).or_default();
                                     issue.owners.insert(id);
+                                    issue.target.get_or_insert_with(|| reference.clone());
                                     if let Some((name, creature)) =
                                         entry.entry.fields.values().find_map(|value| {
                                             missing_reference_context(value, &reference)

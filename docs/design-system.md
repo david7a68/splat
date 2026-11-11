@@ -202,7 +202,10 @@ can. `No changes to save.` belongs only to blocked Save's hover text and accessi
 has one weight: its Save is primary while the draft has changes that it can save and no open run owns `Next turn`,
 and secondary otherwise. An unsaved draft owns the primary over its own page's other actions: while an encounter
 draft has changes, `Save encounter` is primary and `Resume` or `Start fight` is secondary until the draft is saved or
-discarded. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
+discarded. While a run is open, its strip's `Next turn` stays the only primary, whatever the draft holds (round 22).
+A draft that Save refused does not own the primary until its fault is fixed. A Save that fails on the disk (a read-only
+or missing file) shows Save's reason in the state slot with the error icon until the next edit or a Save that writes;
+a repair the note was opened for stays until a Save writes. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
 several Campaign repairs have changes, only the active one (edited or focused last; else the last changed one) has
 the primary Save; the others keep their drafts with a secondary Save. Unsaved,
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
@@ -482,7 +485,8 @@ Missing dependencies lead with the owner and retained member name: `Lost Patrol 
 deleted.` Without a known name, say `Lost Patrol needs a creature that cannot be found.` The repair opens Edit
 Markdown with the caret on the missing link's line and names it in the reserved reason line (`Line 14: Lost Patrol
 needs a creature that cannot be found. Replace the link on this line with another creature, or remove its row.`)
-while the draft holds that link. Link repair to the
+while the draft holds that link. The link is found as the reader reads the member's Creature cell, never by
+matching its id in the text, so notes that mention the id are not the repair. Link repair to the
 referring file; keep raw references in Technical details. A removed package is named without claiming its file
 was deleted.
 

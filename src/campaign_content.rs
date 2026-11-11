@@ -1278,10 +1278,12 @@ impl CampaignContent {
                                             );
                                             // The editor names the missing link and opens at
                                             // its line.
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair_link"),
-                                                (issue.reference.clone(), issue.message.clone()),
-                                            );
+                                            if let Some(target) = &issue.target {
+                                                data.insert_temp(
+                                                    egui::Id::new("open_library_repair_link"),
+                                                    Some((target.clone(), issue.message.clone())),
+                                                );
+                                            }
                                         });
                                     }
                                     design::quiet_section(ui, "Technical details", |ui| {

@@ -2159,7 +2159,10 @@ pub struct Library {
     /// A missing link that Campaign's repair opened this file for: the file, the reference and
     /// the fault's words. Edit Markdown names it at its line while the draft still holds it; it
     /// ends when another note opens or the file saves.
-    repair_link: Option<(PathBuf, String, String)>,
+    repair_link: Option<(PathBuf, splat::content::Reference, String)>,
+    /// A Save that failed on the disk, with the draft it tried to write: its reason stays in
+    /// the state slot until the next edit or a Save that writes.
+    save_failure: Option<(String, String)>,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -2706,7 +2709,11 @@ impl Library {
         self.pending_edit = Some(entry);
     }
     /// Open a file for repair; with a missing link's reference and words, at that link.
-    pub fn repair_file_link(&mut self, path: PathBuf, link: Option<(String, String)>) {
+    pub fn repair_file_link(
+        &mut self,
+        path: PathBuf,
+        link: Option<(splat::content::Reference, String)>,
+    ) {
         self.repair_link = link.map(|(reference, words)| (path.clone(), reference, words));
         self.pending_repair = Some(path);
         self.stale = true;
@@ -4667,7 +4674,6 @@ impl Library {
         let Some(i) = self.selected else {
             return;
         };
-        self.repair_link = None;
         let note = &self.loaded.as_ref().unwrap().notes[i];
         let mut file_gone = file_gone;
         if self.loaded.as_ref().unwrap().duplicates(i).is_empty()
@@ -4737,7 +4743,9 @@ impl Library {
         let loaded = self.loaded.as_ref().unwrap();
         let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        let result = match loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft)) {
+        let refusal = loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft));
+        let refused = refusal.is_some();
+        let result = match refusal {
             Some(error) => Err(error),
             None => {
                 let baseline = (!file_gone).then_some(note.text.as_str());
@@ -4781,6 +4789,9 @@ impl Library {
                 self.content_changed = Some(root);
                 l.refresh_diagnostics();
                 self.error = None;
+                // Written: the repair it was opened for is done, and so is any earlier failure.
+                self.repair_link = None;
+                self.save_failure = None;
             }
             Err(e) => match read_disk(&root, &note.path) {
                 // The file is there but cannot be read: the draft stays, the file keeps its bytes.
@@ -4798,7 +4809,9 @@ impl Library {
                         fault: None,
                     });
                 }
-                Ok(_) => self.error = Some(e),
+                // A refusal is the draft's own; a write that failed is Save's, in the state slot.
+                Ok(_) if refused => self.error = Some(e),
+                Ok(_) => self.save_failure = Some((self.draft.clone(), e)),
             },
         }
     }
@@ -5065,25 +5078,19 @@ impl Library {
             .and_then(|_| self.loaded.as_ref().unwrap().draft_refusal(i, parsed));
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A missing link Campaign sent here: its line, while the draft still holds it.
+        // A missing link Campaign sent here: the row that holds it in the parsed draft.
         let missing_link = self
             .repair_link
             .as_ref()
             .filter(|(path, _, _)| {
                 note.owner.root().map(|root| root.join(&note.path)).as_ref() == Some(path)
             })
-            .and_then(|(_, reference, words)| {
-                // A reference by id is found by its id, whatever form its link takes.
-                let target = reference
-                    .split(|c: char| !(c.is_ascii_hexdigit() || c == '-'))
-                    .find(|word| uuid::Uuid::parse_str(word).is_ok())
-                    .unwrap_or(reference);
-                let line = self.draft.lines().position(|line| line.contains(target))?;
+            .and_then(|(_, target, words)| {
+                let line = splat::content::list_formats::row_linking(parsed.as_ref().ok()?, target)?;
                 Some((
-                    line + 1,
+                    line,
                     format!(
-                        "Line {}: {words} Replace the link on this line with another creature, or remove its row.",
-                        line + 1
+                        "Line {line}: {words} Replace the link on this line with another creature, or remove its row."
                     ),
                 ))
             });
@@ -5094,6 +5101,17 @@ impl Library {
             Status {
                 icon: icons::ERROR,
                 word: "Invalid",
+                color: d.invalid,
+            }
+        } else if let Some((_, reason)) = self
+            .save_failure
+            .as_ref()
+            .filter(|(tried, _)| *tried == self.draft)
+        {
+            // Save's own failure, until the next edit or a Save that writes.
+            Status {
+                icon: icons::ERROR,
+                word: reason,
                 color: d.invalid,
             }
         } else if conflict {

@@ -1929,6 +1929,30 @@ fn owned_ranges(body: &str, group: bool) -> Vec<std::ops::Range<usize>> {
 }
 
 /// Notes forms show the DM's prose; the owned table stays in its original bytes.
+/// The note line of the first group or roster row whose Creature cell links `target`, read as
+/// the reader reads that cell. Prose that only mentions an id is not a row.
+pub fn row_linking(entry: &Entry, target: &super::Reference) -> Option<usize> {
+    let document = Document::new(&entry.body);
+    [GROUP, ROSTER]
+        .into_iter()
+        .filter_map(|headers| document.table(headers))
+        .flat_map(|table| table.rows)
+        .find_map(|row| {
+            let cell = row.get(1)?;
+            let Ok(Value::Mapping(found)) = reference(&cell.value) else {
+                return None;
+            };
+            let field = |name: &str| found.get(name).and_then(Value::as_str);
+            let links = match target {
+                super::Reference::Id(id) => {
+                    field("id").and_then(|raw| Uuid::parse_str(raw).ok()) == Some(*id)
+                }
+                super::Reference::Key(key) => field("key") == Some(key.as_str()),
+            };
+            links.then(|| cell.line + entry.body_line.saturating_sub(1))
+        })
+}
+
 pub fn prose(entry: &Entry) -> String {
     if !["encounter_group", "encounter"].contains(&entry.kind.as_str()) {
         return entry.body.trim().into();

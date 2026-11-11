@@ -3660,6 +3660,8 @@ impl Encounters {
         let compact = ui.available_width() < 760.0;
         // The title and its actions need more room than the panes do.
         let has_run = self.has_run();
+        // A draft that Save refused, until its fault is fixed, does not own the primary.
+        let refused = self.shows_validation_error();
         let loading = self.pending.is_some();
 
         let saved_note = self.message.clone();
@@ -3784,7 +3786,7 @@ impl Encounters {
                         blocked_reason(ui, Some("Close the open run first"));
                         ui.add_space(design::L);
                     }
-                    save = if dirty && !has_run {
+                    save = if dirty && !has_run && !refused {
                         Action::primary("Save encounter")
                     } else {
                         Action::secondary("Save encounter")
