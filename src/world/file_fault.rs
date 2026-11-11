@@ -64,7 +64,19 @@ impl FileFault {
 
     /// The first sentence: what happened to which file.
     pub fn headline(&self) -> String {
-        let path = &self.path;
+        self.headline_for(&self.path)
+    }
+
+    /// The first sentence in a pane whose title and file line already name the file: it says
+    /// `this note`, so the path shows once.
+    pub fn pane_headline(&self) -> String {
+        match self.kind {
+            Kind::Exists => "This note already exists.".into(),
+            _ => self.headline_for("this note"),
+        }
+    }
+
+    fn headline_for(&self, path: &str) -> String {
         match self.kind {
             Kind::NotText => format!("Splat cannot read {path} as text."),
             Kind::ReadDenied => format!("Splat has no permission to read {path}."),
@@ -165,6 +177,12 @@ mod tests {
             fault.headline(),
             "Splat cannot read Notes/Broken.md as text.",
             "AD2-headline"
+        );
+        // Round 24 FG6: in its own pane the file is named by the title and file line already.
+        assert_eq!(
+            fault.pane_headline(),
+            "Splat cannot read this note as text.",
+            "iter-24-FG6-pane-headline"
         );
         assert_eq!(fault.cause(), "Text format cannot be read", "AD2-cause");
         assert!(fault.system.contains("UTF-8"), "AD2-system-kept");

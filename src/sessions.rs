@@ -510,6 +510,33 @@ pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, S
     Ok(new)
 }
 
+/// Moves `source` to `target` in one step, and never replaces a file at `target`: Linux's
+/// `RENAME_NOREPLACE` refuses with `AlreadyExists`, even for a file that arrives at the last
+/// moment. Moves across file systems fail with `EXDEV`.
+#[cfg(target_os = "linux")]
+pub(crate) fn rename_no_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let from =
+        std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
+    let to =
+        std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(std::io::Error::other)?;
+    // Both paths are valid C strings.
+    if unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    } == 0
+    {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
 fn transfer_file(
     source: &Path,
     target: &Path,
@@ -518,32 +545,17 @@ fn transfer_file(
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     if !force_copy {
-        use std::os::unix::ffi::OsStrExt;
-        let from =
-            std::ffi::CString::new(source.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-        let to =
-            std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-        // Both paths are valid C strings; RENAME_NOREPLACE protects an arriving sync file.
-        if unsafe {
-            libc::renameat2(
-                libc::AT_FDCWD,
-                from.as_ptr(),
-                libc::AT_FDCWD,
-                to.as_ptr(),
-                libc::RENAME_NOREPLACE,
-            )
-        } == 0
-        {
-            sync_folder(source.parent().ok_or("Missing source folder")?)?;
-            sync_folder(target.parent().ok_or("Missing target folder")?)?;
-            return Ok(());
-        }
-        if std::io::Error::last_os_error().raw_os_error() != Some(libc::EXDEV) {
-            return Err(format!(
-                "Could not move {}: {}",
-                source.display(),
-                std::io::Error::last_os_error()
-            ));
+        // RENAME_NOREPLACE protects an arriving sync file.
+        match rename_no_replace(source, target) {
+            Ok(()) => {
+                sync_folder(source.parent().ok_or("Missing source folder")?)?;
+                sync_folder(target.parent().ok_or("Missing target folder")?)?;
+                return Ok(());
+            }
+            Err(error) if error.raw_os_error() != Some(libc::EXDEV) => {
+                return Err(format!("Could not move {}: {error}", source.display()));
+            }
+            Err(_) => {}
         }
     }
     let bytes = fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;

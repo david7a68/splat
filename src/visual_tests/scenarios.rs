@@ -18,6 +18,7 @@ pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
+pub mod run_continue;
 pub mod stat_formats;
 pub mod world_build;
 
@@ -6386,12 +6387,10 @@ pub mod run_restart {
         d.click_row(OTHER);
         d.click(NEXT_TURN);
         let current = current_participant(d).unwrap_or_default();
-        d.state("before-restart", Sizes::Default);
+        let undo = d.name_starting("Undo");
+        d.state("before-restart", Sizes::All);
         d.goal("be in a run");
         d.restart();
-        d.state("after-restart", Sizes::All);
-        d.goal("restart");
-        d.begin_task();
         d.observe(
             "Restart",
             d.has_containing(RUN_HEADING)
@@ -6399,6 +6398,18 @@ pub mod run_restart {
                 && participant_is_selected(d, &current),
             format!("The run reopens by itself on the same turn, {current} selected"),
         );
+        d.observe(
+            "Restart",
+            undo == "Undo: next turn" && d.name_starting("Undo") == undo,
+            format!(
+                "Undo names the same step after the restart: {undo}, then {}",
+                d.name_starting("Undo")
+            ),
+        );
+        // The run file keeps the Undo steps, so the run looks as it did before the restart.
+        d.assert_state_matches("after-restart", "before-restart");
+        d.goal("restart");
+        d.begin_task();
         // The other pages load too, with the run still open behind them.
         go_encounters(d);
         d.observe(
@@ -8226,7 +8237,23 @@ pub mod world {
             d.visible_text("A field gate fails on a low roll."),
             "A heading's result opens its note at that heading",
         );
+        // Round 24 FD4: a plain World note has `Open in World` too, and it opens the note there.
+        d.observe(
+            "iter-24-D-FD4",
+            d.has("Open in World") && !d.has("Open in Library"),
+            "Lookup offers Open in World for the plain note Gate Mechanics",
+        );
         d.state("world-heading-beside-run", Sizes::All);
+        d.click("Open in World");
+        d.settle();
+        d.observe(
+            "iter-24-D-FD4-opens",
+            d.current_page() == "World" && d.visible_text("A field gate fails on a low roll."),
+            "Open in World shows Gate Mechanics on the World page",
+        );
+        d.click("Back to run");
+        look_up(d, "reliability");
+        d.expect("Clear");
 
         d.click("Clear");
         d.click("Generate NPC");

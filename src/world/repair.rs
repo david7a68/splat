@@ -13,17 +13,6 @@ pub(crate) fn editor_name(path: &str) -> String {
     format!("Note text: {path}")
 }
 
-/// The source editor. True when the DM changed the text or moved focus into it this frame.
-pub(crate) fn editor(
-    ui: &mut egui::Ui,
-    path: &str,
-    draft: &mut String,
-    error_line: Option<usize>,
-) -> bool {
-    let (changed, focused) = editor_events(ui, path, draft, error_line);
-    changed || focused
-}
-
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus.
 pub(crate) fn editor_events(
@@ -117,11 +106,10 @@ pub(super) struct Repair {
     draft: String,
     discarded: Option<String>,
     reloaded: Option<String>,
-    error: Option<String>,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
-    /// write and Save's reason. This draft owns it. It shows until the draft changes or a Save
-    /// succeeds.
+    /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
+    /// or its Undo, Reload or its Undo, the file followed from disk, and a successful Save.
     failed: Option<(String, String)>,
 }
 
@@ -138,7 +126,6 @@ impl Repair {
             draft: text,
             discarded: None,
             reloaded: None,
-            error: None,
             disk: None,
             failed: None,
         })
@@ -177,7 +164,7 @@ impl Repair {
                 self.discarded = None;
                 // A newer file ends the reload's Undo, so Undo never hides that change.
                 self.reloaded = None;
-                self.error = None;
+                self.failed = None;
             }
         }
         // Save's failure on the disk belongs to the draft it tried to write. Any change ends it,
@@ -204,25 +191,7 @@ impl Repair {
             let choice = design::disk_conflict_choices(ui, "note");
             design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
             if let Some(choice) = choice {
-                self.baseline = disk;
-                self.disk = None;
-                self.error = None;
-                self.discarded = None;
-                match choice {
-                    design::DiskConflictChoice::Reload => {
-                        self.reloaded =
-                            Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
-                    }
-                    design::DiskConflictChoice::Overwrite => {
-                        // An unfinished repair stays editable; only valid text can be written.
-                        if problem.is_some() {
-                            self.error =
-                                Some(format!("Not saved. {}", problem.as_deref().unwrap()));
-                            return false;
-                        }
-                        return self.save(campaign);
-                    }
-                }
+                return self.choose(campaign, choice, disk, problem.is_some());
             }
             return false;
         }
@@ -233,6 +202,33 @@ impl Repair {
             self.edit(ui, campaign, run_open, problem, line)
         })
         .inner
+    }
+
+    /// The DM's choice after the file changed on disk under a changed draft. True when an
+    /// Overwrite saved. `refused`: Save's own check refuses the draft.
+    fn choose(
+        &mut self,
+        campaign: &Campaign,
+        choice: design::DiskConflictChoice,
+        disk: String,
+        refused: bool,
+    ) -> bool {
+        self.baseline = disk;
+        self.disk = None;
+        self.discarded = None;
+        match choice {
+            design::DiskConflictChoice::Reload => {
+                self.reloaded = Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
+                // Reload ends the failure even when the file holds the draft's words.
+                self.failed = None;
+                false
+            }
+            // An unfinished repair stays editable; only valid text can be written. The disk
+            // did not fail, so the editor shows only the cause, from the same check as the
+            // state word: `Not saved.` is for a disk failure.
+            design::DiskConflictChoice::Overwrite if refused => false,
+            design::DiskConflictChoice::Overwrite => self.save(campaign),
+        }
     }
 
     /// The editor, its messages and its save row.
@@ -246,30 +242,25 @@ impl Repair {
     ) -> bool {
         if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
+            self.failed = None;
         }
-        if let Some(error) = self
-            .error
-            .as_ref()
-            .or(self.failure().map(str::to_owned).as_ref())
-        {
-            design::message(ui, design::Tone::Error, error);
-        } else if let Some(problem) = &problem {
-            design::message(ui, design::Tone::Error, problem);
+        // Save's own check comes first: a draft that Save refuses has no disk failure.
+        if let Some(cause) = problem.as_deref().or(self.failure()) {
+            design::message(ui, design::Tone::Error, cause);
         }
-        let before = self.draft.clone();
-        editor(ui, &self.path, &mut self.draft, line);
-        if self.draft != before {
+        let (changed, _) = editor_events(ui, &self.path, &mut self.draft, line);
+        if changed {
             self.reloaded = None;
-            self.error = None;
+            self.failed = None;
         }
         let mut saved = false;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let reason = if self.draft == self.baseline {
-                    Some("No changes to save.")
-                } else {
-                    problem.as_deref()
-                };
+                // Save's refusal first, as the state word: `No changes to save.` is only for a
+                // readable unchanged draft.
+                let reason = problem
+                    .as_deref()
+                    .or((self.draft == self.baseline).then_some("No changes to save."));
                 // One weight for a save row: primary while the draft has changes Save can
                 // write, unless an open run owns `Next turn`. After Save failed on the disk it
                 // stays available to try again, but is not primary.
@@ -289,9 +280,10 @@ impl Repair {
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let dirty = self.dirty();
-                    // A changed draft that still cannot be read is Invalid, as in Library; the
-                    // message above names the cause. Unsaved means Save would write.
-                    let state = if dirty && problem.is_some() {
+                    // A draft that Save refuses is Invalid, changed or not, as in Campaign and
+                    // Library; the message above names the cause. `No changes` is only for a
+                    // readable unchanged draft, and Unsaved means Save would write.
+                    let state = if problem.is_some() {
                         design::Status {
                             icon: design::icons::ERROR,
                             word: "Invalid",
@@ -320,8 +312,7 @@ impl Repair {
                     if design::save_row_state(ui, state, dirty, None) {
                         self.discarded = Some(self.draft.clone());
                         self.draft = self.baseline.clone();
-                        // The restored text has its own problem, if any; drop the old message.
-                        self.error = None;
+                        self.failed = None;
                     }
                     if self.dirty() {
                         design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
@@ -334,7 +325,7 @@ impl Repair {
         {
             self.draft = discarded.clone();
             self.discarded = None;
-            self.error = None;
+            self.failed = None;
         }
         saved
     }
@@ -475,11 +466,15 @@ mod tests {
         // it can save, and secondary when unchanged, still invalid, or when a run owns Next turn.
         // Round 23 FF2: the state word. A changed draft that still cannot be read is Invalid,
         // as in Library; Unsaved means Save would write.
+        // Round 24 FD2, AC3, SC2: an unchanged draft that Save refuses is Invalid too, with
+        // its cause above; `No changes` is only for a readable unchanged draft (below).
         let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(!primary, "FD3-clean");
         assert!(
-            words.contains("No changes") && !words.contains("Invalid"),
-            "FF2-clean\n{words}"
+            words.contains("Invalid")
+                && !words.contains("No changes")
+                && words.contains("Line 3 opens a list with [ that never closes."),
+            "iter-24-FD2-unchanged-invalid\n{words}"
         );
         repair.draft = format!("{before}\nStill broken.\n");
         let (primary, words) = painted(&mut repair, &campaign, false);
@@ -592,11 +587,13 @@ mod tests {
             "recheck-read-only-bytes"
         );
         repair.draft.push_str("One more word.\n");
-        let (_, words) = painted(&mut repair, &campaign, false);
+        let (primary, words) = painted(&mut repair, &campaign, false);
         assert!(
             words.contains("Unsaved") && !words.contains("Not saved") && !words.contains(&reason),
             "recheck-read-only-edit-ends\n{words}"
         );
+        // Round 24 contract: one key after the disk failure gives Save the primary back.
+        assert!(primary, "iter-24-D-read-only-key-primary");
         // Going back to the same words does not bring the old cause back.
         repair.draft = draft.clone();
         let (_, words) = painted(&mut repair, &campaign, false);
@@ -606,7 +603,31 @@ mod tests {
         );
         #[allow(clippy::permissions_set_readonly_false)]
         permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        // Review repair 4: after a failed Save, the file outside Splat comes to hold the draft's
+        // exact words, and the DM chooses Reload. Reload ends the old disk failure although the
+        // text is equal: the state says No changes and the old reason is gone.
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        let reason = failed_save(&mut repair, "reload");
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
         std::fs::set_permissions(&path, permissions).unwrap();
+        std::fs::write(&path, &draft).unwrap();
+        show(&mut repair, &campaign);
+        let disk = repair
+            .disk
+            .clone()
+            .expect("the outside write shows the disk choices");
+        assert!(!repair.choose(&campaign, design::DiskConflictChoice::Reload, disk, false));
+        assert_eq!(repair.draft, draft);
+        let (_, words) = painted(&mut repair, &campaign, false);
+        assert!(
+            words.contains("No changes")
+                && !words.contains("Not saved")
+                && !words.contains(&reason),
+            "review-4-reload-equal-text\n{words}"
+        );
         // A path outside the campaign folder is refused by the draft's own checks, with no disk
         // read: Invalid, Save's reason, and nothing written.
         let mut outside = Repair {
@@ -615,7 +636,6 @@ mod tests {
             draft: draft.clone(),
             discarded: None,
             reloaded: None,
-            error: None,
             disk: None,
             failed: None,
         };
@@ -634,5 +654,11 @@ mod tests {
         assert!(repair.save(&campaign));
         assert!(!repair.dirty());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
+        // The lookalike: a readable unchanged draft says `No changes`, not Invalid.
+        let (primary, words) = painted(&mut repair, &campaign, false);
+        assert!(
+            !primary && words.contains("No changes") && !words.contains("Invalid"),
+            "iter-24-FD2-unchanged-readable\n{words}"
+        );
     }
 }

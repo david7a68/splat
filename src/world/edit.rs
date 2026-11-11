@@ -143,6 +143,9 @@ impl Fields {
 
 /// One entry's form. A draft with changes stays while the DM reads other entries.
 pub(super) struct EditDraft {
+    /// The campaign whose note this is. Its Undo discard and its lost-note warning show only
+    /// there: Lookup keeps its reader across a campaign change.
+    campaign: Uuid,
     name: String,
     path: String,
     /// The entry as the index read it, so a draft without changes can follow the file.
@@ -184,6 +187,7 @@ impl EditDraft {
         let on_disk = Entry::parse(&entry.path, &baseline)?;
         let start = Fields::of(&on_disk, &baseline);
         Ok(Self {
+            campaign: campaign.id,
             name: entry.name.clone(),
             path: entry.path.clone(),
             seen: (
@@ -231,6 +235,10 @@ impl EditDraft {
         index: &ContentIndex,
         log_as: Option<&str>,
     ) -> Result<Saved, String> {
+        // A draft writes only into its own campaign's note.
+        if campaign.id != self.campaign {
+            return Err("This draft belongs to another campaign. Nothing was saved.".into());
+        }
         let disk = super::file_fault::read_note(&campaign.path, &self.path)?;
         if disk != self.baseline {
             let theirs = Fields::read(&self.path, &disk);
@@ -318,6 +326,7 @@ impl EditDraft {
         }
         write_note(&campaign.path, &self.path, Some(&disk), &after)?;
         Ok(Saved::Written(Change {
+            campaign: campaign.id,
             path: self.path.clone(),
             before: disk,
             after,
@@ -338,6 +347,8 @@ impl EditDraft {
                 .as_ref()
                 .map_or_else(|| "not set".into(), |value| value_name(index, value, label))
         };
+        // A link names the note it opens and `not set` is no value, so neither has marks. Status
+        // words are the DM's own text, so they have curly marks (`status_effect` below).
         let effect = |draft_changed: bool, draft: String, disk: String| {
             if draft_changed {
                 format!("Overwrite saves {draft} in place of {disk}.")
@@ -434,12 +445,16 @@ impl EditDraft {
             effects.push(("Part of", format!("Overwrite {words}.")));
         }
         if self.now.status.trim() != theirs.status.trim() {
+            let quoted = |value: &str| match status(value) {
+                words if value.trim().is_empty() => words,
+                words => format!("“{words}”"),
+            };
             effects.push((
                 "Status",
                 effect(
                     changed.status,
-                    status(&self.now.status),
-                    status(&theirs.status),
+                    quoted(&self.now.status),
+                    quoted(&theirs.status),
                 ),
             ));
         }
@@ -538,6 +553,14 @@ impl EditDraft {
     }
 }
 
+/// The campaign this index was read for; nil for an index with none.
+fn index_campaign(index: &ContentIndex) -> Uuid {
+    index
+        .campaign
+        .as_ref()
+        .map_or(Uuid::nil(), |campaign| campaign.id)
+}
+
 impl Reader {
     /// Open the form for the entry on show.
     pub(super) fn begin_edit(&mut self, campaign: &Campaign, item: &Item) {
@@ -554,8 +577,12 @@ impl Reader {
         }
     }
 
-    pub(super) fn editing(&self, id: Uuid) -> bool {
-        self.edits.contains_key(&id)
+    /// A form is open for this campaign's note. A draft from another campaign with the same
+    /// note id (a copied note) is never selected: Lookup keeps its reader across a change.
+    pub(super) fn editing(&self, id: Uuid, campaign: &Campaign) -> bool {
+        self.edits
+            .get(&id)
+            .is_some_and(|draft| draft.campaign == campaign.id)
     }
 
     pub fn has_unsaved_edits(&self) -> bool {
@@ -589,13 +616,13 @@ impl Reader {
 
     /// A draft whose note is gone, or the Undo for one, is on show.
     pub(super) fn has_lost_edits(&self, index: &ContentIndex) -> bool {
-        self.edits
-            .iter()
-            .any(|(id, draft)| index.position(*id).is_none() && draft.dirty())
-            || self
-                .discarded
-                .as_ref()
-                .is_some_and(|(id, _)| index.position(*id).is_none())
+        let here = index_campaign(index);
+        self.edits.iter().any(|(id, draft)| {
+            draft.campaign == here && index.position(*id).is_none() && draft.dirty()
+        }) || self
+            .discarded
+            .as_ref()
+            .is_some_and(|(id, draft)| draft.campaign == here && index.position(*id).is_none())
     }
 
     /// Drafts whose note was deleted or given a new identity outside Splat. They cannot open
@@ -605,7 +632,11 @@ impl Reader {
         let mut lost: Vec<_> = self
             .edits
             .iter()
-            .filter(|(id, draft)| index.position(**id).is_none() && draft.dirty())
+            .filter(|(id, draft)| {
+                draft.campaign == index_campaign(index)
+                    && index.position(**id).is_none()
+                    && draft.dirty()
+            })
             .map(|(id, draft)| (*id, draft.name.clone()))
             .collect();
         lost.sort_by(|a, b| a.1.cmp(&b.1));
@@ -616,7 +647,7 @@ impl Reader {
                     ui,
                     Tone::Warning,
                     &format!(
-                        "The note for your unsaved changes to {name} is gone. It was deleted, or given a new identity."
+                        "The note for your unsaved changes to {name} is gone. It was deleted, or another note took its place."
                     ),
                     |ui| {
                         ui.horizontal_wrapped(|ui| {
@@ -651,6 +682,7 @@ impl Reader {
         }
         // The Undo for a lost draft sits where its warning sat, whatever note is open.
         if let Some((at, draft)) = &self.discarded
+            && draft.campaign == index_campaign(index)
             && index.position(*at).is_none()
             && design::draft_discarded(ui, &draft.name)
             && let Some((id, draft)) = self.discarded.take()
@@ -660,9 +692,10 @@ impl Reader {
     }
 
     /// Undo for a Discard that dropped changes, while the DM reads that entry again.
-    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, id: Uuid) {
+    pub(super) fn discarded_notice(&mut self, ui: &mut egui::Ui, campaign: &Campaign, id: Uuid) {
         if let Some((at, draft)) = &self.discarded
             && *at == id
+            && draft.campaign == campaign.id
             && design::draft_discarded(ui, &draft.name)
             && let Some((id, draft)) = self.discarded.take()
         {
@@ -681,6 +714,10 @@ impl Reader {
         let id = item.entry.id;
         // The draft leaves the map while the form draws, and goes back unless it closes.
         let mut draft = self.edits.remove(&id)?;
+        if draft.campaign != campaign.id {
+            self.edits.insert(id, draft);
+            return None;
+        }
         // A rename in Obsidian keeps the identity, so the draft follows the file.
         draft.path.clone_from(&item.entry.path);
         draft.name.clone_from(&item.entry.name);
@@ -731,47 +768,6 @@ impl Reader {
         let mut focused = false;
         // The Read order: Stat block, In, Part of, then Status.
         let npc = super::fights(&item.entry);
-        for (key, label, slot) in [
-            (
-                "creature",
-                "Stat block",
-                npc.then_some(&mut draft.now.creature),
-            ),
-            ("in", "In", Some(&mut draft.now.place)),
-        ] {
-            let Some(slot) = slot else {
-                continue;
-            };
-            design::field(ui, label, None, None, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(match &*slot {
-                        // Empty and null are both unset, so both read `not set` in muted text.
-                        Some(value) if super::empty_optional(value) => {
-                            Type::Body.rich(ui, "not set").color(colors().muted)
-                        }
-                        Some(value) => Type::Body.rich(ui, value_name(index, value, label)),
-                        None => Type::Body.rich(ui, "not set").color(colors().muted),
-                    });
-                    if Action::quiet("Change")
-                        .density(Density::Read)
-                        .name(&format!("Change {label}"))
-                        .show(ui)
-                        .clicked()
-                    {
-                        self.picker = Some(Picker {
-                            key,
-                            focus: true,
-                            ..Default::default()
-                        });
-                    }
-                });
-            });
-            if self.picker.as_ref().is_some_and(|picker| picker.key == key)
-                && let Some(chosen) = self.pick(ui, item, index, campaign, None)
-            {
-                *slot = Some(chosen).filter(|value| !value.is_null());
-            }
-        }
         let groups_error = draft
             .start
             .groups_unread
@@ -785,47 +781,114 @@ impl Reader {
         {
             self.picker = None;
         }
-        design::field(ui, "Part of", None, None, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                let names: Vec<_> = draft
+        // Each value as the form draws it, with whether it is set. `not set` and `not read` are
+        // muted and warning words, not names.
+        let slot_words = |slot: &Option<Value>, label: &str| match slot {
+            Some(value) if !super::empty_optional(value) => {
+                (value_name(index, value, label), colors().text)
+            }
+            _ => ("not set".to_owned(), colors().muted),
+        };
+        let group_words = if groups_error.is_some() {
+            ("not read".to_owned(), colors().result.warning)
+        } else if draft.now.groups.is_empty() {
+            ("not set".to_owned(), colors().muted)
+        } else {
+            (
+                draft
                     .now
                     .groups
                     .iter()
                     .map(|value| value_name(index, value, "group"))
-                    .collect();
-                // `not read` has the warning colour, as in the reader.
-                ui.label(
-                    Type::Body
-                        .rich(
-                            ui,
-                            if groups_error.is_some() {
-                                "not read".into()
-                            } else if names.is_empty() {
-                                "not set".into()
-                            } else {
-                                names.join(", ")
-                            },
-                        )
-                        .color(if groups_error.is_some() {
-                            colors().result.warning
-                        } else {
-                            colors().muted
-                        }),
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                colors().muted,
+            )
+        };
+        let words = [
+            npc.then(|| slot_words(&draft.now.creature, "Stat block")),
+            Some(slot_words(&draft.now.place, "In")),
+            Some(group_words.clone()),
+        ];
+        // One Change column for Stat block, In and Part of (AI1): an `L` gap after the widest
+        // value, which wraps within the column when the form is narrow.
+        let change_width = Action::quiet("Change")
+            .density(Density::Read)
+            .natural_width(ui);
+        let value_width = words
+            .iter()
+            .flatten()
+            .map(|(words, _)| design::number_width(ui, words, &Type::Body.font(ui)))
+            .fold(0.0_f32, f32::max)
+            .min(
+                (ui.available_width().min(design::FORM_WIDTH) - change_width - design::L)
+                    .max(design::XXL),
+            );
+        let value_and_change = |ui: &mut egui::Ui,
+                                (words, color): (String, egui::Color32),
+                                change: Action<'_>| {
+            ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(value_width, Density::Read.control()),
+                    egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+                    |ui| {
+                        ui.set_width(value_width);
+                        ui.add(egui::Label::new(Type::Body.rich(ui, words).color(color)).wrap());
+                    },
                 );
-                if Action::quiet("Change")
-                    .density(Density::Read)
-                    .name("Change Part of")
-                    .blocked(groups_error.as_deref())
-                    .show(ui)
-                    .clicked()
-                {
+                ui.add_space((design::L - ui.spacing().item_spacing.x).max(0.0));
+                change.show(ui).clicked()
+            })
+            .inner
+        };
+        for (key, label, slot, words) in [
+            (
+                "creature",
+                "Stat block",
+                npc.then_some(&mut draft.now.creature),
+                words[0].clone(),
+            ),
+            ("in", "In", Some(&mut draft.now.place), words[1].clone()),
+        ] {
+            let (Some(slot), Some(words)) = (slot, words) else {
+                continue;
+            };
+            design::field(ui, label, None, None, |ui| {
+                if value_and_change(
+                    ui,
+                    words,
+                    Action::quiet("Change")
+                        .density(Density::Read)
+                        .name(&format!("Change {label}")),
+                ) {
                     self.picker = Some(Picker {
-                        key: "part_of",
+                        key,
                         focus: true,
                         ..Default::default()
                     });
                 }
             });
+            if self.picker.as_ref().is_some_and(|picker| picker.key == key)
+                && let Some(chosen) = self.pick(ui, item, index, campaign, None)
+            {
+                *slot = Some(chosen).filter(|value| !value.is_null());
+            }
+        }
+        design::field(ui, "Part of", None, None, |ui| {
+            if value_and_change(
+                ui,
+                group_words,
+                Action::quiet("Change")
+                    .density(Density::Read)
+                    .name("Change Part of")
+                    .blocked(groups_error.as_deref()),
+            ) {
+                self.picker = Some(Picker {
+                    key: "part_of",
+                    focus: true,
+                    ..Default::default()
+                });
+            }
         });
         if let Some(reason) = &groups_error {
             // The warning keeps the form's right edge.
@@ -919,6 +982,24 @@ impl Reader {
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut cancel = false;
         ui.add_space(design::S);
+        // The campaign-switch reason sits between Discard and Save where it fits. In a narrow
+        // form (Lookup beside a run) it takes its own line below the row, reserved while the
+        // form has no changes, so the first edit moves nothing.
+        let switch = crate::encounters::draft_switch_reason();
+        let spacing = ui.spacing().item_spacing.x;
+        let narrow = ui.available_width().min(design::FORM_WIDTH)
+            < Action::primary("Save changes")
+                .density(Density::Read)
+                .key("Ctrl+S")
+                .natural_width(ui)
+                + Action::quiet("Discard").natural_width(ui)
+                + design::number_width(
+                    ui,
+                    &format!("{} Unsaved", design::icons::DRAFT),
+                    &Type::Body.font(ui),
+                )
+                + design::number_width(ui, switch, &Type::Small.font(ui))
+                + spacing * 4.0;
         ui.horizontal(|ui| {
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -948,8 +1029,14 @@ impl Reader {
                         }
                     };
                     // A dirty draft says Discard. A clean form loses nothing, so it says Cancel.
+                    // A changed form locks the campaign switcher; the save row states why, as
+                    // every other draft's does.
                     cancel = if dirty {
-                        design::save_row_state(ui, state, true, None)
+                        let discard = design::save_row_state(ui, state, true, None);
+                        if !narrow {
+                            design::blocked_reason(ui, Some(switch));
+                        }
+                        discard
                     } else {
                         design::status(ui, state);
                         Action::quiet("Cancel").show(ui).clicked()
@@ -957,6 +1044,13 @@ impl Reader {
                 });
             });
         });
+        if narrow {
+            if dirty {
+                design::blocked_reason(ui, Some(switch));
+            } else {
+                ui.add_space(Type::Small.line() + ui.spacing().item_spacing.y);
+            }
+        }
         if cancel {
             self.error = None;
             self.picker = None;
@@ -1689,6 +1783,35 @@ mod tests {
             )],
             "SD1-preview-remove: the choice names the group it removes and the one it keeps"
         );
+        // Round 24 FD8: Status words are the DM's own text, so each has curly marks; `not set`
+        // and link names have none.
+        let mut theirs = draft.now.clone();
+        theirs.status = "alive".into();
+        let mut probe = draft.now.clone();
+        probe.status = "ready".into();
+        let now = std::mem::replace(&mut draft.now, probe);
+        let start_status = std::mem::take(&mut draft.start.status);
+        let status = |effects: Vec<(&str, String)>| {
+            effects
+                .into_iter()
+                .find(|(label, _)| *label == "Status")
+                .map(|(_, words)| words)
+        };
+        assert_eq!(
+            status(draft.overwrite_effects(&theirs, &index)).as_deref(),
+            Some("Overwrite saves “ready” in place of “alive”."),
+            "iter-24-FD8-changed"
+        );
+        draft.start.status = "ready".into();
+        draft.now.status = "ready".into();
+        theirs.status = " ".into();
+        assert_eq!(
+            status(draft.overwrite_effects(&theirs, &index)).as_deref(),
+            Some("Overwrite keeps not set from the note."),
+            "iter-24-FD8-not-set"
+        );
+        draft.now = now;
+        draft.start.status = start_status;
         draft.save(&campaign, &index, None).unwrap().change();
         assert_eq!(
             fs::read(&path).unwrap(),
@@ -1782,6 +1905,38 @@ mod tests {
         assert!(same("Night Market", "Night Market"));
         assert!(!same("Night Market", "night market"));
         assert!(!same("Zarel", "[[Zarel]]"));
+    }
+
+    #[test]
+    fn lead_review_a_discarded_draft_belongs_to_its_campaign() {
+        // Lookup keeps its reader across a campaign change. A draft let go in one campaign
+        // offers its Undo discard (and its lost-note warning) only there.
+        let campaign = |dir: &std::path::Path| Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let (home_dir, other_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (home, other) = (campaign(home_dir.path()), campaign(other_dir.path()));
+        let id = super::super::create_entry(&home, "Rook", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&home)).unwrap();
+        let entry = &index.items[index.position(id).unwrap()].entry;
+        let mut draft = EditDraft::open(&home, entry).unwrap();
+        draft.now.status = "gone".into();
+        let mut reader = Reader {
+            discarded: Some((id, draft)),
+            ..Default::default()
+        };
+        // The note goes in its own campaign: the Undo is offered there.
+        fs::remove_file(home_dir.path().join(&entry.path)).unwrap();
+        let home_index = ContentIndex::load(&[], Some(&home)).unwrap();
+        assert!(reader.has_lost_edits(&home_index), "owner-home");
+        // Another campaign has no such note either, but the draft is not its own.
+        let other_index = ContentIndex::load(&[], Some(&other)).unwrap();
+        assert!(!reader.has_lost_edits(&other_index), "owner-other");
+        reader.discarded = None;
     }
 
     #[test]
