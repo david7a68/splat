@@ -118,6 +118,21 @@ An interactive element within rendered descriptive text that invokes a defined
 roll or other supported interaction. Its behavior comes from structured mechanics,
 not from interpreting the surrounding prose.
 
+**Action tile**:
+One action of a creature or a character, read from its rules text or its sheet:
+an attack, a save DC or damage. In a run, a tile arms its action; outside a run,
+it previews.
+
+**Armed action**:
+An action waiting for targets in a run. Each row shows the chance to hit it; a
+click on a row rolls against it and puts the damage in Amount. A player's attack
+only targets, and the DM types the damage the player rolled.
+
+**Inspiration rule**:
+The rule entry that says what a player character's inspiration does, from the
+campaign's packages or notes: a reroll after the roll (SRD 5.2.1) or advantage
+before it (SRD 5.1). No ruleset is the default; a campaign with several picks one.
+
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its
 own current combat state. An inline control used during play acts on that participant.
@@ -421,8 +436,9 @@ One instance of damage against a participant, with its cause and applicable
 components. Its rules determine adjustments and the effects it triggers.
 
 **Standalone roll**:
-A roll of an ability's dice expression that displays a result without using
-the ability, spending resources, or changing a participant's state. A later
+A roll of an ability's dice expression, or of any dice expression during a run,
+that displays a result without using the ability, spending resources, or changing
+a participant's state. It goes to the run's Log and is not an Undo step. A later
 ability use does not automatically reuse this result.
 
 **Reaction opportunity**:

@@ -436,8 +436,8 @@ pub(super) fn show(
                     style::section_heading(ui, &section.title);
                 }
                 // A hand-written stat block's actions read as the book's do.
-                if entry.is_some_and(super::creature::has_stats) {
-                    style::source_prose(ui, section.body);
+                if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {
+                    super::creature::rules_text(ui, &entry.name, section.body);
                 } else {
                     style::markdown(ui, section.body);
                 }

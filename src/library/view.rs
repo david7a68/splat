@@ -228,6 +228,7 @@ fn show_inner(
     empty_value_block: bool,
     related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
 ) -> Option<usize> {
+    crate::rolls::set_entry(ui.ctx(), name);
     // The gap before the prose separates it from what is above. Line warnings need it; an
     // empty value block does not.
     let lead_gap = !empty_value_block || entry.is_some_and(|entry| !entry.flags.is_empty());

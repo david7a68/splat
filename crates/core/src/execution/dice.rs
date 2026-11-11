@@ -3,14 +3,33 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub struct Dice {
-    terms: Vec<(i64, u32, u32)>,
+    terms: Vec<Term>,
     constant: i64,
+}
+
+/// `count` dice of `sides`, added or taken away. `keep` counts only the highest (`kh`) or
+/// the lowest (`kl`) of them, as advantage and disadvantage do.
+#[derive(Clone, Copy, Debug)]
+struct Term {
+    sign: i64,
+    count: u32,
+    sides: u32,
+    keep: Option<Keep>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Keep {
+    Highest(u32),
+    Lowest(u32),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Roll {
     pub dice: Vec<i64>,
     pub total: i64,
+    /// The places in `dice` that a keep left out of the total.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dropped: Vec<usize>,
 }
 
 impl Dice {
@@ -42,12 +61,41 @@ impl Dice {
             rest = &rest[end..];
             if let Some((n, sides)) = term.split_once('d') {
                 let n = n.parse::<u32>().map_err(|_| "Invalid dice count")?;
+                let (sides, keep) = match sides.split_once('k') {
+                    Some((sides, keep)) => (sides, Some(keep)),
+                    None => (sides, None),
+                };
                 let sides = sides.parse::<u32>().map_err(|_| "Invalid die size")?;
+                let keep = keep
+                    .map(|keep| {
+                        let (high, kept) = if let Some(kept) = keep.strip_prefix('h') {
+                            (true, kept)
+                        } else if let Some(kept) = keep.strip_prefix('l') {
+                            (false, kept)
+                        } else {
+                            return Err("Keep needs h or l, as in 2d20kh1");
+                        };
+                        let kept = kept.parse::<u32>().map_err(|_| "Invalid keep count")?;
+                        if kept == 0 || kept > n {
+                            return Err("Keep count must be from 1 to the dice count");
+                        }
+                        Ok(if high {
+                            Keep::Highest(kept)
+                        } else {
+                            Keep::Lowest(kept)
+                        })
+                    })
+                    .transpose()?;
                 count = count.checked_add(n).ok_or("Dice count overflow")?;
                 if n == 0 || count > 1000 || sides == 0 || sides > 1_000_000 {
                     return Err("Dice limits exceeded".into());
                 }
-                terms.push((sign, n, sides));
+                terms.push(Term {
+                    sign,
+                    count: n,
+                    sides,
+                    keep,
+                });
             } else {
                 let n = term
                     .parse::<i64>()
@@ -63,9 +111,10 @@ impl Dice {
     /// The lowest and the highest total this expression can roll.
     pub fn range(&self) -> (i64, i64) {
         let (mut low, mut high) = (self.constant, self.constant);
-        for &(sign, count, sides) in &self.terms {
-            let (count, sides) = (i64::from(count), i64::from(sides));
-            if sign > 0 {
+        for term in &self.terms {
+            let count = i64::from(term.kept(term.count));
+            let sides = i64::from(term.sides);
+            if term.sign > 0 {
                 low += count;
                 high += count * sides;
             } else {
@@ -76,17 +125,53 @@ impl Dice {
         (low, high)
     }
 
+    /// A critical hit rolls each term's dice twice over, and keeps twice as many.
     pub fn roll(&self, random: &mut Random, critical: bool) -> Result<Roll, String> {
+        let times = if critical { 2 } else { 1 };
         let mut dice = Vec::new();
+        let mut dropped = Vec::new();
         let mut total = self.constant;
-        for &(sign, count, sides) in &self.terms {
-            for _ in 0..count * if critical { 2 } else { 1 } {
-                let value = i64::from(random.die(sides)?) * sign;
-                total = total.checked_add(value).ok_or("Roll overflow")?;
-                dice.push(value);
+        for term in &self.terms {
+            let first = dice.len();
+            let count = term.count * times;
+            for _ in 0..count {
+                dice.push(i64::from(random.die(term.sides)?));
             }
+            let mut order: Vec<usize> = (first..dice.len()).collect();
+            // Stable: of equal faces, the first rolled is the one kept.
+            match term.keep {
+                Some(Keep::Highest(_)) => order.sort_by_key(|&at| std::cmp::Reverse(dice[at])),
+                Some(Keep::Lowest(_)) => order.sort_by_key(|&at| dice[at]),
+                None => {}
+            }
+            let kept = term.kept(count) as usize;
+            let mut left_out: Vec<usize> = order.split_off(kept.min(order.len()));
+            left_out.sort_unstable();
+            for &at in &order {
+                total = total
+                    .checked_add(dice[at] * term.sign)
+                    .ok_or("Roll overflow")?;
+            }
+            for face in dice.iter_mut().skip(first) {
+                *face *= term.sign;
+            }
+            dropped.extend(left_out);
         }
-        Ok(Roll { dice, total })
+        Ok(Roll {
+            dice,
+            total,
+            dropped,
+        })
+    }
+}
+
+impl Term {
+    /// How many of `count` rolled dice count toward the total.
+    fn kept(&self, count: u32) -> u32 {
+        match self.keep {
+            Some(Keep::Highest(kept) | Keep::Lowest(kept)) => kept * (count / self.count),
+            None => count,
+        }
     }
 }
 
@@ -152,6 +237,30 @@ mod tests {
         assert_eq!(roll.dice, vec![2, 5]);
     }
     #[test]
+    fn keep_highest_and_lowest_drop_the_other_d20() {
+        let advantage = Dice::parse("2d20kh1 + 4")
+            .unwrap()
+            .roll(&mut Random::controlled([6, 13]), false)
+            .unwrap();
+        assert_eq!(advantage.total, 17);
+        assert_eq!(advantage.dice, vec![6, 13]);
+        assert_eq!(advantage.dropped, vec![0]);
+        let disadvantage = Dice::parse("2d20kl1+4")
+            .unwrap()
+            .roll(&mut Random::controlled([6, 13]), false)
+            .unwrap();
+        assert_eq!(disadvantage.total, 10);
+        assert_eq!(disadvantage.dropped, vec![1]);
+        // Equal faces keep the first.
+        let tie = Dice::parse("2d20kh1")
+            .unwrap()
+            .roll(&mut Random::controlled([9, 9]), false)
+            .unwrap();
+        assert_eq!(tie.dropped, vec![1]);
+        assert_eq!(Dice::parse("2d20kh1+4").unwrap().range(), (5, 24));
+        assert_eq!(Dice::parse("4d6kh3").unwrap().range(), (3, 18));
+    }
+    #[test]
     fn rejects_invalid_or_unbounded_expressions() {
         for text in [
             "",
@@ -161,6 +270,10 @@ mod tests {
             "1d6++2",
             "1d6junk",
             "1d6 * 2",
+            "2d20k1",
+            "2d20kh0",
+            "2d20kh3",
+            "2d20kx1",
             "9223372036854775807 + 1",
         ] {
             assert!(Dice::parse(text).is_err(), "{text}");

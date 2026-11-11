@@ -483,7 +483,8 @@ fn add_row(
     let mut enter = false;
     let response = ui
         .horizontal(|ui| {
-            let menu = design::menu_button_width(ui, ROLL_MENU) + design::S;
+            // The gap is the row's item spacing, so the menu ends at the column's right edge.
+            let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
             let width = (ui.available_width() - menu).max(160.0);
             let response = design::text_input(
                 ui,

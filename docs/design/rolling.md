@@ -1,0 +1,215 @@
+# Rolling from the stat block and the sheet
+
+Status: implemented. This is the fifth design; "History" says what the earlier
+ones were and why they changed.
+
+The DM rolls a creature's or a character's attacks, saves, checks and damage
+without leaving the run, as in a tactics game. A stat block's or a sheet's
+actions are **tiles**. In a run a tile arms its action: each row shows the
+chance to hit it, and a click on a row rolls against it and puts the damage in
+Amount, which Enter applies. Players roll their own dice: a party member's
+attack only targets the row, and the DM types what the player says. Outside a
+run a tile previews. The numbers in tables (an ability, a save, a skill) still
+roll.
+
+The glossary names the two kinds of roll:
+
+- A **standalone roll** in a run. It goes to the Log. It does not use the
+  ability, spend a resource, or change a participant by itself.
+- A **preview roll** outside a run, while the DM reads a definition. It changes
+  nothing and is not saved.
+
+## Principles
+
+1. **Act on the rows.** An armed action targets roster rows, and its results show
+   on them: the chance to hit, `11 vs AC 13 · 10 damage`, or a save in the AC
+   cell (ux-intent principle 4). Damage goes into the dock's Amount, and the dock
+   applies it as it applies any typed amount.
+2. **Nothing floats.** No card or popover covers text. The armed action's status
+   and next steps are under its tiles.
+3. **The printed text is the base.** A tile takes its numbers from the printed
+   rules text (`splat::content::dice_text`): `Attack Roll: +4`, the damage groups
+   of its hit, `Dexterity Saving Throw: DC 14`. Structured data is not consistent
+   enough (114 of the 336 built-in creatures have no `attack_bonus:` line). A
+   run's attack and damage changes are added.
+4. **Record, do not rule.** A roll never changes HP; Enter does. There is no hit
+   or miss verdict; the chance to hit is arithmetic.
+5. **Players roll their own dice.** For a party member, a tile targets but does
+   not roll; `Roll for them` rolls if the player wants. A save's character
+   targets roll at the table, and the DM uses their half mark.
+6. **Standalone rolls are history, not steps.** A roll is not an Undo step, and
+   Undo never removes it from the Log.
+
+## Tiles
+
+In a stat block, each rules paragraph with an attack, a save DC or damage is a
+tile, in printed order; paragraphs next to each other share one row of tiles.
+The paragraph's text is in the tile's hover, not under it. Spellcasting stays
+prose, with its spell links. A character's Actions page shows its attacks as
+tiles. A tile has an icon (sword for an attack, shield for a save, fire for
+damage), its name, its number in a run (Ctrl+1 to Ctrl+9 arm it), and its
+numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
+Damage with a condition follows as `or 2d6+2 slashing` or `plus 1d4 slashing`.
+
+A right-click on a tile or on a number that rolls a d20 opens a menu: `Roll`,
+`Roll with advantage`, `Roll with disadvantage`, and, by a campaign rule that
+gives advantage for inspiration, `Roll with inspiration (advantage)` when the
+character has it.
+
+### An attack
+
+1. Click `Bite` (Shift: advantage, Ctrl: disadvantage), or press Ctrl+1. It is
+   armed: its tile is marked, the panel stays on the attacker, and every other
+   row shows the chance to hit it, such as `60% to hit`.
+2. Click the target's row (Shift or Ctrl for advantage or disadvantage). The
+   attack and its damage roll; a natural 20 rolls critical damage. The row says
+   `11 vs AC 13 · 10 damage`, the row becomes the dock's target, and Amount has
+   10. Enter applies it, as one named step of Undo.
+3. The tile stays armed: click the next target for a Multiattack. Escape, `Stop`
+   or Next turn disarms it.
+
+A right-click on a target row opens a menu under the row, headed `Bite against
+Cinder Wolf 2`: `Roll`, `Roll with advantage`, `Roll with disadvantage`. For a
+save it rolls that creature's save another way; for a player's attack it rolls
+for them.
+
+### Damage that depends on a condition
+
+The printed text can put a condition on damage: `or 6 (1d8 + 2) Piercing damage
+if the target is Bloodied` replaces the damage, and `plus 2 (1d4) Slashing damage
+if the attack roll had Advantage` adds to it. The run settles what it can tell:
+the roll's advantage, and whether the target or the attacker is Bloodied. For
+anything else, such as `if the goat moved 20+ feet straight toward the target`,
+the click on the target opens a question under the row before anything rolls:
+the condition, then `Yes · 2d8+2 bludgeoning`, `No · 2d6+2 bludgeoning` and
+`Cancel`. In the built-in creatures, 16 attacks have such damage; 3 need the
+question. A save's damage, rolled once for every target, rolls without its
+conditions.
+
+### Inspiration
+
+No ruleset comes first. The engine runs inspiration contracts with the
+parameters their rule entries give, and a campaign takes its rule from its
+packages and notes (`splat::content::inspiration`):
+
+- `dnd2024:glossary_heroic_inspiration` (SRD 5.2.1, Heroic Inspiration): reroll
+  one die immediately after rolling it, and use the new roll.
+- `dnd2014:inspiration` (SRD 5.1, Inspiration): advantage on an attack roll, a
+  saving throw or an ability check, chosen before the roll. Its parameters are
+  `expend: {timing: when_making_d20_test, grants: advantage, applies_to:
+  [attack_roll, saving_throw, ability_check]}`.
+
+With one such rule, the campaign uses it. With several, campaign settings shows
+`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`.
+With none, a run offers no inspiration. A run keeps the rule it started with.
+
+Only a player character with inspiration is offered it: by the synced D&D Beyond
+sheet, or else by the sheet's last read. Expending it sends `No inspiration` to
+a synced sheet; without sync, the run remembers it and the Log says so.
+
+- **Reroll rule.** After the run rolls a d20 for a player (`Roll for them`, or a
+  check, save or skill from the sheet), a right-click on the row with the result
+  offers `Reroll the d20 with inspiration`. The new die takes the place of the
+  one that counted, the keep is made again, and the Log says `3 becomes 17`. On
+  an attack, the damage rolls again only when a critical hit begins or ends.
+- **Advantage rule.** The tile, number or target menu offers `with inspiration
+  (advantage)`; the roll has advantage and the Log says inspiration was expended.
+
+### A save
+
+1. Click `Ember Burst`. Click each target's row: a creature rolls its save at
+   once, shown where its AC is, `DEX 14`.
+2. `Half for those at or above DC` marks them to take half. `Roll damage` rolls
+   the damage once, for every target, into Amount; Enter applies it, halving
+   where marked.
+
+### A player's attack
+
+A party member's tile targets without rolling: click the row, then type the
+damage the player says, and press Enter. `Roll for them` rolls instead.
+
+### Checks, saves and skills
+
+A number in a table rolls at once in a run, and its result shows on the
+actor's row. Outside a run, a tile or a number previews: its result shows under
+the tiles, and nothing is saved.
+
+## Engine and data
+
+- `Dice` has keep-highest and keep-lowest (`2d20kh1`, `2d20kl1`), so advantage is
+  an ordinary expression. The dock's dice field accepts it too.
+- `rolls::make` rolls an action: an attack and its damage, a save's damage, or a
+  single d20 or dice roll, with the run's changes and a bonus. Each roll keeps
+  every die, which were dropped, the natural d20 and the total; the Log line and
+  the row's result are made from it.
+- `Run::record` writes a roll's Log lines in `state.log` and in every state in
+  `history`, and moves the dice there too, so Undo keeps the lines and never
+  repeats the dice.
+- The run keeps the armed action (`Armed`), each row's result (`badges`) and each
+  save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
+- `dice_text` marks a damage part's condition (`When`: its words, and whether it
+  replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
+- Chips come from `rolls::chips` over the rules text: each paragraph with a
+  run-in title, skipping printed quotes, tables and headings. A test checks every
+  built-in creature: each `Attack Roll:` and each damage group is found.
+
+## Tasks
+
+The `run-rolls` visual scenario measures these:
+
+| ID | Task | Target |
+| --- | --- | --- |
+| T16.1 | Arm the selected creature's attack; rows show the chance to hit | 1 |
+| T16.2 | Roll against a target and apply the damage | 2 |
+| T16.3 | A second attack against the same target, applied | 2 |
+| T16.4 | An area save against two creatures, then its damage | ≤ 6 |
+| T16.5 | Arm an action by Ctrl+number | 1 |
+| T16.6 | A player's attack with their own typed damage | ≤ 4 |
+| T16.7 | Preview an attack in the Library | 1 |
+| T16.8 | Arm an attack with advantage from its menu | 2 |
+| T16.9 | Roll against one target with disadvantage from its menu | 2 |
+| T16.10 | Attack when its damage depends on a condition | 3 |
+
+## History
+
+1. **Dice links in prose, a roll strip above the side panel, and a call view.**
+   Every printed number was a link; results popped over beside the link and
+   stayed in a strip above the panel with `Use` and `Back to`; a save DC opened a
+   view that replaced the panel. Review: a click on the target's row replaced the
+   attacker's text, `Use` was far from Amount, and the call view was a second
+   roster without HP.
+2. **A held panel.** An open result held the panel on its roller; saves showed
+   on the rows; damage filled Amount. Review: the result cards still covered
+   the text they were about, the hold line moved the stat block, and one roll
+   showed in three or four places.
+3. **A richer right-click menu** (header, click hints, damage, bonus). The user
+   found it worse and reverted it.
+4. **A turn strip.** Two concept reviews (Fable and Opus) recommended taking
+   rolling out of the prose and the panel; the user chose a strip of chips, first
+   under the selected row, then one line above the dock. The user then asked for
+   more of a game's feel.
+5. **This design: action tiles.** The user chose tiles in the stat block with
+   text in hover, arming and clicking rows, typed player rolls, the chance to hit
+   on rows, and number keys (Ctrl+number, as plain digits type into Amount).
+
+## Later
+
+- Keyboard: a key to step through target rows while an action is armed.
+- A situational bonus, such as Bless.
+- Heroic Inspiration on a damage die, and gaining or giving inspiration.
+- Recharge: `(Recharge 5–6)` rolls a d6 against the range.
+- Multiattack: one press for all of its attacks. Its structured data has at
+  least three shapes.
+- Clearing the targets at or above the DC, for features that do no damage on a
+  success.
+- Reminders of conditions that can change a roll. These need a table of which
+  conditions affect which rolls, and come close to a ruling.
+- Upcast spell damage.
+- Sending rolls to the D&D Beyond game log, opt-in. The write path is not
+  verified (`docs/research/dndbeyond-api.md` covers only reading).
+
+## Out of scope
+
+Automatic hit and miss decisions, automatic damage, resistance and condition
+rules, spending resources, 3D dice and sound, and a player-facing view. These
+belong to automatic combat resolution, which remains later work.

@@ -200,13 +200,13 @@ changes`. `No changes to save.` belongs only to blocked Save's hover text and ac
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
 save row, run strip or recording row. Other controls use its hover text and accessible description. The rail
 never repeats the sentence. Its campaign switcher keeps its height and a lock; the popup starts with the
-reason and disables campaign choices. Package, encounter, repair and run-settings drafts keep their campaign-switch
+reason and disables campaign choices. Package, encounter, group, repair and run-settings drafts keep their campaign-switch
 reason after Unsaved and Discard in the save row. Reserve its height so the first edit moves no content. Run
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
 and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (`Undo heading
-change`, `Undo replacement`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+change`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. In a
@@ -844,8 +844,10 @@ share columns and picture size; shortening bonuses changes none of these.
 
 Setup reserves initiative, Absent and menu columns on the name line, centred on initiative. Only NPC rows
 reserve Roll, before initiative, so party names use that room and all initiative fields stay aligned. Reserve
-the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column only while
-the roster has tied rows; change its width only after the initiative field loses focus. Tied rows
+the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column from the start when the
+campaign's roll mode gives two or more NPCs one shared roll, so `Roll NPCs` moves no field. Otherwise reserve it
+only while the roster has tied rows, and change its width only after the initiative field loses focus. With no
+shared roll to come (or individual rolls), setup shows no empty tie column. Tied rows
 keep fixed up and down arrow slots, in that order, with unused directions empty. Rows use the height of their name line (at least a Scan control), their Small detail line, and an XS gap.
 Do not add the live roster's minimum height to setup rows. Setup retains its first
 condition and counts the rest when needed. Shared-roll brackets stay beside fields and stop before detail.
@@ -933,6 +935,31 @@ the value trio. Add by hand comes first, in larger type on one summary line. An 
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
 Paused snapshots state when they differ from the current file.
 
+### Rolls
+
+A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
+wrapping row with `S` gaps, its text in hover. A tile is 208 px wide or the room left, two lines in a hairline frame
+with control radius: a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in
+faint Small at the right in a run, then its numbers in muted Small, shortened by whole words. Hover draws the frame in
+the focus colour. Spellcasting stays prose. A character's Actions page shows its attacks as tiles.
+
+In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
+the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
+it. Enter applies the damage. Escape stops.`), then quiet actions on their own line: `Stop`, and for a save `Roll
+damage` and `Half for those at or above DC`, or for a player's attack `Roll for them`. Each other row shows, in accent
+Small, under its state or after its second line, the chance to hit it while an attack is armed, then the result
+against it (`11 vs AC 13 · 10 damage`); the longest form that fits whole, dropping its first parts. A save's creature
+targets show their roll in the AC cell. Outside a run a tile previews, and its totals show in Strong under the tiles.
+
+A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
+(Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
+and the character allow it. A row's menu opens under the row, headed in muted Small (`Bite against Cinder Wolf 2`), so
+the row stays in view. A damage question opens there too: the condition in Small, wrapped at 320 px, then `Yes · …`,
+`No · …` and `Cancel`.
+
+Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
+save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.
+
 ### Arrivals
 
 Only search shows until a name is typed; then the made-up creature form has two fixed field rows. Search
@@ -978,7 +1005,9 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
 warning. App close says Keep running, Keep recording or Keep processing for each task; recording and job
-titles name the unfinished session. Sync conflicts name the character and offer Review conflict. Stop and
+titles name the unfinished session. Sync conflicts name the character and offer Review conflict.
+The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
+Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
 close is secondary when saved work remains.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.

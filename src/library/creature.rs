@@ -6,7 +6,10 @@ use crate::design::{
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use splat::content::{Entry, Reference};
+use splat::content::{
+    Entry, Reference,
+    dice_text::{self, D20, RollLink},
+};
 
 const ABILITIES: [&str; 6] = [
     "strength",
@@ -274,11 +277,53 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
 
 fn prose(
     ui: &mut egui::Ui,
+    name: &str,
     text: &str,
     values: Option<&super::view::RunValues>,
     spell_links: &mut impl FnMut(&mut egui::Ui, &str),
 ) {
+    let mut tiles: Vec<crate::rolls::Chip> = Vec::new();
+    // Action tiles in a row, with a run's attack changes under them.
+    let flush = |ui: &mut egui::Ui, tiles: &mut Vec<crate::rolls::Chip>| {
+        if tiles.is_empty() {
+            return;
+        }
+        crate::rolls::tiles(ui, name, tiles);
+        let attack = tiles.iter().any(|chip| {
+            matches!(
+                chip.link,
+                RollLink::D20 {
+                    what: D20::Attack,
+                    ..
+                }
+            )
+        });
+        if attack
+            && let Some(values) = values
+            && !values.by_hand.is_empty()
+        {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, format!("{} · in the rolls", values.by_hand.join(", ")))
+                        .color(colors().participant.changed),
+                )
+                .wrap(),
+            );
+            ui.add_space(design::S);
+        }
+        tiles.clear();
+    };
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
+        // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
+        // Spellcasting stays prose: it lists spells, with links to them.
+        if !paragraph.starts_with("Spellcasting")
+            && let Some(chip) = crate::rolls::chips(paragraph).into_iter().next()
+        {
+            tiles.push(chip);
+            continue;
+        }
+        flush(ui, &mut tiles);
         if let Some(speed) = values.and_then(|values| values.speed.as_ref())
             && paragraph.lines().any(|line| line.starts_with("Speed "))
         {
@@ -292,25 +337,16 @@ fn prose(
         } else {
             reader_style::source_prose(ui, paragraph);
         }
-        if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
-            && let Some(values) = values
-            && !values.by_hand.is_empty()
-        {
-            ui.add_space(-design::L + design::XS);
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} · add by hand", values.by_hand.join(", ")))
-                        .color(colors().participant.changed),
-                )
-                .wrap(),
-            );
-            ui.add_space(design::L);
-        }
         if paragraph.starts_with("Spellcasting.") {
             spell_links(ui, paragraph);
         }
     }
+    flush(ui, &mut tiles);
+}
+
+/// Rules text written by hand: its actions as tiles, the rest as prose.
+pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, text: &str) {
+    prose(ui, name, text, None, &mut |_, _| {});
 }
 
 /// These stat rows share the reader's label column, including changed values.
@@ -343,41 +379,66 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
 }
 
 /// One ability row of the stat block's attribute table.
-fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
+fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str, saves: bool) {
     let c = colors();
     let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
     // An absent override does not establish proficiency or a save total.
     let save = stat(entry, &format!("save_{ability}"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = design::XS;
+        let [label, score, modifier_cell] = ABILITY_CELLS;
         cell(
             ui,
-            30.0,
+            label,
             &ability[..3].to_uppercase(),
             Type::StatLabel,
             c.text,
         );
-        cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
-        cell(
-            ui,
-            26.0,
-            &modifier.map_or_else(|| "—".into(), design::signed),
-            Type::Stat,
-            c.muted,
-        );
-        cell(
-            ui,
-            56.0,
-            &save.map_or_else(String::new, |v| format!("Save {}", design::signed(v))),
-            Type::Stat,
-            c.muted,
-        );
+        cell(ui, score, &value(entry, ability), Type::Stat, c.text);
+        let name = dice_text::ability(ability).unwrap_or(ability);
+        match modifier {
+            Some(bonus) => link_cell(
+                ui,
+                modifier_cell,
+                &design::signed(bonus),
+                &RollLink::d20(D20::Check, bonus, name),
+            ),
+            None => cell(ui, modifier_cell, "—", Type::Stat, c.muted),
+        }
+        match save {
+            Some(bonus) => link_cell(
+                ui,
+                SAVE_CELL,
+                &format!("Save {}", design::signed(bonus)),
+                &RollLink::d20(D20::Save, bonus, name),
+            ),
+            None if saves => cell(ui, SAVE_CELL, "", Type::Stat, c.muted),
+            None => {}
+        }
     });
 }
 
+/// The widths of an attribute row's cells: label, score, modifier, then the save.
+const ABILITY_CELLS: [f32; 3] = [30.0, 24.0, 26.0];
+const SAVE_CELL: f32 = 56.0;
+
+/// One half of the attribute table, physical or mental, with or without its Save column.
+fn ability_half_width(saves: bool) -> f32 {
+    let cells: f32 = ABILITY_CELLS.iter().sum::<f32>() + 2.0 * design::XS;
+    if saves {
+        cells + design::XS + SAVE_CELL
+    } else {
+        cells
+    }
+}
+
+/// An attribute row is as tall as a pointer target, as its numbers roll.
+const ABILITY_ROW: f32 = 24.0;
+
 fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, role.line()), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
     let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
+    let top = rect.center().y - galley.size().y / 2.0;
     // Numbers line up on their right edge, so that a column of them can be read down.
     let numeric = text.starts_with(|c: char| c.is_ascii_digit() || "+\u{2212}\u{2014}".contains(c));
     let left = if numeric {
@@ -385,8 +446,58 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Colo
     } else {
         rect.left()
     };
-    ui.painter()
-        .galley(egui::pos2(left, rect.top()), galley, color);
+    ui.painter().galley(egui::pos2(left, top), galley, color);
+}
+
+/// A right-aligned number in the attribute table that rolls.
+fn link_cell(ui: &mut egui::Ui, width: f32, text: &str, link: &RollLink) {
+    let c = colors();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ABILITY_ROW), egui::Sense::hover());
+    // An id from the link, so its result follows it when lines appear above the table.
+    let response = ui.interact(
+        rect,
+        ui.id().with(("dice_cell", link.destination())),
+        egui::Sense::click(),
+    );
+    let color = if response.hovered() {
+        c.focus
+    } else {
+        c.accent
+    };
+    let galley = design::one_line(ui, text, Type::Stat.font(ui), color, width + design::S);
+    let left = rect.right() - galley.size().x;
+    let top = rect.center().y - galley.size().y / 2.0;
+    let bottom = top + galley.size().y - 1.0;
+    ui.painter().hline(
+        left..=rect.right(),
+        bottom,
+        egui::Stroke::new(1.0, color.gamma_multiply(0.6)),
+    );
+    ui.painter().galley(egui::pos2(left, top), galley, color);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Link, true, crate::rolls::hint(link))
+    });
+    crate::rolls::interact(ui, &response, link);
+}
+
+/// The Skills row, with each bonus a dice link.
+fn skills_detail(ui: &mut egui::Ui, text: &str) {
+    let mut markdown = String::new();
+    let mut at = 0;
+    let skills = dice_text::skills(text);
+    if skills.is_empty() {
+        reader_style::detail(ui, "Skills", text);
+        return;
+    }
+    for (range, name, bonus) in skills {
+        markdown.push_str(&text[at..range.start]);
+        markdown.push_str(&RollLink::d20(D20::Skill, bonus, name).markdown(&text[range.clone()]));
+        at = range.end;
+    }
+    markdown.push_str(&text[at..]);
+    reader_style::linked_detail(ui, "Skills", |ui| {
+        crate::markdown_view::show_compact(ui, &markdown);
+    });
 }
 
 /// Armor class, hit points and initiative, under capital labels. Only what the entry has.
@@ -666,8 +777,12 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     ui.add_space(design::S);
     vitals(ui, entry, values);
     ui.add_space(design::S);
-    // The rulebook's table: physical abilities beside mental ones.
-    let two_columns = ui.available_width() >= 300.0;
+    // The rulebook's table: physical abilities beside mental ones, with a clear gutter between
+    // them. A creature with no saving throw has no Save column.
+    let saves = ABILITIES
+        .iter()
+        .any(|ability| stat(entry, &format!("save_{ability}")).is_some());
+    let two_columns = ui.available_width() >= 2.0 * ability_half_width(saves) + design::XL;
     let any_ability = ABILITIES
         .iter()
         .any(|ability| stat(entry, ability).is_some());
@@ -679,20 +794,20 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
         // An authored creature can have no scores. There is nothing to tabulate.
     } else if two_columns {
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = design::M;
+            ui.spacing_mut().item_spacing.x = design::XL;
             for column in ABILITIES.chunks(3) {
                 ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     for ability in column {
-                        ability_row(ui, entry, ability);
+                        ability_row(ui, entry, ability, saves);
                     }
                 });
             }
         });
     } else {
-        ui.spacing_mut().item_spacing.y = 1.0;
+        ui.spacing_mut().item_spacing.y = 0.0;
         for ability in ABILITIES {
-            ability_row(ui, entry, ability);
+            ability_row(ui, entry, ability, saves);
         }
     }
     if any_ability {
@@ -707,6 +822,8 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
                 && let Some(speed) = values.and_then(|values| values.speed.as_ref())
             {
                 changed_speed(ui, &text, speed);
+            } else if label == "Skills" {
+                skills_detail(ui, &text);
             } else {
                 reader_style::detail(ui, label, &text);
             }
@@ -729,7 +846,13 @@ pub(super) fn show(
     for section in sections {
         if section.title == "Source text" {
             let body = without_line(section.body, hit_points_line(entry));
-            prose(ui, &rules_prose(entry, &body), values, &mut spell_links);
+            prose(
+                ui,
+                &entry.name,
+                &rules_prose(entry, &body),
+                values,
+                &mut spell_links,
+            );
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
@@ -742,7 +865,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            reader_style::source_prose(ui, &body);
+            prose(ui, &entry.name, &body, values, &mut spell_links);
         }
     }
 }

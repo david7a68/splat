@@ -7,7 +7,7 @@ pub fn run(d: &mut Driver<'_>) {
     search_library(d, "Slate Wolf");
     d.click_containing("Slate Wolf · Creature");
     d.expect("22 (4d8 + 4)");
-    d.expect("Bite.");
+    d.expect("Bite · +");
     // FD2: a campaign creature's toolbar adds Make NPC note. Every toolbar action is a Read
     // row, so the title stays where a campaign item's title is (compared below).
     d.expect("Campaign · Editable");
