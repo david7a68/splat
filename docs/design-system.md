@@ -885,28 +885,22 @@ Paused snapshots state when they differ from the current file.
 
 ### Rolls
 
-In live play the selected row's action strip is one `Read` control line directly above the dock, at roster width;
-the roster's room leaves it out, so no row moves when the selection or a result changes. Secondary chips at `Read`
-density, `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`, come first in printed order; those that do not fit go in a
-quiet `More` menu. After a roll only the rolled chip stays, selected, and the rest go in `More`; then each total in
-Strong, damage by type when there is room and its total alone when not (types and dice in hover), `Natural 20` or
-`Natural 1` in Body on attacks and death saves, Small accent links `adv`, `dis` and `crit` in 24 px targets, or for
-a save a `Full`/`Half` segmented choice, then a muted Small apply hint while it fits whole. With no result it says
-`Click an action to roll it.` and the shortcut words when they fit. A `+` and a 52 px `Bonus` field, placeholder
-`1d4`, keep the right end; a bad bonus replaces the result with a warning-colour line.
+A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
+wrapping row with `S` gaps, its text in hover. A tile is 208 px wide or the room left, two lines in a hairline frame
+with control radius: a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in
+faint Small at the right in a run, then its numbers in muted Small, shortened by whole words. Hover draws the frame in
+the focus colour. Spellcasting stays prose. A character's Actions page shows its attacks as tiles.
 
-While damage waits, each other present row's HP cell has a hairline frame in the rule colour, inside the row and
-clipped to it, a link in accessibility named `Apply 10 damage to Oren`. Hover fills it with the hover colour and
-draws the frame in accent. A click applies the amount and is one Undo step; an attack's frames go after one target,
-a save's after each target. During a save, each creature's result stands in its AC cell in text colour, with the
-ability's three capitals in muted Small where `AC` was, and the row's accessible name adds `DEX save 14`.
+In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
+the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
+it. Enter applies the damage. Escape stops.`), then quiet actions on their own line: `Stop`, and for a save `Roll
+damage` and `Half for those at or above DC`, or for a player's attack `Roll for them`. Each other row shows, in accent
+Small, under its state or after its second line, the chance to hit it while an attack is armed, then the result
+against it (`11 vs AC 13 · 10 damage`); the longest form that fits whole, dropping its first parts. A save's creature
+targets show their roll in the AC cell. Outside a run a tile previews, and its totals show in Strong under the tiles.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
-save's `Roll`) are accent text with a quiet underline, at least 24 px each way; a short number sits in the middle of
-its target. Attribute rows are 24 px for this; the halves keep an `XL` gutter, and a creature with no saving throw
-has no Save column. Prose has no dice links. Outside a run, a creature's reader shows the same action line under its
-heavy stat-head rule with an `S` gap after it, and a character's Actions page shows it above Attacks; rolls there
-are previews, with no HP frames.
+save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.
 
 ### Arrivals
 

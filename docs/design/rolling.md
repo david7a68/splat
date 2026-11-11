@@ -1,15 +1,16 @@
 # Rolling from the stat block and the sheet
 
-Status: implemented. This is the fourth design; "History" says what the earlier
+Status: implemented. This is the fifth design; "History" says what the earlier
 ones were and why they changed.
 
 The DM rolls a creature's or a character's attacks, saves, checks and damage
-without leaving the run. In a run, the selected row's **action strip** is one
-fixed line above the dock: one chip for each of its actions. A chip rolls an attack and its
-damage together; a click on a target's HP applies the damage. A save rolls its
-damage once and every creature's save, shown on the rows. Outside a run, a
-creature's reader and a character's Actions page have the same line as a
-preview. The numbers in tables (an ability, a save, a skill) still roll.
+without leaving the run, as in a tactics game. A stat block's or a sheet's
+actions are **tiles**. In a run a tile arms its action: each row shows the
+chance to hit it, and a click on a row rolls against it and puts the damage in
+Amount, which Enter applies. Players roll their own dice: a party member's
+attack only targets the row, and the DM types what the player says. Outside a
+run a tile previews. The numbers in tables (an ability, a save, a skill) still
+roll.
 
 The glossary names the two kinds of roll:
 
@@ -20,83 +21,65 @@ The glossary names the two kinds of roll:
 
 ## Principles
 
-1. **Act from the roster.** The actor's actions sit just under the roster, above
-   the dock, and the result lands on the rows it concerns (ux-intent principle 4). The side panel stays a
-   reader: no result, mode or card is drawn over it or in it.
-2. **Nothing floats, nothing moves.** Results have a fixed place, the strip
-   above the dock, which keeps one height whether or not a result is there. It
-   does not follow the selection, so no row moves when the DM selects or rolls.
-3. **The printed text is the base.** A chip takes its numbers from the printed
-   rules text (`splat::content::dice_text`): `Attack Roll: +4`, the damage
-   groups of its hit, `Dexterity Saving Throw: DC 14`. Structured data is not
-   consistent enough (114 of the 336 built-in creatures have no
-   `attack_bonus:` line). A run's attack and damage changes are added.
-4. **A roll changes nothing; a click on HP does.** Rolling never changes HP. A
-   damage roll waits until the DM clicks a target's HP, which is one named step
-   of Undo, as a typed amount is (principle 7, record, do not rule: there is no
-   hit or miss verdict, and no automatic damage).
-5. **Standalone rolls are history, not steps.** A roll is not an Undo step, and
-   Undo never removes it from the Log. Rolls that belong to a step stay part of
-   it, as before: initiative, group arrivals, marked-table rolls and loot rolls.
+1. **Act on the rows.** An armed action targets roster rows, and its results show
+   on them: the chance to hit, `11 vs AC 13 · 10 damage`, or a save in the AC
+   cell (ux-intent principle 4). Damage goes into the dock's Amount, and the dock
+   applies it as it applies any typed amount.
+2. **Nothing floats.** No card or popover covers text. The armed action's status
+   and next steps are under its tiles.
+3. **The printed text is the base.** A tile takes its numbers from the printed
+   rules text (`splat::content::dice_text`): `Attack Roll: +4`, the damage groups
+   of its hit, `Dexterity Saving Throw: DC 14`. Structured data is not consistent
+   enough (114 of the 336 built-in creatures have no `attack_bonus:` line). A
+   run's attack and damage changes are added.
+4. **Record, do not rule.** A roll never changes HP; Enter does. There is no hit
+   or miss verdict; the chance to hit is arithmetic.
+5. **Players roll their own dice.** For a party member, a tile targets but does
+   not roll; `Roll for them` rolls if the player wants. A save's character
+   targets roll at the table, and the DM uses their half mark.
+6. **Standalone rolls are history, not steps.** A roll is not an Undo step, and
+   Undo never removes it from the Log.
 
-## The action strip
+## Tiles
 
-In live play, one line above the dock holds the selected row's actions. Next turn
-selects the current creature, so its actions are the ones in view; selecting
-another row, for a reaction or a legendary action, gives that row's. The roster
-leaves room for this line, so it never covers or moves a row.
-
-- **Chips.** One chip for each named rules paragraph with an attack, a save DC,
-  or damage, in printed order: `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`. A
-  linked character's chips come from its sheet's attacks. The chips that fit
-  show; `More` holds the rest. Click rolls; Shift+click rolls with advantage;
-  Ctrl+click with disadvantage.
-- **The result.** After a roll only the rolled chip stays in view, marked, and the
-  others go in `More`, so the result has the line: the totals in Strong, such as
-  `11 to hit` and `10 damage: 6 piercing, 4 fire`, with damage shortened to its
-  total when room is short (types and dice in hover); `Natural 20` or `Natural 1`
-  on attacks and death saves; then `adv`, `dis` and `crit`, which roll the action
-  again that way, or `Full` and `Half` for a save; then how to apply the damage,
-  while it fits. With no result, the line says how to roll.
-- **The bonus field** keeps the right end: `+ 1d4`. It adds to the creature's d20
-  rolls (attacks, saves, checks) as its own part of the result, for Bless or a
-  cover penalty such as `-2`. It stays until it is cleared. A bad bonus says
-  `Use dice or a number, such as 1d4 or -2.` and is not used.
+In a stat block, each rules paragraph with an attack, a save DC or damage is a
+tile, in printed order; paragraphs next to each other share one row of tiles.
+The paragraph's text is in the tile's hover, not under it. Spellcasting stays
+prose, with its spell links. A character's Actions page shows its attacks as
+tiles. A tile has an icon (sword for an attack, shield for a save, fire for
+damage), its name, its number in a run (Ctrl+1 to Ctrl+9 arm it), and its
+numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
 
 ### An attack
 
-1. Click `Bite +4`. The attack and its damage roll together; a natural 20 rolls
-   the damage as a critical hit (the dice twice, the bonus once).
-2. Click the target's HP. The damage applies as one step of Undo, named as any
-   damage is. The attacker stays selected, so the next attack of a Multiattack
-   is one chip and one HP away.
-
-While damage waits, every other present row's HP has a quiet frame that turns
-accent on hover, and says `Apply 10 damage to Oren`. An attack's damage lands
-once; after that the frames go. The attacker's own HP never takes it.
+1. Click `Bite` (Shift: advantage, Ctrl: disadvantage), or press Ctrl+1. It is
+   armed: its tile is marked, the panel stays on the attacker, and every other
+   row shows the chance to hit it, such as `60% to hit`.
+2. Click the target's row (Shift or Ctrl for advantage or disadvantage). The
+   attack and its damage roll; a natural 20 rolls critical damage. The row says
+   `11 vs AC 13 · 10 damage`, the row becomes the dock's target, and Amount has
+   10. Enter applies it, as one named step of Undo.
+3. The tile stays armed: click the next target for a Multiattack. Escape, `Stop`
+   or Next turn disarms it.
 
 ### A save
 
-1. Click `Ember Burst DC 12`. Its damage rolls once, for every target (roll
-   scope). Every present creature other than the caster rolls its save, by its
-   Save bonus or else its ability modifier, and the result stands where that
-   row's AC is: `DEX 14`. A linked player's sheet rolls its own save at the table.
-2. Click the HP of each target. `Full` or `Half` on the strip says what a click
-   applies; Half rounds down. Each target takes it once.
+1. Click `Ember Burst`. Click each target's row: a creature rolls its save at
+   once, shown where its AC is, `DEX 14`.
+2. `Half for those at or above DC` marks them to take half. `Roll damage` rolls
+   the damage once, for every target, into Amount; Enter applies it, halving
+   where marked.
 
-### The table's numbers
+### A player's attack
 
-The attribute table's Mod and Save cells, the Skills row, and a sheet's
-abilities, saves and skills are accent numbers with a quiet underline, at least
-24 px each way. In a run their result goes to the strip above the dock; outside
-a run, to the entry's preview line. A death save has a `Roll` link beside its
-counts. Prose has no dice links.
+A party member's tile targets without rolling: click the row, then type the
+damage the player says, and press Enter. `Roll for them` rolls instead.
 
-### Outside a run
+### Checks, saves and skills
 
-A creature's reader shows the same line under its stat head, and a character's
-Actions page shows it above the attacks. A roll there is a preview on its own
-dice: it changes nothing and goes to no Log. There are no HP frames.
+A number in a table rolls at once in a run, and its result shows on the
+actor's row. Outside a run, a tile or a number previews: its result shows under
+the tiles, and nothing is saved.
 
 ## Engine and data
 
@@ -105,14 +88,12 @@ dice: it changes nothing and goes to no Log. There are no HP frames.
 - `rolls::make` rolls an action: an attack and its damage, a save's damage, or a
   single d20 or dice roll, with the run's changes and a bonus. Each roll keeps
   every die, which were dropped, the natural d20 and the total; the Log line and
-  the strip are made from it.
+  the row's result are made from it.
 - `Run::record` writes a roll's Log lines in `state.log` and in every state in
   `history`, and moves the dice there too, so Undo keeps the lines and never
   repeats the dice.
-- The run keeps the selected row's last action (`Turn`): what rolled, which rows
-  took its damage, Full or Half, and each creature's save. Next turn, another
-  selection, or Undo that removes its actor ends it. Bonuses are kept by row and
-  are not saved with the run.
+- The run keeps the armed action (`Armed`), each row's result (`badges`) and each
+  save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
   run-in title, skipping printed quotes, tables and headings. A test checks every
   built-in creature: each `Attack Roll:` and each damage group is found.
@@ -123,13 +104,13 @@ The `run-rolls` visual scenario measures these:
 
 | ID | Task | Target |
 | --- | --- | --- |
-| T16.1 | Roll the selected creature's attack and its damage | 1 |
-| T16.2 | Apply the damage by the target's HP, with the attacker still selected | 1 |
-| T16.3 | Make a second attack and apply its damage | 2 |
-| T16.4 | An area save against two creatures, one taking half | 4 |
-| T16.5 | Roll the attack again with advantage | 1 |
-| T16.6 | Roll an attack with a Bless bonus | 3 |
-| T16.7 | Preview an attack with advantage in the Library by pointer | 1 |
+| T16.1 | Arm the selected creature's attack; rows show the chance to hit | 1 |
+| T16.2 | Roll against a target and apply the damage | 2 |
+| T16.3 | A second attack against the same target, applied | 2 |
+| T16.4 | An area save against two creatures, then its damage | ≤ 6 |
+| T16.5 | Arm an action by Ctrl+number | 1 |
+| T16.6 | A player's attack with their own typed damage | ≤ 4 |
+| T16.7 | Preview an attack in the Library | 1 |
 
 ## History
 
@@ -145,15 +126,18 @@ The `run-rolls` visual scenario measures these:
    showed in three or four places.
 3. **A richer right-click menu** (header, click hints, damage, bonus). The user
    found it worse and reverted it.
-4. **This design.** Two independent concept reviews (Fable and Opus) both
-   recommended taking rolling out of the prose and the panel. The user chose the
-   turn strip. Built under the selected row, it moved the rows below it on each
-   selection and took the room 12 rows need at 960x640, so it became one fixed
-   line above the dock.
+4. **A turn strip.** Two concept reviews (Fable and Opus) recommended taking
+   rolling out of the prose and the panel; the user chose a strip of chips, first
+   under the selected row, then one line above the dock. The user then asked for
+   more of a game's feel.
+5. **This design: action tiles.** The user chose tiles in the stat block with
+   text in hover, arming and clicking rows, typed player rolls, the chance to hit
+   on rows, and number keys (Ctrl+number, as plain digits type into Amount).
 
 ## Later
 
-- Keyboard: focus on chips, and keys for the HP targets.
+- Keyboard: a key to step through target rows while an action is armed.
+- A situational bonus, such as Bless.
 - Recharge: `(Recharge 5–6)` rolls a d6 against the range.
 - Multiattack: one press for all of its attacks. Its structured data has at
   least three shapes.

@@ -1060,66 +1060,6 @@ impl<'a> Driver<'a> {
         self.settle();
     }
 
-    /// Where these words are painted inside a longer text, such as a dice link in a
-    /// paragraph. The last match in view wins, as the reader paints the body last.
-    pub fn words_rect(&self, words: &str) -> Option<egui::Rect> {
-        let window =
-            egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(self.window.0, self.window.1));
-        let mut found = None;
-        self.each_painted_text(|text, clip| {
-            let full = &text.galley.job.text;
-            let Some(byte) = full.find(words) else {
-                return;
-            };
-            let first = full[..byte].chars().count();
-            let last = first + words.chars().count();
-            let start = text
-                .galley
-                .pos_from_cursor(egui::text::CCursor::new(first))
-                .translate(text.pos.to_vec2());
-            let end = text
-                .galley
-                .pos_from_cursor(egui::text::CCursor::new(last))
-                .translate(text.pos.to_vec2());
-            let rect = egui::Rect::from_min_max(start.min, egui::pos2(end.min.x, start.max.y));
-            if clip.contains(rect.center()) && window.contains(rect.center()) {
-                found = Some(rect);
-            }
-        });
-        found
-    }
-
-    /// Click these words inside painted text, with keys held or with the other button.
-    pub fn click_words(&mut self, words: &str, held: egui::Modifiers, button: egui::PointerButton) {
-        let Some(rect) = self.words_rect(words) else {
-            panic!(
-                "{}: {words:?} is not painted in view.\n{}",
-                self.scenario,
-                self.describe()
-            );
-        };
-        let pos = rect.center();
-        let caption = format!("Click: {words}");
-        self.film_aim(rect, &caption);
-        self.harness.hover_at(pos);
-        self.harness.step();
-        self.harness.input_mut().modifiers = held;
-        for pressed in [true, false] {
-            self.harness.event(egui::Event::PointerButton {
-                pos,
-                button,
-                pressed,
-                modifiers: held,
-            });
-        }
-        self.harness.step();
-        self.harness.input_mut().modifiers = egui::Modifiers::NONE;
-        self.harness.remove_cursor();
-        self.interactions += 1;
-        self.settle();
-        self.film_result(&caption);
-    }
-
     /// Every text painted inside this rect and whole: not cut to an ellipsis, and not
     /// outside the clip of the pane it is in. This is what a person can read there.
     pub fn painted_in(&self, rect: egui::Rect) -> String {

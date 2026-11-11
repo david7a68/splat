@@ -554,10 +554,12 @@ pub(crate) struct Run {
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
-    /// The selected row's last action, until Next turn or another row. Never saved.
-    turn: Option<rolling::Turn>,
-    /// A bonus for a row's d20 rolls, such as 1d4 for Bless, until cleared. Never saved.
-    bonuses: BTreeMap<usize, String>,
+    /// The armed action, until it is stopped or the turn ends. Never saved.
+    armed: Option<rolling::Armed>,
+    /// What each row shows from the current action: its chance to hit or its result.
+    badges: BTreeMap<usize, String>,
+    /// Each save target's roll, shown where its AC is.
+    saves: BTreeMap<usize, i64>,
     /// The dice field's last roll, beside it in the dock.
     dock_roll: Option<crate::rolls::Rolled>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
@@ -873,8 +875,9 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: 0,
-            turn: None,
-            bonuses: BTreeMap::new(),
+            armed: None,
+            badges: BTreeMap::new(),
+            saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
             condition: String::new(),
@@ -3500,8 +3503,9 @@ impl Run {
             dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
-            turn: None,
-            bonuses: BTreeMap::new(),
+            armed: None,
+            badges: BTreeMap::new(),
+            saves: BTreeMap::new(),
             dock_roll: None,
             amount: String::new(),
             condition: String::new(),

@@ -202,7 +202,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 12] = [
+const KEYS: [(&str, &str); 13] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected rows by the amount"),
     ("Shift+Enter", "Heal the selected rows by the amount"),
@@ -212,6 +212,10 @@ const KEYS: [(&str, &str); 12] = [
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
     ("C", "Conditions"),
+    (
+        "Ctrl+1 to 9",
+        "Arm an action; click a row to target it; Escape stops",
+    ),
     ("Ctrl+G", "Add to fight"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
     ("Ctrl+J", "Open or close Notes. Escape also closes them"),
@@ -330,7 +334,6 @@ impl Run {
     }
 
     pub(super) fn select(&mut self, index: usize) {
-        self.forget_turn_unless(index);
         self.clear_targets();
         if self.selected != index {
             self.selected = index;
@@ -420,6 +423,9 @@ impl Run {
             self.live_initiative = None;
             return;
         }
+        if self.disarm_on_escape(ui) {
+            return;
+        }
         // Back to whose turn it is, after a look at someone else.
         if let Some(current) = self.current()
             && (self.selected != current || !self.also.is_empty())
@@ -497,6 +503,26 @@ impl Run {
         }
         if conditions {
             self.open_conditions_tab();
+        }
+        // Ctrl+1 to Ctrl+9 arm the panel's actions, as a game's action bar does.
+        const NUMBERS: [Key; 9] = [
+            Key::Num1,
+            Key::Num2,
+            Key::Num3,
+            Key::Num4,
+            Key::Num5,
+            Key::Num6,
+            Key::Num7,
+            Key::Num8,
+            Key::Num9,
+        ];
+        let number = ui.input_mut(|i| {
+            NUMBERS
+                .iter()
+                .position(|key| i.consume_key(Modifiers::COMMAND, *key))
+        });
+        if let Some(at) = number {
+            self.arm_by_number(at + 1);
         }
     }
 
@@ -652,7 +678,7 @@ impl Run {
                             - header_height(design::RUN_REGULAR)
                             - 32.0
                             - DOCK_HEIGHT
-                            - super::rolling::STRIP_HEIGHT
+                            - self.strip_height()
                             - self.footer_height(),
                         ui.available_width(),
                         self.state.order.len(),
@@ -668,7 +694,7 @@ impl Run {
                     }
                     let room = ui.available_height()
                         - DOCK_HEIGHT
-                        - super::rolling::STRIP_HEIGHT
+                        - self.strip_height()
                         - self.footer_height();
                     let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
                         Density::Read.control() + design::XS
@@ -889,17 +915,17 @@ impl Run {
                     }
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
-                    // The selected row's actions, on one fixed line above the dock: rows never
-                    // move when the selection does.
-                    let strip_rect = Rect::from_min_size(
-                        ui.cursor().min,
-                        vec2(roster_width, super::rolling::STRIP_HEIGHT),
-                    );
-                    ui.scope_builder(egui::UiBuilder::new().max_rect(strip_rect), |ui| {
-                        ui.set_min_height(super::rolling::STRIP_HEIGHT);
-                        let row = self.selected;
-                        self.action_strip(ui, row);
-                    });
+                    // With the panel hidden, its action tiles keep one line above the dock.
+                    if self.hide_panel {
+                        let strip_rect = Rect::from_min_size(
+                            ui.cursor().min,
+                            vec2(roster_width, super::rolling::STRIP_HEIGHT),
+                        );
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(strip_rect), |ui| {
+                            ui.set_min_height(super::rolling::STRIP_HEIGHT);
+                            self.compact_actions(ui);
+                        });
+                    }
                     let dock_rect =
                         Rect::from_min_size(ui.cursor().min, vec2(roster_width, DOCK_HEIGHT));
                     ui.scope_builder(egui::UiBuilder::new().max_rect(dock_rect), |ui| {
@@ -1509,7 +1535,6 @@ impl Run {
         }
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
-        let mut apply = None;
         let mut rule = None;
         let mut toggle_half = None;
         // A changed window size must not leave the selected row out of view.
@@ -1548,10 +1573,14 @@ impl Run {
                     let p = &self.state.participants[index];
                     let sync = self.row_sync_word(index);
                     let save = self.save_on_row(index);
+                    let badge = self.row_badge(index);
                     let turn = TurnMark::of(index, current, next_up);
                     let mut name = row_name(p, turn, sync);
                     if let Some((ability, total)) = &save {
                         name.push_str(&format!(", {ability} save {total}"));
+                    }
+                    if let Some(badge) = &badge {
+                        name.push_str(&format!(", {badge}"));
                     }
                     let response = ui.push_id(&p.key, |ui| {
                         if self.live_initiative == Some(index) {
@@ -1592,6 +1621,7 @@ impl Run {
                                             scale,
                                             layout,
                                             save.as_ref(),
+                                            badge.as_deref(),
                                         );
                                     })
                                 })
@@ -1613,6 +1643,7 @@ impl Run {
                                         scale,
                                         layout,
                                         save.as_ref(),
+                                        badge.as_deref(),
                                     );
                                 },
                             );
@@ -1796,26 +1827,6 @@ impl Run {
                             toggle_half = Some(index);
                         }
                     }
-                    // While damage waits, a target's HP applies it. The row is not selected,
-                    // so the actor's strip and stat block stay.
-                    if let Some(words) = self.apply_words(index) {
-                        let cell = Rect::from_min_max(
-                            pos2(
-                                rect.left() + layout.temp_right + design::XS,
-                                rect.top() + 2.0,
-                            ),
-                            pos2(
-                                rect.left() + layout.hp_right + design::S,
-                                rect.bottom() - 2.0,
-                            ),
-                        )
-                        .intersect(rect);
-                        let id = ui.id().with(("apply_damage", &p.key));
-                        if apply_target(ui, cell, id, &words) {
-                            apply = Some(index);
-                            clicked = None;
-                        }
-                    }
                     if self.selected == index {
                         selected_rect = Some(rect);
                     }
@@ -1859,13 +1870,24 @@ impl Run {
             }
             self.focus_amount = true;
         }
-        if let Some(index) = apply {
-            self.apply_waiting(index);
-        }
-        match clicked {
-            Some((index, true)) => self.toggle_target(index),
-            Some((index, false)) => self.select(index),
-            None => {}
+        // While an action is armed, a row is its target: Shift+click rolls with advantage,
+        // Ctrl+click with disadvantage. Otherwise a click selects, and Ctrl+click adds.
+        if let Some((index, ctrl)) = clicked {
+            let shift = ui.input(|i| i.modifiers.shift);
+            let mode = if ctrl {
+                Some(crate::rolls::Mode::Disadvantage)
+            } else if shift {
+                Some(crate::rolls::Mode::Advantage)
+            } else {
+                None
+            };
+            if !self.target(index, mode) {
+                if ctrl {
+                    self.toggle_target(index);
+                } else {
+                    self.select(index);
+                }
+            }
         }
         if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
             self.panel = Panel::Conditions;
@@ -2934,7 +2956,12 @@ impl Run {
     // ---- Side panel -------------------------------------------------------------
 
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        let index = self.selected;
+        // While an action is armed, its actor's stat block stays; the other tabs follow the row.
+        let index = if self.panel == Panel::Reference {
+            self.panel_row()
+        } else {
+            self.selected
+        };
         let p = &self.state.participants[index];
         let (successes, failures) = (p.successes, p.failures);
         let death_saves = p.shows_death_saves();
@@ -3061,7 +3088,10 @@ impl Run {
 
     fn panel_body(&mut self, ui: &mut egui::Ui, index: usize, panel: Panel) {
         match panel {
-            Panel::Reference => self.reference_tab(ui, index),
+            Panel::Reference => {
+                self.reference_tab(ui, index);
+                self.armed_tiles_end(ui.ctx());
+            }
             Panel::Conditions => self.conditions_tab(ui, index),
             Panel::Record => self.record_tab(ui, index),
             Panel::Log => self.log_tab(ui),
@@ -3918,6 +3948,7 @@ impl Run {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     crate::rolls::set_roller(ui.ctx(), Some(index));
+                    self.armed_tiles_begin(ui.ctx());
                     crate::party::sheet_page(ui, &record, page, "", Some(&live));
                     crate::rolls::set_roller(ui.ctx(), None);
                 });
@@ -4002,6 +4033,7 @@ impl Run {
                         }),
                     };
                     crate::rolls::set_roller(ui.ctx(), Some(index));
+                    self.armed_tiles_begin(ui.ctx());
                     link = view::show_run(
                         ui,
                         definition,
@@ -5240,7 +5272,17 @@ impl Run {
                             )
                             .with_art(self.row_art(ui.ctx(), p));
                             design::row(ui, layout.height(scale), false, &name, |ui, rect| {
-                                paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout, None);
+                                paint_row(
+                                    ui,
+                                    rect,
+                                    p,
+                                    TurnMark::None,
+                                    sync,
+                                    scale,
+                                    &layout,
+                                    None,
+                                    None,
+                                );
                             });
                         }
                     });
@@ -5872,32 +5914,6 @@ fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: 
         }
         values.pop();
     }
-}
-
-/// A row's HP while damage waits: a quiet frame that takes a click, in accent on hover.
-fn apply_target(ui: &egui::Ui, cell: Rect, id: egui::Id, words: &str) -> bool {
-    let target = ui
-        .interact(cell, id, egui::Sense::click())
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    target.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, words));
-    let c = colors();
-    let edge = if target.hovered() {
-        ui.painter()
-            .rect_filled(cell, design::RADIUS_CONTROL, c.hover);
-        c.accent
-    } else {
-        c.rule
-    };
-    ui.painter().rect_stroke(
-        cell,
-        design::RADIUS_CONTROL,
-        egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
-        egui::StrokeKind::Inside,
-    );
-    if target.has_focus() {
-        design::focus_ring(ui, cell);
-    }
-    target.on_hover_text(words).clicked()
 }
 
 /// Keep the copy suffix when a name needs fewer words.
@@ -6675,7 +6691,8 @@ fn condition_links(
     opened
 }
 
-/// `save` is a call's result for this row, such as `DEX` and 19, shown where AC is.
+/// `save` is a save's result for this row, such as `DEX` and 19, shown where AC is, and
+/// `badge` what the current action says about the row, such as `60% to hit`.
 #[allow(clippy::too_many_arguments)]
 fn paint_row(
     ui: &egui::Ui,
@@ -6686,6 +6703,7 @@ fn paint_row(
     scale: RunScale,
     layout: &RowLayout,
     save: Option<&(String, i64)>,
+    badge: Option<&str>,
 ) {
     let c = colors();
     let painter = ui.painter();
@@ -6844,6 +6862,40 @@ fn paint_row(
         pos2(hp_right, bar_top + bar_height),
     );
     design::hp_bar(painter, bar, p.hp, p.max_hp, p.temporary_hp);
+    // The current action's word on this row: the chance to hit, or the result. It goes under
+    // the row's state, or, where the state column has no room, after its second line. The
+    // longest form that fits whole, dropping its first parts.
+    if let Some(badge) = badge {
+        let font = Type::Small.font(ui);
+        let parts: Vec<&str> = badge.split(" · ").collect();
+        let fitting = |room: f32| {
+            (0..parts.len())
+                .map(|from| parts[from..].join(" · "))
+                .find(|words| design::number_width(ui, words, &font) <= room)
+        };
+        let state_left = hp_right + design::S;
+        let after_detail = x
+            + layout.second_left
+            + layout
+                .second_line
+                .as_ref()
+                .map_or(0.0, |line| line.size().x + design::S);
+        let place = fitting(rect.right() - state_left - design::XS)
+            .map(|words| (state_left, words))
+            .or_else(|| {
+                fitting(x + layout.temp_right - after_detail - design::S)
+                    .map(|words| (after_detail, words))
+            });
+        if let Some((left, words)) = place {
+            painter.text(
+                pos2(left, second_y),
+                Align2::LEFT_TOP,
+                words,
+                font,
+                c.accent,
+            );
+        }
+    }
     let state_font = Type::Heading.sized(ui, scale.mark.max(12.0));
     if let Some((icon, word, color)) = hp_word(p).filter(|_| !layout.inline_state) {
         let color = if current && word == "HP unknown" {

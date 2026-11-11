@@ -118,16 +118,15 @@ An interactive element within rendered descriptive text that invokes a defined
 roll or other supported interaction. Its behavior comes from structured mechanics,
 not from interpreting the surrounding prose.
 
-**Action strip**:
-The line above the dock in a live run: the selected row's chip for each action,
-read from its rules text or its sheet, a bonus field, and the last result. An
-attack rolls its damage with it; a save rolls its damage and every creature's
-save. Outside a run, a reader shows the same line as a preview.
+**Action tile**:
+One action of a creature or a character, read from its rules text or its sheet:
+an attack, a save DC or damage. In a run, a tile arms its action; outside a run,
+it previews.
 
-**Waiting damage**:
-Damage an action rolled that no participant has taken yet. A click on a target's
-HP applies it as one step of Undo; an attack's lands once, a save's once per
-target, full or half.
+**Armed action**:
+An action waiting for targets in a run. Each row shows the chance to hit it; a
+click on a row rolls against it and puts the damage in Amount. A player's attack
+only targets, and the DM types the damage the player rolled.
 
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its

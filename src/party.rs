@@ -1448,10 +1448,6 @@ pub fn sheet_page(
     live: Option<&LiveValues>,
 ) {
     crate::rolls::set_entry(ui.ctx(), &record.definition.splat_name);
-    // Outside a run, the actions roll as a preview; in a run, the roster's strip has them.
-    if page == 1 && live.is_none() {
-        crate::rolls::preview_line(ui, &record.definition.splat_name, &sheet_chips(record));
-    }
     match page {
         0 => overview(ui, record, live),
         BACKGROUND_PAGE => background(ui, record),
@@ -2213,6 +2209,7 @@ fn attack_damage(attack: &Value) -> String {
 fn attack_chip(attack: &Value) -> Option<Chip> {
     let name = text(&attack["name"]).to_owned();
     let kind = text(&attack["damage"]["type"]);
+    let words = format!("{name} · {} {kind}", attack_damage(attack));
     let parts: Vec<DamagePart> = attack["damage"]["value"]["diceString"]
         .as_str()
         .filter(|_| attack["damage"]["value"].as_i64().is_none())
@@ -2245,7 +2242,7 @@ fn attack_chip(attack: &Value) -> Option<Chip> {
     } else {
         return None;
     };
-    Chip::new(link)
+    Chip::new(link, words)
 }
 
 /// A character's actions, from its sheet's attacks.
@@ -2262,29 +2259,12 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
     match page {
         1 => {
             sheet_heading(ui, "Attacks", record.character.attacks.len());
-            for attack in &record.character.attacks {
-                let damage = attack_damage(attack);
-                let hit = attack["toHit"]
-                    .as_i64()
-                    .map(|n| format!("{n:+} to hit"))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "Save DC {} {}",
-                            attack["saveInfo"]["value"],
-                            text(&attack["saveInfo"]["label"])
-                        )
-                    });
-                if text(&attack["name"])
-                    .to_lowercase()
-                    .contains(&search.to_lowercase())
-                {
-                    ui.label(format!(
-                        "{} · {hit} · {damage} {}",
-                        text(&attack["name"]),
-                        text(&attack["damage"]["type"])
-                    ));
-                }
-            }
+            // Each attack is an action tile: in a run it arms, elsewhere it previews.
+            let chips: Vec<Chip> = sheet_chips(record)
+                .into_iter()
+                .filter(|chip| chip.label.to_lowercase().contains(&search.to_lowercase()))
+                .collect();
+            crate::rolls::tiles(ui, &record.definition.splat_name, &chips);
             ui.add_space(design::S);
         }
         2 => {

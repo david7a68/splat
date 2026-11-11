@@ -277,11 +277,53 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
 
 fn prose(
     ui: &mut egui::Ui,
+    name: &str,
     text: &str,
     values: Option<&super::view::RunValues>,
     spell_links: &mut impl FnMut(&mut egui::Ui, &str),
 ) {
+    let mut tiles: Vec<crate::rolls::Chip> = Vec::new();
+    // Action tiles in a row, with a run's attack changes under them.
+    let flush = |ui: &mut egui::Ui, tiles: &mut Vec<crate::rolls::Chip>| {
+        if tiles.is_empty() {
+            return;
+        }
+        crate::rolls::tiles(ui, name, tiles);
+        let attack = tiles.iter().any(|chip| {
+            matches!(
+                chip.link,
+                RollLink::D20 {
+                    what: D20::Attack,
+                    ..
+                }
+            )
+        });
+        if attack
+            && let Some(values) = values
+            && !values.by_hand.is_empty()
+        {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, format!("{} · in the rolls", values.by_hand.join(", ")))
+                        .color(colors().participant.changed),
+                )
+                .wrap(),
+            );
+            ui.add_space(design::S);
+        }
+        tiles.clear();
+    };
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
+        // A paragraph with an attack, a save or damage is an action tile; its text is in hover.
+        // Spellcasting stays prose: it lists spells, with links to them.
+        if !paragraph.starts_with("Spellcasting")
+            && let Some(chip) = crate::rolls::chips(paragraph).into_iter().next()
+        {
+            tiles.push(chip);
+            continue;
+        }
+        flush(ui, &mut tiles);
         if let Some(speed) = values.and_then(|values| values.speed.as_ref())
             && paragraph.lines().any(|line| line.starts_with("Speed "))
         {
@@ -295,25 +337,16 @@ fn prose(
         } else {
             reader_style::source_prose(ui, paragraph);
         }
-        if (paragraph.contains("Attack Roll:") || paragraph.contains("to hit"))
-            && let Some(values) = values
-            && !values.by_hand.is_empty()
-        {
-            ui.add_space(-design::L + design::XS);
-            ui.add(
-                egui::Label::new(
-                    Type::Small
-                        .rich(ui, format!("{} · add by hand", values.by_hand.join(", ")))
-                        .color(colors().participant.changed),
-                )
-                .wrap(),
-            );
-            ui.add_space(design::L);
-        }
         if paragraph.starts_with("Spellcasting.") {
             spell_links(ui, paragraph);
         }
     }
+    flush(ui, &mut tiles);
+}
+
+/// Rules text written by hand: its actions as tiles, the rest as prose.
+pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, text: &str) {
+    prose(ui, name, text, None, &mut |_, _| {});
 }
 
 /// These stat rows share the reader's label column, including changed values.
@@ -800,14 +833,6 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     heavy_rule(ui);
     ui.add_space(design::S);
     ui.spacing_mut().item_spacing.y = design::XS;
-    // Outside a run its actions roll here as a preview. In a run the roster's strip has them.
-    if values.is_none() {
-        let chips = crate::rolls::chips(&entry.body);
-        if !chips.is_empty() {
-            crate::rolls::preview_line(ui, &entry.name, &chips);
-            ui.add_space(design::S);
-        }
-    }
 }
 
 pub(super) fn show(
@@ -821,7 +846,13 @@ pub(super) fn show(
     for section in sections {
         if section.title == "Source text" {
             let body = without_line(section.body, hit_points_line(entry));
-            prose(ui, &rules_prose(entry, &body), values, &mut spell_links);
+            prose(
+                ui,
+                &entry.name,
+                &rules_prose(entry, &body),
+                values,
+                &mut spell_links,
+            );
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
@@ -834,7 +865,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            reader_style::source_prose(ui, &body);
+            prose(ui, &entry.name, &body, values, &mut spell_links);
         }
     }
 }

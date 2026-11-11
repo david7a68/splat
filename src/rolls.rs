@@ -58,9 +58,6 @@ fn preview_id() -> Id {
 fn outcome_id(entry: &str) -> Id {
     Id::new(("roll_preview_outcome", entry))
 }
-fn bonus_id(entry: &str) -> Id {
-    Id::new(("roll_preview_bonus", entry))
-}
 
 /// The press of this frame, for the run or the preview stream.
 pub(crate) fn take_ask(ctx: &egui::Context) -> Option<Ask> {
@@ -305,7 +302,7 @@ impl Rolled {
     }
 
     /// `17 to hit`, `14 damage: 7 piercing, 7 fire`.
-    fn headline(&self) -> String {
+    pub fn headline(&self) -> String {
         match self.by_kind.as_slice() {
             [(_, Some(kind))] => format!("{} {} damage", self.total, kind.to_lowercase()),
             [_] | [] => format!("{} {}", self.total, self.what()),
@@ -324,7 +321,7 @@ impl Rolled {
     }
 
     /// `Natural 20` or `Natural 1`, where the rules give them a meaning.
-    fn natural_words(&self) -> Option<&'static str> {
+    pub fn natural_words(&self) -> Option<&'static str> {
         match self.natural {
             Some(20) => Some("Natural 20"),
             Some(1) => Some("Natural 1"),
@@ -473,18 +470,6 @@ fn faces(rolled: &Roll) -> Vec<(i64, bool)> {
         .collect()
 }
 
-/// A situational bonus as dice: `1d4`, `+1d4`, `-2`. Spaces and book minus signs are fine.
-pub(crate) fn bonus_dice(text: &str) -> Result<Option<String>, &'static str> {
-    let plain = dice_text::plain_dice(text);
-    let plain = plain.strip_prefix('+').unwrap_or(&plain).to_owned();
-    if plain.is_empty() {
-        return Ok(None);
-    }
-    Dice::parse(&plain)
-        .map(|_| Some(plain))
-        .map_err(|_| "Use dice or a number, such as 1d4 or -2.")
-}
-
 /// `roll` with a situational bonus added to the total, as its own part.
 pub(crate) fn roll_with(
     who: &str,
@@ -521,10 +506,12 @@ pub(crate) struct Chip {
     /// `Bite +4`, `Ember Burst DC 12`, `Claw 2d6`.
     pub label: String,
     pub link: RollLink,
+    /// The rules text, for hover.
+    pub text: String,
 }
 
 impl Chip {
-    pub fn new(link: RollLink) -> Option<Self> {
+    pub fn new(link: RollLink, text: String) -> Option<Self> {
         let label = match &link {
             RollLink::D20 {
                 what: D20::Attack,
@@ -536,7 +523,7 @@ impl Chip {
             RollLink::Damage { label, parts } => format!("{label} {}", parts_text(parts)),
             _ => return None,
         };
-        Some(Self { label, link })
+        Some(Self { label, link, text })
     }
 }
 
@@ -565,7 +552,9 @@ pub(crate) fn chips(text: &str) -> Vec<Chip> {
         })
         .or_else(|| pick(|l| matches!(l, RollLink::SaveDc { .. })))
         .or_else(|| pick(|l| matches!(l, RollLink::Damage { .. })));
-        if let Some(chip) = link.cloned().and_then(Chip::new)
+        if let Some(chip) = link
+            .cloned()
+            .and_then(|link| Chip::new(link, paragraph.replace(['*', '_'], "")))
             && !chips.iter().any(|known| known.label == chip.label)
         {
             chips.push(chip);
@@ -592,11 +581,6 @@ impl Outcome {
             .flatten()
             .map(Rolled::line)
             .collect()
-    }
-
-    /// Its damage waits for targets: once for an attack, once per target for a save.
-    pub fn many_targets(&self) -> bool {
-        matches!(self.link, RollLink::SaveDc { .. })
     }
 }
 
@@ -676,17 +660,7 @@ pub(crate) fn preview(ctx: &egui::Context, ask: &Ask) {
                 .map_or(1, |since| since.as_nanos() as u64);
             Random::seeded(seed)
         });
-    let bonus = ctx
-        .data(|data| data.get_temp::<String>(bonus_id(&ask.entry)))
-        .and_then(|text| bonus_dice(&text).ok().flatten());
-    let outcome = make(
-        &ask.entry,
-        &ask.link,
-        ask.mode,
-        (0, 0),
-        bonus.as_deref(),
-        &mut random,
-    );
+    let outcome = make(&ask.entry, &ask.link, ask.mode, (0, 0), None, &mut random);
     ctx.data_mut(|data| {
         data.insert_temp(preview_id(), random);
         if let Ok(outcome) = outcome {
@@ -700,316 +674,293 @@ fn preview_outcome(ctx: &egui::Context, entry: &str) -> Option<Outcome> {
     ctx.data(|data| data.get_temp::<Outcome>(outcome_id(entry)))
 }
 
-/// What an action line asks for.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum LineEvent {
-    /// A chip pressed, with its keys.
-    Roll(RollLink, Mode),
-    /// The last action again, this way.
-    Again(Mode),
-    /// Full or half damage for the next HP click.
-    Half(bool),
+/// The run's armed action, for the tiles to mark it and say what can follow.
+#[derive(Clone, Debug)]
+pub(crate) struct ArmedView {
+    pub link: RollLink,
+    /// What to do next, such as `Click a target. Escape stops.`
+    pub status: String,
+    pub actions: Vec<(&'static str, ArmedAction)>,
 }
 
-/// What an action line shows under its chips.
-pub(crate) struct LineResult<'a> {
-    pub outcome: Option<&'a Outcome>,
-    /// During a save's damage in a run: whether a HP click applies half.
-    pub half: Option<bool>,
-    /// In a run: what a click on a row's HP does now.
-    pub apply: Option<String>,
+/// What the line under an armed tile can ask the run to do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ArmedAction {
+    /// For a player's attack: roll it for them against the target.
+    RollForThem,
+    /// For a save: roll its damage once, into Amount.
+    RollDamage,
+    /// For a save: mark the targets at or above the DC to take half.
+    HalfMade,
+    Stop,
 }
 
-/// The height of an action line: one control line.
-pub(crate) const LINE_HEIGHT: f32 = 28.0;
+fn armed_id() -> Id {
+    Id::new("roll_armed")
+}
+fn armed_action_id() -> Id {
+    Id::new("roll_armed_action")
+}
 
-/// One line: the chips, the last result and what can follow it, and a bonus field at the
-/// right. After a roll only the rolled chip stays in view and the rest go in `More`, so the
-/// result has the room. One fixed height, so nothing near it moves when a result arrives.
-pub(crate) fn action_line(
-    ui: &mut egui::Ui,
-    salt: impl std::hash::Hash,
-    chips: &[Chip],
-    result: &LineResult<'_>,
-    bonus: &mut String,
-) -> Option<LineEvent> {
-    let mut event = None;
-    let id = ui.id().with(("action_line", salt));
-    ui.horizontal(|ui| {
-        ui.set_height(LINE_HEIGHT);
-        ui.spacing_mut().item_spacing.x = design::S;
-        // The bonus field keeps the right end; the chips and the result share what is left.
-        let room = (ui.available_width() - BONUS - design::L).max(0.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(room, LINE_HEIGHT),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.set_width(room);
-                ui.spacing_mut().item_spacing.x = design::XS;
-                let active = result.outcome.map(|outcome| &outcome.link);
-                event = chip_row(ui, id, chips, active);
-                ui.add_space(design::S);
-                ui.spacing_mut().item_spacing.x = design::S;
-                event = result_row(ui, result, bonus).or(event.take());
-            },
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = design::XS;
-            let field = design::text_input(ui, "Bonus", bonus, "1d4", BONUS - 12.0);
-            field.on_hover_text(
-                "A bonus for this creature's d20 rolls, such as 1d4 for Bless. It stays until you clear it.",
-            );
-            ui.label(Type::Body.rich(ui, "+").color(colors().muted));
-        });
+/// Show the run's armed action on the tiles drawn next, or none.
+pub(crate) fn set_armed(ctx: &egui::Context, view: Option<ArmedView>) {
+    ctx.data_mut(|data| match view {
+        Some(view) => data.insert_temp(armed_id(), view),
+        None => data.remove::<ArmedView>(armed_id()),
     });
-    event
 }
 
-/// The width of the bonus field and its `+`.
-const BONUS: f32 = 64.0;
-
-/// The chips that fit, and `More` for the rest. With a result, only the rolled chip shows.
-fn chip_row(
-    ui: &mut egui::Ui,
-    id: Id,
-    chips: &[Chip],
-    active: Option<&RollLink>,
-) -> Option<LineEvent> {
-    let mut event = None;
-    let more = Action::quiet("More").density(Density::Read);
-    // With no result, the chips may use the line; with one, the rolled chip alone.
-    let shown: Vec<&Chip> = match active.and_then(|link| chips.iter().find(|c| &c.link == link)) {
-        Some(chip) => vec![chip],
-        None => {
-            let room = (ui.available_width() - more.natural_width(ui)).max(0.0);
-            let mut used = 0.0;
-            let mut fit = Vec::new();
-            for (at, chip) in chips.iter().enumerate() {
-                let width = Action::secondary(&chip.label)
-                    .density(Density::Read)
-                    .natural_width(ui)
-                    + design::XS;
-                let limit = if at + 1 == chips.len() {
-                    room + more.natural_width(ui)
-                } else {
-                    room
-                };
-                if used + width > limit {
-                    break;
-                }
-                used += width;
-                fit.push(chip);
-            }
-            fit
-        }
-    };
-    for chip in &shown {
-        let response = Action::secondary(&chip.label)
-            .density(Density::Read)
-            .selected(active == Some(&chip.link))
-            .hint(&hint(&chip.link))
-            .show(ui);
-        if response.clicked() {
-            event = Some(LineEvent::Roll(
-                chip.link.clone(),
-                Mode::from_keys(ui, &chip.link),
-            ));
-        }
-    }
-    let rest: Vec<&Chip> = chips
-        .iter()
-        .filter(|chip| !shown.iter().any(|shown| shown.link == chip.link))
-        .collect();
-    if !rest.is_empty() {
-        let button = more.name("More actions").show(ui);
-        egui::Popup::menu(&button).id(id.with("more")).show(|ui| {
-            for chip in rest {
-                if ui
-                    .button(&chip.label)
-                    .on_hover_text(hint(&chip.link))
-                    .clicked()
-                {
-                    event = Some(LineEvent::Roll(
-                        chip.link.clone(),
-                        Mode::from_keys(ui, &chip.link),
-                    ));
-                    ui.close();
-                }
-            }
-        });
-    }
-    if chips.is_empty() {
-        ui.label(
-            Type::Small
-                .rich(ui, "No attacks or saves in this text.")
-                .color(colors().muted),
-        );
-    }
-    event
+/// What the DM pressed under an armed tile this frame.
+pub(crate) fn take_armed_action(ctx: &egui::Context) -> Option<ArmedAction> {
+    ctx.data_mut(|data| {
+        let action = data.get_temp::<ArmedAction>(armed_action_id());
+        data.remove::<ArmedAction>(armed_action_id());
+        action
+    })
 }
 
-/// The last result: each roll's total, then `adv dis crit`, then Full or Half and how to
-/// apply, while they fit. The dice are in hover.
-fn result_row(ui: &mut egui::Ui, result: &LineResult<'_>, bonus: &str) -> Option<LineEvent> {
+/// A tile's icon: a sword for an attack, a shield for a save, fire for damage.
+fn icon(link: &RollLink) -> &'static str {
+    match link {
+        RollLink::D20 { .. } => design::icons::ATTACK,
+        RollLink::SaveDc { .. } => design::icons::SAVE_DC,
+        RollLink::Damage { .. } | RollLink::Dice { .. } => design::icons::AREA,
+    }
+}
+
+/// A tile's second line: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
+fn tile_detail(link: &RollLink) -> String {
+    match link {
+        RollLink::D20 { bonus, damage, .. } if damage.is_empty() => design::signed(*bonus),
+        RollLink::D20 { bonus, damage, .. } => {
+            format!("{} · {}", design::signed(*bonus), parts_text(damage))
+        }
+        RollLink::SaveDc {
+            ability,
+            dc,
+            damage,
+            ..
+        } if damage.is_empty() => format!("DC {dc} {ability}"),
+        RollLink::SaveDc {
+            ability,
+            dc,
+            damage,
+            ..
+        } => format!("DC {dc} {ability} · {}", parts_text(damage)),
+        RollLink::Damage { parts, .. } => parts_text(parts),
+        RollLink::Dice { dice, .. } => dice.clone(),
+    }
+}
+
+/// The width of an action tile.
+const TILE_WIDTH: f32 = 208.0;
+
+/// One action as a tile: its icon, name and hotkey number, and its numbers under them. The
+/// rules text is in hover. It is painted, so the tile is one control with one name.
+fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> egui::Response {
     let c = colors();
-    let mut event = None;
-    // A hint shows the longest of its forms that fits whole.
-    let hint = |ui: &mut egui::Ui, forms: &[&str], color: egui::Color32| {
-        let room = ui.available_width();
-        if let Some(words) = forms
-            .iter()
-            .find(|words| design::number_width(ui, words, &Type::Small.font(ui)) <= room)
-        {
-            ui.label(Type::Small.rich(ui, *words).color(color));
-        }
-    };
-    if let Err(problem) = bonus_dice(bonus) {
-        hint(ui, &[problem, "Use dice, such as 1d4."], c.result.warning);
-        return None;
-    }
-    let Some(outcome) = result.outcome else {
-        hint(
+    let width = TILE_WIDTH.min(ui.available_width()).max(48.0);
+    let height = Type::Strong.line() + Type::Small.line() + 2.0 * design::XS + 2.0;
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
+    let label = format!("{} · {}.{keys}", chip.label, tile_detail(&chip.link));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter_at(rect);
+        let edge = if armed {
+            c.accent
+        } else if response.hovered() {
+            c.focus
+        } else {
+            c.rule
+        };
+        painter.rect(
+            rect,
+            design::RADIUS_CONTROL,
+            if armed { c.selected } else { c.page },
+            egui::Stroke::new(design::HAIRLINE_WIDTH, edge),
+            egui::StrokeKind::Inside,
+        );
+        let inner = rect.shrink2(egui::vec2(design::S, design::XS));
+        let mark = if armed {
+            design::icons::ARMED
+        } else {
+            icon(&chip.link)
+        };
+        let mark = design::one_line(
             ui,
-            &[
-                "Click an action to roll it. Shift: advantage. Ctrl: disadvantage.",
-                "Click an action to roll it.",
-            ],
+            mark,
+            Type::Body.font(ui),
+            if armed { c.accent } else { c.muted },
+            f32::INFINITY,
+        );
+        let mark_width = mark.size().x + design::XS;
+        painter.galley(inner.min, mark, c.text);
+        let digit = number.map(|n| {
+            design::one_line(
+                ui,
+                &n.to_string(),
+                Type::Small.font(ui),
+                c.faint,
+                f32::INFINITY,
+            )
+        });
+        let digit_width = digit.as_ref().map_or(0.0, |g| g.size().x + design::XS);
+        if let Some(digit) = digit {
+            painter.galley(
+                egui::pos2(inner.right() - digit.size().x, inner.top()),
+                digit,
+                c.faint,
+            );
+        }
+        let room = (inner.width() - mark_width - digit_width).max(1.0);
+        let name = design::words_that_fit(ui, &chip_name(&chip.link), &Type::Strong.font(ui), room);
+        let name = design::one_line(ui, &name, Type::Strong.font(ui), c.text, room);
+        painter.galley(inner.min + egui::vec2(mark_width, 0.0), name, c.text);
+        let detail = tile_detail(&chip.link);
+        let detail = design::words_that_fit(ui, &detail, &Type::Small.font(ui), inner.width());
+        let detail = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, inner.width());
+        painter.galley(
+            egui::pos2(inner.left(), inner.top() + Type::Strong.line()),
+            detail,
             c.muted,
         );
-        return None;
-    };
-    let fits = |ui: &egui::Ui, words: &str, role: Type| {
-        design::number_width(ui, words, &role.font(ui)) + design::S <= ui.available_width()
-    };
-    // Room kept for what can follow the totals: Full and Half, or adv, dis and crit.
-    let keep = if result.half.is_some() {
-        design::number_width(ui, "Full Half", &Type::Body.font(ui)) + design::L
-    } else {
-        design::number_width(ui, "adv dis crit", &Type::Small.font(ui)) + design::L
-    };
-    for rolled in [&outcome.first, &outcome.damage].into_iter().flatten() {
-        // Damage by type when there is room; its total alone, with the types in hover, if not.
-        let full = rolled.headline();
-        let words = if design::number_width(ui, &full, &Type::Strong.font(ui)) + keep
-            <= ui.available_width()
-        {
-            full
-        } else {
-            format!("{} {}", rolled.total, rolled.what())
-        };
-        if fits(ui, &words, Type::Strong) {
-            let response = ui.label(Type::Strong.rich(ui, &words).color(c.text));
-            design::named(ui, &response, &rolled.line());
-            response.on_hover_ui(|ui| {
-                ui.label(Type::Small.rich(ui, rolled.headline()).color(c.text));
-                ui.add(egui::Label::new(rolled.parts_job(ui, c.muted)));
-                if let Some(words) = rolled.changed_words() {
-                    ui.label(Type::Small.rich(ui, words).color(c.participant.changed));
-                }
-            });
+    }
+    if response.has_focus() {
+        design::focus_ring(ui, rect);
+    }
+    response.on_hover_ui(|ui| {
+        ui.set_max_width(360.0);
+        ui.add(egui::Label::new(Type::Body.rich(ui, &chip.text).color(c.text)).wrap());
+        ui.label(
+            Type::Small
+                .rich(
+                    ui,
+                    format!(
+                        "{} Shift: advantage. Ctrl: disadvantage.{keys}",
+                        hint(&chip.link)
+                    ),
+                )
+                .color(c.muted),
+        );
+    })
+}
+
+/// An action's name: `Bite`, `Ember Burst`.
+fn chip_name(link: &RollLink) -> String {
+    match link {
+        RollLink::D20 { label, .. }
+        | RollLink::Damage { label, .. }
+        | RollLink::SaveDc { label, .. }
+        | RollLink::Dice { label, .. } => label.clone(),
+    }
+}
+
+/// An entry's actions as tiles. In a run a tile arms its action, and the line under the
+/// tiles says how to use it; outside a run a tile previews, and the line shows the result.
+pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
+    if chips.is_empty() {
+        return;
+    }
+    let ctx = ui.ctx().clone();
+    let in_run = ctx.data(|data| data.get_temp::<usize>(roller_id()).is_some());
+    let armed = ctx
+        .data(|data| data.get_temp::<ArmedView>(armed_id()))
+        .filter(|view| in_run && chips.iter().any(|chip| chip.link == view.link));
+    set_entry(&ctx, entry);
+    ui.add_space(design::XS);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
+        for (at, chip) in chips.iter().enumerate() {
+            let number = (in_run && at < 9).then_some(at + 1);
+            let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
+            if tile(ui, chip, number, lit).clicked() {
+                ask(&ctx, chip.link.clone(), Mode::from_keys(ui, &chip.link));
+            }
         }
-        if let Some(words) = rolled.natural_words()
-            && fits(ui, words, Type::Body)
-        {
+    });
+    ui.add_space(design::XS);
+    if let Some(view) = &armed {
+        // What to do now, then what can follow, each on its own line.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = design::XS;
+            ui.label(
+                Type::Body
+                    .rich(ui, design::icons::ARMED)
+                    .color(colors().accent),
+            );
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, &view.status).color(colors().text)).wrap(),
+            );
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = design::S;
+            for (word, action) in &view.actions {
+                if Action::quiet(word)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    ctx.data_mut(|data| data.insert_temp(armed_action_id(), *action));
+                }
+            }
+        });
+    } else if !in_run
+        && let Some(outcome) =
+            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|c| c.link == o.link))
+    {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = design::S;
+            outcome_line(ui, &outcome);
+        });
+    }
+    ui.add_space(design::S);
+}
+
+/// The totals of an outcome in Strong, with their dice in hover.
+pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
+    let c = colors();
+    for rolled in [&outcome.first, &outcome.damage].into_iter().flatten() {
+        let response = ui.label(Type::Strong.rich(ui, rolled.headline()).color(c.text));
+        design::named(ui, &response, &rolled.line());
+        response.on_hover_ui(|ui| {
+            ui.add(egui::Label::new(rolled.parts_job(ui, c.muted)));
+            if let Some(words) = rolled.changed_words() {
+                ui.label(Type::Small.rich(ui, words).color(c.participant.changed));
+            }
+        });
+        if let Some(words) = rolled.natural_words() {
             ui.label(Type::Body.rich(ui, words).color(c.text));
         }
     }
-    if let Some(half) = result.half
-        && fits(ui, "Full Half", Type::Body)
-    {
-        let mut chosen = half;
-        if design::segmented(ui, &mut chosen, &[(false, "Full"), (true, "Half")]) {
-            event = Some(LineEvent::Half(chosen));
-        }
-    }
-    let d20 = matches!(outcome.link, RollLink::D20 { .. });
-    // A save's damage is never a critical hit.
-    let damage = outcome.damage.is_some() && !outcome.many_targets();
-    for (word, mode, offered, hint) in [
-        ("adv", Mode::Advantage, d20, "Roll it again with advantage"),
-        (
-            "dis",
-            Mode::Disadvantage,
-            d20,
-            "Roll it again with disadvantage",
-        ),
-        (
-            "crit",
-            Mode::Critical,
-            damage,
-            "Roll its damage again as a critical hit",
-        ),
-    ] {
-        if offered && fits(ui, word, Type::Small) && again_link(ui, word, hint) {
-            event = Some(LineEvent::Again(mode));
-        }
-    }
-    if let Some(apply) = &result.apply
-        && fits(ui, apply, Type::Small)
-    {
-        ui.label(Type::Small.rich(ui, apply).color(c.muted));
-    }
-    event
 }
 
-/// A short Small link, such as `adv`, in a target at least 24 px each way.
-fn again_link(ui: &mut egui::Ui, word: &str, hint: &str) -> bool {
-    let c = colors();
-    let galley = design::one_line(
-        ui,
-        word,
-        Type::Small.font(ui),
-        egui::Color32::PLACEHOLDER,
-        f32::INFINITY,
-    );
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(galley.size().x.max(24.0), 24.0),
-        egui::Sense::click(),
-    );
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, hint));
-    let color = if response.hovered() {
-        c.focus
-    } else {
-        c.accent
-    };
-    let left = rect.center().x - galley.size().x / 2.0;
-    let top = rect.center().y - galley.size().y / 2.0;
-    ui.painter().hline(
-        left..=left + galley.size().x,
-        top + galley.size().y,
-        egui::Stroke::new(1.0, color.gamma_multiply(0.6)),
-    );
-    ui.painter().galley(egui::pos2(left, top), galley, color);
-    if response.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
-    response.on_hover_text(hint).clicked()
-}
-
-/// A reader's action line outside a run: the entry's chips, its last preview, and its bonus.
-pub(crate) fn preview_line(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
+/// The run's actions on one line above the dock while Lookup or Notes hide the panel:
+/// a quiet button for each tile, the armed one marked.
+pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     let ctx = ui.ctx().clone();
-    let outcome = preview_outcome(&ctx, entry);
-    let mut bonus = ctx
-        .data(|data| data.get_temp::<String>(bonus_id(entry)))
-        .unwrap_or_default();
-    let result = LineResult {
-        outcome: outcome.as_ref(),
-        half: None,
-        apply: None,
-    };
-    set_entry(&ctx, entry);
-    let event = action_line(ui, ("preview", entry), chips, &result, &mut bonus);
-    ctx.data_mut(|data| data.insert_temp(bonus_id(entry), bonus));
-    match event {
-        Some(LineEvent::Roll(link, mode)) => ask(&ctx, link, mode),
-        Some(LineEvent::Again(mode)) => {
-            if let Some(outcome) = outcome {
-                ask(&ctx, outcome.link, mode);
+    let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));
+    ui.horizontal(|ui| {
+        ui.set_height(28.0);
+        ui.spacing_mut().item_spacing.x = design::XS;
+        for chip in chips {
+            if ui.available_width() < 80.0 {
+                break;
+            }
+            let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
+            let words = format!("{} {}", icon(&chip.link), chip.label);
+            let response = Action::secondary(&words)
+                .name(&chip.label)
+                .density(Density::Read)
+                .selected(lit)
+                .hint(&hint(&chip.link))
+                .show(ui);
+            if response.clicked() {
+                ask(&ctx, chip.link.clone(), Mode::from_keys(ui, &chip.link));
             }
         }
-        Some(LineEvent::Half(_)) | None => {}
-    }
+    });
 }
 
 #[cfg(test)]
@@ -1117,10 +1068,6 @@ mod tests {
 
     #[test]
     fn a_bonus_is_its_own_part_and_bad_words_are_refused() {
-        assert_eq!(bonus_dice(" +1d4 "), Ok(Some("1d4".into())));
-        assert_eq!(bonus_dice("\u{2212}2"), Ok(Some("-2".into())));
-        assert_eq!(bonus_dice(""), Ok(None));
-        assert!(bonus_dice("bless").is_err());
         let rolled = roll_with(
             "Guard",
             &attack(),
