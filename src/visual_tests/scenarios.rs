@@ -8226,7 +8226,23 @@ pub mod world {
             d.visible_text("A field gate fails on a low roll."),
             "A heading's result opens its note at that heading",
         );
+        // Round 24 FD4: a plain World note has `Open in World` too, and it opens the note there.
+        d.observe(
+            "iter-24-D-FD4",
+            d.has("Open in World") && !d.has("Open in Library"),
+            "Lookup offers Open in World for the plain note Gate Mechanics",
+        );
         d.state("world-heading-beside-run", Sizes::All);
+        d.click("Open in World");
+        d.settle();
+        d.observe(
+            "iter-24-D-FD4-opens",
+            d.current_page() == "World" && d.visible_text("A field gate fails on a low roll."),
+            "Open in World shows Gate Mechanics on the World page",
+        );
+        d.click("Back to run");
+        look_up(d, "reliability");
+        d.expect("Clear");
 
         d.click("Clear");
         d.click("Generate NPC");
