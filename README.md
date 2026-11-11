@@ -942,17 +942,15 @@ choose **End encounter…** again, the outcome field starts with that outcome, s
 replaces it. The outcome comes from the run file, so it is the same after a close and a restart. Timeline, the
 session plan and the Encounters lists follow the run each way.
 
-The run file keeps when its fight was last played: its place in the campaign's order of play, and the session that
-was being played. A step sets it, and **Undo** of the step puts the older value back, also after a close or a
-restart. So a fight that is opened, continued and taken back keeps its old place, and the next fight still starts
-from the fight that was played last. The Timeline decides none of this. It takes what the run files say after each
-read of `Timeline.md` or of the run folder, so nothing is lost when the file cannot be read for a time, when the
-app restarts, or when you work in another campaign meanwhile. Moving an event on Timeline changes the story's order
-and not the order of play. A run file that changed on disk since Splat read the run folder, and two run files with
-one identity, say nothing to the Timeline until the folder is read again. Two limits: a fight that is played while
-`Timeline.md` cannot be read takes its place from the run files alone, so it can fall before a long rest that no
-run has seen; and a fight that starts while the file cannot be read reaches the Timeline only if its run is the
-open run when the file reads again.
+Continue fight is for the fight that was played last. Splat offers it when it can read `Timeline.md`, and no
+fight and no long rest that restored the party has a later place in the order of play than this fight's event. For
+that fight, neither Continue fight nor its **Undo** changes which fight was played last, so the next fight still
+starts each player from the right HP, and Timeline has no order to put back. For any other ended run the control
+is not offered, and one sentence stands in its place: **A later fight or rest was played. Start a new run to play
+this one again.** While `Timeline.md` cannot be read, the sentence is **Splat cannot read Timeline.md. Fix that on
+the Timeline page first.** For a fight whose event was removed from Timeline, it is **This fight is not on the
+Timeline. Start a new run to play it again.** **Undo: end encounter** has no such rule. It takes the ending away
+for any open run while the ending is the newest step, as before.
 With another run open, Continue fight is blocked and says **Close the open run first.**
 
 ### Run storage and campaign initiative
@@ -1084,7 +1082,8 @@ Settings imports a D&D Beyond campaign directly below its row and suggests a new
 Library shows **Back** with **Alt+Left** whenever an earlier entry is available. **Alt+Right** goes forward again to an entry left by Back, until a new link starts a new trail. The mouse's Back and Forward buttons do the same. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `run-continue` covers Undo after a
-close and a restart, Continue fight, and unread Undo steps, each with Lookup closed and open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
+and unread Undo steps, each with Lookup closed and open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 

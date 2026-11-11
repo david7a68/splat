@@ -85,7 +85,7 @@ pub fn run(d: &mut Driver<'_>) {
     go_encounters(d);
     resume_run(d, RUN_VAULT);
     d.observe(
-        "T15.1",
+        "T17.1",
         undo_step(d) == "Undo: next turn",
         format!(
             "A resumed run names the last step from before it closed: {}",
@@ -98,7 +98,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.press(Key::Enter);
     let turn = current_participant(d).unwrap_or_default();
     d.observe(
-        "T15.1",
+        "T17.1",
         undo_step(d) == DAMAGE_STEP && d.row_hp(TARGET) == whole.map(|hp| hp - 3),
         format!("Undo names the damage: {}", undo_step(d)),
     );
@@ -109,9 +109,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.begin_task();
     d.click_beside(&format!("{RUN_VAULT} · Closed last"), RESUME);
     d.expect(&format!("{RUN_HEADING}{RUN_VAULT}"));
-    d.goal_within("T15.1", "come back from Close run", 1);
+    d.goal_within("T17.1", "come back from Close run", 1);
     d.observe(
-        "T15.1",
+        "T17.1",
         undo_step(d) == DAMAGE_STEP && current_participant(d).as_deref() == Some(turn.as_str()),
         format!(
             "After Close run and Resume, Undo names the same step on the same turn: {}, {:?}",
@@ -122,7 +122,7 @@ pub fn run(d: &mut Driver<'_>) {
     // A quit, or a crash: the app opens the run again by itself.
     d.restart();
     d.observe(
-        "T15.1",
+        "T17.1",
         undo_step(d) == DAMAGE_STEP && current_participant(d).as_deref() == Some(turn.as_str()),
         format!(
             "After a restart, Undo names the same step on the same turn: {}, {:?}",
@@ -135,10 +135,10 @@ pub fn run(d: &mut Driver<'_>) {
     go_library(d);
     d.begin_task();
     d.click(BACK_TO_RUN);
-    d.goal_within("T15.1", "come back from another page", 1);
+    d.goal_within("T17.1", "come back from another page", 1);
     d.click_containing(DAMAGE_STEP);
     d.observe(
-        "T15.1",
+        "T17.1",
         d.row_hp(TARGET) == whole && undo_step(d) == "Undo: next turn",
         format!(
             "Undo takes the damage back, and the step before it is next: {:?}, {}",
@@ -152,13 +152,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("End encounter");
     d.expect("Outcome: Undecided");
     d.observe(
-        "T15.2",
+        "T17.2",
         undo_step(d) == END_STEP && !d.has(CONTINUE),
         "While the ending is the newest step, the ended view has Undo and no second control",
     );
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view",
         &[END_STEP, CLOSE_RUN],
         "Ended · Round 2",
@@ -167,7 +167,7 @@ pub fn run(d: &mut Driver<'_>) {
     open_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view beside Lookup",
         &[CLOSE_RUN],
         "Ended · Round 2",
@@ -175,9 +175,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("ended-beside-lookup", Sizes::All);
     d.begin_task();
     d.click_starting("Undo");
-    d.goal_within("T15.2", "take back an ending", 1);
+    d.goal_within("T17.2", "take back an ending", 1);
     d.observe(
-        "T15.2",
+        "T17.2",
         current_participant(d).as_deref() == Some(turn.as_str()) && d.in_view(NEXT_TURN),
         format!(
             "Undo of the ending returns to the turn the fight ended on: {:?}",
@@ -185,7 +185,7 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
     d.observe(
-        "T15.6",
+        "T17.6",
         lookup_keeps_its_entry(d),
         "Undo of the ending leaves Lookup on its entry",
     );
@@ -198,7 +198,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(ROLL_LOOT);
     d.expect(" on 1d4");
     d.observe(
-        "T15.2",
+        "T17.2",
         undo_step(d) == LOOT_STEP && d.has(CONTINUE),
         format!(
             "After a loot roll, Undo names the roll and Continue fight shows: {}",
@@ -207,7 +207,7 @@ pub fn run(d: &mut Driver<'_>) {
     );
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view with loot beside Lookup",
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
@@ -216,7 +216,7 @@ pub fn run(d: &mut Driver<'_>) {
     close_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view with loot",
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
@@ -231,13 +231,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Add Long rest");
     d.click(BACK_TO_RUN);
     d.observe(
-        "T15.8",
+        "T17.8",
         !d.has(CONTINUE) && d.visible_passage(LATER) && d.in_view(CLOSE_RUN),
         "After a later rest, the ended view offers no Continue fight and says why",
     );
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view of a fight that is not the last",
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
@@ -246,7 +246,7 @@ pub fn run(d: &mut Driver<'_>) {
     open_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view of a fight that is not the last, beside Lookup",
         &[CLOSE_RUN, LATER],
         "Ended · Round 2",
@@ -261,7 +261,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Long rest");
     d.click(BACK_TO_RUN);
     d.observe(
-        "T15.8",
+        "T17.8",
         d.has(CONTINUE) && !d.visible_passage(LATER),
         "With no later fight or restoring rest, Continue fight is offered again",
     );
@@ -277,13 +277,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.app_mut().timeline.reload();
     d.settle();
     d.observe(
-        "T15.8",
+        "T17.8",
         !d.has(CONTINUE) && d.visible_passage(NO_TIMELINE),
         "While Timeline.md cannot be read, the ended view offers no Continue fight and says why",
     );
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view while Timeline.md cannot be read",
         &[CLOSE_RUN, NO_TIMELINE],
         "Ended · Round 2",
@@ -292,7 +292,7 @@ pub fn run(d: &mut Driver<'_>) {
     open_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended view while Timeline.md cannot be read, beside Lookup",
         &[CLOSE_RUN, NO_TIMELINE],
         "Ended · Round 2",
@@ -302,22 +302,22 @@ pub fn run(d: &mut Driver<'_>) {
     d.app_mut().timeline.reload();
     d.settle();
     d.observe(
-        "T15.8",
+        "T17.8",
         d.has(CONTINUE) && !d.visible_passage(NO_TIMELINE),
         "When Timeline.md can be read again, Continue fight is offered again",
     );
     let told = story(d);
     d.observe(
-        "T15.4",
+        "T17.4",
         told == "Undecided, round 2",
         format!("Timeline has the ending: {}", told),
     );
     open_lookup(d);
     d.begin_task();
     d.click(CONTINUE);
-    d.goal_within("T15.2", "go on with an ended fight", 1);
+    d.goal_within("T17.2", "go on with an ended fight", 1);
     d.observe(
-        "T15.2",
+        "T17.2",
         current_participant(d).as_deref() == Some(turn.as_str())
             && d.in_view(NEXT_TURN)
             && undo_step(d) == CONTINUE_STEP,
@@ -328,7 +328,7 @@ pub fn run(d: &mut Driver<'_>) {
         ),
     );
     d.observe(
-        "T15.6",
+        "T17.6",
         lookup_keeps_its_entry(d),
         "Continue fight leaves Lookup on its entry",
     );
@@ -337,13 +337,13 @@ pub fn run(d: &mut Driver<'_>) {
     // Everything that reads the fight says it is live again.
     let told = story(d);
     d.observe(
-        "T15.4",
+        "T17.4",
         told == "Round 2",
         format!("Timeline says the fight is live: {}", told),
     );
     go_encounters(d);
     d.observe(
-        "T15.4",
+        "T17.4",
         d.has_label("IN PROGRESS 2") && d.visible_text("No ended fights yet."),
         format!(
             "Encounters lists the continued fight in In progress, and History has none: {:?}",
@@ -361,7 +361,7 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|node| node.name == "Round 2" && node.is_link())
         .map(|node| node.rect);
     d.observe(
-        "T15.4",
+        "T17.4",
         row.zip(running).is_some_and(|(row, link)| {
             link.top() >= row.top() && link.top() - row.bottom() <= crate::design::XL
         }) && !d.has_containing("Undecided · Ended"),
@@ -374,7 +374,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Outcome: Undecided");
     let told = story(d);
     d.observe(
-        "T15.2",
+        "T17.2",
         undo_step(d) == LOOT_STEP && d.visible_text(" on 1d4") && told == "Undecided, round 2",
         format!(
             "Undo of Continue fight restores the ending, its loot and its Timeline result: {}, {}",
@@ -398,7 +398,7 @@ pub fn run(d: &mut Driver<'_>) {
         .filter(|name| name.contains("Ended"))
         .collect();
     d.observe(
-        "T15.4",
+        "T17.4",
         played
             .iter()
             .any(|name| name == "Undecided · Ended · Round 2"),
@@ -407,13 +407,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("plan-played-row", Sizes::Default);
     d.click("Whole run");
     d.expect("Read-only");
-    whole_at_every_size(d, "T15.6", "The ended run in History", &[CONTINUE], "");
+    whole_at_every_size(d, "T17.6", "The ended run in History", &[CONTINUE], "");
     d.state("history-continue-fight", Sizes::All);
     d.click(CONTINUE);
-    d.goal_within("T15.3", "go on with a closed, ended fight from the plan", 3);
+    d.goal_within("T17.3", "go on with a closed, ended fight from the plan", 3);
     let told = story(d);
     d.observe(
-        "T15.3",
+        "T17.3",
         current_participant(d).as_deref() == Some(turn.as_str())
             && d.in_view(NEXT_TURN)
             && undo_step(d) == CONTINUE_STEP
@@ -439,16 +439,16 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Read-only");
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The ended run in History beside Lookup",
         &[CONTINUE, "New encounter", "Reload from disk"],
         "",
     );
     d.state("history-beside-lookup", Sizes::All);
     d.click(CONTINUE);
-    d.goal_within("T15.3", "go on with a closed, ended fight from History", 2);
+    d.goal_within("T17.3", "go on with a closed, ended fight from History", 2);
     d.observe(
-        "T15.6",
+        "T17.6",
         lookup_keeps_its_entry(d) && d.in_view(NEXT_TURN) && undo_step(d) == CONTINUE_STEP,
         "Continue fight from History leaves Lookup on its entry",
     );
@@ -457,7 +457,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_containing(CONTINUE_STEP);
     d.expect("Outcome: Undecided");
     d.observe(
-        "T15.1",
+        "T17.1",
         undo_step(d) == LOOT_STEP,
         format!(
             "After a restart, the ended run still has its loot step: {}",
@@ -473,7 +473,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Outcome: Held the vault");
     let told = story(d);
     d.observe(
-        "T15.4",
+        "T17.4",
         told == "Held the vault, round 2" && undo_step(d) == END_STEP && !d.has(CONTINUE),
         format!(
             "A second ending is an ending like the first: {}, {}",
@@ -492,7 +492,7 @@ pub fn run(d: &mut Driver<'_>) {
     let offered = d.field_text("Outcome");
     d.press(Key::Enter);
     d.observe(
-        "T15.7",
+        "T17.7",
         offered.as_deref() == Some("Held the vault") && d.has("Outcome: Held the vault"),
         format!("The outcome field starts with the old outcome, and Enter keeps it: {offered:?}"),
     );
@@ -507,7 +507,7 @@ pub fn run(d: &mut Driver<'_>) {
         .find(|node| node.name.starts_with("Outcome: "))
         .map_or_else(String::new, |node| node.name);
     d.observe(
-        "T15.7",
+        "T17.7",
         outcome == "Outcome: Fled",
         format!("Typing replaces the selected outcome: {outcome}"),
     );
@@ -518,7 +518,7 @@ pub fn run(d: &mut Driver<'_>) {
     close_run(d);
     let after = std::fs::read_to_string(&timeline).unwrap_or_default();
     d.observe(
-        "T15.4",
+        "T17.4",
         !before.contains("Fled, round 2") && after.contains("Fled, round 2"),
         format!(
             "Close run puts the last result in Timeline.md at once: before {}, after {}",
@@ -528,7 +528,7 @@ pub fn run(d: &mut Driver<'_>) {
     );
     go_encounters(d);
     d.observe(
-        "T15.4",
+        "T17.4",
         d.has_label("IN PROGRESS 1") && !d.visible_text("No ended fights yet."),
         "After the second ending, the fight has left In progress for History",
     );
@@ -547,7 +547,7 @@ pub fn run(d: &mut Driver<'_>) {
     std::fs::write(&paused.path, serde_json::to_vec_pretty(&saved).unwrap()).unwrap();
     resume_run(d, RUN);
     d.observe(
-        "T15.5",
+        "T17.5",
         d.visible_passage(UNREAD) && d.in_view(NEXT_TURN) && d.in_view(DISMISS),
         "The run opens on its turn and says that its Undo steps could not be read",
     );
@@ -555,7 +555,7 @@ pub fn run(d: &mut Driver<'_>) {
     open_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The unread-steps message beside Lookup",
         &[DISMISS, NEXT_TURN],
         "",
@@ -563,7 +563,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state("undo-steps-unread-beside-lookup", Sizes::All);
     d.click(DISMISS);
     d.observe(
-        "T15.5",
+        "T17.5",
         !d.visible_passage(UNREAD) && lookup_keeps_its_entry(d),
         "Dismiss removes the message and leaves Lookup on its entry",
     );
@@ -571,7 +571,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NEXT_TURN);
     d.restart();
     d.observe(
-        "T15.5",
+        "T17.5",
         !d.visible_passage(UNREAD) && undo_step(d) == "Undo: next turn",
         format!(
             "It is said once, and Undo starts again from there: {}",
@@ -588,13 +588,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_starting("Open the run of Sunken Vault");
     d.expect("Read-only");
     d.observe(
-        "T15.8",
+        "T17.8",
         !d.has(CONTINUE) && d.visible_passage(LATER),
         "After a later fight, History offers no Continue fight and says why",
     );
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The History run that is not the last fight",
         &[LATER],
         "",
@@ -603,14 +603,14 @@ pub fn run(d: &mut Driver<'_>) {
     open_lookup(d);
     whole_at_every_size(
         d,
-        "T15.6",
+        "T17.6",
         "The History run that is not the last fight, beside Lookup",
         &[LATER, "New encounter", "Reload from disk"],
         "",
     );
     d.state("history-not-the-last-fight-beside-lookup", Sizes::All);
     d.observe(
-        "T15.6",
+        "T17.6",
         lookup_keeps_its_entry(d),
         "The reason in History leaves Lookup on its entry",
     );

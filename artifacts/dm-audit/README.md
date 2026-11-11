@@ -22,7 +22,7 @@ the session being played survive a restart; the fight picker scrolls and has a s
 target's row, so any number of targets stays in view; initiative can be corrected during combat; and Exhaustion is one level.
 
 Done since: **Undo after a restart.** The run file keeps the Undo steps, and a fight that ended by mistake goes on
-with **Continue fight** (`README.md`, Running an encounter as DM).
+with **Continue fight** while it is the fight that was played last (`README.md`, Running an encounter as DM).
 
 Left for later, because each is a feature of its own:
 

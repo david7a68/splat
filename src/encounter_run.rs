@@ -5271,6 +5271,14 @@ mod tests {
         let campaign = stored(&mut run, dir.path());
         let reopened = close_and_reopen(&mut run, campaign);
         newest(&run, &reopened);
+        // The states that are kept fit the budget: no state goes in after its weight says no.
+        let held: usize = reopened
+            .history
+            .iter()
+            .flat_map(|state| &state.log)
+            .map(String::len)
+            .sum();
+        assert!(held <= undo::MEMORY_BYTES, "{held} bytes of log lines");
         // The first step that does not fit is never built: its state would break the budget
         // before it could be weighed. Here that step gives a state that no run can have, so
         // building it would lose every step. The same holds for decoding: a step whose text

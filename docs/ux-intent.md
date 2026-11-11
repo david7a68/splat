@@ -161,7 +161,8 @@ first turn, or the exact turn left off, fast. **Context:** boundary of desk and 
   There is no way to delete a run. Runs are not grouped by encounter.
 - Saved runs and run settings are in collapsed sections of the builder page.
 - A resumed ended run could not be reopened, because undo was not saved (`:261`, `:1119`). Now the run file keeps
-  the Undo steps, and **Continue fight** takes an ending away (T15.1 to T15.4).
+  the Undo steps, and **Continue fight** takes an ending away from the fight that was played last (T17.1 to
+  T17.4, T17.8).
 
 **Done well:** T4.1 to T4.6.
 
@@ -629,13 +630,14 @@ reading the code, not from a test run.
 | T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel. With a fight open, its row goes to that panel in 1 | session-plan-groups | cost, state | New |
 | T14.8 | A creature at 0 HP with loot says Loot on its row, and its card lists the loot. The ended view lists the encounter's loot and each downed creature's, and a loot roll is one step of undo | run-loot | state | New |
 | T14.1 | An interrupted run says Resume, and can be deleted with one step of undo. Ended runs are in the history | session-plan | state | New |
-| T15.1 | After Close run and Resume, after a restart and after another page, Undo names and takes back the same step on the same turn, in ≤ 1 | run-continue | cost, state | New |
-| T15.2 | An ended fight has one control that takes the ending away: Undo while the ending is the newest step, otherwise Continue fight. Play returns to the turn the fight ended on in 1, and Undo puts the ending back with its loot | run-continue | cost, state | New |
-| T15.3 | A closed, ended fight goes on in ≤ 2 from History and in ≤ 3 from the plan's played row | run-continue | cost, state | New |
-| T15.4 | After Continue fight, Timeline, the plan row and the Encounters lists show a live fight. After Undo, and after a second ending, they show an ended one | run-continue | state | New |
-| T15.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
-| T15.6 | The ended view, the History row and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
-| T15.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
+| T17.1 | After Close run and Resume, after a restart and after another page, Undo names and takes back the same step on the same turn, in ≤ 1 | run-continue | cost, state | New |
+| T17.2 | An ended fight has one control that takes the ending away: Undo while the ending is the newest step, otherwise Continue fight. Play returns to the turn the fight ended on in 1, and Undo puts the ending back with its loot | run-continue | cost, state | New |
+| T17.3 | A closed, ended fight that was played last goes on in ≤ 2 from History and in ≤ 3 from the plan's played row | run-continue | cost, state | New |
+| T17.4 | After Continue fight, Timeline, the plan row and the Encounters lists show a live fight. After Undo, and after a second ending, they show an ended one. Close run puts the last result in `Timeline.md` at once | run-continue | state | New |
+| T17.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
+| T17.6 | The ended view, the History row, the sentence that stands where Continue fight would be, and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
+| T17.7 | After Continue fight, End encounter starts with the outcome of the ending that Continue removed, selected: Enter keeps it and typing replaces it | run-continue | state | New |
+| T17.8 | Continue fight is offered only for the fight that was played last. After a later fight or a long rest that restored the party, and while `Timeline.md` cannot be read, the ended view and History offer no Continue fight and say why in its place. When that is no longer so, the control is back | run-continue | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

@@ -1209,7 +1209,12 @@ first (`Undo`, with the full action in hover and its accessible name). When the 
 title's line, as beside Lookup at 960x640, Close run stays on that line and Undo and Continue fight take a line of
 their own below it, at the right edge, with Undo's full action. A closed, ended run read in History has the same
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
-run is open. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
+run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
+as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
+why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
+button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
+`15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
+line. In History it is the line under Read-only. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
 footer's End step starts its outcome field with the outcome of the ending that went. Whenever that field opens
 with text, the text is selected, so that Enter keeps it and typing replaces it.
 

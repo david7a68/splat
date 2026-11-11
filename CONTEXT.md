@@ -250,8 +250,8 @@ from. A long rest the DM marks starts everyone at full instead.
 
 **Order of play**:
 The order in which fights were last played and long rests were ruled, across the campaign. Carried state follows
-it, and not the order of events in the story. A run file owns its fight's place in it, and Undo in the run restores
-that place. The Timeline holds what the run last said.
+it, and not the order of events in the story. The Timeline keeps it: a fight takes the next place when the DM plays
+it. **Continue fight** is offered only for the fight that is last in it.
 _Avoid_: Timeline order, which is the story's.
 
 **Session template**:
