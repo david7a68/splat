@@ -108,8 +108,8 @@ pub(super) struct Repair {
     reloaded: Option<String>,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
-    /// write and Save's reason. This draft owns it. It shows until the draft changes or a Save
-    /// succeeds.
+    /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
+    /// or its Undo, Reload or its Undo, the file followed from disk, and a successful Save.
     failed: Option<(String, String)>,
 }
 
@@ -164,6 +164,7 @@ impl Repair {
                 self.discarded = None;
                 // A newer file ends the reload's Undo, so Undo never hides that change.
                 self.reloaded = None;
+                self.failed = None;
             }
         }
         // Save's failure on the disk belongs to the draft it tried to write. Any change ends it,
@@ -190,24 +191,7 @@ impl Repair {
             let choice = design::disk_conflict_choices(ui, "note");
             design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
             if let Some(choice) = choice {
-                self.baseline = disk;
-                self.disk = None;
-                self.discarded = None;
-                match choice {
-                    design::DiskConflictChoice::Reload => {
-                        self.reloaded =
-                            Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
-                    }
-                    design::DiskConflictChoice::Overwrite => {
-                        // An unfinished repair stays editable; only valid text can be written.
-                        // The disk did not fail, so the editor shows only the cause, from the
-                        // same check as the state word: `Not saved.` is for a disk failure.
-                        if problem.is_some() {
-                            return false;
-                        }
-                        return self.save(campaign);
-                    }
-                }
+                return self.choose(campaign, choice, disk, problem.is_some());
             }
             return false;
         }
@@ -218,6 +202,33 @@ impl Repair {
             self.edit(ui, campaign, run_open, problem, line)
         })
         .inner
+    }
+
+    /// The DM's choice after the file changed on disk under a changed draft. True when an
+    /// Overwrite saved. `refused`: Save's own check refuses the draft.
+    fn choose(
+        &mut self,
+        campaign: &Campaign,
+        choice: design::DiskConflictChoice,
+        disk: String,
+        refused: bool,
+    ) -> bool {
+        self.baseline = disk;
+        self.disk = None;
+        self.discarded = None;
+        match choice {
+            design::DiskConflictChoice::Reload => {
+                self.reloaded = Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
+                // Reload ends the failure even when the file holds the draft's words.
+                self.failed = None;
+                false
+            }
+            // An unfinished repair stays editable; only valid text can be written. The disk
+            // did not fail, so the editor shows only the cause, from the same check as the
+            // state word: `Not saved.` is for a disk failure.
+            design::DiskConflictChoice::Overwrite if refused => false,
+            design::DiskConflictChoice::Overwrite => self.save(campaign),
+        }
     }
 
     /// The editor, its messages and its save row.
@@ -231,6 +242,7 @@ impl Repair {
     ) -> bool {
         if self.reloaded.is_some() && design::reloaded_draft(ui) {
             self.draft = self.reloaded.take().unwrap();
+            self.failed = None;
         }
         // Save's own check comes first: a draft that Save refuses has no disk failure.
         if let Some(cause) = problem.as_deref().or(self.failure()) {
@@ -239,6 +251,7 @@ impl Repair {
         let (changed, _) = editor_events(ui, &self.path, &mut self.draft, line);
         if changed {
             self.reloaded = None;
+            self.failed = None;
         }
         let mut saved = false;
         ui.horizontal(|ui| {
@@ -299,6 +312,7 @@ impl Repair {
                     if design::save_row_state(ui, state, dirty, None) {
                         self.discarded = Some(self.draft.clone());
                         self.draft = self.baseline.clone();
+                        self.failed = None;
                     }
                     if self.dirty() {
                         design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
@@ -311,6 +325,7 @@ impl Repair {
         {
             self.draft = discarded.clone();
             self.discarded = None;
+            self.failed = None;
         }
         saved
     }
@@ -588,7 +603,31 @@ mod tests {
         );
         #[allow(clippy::permissions_set_readonly_false)]
         permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        // Review repair 4: after a failed Save, the file outside Splat comes to hold the draft's
+        // exact words, and the DM chooses Reload. Reload ends the old disk failure although the
+        // text is equal: the state says No changes and the old reason is gone.
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        let reason = failed_save(&mut repair, "reload");
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
         std::fs::set_permissions(&path, permissions).unwrap();
+        std::fs::write(&path, &draft).unwrap();
+        show(&mut repair, &campaign);
+        let disk = repair
+            .disk
+            .clone()
+            .expect("the outside write shows the disk choices");
+        assert!(!repair.choose(&campaign, design::DiskConflictChoice::Reload, disk, false));
+        assert_eq!(repair.draft, draft);
+        let (_, words) = painted(&mut repair, &campaign, false);
+        assert!(
+            words.contains("No changes")
+                && !words.contains("Not saved")
+                && !words.contains(&reason),
+            "review-4-reload-equal-text\n{words}"
+        );
         // A path outside the campaign folder is refused by the draft's own checks, with no disk
         // read: Invalid, Save's reason, and nothing written.
         let mut outside = Repair {

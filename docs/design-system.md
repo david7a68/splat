@@ -775,8 +775,9 @@ note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
 guarded update and `Undo name change`, then `Rename the file to <name>.md`, which keeps the name the DM typed. The file
-move never replaces a file and checks that the note still holds the text the DM saw; its result `The file is now
-<name>.md.` has `Undo file rename`, which checks the same before it moves the file back. The file choice is left out
+move never replaces a file, not even one that arrives during the move, and checks that the note still holds the text the
+reader came from; its result `The file is now
+<name>.md.` has `Undo file rename`, which checks the same before it moves the file back, and only in the campaign that made the move. The file choice is left out
 while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
 future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
@@ -841,7 +842,8 @@ or an identity the campaign does not allow. These checks read no file. A readabl
 otherwise it says `Unsaved`. An Overwrite that these checks refuse writes nothing and shows only the cause: `Not
 saved.` is only for a failure on the disk. A Save that then fails on the disk
 (read only, missing, a write error) says `Not saved` with Save's reason above the editor, and Save is no longer
-primary. That cause belongs to the draft: it stays until the draft changes or a Save succeeds. Keep drafts in memory and
+primary. That cause belongs to the draft: an edit, Discard, Reload (also when the file holds the draft's words), the
+file followed from disk, or a successful Save ends it. Keep drafts in memory and
 warn before app close or a campaign switch. The unreadable count in the header opens the first broken
 note's repair, keeping other repair drafts. A note that the system will not read (not UTF-8 text, or no
 permission) cannot open in the source editor. Its pane keeps the title and a file line with only `Show file`: no

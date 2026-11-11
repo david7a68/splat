@@ -199,6 +199,36 @@ pub struct ContentIndex {
     loot: std::sync::OnceLock<Arc<crate::loot_editor::Sources>>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
+    /// World notes whose name another World note also has, found once when the index loads, so
+    /// a result or a chooser names their folder without a search on each frame.
+    shared_world_names: HashSet<usize>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// `shown_name` calls on this (the UI) thread.
+    static SHOWN_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Runs of the shared-name search, by campaign folder. The index loads on another thread, and
+/// scenarios run side by side, so each counts under its own folder.
+#[cfg(test)]
+static SHARED_NAME_SEARCHES: std::sync::Mutex<BTreeMap<std::path::PathBuf, usize>> =
+    std::sync::Mutex::new(BTreeMap::new());
+
+/// How often `shown_name` ran on this thread, and how often the shared-name search ran for
+/// the campaign in this folder.
+#[cfg(test)]
+pub(crate) fn shown_name_counts(campaign: &std::path::Path) -> crate::test_support::Counts {
+    crate::test_support::Counts {
+        reached: SHOWN_NAMES.with(std::cell::Cell::get),
+        work: SHARED_NAME_SEARCHES
+            .lock()
+            .unwrap()
+            .get(campaign)
+            .copied()
+            .unwrap_or(0),
+    }
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -567,6 +597,7 @@ impl ContentIndex {
                 .collect();
         }
         index.items = items;
+        index.shared_world_names = index.find_shared_world_names();
         index.mentions = index.find_mentions();
         // Relations and history are read once, so a reader does no search on each frame.
         for at in index.world.clone() {
@@ -873,28 +904,46 @@ impl ContentIndex {
         }
     }
 
+    /// The World notes whose name another World note in another file also has. It runs once
+    /// per index; the test count is kept here.
+    fn find_shared_world_names(&self) -> HashSet<usize> {
+        #[cfg(test)]
+        if let Some(campaign) = &self.campaign {
+            *SHARED_NAME_SEARCHES
+                .lock()
+                .unwrap()
+                .entry(campaign.path.clone())
+                .or_default() += 1;
+        }
+        let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+        for &at in &self.world {
+            let item = &self.items[at];
+            if item.is_private() {
+                by_name
+                    .entry(item.entry.name.as_str())
+                    .or_default()
+                    .push(at);
+            }
+        }
+        by_name
+            .into_values()
+            .filter(|found| {
+                found
+                    .iter()
+                    .any(|&at| self.items[at].entry.path != self.items[found[0]].entry.path)
+            })
+            .flatten()
+            .collect()
+    }
+
     /// A World note's name as a result or a chooser shows it: with its folder when another World
-    /// note has the same name (`Watch House (Locations)`), so the two can be told apart. One
-    /// lookup in the link names, not a scan of the index.
+    /// note has the same name (`Watch House (Locations)`), so the two can be told apart. The
+    /// shared names are found when the index loads.
     pub(crate) fn shown_name(&self, at: usize) -> String {
+        #[cfg(test)]
+        SHOWN_NAMES.with(|count| count.set(count.get() + 1));
         let entry = &self.items[at].entry;
-        let world = |item: &Item| {
-            item.is_private()
-                && (item.entry.kind == "world" || item.entry.kind == crate::world::NOTE_KIND)
-        };
-        let shared = self
-            .link_names
-            .get(&entry.name.to_lowercase())
-            .is_some_and(|found| {
-                found.iter().any(|&other| {
-                    let item = &self.items[other];
-                    other != at
-                        && world(item)
-                        && item.entry.name == entry.name
-                        && item.entry.path != entry.path
-                })
-            });
-        if !shared {
+        if !self.shared_world_names.contains(&at) {
             return entry.name.clone();
         }
         match entry.path.rsplit_once('/') {

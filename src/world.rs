@@ -1341,29 +1341,51 @@ impl Change {
 /// A note's file renamed to match its name (FD5). Undo moves it back. Neither move replaces a
 /// file, and each checks that the file still holds the text the DM saw.
 pub(crate) struct FileRename {
+    /// The campaign whose folder holds the file. Undo acts only there.
+    campaign: Uuid,
     from: String,
     to: String,
     text: String,
 }
 
 impl FileRename {
-    fn apply(root: &Path, from: &str, to: &str, text: &str) -> Result<Self, String> {
-        move_note(root, from, to, text)?;
+    /// `seen` is the file's text that produced the reader: the move refuses unless the file
+    /// still holds it.
+    fn apply(campaign: &Campaign, from: &str, to: &str, seen: &str) -> Result<Self, String> {
+        move_note(&campaign.path, from, to, seen, || {})?;
         Ok(Self {
+            campaign: campaign.id,
             from: from.into(),
             to: to.into(),
-            text: text.into(),
+            text: seen.into(),
         })
     }
 
-    fn undo(&self, root: &Path) -> Result<(), String> {
-        move_note(root, &self.to, &self.from, &self.text)
+    /// Whether this rename's result belongs on this campaign's note at `path`.
+    fn shows_on(&self, campaign: &Campaign, path: &str) -> bool {
+        self.campaign == campaign.id && self.to == path
+    }
+
+    fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+        if campaign.id != self.campaign {
+            return Err("This rename belongs to another campaign. Nothing was renamed.".into());
+        }
+        move_note(&campaign.path, &self.to, &self.from, &self.text, || {})
     }
 
     fn message(&self) -> String {
         let file = self.to.rsplit('/').next().unwrap_or(&self.to);
         format!("The file is now {file}.")
     }
+}
+
+/// The file text that produced the reader's note, for `Rename the file to …` (FD5). The
+/// reader reads it once per index, and keeps it only when it parses to the note on screen.
+struct RenameSeen {
+    generation: u64,
+    campaign: Uuid,
+    id: Uuid,
+    text: Option<String>,
 }
 
 /// The file beside `path` for a note named `name`, when the name can be a file name.
@@ -1385,18 +1407,37 @@ fn renamed_path(path: &str, name: &str) -> Option<String> {
 }
 
 /// Moves a note file within the campaign. It refuses when `from` no longer holds `expected` or
-/// a file is already at `to`, so it never replaces or loses a file.
-fn move_note(root: &Path, from: &str, to: &str, expected: &str) -> Result<(), String> {
+/// a file is at `to`, so it never replaces or loses a file. The move itself never replaces a
+/// file either (`RENAME_NOREPLACE`), so a file that arrives at `to` after the check keeps its
+/// bytes. `before_move` runs between the checks and the move, for tests.
+fn move_note(
+    root: &Path,
+    from: &str,
+    to: &str,
+    expected: &str,
+    before_move: impl FnOnce(),
+) -> Result<(), String> {
     let source = crate::library::note_path(root, from)?;
     let target = crate::library::note_path(root, to)?;
     if file_fault::read_note(root, from)? != expected {
         return Err(format!("{from} changed on disk. Nothing was renamed."));
     }
+    let exists = || format!("{to} already exists. Nothing was renamed.");
     if std::fs::symlink_metadata(&target).is_ok() {
-        return Err(format!("{to} already exists. Nothing was renamed."));
+        return Err(exists());
     }
-    std::fs::rename(&source, &target)
-        .map_err(|error| file_fault::FileFault::write(from, &error).message())
+    before_move();
+    #[cfg(target_os = "linux")]
+    let moved = crate::sessions::rename_no_replace(&source, &target);
+    #[cfg(not(target_os = "linux"))]
+    let moved = std::fs::rename(&source, &target);
+    moved.map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            exists()
+        } else {
+            file_fault::FileFault::write(from, &error).message()
+        }
+    })
 }
 
 /// World notes and Library entries share identity repair, but keep their own nouns.
@@ -1619,6 +1660,8 @@ pub struct Reader {
     name_undo: Option<Change>,
     /// The last `Rename the file to …` on this page, until it is undone or another replaces it.
     file_undo: Option<FileRename>,
+    /// The file text behind the note whose `Rename the file to …` shows.
+    rename_seen: Option<RenameSeen>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -1676,6 +1719,34 @@ pub(crate) fn page_result(ui: &mut egui::Ui, result: &PageResult) -> bool {
 }
 
 impl Reader {
+    /// Reads the note's file once per index and campaign, and keeps its text only when it
+    /// parses to the note on screen: the version that produced the reader.
+    fn see_rename_source(&mut self, index: &ContentIndex, campaign: &Campaign, item: &Item) {
+        let generation = index.generation();
+        if self.rename_seen.as_ref().is_some_and(|seen| {
+            seen.generation == generation
+                && seen.campaign == campaign.id
+                && seen.id == item.entry.id
+        }) {
+            return;
+        }
+        let text = file_fault::read_note(&campaign.path, &item.entry.path)
+            .ok()
+            .filter(|text| {
+                Entry::parse(&item.entry.path, text).is_ok_and(|disk| {
+                    disk.name == item.entry.name
+                        && *disk.fields == *item.entry.fields
+                        && disk.body == item.entry.body
+                })
+            });
+        self.rename_seen = Some(RenameSeen {
+            generation,
+            campaign: campaign.id,
+            id: item.entry.id,
+            text,
+        });
+    }
+
     /// Offer the same short chooser to links opened outside the World page.
     pub fn choose_link(&mut self, positions: Vec<usize>, target: &str) {
         self.many = positions;
@@ -1987,6 +2058,9 @@ impl Reader {
                     // its name while one is open.
                     let file = renamed_path(&item.entry.path, &item.entry.name)
                         .filter(|_| !self.editing(id));
+                    if file.is_some() {
+                        self.see_rename_source(index, campaign, item);
+                    }
                     let (note, rename_file) =
                         design::message_with_actions(ui, Tone::Warning, &message, |ui| {
                             // A choice whose words do not fit the message's width says only
@@ -2033,10 +2107,24 @@ impl Reader {
                             .inner
                         });
                     if rename_file && let Some(to) = &file {
-                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
-                            .and_then(|text| {
-                                FileRename::apply(&campaign.path, &item.entry.path, to, &text)
-                            });
+                        // The move compares the file with the text the reader came from, not
+                        // with what is on disk now, so an outside change is never moved.
+                        let seen = self
+                            .rename_seen
+                            .as_ref()
+                            .filter(|seen| {
+                                seen.generation == index.generation()
+                                    && seen.campaign == campaign.id
+                                    && seen.id == id
+                            })
+                            .and_then(|seen| seen.text.clone());
+                        let result = match seen {
+                            Some(text) => FileRename::apply(campaign, &item.entry.path, to, &text),
+                            None => Err(format!(
+                                "{} changed on disk. Nothing was renamed.",
+                                item.entry.path
+                            )),
+                        };
                         match result {
                             Ok(rename) => {
                                 self.file_undo = Some(rename);
@@ -2076,10 +2164,10 @@ impl Reader {
                     }
                 }
                 if let Some(rename) = &self.file_undo
-                    && rename.to == item.entry.path
+                    && rename.shows_on(campaign, &item.entry.path)
                     && design::undo_message(ui, CHANGED, &rename.message(), "Undo file rename")
                 {
-                    match rename.undo(&campaign.path) {
+                    match rename.undo(campaign) {
                         Ok(()) => {
                             self.file_undo = None;
                             return Some(Go::Reload(item.entry.id));
@@ -3670,6 +3758,13 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Rename checks".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
         std::fs::create_dir_all(root.join("Notes")).unwrap();
         let text = "---\nsplat_schema: 2\nsplat_kind: world\nsplat_name: Rook\n---\n";
         let from = root.join("Notes/Broken.md");
@@ -3677,35 +3772,74 @@ mod tests {
         std::fs::write(&from, text).unwrap();
         // A file already at the target keeps its bytes, and the note stays where it was.
         std::fs::write(&to, "Another note.").unwrap();
-        let refused = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", text);
+        let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", text);
         assert!(refused.is_err(), "fd5-target-exists");
         assert_eq!(std::fs::read_to_string(&to).unwrap(), "Another note.");
         assert_eq!(std::fs::read_to_string(&from).unwrap(), text);
         std::fs::remove_file(&to).unwrap();
+        // Review repair 2: a file that arrives at the target after the check, just before the
+        // move, keeps its bytes, and so does the note.
+        let raced = move_note(root, "Notes/Broken.md", "Notes/Rook.md", text, || {
+            std::fs::write(&to, "Arrived during the move.").unwrap()
+        });
+        assert!(raced.is_err(), "review-2-race-refused");
+        assert_eq!(
+            std::fs::read_to_string(&to).unwrap(),
+            "Arrived during the move.",
+            "review-2-race-target-bytes"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&from).unwrap(),
+            text,
+            "review-2-race-source-bytes"
+        );
+        std::fs::remove_file(&to).unwrap();
         // The note changed on disk after the DM saw it.
-        let refused = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", "Old text");
+        let refused = FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", "Old text");
         assert!(refused.is_err() && !to.exists(), "fd5-changed");
         // The note moved away: nothing to rename.
         assert!(
-            FileRename::apply(root, "Notes/Gone.md", "Notes/Rook.md", text).is_err(),
+            FileRename::apply(&campaign, "Notes/Gone.md", "Notes/Rook.md", text).is_err(),
             "fd5-gone"
         );
-        let rename = FileRename::apply(root, "Notes/Broken.md", "Notes/Rook.md", text).unwrap();
+        let rename =
+            FileRename::apply(&campaign, "Notes/Broken.md", "Notes/Rook.md", text).unwrap();
         assert!(!from.exists(), "fd5-moved");
         assert_eq!(std::fs::read_to_string(&to).unwrap(), text, "fd5-bytes");
         assert_eq!(rename.message(), "The file is now Rook.md.");
+        // Review repair 3: the Undo belongs to its campaign. Another campaign with a note at the
+        // same relative path neither shows it nor moves anything.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = Campaign {
+            id: Uuid::new_v4(),
+            path: other_dir.path().into(),
+            ..campaign.clone()
+        };
+        std::fs::create_dir_all(other_dir.path().join("Notes")).unwrap();
+        std::fs::write(other_dir.path().join("Notes/Rook.md"), text).unwrap();
+        assert!(
+            !rename.shows_on(&other, "Notes/Rook.md")
+                && rename.shows_on(&campaign, "Notes/Rook.md"),
+            "review-3-owner"
+        );
+        assert!(rename.undo(&other).is_err(), "review-3-undo-refused");
+        assert!(
+            other_dir.path().join("Notes/Rook.md").exists()
+                && !other_dir.path().join("Notes/Broken.md").exists(),
+            "review-3-other-bytes"
+        );
         // Undo refuses while a new file holds the old path, and keeps both.
         std::fs::write(&from, "A new note.").unwrap();
-        assert!(rename.undo(root).is_err(), "fd5-undo-target-exists");
+        assert!(rename.undo(&campaign).is_err(), "fd5-undo-target-exists");
         assert_eq!(std::fs::read_to_string(&from).unwrap(), "A new note.");
         assert_eq!(std::fs::read_to_string(&to).unwrap(), text);
         std::fs::remove_file(&from).unwrap();
         // Undo refuses when the renamed file changed since.
         std::fs::write(&to, format!("{text}\nAn outside edit.\n")).unwrap();
-        assert!(rename.undo(root).is_err(), "fd5-undo-changed");
+        assert!(rename.undo(&campaign).is_err(), "fd5-undo-changed");
         assert!(!from.exists());
         std::fs::write(&to, text).unwrap();
-        rename.undo(root).unwrap();
+        rename.undo(&campaign).unwrap();
         assert_eq!(std::fs::read_to_string(&from).unwrap(), text, "fd5-undo");
         assert!(!to.exists(), "fd5-undo-moved");
     }

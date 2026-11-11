@@ -853,6 +853,32 @@ pub fn broken(d: &mut Driver<'_>) {
     // the second safe choice keeps that name and renames the file, with Undo.
     d.expect("Rename the note to Broken");
     let moved = root(d).join("Notes/Repaired watchkeeper.md");
+    // Review repair 1: the file changes outside Splat while the choice shows. The change keeps
+    // the file's length and time, so nothing reloads. The move compares with the text the
+    // reader came from, so it refuses and the changed file stays where it is.
+    let seen_time = fs::metadata(&path).unwrap().modified().unwrap();
+    let outside_edit = fixed.replace("is back.", "is home.");
+    assert_eq!(outside_edit.len(), fixed.len(), "fixture: same length");
+    let write_kept_time = |text: &str| {
+        fs::write(&path, text).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(seen_time)
+            .unwrap();
+    };
+    write_kept_time(&outside_edit);
+    d.click("Rename the file to Repaired watchkeeper.md");
+    d.settle();
+    d.observe(
+        "review-1-D-seen-version",
+        fs::read_to_string(&path).ok().as_deref() == Some(outside_edit.as_str())
+            && !moved.exists()
+            && d.has_containing("Notes/Broken.md changed on disk. Nothing was renamed."),
+        "Rename the file refuses a file that changed after the reader read it",
+    );
+    write_kept_time(&fixed);
     d.click("Rename the file to Repaired watchkeeper.md");
     d.wait_for_text("The file is now Repaired watchkeeper.md.");
     d.observe(
@@ -885,6 +911,58 @@ pub fn broken(d: &mut Driver<'_>) {
             && fs::read_to_string(&lamp).unwrap() == lamp_renamed
             && d.has("Rename the file to Repaired watchkeeper.md"),
         "Undo file rename moves the file back; the other note keeps its new name",
+    );
+    // Review repair 3: the rename's Undo belongs to its campaign. Lookup keeps its reader across
+    // a campaign change, and Quiet Harbor has a note at the same relative path. A (rename in
+    // Emberfall from Lookup), then a campaign change and B (a name change there), then Undo A.
+    let quiet_note = d
+        .root
+        .join("campaigns/quiet-harbor/Notes/Repaired watchkeeper.md");
+    fs::create_dir_all(quiet_note.parent().unwrap()).unwrap();
+    fs::write(
+        &quiet_note,
+        format!(
+            "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Quiet keeper\nsplat_type: npc\n---\n\nKeeps the harbour light.\n",
+            splat::character::stable_id("quiet-keeper")
+        ),
+    )
+    .unwrap();
+    d.click(NAV_ENCOUNTERS);
+    if d.has(SEARCH_LOOKUP) {
+        look_up_again(d, "Repaired watchkeeper");
+    } else {
+        look_up(d, "Repaired watchkeeper");
+    }
+    d.click("Rename the file to Repaired watchkeeper.md");
+    d.wait_for_text("The file is now Repaired watchkeeper.md.");
+    assert!(moved.exists() && !path.exists(), "A moved the file");
+    switch_campaign(d, QUIET_CAMPAIGN);
+    d.settle();
+    look_up_again(d, "Quiet keeper");
+    d.wait_for_text("Keeps the harbour light.");
+    d.observe(
+        "review-3-D-campaign-owner",
+        !d.has("Undo file rename") && quiet_note.exists(),
+        "Emberfall's file rename offers no Undo on Quiet Harbor's note at the same path",
+    );
+    d.click("Rename the note to Repaired watchkeeper");
+    d.wait_for_text("Undo name change");
+    let quiet_after = fs::read_to_string(&quiet_note).unwrap();
+    assert!(
+        quiet_after.contains("splat_name: Repaired watchkeeper\n"),
+        "B changed state"
+    );
+    switch_campaign(d, CAMPAIGN);
+    d.settle();
+    look_up_again(d, "Repaired watchkeeper");
+    d.click("Undo file rename");
+    d.settle();
+    d.observe(
+        "review-3-D-undo-after-b",
+        fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str())
+            && !moved.exists()
+            && fs::read_to_string(&quiet_note).ok().as_deref() == Some(quiet_after.as_str()),
+        "Undo A back in Emberfall moves its file back; Quiet Harbor keeps B",
     );
 }
 
@@ -1716,6 +1794,58 @@ pub fn places(d: &mut Driver<'_>) {
     d.state("place-change-keeps-disk-edit", Sizes::All);
     d.click("Undo place change");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
+    // Review repair 5: the place picker names a shared name's folder (`Bell House (Ruins)`)
+    // with no search on each frame, even when many notes give that name as an alias. The
+    // shared names are found when the index loads; the count is kept in that search.
+    use crate::test_support::CachedWork;
+    entry(d, "Locations/Bell House.md", "Bell House", "location", "");
+    entry(d, "Ruins/Bell House.md", "Bell House", "location", "");
+    for n in 0..150 {
+        entry(
+            d,
+            &format!("Lanterns/Lantern {n}.md"),
+            &format!("Lantern {n}"),
+            "lore",
+            "  aliases: [Bell House]\n",
+        );
+    }
+    let folder = root(d);
+    let names = CachedWork::start("Shared World names", d, move |_: &mut Driver<'_>| {
+        crate::lookup::shown_name_counts(&folder)
+    });
+    reload(d);
+    d.click("Change In");
+    d.type_text("Bell House");
+    let shown = |d: &Driver<'_>| d.has("Bell House (Locations)") && d.has("Bell House (Ruins)");
+    let warm = names.warm(d, shown(d), 1);
+    d.observe(
+        "review-5-D-warm",
+        warm.is_ok(),
+        format!("The index found the shared names once: {warm:?}"),
+    );
+    let steady = names.steady(d, |d| {
+        d.settle();
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        shown(d)
+    });
+    d.observe(
+        "review-5-D-steady",
+        steady.is_ok(),
+        format!("Picker frames and a resize do no shared-name search: {steady:?}"),
+    );
+    // Lookalike: the Ruins note gets its own name, the index reads it again, and both names
+    // show without a folder.
+    let refresh = names.refresh(d, 1, |d| {
+        entry(d, "Ruins/Bell House.md", "Bell House Ruins", "location", "");
+        reload(d);
+        d.has("Bell House") && d.has("Bell House Ruins") && !d.has_containing("Bell House (")
+    });
+    d.observe(
+        "review-5-D-refresh",
+        refresh.is_ok(),
+        format!("A new name is found when the index reads again: {refresh:?}"),
+    );
 }
 
 pub fn round_trip(d: &mut Driver<'_>) {
