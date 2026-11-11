@@ -1831,6 +1831,38 @@ pub mod campaign_content {
                 super::session_recording::accent_filled(d)
             ),
         );
+        // Round 23 FA9: the message names the file; the REPAIR heading does not repeat it. The
+        // editor's accessible name holds the path.
+        let mut named = 0;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains("Notes/Broken.md")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                named += 1;
+            }
+        });
+        d.observe(
+            "iter-23-C-FA9",
+            named == 2
+                && d.has(&crate::world::repair::editor_name("Notes/Broken.md"))
+                && d.visible_text("REPAIR"),
+            format!("Notes/Broken.md is painted {named} times: the Save reason and the message"),
+        );
+        // Round 23 FA3: the unchanged draft is the invalid file, so Save would refuse it. Only
+        // the package save row still says No changes.
+        let mut clean = 0;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains("No changes")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                clean += 1;
+            }
+        });
+        d.observe(
+            "iter-23-C-FA3-clean",
+            d.visible_text("Invalid") && clean == 1 && d.is_disabled("Save repaired note"),
+            format!("An unchanged invalid repair says Invalid, and Save is blocked; No changes is painted {clean} times"),
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1843,19 +1875,37 @@ pub mod campaign_content {
                 .is_some_and(|text| text.contains("splat_id")),
             "The repair is reachable without leaving the page",
         );
-        let before = [(960.0, 640.0), (1200.0, 800.0)]
-            .map(|size| d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top()));
+        let editor_top = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
+                .map(|node| node.rect.top())
+        };
+        let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| {
+            d.at_size(size, |d| {
+                (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
+            })
+        });
         let draft = d
             .editor_text()
             .unwrap()
             .replacen("splat_id: [", "splat_id: [ ", 1);
         d.replace_text_in("Note text", &draft);
-        for (size, y) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
-            let after = d.at_size(size, |d| d.place_of(SAVE_SELECTIONS).unwrap().top());
+        for (size, (y, editor)) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+            let (after, editor_after) = d.at_size(size, |d| {
+                (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
+            });
             d.observe(
                 "i19-U1-repair",
                 after == y,
                 "The first repair edit does not move the selection save row.",
+            );
+            // Round 23 FA1: `Fix Notes/Broken.md first.` keeps its own line below Save, so the
+            // first key moves neither the error nor the editor.
+            d.observe(
+                "iter-23-C-FA1",
+                editor.is_some() && editor_after == editor,
+                format!("At {size:?}, the repair editor top {editor:?} → {editor_after:?}"),
             );
         }
         d.observe_both(
@@ -1863,18 +1913,101 @@ pub mod campaign_content {
             "A repair draft states the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
+        // Round 23 FA3: the changed draft still fails as Save would fail it. It says Invalid with
+        // its cause, Save is blocked, and nothing on the screen is primary.
+        d.observe_both(
+            "iter-23-C-FA3-dirty",
+            "A changed draft that Save refuses says Invalid, blocks Save and has no primary",
+            |d| {
+                d.visible_text("Invalid")
+                    && !d.visible_text("Unsaved")
+                    && d.visible_text("Line 3 opens a list")
+                    && d.is_disabled("Save repaired note")
+                    && super::session_recording::accent_filled(d).is_empty()
+            },
+        );
+        d.state("repair-dirty", Sizes::All);
+        // Lead ruling on round 23 FA3: a draft that parses but that Save refuses (a package
+        // note, which settings own) is Invalid with Save's reason, and a Save attempt writes
+        // nothing.
+        let on_disk = std::fs::read(d.root.join(BROKEN_NOTE)).unwrap();
+        let owned = crate::library::note_text("Broken", "package", Some("broken"));
+        assert!(splat::content::Entry::parse("Notes/Broken.md", &owned).is_ok());
+        d.replace_text_in("Note text", &owned);
+        d.press_ctrl(Key::S);
+        d.settle();
+        const OWNERSHIP: &str = "Keep campaign ownership consistent with settings.";
+        d.observe(
+            "iter-23-C-FA3-refused",
+            d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.visible_text(OWNERSHIP)
+                && d.is_disabled("Save repaired note")
+                && super::session_recording::accent_filled(d).is_empty()
+                && std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk,
+            format!(
+                "A parsed draft that Save refuses: Invalid {}, reason {}, Save blocked {}, file unchanged {}",
+                d.visible_text("Invalid"),
+                d.visible_text(OWNERSHIP),
+                d.is_disabled("Save repaired note"),
+                std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk
+            ),
+        );
+        // A draft that Save would write says Unsaved, and its Save is the one primary action.
+        let valid = crate::library::note_text("Broken", "rule", None);
+        d.replace_text_in("Note text", &valid);
+        d.observe(
+            "iter-23-C-FA3-valid",
+            d.visible_text("Unsaved")
+                && !d.visible_text("Invalid")
+                && !d.is_disabled("Save repaired note"),
+            "A draft that Save would write says Unsaved, and Save is open",
+        );
         // Round 22 FD3: a changed repair's save is the one primary action, as `Save changes` is.
         d.observe_both(
             "iter-22-C-FD3-campaign",
             "Save repaired note is the only accent-filled action while the draft has changes",
             |d| super::session_recording::accent_filled(d) == ["Save repaired note"],
         );
-        d.state("repair-dirty", Sizes::All);
+        // Lead ruling on round 23 FA3: Save that fails on the disk (here a read-only file) is
+        // an action-time failure. The state slot names Save's reason, not Unsaved, until the
+        // next edit of that draft.
+        let file = d.root.join(BROKEN_NOTE);
+        let set_read_only = |read_only: bool| {
+            let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(&file, permissions).unwrap();
+        };
+        set_read_only(true);
+        d.click("Save repaired note");
+        d.settle();
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        let unchanged = std::fs::read(&file).unwrap() == on_disk;
+        d.observe(
+            "iter-23-C-FA3-disk",
+            d.visible_text(READ_ONLY) && !d.visible_text("Unsaved") && unchanged,
+            format!(
+                "After a read-only Save: reason shown {}, Unsaved shown {}, file unchanged {unchanged}",
+                d.visible_text(READ_ONLY),
+                d.visible_text("Unsaved")
+            ),
+        );
+        d.state("repair-save-failed", Sizes::Default);
+        // The next edit ends it: the draft is a new one that Save has not tried.
+        d.replace_text_in("Note text", &format!("{valid}\nOne more line.\n"));
+        d.observe(
+            "iter-23-C-FA3-disk-ends",
+            d.visible_text("Unsaved") && !d.visible_text(READ_ONLY),
+            "An edit of the draft ends the failed Save's reason",
+        );
+        set_read_only(false);
         d.click("Discard");
         two_changed_repairs_have_one_primary(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
         let manifest = d.root.join("campaigns/emberfall/Campaign.md");
         let before = std::fs::read_to_string(&manifest).unwrap();
+        const PACKAGES_DISCARDED: &str = "Campaign packages draft discarded.";
+        let discarded_before = d.visible_text(PACKAGES_DISCARDED);
         std::fs::remove_file(&manifest).unwrap();
         d.click(RELOAD);
         d.wait_for_text("Write Campaign.md again");
@@ -1884,6 +2017,16 @@ pub mod campaign_content {
         d.click("Write Campaign.md again");
         d.wait_for_text("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
+        // Round 23 FA8: the discarded package draft belonged to the file that went missing. Its
+        // Undo does not come back with the written file.
+        d.observe(
+            "iter-23-C-FA8",
+            discarded_before && !d.visible_text(PACKAGES_DISCARDED) && !d.has("Undo discard"),
+            format!(
+                "Undo discard shown before the file went: {discarded_before}; after the write: {}",
+                d.visible_text(PACKAGES_DISCARDED)
+            ),
+        );
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
@@ -1900,7 +2043,8 @@ pub mod campaign_content {
         d.restart();
         go_campaign(d);
         d.wait_for_text("Write a new Campaign.md");
-        d.expect("Splat has no copy. This writes a new Campaign.md with the default packages.");
+        // Round 23 FB5: the sentence offers the write; it does not say Splat is writing now.
+        d.expect("Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.");
         d.state("missing-campaign-manifest-without-copy", Sizes::All);
         d.click("Write a new Campaign.md");
         d.wait_for_text("Undo write Campaign.md");
@@ -1944,8 +2088,10 @@ pub mod campaign_content {
             2,
             "Both repairs are open"
         );
-        let first = format!("{broken}\nFirst draft.\n");
-        let second = format!("{broken}\nSecond draft.\n");
+        // Only a draft that Save would write holds the primary (round 23 FA3), so both drafts
+        // are valid notes. Their names, near the top of each editor, tell them apart.
+        let first = crate::library::note_text("First draft.", "rule", None);
+        let second = crate::library::note_text("Second draft.", "rule", None);
         // Edit the upper repair, close it, edit the lower one, then open the upper one again.
         d.replace_text_in("Note text", &first);
         d.click("Close repair");
@@ -1993,9 +2139,117 @@ pub mod campaign_content {
         d.click_starting("Run · ");
         close_run(d);
         go_campaign(d);
+
+        // Round 23 review: each repair editor names its file, so a DM who tabs between the
+        // two hears which is which. No repair editor is named only `Note text`.
+        let (a_editor, b_editor) = (
+            crate::world::repair::editor_name("Notes/Broken.md"),
+            crate::world::repair::editor_name("Notes/Cracked.md"),
+        );
+        let bare = d
+            .nodes()
+            .iter()
+            .filter(|node| node.name == "Note text")
+            .count();
+        d.observe(
+            "iter-23-C-FA9-names",
+            d.has(&a_editor) && d.has(&b_editor) && bare == 0,
+            format!(
+                "Editors named {a_editor:?}: {}, {b_editor:?}: {}; named only Note text: {bare}",
+                d.has(&a_editor),
+                d.has(&b_editor)
+            ),
+        );
+
+        // Round 23 review: a failed Save belongs to its own repair. A's cause stays through B's
+        // edit, B's Save and B's own failed Save; B's state is its own.
+        const READ_ONLY: &str = "Not saved. This file is read only.";
+        const CHANGED_ON_DISK: &str = "Not saved. This entry changed on disk.";
+        const B_MESSAGE: &str = "Notes/Cracked.md cannot be read";
+        let top_of = |d: &Driver<'_>, words: &str| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.contains(words) && node.role != egui::accesskit::Role::TextRun
+                })
+                .map(|node| node.rect.top())
+                .collect::<Vec<_>>()
+        };
+        // A's cause sits above B's message; B's state sits below it.
+        let a_owns = |d: &Driver<'_>| {
+            let message = top_of(d, B_MESSAGE);
+            let cause = top_of(d, READ_ONLY);
+            message.len() == 1 && cause.len() == 1 && cause[0] < message[0]
+        };
+        let b_state = |d: &Driver<'_>, word: &str| {
+            let message = top_of(d, B_MESSAGE);
+            message.len() == 1 && top_of(d, word).iter().any(|top| *top > message[0])
+        };
+        let a_file = d.root.join(BROKEN_NOTE);
+        let b_file = d.root.join(SECOND);
+        let set_read_only = |file: &std::path::Path, read_only: bool| {
+            let mut permissions = std::fs::metadata(file).unwrap().permissions();
+            permissions.set_readonly(read_only);
+            std::fs::set_permissions(file, permissions).unwrap();
+        };
+        set_read_only(&a_file, true);
+        d.click_first("Save repaired note");
+        d.settle();
+        let a_before = a_owns(d);
+        // Round 23 review: an unchanged frame does not check the drafts again.
+        let checks = d.app_mut().campaign_content.repair_checks();
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        let unchanged = d.app_mut().campaign_content.repair_checks();
+        d.replace_text_in(&b_editor, &format!("{second}\nB edit.\n"));
+        let edited = d.app_mut().campaign_content.repair_checks();
+        d.observe(
+            "iter-23-C-check-once",
+            unchanged == checks && edited > unchanged,
+            format!(
+                "Draft checks: {checks} before, {unchanged} after unchanged frames at two sizes, {edited} after an edit"
+            ),
+        );
+        d.observe(
+            "iter-23-C-own-failure-edit",
+            a_before && a_owns(d) && b_state(d, "Unsaved"),
+            format!(
+                "A failed first: {a_before}; after B's edit, A's cause {} and B Unsaved {}",
+                a_owns(d),
+                b_state(d, "Unsaved")
+            ),
+        );
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        let b_written = std::fs::read_to_string(&b_file)
+            .unwrap()
+            .contains("B edit.");
+        d.observe(
+            "iter-23-C-own-failure-save",
+            b_written && a_owns(d) && b_state(d, "No changes"),
+            format!(
+                "After B's Save: B written {b_written}, A's cause {}, B No changes {}",
+                a_owns(d),
+                b_state(d, "No changes")
+            ),
+        );
+        d.replace_text_in(&b_editor, &format!("{second}\nB again.\n"));
+        std::fs::remove_file(&b_file).unwrap();
+        d.click_below(B_MESSAGE, "Save repaired note");
+        d.settle();
+        d.observe(
+            "iter-23-C-own-failure-fail",
+            a_owns(d) && b_state(d, CHANGED_ON_DISK) && !b_file.exists(),
+            format!(
+                "After B's Save fails: A's cause {}, B's own cause {}",
+                a_owns(d),
+                b_state(d, CHANGED_ON_DISK)
+            ),
+        );
+        set_read_only(&a_file, false);
         d.click("Discard");
         d.click("Discard");
-        std::fs::remove_file(d.root.join(SECOND)).unwrap();
+        let _ = std::fs::remove_file(d.root.join(SECOND));
         d.click(RELOAD);
         d.settle();
         assert!(!d.visible_text("Notes/Cracked.md"));
@@ -2019,7 +2273,7 @@ pub mod party {
     const OVERVIEW: &str = "Overview";
     const SOURCE: &str = "Technical details";
     const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Level 6 Fighter"];
-    const NO_CHARACTERS: &str = "No local characters yet";
+    const NO_CHARACTERS: &str = "No characters yet";
     const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2910,6 +3164,37 @@ pub mod settings {
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
         d.expect(OFFLINE_ERROR);
+        // Round 23 SF1: the failure scrolls the form so its cause, the kept cookie and the retry
+        // show together, at the 960 size where the error pushed Connect out of view.
+        let fully = |d: &Driver<'_>, name: &str, exact: bool| {
+            d.nodes().iter().any(|node| {
+                (if exact {
+                    node.name == name
+                } else {
+                    node.name.contains(name)
+                }) && node.fully_in_view()
+            })
+        };
+        d.observe(
+            "iter-23-C-SF1",
+            fully(d, OFFLINE_ERROR, false)
+                && fully(d, COOKIE_FIELD, true)
+                && fully(d, CONNECT, true),
+            format!(
+                "After a failed Connect at 960x640: error {}, cookie {}, Connect {}",
+                fully(d, OFFLINE_ERROR, false),
+                fully(d, COOKIE_FIELD, true),
+                fully(d, CONNECT, true)
+            ),
+        );
+        // Round 23 FM4: the trust text uses the DM's words, not the code's.
+        d.observe(
+            "iter-23-C-FM4-form",
+            d.has_containing("With the box ticked, Splat signs in again when it starts.")
+                && !d.has_containing("access token")
+                && !d.has_containing("keyring"),
+            "The connect form says what the remember box does, without token or keyring words",
+        );
         d.state("connect-failed", Sizes::All);
         d.goal("try to connect without a network");
         // The cookie stays for a retry. There is nothing saved, so nothing to disconnect.
@@ -2935,7 +3220,17 @@ pub mod settings {
             match state {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 // Also supplies signed-in's shared Settings image at the wide size.
-                Account::Connected => d.state("account-connected", Sizes::All),
+                Account::Connected => {
+                    d.observe(
+                        "iter-23-C-FM4-connected",
+                        d.visible_text("Splat stays signed in while it is open.")
+                            && d.visible_text("Disconnect removes Splat’s saved D&D Beyond sign-in. It does not sign your browser out of D&D Beyond.")
+                            && !d.has_containing("access token")
+                            && !d.has_containing("local credentials"),
+                        "Connected account help says what the DM keeps, once, in plain words",
+                    );
+                    d.state("account-connected", Sizes::All);
+                }
                 Account::KeyringWarning => {
                     d.state("account-keyring-warning", Sizes::Default);
                     d.observe_both(
@@ -6441,6 +6736,23 @@ pub mod signed_in {
             "An added remote campaign has a status; an available campaign has an Add action",
         );
         d.click("Add Salt Road from D&D Beyond");
+        // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
+        let (cancel, labels) = d.at_size(DEFAULT, |d| {
+            (
+                d.place_of("Cancel")
+                    .and_then(|cancel| words_left_in(d, cancel)),
+                [d.painted_left("Campaign name"), d.painted_left("Folder")],
+            )
+        });
+        d.observe(
+            "iter-23-C-AM2",
+            cancel.is_some_and(|cancel| {
+                labels
+                    .iter()
+                    .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
+            }),
+            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
+        );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
             "T10.3",
@@ -6748,6 +7060,19 @@ pub mod signed_in {
                 format!("At {size:?}, Connect to sync starts the line and Review conflict follows it, apart: {pair:?}"),
             );
         }
+        // iter-23-S AM1: the close is blocked, so the words do not offer it, and the dialog
+        // shows why in view, not only on hover.
+        let blocked_words = |d: &Driver<'_>| {
+            d.is_disabled("Close now")
+                && d.visible_text("Choose which HP to keep before you close.")
+                && d.visible_text(crate::encounter_run::CLOSE_BLOCKED)
+                && !d.visible_text("or close and choose next time")
+        };
+        d.observe(
+            "iter-23-S-AM1-signed-out",
+            blocked_words(d),
+            "Signed out, a blocked Close now is not offered in the words, and its reason shows",
+        );
         d.state("close-with-conflict-signed-out", Sizes::Default);
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
@@ -6764,6 +7089,11 @@ pub mod signed_in {
             CHOOSE,
             &[SMALL, DEFAULT, LARGE],
             Some(&CLOSE_DIALOG),
+        );
+        d.observe(
+            "iter-23-S-AM1-signed-in",
+            blocked_words(d),
+            "Signed in, a blocked Close now is not offered in the words, and its reason shows",
         );
         d.state("close-with-conflict-signed-in", Sizes::Default);
         d.press(Key::Escape);
@@ -7620,6 +7950,12 @@ pub mod session_notes {
                     "A wide Timeline exposes every action without More"
                 );
             }
+            // iter-23-S FK7: with no day yet, the header names no clock.
+            d.observe(
+                "iter-23-S-FK7",
+                d.visible_text("events") && !d.visible_text("Now:"),
+                "A timeline with no day yet has no Now in its header",
+            );
         });
         d.check_tab_order("timeline");
         d.click_add_event(ADD_DAY);
@@ -7639,6 +7975,32 @@ pub mod session_notes {
         d.expect("Copied");
         d.expect("Mentioned in");
         d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            // iter-23-S FK5: the list row draws the rest ruling as the plan row and the detail
+            // do: its icon and word in the ruling's colour.
+            let mut rulings = Vec::new();
+            let mut in_row = false;
+            d.each_painted_text(|text, _| {
+                let job = &text.galley.job;
+                if job.text.contains("Everyone at full") {
+                    // The list row's second line puts its other facts before the ruling.
+                    in_row |= job.text.contains(" · ");
+                    rulings.extend(job.sections.iter().filter_map(|section| {
+                        let words = &job.text[section.byte_range.clone()];
+                        words
+                            .contains("Everyone at full")
+                            .then_some(section.format.color)
+                    }));
+                }
+            });
+            d.observe(
+                "iter-23-S-FK5",
+                in_row
+                    && !rulings.is_empty()
+                    && rulings
+                        .iter()
+                        .all(|color| *color == crate::design::colors().document.saved),
+                format!("The list row's ruling uses the ruling's colour: {rulings:?}"),
+            );
             let label_visible = d.visible_text("TITLE") || d.visible_text("Title");
             d.observe(
                 "iter-2-C-FT12",
@@ -7906,6 +8268,13 @@ pub mod session_notes {
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+            // iter-23-S FK8: the warning names which choice hides the files.
+            d.observe(
+                "iter-23-S-FK8",
+                d.visible_text("If you save without moving, Splat no longer shows these files.")
+                    && !d.visible_text("will not show these files from the new folder"),
+                "The folder warning says Save without moving hides the files",
+            );
         });
         // Must stay true: the open details form owns its own save, so the move is not primary.
         d.click("Edit details");
@@ -8595,6 +8964,34 @@ pub mod session_notes {
         d.app_mut().timeline.save();
         d.settle();
         d.expect("Timeline.md also changed outside Splat. Both changes are kept.");
+        // iter-23-S FK6: the outside change is a result like the others in the list column, with
+        // the info icon on its line and words in the text colour, not muted help text.
+        let mut words = None;
+        let mut icons = Vec::new();
+        let icon = crate::design::icons::INFO;
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text
+                .galley
+                .job
+                .text
+                .starts_with("Timeline.md also changed outside Splat.")
+            {
+                words = Some((rect, text.galley.job.sections[0].format.color));
+            } else if text.galley.job.text == icon {
+                icons.push(rect);
+            }
+        });
+        d.observe(
+            "iter-23-S-FK6",
+            words.is_some_and(|(words, color)| {
+                color == crate::design::colors().text
+                    && icons.iter().any(|icon| {
+                        icon.right() <= words.left() && (icon.top() - words.top()).abs() <= 1.0
+                    })
+            }),
+            format!("The outside change reads as an info message: {words:?}"),
+        );
         d.observe_both(
             "i20-S1",
             "Separate Timeline edits save without a conflict or a rail error",
@@ -8953,6 +9350,13 @@ pub mod session_recording {
                     .any(|node| node.in_view() && node.name.starts_with("Process:"))
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+            // iter-23-S FE1 lookalike: with the audio there, the advice stays and no reason shows.
+            d.observe(
+                "iter-23-S-FE1-audio-there",
+                d.visible_text("Wait, then select Continue processing.")
+                    && !d.visible_text("Audio removed. Restore the WAV file"),
+                "A retry that can run keeps its advice",
+            );
             let size = d.window_size();
             check_choices_at_text(
                 d,
@@ -9016,6 +9420,32 @@ pub mod session_recording {
                 "iter-9-C-ST1-blocked-availability",
                 d.is_disabled("Continue processing"),
                 "A banner retry with removed audio is blocked",
+            );
+            // iter-23-S FE1: the reason stands beside the blocked action, and the words no
+            // longer tell the DM to select it.
+            const GONE: &str = "Audio removed. Restore the WAV file to process it.";
+            // A wrapped label in a wrapped row starts its first line after the controls before
+            // it; measure that line.
+            let mut reason = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text == GONE
+                    && let Some(row) = text.galley.rows.first()
+                {
+                    let left = row.glyphs.first().map_or(0.0, |glyph| glyph.pos.x);
+                    let min = text.pos + row.pos.to_vec2() + egui::vec2(left, 0.0);
+                    reason = Some(egui::Rect::from_min_size(min, row.size));
+                }
+            });
+            let button = d.place_of("Continue processing");
+            d.observe(
+                "iter-23-S-FE1",
+                !d.visible_text("Wait, then select Continue processing")
+                    && d.visible_text("The transcript and summary service is busy.")
+                    && reason.zip(button).is_some_and(|(reason, button)| {
+                        reason.left() >= button.right() && reason.center().y > button.top()
+                            && reason.center().y < button.bottom()
+                    }),
+                format!("The blocked reason follows Continue processing on its line: {reason:?}, {button:?}"),
             );
             let process = d
                 .nodes()
@@ -9182,8 +9612,8 @@ pub mod session_recording {
             let file = note.path.file_name().unwrap().to_string_lossy();
             d.observe(
                 "iter-9-C-ST3-FT11",
-                rows.iter().any(|row| row.name.contains(file.as_ref()))
-                    && d.visible_text(&file.replace(' ', "\u{a0}")),
+                // iter-23-S FA11: a file name keeps its word spaces, so it wraps at one.
+                rows.iter().any(|row| row.name.contains(file.as_ref())) && d.visible_text(&file),
                 format!("Equal session row shows {file} and names it accessibly"),
             );
         }
@@ -9912,7 +10342,26 @@ pub mod session_recording {
         d.expect("Continue processing sends the raw transcript");
         d.expect("The audio is not sent again.");
         d.state_prepared("processing-failed", Sizes::All, |d| {
-            check_processing_action(d, "Continue processing:", true)
+            check_processing_action(d, "Continue processing:", true);
+            // iter-23-S FL4: the failure's sentence wraps at the reader's line length, as the
+            // destination below it does.
+            let mut widths = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("your limit is reached") {
+                    widths.push(text.galley.size().x);
+                }
+            });
+            d.observe(
+                "iter-23-S-FL4",
+                !widths.is_empty()
+                    && widths
+                        .iter()
+                        .all(|width| *width <= crate::design::READER_MEASURE + 1.0),
+                format!(
+                    "At {:?}, the failure reason is no wider than the reader measure: {widths:?}",
+                    d.window_size()
+                ),
+            );
         });
 
         // The open recording row owns the retry and clears the old failure.
@@ -10307,10 +10756,18 @@ pub mod session_recording {
             });
             d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Discard has an L or M gap at {size:?}"));
         }
+        // iter-23-S FL2: the warning says Splat found the note under its new name, so the first
+        // choice is explained.
+        d.observe(
+            "iter-23-S-FL2",
+            d.visible_text("This note was moved or renamed. It is now Renamed in Obsidian.md.")
+                && !d.visible_text("This file is gone from the folder."),
+            "A renamed note's warning names where it went",
+        );
         check_choices_at_text(
             d,
             "iter-15-C-FT1-gone",
-            "This file is gone from the folder.",
+            "This note was moved or renamed.",
             &[
                 "Save my draft to Renamed in Obsidian.md",
                 "Save my draft as a new file",
@@ -12598,7 +13055,8 @@ pub mod session_plan {
                 link.and_then(|link| d.painted_word_rect(name, link.expand(crate::design::XS)))
             })
             .collect();
-        let edge = d.painted_left("Kestrel 7/41");
+        // The grid's first cell, in the party bar's order (iter-23-S FK4).
+        let edge = d.painted_left("Brannoch 58/62");
         let log = words[0];
         d.observe(
             "iter-14-C-FT4",
@@ -12628,6 +13086,44 @@ pub mod session_plan {
 
     /// FT1: the party bar says where its numbers come from whenever the room after the players
     /// holds it. Its words are the last fact of each player's accessible name.
+    /// iter-23-S FK4: the plan's final HP grid reads in the party bar's order.
+    fn hp_grid_follows_the_bar(d: &mut Driver<'_>) {
+        let nodes = d.nodes();
+        let mut bar: Vec<_> = nodes
+            .iter()
+            .filter(|node| {
+                node.role == egui::accesskit::Role::Button
+                    && node.name.contains(" · HP ")
+                    && node.in_view()
+            })
+            .filter_map(|node| {
+                let first = node.name.split_whitespace().next()?;
+                Some((node.rect.left(), first.to_owned()))
+            })
+            .collect();
+        bar.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let bar: Vec<_> = bar.into_iter().map(|(_, name)| name).collect();
+        let mut grid: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.in_view() && node.role != egui::accesskit::Role::Button)
+            .filter_map(|node| {
+                let (first, hp) = node.name.split_once(' ')?;
+                (bar.iter().any(|name| name == first)
+                    && hp.split_whitespace().next()?.contains('/'))
+                .then(|| (node.rect.top().round(), node.rect.left(), first.to_owned()))
+            })
+            .collect();
+        grid.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        // A label can show twice in the tree at one place; one place is one cell.
+        grid.dedup();
+        let grid: Vec<_> = grid.into_iter().map(|(.., name)| name).collect();
+        d.observe(
+            "iter-23-S-FK4",
+            grid.len() >= 2 && grid == bar,
+            format!("The final HP grid reads as the party bar does: grid {grid:?}, bar {bar:?}"),
+        );
+    }
+
     fn party_bar_names_its_source(d: &mut Driver<'_>) {
         use egui::accesskit::Role;
         let size = d.window_size();
@@ -12792,6 +13288,31 @@ pub mod session_plan {
         d.click("Delete the saved run");
         d.expect(&format!("Start fight: {FIRST}"));
         assert!(!d.has(&format!("Resume: {FIRST}")));
+        // AT2: the notice says which Bridge Ambush went, and that the planned one stays.
+        let notice = format!("Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” stays.");
+        d.observe(
+            "iter-10-C-AT2",
+            d.visible_text(&notice),
+            format!("The removal notice names the removed fight by its state: {notice}"),
+        );
+        d.observe(
+            "iter-10-C-AT2-undo",
+            d.in_view("Undo remove")
+                && d.place_of("Undo remove")
+                    .zip(d.place_of(FIRST))
+                    .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
+            "Undo remove stays with the notice, above the remaining row",
+        );
+        // FT4: Timeline names the removed fight as the plan does.
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "iter-12-C-FT4",
+            d.visible_text(&format!("Removed “{FIRST}” (Round 2 · Paused)."))
+                && d.in_view("Undo remove"),
+            "Timeline's removal notice names the removed fight, with its Undo",
+        );
+        d.click(NAV_SESSIONS);
+        show_plan(d);
         write_note(d);
         d.observe(
             "T12.1",
@@ -13194,23 +13715,16 @@ pub mod session_plan {
 
         // T12.5: how a fight ended, in place.
         show_plan(d);
+        // iter-23-S FK2: a run that starts ends the removal's result and its Undo, so no notice
+        // sits above rows it no longer names.
+        let removal_gone = |d: &Driver<'_>| {
+            !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
+        };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
-            // AT2: the notice says which Bridge Ambush went, and that the played one stays.
-            let notice = format!(
-                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
-            );
             d.observe(
-                "iter-10-C-AT2",
-                d.visible_text(&notice),
-                format!("The removal notice names the removed fight by its state: {notice}"),
-            );
-            d.observe(
-                "iter-10-C-AT2-undo",
-                d.in_view("Undo remove")
-                    && d.place_of("Undo remove")
-                        .zip(d.place_of(FIRST))
-                        .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
-                "Undo remove stays with the notice, above the remaining row",
+                "iter-23-S-FK2-plan",
+                removal_gone(d),
+                "After the fight ran, the plan shows no removal notice",
             );
         });
         d.begin_task();
@@ -13226,6 +13740,9 @@ pub mod session_plan {
         d.state_prepared("fight-in-place", Sizes::All, |d| {
             played_fight_links_at_the_text_edge(d);
             party_bar_names_its_source(d);
+            if d.window_size() == DEFAULT {
+                hp_grid_follows_the_bar(d);
+            }
         });
         d.observe(
             "T12.5",
@@ -13237,19 +13754,10 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
         d.state_prepared("timeline-after-fight", Sizes::All, |d| {
-            // FT4: Timeline names the removed fight as the plan does, so the row below reads true.
-            let notice = format!(
-                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
-            );
             d.observe(
-                "iter-12-C-FT4",
-                d.visible_text(&notice),
-                format!("Timeline's removal notice names the removed fight: {notice}"),
-            );
-            d.observe(
-                "iter-12-C-FT4-row",
-                d.in_view("Undo remove") && d.has_containing("Held the bridge · Ended · Round 1"),
-                "Undo remove stays with the notice, and the played fight's row stays",
+                "iter-23-S-FK2-timeline",
+                removal_gone(d) && d.has_containing("Held the bridge · Ended · Round 1"),
+                "After the fight ran, Timeline shows no removal notice, and the played fight's row stays",
             );
         });
         d.click(NAV_SESSIONS);
@@ -13262,6 +13770,11 @@ pub mod session_plan {
             "T14.4",
             d.has(&format!("Start fight: {FIRST}")),
             "A fight planned a second time can start a second time",
+        );
+        d.observe(
+            "iter-23-S-FK2-again",
+            removal_gone(d),
+            "Planning the fight again shows no old removal notice",
         );
         d.state("plan-the-same-fight-again", Sizes::Default);
 
@@ -13338,6 +13851,13 @@ pub mod session_plan {
         d.click("Long rest");
         d.click("Mark not at full");
         d.expect("Undo ruling");
+        // iter-23-S FL1: the result names the new ruling and its effect.
+        d.observe(
+            "iter-23-S-FL1-plan-off",
+            d.visible_text("The next fight starts from the HP the party has now.")
+                && !d.visible_text("Long rest ruling changed."),
+            "Mark not at full says what the next fight starts from",
+        );
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("plan-rest-ruling-off", Sizes::All);
@@ -13379,7 +13899,15 @@ pub mod session_plan {
             before.iter().zip(after).all(|(a, b)| (a - b).abs() < 1.0),
             "The open rest ruling stays at the same height at both sizes",
         );
-        d.expect_same("The ruling changes words and colour; the open row stays in place.");
+        d.observe(
+            "iter-23-S-FL1-plan-on",
+            d.visible_text("Everyone starts the next fight at full.")
+                && !d.visible_text("The next fight starts from the HP the party has now."),
+            "Mark everyone at full says the next fight starts at full",
+        );
+        d.expect_same(
+            "The ruling and its message change words and colour; the open row stays in place.",
+        );
         d.state("plan-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -13511,7 +14039,12 @@ pub mod session_plan {
         });
         d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
+        d.observe(
+            "iter-23-S-FL1-timeline-on",
+            d.visible_text("Everyone starts the next fight at full."),
+            "On Timeline, Mark everyone at full says the next fight starts at full",
+        );
+        d.expect_same("Only the long-rest status, its action and its message change; the wide page stays in place.");
         d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -13631,6 +14164,15 @@ pub mod session_plan {
                 !duplicates.is_empty()
                     && duplicates.iter().all(|node| !node.name.contains("Saved "))
             },
+        );
+        // iter-23-S FL3: a run that began after a restoring rest names the rest's step, in the
+        // same lower-case words as every other `Last:` value.
+        d.observe(
+            "iter-23-S-FL3",
+            d.has_containing("Last: full HP after long rest")
+                && !d.has_containing("carried over from the long rest")
+                && !d.has_containing("Last: Party"),
+            "Last: after a long rest says full HP, in lower case",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(

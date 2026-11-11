@@ -114,7 +114,7 @@ fn repair_notice(
         } else {
             "Write the manifest again".into()
         };
-        let tone = if *exists { Tone::Error } else { Tone::Warning };
+        let tone = crate::content_workspace::manifest_fault_tone(*exists);
         let pressed = ui
             .scope(|ui| {
                 // Keep the action below the error at the text edge, even in a wide pane.
@@ -139,7 +139,10 @@ fn repair_notice(
                     ui.add(
                         egui::Label::new(
                             Type::Small
-                                .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                                .rich(
+                                    ui,
+                                    crate::content_workspace::manifest_replace_consequence(path),
+                                )
                                 .color(colors().muted),
                         )
                         .wrap(),
@@ -3598,13 +3601,12 @@ impl Library {
                     .then_some(crate::content_workspace::UNDO_ENDED),
                 true,
             );
-            // The other choice starts below, at the message words.
+            // The other choice starts below, at the message words. Only Undo is quiet.
             let use_copy = campaigns.active_campaign().is_some()
                 && self.copied_rosters.is_none()
                 && design::message_choice_row(ui, Tone::Success, |ui| {
-                    Action::quiet(USE_COPY)
+                    Action::secondary(USE_COPY)
                         .density(Density::Read)
-                        .line_start()
                         .blocked(self.draft_reason())
                         .show(ui)
                         .clicked()

@@ -170,6 +170,15 @@ impl Party {
             })
     }
 
+    /// The members' identities in a run, in the party bar's order.
+    pub fn order(&self) -> Vec<uuid::Uuid> {
+        self.reader
+            .members
+            .iter()
+            .filter_map(|member| self.reader.sheets.get(&member.id))
+            .map(|record| record.definition.splat_id)
+            .collect()
+    }
     /// The party has members to show.
     pub fn has_members(&self) -> bool {
         !self.reader.members.is_empty()
@@ -449,7 +458,7 @@ impl Party {
                 design::empty_state(
                     ui,
                     icons::PARTY,
-                    "No local characters yet",
+                    "No characters yet",
                     "Connect to D&D Beyond in Settings to load this party.",
                     |ui| {
                         if if self.run_open {

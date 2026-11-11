@@ -39,6 +39,24 @@ pub fn fights_that_keep_hp(
         .collect()
 }
 
+/// One removed event, until its session changes or Undo puts it back.
+#[derive(Clone)]
+struct Removal {
+    index: usize,
+    /// The event that was before it, which it goes back after.
+    after: Option<String>,
+    event: Event,
+    /// Its name where it was.
+    label: String,
+    /// Its session's events once it was gone. A difference is an edit of that session.
+    owned: Vec<Event>,
+}
+
+/// An event belongs to a session's story there, and to the session that continued it.
+fn owned_by(event: &Event, session: Option<Uuid>) -> bool {
+    event.session == session || (session.is_some() && event.continued_in == session)
+}
+
 /// The removal notice on the plan and on Timeline. It names which event went, by its result or
 /// state, and says when another event with the same name stays in this session. The plan passes
 /// its own fights in `planned`; Timeline passes the removed event's own session and none.
@@ -628,7 +646,7 @@ pub struct Book {
     pub gone: bool,
     pub error: Option<String>,
     /// What was removed, where it was, and the name it had there.
-    removed: Option<(usize, Event, String)>,
+    removed: Option<Removal>,
     /// What a reload replaced, until the next edit.
     dropped: Option<Vec<Event>>,
     /// One ruling change, until the next edit.
@@ -709,7 +727,7 @@ impl Book {
                             })
                             .collect();
                         self.saved_events.clone_from(&events);
-                        self.events = events;
+                        self.accept_events(events);
                     }
                     Err(error) => {
                         self.events.clear();
@@ -742,6 +760,7 @@ impl Book {
         self.run_write = false;
         self.merged_outside = false;
         self.rest_undo = None;
+        self.end_removal_if_its_session_changed();
         let days = day_numbers(&self.events);
         for (at, event) in self.events.iter().enumerate() {
             let label = reference_label(event, days[at]);
@@ -758,8 +777,35 @@ impl Book {
         }
         self.dirty = true;
         self.last_edit = Some(Instant::now());
-        self.removed = None;
         self.dropped = None;
+    }
+
+    /// Events from the file, or merged with it, replace the ones in memory. A change there to
+    /// the removal's own session (its event back from outside, say) ends it, as an edit does.
+    fn accept_events(&mut self, events: Vec<Event>) {
+        self.events = events;
+        self.end_removal_if_its_session_changed();
+    }
+
+    /// A removal belongs to its event's session. An edit of that session's events ends its
+    /// result and Undo; another session's edit leaves them.
+    fn end_removal_if_its_session_changed(&mut self) {
+        if self
+            .removed
+            .as_ref()
+            .is_some_and(|removal| self.owned_events(removal.event.session) != removal.owned)
+        {
+            self.removed = None;
+        }
+    }
+
+    /// The events of one session, in story order. Events with no session are their own group.
+    fn owned_events(&self, session: Option<Uuid>) -> Vec<Event> {
+        self.events
+            .iter()
+            .filter(|event| owned_by(event, session))
+            .cloned()
+            .collect()
     }
 
     fn text_for(&self, events: &[Event], source: Option<&str>) -> Result<String, String> {
@@ -910,7 +956,7 @@ impl Book {
         crate::sessions::sync_folder(parent)?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
-        self.events = events;
+        self.accept_events(events);
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
         self.dirty = false;
@@ -941,7 +987,7 @@ impl Book {
             {
                 Ok(_) => {
                     match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
-                        Ok(merged) => self.events = merged,
+                        Ok(merged) => self.accept_events(merged),
                         Err(error) => {
                             self.error = Some(error);
                             return;
@@ -1056,7 +1102,7 @@ impl Book {
                 if self.unreadable.is_none()
                     && let Some((fact, session, played)) = self.pending_run.take()
                 {
-                    self.apply_run(&fact, session, played);
+                    self.apply_run_keeping_removal(&fact, session, played);
                 }
             }
         }
@@ -1165,31 +1211,54 @@ impl Book {
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.events.iter().position(|event| event.id == id) {
             let label = self.events[index].label(day_numbers(&self.events)[index]);
+            let after = index
+                .checked_sub(1)
+                .map(|before| self.events[before].id.clone());
             let event = self.events.remove(index);
             self.touch();
-            self.removed = Some((index, event, label));
+            // One Undo remove at a time: a newer removal, in any session, replaces it.
+            self.removed = Some(Removal {
+                index,
+                after,
+                owned: self.owned_events(event.session),
+                event,
+                label,
+            });
         }
     }
 
     pub fn removed_row(&self) -> Option<(usize, String)> {
         self.removed
             .as_ref()
-            .map(|(at, _, label)| (*at, label.clone()))
+            .map(|removal| (removal.index, removal.label.clone()))
     }
 
     /// The event that Undo would put back.
     pub fn removed_event(&self) -> Option<&Event> {
-        self.removed.as_ref().map(|(_, event, _)| event)
+        self.removed.as_ref().map(|removal| &removal.event)
     }
 
     pub fn removed(&self) -> Option<&str> {
-        self.removed.as_ref().map(|(.., label)| label.as_str())
+        self.removed.as_ref().map(|removal| removal.label.as_str())
     }
 
+    /// The event goes back after the event that was before it, so edits in other sessions since
+    /// do not move it. An event that came back another way is not added twice.
     pub fn undo_remove(&mut self) -> Option<String> {
-        let (index, event, _) = self.removed.take()?;
-        let id = event.id.clone();
-        self.events.insert(index.min(self.events.len()), event);
+        let removal = self.removed.take()?;
+        let id = removal.event.id.clone();
+        if self.events.iter().any(|event| event.id == id) {
+            return None;
+        }
+        let at = match &removal.after {
+            None => 0,
+            Some(after) => self
+                .events
+                .iter()
+                .position(|event| event.id == *after)
+                .map_or(removal.index.min(self.events.len()), |at| at + 1),
+        };
+        self.events.insert(at, removal.event);
         self.touch();
         Some(id)
     }
@@ -1198,19 +1267,61 @@ impl Book {
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        // It stays in place for this, because what comes next must follow its order.
-        let removed = self.removed.clone();
         let dm_edit = self.dirty && !self.run_write;
-        self.apply_run(fact, session, played);
+        self.apply_run_keeping_removal(fact, session, played);
         self.run_write = !dm_edit;
-        self.removed = removed;
+    }
+
+    /// A run's update is not an edit: a removal stays in place, because what comes next must
+    /// follow its order. When combat begins, the run's event enters the timeline; in the
+    /// removal's own session that begins the next part of its story, so the result and Undo
+    /// end there. A Setup adds no event and ends nothing.
+    fn apply_run_keeping_removal(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
+        let on_timeline = |events: &[Event]| {
+            events.iter().any(|event| {
+                event.run == Some(fact.id)
+                    || (fact.copied_from.is_some() && event.run == fact.copied_from)
+            })
+        };
+        // A run that waits for an unreadable file changes nothing yet, and the cleared events
+        // are not the session's state.
+        if self.unreadable.is_some() {
+            self.apply_run(fact, session, played);
+            return;
+        }
+        let before = on_timeline(&self.events);
+        let removed = self.removed.clone();
+        self.apply_run(fact, session, played);
+        let entered = (!before)
+            .then(|| self.events.iter().find(|event| event.run == Some(fact.id)))
+            .flatten()
+            .cloned();
+        self.removed = removed
+            .filter(|removal| {
+                // The removed event's own run back on the timeline also ends it: its Undo
+                // would give that run a second event.
+                !entered.as_ref().is_some_and(|event| {
+                    owned_by(event, removal.event.session)
+                        || (event.run.is_some() && event.run == removal.event.run)
+                })
+            })
+            .map(|removal| Removal {
+                // The run's own changes are the session's new state, not an edit after it.
+                owned: self.owned_events(removal.event.session),
+                ..removal
+            });
+    }
+
+    /// The removal's result and Undo end: its session's note was edited after it.
+    pub fn forget_removed(&mut self) {
+        self.removed = None;
     }
 
     /// The order for what is played or ruled on next.
     pub fn next_order(&self) -> u64 {
         self.events
             .iter()
-            .chain(self.removed.iter().map(|(_, event, _)| event))
+            .chain(self.removed.iter().map(|removal| &removal.event))
             .map(|event| event.played_order)
             .max()
             .unwrap_or(0)
@@ -1378,6 +1489,33 @@ mod tests {
         );
         assert!(saved.contains("Outside prose."));
         assert_eq!(book.events, events);
+        // iter-23-S FK2: A's event goes and is saved; B is edited; A's event comes back from
+        // outside; the save of B merges A back. B's edit stays, and A's notice and Undo end,
+        // because A's session changed.
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        book.session_links = BTreeMap::from([(a, "Session A".into()), (b, "Session B".into())]);
+        let a_event = book.add(Kind::Travel, Some(a));
+        let b_event = book.add(Kind::Travel, Some(b));
+        book.save();
+        let with_a = fs::read_to_string(&path).unwrap();
+        book.remove(&a_event);
+        book.save();
+        book.event_mut(&b_event).unwrap().title = "B road".into();
+        book.touch();
+        assert!(book.removed().is_some(), "B's edit keeps A's Undo");
+        fs::write(&path, &with_a).unwrap();
+        book.save();
+        assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
+        assert!(
+            book.events.iter().any(|event| event.id == a_event),
+            "A came back"
+        );
+        assert_eq!(
+            book.events.iter().find(|e| e.id == b_event).unwrap().title,
+            "B road"
+        );
+        assert!(book.removed().is_none(), "A's notice ends");
+        assert!(book.undo_remove().is_none(), "and its Undo");
     }
 
     #[test]
@@ -1412,6 +1550,46 @@ mod tests {
         book.overwrite();
         assert!(!book.conflict && !book.unsaved());
         assert_eq!(fs::read_to_string(&path).unwrap(), draft);
+        // iter-23-S FK2: Overwrite merges A's event back from outside too, so its notice and
+        // Undo end there, while the DM's own B edit wins.
+        let (a, b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        book.session_links = BTreeMap::from([(a, "Session A".into()), (b, "Session B".into())]);
+        let a_event = book.add(Kind::Travel, Some(a));
+        let b_event = book.add(Kind::Travel, Some(b));
+        book.save();
+        let with_a = fs::read_to_string(&path).unwrap();
+        book.remove(&a_event);
+        book.save();
+        book.event_mut(&b_event).unwrap().title = "My B road".into();
+        book.touch();
+        let mut outside = parse(&with_a).unwrap();
+        outside.iter_mut().find(|e| e.id == b_event).unwrap().title = "Their B road".into();
+        fs::write(
+            &path,
+            formats::patch(&with_a, &outside, &book.session_links, false).unwrap(),
+        )
+        .unwrap();
+        book.save();
+        assert!(book.conflict, "the same B event changed on both sides");
+        assert!(book.removed().is_some());
+        // The merge itself ends A's notice, even when the write after it fails.
+        use std::os::unix::fs::PermissionsExt;
+        let open = fs::metadata(dir.path()).unwrap().permissions();
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        book.overwrite();
+        fs::set_permissions(dir.path(), open).unwrap();
+        assert!(book.error.is_some(), "the write after the merge failed");
+        assert!(
+            book.events.iter().any(|event| event.id == a_event),
+            "A came back"
+        );
+        assert!(book.removed().is_none() && book.undo_remove().is_none());
+        book.overwrite();
+        assert!(!book.conflict, "{:?}", book.error);
+        assert_eq!(
+            book.events.iter().find(|e| e.id == b_event).unwrap().title,
+            "My B road"
+        );
     }
 
     #[test]
@@ -1538,6 +1716,40 @@ mod tests {
         assert!(book.unreadable.is_none());
         assert_eq!(book.events.len(), 2);
         assert_eq!(book.events[1].run, Some(fact(RunState::Running).id));
+        // iter-23-S FK2: a reload that leaves the removal's session alone keeps its Undo, and
+        // so does a round that waited while the file could not be read. An outside change to
+        // that session's events ends it.
+        let rest = book.add(Kind::LongRest, None);
+        book.save();
+        book.remove(&rest);
+        book.save();
+        let saved = fs::read_to_string(&path).unwrap();
+        fs::write(&path, "broken").unwrap();
+        book.reload();
+        assert!(book.unreadable.is_some());
+        let later = RunFact {
+            round: 5,
+            ..fact(RunState::Running)
+        };
+        book.record_change(Some(&fact(RunState::Running)), &later, None);
+        fs::write(&path, &saved).unwrap();
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert!(book.unreadable.is_none());
+        assert_eq!(
+            book.events[1].result, "Round 5",
+            "the waiting round arrived"
+        );
+        assert_eq!(book.removed(), Some("Long rest"));
+        book.save();
+        let saved = fs::read_to_string(&path).unwrap();
+        fs::write(&path, saved.replace("1 hour", "2 hours")).unwrap();
+        book.reload();
+        assert_ne!(
+            book.events[0].duration, "1 hour",
+            "the outside change arrived"
+        );
+        assert!(book.removed().is_none());
     }
 
     #[test]
@@ -2136,7 +2348,70 @@ mod tests {
         };
         book.record_run(&next, None, true);
         assert_eq!(book.events[0].result, "Round 4");
-        assert_eq!(book.undo_remove(), Some(rest));
+        // iter-23-S FK2: the round is the session's state now, so another session's edit after
+        // it still keeps the Undo.
+        book.add(Kind::Travel, Some(Uuid::from_u128(1)));
+        assert_eq!(book.removed(), Some("Long rest"));
+        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        // iter-23-S FK2: opening a run in Setup puts nothing on the timeline, so the removal's
+        // result and Undo stay. Combat that begins in the removal's session ends them; combat
+        // in another session does not.
+        book.remove(&rest);
+        let started = RunFact {
+            id: Uuid::from_u128(8),
+            ..fact(RunState::Setup)
+        };
+        book.record_run(&started, None, true);
+        assert!(
+            !book
+                .events
+                .iter()
+                .any(|event| event.run == Some(started.id))
+        );
+        assert_eq!(book.removed(), Some("Long rest"), "Setup keeps Undo");
+        let elsewhere = RunFact {
+            id: Uuid::from_u128(9),
+            ..fact(RunState::Running)
+        };
+        book.record_run(&elsewhere, Some(Uuid::from_u128(1)), true);
+        assert!(
+            book.events
+                .iter()
+                .any(|event| event.run == Some(elsewhere.id))
+        );
+        assert_eq!(
+            book.removed(),
+            Some("Long rest"),
+            "another session's combat"
+        );
+        let begun = RunFact {
+            state: RunState::Running,
+            ..started
+        };
+        book.record_run(&begun, None, true);
+        assert!(book.events.iter().any(|event| event.run == Some(begun.id)));
+        assert!(book.removed().is_none());
+        assert!(book.undo_remove().is_none());
+        assert!(!book.events.iter().any(|event| event.id == rest));
+        // A removed fight whose run comes back in another session: its Undo would give the run
+        // a second event, so it ends.
+        let fight = book
+            .events
+            .iter()
+            .find(|event| event.run == Some(elsewhere.id))
+            .unwrap()
+            .id
+            .clone();
+        book.remove(&fight);
+        book.record_run(&elsewhere, Some(Uuid::from_u128(2)), true);
+        assert!(book.removed().is_none());
+        assert_eq!(
+            book.events
+                .iter()
+                .filter(|event| event.run == Some(elsewhere.id))
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -2172,6 +2447,25 @@ mod tests {
         book.remove(&rest);
         book.add(Kind::Day, None);
         assert!(book.undo_remove().is_none());
+        // iter-23-S FK2: a removal belongs to its event's session. Another session's edit keeps
+        // it, and Undo puts the event back after its old neighbour; an edit in its own session
+        // ends it.
+        let (one, two) = (Some(Uuid::from_u128(1)), Some(Uuid::from_u128(2)));
+        let mut book = Book::default();
+        let first = book.add(Kind::Travel, one);
+        let rest = book.add(Kind::LongRest, one);
+        book.remove(&rest);
+        let other = book.add(Kind::Day, two);
+        book.place_after(&other, None);
+        assert_eq!(book.events[0].id, other, "B's edit happened");
+        assert_eq!(book.removed(), Some("Long rest"), "B's edit keeps A's Undo");
+        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        let order: Vec<_> = book.events.iter().map(|event| event.id.clone()).collect();
+        assert_eq!(order, [other, first.clone(), rest.clone()]);
+        assert!(book.removed().is_none(), "the words go with the Undo");
+        book.remove(&rest);
+        book.add(Kind::Travel, one);
+        assert!(book.removed().is_none(), "A's edit ends it");
     }
 
     #[test]

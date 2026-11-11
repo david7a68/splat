@@ -1684,7 +1684,9 @@ impl Splat {
                     let mut group_editor = |ui: &mut egui::Ui| {
                         encounters.group_in_plan_view(ui, campaign, campaigns);
                     };
+                    let party = self.party.order();
                     let plan = sessions::page::Plan {
+                        party: &party,
                         fights: &fights,
                         saved_runs: &saved_runs,
                         groups: &groups,

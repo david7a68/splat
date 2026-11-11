@@ -496,18 +496,31 @@ fn failure(service: &str, response: Response) -> Failure {
     let mut words = match status {
         401 | 403 => format!("{service} did not accept the API key. Check it in Settings."),
         404 => format!("{service} does not know this address or model. Check them in Settings."),
-        408 | 409 | 429 => format!(
-            "{service} is busy, or your limit is reached. Wait, then select Continue processing. It goes on from where it stopped."
-        ),
-        500.. => format!(
-            "{service} has a problem on its side. Process it again later. It goes on from where it stopped."
-        ),
+        408 | 409 | 429 => {
+            format!("{service} is busy, or your limit is reached. {WAIT_ADVICE} {GOES_ON_ADVICE}")
+        }
+        500.. => format!("{service} has a problem on its side. {LATER_ADVICE} {GOES_ON_ADVICE}"),
         _ => format!("{service} refused the request, with status {status}."),
     };
     if !detail.is_empty() {
         words.push_str(&format!(" It said: {detail}"));
     }
     Failure { words, retryable }
+}
+
+/// A failure's advice to process again. It is true only while the audio is there to process.
+pub const WAIT_ADVICE: &str = "Wait, then select Continue processing.";
+pub const LATER_ADVICE: &str = "Process it again later.";
+pub const GOES_ON_ADVICE: &str = "It goes on from where it stopped.";
+pub const CONTINUE_ADVICE: &str = "Continue processing goes on from there.";
+
+/// A failure's words without the advice to process again, for when that cannot happen.
+pub fn without_retry_advice(words: &str) -> String {
+    [WAIT_ADVICE, LATER_ADVICE, GOES_ON_ADVICE, CONTINUE_ADVICE]
+        .into_iter()
+        .fold(words.to_owned(), |words, advice| {
+            words.replace(&format!(" {advice}"), "")
+        })
 }
 
 struct Failure {
