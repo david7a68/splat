@@ -3074,13 +3074,26 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.replace_text_in("Markdown editor", &renamed);
     d.click("Save");
     d.wait_for_text("Update 1 link");
+    // Astra review of round 24: the offer and its result belong to the renamed entry (A, Ash
+    // Wolf) and show in its reader only.
+    let ash_exposure = fs::read_to_string(&path).unwrap();
     search_library(d, "Ash Exposure");
     d.click_starting("Ash Exposure · ");
+    d.observe(
+        "iter-24-L-link-owner-offer-hidden",
+        d.visible_text("The watch knows this spell.")
+            && !d.has_containing("Change links from")
+            && !d.has_containing("Update 1 link"),
+        "Another entry's reader does not show the rename's offer",
+    );
+    search_library(d, "Ash Wolf");
+    d.click_starting("Ash Wolf · ");
+    d.wait_for_text("Update 1 link");
     d.state("renamed-creature-offers-link-update", Sizes::All);
     // Round 24 FC4: the offer and its result sit in the reader's result place, below the title.
-    let with_offer = reader_frame(d, "Ash Exposure");
+    let with_offer = reader_frame(d, "Ash Wolf");
     // Round 23 AE2: the offer names the old and the new name, so the DM can check the words
-    // before the write. The open reader is Ash Exposure, so nothing else on screen says Ash Wolf.
+    // before the write.
     let offer = d.painted_word_rect(
         "Change links from “Cinder Wolf” to “Ash Wolf”.",
         egui::Rect::EVERYTHING,
@@ -3089,6 +3102,11 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "iter-23-L-AE2",
         offer.is_some() && d.visible_text("Update 1 link"),
         "The link offer names both names, and its action keeps the count",
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        ash_exposure,
+        "the offer writes nothing"
     );
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
@@ -3112,19 +3130,76 @@ pub fn package_rename(d: &mut Driver<'_>) {
         format!("The result {result:?} takes the offer's place {offer:?}, and the offer has gone"),
     );
     d.state("renamed-creature-links-updated", Sizes::All);
-    let with_result = reader_frame(d, "Ash Exposure");
-    d.click("Undo link update");
-    assert!(
-        fs::read_to_string(&path)
+    let with_result = reader_frame(d, "Ash Wolf");
+
+    // B (Veilglass Lantern), linked from another file (Ash Wraith), is renamed while A's result
+    // waits. A's result is hidden in B's reader, not ended; B's offer and result are B's.
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let wraith = package.join(
+        &entries
+            .iter()
+            .find(|e| e.name == "Ash Wraith")
             .unwrap()
-            .contains("[[Cinder Wolf]]")
+            .path,
+    );
+    fs::write(
+        &wraith,
+        fs::read_to_string(&wraith).unwrap() + "\nSee [[Veilglass Lantern]].\n",
+    )
+    .unwrap();
+    d.click("Packages");
+    d.click("Reload from disk");
+    search_library(d, "Veilglass Lantern");
+    d.click_starting("Veilglass Lantern · ");
+    d.wait_for_text("Veilglass Lantern");
+    let a_hidden_in_b = !d.has_containing("Links now say") && !d.has("Undo link update");
+    d.click(EDIT_MARKDOWN);
+    let lantern = d.editor_text().unwrap();
+    let lamp = crate::content_workspace::patch_fields(
+        &lantern,
+        &[("splat_name", Some("Veilglass Lamp".into()))],
+    )
+    .unwrap()
+    .replace("# Veilglass Lantern", "# Veilglass Lamp");
+    d.replace_text_in("Markdown editor", &lamp);
+    d.click("Save");
+    d.wait_for_text("Change links from “Veilglass Lantern” to “Veilglass Lamp”.");
+    let b_offer_alone = !d.has_containing("Links now say “Ash Wolf”");
+    d.click("Update 1 link");
+    d.wait_for_text("Links now say “Veilglass Lamp”.");
+    let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
+    let b_saved = fs::read_to_string(&wraith)
+        .unwrap()
+        .contains("[[Veilglass Lamp]]");
+    search_library(d, "Ash Wolf");
+    d.click_starting("Ash Wolf · ");
+    d.wait_for_text("Links now say “Ash Wolf”.");
+    let a_back = !d.has_containing("Veilglass");
+    d.observe(
+        "iter-24-L-link-owner",
+        a_hidden_in_b && b_offer_alone && b_result_alone && b_saved && a_back,
+        format!(
+            "Each link offer and result shows in its own entry's reader only: A hidden in B {a_hidden_in_b}, B's offer alone {b_offer_alone}, B's result alone {b_result_alone}, B saved {b_saved}, A's result back in A {a_back}"
+        ),
+    );
+    d.click("Undo link update");
+    let a_undone = fs::read_to_string(&path)
+        .unwrap()
+        .contains("[[Cinder Wolf]]");
+    let b_kept = fs::read_to_string(&wraith)
+        .unwrap()
+        .contains("[[Veilglass Lamp]]");
+    d.observe(
+        "iter-24-L-link-owner-undo",
+        a_undone && b_kept,
+        format!("Undo of A's link update restores A's links ({a_undone}) and keeps B's ({b_kept})"),
     );
     d.observe(
         "iter-19-E-AD3-link-undone",
         !d.has_containing("Links now say") && !d.has("Undo link update"),
         "After Undo link update, its result message goes away",
     );
-    let without = reader_frame(d, "Ash Exposure");
+    let without = reader_frame(d, "Ash Wolf");
     d.observe(
         "iter-24-L-FC4-links",
         without.iter().all(Option::is_some) && with_offer == without && with_result == without,
@@ -3477,6 +3552,36 @@ pub fn package_about(d: &mut Driver<'_>) {
             "Library names the existing manifest file",
         );
     });
+    // Astra review of round 24: with the write result kept on screen, Save's refusal of invalid
+    // text, Discard and Undo discard move nothing either. The result and the reason share one
+    // space of fixed height below the save row.
+    let written = d.editor_text().unwrap();
+    let invalid = written.replacen("splat_kind: package", "splat_kind: [", 1);
+    assert_ne!(invalid, written, "fixture: the manifest names its kind");
+    d.replace_editor_text(&invalid);
+    d.wait_for_text("Invalid");
+    let kept = |d: &Driver<'_>| d.visible_text("Module.md was written again.");
+    let refused = (kept(d), editor_below_read(d));
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
+    let discarded = (
+        kept(d) && d.has_containing("Undo discard"),
+        editor_below_read(d),
+    );
+    d.click_starting("Undo discard");
+    assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
+    let undone = (kept(d), editor_below_read(d));
+    d.observe(
+        "iter-24-L-FB3-states",
+        [&refused, &discarded, &undone]
+            .iter()
+            .all(|(kept, tops)| *kept && *tops == no_result),
+        format!(
+            "With the write result on screen the editor stays {no_result:?} below Read: Invalid {refused:?}, discarded {discarded:?}, Undo discard {undone:?}"
+        ),
+    );
+    d.click("Discard");
+    assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
     assert!(!folder.join("Package.md").exists());
     d.click("Undo write Module.md");
     d.wait_for_text("Line 4 opens a list");

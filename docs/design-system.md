@@ -590,9 +590,13 @@ the same place. Every Library result takes it too: package use, a manifest write
 separate entry.`, a folder's separate entries, a discarded draft, the offer to change links after a rename and its
 result, and a copied package's registration with `Use the copy in encounters`. One result place per reader: in Read
 they sit after the title's kind line, so the columns, the tabs, the file line and the title never move. Edit
-Markdown puts them in the reserved slot below the save row, so the editor does not move; when Save's reason or the
-discard result holds the slot, they come directly above it. With no entry open, they sit above the empty reader,
-and above a form that takes the reader's place.
+Markdown keeps one space of fixed height below the save row: a result line, then the reason slot directly above the
+editor. The result line is reserved whether or not a result shows, and holds the guidance first when Save's reason
+or the discard result holds the slot. So no result, reason, Discard or Undo discard moves the editor. With no entry
+open, they sit above the empty reader, and above a form that takes the reader's place. The link offer after a
+rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
+open, and end on its next link update or saved edit, on Undo, or when a file the update wrote changes on disk.
+Undo restores only the files that update wrote, so another entry's link update stays.
 An `L` gap separates choices. Name the folder when filenames match. Making an entry separate also sets
 its name and matching first heading to its file stem. Other actions name encounters whose source will
 change; results explaining which entry an encounter will use are Small muted text below the action.

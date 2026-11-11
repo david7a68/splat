@@ -1698,6 +1698,23 @@ fn gone_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str) {
     }
 }
 
+/// The offer to change links after a rename. It belongs to the renamed entry (by its id) and
+/// shows only in that entry's reader.
+struct LinkOffer {
+    owner: Uuid,
+    old: String,
+    new: String,
+}
+
+/// A link update's result and its Undo. It belongs to the renamed entry and shows only in its
+/// reader: while another entry is open it is hidden, not ended. It ends on its owner's next link
+/// update or saved edit, its Undo, or a change on disk to a file it wrote.
+struct LinkResult {
+    owner: Uuid,
+    edits: crate::content_workspace::ContentEdits,
+    new: String,
+}
+
 /// The page's results that are not about the open entry: the offer to change links after a rename
 /// and its result, and a copied package's registration. They take the reader's result place, so a
 /// result never moves the columns, the tabs, the file line or the title.
@@ -2762,9 +2779,10 @@ pub struct Library {
     copy_campaign_before: Option<(Campaign, String, String, String)>,
     unregistered: Option<Module>,
     copied_rosters: Option<crate::content_workspace::ContentEdits>,
-    renamed_links: Option<(String, String)>,
-    /// The link update and the name its links now say.
-    link_edits: Option<(crate::content_workspace::ContentEdits, String)>,
+    /// Offers to change links after a rename, each owned by the renamed entry.
+    renamed_links: Vec<LinkOffer>,
+    /// Link updates and the names their links now say, each owned by the renamed entry.
+    link_edits: Vec<LinkResult>,
     /// This frame's page results (link update, registration), drawn in the reader's result place.
     page_results: PageResults,
     /// Which page result's action the reader pressed, applied after the reader is drawn.
@@ -3099,13 +3117,7 @@ impl Library {
         }) {
             self.selection_undo = None;
         }
-        if self
-            .link_edits
-            .as_ref()
-            .is_some_and(|(edits, _)| !edits.on_disk())
-        {
-            self.link_edits = None;
-        }
+        self.link_edits.retain(|result| result.edits.on_disk());
         self.rosters_changed = self
             .copied_rosters
             .as_ref()
@@ -3882,20 +3894,27 @@ impl Library {
         // The page's results take the reader's result place (after the title, in Edit Markdown's
         // reserved slot, or above the empty reader), so they never move the columns, the tabs,
         // the file line or the title. Their presses are applied after the reader is drawn.
+        // A link offer and a link result show only in their own entry's reader.
+        let open = self.open_entry_id();
         self.page_results = PageResults {
-            link_offer: self.renamed_links.as_ref().and_then(|(old, new)| {
-                let count = self.link_rename_count(old, new);
-                (count > 0).then(|| {
-                    (
-                        format!("Change links from “{old}” to “{new}”."),
-                        format!("Update {}", design::count(count, "link", "links")),
-                    )
-                })
-            }),
+            link_offer: self
+                .renamed_links
+                .iter()
+                .find(|offer| Some(offer.owner) == open)
+                .and_then(|offer| {
+                    let count = self.link_rename_count(&offer.old, &offer.new);
+                    (count > 0).then(|| {
+                        (
+                            format!("Change links from “{}” to “{}”.", offer.old, offer.new),
+                            format!("Update {}", design::count(count, "link", "links")),
+                        )
+                    })
+                }),
             links: self
                 .link_edits
-                .as_ref()
-                .map(|(_, new)| format!("Links now say “{new}”.")),
+                .iter()
+                .find(|result| Some(result.owner) == open)
+                .map(|result| format!("Links now say “{}”.", result.new)),
             registration: self.package_copy.as_ref().map(|copy| {
                 (
                     package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
@@ -4498,6 +4517,12 @@ impl Library {
         self.apply_page_press(pressed, campaigns);
     }
 
+    /// The open entry's identity, which owns its link offer and link result.
+    fn open_entry_id(&self) -> Option<Uuid> {
+        let note = self.loaded.as_ref()?.notes.get(self.selected?)?;
+        note.entry.as_ref().map(|entry| entry.id)
+    }
+
     /// How many links the offer after a rename would change. The loaded notes keep the count
     /// until they change, so an unchanged frame reads no note.
     fn link_rename_count(&self, old: &str, new: &str) -> usize {
@@ -4509,10 +4534,15 @@ impl Library {
     /// The page results' presses from the reader: the link update and its Undo, and the
     /// registration's Undo, its source change and that change's Undo.
     fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
+        let open = self.open_entry_id();
         if pressed.link_offer
-            && let Some((old, new)) = self.renamed_links.clone()
+            && let Some(at) = self
+                .renamed_links
+                .iter()
+                .position(|offer| Some(offer.owner) == open)
             && let Some(loaded) = &self.loaded
         {
+            let LinkOffer { owner, old, new } = self.renamed_links.remove(at);
             let files: Vec<_> = loaded
                 .notes
                 .iter()
@@ -4531,8 +4561,9 @@ impl Library {
                 .collect();
             match crate::content_workspace::ContentEdits::write(files) {
                 Ok(edits) => {
-                    self.link_edits = Some((edits, new));
-                    self.renamed_links = None;
+                    // The owner's new update ends its earlier result.
+                    self.link_edits.retain(|result| result.owner != owner);
+                    self.link_edits.push(LinkResult { owner, edits, new });
                     self.stale = true;
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
@@ -4541,11 +4572,16 @@ impl Library {
             }
         }
         if pressed.links
-            && let Some((edits, _)) = &self.link_edits
+            && let Some(at) = self
+                .link_edits
+                .iter()
+                .position(|result| Some(result.owner) == open)
         {
-            match edits.undo() {
+            // Undo restores only the files this update wrote, and only while they hold what it
+            // wrote, so another entry's link update stays.
+            match self.link_edits[at].edits.undo() {
                 Ok(()) => {
-                    self.link_edits = None;
+                    self.link_edits.remove(at);
                     self.stale = true;
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
@@ -5555,12 +5591,20 @@ impl Library {
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
+                // A saved edit of the entry ends its link update's result; a rename gives it a
+                // new offer, which replaces its earlier one. Other entries keep theirs.
+                self.link_edits.retain(|result| result.owner != entry.id);
                 if let Some(old) = &l.notes[i].entry
                     && old.name != entry.name
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
-                    self.renamed_links = Some((old.name.clone(), entry.name.clone()));
+                    self.renamed_links.retain(|offer| offer.owner != entry.id);
+                    self.renamed_links.push(LinkOffer {
+                        owner: entry.id,
+                        old: old.name.clone(),
+                        new: entry.name.clone(),
+                    });
                 }
                 if entry.kind == "package"
                     && let Owner::Package(module) = &l.notes[i].owner
@@ -6412,21 +6456,16 @@ impl Library {
                 repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
             }
             {
-                // The slot holds, first to last: the discard result, Save's reason, the reader's
-                // results, the guidance. The guidance, then the results, come directly above a
-                // slot that something earlier holds.
+                // One space below the save row holds the reader's results and, below them, the
+                // reason slot: the discard result, Save's reason, the guidance or the draft's
+                // reason. Its height is one result line and the slot together, whether or not
+                // either shows, so no result, reason or Discard moves the editor. The guidance
+                // comes directly above when the slot holds Save's reason or the discard result.
                 let discard_shown =
                     discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
                 let slot_busy = discard_shown || slot_problem.is_some();
-                let results_shown = !choices_in_reader && results.any();
-                let results_in_slot = results_shown && !slot_busy;
-                let slot_link = link_words.filter(|_| !slot_busy && !results_in_slot);
-                if let Some(words) = link_words.filter(|_| slot_link.is_none()) {
-                    design::message(ui, Tone::Warning, words);
-                }
-                if results_shown && !results_in_slot {
-                    pressed = show_results(ui, &results);
-                }
+                let slot_link = link_words.filter(|_| !slot_busy);
+                let link_above = link_words.filter(|_| slot_busy);
                 // Measure the same words in both states, so the first edit keeps the caret in place.
                 let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
                 // The discard message is measured too, so neither state moves the editor.
@@ -6441,7 +6480,6 @@ impl Library {
                         .size()
                         .y
                 };
-                // The guidance alone fills the slot: a discard result would move it above anyway.
                 let height = if let Some(link) = slot_link {
                     body_height(link).max(Density::Read.control() + design::XS)
                 } else {
@@ -6458,71 +6496,80 @@ impl Library {
                         .max(Density::Read.control() + design::XS)
                         .max(slot_problem.map_or(0.0, |problem| body_height(problem)))
                 };
-                if results_in_slot {
-                    // The results draw from the slot's top; a result taller than the slot
-                    // takes the room it needs.
-                    let top = ui.cursor().min;
-                    let mut slot_ui = ui.new_child(
+                // The results draw from the space's top. A result line is one message with its
+                // Undo; a result too long for one line takes the room it needs.
+                // The guidance, when the slot is busy, comes first in the same upper part, so it
+                // stays directly above the slot.
+                let top = ui.cursor().min;
+                let mut drawn = 0.0;
+                let results_shown = !choices_in_reader && results.any();
+                if results_shown || link_above.is_some() {
+                    let mut results_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(egui::Rect::from_min_size(
                                 top,
-                                egui::vec2(editor_width, ui.available_height().max(height)),
+                                egui::vec2(editor_width, ui.available_height()),
                             ))
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
-                    pressed = show_results(&mut slot_ui, &results);
-                    let drawn = slot_ui.min_rect().height();
-                    ui.allocate_exact_size(
-                        egui::vec2(editor_width, height.max(drawn)),
-                        egui::Sense::hover(),
-                    );
-                } else {
-                    let (slot, _) = ui.allocate_exact_size(
-                        egui::vec2(editor_width, height),
-                        egui::Sense::hover(),
-                    );
-                    if discard_shown {
-                        let mut slot_ui = ui.new_child(
-                            egui::UiBuilder::new()
-                                .max_rect(slot)
-                                .layout(egui::Layout::top_down(egui::Align::Min)),
-                        );
-                        if design::draft_discarded(&mut slot_ui, note.name())
-                            && let Some((_, _, text)) = self.discarded.take()
-                        {
-                            self.draft = text;
-                            // The draft changed: a failed Save of the old words no longer owns it.
-                            self.draft_revision += 1;
-                        }
-                    } else if let Some(problem) = slot_problem {
-                        // Save's reason: its refusal before the write, or the disk's failure.
-                        let mut slot_ui = ui.new_child(
-                            egui::UiBuilder::new()
-                                .max_rect(slot)
-                                .layout(egui::Layout::top_down(egui::Align::Min)),
-                        );
-                        design::message(&mut slot_ui, Tone::Error, problem);
-                    } else if let Some(words) = slot_link {
-                        // The repair this note was opened for, in the reason line.
-                        let mut slot_ui = ui.new_child(
-                            egui::UiBuilder::new()
-                                .max_rect(slot)
-                                .layout(egui::Layout::top_down(egui::Align::Min)),
-                        );
-                        design::message(&mut slot_ui, Tone::Warning, words);
-                    } else if let Some(reason) = draft_reason {
-                        let mut slot_ui = ui.new_child(
-                            egui::UiBuilder::new()
-                                .max_rect(slot)
-                                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                        );
-                        slot_ui.add(
-                            egui::Label::new(
-                                Type::Small.rich(&slot_ui, reason).color(colors().muted),
-                            )
-                            .wrap(),
-                        );
+                    if let Some(words) = link_above {
+                        design::message(&mut results_ui, Tone::Warning, words);
                     }
+                    if results_shown {
+                        pressed = show_results(&mut results_ui, &results);
+                    }
+                    drawn = results_ui.min_rect().height();
+                }
+                // The reason slot sits directly above the editor, below the result line, which is
+                // reserved whether or not a result shows.
+                let result_line = drawn.max(Density::Read.control());
+                ui.allocate_exact_size(
+                    egui::vec2(editor_width, result_line + height),
+                    egui::Sense::hover(),
+                );
+                let slot = egui::Rect::from_min_size(
+                    top + egui::vec2(0.0, result_line),
+                    egui::vec2(editor_width, height),
+                );
+                if discard_shown {
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    if design::draft_discarded(&mut slot_ui, note.name())
+                        && let Some((_, _, text)) = self.discarded.take()
+                    {
+                        self.draft = text;
+                        // The draft changed: a failed Save of the old words no longer owns it.
+                        self.draft_revision += 1;
+                    }
+                } else if let Some(problem) = slot_problem {
+                    // Save's reason: its refusal before the write, or the disk's failure.
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    design::message(&mut slot_ui, Tone::Error, problem);
+                } else if let Some(words) = slot_link {
+                    // The repair this note was opened for, in the reason line.
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    design::message(&mut slot_ui, Tone::Warning, words);
+                } else if let Some(reason) = draft_reason {
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    );
+                    slot_ui.add(
+                        egui::Label::new(Type::Small.rich(&slot_ui, reason).color(colors().muted))
+                            .wrap(),
+                    );
                 }
             }
         }
@@ -9967,11 +10014,15 @@ mod tests {
         assert!(library.dependency_undo.is_none());
 
         // `Undo link update`.
-        library.link_edits = Some((edit("links"), "Ash Wolf".into()));
+        library.link_edits = vec![LinkResult {
+            owner: Uuid::nil(),
+            edits: edit("links"),
+            new: "Ash Wolf".into(),
+        }];
         library.forget_changed_undos();
-        assert!(library.link_edits.is_some());
+        assert!(!library.link_edits.is_empty());
         change_outside(&mut library);
-        assert!(library.link_edits.is_none());
+        assert!(library.link_edits.is_empty());
 
         // `Undo source change` keeps its data for registration, and blocks both Undos.
         library.copied_rosters = Some(edit("rosters"));
