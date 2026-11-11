@@ -8,6 +8,35 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_containing("Slate Wolf · Creature");
     d.expect("22 (4d8 + 4)");
     d.expect("Bite · +");
+    // FD2: a campaign creature's toolbar adds Make NPC note. Every toolbar action is a Read
+    // row, so the title stays where a campaign item's title is (compared below).
+    d.expect("Campaign · Editable");
+    let creature_title = super::world_build::reader_title_tops(d, "Slate Wolf");
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let (make, read, more) = d.at_size(size, |d| {
+            (
+                d.place_of("Make NPC note"),
+                d.place_of("Read"),
+                d.place_of("More"),
+            )
+        });
+        // Must stay true: shown, Make NPC note is a Read-density control on Read's line;
+        // folded, More holds it.
+        d.observe(
+            "iter-18-E-FD2-row",
+            match (make, read) {
+                (Some(make), Some(read)) => {
+                    (make.height() - crate::design::Density::Read.control()).abs() <= 0.5
+                        && (make.center().y - read.center().y).abs() <= 1.0
+                }
+                (None, Some(_)) => more.is_some(),
+                _ => false,
+            },
+            format!(
+                "At {size:?}, Make NPC note {make:?} is a Read row on the toolbar line with Read {read:?} (or More {more:?} holds it)"
+            ),
+        );
+    }
     d.state("schema-2-creature-library", Sizes::All);
     search_library(d, "Flagged Wolf");
     d.expect("1 value not read");
@@ -44,6 +73,19 @@ pub fn run(d: &mut Driver<'_>) {
     search_library(d, "Bound Charm");
     d.click_containing("Bound Charm · ");
     d.expect("Wondrous Item, Uncommon (Requires Attunement)");
+    d.expect("Campaign · Editable");
+    assert!(
+        !d.has("Make NPC note"),
+        "fixture: an item has no Make NPC note"
+    );
+    let item_title = super::world_build::reader_title_tops(d, "Bound Charm");
+    d.observe(
+        "iter-18-E-FD2",
+        creature_title.iter().all(Option::is_some) && creature_title == item_title,
+        format!(
+            "The campaign creature's title is at the campaign item's height (960, 1200, 1920): Slate Wolf {creature_title:?}, Bound Charm {item_title:?}"
+        ),
+    );
     d.expect("Keep the charm effect.");
     d.observe(
         "i19 converted item",

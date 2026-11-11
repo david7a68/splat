@@ -166,9 +166,13 @@ pub(crate) fn show(
     origin: &Origin<'_>,
     links: &dyn Links,
 ) -> Option<usize> {
-    show_inner(ui, name, entry, body, origin, links, None, |_| None)
+    show_inner(ui, name, entry, body, origin, links, None, false, |_| None)
 }
 
+/// `empty_value_block`: the caller drew a value block above the entry, and that block drew
+/// no row. The prose then starts without the reader's own gap, where a plain note's prose
+/// starts. Line warnings keep the gap after them.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn show_with_related(
     ui: &mut egui::Ui,
     name: &str,
@@ -176,9 +180,20 @@ pub(crate) fn show_with_related(
     body: &str,
     origin: &Origin<'_>,
     links: &dyn Links,
+    empty_value_block: bool,
     related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
 ) -> Option<usize> {
-    show_inner(ui, name, entry, body, origin, links, None, related)
+    show_inner(
+        ui,
+        name,
+        entry,
+        body,
+        origin,
+        links,
+        None,
+        empty_value_block,
+        related,
+    )
 }
 
 pub(crate) fn show_run(
@@ -196,6 +211,7 @@ pub(crate) fn show_run(
         origin,
         links,
         Some(values),
+        false,
         |_| None,
     )
 }
@@ -209,9 +225,13 @@ fn show_inner(
     origin: &Origin<'_>,
     links: &dyn Links,
     values: Option<&RunValues>,
+    empty_value_block: bool,
     related: impl FnOnce(&mut egui::Ui) -> Option<usize>,
 ) -> Option<usize> {
     crate::rolls::set_entry(ui.ctx(), name);
+    // The gap before the prose separates it from what is above. Line warnings need it; an
+    // empty value block does not.
+    let lead_gap = !empty_value_block || entry.is_some_and(|entry| !entry.flags.is_empty());
     if let Some(entry) = entry {
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
@@ -263,7 +283,7 @@ fn show_inner(
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
         let open_link = content(
-            ui, entry, reading, &sections, styled, builtin, links, values,
+            ui, entry, reading, &sections, styled, builtin, links, values, lead_gap,
         );
         let open_link = open_link.or(related(ui));
         if entry.is_some() {
@@ -280,6 +300,7 @@ const REFERENCE_MAX: f32 = 360.0;
 pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
+/// `lead_gap` is false when nothing above needs a gap before the first prose.
 #[allow(clippy::too_many_arguments)]
 fn content(
     ui: &mut egui::Ui,
@@ -290,10 +311,13 @@ fn content(
     builtin: bool,
     links: &dyn Links,
     values: Option<&RunValues>,
+    lead_gap: bool,
 ) -> Option<usize> {
     let mut open_link = None;
     if let Some(reading) = reading {
-        ui.add_space(design::L);
+        if lead_gap {
+            ui.add_space(design::L);
+        }
         style::markdown(ui, &reading.summary);
     }
     if let Some(entry) = styled {
@@ -303,10 +327,13 @@ fn content(
         });
     } else {
         // A creature the DM wrote has no source text to style. Its numbers still lead.
+        // The stat head is above the prose, so the gap after it stays.
+        let mut lead_gap = lead_gap;
         if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
             creature::stat_head(ui, entry, values);
+            lead_gap = true;
         }
-        reader::show(ui, entry, sections, builtin, reading.is_some());
+        reader::show(ui, entry, sections, builtin, reading.is_some(), lead_gap);
     }
     if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
         open_link = open_link.or(class::show_features(ui, entry, links));
@@ -420,4 +447,76 @@ fn reference(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The top of the painted prose line, read through `show_with_related`.
+    fn prose_top(entry: &Entry, empty_value_block: bool) -> f32 {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_with_related(
+                    ui,
+                    &entry.name,
+                    Some(entry),
+                    &entry.body,
+                    &Origin {
+                        path: &entry.path,
+                        owner: "Campaign",
+                        builtin: false,
+                    },
+                    &NoLinks,
+                    empty_value_block,
+                    |_| None,
+                );
+            });
+        });
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.contains("Keep this prose.") => {
+                    Some(text.pos.y)
+                }
+                _ => None,
+            })
+            .expect("the prose is painted")
+    }
+
+    fn note(flags: Vec<splat::content::layout::Flag>) -> Entry {
+        let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: world\nsplat_name: Watch House\nsplat_world:\n  type: location\n---\n\n# Watch House\n\nKeep this prose.\n";
+        let converted = splat::content::formats::convert("World.md", old).unwrap();
+        let mut entry =
+            Entry::parse("Places/Watch House.md", &converted).expect("fixture: a world note");
+        entry.flags = flags;
+        entry
+    }
+
+    /// FT2 (iter 18): a value block that drew no row takes away the reader's gap before the
+    /// prose, and only that gap. Line warnings keep the gap after them.
+    #[test]
+    fn iter18_e_ft2_empty_value_block_skips_only_the_lead_gap() {
+        let plain = note(Vec::new());
+        let with_gap = prose_top(&plain, false);
+        let without_gap = prose_top(&plain, true);
+        assert_eq!(
+            with_gap - without_gap,
+            design::L,
+            "iter-18-E-FT2-flag: the flag takes back the reader's L before the prose ({with_gap} with the gap, {without_gap} without)"
+        );
+        // Must stay true: after a line warning, the prose keeps its gap with the flag set.
+        let warned = note(vec![splat::content::layout::Flag {
+            line: 3,
+            message: "Unknown field".into(),
+        }]);
+        assert_eq!(
+            prose_top(&warned, true),
+            prose_top(&warned, false),
+            "iter-18-E-FT2-warning: a line warning keeps the gap before the prose"
+        );
+    }
 }

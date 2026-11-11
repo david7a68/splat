@@ -1977,6 +1977,36 @@ fn prose_gap(d: &Driver<'_>, file: &str, prose: &str) -> Option<f32> {
     Some(d.painted_rect_in(prose, pane)?.top() - file_line.bottom())
 }
 
+/// In Lookup, the gap from the reader's kind line to the first text below it (the prose).
+fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Option<f32> {
+    let search = d.place_of(SEARCH_LOOKUP)?;
+    let (width, height) = d.window_size();
+    let pane = egui::Rect::from_min_max(
+        egui::pos2(search.left() - 1.0, search.bottom()),
+        egui::pos2(width, height),
+    );
+    let title = d.painted_word_rect(title, pane)?;
+    let kind = d.painted_rect_in(
+        kind,
+        egui::Rect::from_min_max(
+            egui::pos2(pane.left(), title.bottom()),
+            egui::pos2(width, title.bottom() + design::XL),
+        ),
+    )?;
+    let mut first: Option<f32> = None;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if pane.contains(rect.center())
+            && clip.intersects(rect)
+            && rect.top() >= kind.bottom()
+            && !text.galley.job.text.trim().is_empty()
+        {
+            first = Some(first.map_or(rect.top(), |top| top.min(rect.top())));
+        }
+    });
+    Some(first? - kind.bottom())
+}
+
 /// The NPC keeps both reference links beside a live fight.
 pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let modules = d.app_mut().campaigns.modules().to_vec();
@@ -2021,6 +2051,16 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click("Back");
     d.click("Watch House");
     d.wait_for_text("Rook Ambry");
+    // FT2: a location with no set values draws no value row in Lookup, so its prose has the
+    // gap below the kind line that a spell (no value block) has. Compared with Bless below.
+    let place_gaps: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                lookup_prose_gap(d, "Watch House", "Location · Campaign")
+            })
+        })
+        .collect();
     d.state("npc-place-link", Sizes::All);
 
     // Rook moves and makes a promise. The DM writes both down without leaving the fight.
@@ -2120,6 +2160,57 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click("Undo changes");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
+
+    // FT2, the other half: Bless has no value block. Its prose sets the gap that Watch House
+    // must match.
+    look_up_again(d, "bless");
+    d.wait_for_text("Spell · Level 1 · Campaign");
+    let spell_gaps: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .map(|size| {
+            d.at_size(size, |d| {
+                lookup_prose_gap(d, "Bless", "Spell · Level 1 · Campaign")
+            })
+        })
+        .collect();
+    for ((size, place), spell) in [SMALL, DEFAULT, LARGE]
+        .into_iter()
+        .zip(place_gaps)
+        .zip(spell_gaps.iter().copied())
+    {
+        d.observe(
+            "iter-18-E-FT2",
+            place
+                .zip(spell)
+                .is_some_and(|(place, spell)| (place - spell).abs() <= 1.0),
+            format!(
+                "At {size:?}, Lookup's Watch House has {place:?} px from its kind line to its prose, Bless {spell:?} px"
+            ),
+        );
+    }
+    // FT2, plain notes: a note with no front matter keeps the same gap in Lookup.
+    fs::create_dir_all(root(d).join("Notes")).unwrap();
+    fs::write(
+        root(d).join("Notes/Harbour Rumours.md"),
+        "# Harbour Rumours\n\nThe ferry master hears every rumour first.\n",
+    )
+    .unwrap();
+    reload(d);
+    look_up_again(d, "harbour rumours");
+    d.wait_for_text("The ferry master hears every rumour first.");
+    for (size, spell) in [SMALL, DEFAULT, LARGE].into_iter().zip(spell_gaps) {
+        let note = d.at_size(size, |d| {
+            lookup_prose_gap(d, "Harbour Rumours", "World note · Campaign")
+        });
+        d.observe(
+            "iter-18-E-FT2-note",
+            note.zip(spell)
+                .is_some_and(|(note, spell)| (note - spell).abs() <= 1.0),
+            format!(
+                "At {size:?}, Lookup's plain note Harbour Rumours has {note:?} px from its kind line to its prose, Bless {spell:?} px"
+            ),
+        );
+    }
 }
 
 /// A rename on disk keeps an identity-based package link working.
@@ -3259,7 +3350,7 @@ pub(super) fn reader_title(d: &Driver<'_>, title: &str) -> Option<egui::Rect> {
 }
 
 /// The reader title's top at each captured size.
-fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
+pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
     [SMALL, DEFAULT, (1920.0, 1080.0)]
         .into_iter()
         .map(|size| d.at_size(size, |d| reader_title(d, title).map(|rect| rect.top())))
@@ -4357,6 +4448,33 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             aligned,
             format!("The copied-package action is bordered below the message at {size:?}"),
         );
+        // FD1: the Undo sits on the message line, after the words, so the message takes two
+        // lines (message, then Use the copy's entries), not three.
+        let (undo, message, action) = d.at_size(size, |d| {
+            let message = d
+                .nodes()
+                .into_iter()
+                .find(|n| {
+                    n.role == Role::Label && n.name.starts_with("Ashen Reaches is registered")
+                })
+                .map(|n| n.rect);
+            (
+                d.place_of("Undo package registration"),
+                message,
+                d.place_of("Use the copy's entries"),
+            )
+        });
+        d.observe(
+            "iter-18-E-FD1",
+            undo.zip(message).zip(action).is_some_and(|((undo, message), action)| {
+                (undo.center().y - message.center().y).abs() <= 1.0
+                    && undo.left() >= message.right()
+                    && action.top() >= undo.bottom()
+            }),
+            format!(
+                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?}, and Use the copy's entries {action:?} is the one row below"
+            ),
+        );
     }
     // AD1, a result with another action: an outside change to a copied file blocks Undo package
     // registration with its reason, and Use the copy's entries stays. Restoring the bytes and
@@ -4391,6 +4509,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "Undo package registration",
             crate::content_workspace::UNDO_ENDED,
         );
+        d.state("registration-undo-blocked", Sizes::Default);
         d.observe(
             "iter-14-E-AD1-registration",
             blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
