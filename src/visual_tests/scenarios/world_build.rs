@@ -5795,6 +5795,10 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("Lookup's duplicate choices start at the message text at {size:?}: {detail}"),
         );
     }
+    // Round 24 FA4: at 960 beside Lookup, World's file line puts the path on its own row, so
+    // World's `Also linked from` line sits just below the window. Scroll the World reader to it.
+    let world_reader = egui::pos2(470.0, 400.0);
+    d.scroll_at(world_reader, 2);
     d.observe_both(
         "iter-15-D-FD7",
         "Also linked from never names the note itself, and names a copy by its path",
@@ -5813,6 +5817,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                 && !links.iter().any(|name| name == "Rook Ambry")
         },
     );
+    d.scroll_up_at(world_reader, 2);
     // FD6: a Lookup row shortens by whole parts. It drops the kind and keeps the whole file that
     // tells the rows apart. At 1200 the fault is whole; at 960 it ends on a whole word. No row
     // cuts inside a word or ends on a separator before `…`.

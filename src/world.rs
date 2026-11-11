@@ -1989,22 +1989,45 @@ impl Reader {
                         .filter(|_| !self.editing(id));
                     let (note, rename_file) =
                         design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                            // A choice whose words do not fit the message's width says only
+                            // its verb; the warning above names the name, and the accessible
+                            // name keeps the whole choice.
+                            let room = ui.available_width();
+                            let choice = |full: String, short: &'static str| {
+                                let action = Action::secondary(&full).density(Density::Read);
+                                if action.natural_width(ui) <= room {
+                                    (full.clone(), full)
+                                } else {
+                                    (short.to_owned(), full)
+                                }
+                            };
+                            let (note_words, note_name) =
+                                choice(format!("Rename the note to {stem}"), "Rename the note");
+                            let file_words = file.as_ref().map(|to| {
+                                choice(
+                                    format!(
+                                        "Rename the file to {}",
+                                        to.rsplit('/').next().unwrap_or(to)
+                                    ),
+                                    "Rename the file",
+                                )
+                            });
                             ui.horizontal_wrapped(|ui| {
-                                let note = Action::secondary(&format!("Rename the note to {stem}"))
+                                let note = Action::secondary(&note_words)
+                                    .name(&note_name)
                                     .density(Density::Read)
                                     .show(ui)
                                     .clicked();
-                                let rename_file = file.as_ref().is_some_and(|to| {
-                                    // The layout's own gap after a control, with this, is `L`.
-                                    ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                    Action::secondary(&format!(
-                                        "Rename the file to {}",
-                                        to.rsplit('/').next().unwrap_or(to)
-                                    ))
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked()
-                                });
+                                let rename_file =
+                                    file_words.as_ref().is_some_and(|(words, name)| {
+                                        // The layout's own gap after a control, with this, is `L`.
+                                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                        Action::secondary(words)
+                                            .name(name)
+                                            .density(Density::Read)
+                                            .show(ui)
+                                            .clicked()
+                                    });
                                 (note, rename_file)
                             })
                             .inner
