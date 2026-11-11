@@ -2107,6 +2107,21 @@ struct RepairLink {
     target: splat::content::Reference,
     words: String,
     found: Option<(ParsedDraft, Option<usize>)>,
+    /// Its note has been on screen. From then, any other selection ends the repair.
+    shown: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The row that links a repair's reference. Every repair lookup goes through here, and the
+/// test count is kept here.
+fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize> {
+    #[cfg(test)]
+    REPAIR_LOOKUPS.with(|count| count.set(count.get() + 1));
+    splat::content::list_formats::row_linking(entry, target)
 }
 
 #[derive(Default)]
@@ -2178,10 +2193,6 @@ pub struct Library {
     /// A missing link that Campaign's repair opened this file for. Edit Markdown names it at its
     /// line while the draft still holds it; it ends when another note opens or a Save writes.
     repair_link: Option<RepairLink>,
-    /// How many times the repair link's row was looked up, for the test that unchanged frames
-    /// do not look again.
-    #[cfg(test)]
-    repair_lookups: usize,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -2637,15 +2648,6 @@ impl Library {
         let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
             return;
         };
-        if self
-            .repair_link
-            .as_ref()
-            .is_some_and(|RepairLink { path, .. }| {
-                note.owner.root().map(|root| root.join(&note.path)).as_ref() != Some(path)
-            })
-        {
-            self.repair_link = None;
-        }
         if self.selected != Some(index) {
             self.trail.leave(self.here());
         }
@@ -2732,9 +2734,30 @@ impl Library {
         self.pending_edit = Some(entry);
     }
     /// Open a file for repair; with a missing link's reference and words, at that link.
+    /// The one cleanup for a repair's owner. Once the repair's note has been on screen, any
+    /// other selection ends it, however it was made: the list, the keyboard, search, `reveal`,
+    /// Back or Forward, or a link. A load in progress keeps it, as the selection waits for it.
+    fn end_repair_on_owner_change(&mut self) {
+        if self.pending.is_some() || self.stale || self.pending_repair.is_some() {
+            return;
+        }
+        let here = self
+            .selected
+            .and_then(|i| self.loaded.as_ref()?.notes.get(i))
+            .and_then(|note| Some(note.owner.root()?.join(&note.path)));
+        let Some(link) = &mut self.repair_link else {
+            return;
+        };
+        if here.as_ref() == Some(&link.path) {
+            link.shown = true;
+        } else if link.shown {
+            self.repair_link = None;
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn repair_lookups(&self) -> usize {
-        self.repair_lookups
+        REPAIR_LOOKUPS.with(std::cell::Cell::get)
     }
     pub fn repair_file_link(
         &mut self,
@@ -2746,6 +2769,7 @@ impl Library {
             target,
             words,
             found: None,
+            shown: false,
         });
         self.pending_repair = Some(path);
         self.stale = true;
@@ -2870,6 +2894,7 @@ impl Library {
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        self.end_repair_on_owner_change();
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
         });
@@ -5117,13 +5142,10 @@ impl Library {
                     .as_ref()
                     .is_some_and(|(seen, _)| std::sync::Arc::ptr_eq(seen, &parsed_draft));
                 if stale {
-                    #[cfg(test)]
-                    {
-                        self.repair_lookups += 1;
-                    }
-                    let line = parsed.as_ref().ok().and_then(|entry| {
-                        splat::content::list_formats::row_linking(entry, &link.target)
-                    });
+                    let line = parsed
+                        .as_ref()
+                        .ok()
+                        .and_then(|entry| repair_row(entry, &link.target));
                     link.found = Some((parsed_draft.clone(), line));
                 }
                 let line = link.found.as_ref()?.1?;

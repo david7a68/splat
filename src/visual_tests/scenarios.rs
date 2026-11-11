@@ -13104,6 +13104,42 @@ pub mod session_plan_groups {
                 "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
             ),
         );
+        // The guidance belongs to Lost Patrol while it stays open. Selecting another entry ends
+        // it, by the list and by Back: coming back to Lost Patrol does not bring it back.
+        const GUIDANCE: &str = "needs a creature that cannot be found. Replace the link";
+        let shown_before_list = d.visible_text(GUIDANCE);
+        d.click_starting("Rival Team ·");
+        d.click_starting("Lost Patrol ·");
+        d.expect("Markdown editor");
+        d.click("Edit Markdown");
+        let after_list = (
+            d.editor_text()
+                .is_some_and(|text| text.contains(&missing_id)),
+            d.visible_text(GUIDANCE),
+        );
+        d.click(NAV_CAMPAIGN);
+        d.expect("Repair Lost Patrol");
+        d.click("Repair Lost Patrol");
+        d.expect("Markdown editor");
+        let shown_before_back = d.visible_text(GUIDANCE);
+        d.click_starting("Rival Team ·");
+        d.click("Back");
+        d.click("Edit Markdown");
+        let after_back = (
+            d.editor_text()
+                .is_some_and(|text| text.contains(&missing_id)),
+            d.visible_text(GUIDANCE),
+        );
+        d.observe(
+            "iter-23-B-FK1-owner",
+            shown_before_list
+                && after_list == (true, false)
+                && shown_before_back
+                && after_back == (true, false),
+            format!(
+                "Guidance before the list {shown_before_list}, Lost Patrol again after the list (open, guidance) {after_list:?}; before Back {shown_before_back}, after Back {after_back:?}"
+            ),
+        );
         std::fs::write(&lost, &lost_text).unwrap();
 
         // Astra review of PR 231: a plan group none of whose members can join keeps each member
