@@ -197,38 +197,98 @@ fn menu_keys_owner_id() -> egui::Id {
     egui::Id::new("roll_menu_opened_by_keys")
 }
 
-/// At the end of each frame: when a menu the keys opened has closed, by any path (a choice, the
-/// last choice going away, Escape, a click outside, or its control gone), it ends here, and the
-/// focus goes back to the control that owned it. A click outside that gave the focus to another
-/// control keeps it there. When the DM moves the focus out of the open menu (Tab to another
-/// control or a field), the return is cancelled at once, so a later Escape never takes the
-/// focus back from where the DM put it. The menu stays open, as a menu does when it loses the
-/// focus. Run after everything that draws a menu.
+fn menu_owner_seen_id() -> egui::Id {
+    egui::Id::new("roll_menu_owner_seen_frame")
+}
+
+/// Where the focus was at the end of the last frame while the menu was open, when it was
+/// outside the menu: on another control. No entry means inside (the row or a menu choice).
+fn menu_focus_outside_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_outside")
+}
+
+/// A focus set back after a keyboard close, set once more in the next frame if egui cleared it.
+fn menu_focus_again_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_again")
+}
+
+/// A control that can own a menu says it is still on screen. Call it every frame, before any
+/// early return, so a menu whose last choice went away still has its owner.
+pub(crate) fn keep_menu_owner(response: &egui::Response) {
+    let ctx = &response.ctx;
+    if ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) == Some(response.id) {
+        let frame = ctx.cumulative_frame_nr();
+        ctx.data_mut(|data| data.insert_temp(menu_owner_seen_id(), frame));
+    }
+}
+
+/// The focus model of a menu the keys opened, run at the end of each frame after everything
+/// that draws a menu.
+///
+/// - The menu has one owner, its control, from when it opens until it closes.
+/// - While it is open, each frame records where the focus is: inside (the owner or a menu
+///   choice) or outside, on another control.
+/// - Closed by the keys (Escape, a choice, its last choice going away): the focus goes to the
+///   owner when the last record is inside, and to that other control when it is outside. It is
+///   set once more in the next frame, as egui clears the focus on Escape. It is never left
+///   empty.
+/// - Closed by a mouse click: the clicked control keeps the focus. When the click left none
+///   (a choice that went away), it goes to the owner.
+/// - The owner is gone (its row taken away, the run ended): the menu ends and the focus stays.
 pub(crate) fn end_menu_frame(ctx: &egui::Context) {
+    let frame = ctx.cumulative_frame_nr();
+    let focused = ctx.memory(|memory| memory.focused());
+    let again = ctx.data_mut(|data| {
+        let target = data.get_temp::<egui::Id>(menu_focus_again_id());
+        data.remove::<egui::Id>(menu_focus_again_id());
+        target
+    });
+    if let Some(target) = again
+        && focused.is_none()
+    {
+        ctx.memory_mut(|memory| memory.request_focus(target));
+    }
     let Some(owner) = ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) else {
         return;
     };
-    let focused = ctx.memory(|memory| memory.focused());
     let clear = |ctx: &egui::Context| {
         ctx.data_mut(|data| {
             data.remove::<egui::Id>(menu_keys_owner_id());
             data.remove::<bool>(focus_first_choice_id());
             data.remove::<egui::Id>(menu_choice_focus_id());
             data.remove::<u64>(menu_choice_focus_frame_id());
+            data.remove::<u64>(menu_owner_seen_id());
+            data.remove::<egui::Id>(menu_focus_outside_id());
         });
     };
+    if ctx.data(|data| data.get_temp::<u64>(menu_owner_seen_id())) != Some(frame) {
+        clear(ctx);
+        return;
+    }
     if egui::Popup::is_id_open(ctx, owner.with("popup")) {
-        let in_menu = ctx.data(|data| data.get_temp::<u64>(menu_choice_focus_frame_id()))
-            == Some(ctx.cumulative_frame_nr());
-        if focused.is_some_and(|focused| focused != owner) && !in_menu {
-            clear(ctx);
+        let in_menu =
+            ctx.data(|data| data.get_temp::<u64>(menu_choice_focus_frame_id())) == Some(frame);
+        match focused {
+            Some(id) if id == owner || in_menu => {
+                ctx.data_mut(|data| data.remove::<egui::Id>(menu_focus_outside_id()));
+            }
+            Some(id) => ctx.data_mut(|data| data.insert_temp(menu_focus_outside_id(), id)),
+            None => {}
         }
         return;
     }
+    let outside = ctx.data(|data| data.get_temp::<egui::Id>(menu_focus_outside_id()));
     let choice = ctx.data(|data| data.get_temp::<egui::Id>(menu_choice_focus_id()));
+    let by_mouse = ctx.input(|input| input.pointer.any_click());
     clear(ctx);
-    if focused.is_none() || focused == choice {
-        ctx.memory_mut(|memory| memory.request_focus(owner));
+    let target = if by_mouse {
+        (focused.is_none() || focused == choice).then_some(owner)
+    } else {
+        Some(outside.unwrap_or(owner))
+    };
+    if let Some(target) = target {
+        ctx.memory_mut(|memory| memory.request_focus(target));
+        ctx.data_mut(|data| data.insert_temp(menu_focus_again_id(), target));
     }
 }
 
@@ -238,6 +298,7 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
 /// click or Enter on the control closes it.
 pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOpenCommand> {
     use egui::accesskit::Action as Access;
+    keep_menu_owner(response);
     let ctx = &response.ctx;
     ctx.accesskit_node_builder(response.id, |node| node.add_action(Access::ShowContextMenu));
     let by_keys = ctx
@@ -245,8 +306,11 @@ pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOp
         || (response.has_focus()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
     if by_keys {
+        let frame = ctx.cumulative_frame_nr();
         ctx.data_mut(|data| {
             data.insert_temp(menu_keys_owner_id(), response.id);
+            data.insert_temp(menu_owner_seen_id(), frame);
+            data.remove::<egui::Id>(menu_focus_outside_id());
             data.insert_temp(focus_first_choice_id(), true);
         });
         return Some(egui::SetOpenCommand::Bool(true));

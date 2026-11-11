@@ -15120,27 +15120,95 @@ pub mod run_rolls {
             again,
             "With the focus back on the row, Shift+F10 opens its menu again",
         );
-        // AJ1 (re-check): the DM leaves the open menu with Tab, to a button and to a text field,
-        // then presses Escape. The focus stays where the DM put it, or is cleared; it never
-        // goes back to the row.
+        // AJ1, the menu focus model: a keyboard close sends the focus to where it last was,
+        // inside the menu (the row) or outside it (that control), and never leaves it empty.
+        let menu_row = |d: &Driver<'_>| d.row_node(ATTACKER).map(|node| node.name);
+        // (a, b): Tab out to a button or a text field, then Escape. The focus stays there,
+        // and the next Tab goes on from there, as it does with no menu.
         for away in [NEXT_TURN, "Amount"] {
-            let row = d.row_node(ATTACKER).map(|node| node.name);
+            let reached = d.tab_to(away);
+            d.press(Key::Tab);
+            let after = d.focused_name();
+            d.harness_focus_nothing();
+            let row = menu_row(d);
             let on_row = row.as_deref().is_some_and(|row| d.tab_to(row));
             d.press_shift(Key::F10);
             let opened = d.has_containing("Inspiration: reroll one die");
             let left = d.tab_to(away);
             d.press(Key::Escape);
             let focus = d.focused_name();
+            d.press(Key::Tab);
+            let next = d.focused_name();
             d.observe(
                 "iter-23-R-AJ1",
-                on_row
+                reached
+                    && on_row
                     && opened
                     && left
                     && !d.has_containing("Inspiration: reroll one die")
-                    && focus.as_deref().is_none_or(|focus| focus == away)
+                    && focus.as_deref() == Some(away)
+                    && after.is_some()
+                    && next == after
                     && d.has("Roll for them"),
                 format!(
-                    "Tab from the open menu to {away}, then Escape: the menu closes and the focus is {focus:?}, not the row"
+                    "Tab from the open menu to {away}, then Escape: the focus is {focus:?}, and Tab then goes to {next:?} (with no menu: {after:?})"
+                ),
+            );
+            d.harness_focus_nothing();
+        }
+        // (c, d): Tab out, then back inside, to a menu choice with Shift+Tab or to the row
+        // itself, then Escape: the focus goes to the row.
+        for back_to_row in [false, true] {
+            let row = menu_row(d);
+            let on_row = row.as_deref().is_some_and(|row| d.tab_to(row));
+            let before: std::collections::BTreeSet<String> =
+                d.nodes().into_iter().map(|node| node.name).collect();
+            d.press_shift(Key::F10);
+            let choices: std::collections::BTreeSet<String> = d
+                .nodes()
+                .into_iter()
+                .map(|node| node.name)
+                .filter(|name| !before.contains(name))
+                .collect();
+            // The menu's own choices; its `Roll for them` shares a name with the panel's, so it
+            // counts as neither inside nor outside.
+            let in_menu =
+                |d: &Driver<'_>| d.focused_name().is_some_and(|name| choices.contains(&name));
+            let mut out = false;
+            for _ in 0..20 {
+                d.press(Key::Tab);
+                if !in_menu(d) && d.focused_name().is_some_and(|name| name != "Roll for them") {
+                    out = true;
+                    break;
+                }
+            }
+            let outside = d.focused_name();
+            let back = if back_to_row {
+                row.as_deref().is_some_and(|row| d.tab_to(row))
+            } else {
+                d.press_shift(Key::Tab);
+                in_menu(d)
+            };
+            let open = d.has_containing("Inspiration: reroll one die");
+            d.press(Key::Escape);
+            let focus = d.focused_name();
+            let how = if back_to_row {
+                "the row"
+            } else {
+                "a menu choice"
+            };
+            d.observe(
+                "iter-23-R-AJ1",
+                on_row
+                    && out
+                    && back
+                    && open
+                    && !d.has_containing("Inspiration: reroll one die")
+                    && focus
+                        .as_deref()
+                        .is_some_and(|focus| focus.starts_with(&format!("{ATTACKER},"))),
+                format!(
+                    "Tab out to {outside:?}, back to {how}, then Escape: the focus is {focus:?}, on the row"
                 ),
             );
             d.harness_focus_nothing();

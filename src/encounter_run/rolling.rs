@@ -558,6 +558,8 @@ impl Run {
     /// The right-click menu of a run row, and the question that waits on it. Shows nothing
     /// when the row has nothing to offer.
     pub(super) fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
+        // Before any early return: a row whose last choice went away still owns its menu.
+        rolls::keep_menu_owner(response);
         let mut chosen = None;
         if let Some(asking) = self.asking.as_ref().filter(|asking| asking.row == row) {
             let shown = egui::Popup::menu(response).open(true).show(|ui| {
