@@ -986,6 +986,12 @@ fn create_at(
 }
 
 /// Give a plain note an identity. Its body does not change.
+/// What giving a note a type does, in the DM's words.
+pub(crate) const TYPE_HELP: &str = "Gives this note a type. Its text stays the same.";
+/// How Splat stores the type, for Technical details only.
+pub(crate) const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
+     at the top of the file.";
+
 pub fn make_entry(campaign: &Campaign, item: &Item, kind: &str) -> Result<Uuid, String> {
     let relative = &item.entry.path;
     let text = file_fault::read_note(&campaign.path, relative)?;
@@ -2081,14 +2087,9 @@ impl Reader {
         let mut chosen = None;
         ui.add_space(design::M);
         design::quiet_section(ui, "Give this note a type", |ui| {
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        "Adds a type to the file's front matter. The text does not change.",
-                    )
-                    .color(colors().muted),
-            );
+            // The help says what the choice does for the DM; how Splat stores it waits in
+            // Technical details at the end of the section.
+            ui.label(Type::Small.rich(ui, TYPE_HELP).color(colors().muted));
             ui.horizontal_wrapped(|ui| {
                 for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
                     .into_iter()
@@ -2117,6 +2118,12 @@ impl Reader {
             {
                 chosen = Some(other);
             }
+            design::quiet_section(ui, "Technical details", |ui| {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, TYPE_STORAGE).color(colors().muted))
+                        .wrap(),
+                );
+            });
         });
         match make_entry(campaign, item, &chosen?) {
             Ok(id) => Some(Go::Reload(id)),

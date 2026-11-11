@@ -763,7 +763,8 @@ impl WorldPage {
         unread.seen = Some(generation);
         let fault = unread.fault.clone();
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
-        super::file_actions(ui, campaign, &fault.path);
+        // No editor link: an editor cannot open a file that Splat cannot read either.
+        super::entry_file_actions(ui, &campaign.path, &fault.path, false);
         let (again, cancel) =
             design::message_with_actions(ui, design::Tone::Error, &fault.headline(), |ui| {
                 ui.add(

@@ -444,10 +444,16 @@ pub fn broken(d: &mut Driver<'_>) {
         d.has_containing("Open the file in a text editor and save it as UTF-8 text, or restore it from a backup. Then choose Try again."),
         "The pane explains the text format and the recovery",
     );
+    // FD6: no editor can open a file that Splat cannot read as text, so its file line offers
+    // only Show file.
+    d.observe(
+        "iter-19-D-FD6-no-editor",
+        d.has("Show file") && !d.has("Edit in Obsidian"),
+        "The file line of a file that is not text offers Show file and no editor link",
+    );
     d.observe(
         "iter-18-D-AD1-file-line",
         d.has("Show file")
-            && d.has("Edit in Obsidian")
             && d.place_of("Show file")
                 .zip(d.place_of(headline))
                 .is_some_and(|(show, words)| show.bottom() <= words.top()),
@@ -550,6 +556,12 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-18-D-try-again-opens",
         !d.has(headline) && d.has("Edit Repaired watchkeeper"),
         "Try again reads the folder again and opens the repaired note",
+    );
+    // Must stay true: a note that is text again gets its editor link back.
+    d.observe(
+        "iter-19-D-FD6-text-keeps-editor",
+        d.has("Show file") && d.has("Edit in Obsidian"),
+        "A note read as text again offers Edit in Obsidian beside Show file",
     );
 
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
@@ -756,7 +768,14 @@ pub fn facts(d: &mut Driver<'_>) {
     }
     // A plain note's type choices start at the section's text edge.
     d.click("Give this note a type");
-    let help = "Adds a type to the file's front matter.";
+    let help = crate::world::TYPE_HELP;
+    // SD2: the help says what the choice does, in the DM's words; storage waits in Technical
+    // details, closed.
+    d.observe(
+        "iter-19-D-SD2-help",
+        d.has_label(help) && !d.has_containing("front matter"),
+        "The type help states its purpose and names no storage format",
+    );
     action_at_text_edge(
         d,
         "iter-17-D-type-choice",
@@ -775,6 +794,22 @@ pub fn facts(d: &mut Driver<'_>) {
         |d| d.painted_left(help),
     );
     d.state("type-choices", Sizes::Default);
+    d.click("Technical details");
+    d.observe(
+        "iter-19-D-SD2-storage",
+        d.has_label(crate::world::TYPE_STORAGE),
+        "Technical details at the end of the type section says how Splat stores the type",
+    );
+    // Must stay true: the open details do not move the choices off the section's text edge.
+    action_at_text_edge(
+        d,
+        "iter-19-D-SD2-choice-edge",
+        "NPC",
+        "Resize World notes column",
+        &[DEFAULT],
+        |d| d.painted_left(help),
+    );
+    d.click("Technical details");
     d.replace_text_in("Another type", "");
     d.click("Give this note a type");
     // Must stay true: a typed note with values keeps its rows between the file line and its
@@ -2153,6 +2188,15 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
         "The compact NPC reader shows its stat block and place beside the run",
     );
+    // One match: the closed list's action says `Show 1 result`, whole at every captured size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let words = d.at_size(size, super::lookup_results_words);
+        d.observe(
+            "iter-19-D-show-1-result",
+            words.as_deref() == Some("Show 1 result"),
+            format!("At {size:?}, the one-result action says {words:?}"),
+        );
+    }
     d.state("npc-with-stat-block-and-place", Sizes::All);
     d.begin_task();
     d.click("Guard");

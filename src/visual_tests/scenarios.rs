@@ -12034,6 +12034,21 @@ pub mod session_plan {
             &[SMALL, DEFAULT, LARGE],
             |d| d.place_of(SEARCH_LOOKUP).map(|field| field.left()),
         );
+        // The action names what a press does: `Show N results`, never a bare count, at every
+        // captured size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, lookup_results_words);
+            d.observe(
+                "iter-19-D-show-results",
+                words.as_deref().is_some_and(|words| {
+                    words
+                        .strip_prefix("Show ")
+                        .and_then(|rest| rest.strip_suffix(" results"))
+                        .is_some_and(|count| count.parse::<usize>().is_ok_and(|count| count > 1))
+                }),
+                format!("At {size:?}, the results action says {words:?}"),
+            );
+        }
         d.press(Key::Escape);
 
         // T14.2: a number typed wrong can be put right, and the turn stays.
@@ -13218,6 +13233,12 @@ fn show_all_count(d: &Driver<'_>) -> Option<usize> {
 }
 
 /// FT2: a quiet Lookup action that starts a line uses `line_start`. See `action_at_text_edge`.
+/// The painted words of Lookup's action that opens the closed result list.
+pub(super) fn lookup_results_words(d: &Driver<'_>) -> Option<String> {
+    d.place_of("Show the results")
+        .map(|place| d.painted_in(place).trim().to_owned())
+}
+
 fn lookup_action_at_text_edge(
     d: &mut Driver<'_>,
     id: &str,
@@ -13450,6 +13471,16 @@ fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
              before {before:?} in {before_clip:?}, after {after:?} in {after_clip:?}",
             tenth.as_ref().map(|row| &row.name)
         ),
+    );
+    // Crowded: Enter reads the highlighted match and closes the long list. The action that
+    // opens it again names every match, whole, at the smallest size.
+    d.press(Key::Enter);
+    let reopen = d.at_size(SMALL, lookup_results_words);
+    d.observe(
+        "iter-19-D-show-results-crowded",
+        broad.is_some_and(|broad| reopen == Some(format!("Show {broad} results")))
+            && show_all_count(d).is_none(),
+        format!("With {broad:?} matches and the list closed, the action says {reopen:?}"),
     );
     d.replace_text_in(SEARCH_LOOKUP, words);
 }
