@@ -259,9 +259,10 @@ pub struct Sessions {
     reveal_event: bool,
     open_planned: Option<String>,
     show_fight_log: bool,
-    /// A saved run the DM deleted from the plan, with that run's id. The deletion's result
-    /// owns it: its Undo, or the plan's next note or event edit, ends it.
-    deleted_run: Option<(crate::encounter_run::DeletedRun, Option<Uuid>)>,
+    /// A saved run the DM deleted from the plan, with the removal action it replaces in the
+    /// plan (the book's removal of that run's own event when the deletion happened). The
+    /// deletion's result owns it: its Undo, or the plan's next note or event edit, ends it.
+    deleted_run: Option<(crate::encounter_run::DeletedRun, Option<u64>)>,
     row_notice: Option<(Option<Uuid>, usize)>,
     updated_links: Option<Vec<(Draft, String)>>,
     link_undo_state: Option<LinkUndoState>,
@@ -1077,14 +1078,12 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
-/// Whether a live deletion result for this run replaces the book's removal result in the plan:
-/// only when the removed event is that same run's, so a deletion in another fight or session
-/// leaves an unrelated removal's result alone.
-fn removal_replaced(book: &Book, deleted_run: Option<Uuid>) -> bool {
-    deleted_run.is_some()
-        && book
-            .removed_event()
-            .is_some_and(|event| event.run == deleted_run)
+/// The removal action a deletion of this run follows: the book's live removal, when its event
+/// is that same run's. A deletion in another fight or session replaces no removal.
+fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
+    book.removed_event()
+        .filter(|event| deleted_run.is_some() && event.run == deleted_run)
+        .and(book.removal_action())
 }
 
 /// Recording results follow the column with the same text inset as Write, and keep the reader
@@ -4779,9 +4778,7 @@ impl Sessions {
                             .map_or_else(String::new, |draft| draft.body.clone()),
                         book.events.clone(),
                     ));
-                    // While this result shows, it replaces the same fight's removal result.
-                    self.deleted_run = Some((deleted, saved.id));
-                    self.wants_runs_refresh = true;
+                    self.record_deleted_run(book, deleted, saved.id);
                 }
                 Err(error) => self.rename_problem = Some(error),
             }
@@ -4858,13 +4855,26 @@ impl Sessions {
         }
     }
 
+    /// The deletion's result. While it shows, it replaces the result of the removal action it
+    /// follows, when that removal is of this run's own event.
+    fn record_deleted_run(
+        &mut self,
+        book: &Book,
+        deleted: crate::encounter_run::DeletedRun,
+        run: Option<Uuid>,
+    ) {
+        self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
+        self.wants_runs_refresh = true;
+    }
+
     /// One step, one result: decided each draw from the two live results. The book's removal
-    /// result hides only while the deletion result of that same event's run shows; each keeps
-    /// its own owner and end event.
+    /// result hides only while the deletion result that followed that same removal action
+    /// shows. A new removal, even of the same event, is another action and shows.
     fn removal_superseded(&self, book: &Book) -> bool {
         self.deleted_run
             .as_ref()
-            .is_some_and(|(_, run)| removal_replaced(book, *run))
+            .and_then(|(_, action)| *action)
+            .is_some_and(|action| book.removal_action() == Some(action))
     }
 
     /// Put the deleted run's file back. Its result ends; a removal result it replaced returns.
@@ -8454,8 +8464,12 @@ mod tests {
                 unsent: Vec::new(),
             };
             let deleted = crate::encounter_run::DeletedRun::delete(&info).unwrap();
-            sessions.deleted_run = Some((deleted, id));
-            sessions.plan_notice_state = Some((String::new(), book.events.clone()));
+            sessions.record_deleted_run(book, deleted, id);
+            let body = sessions
+                .draft
+                .as_ref()
+                .map_or_else(String::new, |draft| draft.body.clone());
+            sessions.plan_notice_state = Some((body, book.events.clone()));
         };
         let mut sessions = Sessions::default();
         assert!(!sessions.removal_superseded(&book));
@@ -8488,6 +8502,29 @@ mod tests {
         book.undo_remove();
         book.remove(&second);
         assert!(!sessions.removal_superseded(&book));
+        // Re-check of PR 245: with a note open, Timeline's Undo remove and a new removal of the
+        // same event both happen before the plan draws again. The note and the events then
+        // equal the plan's witness, so its cleanup keeps the deletion result; the new removal
+        // still shows its message and Undo remove, because it is a different action.
+        book.undo_remove();
+        let note = folder.path().join("note.md");
+        fs::write(&note, "## What happened\n\nThe bridge held.\n").unwrap();
+        sessions.draft = Some(Draft::open(&note).unwrap());
+        book.remove(&first);
+        delete(&mut sessions, &book, Some(run));
+        assert!(sessions.removal_superseded(&book));
+        book.undo_remove();
+        book.remove(&first);
+        sessions.end_plan_results_after_edits(&book);
+        assert!(
+            sessions.deleted_run.is_some(),
+            "the plan's cleanup sees no edit, so the deletion result stays"
+        );
+        assert!(book.removed().is_some());
+        assert!(
+            !sessions.removal_superseded(&book),
+            "the new removal of the same event shows its message and Undo remove"
+        );
     }
 
     #[test]
