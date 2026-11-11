@@ -1264,10 +1264,10 @@ impl<'a> Driver<'a> {
 
     /// Every skill bonus in view in a Skills row (a sign and digits joined by a no-break space to
     /// a name that ends in a letter, as in `Insight +8`): how many there are, and each way one breaks the row's
-    /// rule. The rule: the bonus has one link target at least `XL` square, which starts no further
-    /// left than the end of its skill's name and ends no further right than the start of the next
-    /// entry; a comma sits directly after the bonus and is followed by one blank only; and the
-    /// name, its bonus and its comma share a row.
+    /// rule. The rule: one blank only between the name and its bonus; the bonus has one link
+    /// target at least `XL` square, inside its entry (from the name's first letter to the bonus's
+    /// last digit), so clear of the next entry; a comma sits directly after the bonus and is
+    /// followed by one blank only; and the name, its bonus and its comma share a row.
     pub fn skills_row_faults(&self) -> (usize, Vec<String>) {
         let scale = self.harness.ctx.pixels_per_point();
         let targets: Vec<egui::Rect> = self
@@ -1311,6 +1311,7 @@ impl<'a> Driver<'a> {
                 let last = sign + digits;
                 let right = glyphs[last].3;
                 let name_end = glyphs[sign - 2].3;
+                let blank = glyphs[sign - 1];
                 let mut start = sign - 2;
                 while start > 0
                     && !(glyphs[start - 1].1.is_whitespace() && glyphs[start - 1].1 != '\u{a0}')
@@ -1322,6 +1323,13 @@ impl<'a> Driver<'a> {
                 let unit_end = if comma.is_some() { last + 1 } else { last };
                 if glyphs[start..=unit_end].iter().any(|glyph| glyph.0 != row) {
                     faults.push(format!("{words}: the entry is split across rows"));
+                }
+                // Glyphs snap to whole pixels, so the gap can be up to a pixel wider than the blank.
+                if left - name_end > blank.3 - blank.2 + 1.0 {
+                    faults.push(format!(
+                        "{words}: more than one blank before the bonus ({} px)",
+                        left - name_end
+                    ));
                 }
                 if let Some(comma) = comma {
                     if (comma.2 - right).abs() > 1.0 {
@@ -1355,9 +1363,10 @@ impl<'a> Driver<'a> {
                 {
                     faults.push(format!("{words}: target {target:?} is under XL"));
                 }
-                if target.left() < name_end - 0.5 {
+                let entry_start = glyphs[start].2;
+                if target.left() < entry_start - 0.5 || target.right() > right + 0.5 {
                     faults.push(format!(
-                        "{words}: target {target:?} is over the name, which ends at {name_end}"
+                        "{words}: target {target:?} is outside its entry, {entry_start}..{right}"
                     ));
                 }
                 if let Some(next) = next_entry

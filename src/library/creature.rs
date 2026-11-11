@@ -471,7 +471,7 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
     }
     markdown.push_str(&text[at..]);
     reader_style::linked_detail(ui, "Skills", |ui| {
-        crate::markdown_view::show_compact(ui, &markdown);
+        crate::markdown_view::show_skills(ui, &markdown);
     });
 }
 
@@ -1148,13 +1148,13 @@ mod tests {
         }
     }
 
-    /// Iteration 21, FD4 joint witness: a bonus takes its spare target width over the blank
-    /// between its skill's name and itself, so each comma is followed by one blank only. Each
-    /// bonus target is at least `XL` square and is over neither the name before it nor the next
-    /// entry, and the row wraps by whole entries. From the narrowest stat block to the widest
+    /// Iteration 21, FD4 joint witness (revised): a Skills row keeps one normal blank between each
+    /// name and its bonus and one after each comma. A bonus's target is at least `XL` square: it
+    /// extends left over its own skill's name, stays inside its entry, and is clear of the other
+    /// targets. The row wraps by whole entries. From the narrowest stat block to the widest
     /// reader, so the Library and Lookup panels at 960 and 1920 are both inside it.
     #[test]
-    fn iter21_s_fd4_a_skill_bonus_takes_its_spare_width_to_the_left() {
+    fn iter21_s_fd4_a_skill_bonus_target_covers_its_own_entry() {
         // The tightest text: the narrowest bonus, then two bonuses as wide as they get.
         const SKILLS: &str = "Insight +8, Perception +14, Persuasion +14";
         let skills = [
@@ -1175,6 +1175,7 @@ mod tests {
             }
             let targets = link_targets(&harness);
             assert_eq!(targets.len(), skills.len(), "FD4-links: {at}");
+            let mut name_gaps = Vec::new();
             for (at_skill, ((name, bonus), target)) in skills.iter().zip(&targets).enumerate() {
                 let unit = format!("{name} {bonus}");
                 let found = runs(&glyphs, &unit);
@@ -1197,11 +1198,14 @@ mod tests {
                     target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
                     "FD4-target-size: {at}: {unit} {target:?}"
                 );
+                // The target may cover its own skill's name, but stays inside its entry.
                 assert!(
-                    target.left() >= name_end.right - 0.5,
-                    "FD4-target-clear-of-name: {at}: {unit} target {target:?}, name ends {}",
-                    name_end.right
+                    target.left() >= unit_glyphs[0].left - 0.5,
+                    "FD4-target-inside-entry: {at}: {unit} target {target:?}, entry starts {}",
+                    unit_glyphs[0].left
                 );
+                let blank = unit_glyphs[name.len()];
+                name_gaps.push((digits[0].left - name_end.right, blank.right - blank.left));
                 assert!(
                     target.contains(egui::pos2(
                         (digits[0].left + digits.last().unwrap().right) / 2.0,
@@ -1253,6 +1257,24 @@ mod tests {
                     next.row != row || target.right() <= next.left + 0.5,
                     "FD4-target-clear-of-next: {at}: {unit} target {target:?}, next starts {}",
                     next.left
+                );
+            }
+            // `+8` and `+14` sit as far from their names as each other. Glyphs snap to whole
+            // pixels, so the gaps can differ by one.
+            let (least, most) = name_gaps
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), (gap, _)| {
+                    (a.min(*gap), b.max(*gap))
+                });
+            assert!(
+                most - least <= 1.0,
+                "FD4-equal-name-gaps: {at}: {name_gaps:?}"
+            );
+            // One normal blank between each name and its bonus, whatever the bonus's width.
+            for (gap, blank) in &name_gaps {
+                assert!(
+                    (gap - blank).abs() <= 0.5,
+                    "FD4-one-blank-before-bonus: {at}: gap {gap}, blank {blank}"
                 );
             }
             for (a, first) in targets.iter().enumerate() {

@@ -30,9 +30,9 @@ const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
 /// choice, or a quiet dismissal): on a shared line the gap is `L`; on a line of its own it starts at
 /// the text edge, as every wrapped choice does.
 /// Iteration 21 (FD4): at each size, the Skills rows in view hold at least `least` bonuses, and
-/// every one keeps the row's rule (`Driver::skills_row_faults`): one blank after each comma, a
-/// target at least `XL` square, clear of its skill's name and of the next entry, and whole entries
-/// on each row.
+/// every one keeps the row's rule (`Driver::skills_row_faults`): one blank between each name and
+/// its bonus and after each comma, a target at least `XL` square inside its own entry, and whole
+/// entries on each row.
 fn check_skills_row(d: &mut Driver<'_>, id: &str, least: usize, sizes: &[(f32, f32)]) {
     for &size in sizes {
         let (count, faults) = d.at_size(size, Driver::skills_row_faults);
