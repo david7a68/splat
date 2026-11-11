@@ -14492,6 +14492,31 @@ pub mod session_plan_groups {
                 }),
             format!("Both broken links are named, each once: example {example_words:?}, member {named:?}"),
         );
+        // The example's warning is drawn, not only named: the wheel over the message space
+        // brings it into view (the repair's guidance comes first and fills the two lines).
+        let space = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.role == egui::accesskit::Role::GenericContainer
+                    && example_words
+                        .as_deref()
+                        .is_some_and(|words| node.name.contains(words))
+            })
+            .map(|node| node.rect);
+        let drawn = space.is_some_and(|space| {
+            d.scroll_at(space.center(), 1);
+            let drawn = example_words
+                .as_deref()
+                .is_some_and(|words| d.visible_text(words));
+            d.scroll_up_at(space.center(), 1);
+            drawn
+        });
+        d.observe(
+            "iter-25-L-FH6-drawn",
+            drawn,
+            format!("The example row's warning is drawn in the message space {space:?}"),
+        );
         let broken_warm = broken_work.warm(d, each_named(d), 1);
         let broken_steady = broken_work.steady(d, |d| {
             d.settle();

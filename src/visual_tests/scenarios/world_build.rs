@@ -7642,7 +7642,9 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                     .collect();
                 listed.len() == 2
                     && listed.iter().any(|row| row.ends_with(" · ashen-marches/"))
-                    && listed.iter().any(|row| row.ends_with(" · ashen-marches-copy/"))
+                    && listed
+                        .iter()
+                        .any(|row| row.ends_with(" · ashen-marches-copy/"))
             },
             format!("At {size:?} each row ends with its whole folder: {rows:?}"),
         );
@@ -8672,7 +8674,8 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
     // Round 25 FB3, SB1: the recovery steps are prose and keep the reader measure, with a
     // draft and without one.
     fn recovery_measure(d: &mut Driver<'_>, id: &str) {
-        let recovery = d.painted_rect_in("Splat reads notes as UTF-8 text.", egui::Rect::EVERYTHING);
+        let recovery =
+            d.painted_rect_in("Splat reads notes as UTF-8 text.", egui::Rect::EVERYTHING);
         d.observe(
             id,
             recovery.is_some_and(|rect| rect.width() <= design::READER_MEASURE + 1.0),
@@ -8694,7 +8697,8 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
         // Round 25 family: a message action without an icon is a bordered secondary button.
         d.observe(
             "iter-25-L-try-again-bordered",
-            d.control_frame("Try again").is_some_and(|frame| frame.stroke.width > 0.0),
+            d.control_frame("Try again")
+                .is_some_and(|frame| frame.stroke.width > 0.0),
             "Try again under the fault is bordered",
         );
     });
