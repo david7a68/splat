@@ -3328,8 +3328,8 @@ fn reveal_in_space(d: &mut Driver<'_>, words: &str, control: &str) {
 
 /// Astra review of round 25: a message in the one message space below the save row is drawn and
 /// reachable, not only in the space's accessible name. At 960, 1200 and 1920, from the space's top:
-/// Tab to the space and step down with the arrow key, then from the top again scroll the pointer
-/// over the space a line at a time. Each traversal must bring every painted row that holds `words` fully into view inside
+/// Tab to the space and step down with the arrow key, then from the top again turn the wheel over
+/// the space, a notch at a time. Each traversal must bring every painted row that holds `words` fully into view inside
 /// that space, one time or another, and `undo` (when given) fully into view. Focus goes back to
 /// exactly the widget that had it (or to none), with no click, and the step checks that the app
 /// state did not change. Returns whether the keyboard and the pointer each reached it, per size.
@@ -3414,14 +3414,12 @@ pub(super) fn space_reaches(
             };
             d.press(egui::Key::PageUp);
             let pointer = {
-                d.scroll_up_at(space.rect.center(), 3);
-                // A line at a time, as a touchpad scrolls: a 100-point wheel notch is larger than
-                // the two-line space and can pass over a middle row (a limit of `fixed_part`).
-                reach(d, space.rect, &|d| {
-                    d.scroll_points_at(space.rect.center(), design::Type::Body.line())
-                })
+                d.scroll_up_at(space.rect.center(), 8);
+                // Real wheel notches: `fixed_part` turns each into at most one text line, so no
+                // row is passed over.
+                reach(d, space.rect, &|d| d.scroll_at(space.rect.center(), 1))
             };
-            d.scroll_up_at(space.rect.center(), 3);
+            d.scroll_up_at(space.rect.center(), 8);
             (keyboard, pointer)
         })
     });
