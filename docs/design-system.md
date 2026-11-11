@@ -465,7 +465,9 @@ counts in its file: the warning icon in the warning colour, then a short cause i
 Lookup rows draw their marks in the same tones. Opening one from a roster selects its
 kind under Cannot be read and opens repair. Repair errors use file line numbers. Edit Markdown opens with
 the caret on the line to fix and scrolls that line into view. A repair draft's error and its save-row state
-come from the draft as it is now, checked as Save checks it. Each reason Save would refuse it (a YAML fault,
+come from the draft as it is now, checked as Save checks it. So does every other draft's: a ready state
+(`Unsaved`) means Save would accept the draft, and a draft that parses but that Save refuses (another UUID,
+kind or key) says Invalid with Save's reason, and Save and Ctrl+S are blocked with it. Each reason Save would refuse it (a YAML fault,
 a UUID or key that another entry uses) is the error, with Invalid. Once Save would write it, the error goes and
 the state says Unsaved. The owner line and the row keep Cannot be read until Save. A fault that is not in the text (another identity, a
 deleted manifest, a file that is not text) stays until the file changes. Repair reloads campaign use at once. Validation

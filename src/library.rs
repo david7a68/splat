@@ -3032,13 +3032,20 @@ impl Library {
         self.pending_repair = Some(path);
         self.stale = true;
     }
+    /// The close dialog's Save is offered only when Save would accept the draft: its own check
+    /// before the write, not only a parse.
     pub fn can_save_and_close(&self) -> bool {
         self.dirty()
             && self.disk_change.is_none()
             && self
                 .selected
-                .and_then(|i| self.loaded.as_ref()?.notes.get(i))
-                .is_some_and(|note| Entry::parse(&note.path, &self.draft).is_ok())
+                .zip(self.loaded.as_ref())
+                .is_some_and(|(i, loaded)| {
+                    let note = &loaded.notes[i];
+                    loaded
+                        .draft_refusal(i, &Entry::parse(&note.path, &self.draft))
+                        .is_none()
+                })
     }
     pub fn save_for_close(&mut self) -> bool {
         if !self.can_save_and_close() {
@@ -5471,13 +5478,21 @@ impl Library {
             ),
             _ => String::new(),
         };
-        // Only a repair draft asks why Save would refuse it; the parse is already cached.
-        let refusal = note
-            .error
-            .as_ref()
-            .and_then(|_| self.loaded.as_ref().unwrap().draft_refusal(i, parsed));
+        // A ready state means Save would accept the draft. Every draft with changes, and every
+        // repair draft, asks Save's own check before the write (parse, identity, ownership):
+        // the parse is cached, and the identity index is cached until the notes change.
+        let refusal = (note.error.is_some() || dirty)
+            .then(|| self.loaded.as_ref().unwrap().draft_refusal(i, parsed))
+            .flatten();
+        // Why Save refuses this draft now. It blocks Save and Ctrl+S, and the state is Invalid.
+        let save_refusal = refusal.clone().filter(|_| dirty);
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
+        // A readable entry's draft that Save refuses names the reason where a repair draft does.
+        let repair_problem = repair_problem.or_else(|| save_refusal.clone());
+        if save_refusal.is_some() && !overwrite {
+            save = false;
+        }
         // A parse fault ends with the draft that parses: the saved file stays unreadable on the
         // owner line until Save, but the draft is not Invalid.
         let state = if fault.is_some() || repair_problem.is_some() {
@@ -5864,8 +5879,10 @@ impl Library {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let blocked = if conflict {
                         Some("Choose what to do with the changed file first.")
+                    } else if !dirty {
+                        Some("No changes to save.")
                     } else {
-                        (!dirty).then_some("No changes to save.")
+                        save_refusal.as_deref()
                     };
                     save |= (if self.run_open {
                         Action::secondary("Save")
@@ -10013,6 +10030,49 @@ mod tests {
             valid,
             "SD1-valid-written"
         );
+
+        // Round 23 lead note: a ready state means Save would accept the draft. The saved note
+        // reads now. A draft of it that parses but takes another UUID is refused by Save's own
+        // check, so its state is Invalid with Save's reason, Save is not offered (here or in the
+        // close dialog), and a Save attempt leaves the file's bytes as they are.
+        let path = campaign.path.join("Notes/Yaml.md");
+        assert!(
+            library.loaded.as_ref().unwrap().notes[library.selected.unwrap()]
+                .error
+                .is_none()
+        );
+        let saved = fs::read(&path).unwrap();
+        let moved_id =
+            format!("{valid}\nA new line.\n").replace(&id_line(&valid), &id_line(&other));
+        assert!(Entry::parse("Notes/Yaml.md", &moved_id).is_ok());
+        library.draft = moved_id.clone();
+        let painted = sd1_painted(&mut library);
+        let reason = "Keep this entry's UUID and kind unchanged.";
+        assert!(painted.contains(reason), "ready-refused-reason\n{painted}");
+        assert!(
+            painted.contains("Invalid"),
+            "ready-refused-state\n{painted}"
+        );
+        assert!(
+            !painted.contains("Unsaved"),
+            "ready-refused-not-unsaved\n{painted}"
+        );
+        assert!(!library.can_save_and_close(), "ready-refused-no-close-save");
+        library.save_selected(false);
+        assert_eq!(fs::read(&path).unwrap(), saved, "ready-refused-not-written");
+        assert_eq!(library.draft, moved_id, "ready-refused-draft-kept");
+        // Must stay true: the same note's draft that Save accepts is Unsaved, with no reason.
+        library.draft = format!("{valid}\nA new line.\n");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Unsaved"),
+            "ready-accepted-unsaved\n{painted}"
+        );
+        assert!(
+            !painted.contains(reason),
+            "ready-accepted-no-reason\n{painted}"
+        );
+        assert!(library.can_save_and_close(), "ready-accepted-close-save");
 
         // Lookalike outside the rule: another identity is not in the draft's parse, so a draft
         // that parses keeps the stored fault and Invalid until the file changes.
