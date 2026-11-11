@@ -1717,7 +1717,11 @@ pub(super) fn overrides_form(
         }
     }
     if !linked || !overrides.conditions.is_empty() {
-        conditions_row(ui, &mut overrides.conditions);
+        // The run's condition form width: the grid, the effects and Add stay within it.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            conditions_row(ui, &mut overrides.conditions);
+        });
     }
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
     // A group of rows, as Starting conditions is.
@@ -1742,12 +1746,11 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     } else {
         2
     };
+    // The run's grid: columns as wide as their longest choice, `S` apart.
     egui::Grid::new("starting_conditions")
         .num_columns(columns)
-        .min_col_width(
-            (ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN),
-        )
-        .spacing([design::XS, design::XS])
+        .min_col_width(0.0)
+        .spacing([design::S, design::XS])
         .show(ui, |ui| {
             for (position, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
                 let found = conditions.iter().position(|c| same_condition(c, name));
