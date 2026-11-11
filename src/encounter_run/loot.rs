@@ -124,12 +124,12 @@ fn loot_line(ui: &mut egui::Ui, mark: &str, line: &str, source: Option<&str>) {
     });
 }
 
-/// `gems`, or `2× gems`.
+/// `gems`, or `2 × gems`, as the roster and Arrivals count creatures.
 fn plain_roll(times: u32, key: &str) -> String {
     if times == 1 {
         key.to_owned()
     } else {
-        format!("{times}× {key}")
+        format!("{times} × {key}")
     }
 }
 

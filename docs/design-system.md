@@ -968,8 +968,10 @@ It must be 1 or more.` Give an upper limit only when exceeded. In a change form,
 directly below its own field, at the field's left edge, and the preview beside the field takes the error icon and
 colour; only a fault that no field explains (a value a linked sheet decides) stays at the top of the form. Done closes
 the form and returns to its row. Change forms use the run's condition grid. The grid, its Other effect field and Add
-stay within `FORM_WIDTH` at the pane's left edge, in the run and in Starting conditions. Each column is as wide as its
-longest choice, and columns are `S` apart, so they sit near each other in a wide pane. Other effects use the run's
+stay within `FORM_WIDTH` at the pane's left edge, in the run and in Starting conditions. Both use one helper,
+`conditions_grid`. Each column has a fixed width: its longest choice in the selected (bordered) form, measured once per
+font size. Columns are `S` apart, so they sit near each other in a wide pane, and turning a condition on or off never
+moves another toggle. Other effects use the run's
 function: the `OTHER EFFECTS` label, each effect in Body text with its row menu, and the `Other effect…` field. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
@@ -983,7 +985,8 @@ reason. The add field adds the typed words on Enter. Suggestions under it, `ROLL
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
 refuses `;`, with the reason beside the field. Its Changes link stays one word, `Loot`, and names any key with no
 table. In a run, a standing creature's card has one muted `Loot · …` line, and the list opens at 0 HP. A result
-replaces its Roll button: the found thing first, then muted `<key> · <values> on <dice>`. The ended view puts
+replaces its Roll button: the found thing first, then muted `<key> · <values> on <dice>`. A count of rolls on screen
+uses the roster's form, `2 × gems`, with a blank on each side of `×`; the saved line keeps `Roll 2× gems`. The ended view puts
 `LOOT`, a muted `N to roll`, secondary `Roll all N` and quiet `Copy loot` on one line above Final state.
 
 Run settings put Roll NPC initiative help directly below its dropdown, before the tie checkbox: `Run setup
@@ -1045,7 +1048,8 @@ row menu opens Correct. A setup row's menu says what each choice does: `Correct�
 (`Hide NPC and roll mode` while they show). Unread-row notices use compact message type and the unused ready-line space
 so the roster keeps its height. Overflow uses the live list's band and counts hidden missing initiatives and ties.
 
-A made-up creature shows current and maximum HP and typed initiative as a total, without printed values. A
+A made-up creature shows current and maximum HP and typed initiative as a total, without printed values, in the
+stat block's three columns, so the trio keeps its place from one selected row to the next. A
 side of its own keeps its word on live rows. Setup and live play share side, HP, temporary HP and AC parts.
 Correct holds correction fields. Opening it does not change sync state. A row says `Sync off` only
 after the DM stops sync for that character; an untouched linked row has no sync word.
@@ -1089,8 +1093,10 @@ remove, two effect words and target. Concentration Undo says start concentration
 the target. Exhaustion Undo keeps both levels, such as `exhaustion 2 → 3 on Oren`. Exhaustion level uses the shared `stepper` at Scan height. One drag on the level is one Undo step, from the level where the drag started, committed when the drag ends; each − or + press is one step. At a limit the button says `Exhaustion stops at 6.` or `Exhaustion is already 0.` Hover and accessibility keep full text.
 
 The dock has a fixed place above the footer: Amount, Damage, Heal, Temp HP, selected name, Conditions, Conc,
-Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. Dock and footer use
-roster width; panels never cover them. Fit whole words, retain a distinguishing last word or copy number or
+Absent. Off toggles use text colour; disabled controls stay muted. Enter applies damage. The dock's and footer's
+background uses roster width; panels never cover them. The dock's controls are one block at the left, no wider than
+`LIST_MEASURE`: the dice end at the block's edge, and Conditions, Conc and Absent follow the selected name after an `L`
+gap, not at the roster's far edge. Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words. Hover and accessibility keep
 full names.
 
@@ -1112,7 +1118,9 @@ Clicking a count edits it. Sheet
 shows live death saves once, with correct singular and plural words. A character's sheet panel starts with its sync status and facts on one line, one blank before each `·`
 (`Not connected · Fetched 3 h ago · HP from this run`). Correct has no duplicate fields; HP owns
 its help. Correct initiative says This row moves. The current turn stays. Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
-initiative and DM-note commits have a short adjacent reason. Correct HP has an `L` gap after death saves.
+initiative and DM-note commits have a short reason on its own line below the field, at the field's left. That line
+stays when the reason goes, so nothing below moves as the DM types. The DM note field takes the form's width
+(`FORM_WIDTH`) up to Add note. Correct HP has an `L` gap after death saves.
 Empty Prep offers Edit encounter if its encounter exists.
 
 Changed creatures show Changed and the changes the printed stat block does not show, such as Attack +1 or Speed
@@ -1168,7 +1176,9 @@ in a run. A narrow line moves the `·` to the next line with the part after it.
 
 While Lookup or Notes hide the panel, its tiles are one line of secondary Read buttons above the dock, with the run's
 changes in their numbers (`Dagger +6`, `Fire Bolt +7`). The line keeps an `XS` gap above the dock, and its first button
-starts at the dock's content edge, where Amount starts.
+starts at the dock's content edge, where Amount starts. A button shows whole or not at all. The actions with no room
+go in a `menu_button` at the line's end (`1 more`): its menu lists each by name with its `Ctrl+3` number, and a click
+arms it while Lookup stays open.
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
@@ -1191,7 +1201,11 @@ save's `Roll`) are accent text with a quiet underline, at least 24 px each way. 
 
 ### Arrivals
 
-Only search shows until a name is typed; then the made-up creature form has two fixed field rows. Search
+Only search shows until a name is typed; then the made-up creature form has two fixed field rows. The search field
+is as wide as the group block below it, so the panel has one right edge. In the form, `Count` and `Initiative` take
+one word column, so their fields start at one x, and `Side` starts where `HP` does. The form's reason line (`Type its
+HP. A creature made up here has no stat block.`) keeps its height when the reason goes, so Add and the groups below
+stay still. Search
 shows five matches. When more match, a quiet `Show all 6` (the number of matches) lists every match in place, in a scroll list at most
 eight rows tall, so the words, the chosen match and the roster stay in view. New words return to five. Its side
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
@@ -1202,8 +1216,11 @@ say Added before combat. A status that cannot fit the member slot whole takes a 
 and controls, and wraps there at its spaces, never inside a word. Names include count when adding more than one creature. No confirmation is needed;
 Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
 group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
-Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` The Log keeps `Added by hand` and `entered by the
-DM`.
+Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` Every result is a success message, tied or not; the
+`Move … before …` button below a tied one shows that a choice is open. That button, the moved result and its Undo
+name the arrival as its message does (`Move Lost Patrol before Ember Cultist`). When the roster has two groups of
+one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. The Log keeps
+`Added by hand` and `entered by the DM`.
 
 Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1 × Goblin Warrior` and
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
@@ -1362,8 +1379,8 @@ ruling now in force: `Everyone starts the next fight at full.` or `The next figh
 has now.`
 Resuming a saved Setup after a restoring rest starts party HP full, says `Party HP is full after the long
 rest.` and offers Use the saved HP. Use the saved HP is its own named step, not an Undo: the header then says
-`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with Undo, which gives
-back the full HP. Combat retains saved HP; the rest message names those fights. A run started after a
+`Undo: use the saved HP`, and the same place says `Party HP set to the saved values.` with `Undo use saved HP`, which
+gives back the full HP. A message's Undo names its step, as every other message Undo does. Combat retains saved HP; the rest message names those fights. A run started after a
 restoring rest with no fight since logs `Party HP is full after the long rest.`, and its saved row says `Last:
 full HP after long rest`; `carried over` is only for HP from a fight. Every `Last:` value that Splat writes
 starts in lower case.

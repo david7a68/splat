@@ -562,7 +562,7 @@ fn add_row(
                 let title = if times == 1 {
                     table.key.clone()
                 } else {
-                    format!("{times}× {}", table.key)
+                    format!("{times} × {}", table.key)
                 };
                 row(ui, &title, &detail, Pick::Table(table.key.clone()));
             }
