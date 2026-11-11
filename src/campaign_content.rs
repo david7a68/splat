@@ -203,8 +203,13 @@ fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>
     }
     (Some(problem), None)
 }
-/// A folder recovery must keep the selected package's identity.
-fn find_package_folder(reference: &EntryRef, folder: &std::path::Path) -> Result<Module, String> {
+/// A folder recovery must keep the selected package's identity. `name` is the package the DM
+/// looks for, as the campaign names it.
+fn find_package_folder(
+    reference: &EntryRef,
+    name: Option<&str>,
+    folder: &std::path::Path,
+) -> Result<Module, String> {
     let module = crate::library::local_module(folder)?;
     let matches = if let Some(id) = reference.id {
         id == module.id
@@ -213,9 +218,15 @@ fn find_package_folder(reference: &EntryRef, folder: &std::path::Path) -> Result
         catalogue.resolve_ref(reference).ok() == Some(module.id)
     };
     if !matches {
-        return Err(
-            "Choose the folder for this package. That folder contains a different package.".into(),
+        // The fault first, then what to do, and both things by name.
+        let picked = folder.file_name().map_or_else(
+            || folder.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
         );
+        return Err(format!(
+            "{picked}/ holds a different package. Choose the folder that holds {}.",
+            name.unwrap_or("this package")
+        ));
     }
     Ok(module)
 }
@@ -1154,15 +1165,17 @@ impl CampaignContent {
                 }
             }
         }
+        // While a draft waits, only Undo greys: the write happened, so its words keep the text
+        // colour, and the draft's own save row says why.
         if let Some(write) = &self.manifest_write
-            && design::locked(ui, manifest_locked, |ui| {
-                design::undo_message(
-                    ui,
-                    Tone::Success,
-                    &write.message(),
-                    &format!("Undo write {}", write.path()),
-                )
-            })
+            && crate::library::kept_undo_message(
+                ui,
+                Tone::Success,
+                &write.message(),
+                &format!("Undo write {}", write.path()),
+                manifest_locked,
+                false,
+            )
         {
             match write.undo() {
                 Ok(_) => {
@@ -1520,7 +1533,11 @@ impl CampaignContent {
                                 .clicked()
                             && let Some(known) = &known
                         {
-                            match find_package_folder(&selection.package, &known.path) {
+                            match find_package_folder(
+                                &selection.package,
+                                selection.name.as_deref(),
+                                &known.path,
+                            ) {
                                 Ok(module) => {
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
@@ -1545,7 +1562,11 @@ impl CampaignContent {
                                 known.as_ref().and_then(|module| module.path.parent()),
                             )
                         {
-                            match find_package_folder(&selection.package, &folder) {
+                            match find_package_folder(
+                                &selection.package,
+                                selection.name.as_deref(),
+                                &folder,
+                            ) {
                                 Ok(module) => {
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
@@ -2479,13 +2500,18 @@ mod tests {
         write_note(&other, "Package.md", None, &text).unwrap();
         let reference = EntryRef::id(entry.id);
         assert_eq!(
-            find_package_folder(&reference, &expected).unwrap().name,
+            find_package_folder(&reference, Some("Ashen Marches"), &expected)
+                .unwrap()
+                .name,
             "Ashen Marches"
         );
-        assert!(
-            find_package_folder(&reference, &other)
-                .unwrap_err()
-                .contains("different package")
+        // Round 23 FE3: the fault comes first and names the picked folder and the package.
+        let folder = other.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            find_package_folder(&reference, Some("Ashen Marches"), &other).unwrap_err(),
+            format!(
+                "{folder}/ holds a different package. Choose the folder that holds Ashen Marches."
+            )
         );
     }
 }

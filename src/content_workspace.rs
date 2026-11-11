@@ -768,6 +768,9 @@ pub struct UnreadableNote {
     pub path: PathBuf,
     pub word: String,
     key: Option<String>,
+    /// Two files claim this identity. That fault is a warning; a file that cannot be read is an
+    /// error.
+    pub duplicate: bool,
 }
 
 /// A file that differs from its shared key's filename is the copy. Otherwise
@@ -971,6 +974,7 @@ impl Catalogue {
                     path,
                     word,
                     key: entry.key.clone(),
+                    duplicate: true,
                 },
             );
             return Ok(());
@@ -1012,6 +1016,7 @@ impl Catalogue {
                     key: note_property(&text, "splat_key:"),
                     word: format!("{name} cannot be read{line}"),
                     path,
+                    duplicate: false,
                 },
             );
         }

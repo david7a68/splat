@@ -1230,6 +1230,15 @@ impl<'a> Driver<'a> {
         rules
     }
 
+    /// The surfaces that scroll sideways now, as the ergonomics check finds them.
+    pub fn horizontal_scroll_regions(&self) -> Vec<egui::Rect> {
+        let scale = 1.0 / self.harness.ctx.pixels_per_point();
+        ergonomics::horizontal_scroll_regions(&self.harness)
+            .into_iter()
+            .map(|rect| rect * scale)
+            .collect()
+    }
+
     pub fn painted_rect_in(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
         let mut found = None;
         self.each_painted_text(|text, clip| {

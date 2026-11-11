@@ -2012,7 +2012,8 @@ impl Lookup {
                             );
                             let room = (rect.width() - name.size().x).max(0.0);
                             let fitted = fitted_detail(ui, detail, room);
-                            let tail = design::one_line(
+                            // A fault mark has its own tone, as on a Library row.
+                            let tail = crate::library::marked_line(
                                 ui,
                                 &if fitted.is_empty() {
                                     String::new()
