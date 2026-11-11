@@ -313,7 +313,8 @@ impl Settings {
                 "Signed out of D&D Beyond",
                 c.connection.offline,
             ),
-            Account::Failed => (icons::ERROR, "Not connected", c.result.error),
+            // The words name the failure, as the error icon and colour do (round 24 FA6).
+            Account::Failed => (icons::ERROR, "Connect failed", c.result.error),
             Account::Busy => (icons::BUSY, "Connecting", c.connection.busy),
             Account::RefreshFailing => (icons::WARN, "Sign-in failing", c.result.warning),
             Account::KeyringWarning => {
