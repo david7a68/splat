@@ -368,7 +368,7 @@ impl Repair {
         };
         let reason = problem.as_deref().or(self.failure()).map(str::to_owned);
         let result = undo.map(|undo| undo.words(&name));
-        let mut space = super::a_shim::MessageSpace::new("world_repair_message", ui.available_width());
+        let mut space = design::MessageSpace::new("world_repair_message", ui.available_width());
         if let Some(reason) = &reason {
             space = space.reason(reason, move |ui| {
                 design::message(ui, design::Tone::Error, reason);

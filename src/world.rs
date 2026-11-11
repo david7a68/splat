@@ -2,7 +2,6 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
-pub(crate) mod a_shim;
 mod checks;
 pub(crate) mod edit;
 mod fields;
@@ -2498,7 +2497,7 @@ impl Reader {
             // The help says what the choice does for the DM; how Splat stores it waits in
             // Technical details at the end of the section.
             // Help under a section keeps the reader measure (round 25 FG1, AG1).
-            a_shim::help(ui, TYPE_HELP);
+            design::help(ui, TYPE_HELP);
             ui.horizontal_wrapped(|ui| {
                 for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
                     .into_iter()
@@ -2528,7 +2527,7 @@ impl Reader {
                 chosen = Some(other);
             }
             design::quiet_section(ui, "Technical details", |ui| {
-                a_shim::help(ui, TYPE_STORAGE);
+                design::help(ui, TYPE_STORAGE);
             });
         });
         match make_entry(campaign, item, &chosen?) {
