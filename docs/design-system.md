@@ -624,8 +624,17 @@ Campaign's header counts chosen entries only. Flags appear once in the content i
 the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Encounters'
 count uses the same helper, words and size. Each flag's
 repair choice and file line start at its words. Packages keeps its save row directly below the tabs, before notices.
+The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows; the package list
+fills the rest of the window and keeps room for a few rows, so tall repairs make the page scroll. A control that
+gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
+Below `Save selections`, the page keeps one message space, two text lines high whatever it holds: the page's latest
+result (`Campaign selections saved.`, a discard, a written Campaign.md or manifest, a found folder, a removed
+package, applied changes), first while its Undo is live, then the page's errors (Save's or a load's, the change
+check's). A new result ends the earlier one and its Undo. So no result or error moves the repairs or the package
+list below. With nothing loaded, the errors stand alone.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
-An open repair keeps the same right edge as the save row.
+An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
+state (`Not saved. …`) or lock reason wraps beside it and never cuts it.
 Repair fills the column with the invalid-note message above it; an `L` gap and hairline separate its save row
 from the package save row. While the repair is open, that message keeps the same words (`<path> cannot be read.
 Fix it here or in World.`), so no edit moves the editor. Below the repair's own save row is the one message space,
@@ -1604,7 +1613,9 @@ A stopped-sync notice sits below the Party header, across the page. Its bar star
 Dismiss sits at the right end of its first line. Every dismissable Party notice (stopped sync, a replaced sheet,
 a combat sync action's result) has this one form: the close icon at the right end of the first line, never a
 word. Notices above the member list and the sheet end with an `L` gap. The member list keeps the scroll bar's
-lane whether or not the bar shows, so its rows and header columns never move. Sheet pages use Small tabs on one line, with later pages in More.
+lane whether or not the bar shows, so its rows and header columns never move. A combat sync action's result has
+a reserved place above the editable fields, two text lines high whatever it holds, so the result, its dismissal and
+the next read move no field. The sync panel's help keeps the reader measure. Sheet pages use Small tabs on one line, with later pages in More.
 
 Local-edit notices measure the full message inset, including its bar, icon and gaps. The Party header owns Connect to refresh, except while a signed-out local-edit notice shows: then the notice's secondary `Connect D&D Beyond`, before Show file, is the one way to connect, and the header shows only the state (`Not connected · Fetched 3 h ago`). One action has one control and one name on a screen. Signed-out notices say replacement keeps the DM’s version as a copy. Local-edit warnings name the character and say replacement keeps a copy. Keep each notice within `LIST_MEASURE`. Actions follow its text after an `L` gap, or wrap below, aligned with the text. The affected row says Local edits; replacement names the character, offers Show file for the kept
 version and Dismiss. Empty Party has one Connect D&D Beyond action. An offline Party now line offers Connect
