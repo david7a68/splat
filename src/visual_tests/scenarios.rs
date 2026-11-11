@@ -292,6 +292,28 @@ pub(super) fn glyph_spans(d: &Driver<'_>, paragraph: &str, words: &str) -> Vec<(
     spans
 }
 
+/// For each visible painted paragraph that contains `paragraph`: each row's top and its first
+/// glyph's baseline.
+fn paragraph_baselines(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<(f32, f32)>> {
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text.contains(paragraph) && clip.intersects(text.visual_bounding_rect())
+        {
+            found.push(
+                text.galley
+                    .rows
+                    .iter()
+                    .filter_map(|row| {
+                        let top = text.pos.y + row.pos.y;
+                        Some((top, top + row.glyphs.first()?.pos.y))
+                    })
+                    .collect(),
+            );
+        }
+    });
+    found
+}
+
 /// The row tops of each visible painted paragraph that contains `paragraph`.
 pub(super) fn paragraph_row_tops(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<f32>> {
     let mut found = Vec::new();
@@ -8094,6 +8116,28 @@ pub mod session_notes {
                 format!(
                     "At {size:?}, the Session reader and Lookup's card each keep one {} px pitch \
                      in the paragraph that holds Wren: {found:?}",
+                    crate::design::XL
+                ),
+            );
+            // FT5: the words keep that pitch too, from the first line. Each line's baseline is
+            // the same distance below its row top, so the baselines are `XL` apart.
+            let found = d.at_size(size, |d| paragraph_baselines(d, PARAGRAPH));
+            d.observe(
+                "iter-19-A-FT5-baseline-pitch",
+                found.len() == 2
+                    && found.iter().all(|rows| {
+                        rows.len() >= 2
+                            && rows.iter().all(|(top, baseline)| {
+                                ((baseline - top) - (rows[0].1 - rows[0].0)).abs() < 0.5
+                            })
+                            && rows
+                                .windows(2)
+                                .all(|pair| (pair[1].1 - pair[0].1 - crate::design::XL).abs() < 0.5)
+                    }),
+                format!(
+                    "At {size:?}, every line of the paragraph that holds Wren, the first line too, \
+                     has its baseline at one offset in its row and {} px below the last, in the \
+                     Session reader and in Lookup's card (row top, baseline): {found:?}",
                     crate::design::XL
                 ),
             );
