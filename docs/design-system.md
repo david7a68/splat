@@ -294,7 +294,7 @@ height of two text lines (see Files and recovery), so neither the reason nor the
 above the slot, and the slot below the error holds the discard result the same way. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
-A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. Show secondary `Overwrite with my draft` first, then
+A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library and World
 draw the choices through `message_with_actions`: the row starts at the message text, not at the warning bar, and
 an `L` gap comes before the red choice. Library's note of the entries that need a deleted file sits in the same

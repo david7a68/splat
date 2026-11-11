@@ -3522,17 +3522,40 @@ impl Encounters {
         }
         // Each undo waits while the other kind of draft is open. Restored behind that editor,
         // a draft could be neither reached nor closed.
-        if self.encounter_undo_ready()
-            && design::draft_discarded(ui, &self.discarded.as_ref().unwrap().name)
-        {
-            self.undo_discard();
+        // FF7: a draft whose file was gone was removed with it; its Undo says so.
+        if self.encounter_undo_ready() {
+            let discarded = self.discarded.as_ref().unwrap();
+            let undo = if discarded.recovery.file_gone() {
+                design::undo_message(
+                    ui,
+                    Tone::Info,
+                    &disk::removed_with_draft(&discarded.name),
+                    "Undo remove",
+                )
+            } else {
+                design::draft_discarded(ui, &discarded.name)
+            };
+            if undo {
+                self.undo_discard();
+            }
         }
         if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
         }
-        if self.group_undo_ready()
-            && design::draft_discarded(ui, &self.discarded_group.as_ref().unwrap().name())
-        {
+        let group_undo = self.group_undo_ready() && {
+            let discarded = self.discarded_group.as_ref().unwrap();
+            if discarded.file_gone() {
+                design::undo_message(
+                    ui,
+                    Tone::Info,
+                    &disk::removed_with_draft(&discarded.name()),
+                    "Undo remove",
+                )
+            } else {
+                design::draft_discarded(ui, &discarded.name())
+            }
+        };
+        if group_undo {
             self.group_draft = self.discarded_group.take();
             self.message = None;
             self.error = None;
@@ -7075,8 +7098,49 @@ mod tests {
         draft.source = change.text.clone().unwrap();
         draft.baseline = change.text;
         draft.save(&campaign, &[]).unwrap();
-        let saved = fs::read_to_string(path).unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
         assert!(saved.contains("tags: [DM]") && saved.contains("My words"));
+
+        use egui_kittest::kittest::Queryable;
+        // FF7: the file goes while the draft is open. The red choice says what it removes, its
+        // result says what was lost, and Undo remove gives the draft back.
+        fs::remove_file(&path).unwrap();
+        draft.body = "My later words".into();
+        assert!(draft.save(&campaign, &[]).is_err());
+        assert!(draft.recovery.file_gone());
+        let name = draft.name.clone();
+        let editor = Encounters {
+            draft: Some(draft),
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Default::default()
+        };
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            |ctx, editor: &mut Encounters| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    editor.discard_undo(ui);
+                    if !editor.encounter_disk_view(ui, &campaign, &[]) {}
+                });
+            },
+            editor,
+        );
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Let it go").is_none());
+        harness
+            .get_by_label("Remove encounter and lose draft")
+            .click();
+        harness.run_steps(2);
+        assert!(harness.state().draft.is_none());
+        harness.get_by_label(&format!("{name} removed. Its draft was discarded."));
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        let back = harness
+            .state()
+            .draft
+            .as_ref()
+            .expect("Undo remove gives the draft back");
+        assert_eq!(back.body, "My later words");
+        assert!(harness.state().discarded.is_none());
+        assert!(!path.exists(), "nothing was written");
     }
 
     #[test]

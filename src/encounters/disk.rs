@@ -20,6 +20,11 @@ pub(super) struct Change {
 }
 
 /// The one sentence for a draft whose file changed on disk. It names what changed, never the file.
+/// The result after `Remove <noun> and lose draft`, as Library says it (FF7).
+pub(super) fn removed_with_draft(name: &str) -> String {
+    format!("{name} removed. Its draft was discarded.")
+}
+
 pub(super) fn changed_on_disk(what: &str) -> String {
     format!("This {what} changed on disk. Your draft is safe until you choose.")
 }
@@ -70,6 +75,14 @@ impl Recovery {
         Ok(())
     }
 
+    /// The draft's file is gone from the disk: the destructive choice removes the draft's
+    /// object and loses the draft (FF7's words), and its result offers `Undo remove`.
+    pub fn file_gone(&self) -> bool {
+        self.change
+            .as_ref()
+            .is_some_and(|change| change.text.is_none())
+    }
+
     pub fn accept(&mut self) -> Option<Change> {
         self.copies_accepted = true;
         self.change.take()
@@ -103,14 +116,16 @@ impl Recovery {
                 }
                 // egui adds its item spacing too, so the whole gap is exactly `L`.
                 ui.add_space(design::L - ui.spacing().item_spacing.x);
-                if Action::destructive(if change.text.is_some() {
-                    "Reload and lose my draft"
+                // FF7: the file is gone, so the choice says what it removes and loses.
+                let lose = if change.text.is_some() {
+                    "Reload and lose my draft".to_owned()
                 } else {
-                    "Let it go"
-                })
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
+                    format!("Remove {what} and lose draft")
+                };
+                if Action::destructive(&lose)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                 {
                     choice = Some(false);
                 }

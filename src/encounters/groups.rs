@@ -501,6 +501,9 @@ impl GroupDraft {
             "group",
         )
     }
+    pub(super) fn file_gone(&self) -> bool {
+        self.recovery.file_gone()
+    }
     pub(super) fn has_disk_change(&self) -> bool {
         self.recovery.change.is_some()
     }
