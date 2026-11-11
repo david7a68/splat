@@ -3173,8 +3173,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
         .contains("[[Veilglass Lamp]]");
     search_library(d, "Ash Wolf");
     d.click_starting("Ash Wolf · ");
-    d.wait_for_text("Links now say “Ash Wolf”.");
-    let a_back = !d.has_containing("Veilglass");
+    d.settle();
+    let a_back = d.visible_text("Links now say “Ash Wolf”.") && !d.has_containing("Veilglass");
     d.observe(
         "iter-24-L-link-owner",
         a_hidden_in_b && b_offer_alone && b_result_alone && b_saved && a_back,
@@ -3182,7 +3182,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
             "Each link offer and result shows in its own entry's reader only: A hidden in B {a_hidden_in_b}, B's offer alone {b_offer_alone}, B's result alone {b_result_alone}, B saved {b_saved}, A's result back in A {a_back}"
         ),
     );
-    d.click("Undo link update");
+    if d.has("Undo link update") {
+        d.click("Undo link update");
+    }
     let a_undone = fs::read_to_string(&path)
         .unwrap()
         .contains("[[Cinder Wolf]]");
