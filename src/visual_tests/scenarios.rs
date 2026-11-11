@@ -1017,10 +1017,6 @@ pub mod library_author {
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
         d.expect(NEW_NAME);
-        assert!(
-            !d.has("Saved in the new layout."),
-            "A single-file conversion notice belongs to its file"
-        );
         d.state("new-entry-created", Sizes::All);
         d.goal("create a new entry");
 
@@ -12442,11 +12438,6 @@ pub mod session_plan {
         d.click("Add Long rest");
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
-        d.observe_both(
-            "H1 no stale notice",
-            "A later Timeline action has no earlier layout notice",
-            |d| !d.visible_text("Saved in the new layout."),
-        );
         d.state("timeline-long-rest-restores", Sizes::All);
         d.observe_both(
             "iter-18-B-S1",

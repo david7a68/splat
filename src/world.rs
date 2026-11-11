@@ -3639,7 +3639,7 @@ mod tests {
         note(
             root,
             "Sessions/Timeline.md",
-            "---\ntimeline_version: 1\n---\n",
+            "---\ntimeline_version: 2\n---\n",
         );
         note(root, "Sessions/Templates/Lazy.md", "Template\n");
         note(root, "Sessions/Recordings/a/a.transcript.md", "raw\n");
@@ -3651,7 +3651,7 @@ mod tests {
         note(root, "Sessions/Recordings/a/a.review.md", "no\n");
         note(root, "Sessions/Recordings/b/b.transcript.md", "only\n");
         note(root, "Trackers.md", "---\ntrackers_version: 1\n---\n");
-        note(root, "Entry.md", "---\nsplat_schema: 1\n---\n");
+        note(root, "Entry.md", "---\nsplat_schema: 2\n---\n");
         note(root, ".obsidian/plugins/a/README.md", "no\n");
         note(root, ".trash/Old.md", "no\n");
         fs::write(root.join("Map.PNG"), b"x").unwrap();
@@ -3680,7 +3680,7 @@ mod tests {
     fn a_session_folder_at_the_root_hides_no_world_note() {
         let dir = tempfile::tempdir().unwrap();
         note(dir.path(), "Setting.md", "# Setting\n");
-        note(dir.path(), "Timeline.md", "---\ntimeline_version: 1\n---\n");
+        note(dir.path(), "Timeline.md", "---\ntimeline_version: 2\n---\n");
         let scan = scan(dir.path(), dir.path());
         assert_eq!(scan.notes.len(), 1);
         assert_eq!(scan.notes[0].path, "Setting.md");

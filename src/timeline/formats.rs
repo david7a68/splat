@@ -450,43 +450,6 @@ pub fn is_v2(text: &str) -> bool {
         })
         .is_some_and(|n| n == 2)
 }
-pub fn convert(text: &str, sessions: &BTreeMap<Uuid, String>) -> Result<String, String> {
-    if is_v2(text) {
-        return Ok(text.into());
-    }
-    let events: Vec<Event> = splat::content::legacy::timeline(text)?;
-    let mut after = crate::content_workspace::patch_fields(
-        text,
-        &[("timeline_version", Some(2.into())), ("timeline", None)],
-    )?;
-    let (front, body) = crate::sessions::split_note(&after).ok_or("Missing timeline properties")?;
-    let mut noise = String::new();
-    for line in body.lines() {
-        if line == "# Timeline"
-            || line.starts_with("Splat writes this page from the list above.")
-            || events
-                .iter()
-                .any(|event| line.ends_with(&format!(" ^{}", event.id)))
-        {
-            continue;
-        }
-        if !line.trim().is_empty() {
-            noise.push_str(line);
-            noise.push('\n');
-        }
-    }
-    let generated = render(&events, sessions);
-    let generated = crate::sessions::body_of(&generated);
-    after = format!("{front}{generated}");
-    if !noise.is_empty() {
-        after.push('\n');
-        after.push_str(&noise);
-    }
-    if parse(&after).0 != events {
-        return Err("Conversion changed timeline values".into());
-    }
-    Ok(after)
-}
 pub fn patch(
     text: &str,
     events: &[Event],
@@ -883,15 +846,17 @@ mod tests {
 
     #[test]
     fn i19_x14_custom_fields_are_visible_and_deleting_one_keeps_it_deleted() {
-        let old = "---\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  weather: rain\n  loot: {gold: 20}\n---\n";
-        let converted = convert(old, &BTreeMap::new()).unwrap();
-        assert!(converted.contains("  - weather: rain\n"));
-        assert!(!converted.contains("data="));
-        assert_eq!(
-            splat::content::legacy::timeline::<Event>(old).unwrap(),
-            parse(&converted).0
+        let mut road = event(Kind::Travel, "t-road".into(), String::new());
+        road.extra.insert("weather".into(), "rain".into());
+        road.extra.insert(
+            "loot".into(),
+            serde_yaml_ng::from_str("{gold: 20}").unwrap(),
         );
-        let edited = converted
+        let text = render(std::slice::from_ref(&road), &BTreeMap::new());
+        assert!(text.contains("  - weather: rain\n"));
+        assert!(!text.contains("data="));
+        assert_eq!(parse(&text).0, vec![road]);
+        let edited = text
             .lines()
             .filter(|line| !line.starts_with("  - loot:"))
             .collect::<Vec<_>>()
@@ -951,27 +916,8 @@ mod tests {
         }
     }
     #[test]
-    fn timeline_conversion_keeps_model_prose_and_exact_new_text() {
-        let old = "---\n# Keep this comment\ntags: [road]\ntimeline_version: 1\ntimeline:\n- id: t-day\n  kind: day\n  title: Begins\n- id: t-fight\n  kind: encounter\n  title: Bridge\n  result: Round 1\n  weather: rain\n---\n\n# Timeline\n\nA paragraph from the DM.\n";
+    fn a_result_edit_keeps_comments_properties_and_prose() {
         let new = "---\n# Keep this comment\ntags: [road]\ntimeline_version: 2\n---\n\n# Timeline\n\n## Day 1: Begins\n%% splat id=t-day %%\n\n- Encounter: **Bridge** ^t-fight\n  - Result: Round 1\n  - weather: rain\n\nA paragraph from the DM.\n";
-        let converted = convert(old, &BTreeMap::new()).unwrap();
-        assert_eq!(
-            converted,
-            new.replace("- Encounter:", "- Fight:")
-                .replace(
-                    "# Timeline\n\n",
-                    "# Timeline\n\nEdit this list in Obsidian or in Splat.\n\n"
-                )
-                .replace("\n\nA paragraph", "\n\n\nA paragraph")
-        );
-        assert!(converted.contains("# Keep this comment"));
-        assert!(converted.contains("tags: [road]"));
-        assert!(converted.contains("A paragraph from the DM."));
-        assert_eq!(
-            splat::content::legacy::timeline::<Event>(old).unwrap(),
-            parse(&converted).0
-        );
-        assert_eq!(converted, convert(&converted, &BTreeMap::new()).unwrap());
         let mut events = parse(new).0;
         events[1].result = "Party won".into();
         let edited = patch(new, &events, &BTreeMap::new(), true).unwrap();

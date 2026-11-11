@@ -8,9 +8,6 @@ use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// Action shown for a retired on-disk layout. Loading never changes the file.
-pub const OLD_LAYOUT: &str = "Old layout: Splat no longer reads this file. Use Convert files.";
-
 /// A note's line that makes the table below it rollable. It holds no entry data.
 pub const ROLLS_MARKER: &str = "<!-- splat:rolls ";
 
@@ -35,7 +32,6 @@ mod reading;
 pub use reading::Reading;
 pub mod formats;
 pub mod layout;
-pub mod legacy;
 pub mod list_formats;
 pub mod loot;
 mod markdown;
@@ -92,7 +88,6 @@ impl TryFrom<EntryWire> for Entry {
     fn try_from(wire: EntryWire) -> Result<Self, String> {
         match wire.fields.get("splat_schema").and_then(Value::as_u64) {
             Some(2) => {}
-            Some(1) => return Err(OLD_LAYOUT.into()),
             _ => return Err("Unsupported content schema; expected 2".into()),
         }
         let entry = Self {
@@ -234,7 +229,6 @@ impl Entry {
         };
         match fields.get("splat_schema").and_then(Value::as_u64) {
             Some(2) => {}
-            Some(1) => return Err(OLD_LAYOUT.into()),
             _ => return Err("Unsupported content schema; expected 2".into()),
         }
         let id =
@@ -1202,14 +1196,7 @@ pub fn patch_fields(
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    read_directory_using(root, Entry::parse)
-}
-
-fn read_directory_using(
-    root: &Path,
-    parse: fn(&str, &str) -> Result<Entry, String>,
-) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    read_folder_using(root, parse).map(|folder| (folder.entries.clone(), folder.errors.clone()))
+    read_folder(root).map(|folder| (folder.entries.clone(), folder.errors.clone()))
 }
 
 /// `text` up to the first line that starts with `start`, without that line's newline.
@@ -1279,13 +1266,6 @@ impl Folder {
 
 /// [`read_directory`], shared: later reads of unchanged notes return the same `Folder`.
 pub fn read_folder(root: &Path) -> Result<Arc<Folder>, String> {
-    read_folder_using(root, Entry::parse)
-}
-
-fn read_folder_using(
-    root: &Path,
-    parse: fn(&str, &str) -> Result<Entry, String>,
-) -> Result<Arc<Folder>, String> {
     fn walk(
         root: &Path,
         current: &Path,
@@ -1410,10 +1390,7 @@ fn read_folder_using(
         Ok(())
     }
     // Pages name some folders by their canonical path. Both names share one reading.
-    let key = (
-        root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
-        parse as usize,
-    );
+    let key = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     // Pages often read the same folder at the same time. The later ones wait and reuse it.
     let reading = read_cache::reading(&key);
     let _reading = reading
@@ -1430,7 +1407,7 @@ fn read_folder_using(
     let parsed: Vec<_> = files
         .par_iter()
         .map(|(path, text, _)| {
-            parse(path, text.as_str().unwrap_or_default()).map_err(|message| Diagnostic {
+            Entry::parse(path, text.as_str().unwrap_or_default()).map_err(|message| Diagnostic {
                 path: path.clone(),
                 message,
             })
@@ -1473,7 +1450,7 @@ mod read_cache {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
-    pub(super) type Key = (PathBuf, usize);
+    pub(super) type Key = PathBuf;
 
     /// Enough for every package and campaign in use; tests make many temporary folders.
     const LIMIT: usize = 64;

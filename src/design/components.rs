@@ -2128,15 +2128,6 @@ pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&m
     dialog_width(ctx, id, title, FORM_WIDTH, add)
 }
 
-pub fn wide_dialog<R>(
-    ctx: &egui::Context,
-    id: &str,
-    title: &str,
-    add: impl FnOnce(&mut Ui) -> R,
-) -> R {
-    dialog_width(ctx, id, title, LIST_MEASURE + XXL * 7.0, add)
-}
-
 fn dialog_width<R>(
     ctx: &egui::Context,
     id: &str,
@@ -2588,108 +2579,92 @@ fn iter3_comparisons_count_only_actual_insertions_and_deletions() {
 }
 
 #[test]
-fn iter3_conversion_navigation_skips_whole_change_groups() {
+fn iter3_comparison_navigation_skips_whole_change_groups() {
     use egui_kittest::{Harness, kittest::Queryable};
-    for source in [true, false] {
-        for (before, after, groups) in [
-            ("old\nolder\nsame", "new\nnewer\nsame", vec![0]),
-            (
-                "old\nolder\nsame\nlast",
-                "new\nnewer\nsame\nend",
-                vec![0, 3],
-            ),
-        ] {
-            let state = std::cell::Cell::new(Id::NULL);
-            let installed = std::cell::Cell::new(false);
-            let mut harness = Harness::new(|ctx| {
-                if !installed.replace(true) {
-                    super::theme::install(ctx);
-                    ctx.request_repaint();
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    if source {
-                        state.set(
-                            ui.make_persistent_id(("source_comparison", "test"))
-                                .with("line"),
-                        );
-                        source_comparison(ui, [before, after], "test");
-                    } else {
-                        state.set(ui.make_persistent_id(("draft_difference", "test")));
-                        grouped_draft_comparison(ui, before, after, "test", true);
-                    }
-                });
+    for (before, after, groups) in [
+        ("old\nolder\nsame", "new\nnewer\nsame", vec![0]),
+        (
+            "old\nolder\nsame\nlast",
+            "new\nnewer\nsame\nend",
+            vec![0, 3],
+        ),
+    ] {
+        let state = std::cell::Cell::new(Id::NULL);
+        let installed = std::cell::Cell::new(false);
+        let mut harness = Harness::new(|ctx| {
+            if !installed.replace(true) {
+                super::theme::install(ctx);
+                ctx.request_repaint();
+                return;
+            }
+            egui::CentralPanel::default().show(ctx, |ui| {
+                state.set(ui.make_persistent_id(("draft_difference", "test")));
+                grouped_draft_comparison(ui, before, after, "test", true);
             });
-            harness.run_steps(2);
-            if groups.len() == 1 {
-                assert!(harness.query_by_label("Next difference").is_none());
-            } else {
-                for expected in [3, 0, 3] {
-                    harness.get_by_label("Next difference").click();
-                    harness.run();
-                    assert_eq!(
-                        harness.ctx.data(|data| data.get_temp::<usize>(state.get())),
-                        Some(expected)
-                    );
-                }
+        });
+        harness.run_steps(2);
+        if groups.len() == 1 {
+            assert!(harness.query_by_label("Next difference").is_none());
+        } else {
+            for expected in [3, 0, 3] {
+                harness.get_by_label("Next difference").click();
+                harness.run();
+                assert_eq!(
+                    harness.ctx.data(|data| data.get_temp::<usize>(state.get())),
+                    Some(expected)
+                );
             }
         }
     }
 }
 
 #[test]
-fn iter3_unchanged_text_aligns_without_highlights_in_both_comparisons() {
-    for source in [true, false] {
-        for width in [600.0, 1500.0] {
-            let ctx = egui::Context::default();
-            super::theme::install(&ctx);
-            ctx.enable_accesskit();
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 300.0))),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let before = "old\nremoved\n# Rook\nA note for tonight.";
-                        let after = "new\n# Rook\nA note for tonight.";
-                        if source {
-                            source_comparison(ui, [before, after], "aligned");
-                        } else {
-                            draft_comparison(ui, before, after, "aligned");
-                        }
-                    });
-                },
-            );
-            for line in ["# Rook", "A note for tonight."] {
-                let text: Vec<_> = output
-                    .shapes
-                    .iter()
-                    .filter_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) if text.galley.text() == line => Some(text),
-                        _ => None,
-                    })
-                    .collect();
-                assert_eq!(text.len(), 2);
-                assert_eq!(text[0].pos.y, text[1].pos.y);
-                for text in text {
-                    assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
-                        egui::Shape::Rect(rect) if rect.fill == colors().selected && rect.rect.contains(text.visual_bounding_rect().center())
-                    )), "Unchanged text must not have a change highlight");
-                }
+fn iter3_unchanged_text_aligns_without_highlights_in_the_draft_comparison() {
+    for width in [600.0, 1500.0] {
+        let ctx = egui::Context::default();
+        super::theme::install(&ctx);
+        ctx.enable_accesskit();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 300.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let before = "old\nremoved\n# Rook\nA note for tonight.";
+                    let after = "new\n# Rook\nA note for tonight.";
+                    draft_comparison(ui, before, after, "aligned");
+                });
+            },
+        );
+        for line in ["# Rook", "A note for tonight."] {
+            let text: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text() == line => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(text.len(), 2);
+            assert_eq!(text[0].pos.y, text[1].pos.y);
+            for text in text {
+                assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+                    egui::Shape::Rect(rect) if rect.fill == colors().selected && rect.rect.contains(text.visual_bounding_rect().center())
+                )), "Unchanged text must not have a change highlight");
             }
-            assert_eq!(
-                output
-                    .platform_output
-                    .accesskit_update
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .filter(|(_, node)| node.label() == Some("No line"))
-                    .count(),
-                1
-            );
         }
+        assert_eq!(
+            output
+                .platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .iter()
+                .filter(|(_, node)| node.label() == Some("No line"))
+                .count(),
+            1
+        );
     }
 }
 
@@ -2852,127 +2827,6 @@ pub fn draft_comparison_styled(
         face,
         line_height,
     );
-}
-
-/// Aligned rows, from the same cache the source panes paint. Either text invalidates it.
-pub fn source_comparison_rows(ui: &Ui, text: [&str; 2], id: impl std::hash::Hash) -> usize {
-    Comparison::cached_rows(ui.ctx(), Id::new(("source_comparison_layout", id)), text)
-}
-
-/// Two source panes share their scroll position. Source lines never wrap.
-pub fn source_comparison(ui: &mut Ui, text: [&str; 2], id: impl std::hash::Hash) {
-    let state = ui.make_persistent_id(("source_comparison", &id));
-    let Comparison {
-        columns: lines,
-        changed,
-        groups: differences,
-    } = Comparison::cached(ui.ctx(), Id::new(("source_comparison_layout", id)), text);
-    let count = lines[0].len();
-    let previous = ui.data(|data| data.get_temp::<egui::Vec2>(state));
-    let mut offset = previous.unwrap_or_default();
-    let mut target = previous
-        .is_none()
-        .then_some(differences.first().copied().unwrap_or(0));
-    let current = ui
-        .data(|data| data.get_temp::<usize>(state.with("line")))
-        .unwrap_or(0);
-    ui.horizontal(|ui| {
-        ui.label(
-            Type::Small
-                .rich(ui, super::count(changed, "line differs", "lines differ"))
-                .color(colors().muted),
-        );
-        if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
-            target = Some(
-                differences
-                    .iter()
-                    .copied()
-                    .find(|&line| line > current)
-                    .unwrap_or(differences[0]),
-            );
-        }
-    });
-    ui.columns(2, |columns| {
-        group_label(&mut columns[0], "Before");
-        group_label(&mut columns[1], "After");
-    });
-    let line_height = Type::Mono
-        .line()
-        .max(ui.fonts_mut(|fonts| fonts.row_height(&Type::Mono.font(ui))));
-    // Whole rows above the horizontal scroll bar: a pane never ends on a cut line.
-    let bar = ui.spacing().scroll.allocated_width();
-    let height = ((ui.available_height() - bar) / line_height)
-        .floor()
-        .max(1.0)
-        * line_height
-        + bar;
-    if let Some(line) = target {
-        offset.y = comparison_offset(&vec![line_height; count], line, height - S);
-        ui.data_mut(|data| data.insert_temp(state.with("line"), line));
-    }
-    let source_width = text
-        .iter()
-        .flat_map(|text| text.lines())
-        .map(|line| number_width(ui, line, &Type::Mono.font(ui)))
-        .fold(0.0, f32::max);
-    let mut next = offset;
-    ui.columns(2, |columns| {
-        for side in 0..2 {
-            let ui = &mut columns[side];
-            let min_width = ui.available_width().max(source_width);
-            // ScrollArea's normal paint margin can leak the next row above its bar.
-            ui.visuals_mut().clip_rect_margin = 0.0;
-            let output = egui::ScrollArea::both()
-                .id_salt(state.with(side))
-                .auto_shrink([false, false])
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .max_height(height)
-                .scroll_offset(offset)
-                .show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    for at in 0..count {
-                        let changed = lines[0].get(at) != lines[1].get(at);
-                        egui::Frame::new()
-                            .fill(if changed {
-                                colors().selected
-                            } else {
-                                colors().raised
-                            })
-                            .show(ui, |ui| {
-                                ui.set_min_width(min_width);
-                                ui.set_min_height(line_height);
-                                if let Some(line) = lines[side][at] {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Mono
-                                                .rich(ui, line)
-                                                .line_height(Some(line_height)),
-                                        )
-                                        .extend(),
-                                    );
-                                } else {
-                                    let (rect, _) = ui.allocate_exact_size(
-                                        vec2(min_width, line_height),
-                                        Sense::hover(),
-                                    );
-                                    comparison_missing_row(ui, rect);
-                                }
-                            });
-                    }
-                });
-            let pane = ui.interact(
-                output.inner_rect,
-                state.with((side, "pane")),
-                Sense::hover(),
-            );
-            pane.widget_info(|| WidgetInfo::new(WidgetType::Other));
-            named(ui, &pane, ["Before source pane", "After source pane"][side]);
-            if output.state.offset != offset {
-                next = output.state.offset;
-            }
-        }
-    });
-    ui.data_mut(|data| data.insert_temp(state, next));
 }
 
 /// A missing source row has no file text. Its name remains available to screen readers.

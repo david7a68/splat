@@ -13,102 +13,79 @@ fn run(root: &std::path::Path, command: &str, flags: &[&str]) -> Output {
         .output()
         .unwrap()
 }
-fn old(name: &str) -> String {
+fn note(schema: u64, name: &str) -> String {
     format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_world: {{type: npc}}\n---\n\n# {name}\n",
+        "---\nsplat_schema: {schema}\nsplat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_type: npc\n---\n\n# {name}\n",
         uuid::Uuid::new_v4()
     )
 }
 #[test]
-fn convert_and_check_are_headless_and_dry_run_writes_nothing() {
+fn check_is_headless_and_reports_unreadable_notes_without_writing() {
     let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("Wren.md"), note(2, "Wren")).unwrap();
+    let check = run(dir.path(), "check", &[]);
+    assert!(check.status.success());
+    let output = String::from_utf8(check.stdout).unwrap();
+    assert!(
+        output.contains("1 files loaded; 0 flags or unreadable files."),
+        "{output}"
+    );
+
     let path = dir.path().join("Rook.md");
-    let before = old("Rook");
+    let before = note(1, "Rook");
     fs::write(&path, &before).unwrap();
+    fs::write(dir.path().join("Broken.md"), "---\nsplat_schema: [\n---\n").unwrap();
     let check = run(dir.path(), "check", &[]);
     assert_eq!(check.status.code(), Some(1));
     let output = String::from_utf8(check.stdout).unwrap();
-    assert!(output.contains("Rook.md:2: Old layout"), "{output}");
-    let dry = run(dir.path(), "convert", &["--dry-run", "--verify"]);
-    assert!(dry.status.success());
     assert!(
-        String::from_utf8(dry.stdout)
-            .unwrap()
-            .contains("1 files would convert; 0 skipped")
+        output.contains("Rook.md:1: Unsupported content schema; expected 2"),
+        "{output}"
+    );
+    assert!(output.contains("Broken.md:"), "{output}");
+    assert!(
+        output.contains("1 files loaded; 2 flags or unreadable files."),
+        "{output}"
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
-    assert_eq!(
-        run(dir.path(), "convert", &["--verify"]).status.code(),
-        Some(2)
-    );
-    assert!(run(dir.path(), "convert", &[]).status.success());
-    assert!(
-        fs::read_to_string(&path)
-            .unwrap()
-            .contains("splat_schema: 2")
-    );
-    assert!(run(dir.path(), "check", &[]).status.success());
-    fs::write(dir.path().join("Broken.md"), "---\nsplat_schema: [\n---\n").unwrap();
-    assert_eq!(run(dir.path(), "check", &[]).status.code(), Some(1));
-    let convert = run(dir.path(), "convert", &[]);
-    assert_eq!(convert.status.code(), Some(1));
-    assert!(
-        String::from_utf8(convert.stdout)
-            .unwrap()
-            .contains("Broken.md: skipped:")
-    );
-}
-#[test]
-fn generated_packages_can_be_explicitly_converted() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("Package.md"), format!("---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: package\nsplat_name: Book\nsplat_namespace: book\nsplat_generated: true\n---\n", uuid::Uuid::new_v4())).unwrap();
-    let path = dir.path().join("Rook.md");
-    let before = old("Rook");
-    fs::write(&path, &before).unwrap();
-    let skipped = run(dir.path(), "convert", &[]);
-    assert_eq!(skipped.status.code(), Some(1));
-    assert!(
-        String::from_utf8(skipped.stdout)
-            .unwrap()
-            .contains("Generated package")
-    );
-    assert_eq!(fs::read_to_string(&path).unwrap(), before);
-    assert!(
-        run(dir.path(), "convert", &["--include-generated"])
-            .status
-            .success()
-    );
-    assert!(run(dir.path(), "check", &[]).status.success());
 }
 
 #[test]
-fn old_timeline_is_not_loaded_and_converts_without_changing_events() {
+fn only_check_is_a_command() {
+    let dir = tempfile::tempdir().unwrap();
+    for (command, flags) in [
+        ("convert", &[][..]),
+        ("convert", &["--dry-run"][..]),
+        ("check", &["--verify"][..]),
+    ] {
+        let result = run(dir.path(), command, flags);
+        assert_eq!(result.status.code(), Some(2), "{command} {flags:?}");
+        assert!(
+            String::from_utf8(result.stdout)
+                .unwrap()
+                .contains("Usage: splat check <folder>")
+        );
+    }
+}
+
+#[test]
+fn version_one_timeline_is_unreadable_and_kept() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("Timeline.md");
-    let old = "---\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  title: Old bridge\n  duration: 10 minutes\n---\n\n# Timeline\n\nKeep this prose.\n";
-    fs::write(&path, old).unwrap();
+    let text = "---\ntimeline_version: 1\ntimeline:\n- id: t-road\n  kind: travel\n  title: Bridge\n---\n\n# Timeline\n\nKeep this prose.\n";
+    fs::write(&path, text).unwrap();
     let check = run(dir.path(), "check", &[]);
     assert_eq!(check.status.code(), Some(1));
+    let output = String::from_utf8(check.stdout).unwrap();
     assert!(
-        String::from_utf8(check.stdout)
-            .unwrap()
-            .contains("Timeline.md:2: Old layout")
+        output.contains("Timeline.md:2: Unsupported timeline version (expected 2)."),
+        "{output}"
     );
-    assert!(run(dir.path(), "convert", &["--dry-run"]).status.success());
-    assert_eq!(fs::read_to_string(&path).unwrap(), old);
-    assert!(run(dir.path(), "convert", &[]).status.success());
-    let converted = fs::read_to_string(&path).unwrap();
-    assert!(converted.contains("timeline_version: 2"));
-    assert!(
-        converted.contains("Old bridge")
-            && converted.contains("10 minutes")
-            && converted.contains("Keep this prose.")
-    );
-    assert!(run(dir.path(), "check", &[]).status.success());
+    assert_eq!(fs::read_to_string(&path).unwrap(), text);
 }
 
 #[test]
-fn malformed_run_is_reported_and_skipped() {
+fn malformed_run_is_reported() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir(dir.path().join("Encounter Runs")).unwrap();
     fs::write(
@@ -123,32 +100,4 @@ fn malformed_run_is_reported_and_skipped() {
             .unwrap()
             .contains("Broken.json:2:")
     );
-    assert_eq!(run(dir.path(), "convert", &[]).status.code(), Some(1));
-}
-
-#[test]
-fn missing_reference_is_a_warning_and_dry_run_verifies_the_saved_identity() {
-    let dir = tempfile::tempdir().unwrap();
-    let text = format!(
-        "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Scouts\nsplat_encounter_group: {{side: enemies, members: [{{creature: {{id: '00000000-0000-0000-0000-000000000099'}}, count: 1}}]}}\n---\n# Scouts\n",
-        uuid::Uuid::new_v4()
-    );
-    let path = dir.path().join("Scouts.md");
-    fs::write(&path, &text).unwrap();
-    let result = run(dir.path(), "convert", &["--dry-run", "--verify"]);
-    assert!(result.status.success());
-    let output = String::from_utf8(result.stdout).unwrap();
-    assert!(
-        output.contains("1 files would convert; 0 skipped."),
-        "{output}"
-    );
-    assert!(
-        output.contains("1 unresolved reference warnings."),
-        "{output}"
-    );
-    assert!(
-        output.contains("Verify encounter_group: 1 checked; 0 differences."),
-        "{output}"
-    );
-    assert_eq!(fs::read_to_string(path).unwrap(), text);
 }

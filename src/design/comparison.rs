@@ -70,15 +70,6 @@ impl<'a> Comparison<'a> {
         Self::from_layout(&lines, (*layout).clone())
     }
 
-    pub fn cached_rows(
-        ctx: &eframe::egui::Context,
-        slot: eframe::egui::Id,
-        text: [&str; 2],
-    ) -> usize {
-        let lines = text.map(|text| text.lines().collect::<Vec<_>>());
-        Self::cached_layout(ctx, slot, text, &lines).rows.len()
-    }
-
     fn cached_layout(
         ctx: &eframe::egui::Context,
         slot: eframe::egui::Id,
@@ -287,7 +278,10 @@ mod tests {
             (["anchor", "anchor"], 1),
             (["", ""], 0),
         ] {
-            assert_eq!(Comparison::cached_rows(&ctx, slot, text), expected);
+            assert_eq!(
+                Comparison::cached(&ctx, slot, text).columns[0].len(),
+                expected
+            );
             let first = ctx
                 .data(|data| data.get_temp::<(u64, std::sync::Arc<super::Layout>)>(slot))
                 .unwrap()

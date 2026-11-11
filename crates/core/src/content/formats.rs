@@ -804,9 +804,9 @@ pub fn write(path: &str, fields: &Mapping, body: &str) -> Result<String, String>
     Ok(after)
 }
 
-/// Test fixtures write a note from `fields` given as YAML, and the body below the properties.
-#[cfg(test)]
-pub(crate) fn fixture(path: &str, fields: &str, body: &str) -> Result<String, String> {
+/// Write a note from `fields` given as YAML, and the body below the properties.
+/// Tests and seeded example data use this.
+pub fn fixture(path: &str, fields: &str, body: &str) -> Result<String, String> {
     write(
         path,
         &serde_yaml_ng::from_str(fields).map_err(|e| e.to_string())?,
