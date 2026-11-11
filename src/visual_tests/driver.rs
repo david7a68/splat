@@ -585,11 +585,11 @@ impl<'a> Driver<'a> {
                     }
                 }
                 egui::Shape::Rect(frame)
-                    if frame.fill == fill && frame.rect.expand(0.5).contains_rect(inside) =>
+                    if frame.fill == fill
+                        && frame.rect.expand(0.5).contains_rect(inside)
+                        && best.is_none_or(|best| frame.rect.area() < best.area()) =>
                 {
-                    if best.is_none_or(|best| frame.rect.area() < best.area()) {
-                        *best = Some(frame.rect);
-                    }
+                    *best = Some(frame.rect);
                 }
                 _ => {}
             }
