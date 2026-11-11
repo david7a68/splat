@@ -129,10 +129,7 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
             if let Some(kind) = kind(label) {
                 Some((kind, title.trim().trim_matches('*').to_owned(), id))
             } else {
-                flags.push(Flag {
-                    line: line.number,
-                    message: "Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event.".into(),
-                });
+                flags.push(Flag::new(line.number, "Timeline item not read. Start it with Fight, Travel, Short rest, Long rest or Major event.".into()));
                 None
             }
         } else {
@@ -190,10 +187,7 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
                 match value.to_lowercase().as_str() {
                     "yes" => row.event.restores = true,
                     "no" => row.event.restores = false,
-                    _ => flags.push(Flag {
-                        line: line.number,
-                        message: "Restores: use yes or no".into(),
-                    }),
+                    _ => flags.push(Flag::new(line.number, "Restores: use yes or no".into())),
                 }
                 child = None;
             } else if label.eq_ignore_ascii_case("Session")
@@ -239,19 +233,13 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
         if row.event.kind == Kind::Day {
             let typed = written_day(&row.head.text);
             if let Some(typed) = typed.filter(|typed| *typed != expected) {
-                flags.push(Flag {
-                    line: row.head.number,
-                    message: format!("“Day {typed}” is day {expected} in order. Splat renumbers it when it saves."),
-                });
+                flags.push(Flag::new(row.head.number, format!("“Day {typed}” is day {expected} in order. Splat renumbers it when it saves.")));
             }
         }
     }
     rows.retain(|row| {
         if !seen.insert(row.event.id.clone()) {
-            flags.push(Flag {
-                line: row.head.number,
-                message: "Duplicate timeline id".into(),
-            });
+            flags.push(Flag::new(row.head.number, "Duplicate timeline id".into()));
             false
         } else {
             true
@@ -308,10 +296,10 @@ pub fn parse_with_sessions(
             if matches.len() == 1 {
                 row.event.session = Some(*matches[0].0);
             } else {
-                flags.push(Flag {
-                    line: line.number,
-                    message: "Session link not found. The saved session id is used.".into(),
-                });
+                flags.push(Flag::new(
+                    line.number,
+                    "Session link not found. The saved session id is used.".into(),
+                ));
             }
         }
     }

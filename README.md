@@ -293,7 +293,7 @@ on hover. Sharing required campaign entries lists the copies before **Copy both*
 
 The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, save rows, discard recovery, the Add strip, paused runs and message actions. Each scroll capture adds a section to the evidence. The `missing-glyph` check rejects painted characters missing from the app fonts. The
 `clipped` check also catches text partly covered by a later opaque pane. `src/design/lint.rs` fails on raw
-colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
+colours, text sizes and raw icon text outside `src/design/`, and on a straight apostrophe in a UI string, and `src/design/tokens.rs` tests WCAG contrast.
 
 Scenario labels are at the top of each scenario in `src/visual_tests/scenarios.rs`, and the
 ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md` section 8.

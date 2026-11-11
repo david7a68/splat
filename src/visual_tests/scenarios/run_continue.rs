@@ -11,7 +11,7 @@ const CONTINUE: &str = "Continue fight";
 const ROLL_LOOT: &str = "Roll 2× gems for Sunken Vault";
 const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
-const UNREAD: &str = "Splat could not read this run's saved Undo steps";
+const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
 
 /// The Undo control's whole action, which its accessible name keeps when its words are cut.

@@ -399,7 +399,7 @@ fn processing_destination(settings: &ProcessingSettings) -> String {
     let config = &settings.config;
     let llm = processing_llm(settings);
     format!(
-        "Process sends the audio and the session and campaign names to {} for a transcript. Then the transcript, this session's name, notes and events go to {llm} twice: once to clean them, and once to check that work against the raw words.",
+        "Process sends the audio and the session and campaign names to {} for a transcript. Then the transcript, this session’s name, notes and events go to {llm} twice: once to clean them, and once to check that work against the raw words.",
         processing::host(&config.speech_url)
     )
 }
@@ -407,7 +407,7 @@ fn processing_destination(settings: &ProcessingSettings) -> String {
 fn recording_destination(settings: &ProcessingSettings, recording: &Recording) -> String {
     if recording.transcript && processing::transcript_short_of(&recording.path).is_none() {
         format!(
-            "Continue processing sends the raw transcript, this session's name, notes and events to {}. The audio is not sent again.",
+            "Continue processing sends the raw transcript, this session’s name, notes and events to {}. The audio is not sent again.",
             processing_llm(settings)
         )
     } else {
@@ -1314,10 +1314,10 @@ impl Sessions {
                     word: "Recording stopped",
                     words: match plain_recorder_words(&words) {
                         Some(plain) => {
-                            format!("The recording of {label} stopped by itself: {plain}. {kept}")
+                            format!("The recording of “{label}” stopped by itself: {plain}. {kept}")
                         }
                         None => format!(
-                            "The recording of {label} stopped by itself. {kept} The recorder said: {}.",
+                            "The recording of “{label}” stopped by itself. {kept} The recorder said: {}.",
                             words.trim_end_matches(['.', '!', '?'])
                         ),
                     },
@@ -1475,7 +1475,7 @@ impl Sessions {
         let primary_owner = self.banner_primary_owner(settings, run_open);
         let stalled = self.stalled_elsewhere().map(|live| {
             format!(
-                "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
+                "The recording of “{}” is not saving audio after {}. What was saved is kept. Record again starts a new file.",
                 live.label,
                 spoken_length(live.recorder.seconds())
             )
@@ -1726,7 +1726,7 @@ impl Sessions {
                 self.notice = Some((
                     Tone::Success,
                     format!(
-                        "{label} is processed. Read the result, and add the events you want to the timeline."
+                        "“{label}” is processed. Read the result, and add the events you want to the timeline."
                     ),
                 ));
             }
@@ -1759,7 +1759,7 @@ impl Sessions {
                     retry: failed_recording,
                     said: None,
                     word: "Processing failed",
-                    words: format!("Processing {label} failed. What is done is kept. {error}"),
+                    words: format!("Processing “{label}” failed. What is done is kept. {error}"),
                 });
             }
         }
@@ -1833,7 +1833,7 @@ impl Sessions {
             return;
         };
         if !folder.is_dir() {
-            self.folder_error = Some(super::missing_folder(folder));
+            self.folder_error = Some(super::missing_folder("Session", folder));
             return;
         }
         self.folder_error = None;
@@ -2203,7 +2203,7 @@ impl Sessions {
             next.save();
             if next.unsaved() {
                 self.link_problem = Some(format!(
-                    "Links in {} were not saved. Resolve the note's save problem and try again.",
+                    "Links in {} were not saved. Resolve the note’s save problem and try again.",
                     next.path.display()
                 ));
             } else {
@@ -2465,7 +2465,10 @@ impl Sessions {
                     format!("Recording saved: {}.", recording_title(&path)),
                 )
             } else {
-                (Tone::Warning, format!("Nothing was recorded for {label}."))
+                (
+                    Tone::Warning,
+                    format!("Nothing was recorded for “{label}”."),
+                )
             });
         }
         self.refresh_recordings();
@@ -2803,7 +2806,7 @@ impl Sessions {
             let label = self
                 .selected
                 .and_then(|id| self.notes.iter().find(|note| note.id == id))
-                .map_or_else(String::new, Note::label);
+                .map_or_else(String::new, |note| format!("“{}”", note.label()));
             let today = self.today();
             let dated = self
                 .selected
@@ -4241,7 +4244,10 @@ impl Sessions {
                 .notes
                 .iter()
                 .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(|| "another session".to_owned(), Note::label);
+                .map_or_else(
+                    || "another session".to_owned(),
+                    |note| format!("“{}”", note.label()),
+                );
             if design::message_with_action(
                 ui,
                 Tone::Info,
@@ -4849,7 +4855,7 @@ impl Sessions {
                 design::message(
                     ui,
                     Tone::Info,
-                    &format!("This fight's run cannot be read. {error}"),
+                    &format!("This fight’s run cannot be read. {error}"),
                 );
             }
             Ok(summary) => {
@@ -5373,7 +5379,7 @@ impl Sessions {
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
                 let words = format!(
-                    "This sends the raw transcript, this session's name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
+                    "This sends the raw transcript, this session’s name, notes and events to {} twice. The audio is not sent again. It replaces the summary, the clean transcript and what the check changed. Events you added stay on the timeline.",
                     processing_llm(settings)
                 );
                 // The choices start at the message text; the red one keeps an `L` gap.
@@ -5918,7 +5924,7 @@ impl Sessions {
             let words = if here {
                 "The recorder is starting. Its file appears here in a moment.".to_owned()
             } else if let Some(label) = elsewhere {
-                format!("No recordings of this session. {label} is recording now.")
+                format!("No recordings of this session. “{label}” is recording now.")
             } else if let Some(reason) = &reason {
                 format!("No recordings of this session. {reason}")
             } else {
@@ -6517,7 +6523,7 @@ impl Sessions {
                         Type::Small
                             .rich(
                                 ui,
-                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian's core Templates plugin also fills {{date}} and {{title}}.",
+                                "Splat fills {{number}}, {{title}}, {{date}} and {{campaign}}. Obsidian’s core Templates plugin also fills {{date}} and {{title}}.",
                             )
                             .color(c.muted),
                     )

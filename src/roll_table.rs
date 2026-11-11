@@ -75,7 +75,7 @@ pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
     }
     Some(match (key, dice) {
         (Some(key), Some(dice)) => Ok((key, dice)),
-        _ => Err("This roll table's marker needs key= and dice=.".to_owned()),
+        _ => Err("This roll table’s marker needs key= and dice=.".to_owned()),
     })
 }
 
