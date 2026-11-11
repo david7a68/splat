@@ -1822,7 +1822,9 @@ impl Reader {
         {
             // The form has no file line, so the result sits below the title.
             self.draw_page_result(ui);
-            design::reader::measure(ui, |ui| self.lost_edits(ui, index));
+            if self.has_lost_edits(index) {
+                design::reader::measure(ui, |ui| self.lost_edits(ui, index));
+            }
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -1995,14 +1997,22 @@ impl Reader {
                 ui.add_space((design::M - spacing).max(0.0));
             }
         }
-        design::reader::measure(ui, |ui| {
-            for warning in index.errors.iter().filter(|error| {
+        let warnings: Vec<_> = index
+            .errors
+            .iter()
+            .filter(|error| {
                 error.starts_with(&format!("{}:", item.entry.path))
                     || error.starts_with(&format!("{} is in ", item.entry.name))
-            }) {
-                design::message(ui, Tone::Warning, warning);
-            }
-        });
+            })
+            .collect();
+        // Only a warning gets the scope: an empty one would still add an item gap.
+        if !warnings.is_empty() {
+            design::reader::measure(ui, |ui| {
+                for warning in warnings {
+                    design::message(ui, Tone::Warning, warning);
+                }
+            });
+        }
         // A value block that draws no row adds no gap. In World, the prose then starts where a
         // plain note's starts, below the file line. Lookup's compact reader has no file line:
         // there the prose keeps the reader's gap below the kind line, as an entry with no value

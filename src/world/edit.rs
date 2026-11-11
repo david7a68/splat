@@ -587,6 +587,17 @@ impl Reader {
         };
     }
 
+    /// A draft whose note is gone, or the Undo for one, is on show.
+    pub(super) fn has_lost_edits(&self, index: &ContentIndex) -> bool {
+        self.edits
+            .iter()
+            .any(|(id, draft)| index.position(*id).is_none() && draft.dirty())
+            || self
+                .discarded
+                .as_ref()
+                .is_some_and(|(id, _)| index.position(*id).is_none())
+    }
+
     /// Drafts whose note was deleted or given a new identity outside Splat. They cannot open
     /// again, so the DM copies the text or lets the draft go here. A draft let go stays in
     /// `discarded` for one `Undo discard` until the next Edit, the next Discard or the Undo.
