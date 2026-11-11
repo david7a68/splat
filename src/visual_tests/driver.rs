@@ -2110,6 +2110,17 @@ impl<'a> Driver<'a> {
             .unwrap_or(0)
     }
 
+    /// Test-only reading of app state. Unlike `app_mut`, it leaves the video's hold alone.
+    pub fn app(&self) -> &Splat {
+        self.harness.state()
+    }
+
+    /// How many frames the app has drawn, for `test_support::CachedWork` when a seam's guard has
+    /// no count of its own.
+    pub fn passes(&self) -> usize {
+        self.harness.ctx.cumulative_pass_nr() as usize
+    }
+
     /// Look at the app at another window size, off camera, then come back.
     pub fn at_size<T>(&mut self, size: (f32, f32), look: impl FnOnce(&Self) -> T) -> T {
         self.resize(size, 1.0);

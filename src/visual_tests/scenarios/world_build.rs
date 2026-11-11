@@ -1725,10 +1725,10 @@ pub fn round_trip(d: &mut Driver<'_>) {
     d.state("campaign-creature-as-npc", Sizes::All);
 
     // An unread list must not turn into an empty editable list.
-    let id = Uuid::new_v4();
+    let id = crate::hermetic::new_uuid();
     let unread_groups = format!(
         "splat_part_of: # Keep the stored groups.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n",
-        Uuid::new_v4()
+        crate::hermetic::new_uuid()
     );
     let unread_path = root(d).join("NPCs/Unread groups.md");
     let before = format!(
@@ -6130,7 +6130,10 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     let hand_edit = crate::content_workspace::patch_fields(
         std::str::from_utf8(&before).unwrap(),
         &[
-            ("splat_id", Some(Uuid::new_v4().to_string().into())),
+            (
+                "splat_id",
+                Some(crate::hermetic::new_uuid().to_string().into()),
+            ),
             ("splat_namespace", Some("manual_copy".into())),
             ("splat_key", Some("manual_copy:library".into())),
         ],
@@ -6370,13 +6373,13 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     let path = root(d).join("NPCs/Safe Rook.md");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let id = Uuid::new_v4();
+    let id = crate::hermetic::new_uuid();
     let readable = format!(
         "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: world\nsplat_name: Safe Rook\nsplat_type: npc\nsplat_part_of: # Keep the stored groups.\n- \"[[Zarel|the Archdevil]]\" # Keep the alias.\nsplat_status: alive\n---\n\n# Safe Rook\n\nKeeps the gate.\n"
     );
     let unread_groups = format!(
         "splat_part_of: # Keep the stored groups.\n- '[[Zarel|the Archdevil]]'\n- {{id: {}, link: '[[Lost Guild|the lost]]'}}\n",
-        Uuid::new_v4()
+        crate::hermetic::new_uuid()
     );
     let unread = readable.replace("splat_part_of: # Keep the stored groups.\n- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n", &unread_groups);
     fs::write(&path, &readable).unwrap();
