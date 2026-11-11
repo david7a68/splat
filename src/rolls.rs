@@ -232,7 +232,7 @@ pub(crate) fn hint(link: &RollLink) -> String {
         RollLink::Dice { dice, .. } => format!("Roll {dice}."),
         RollLink::SaveDc {
             label, ability, dc, ..
-        } => format!("{label}: roll its damage and each creature's DC {dc} {ability} save."),
+        } => format!("{label}: roll its damage and each creature’s DC {dc} {ability} save."),
     }
 }
 
@@ -1634,7 +1634,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
             let room = ui.available_width() - if left > 1 { more_width } else { 0.0 };
             if action.natural_width(ui) > room {
                 let hint = format!(
-                    "{}. Close Lookup to see them, or press Ctrl and an action's number.",
+                    "{}. Close Lookup to see them, or press Ctrl and an action’s number.",
                     design::count(left, "more action", "more actions")
                 );
                 ui.label(Type::Small.rich(ui, more).color(colors().muted))

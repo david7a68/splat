@@ -29,6 +29,11 @@ use std::{
 use uuid::Uuid;
 pub(crate) use view::{change_preview, change_rows};
 
+/// The words after a name in a sheet change's summary. The run header shortens them to `:`.
+pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
+/// The words after a name in the log line of a new turn.
+const TURN: &str = "’s turn.";
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
     pub key: String,
@@ -506,7 +511,7 @@ impl Participant {
         )?;
         let max = participant.max_hp.ok_or_else(|| {
             format!(
-                "{}: {} has no maximum HP. Set it in this member's overrides.",
+                "{}: {} has no maximum HP. Set it in this member’s overrides.",
                 group.name, member.entry.name
             )
         })?;
@@ -1137,7 +1142,7 @@ impl Run {
     /// The full HP stays in history, so the DM can return to it.
     fn use_saved_hp(&mut self) -> Result<(), String> {
         if !self.rest_filled_saved_hp() {
-            return Err("The long rest's HP is no longer the newest change.".into());
+            return Err("The long rest’s HP is no longer the newest change.".into());
         }
         let mut commands = Vec::new();
         for (index, hp, temp) in self.carried.iter().flat_map(|carried| &carried.sheets) {
@@ -1183,7 +1188,7 @@ impl Run {
         let carried = self.carried.as_ref()?;
         (!carried.missing.is_empty()).then(|| {
             format!(
-                "Could not read the run of {}, so that fight's HP did not carry over.",
+                "Could not read the run of {}, so that fight’s HP did not carry over.",
                 carried.missing.join(", ")
             )
         })
@@ -1748,7 +1753,7 @@ impl Run {
                 next.round = 1;
                 next.phase = Phase::Running;
                 format!(
-                    "Round 1: {}'s turn.",
+                    "Round 1: {}{TURN}",
                     next.participants[next.order[next.cursor]].name
                 )
             }
@@ -1761,7 +1766,7 @@ impl Run {
                 }
                 Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
-                    "Round {}: {}'s turn.",
+                    "Round {}: {}{TURN}",
                     next.round, next.participants[next.order[next.cursor]].name
                 )
             }
@@ -2872,7 +2877,7 @@ impl Run {
             if linked != Some(campaign.as_str()) {
                 sync.stop();
                 sync.error = Some(
-                    "Link this campaign to the character's D&D Beyond campaign to sync.".into(),
+                    "Link this campaign to the character’s D&D Beyond campaign to sync.".into(),
                 );
                 continue;
             }
@@ -3127,7 +3132,7 @@ impl Run {
                 .find_map(|participant| {
                     first.strip_prefix(&participant.name).map(|rest| {
                         format!(
-                            "{}'s sheet changed:{}",
+                            "{}{SHEET_CHANGED}{}",
                             participant.name,
                             rest.trim_start_matches(':')
                         )
@@ -3170,7 +3175,7 @@ impl Run {
             .map(|p| p.name.as_str())
             .collect();
         self.undo_boundary = Some(match names.as_slice() {
-            [name] => format!("Nothing to undo since {name}'s sheet changed"),
+            [name] => format!("Nothing to undo since {name}’s sheet changed"),
             _ => "Nothing to undo since the sheets changed".to_owned(),
         });
     }
@@ -3746,7 +3751,7 @@ impl Run {
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
-            return Err(format!("Run folder not found: {}.", directory.display()));
+            return Err(crate::sessions::missing_folder("Run", directory));
         }
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
@@ -4380,7 +4385,14 @@ mod tests {
         let error = Run::list(&dir.path().join("gone"), Uuid::nil())
             .err()
             .unwrap();
-        assert!(error.contains("Run folder not found"));
+        // FB6: the run says what the session says for the same fault.
+        assert_eq!(
+            error,
+            format!(
+                "Run folder not found: {}. It may have been moved or renamed.",
+                dir.path().join("gone").display()
+            )
+        );
     }
 
     #[test]
@@ -4791,9 +4803,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = Uuid::new_v4();
         let mut run = run();
+        // A name and notes with straight marks, and a note with the grouping phrase.
+        run.state.participants[2].name = "Ka'ar".into();
         begin(&mut run);
         run.apply(Command::Damage(0, 5)).unwrap();
         run.apply(Command::Next).unwrap();
+        run.apply(Command::Note(0, "Wait until Bob's turn.".into()))
+            .unwrap();
+        let grouping = Grouping::Explicit.label().replace('’', "'");
+        run.apply(Command::Note(2, format!("Roll {grouping} next time.")))
+            .unwrap();
         run.configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         let path = run.storage.as_ref().unwrap().path.clone();
@@ -4804,7 +4823,29 @@ mod tests {
             run.state.participants[0].hp
         );
         assert_eq!(reopened.state.log, run.state.log);
+        // Lead ruling on PR 235: the run file is Splat's own state, so the log keeps every
+        // line as shown, byte for byte, through two saves and loads: the generated curly
+        // turn, and the straight marks the DM and the names typed.
+        let expected = [
+            "Round 1: Guard 2’s turn.".to_owned(),
+            "Guard 1: DM note: Wait until Bob's turn.".to_owned(),
+            format!("Ka'ar: DM note: Roll {grouping} next time."),
+        ];
+        for line in &expected {
+            assert!(
+                run.state.log.contains(line),
+                "{line:?} in {:?}",
+                run.state.log
+            );
+            assert!(reopened.state.log.contains(line), "{line:?} after a load");
+        }
+        let stored = fs::read_to_string(&path).unwrap();
+        assert!(stored.contains("Guard 2’s turn.") && stored.contains("Bob's turn."));
         assert!(!reopened.needs_save());
+        reopened.dirty = true;
+        reopened.save().unwrap();
+        let twice = Run::open(&path, campaign).unwrap();
+        assert_eq!(twice.state.log, run.state.log);
         reopened.apply(Command::Next).unwrap();
         reopened.save().unwrap();
         assert_eq!(Run::open(&path, campaign).unwrap().current(), Some(2));
@@ -7371,7 +7412,7 @@ mod tests {
         assert_eq!(
             run.notice_summary.as_deref(),
             Some(
-                format!("{first}'s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more sheet")
+                format!("{first}’s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more sheet")
                     .as_str()
             )
         );

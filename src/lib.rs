@@ -645,11 +645,11 @@ impl Splat {
         let title = if items.len() == background {
             self.sessions
                 .recording_label()
-                .map(|label| format!("{label} is recording"))
+                .map(|label| format!("“{label}” is recording"))
                 .or_else(|| {
                     self.sessions
                         .processing_label()
-                        .map(|label| format!("{label} is processing"))
+                        .map(|label| format!("“{label}” is processing"))
                 })
                 .unwrap_or_else(|| title.to_owned())
         } else if only_sync && let Some(name) = &conflict {
@@ -1000,7 +1000,7 @@ impl Splat {
                         "Ctrl+J",
                         self.sessions.notes_open && self.page != Page::Sessions,
                     )
-                    .on_hover_text("This session's notes, beside this page (Ctrl+J)")
+                    .on_hover_text("This session’s notes, beside this page (Ctrl+J)")
                     .clicked()
                     {
                         self.toggle_notes();
@@ -1039,7 +1039,7 @@ impl Splat {
                     }
                 });
                 ui.ctx()
-                    .request_discard("The rail's status slot changed height");
+                    .request_discard("The rail’s status slot changed height");
             }
         });
     }
@@ -1809,7 +1809,7 @@ impl Splat {
                     |ui| {
                         open_entries = Action::quiet("Campaign entries")
                             .icon(icons::DOCUMENT)
-                            .hint("This campaign's own entries, in the Library")
+                            .hint("This campaign’s own entries, in the Library")
                             .show(ui)
                             .clicked();
                     },

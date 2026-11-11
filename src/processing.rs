@@ -246,16 +246,16 @@ impl Config {
     /// The first thing that stops Process, in the words the DM reads.
     pub fn problem(&self) -> Option<String> {
         if self.speech_url.trim().is_empty() {
-            return Some("Enter the speech service's address in Settings.".into());
+            return Some("Enter the speech service’s address in Settings.".into());
         }
         if self.speech_model.trim().is_empty() {
-            return Some("Enter the speech model's name in Settings.".into());
+            return Some("Enter the speech model’s name in Settings.".into());
         }
         if self.provider != Provider::CodexCli && self.llm_url.trim().is_empty() {
-            return Some("Enter the transcript and summary service's address in Settings.".into());
+            return Some("Enter the transcript and summary service’s address in Settings.".into());
         }
         if self.llm_model.trim().is_empty() {
-            return Some("Enter the transcript and summary model's name in Settings.".into());
+            return Some("Enter the transcript and summary model’s name in Settings.".into());
         }
         service_url(&self.speech_url).err().or_else(|| {
             (self.provider != Provider::CodexCli)
