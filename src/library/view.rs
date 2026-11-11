@@ -540,7 +540,7 @@ mod tests {
         (opening.top(), closing.bottom(), heading_top)
     }
 
-    /// FD5 (round 21): a converted creature (Slate Wolf) has no source text to style. Its
+    /// FD5 (round 21): a schema-2 creature with no source text to style (Slate Wolf). Its
     /// first heading starts as far below the stat block's closing rule as a styled creature's
     /// does, also with a line warning. Must stay true: the stat block opens at the same height.
     #[test]
@@ -554,9 +554,20 @@ mod tests {
             creature::supports(&styled, &presentation::reading_sections(&styled.body, "")),
             "fixture: the Aboleth reads as a styled stat block"
         );
-        let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000009\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}, initiative: {value: 2}, speed: {value: 40, unit: ft}, strength: {value: 12}, dexterity: {value: 15}}\n---\n\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n";
-        let converted = splat::content::formats::convert("Creatures/Slate Wolf.md", old).unwrap();
-        let slate = Entry::parse("Creatures/Slate Wolf.md", &converted).unwrap();
+        // Slate Wolf as the visual fixture writes it: a schema-2 note from the note writer,
+        // with its stat tables and no source text.
+        let written = splat::content::formats::fixture(
+            "Creatures/Slate Wolf.md",
+            "splat_id: 00000000-0000-0000-0000-000000000009\nsplat_kind: creature\nsplat_name: Slate Wolf\nsplat_creature: {size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', cr_text: '1 (XP 200; PB +2)'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}, initiative: {value: 2}, speed: {value: 40, unit: ft}, strength: {value: 12}, dexterity: {value: 15}}\n",
+            "\n# Slate Wolf\n\n## Actions\n\nBite. Melee Attack Roll: +4, reach 5 ft. Hit: 7 Piercing damage.\n",
+        )
+        .unwrap();
+        assert!(
+            written.contains("splat_schema: 2")
+                && written.contains("| Hit Points | 22 (4d8 + 4) |"),
+            "fixture: the writer gives a schema-2 note with its stat table"
+        );
+        let slate = Entry::parse("Creatures/Slate Wolf.md", &written).unwrap();
         assert!(
             creature::has_stats(&slate)
                 && !creature::supports(&slate, &presentation::reading_sections(&slate.body, "")),
