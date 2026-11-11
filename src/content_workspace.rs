@@ -471,17 +471,14 @@ impl ManifestWrite {
     pub fn path(&self) -> &str {
         &self.path
     }
+    /// One verb for the result and its `Undo write <file>`, whether the file was missing or
+    /// replaced (round 24 FF5).
     pub fn message(&self) -> String {
-        format!(
-            "{} was {}.",
-            self.path,
-            if self.replaced() {
-                "replaced"
-            } else {
-                "written again"
-            }
-        )
+        format!("{} was written again.", self.path)
     }
+    /// Whether the write replaced a file that was there. Tests only: the result says
+    /// `written again` either way.
+    #[cfg(test)]
     pub fn replaced(&self) -> bool {
         self.before.is_some()
     }
@@ -2322,7 +2319,7 @@ impl CopyPlan {
                 }
             }
         }
-        let new_id = Uuid::new_v4();
+        let new_id = crate::hermetic::new_uuid();
         // A were-creature's curse makes more of this creature, and the copy's makes more of the
         // copy. Prose that only names the original keeps its words.
         let normalized = source.text.clone();

@@ -512,6 +512,69 @@ fn a_scenarios_ids_come_from_its_name_alone() {
     assert!(twice.is_err());
 }
 
+/// Lines of `text` that make a random ID directly. Scenario code takes each new ID from
+/// `crate::hermetic::new_uuid`, which follows the scenario's seed, so two runs show the same IDs.
+fn random_id_lines(text: &str) -> Vec<usize> {
+    // Built from parts, so this function's own file does not match.
+    let calls = [concat!("Uuid::", "new_v4"), concat!("Uuid::", "now_v7")];
+    text.lines()
+        .enumerate()
+        .filter(|(_, line)| calls.iter().any(|call| line.contains(call)))
+        .map(|(at, _)| at + 1)
+        .collect()
+}
+
+/// Every Rust file under `src/visual_tests/`, the scenarios included.
+fn visual_test_sources() -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src/visual_tests")];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder).expect("read src/visual_tests") {
+            let path = entry.expect("read a visual test entry").path();
+            if path.is_dir() {
+                folders.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// Visual test code makes no random ID: a random ID differs on every run, so its captures
+/// differ too.
+#[test]
+fn visual_test_code_takes_ids_from_the_scenario_seed() {
+    let files = visual_test_sources();
+    // The scan reads the scenario files, so an empty scan cannot pass.
+    for scenario in ["scenarios.rs", "scenarios/world_build.rs"] {
+        assert!(
+            files.iter().any(|file| file.ends_with(scenario)),
+            "the scan missed {scenario}: {files:?}"
+        );
+    }
+    // It finds a direct call, in either form.
+    let random = concat!("let id = uuid::Uuid::", "new_v4();\n");
+    let unwrap = concat!("x.unwrap_or_else(Uuid::", "new_v4)\n");
+    assert_eq!(random_id_lines(&format!("ok\n{random}{unwrap}")), [2, 3]);
+    assert!(random_id_lines("crate::hermetic::new_uuid()\n").is_empty());
+    let found: Vec<String> = files
+        .iter()
+        .flat_map(|file| {
+            let text = std::fs::read_to_string(file).expect("read a visual test file");
+            random_id_lines(&text)
+                .into_iter()
+                .map(|line| format!("{}:{line}", file.display()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(
+        found.is_empty(),
+        "Use crate::hermetic::new_uuid() for a new ID in visual test code: {found:?}"
+    );
+}
+
 fn run_scenario(
     root: &Path,
     output: Option<&Path>,
