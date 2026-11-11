@@ -18,8 +18,8 @@ No feature adds a page, a panel, a tab, a strip or a dialog.
 **Counts, by hand against `steps.tsv`** (section 2.1): the 41 measured tasks go from 13 page transitions and
 231 interactions to 12 and 226, or 228 when the DM opens **More** twice on the Add strip. Seven records that
 were on paper cost 14 more, and 2 more, once, when the campaign has several travel tables. The audit script
-had drifted from `steps.tsv`. P1a repaired it and measured `main` again: 40 tasks, 15 page transitions and
-233 interactions (`artifacts/dm-audit/README.md`). That is G6's yardstick for every feature.
+had drifted from `steps.tsv`. P1a repaired it and measured `main` again: 42 tasks, 17 page transitions and
+240 interactions (`artifacts/dm-audit/README.md`). That is G6's yardstick for every feature.
 
 ## 1. Rules for every feature
 
@@ -254,8 +254,9 @@ typed scenes cost 1 more, and 1 to come back to the plan.
 - **The More clicks and the audit script.** `steps.tsv` counts no **More** click, and the script clicks
   **More** only when `Travel` or `Short rest` is not in view. Its task for a played fight clicks an `Add to
   notes` that the app no longer has (`src/sessions/page.rs:4388`). So this document gives no total for
-  `main`: P1a repairs the script, freezes it, and measures `main`. P1a measured 15 transitions and 233
-  interactions in 40 tasks; `artifacts/dm-audit/README.md` explains each difference from 13 and 231.
+  `main`: P1a repairs the script, freezes it, and measures `main`. P1a measured 17 transitions and 240
+  interactions in 42 tasks; `artifacts/dm-audit/README.md` explains each difference from 13 and 231. The
+  played fight's link now goes by the Timeline's `Copy link` and a paste in the note: 6, **T T**.
 
 ### 2.2 J2: the improvised evening
 

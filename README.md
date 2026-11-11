@@ -179,10 +179,11 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `dm-audit` (G6) plays the measured evening of `artifacts/dm-audit/` and fails when a task's
   page transitions, interactions or path differ from `artifacts/dm-audit/counts.json`.
   `plain-evening` (G7) plays the frozen plain campaign and fails on any difference from
-  `src/visual_tests/plain_evening/reference.json` in a control's or text's rectangle, the words
-  or a campaign file, unless a row of `plain_evening/allowed.json` names exactly that difference.
+  `src/visual_tests/plain_evening/reference.json`: a control's or text's rectangle in a view
+  that `SCREENS` names, the words or file writes of an act, or a campaign file's bytes, unless a
+  row of `plain_evening/allowed.json` names exactly that difference. A missing view always fails.
   `devenv shell -- audit-freeze [label]` writes the counts and the reference again from this
-  source. Run it on `main` only.
+  source. A feature pull request never runs it (`AGENTS.md`).
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.
