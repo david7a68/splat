@@ -337,25 +337,6 @@ pub(super) fn rules_text(ui: &mut egui::Ui, name: &str, body: &str, text: &str) 
     prose(ui, name, body, text, None, &mut |_, _| {});
 }
 
-/// These stat rows share the reader's label column, including changed values.
-fn stat_detail(ui: &mut egui::Ui, label: &str, value: &str, color: egui::Color32) {
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing.x = design::S;
-        let (rect, _) = ui.allocate_exact_size(
-            egui::vec2(7.0 * design::L, Type::Stat.line()),
-            egui::Sense::hover(),
-        );
-        ui.painter().text(
-            rect.min,
-            egui::Align2::LEFT_TOP,
-            label,
-            Type::StatLabel.font(ui),
-            colors().text,
-        );
-        ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(color)).wrap());
-    });
-}
-
 fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
     let preview = crate::encounter_run::change_preview(&splat::content::overrides::Row {
         label: "Speed",
@@ -364,7 +345,7 @@ fn changed_speed(ui: &mut egui::Ui, printed: &str, speed: &str) {
         by_hand: true,
         in_rolls: false,
     });
-    stat_detail(ui, "Speed", &preview, colors().participant.changed);
+    reader_style::stat_detail(ui, "Speed", &preview, colors().participant.changed);
 }
 
 /// One ability row of the stat block's attribute table.
@@ -475,11 +456,16 @@ fn skills_detail(ui: &mut egui::Ui, text: &str) {
     let mut at = 0;
     let skills = dice_text::skills(text);
     if skills.is_empty() {
-        reader_style::detail(ui, "Skills", text);
+        reader_style::stat_detail(ui, "Skills", text, colors().text);
         return;
     }
     for (range, name, bonus) in skills {
-        markdown.push_str(&text[at..range.start]);
+        // A skill and its bonus wrap as one unit: the blanks inside `Sleight of Hand +5` do not
+        // break, so the bonus never starts a line without its name.
+        let between = &text[at..range.start];
+        let skill = between.trim_start_matches(|c: char| c == ',' || c == ';' || c.is_whitespace());
+        markdown.push_str(&between[..between.len() - skill.len()]);
+        markdown.push_str(&skill.replace(char::is_whitespace, "\u{a0}"));
         markdown.push_str(&RollLink::d20(D20::Skill, bonus, name).markdown(&text[range.clone()]));
         at = range.end;
     }
@@ -814,7 +800,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
             } else if label == "Skills" {
                 skills_detail(ui, &text);
             } else {
-                reader_style::detail(ui, label, &text);
+                reader_style::stat_detail(ui, label, &text, colors().text);
             }
         }
     }
@@ -1077,5 +1063,262 @@ mod tests {
             ),
             "Keep the existing complete view when no source rules prose exists"
         );
+    }
+
+    /// A harness that draws `add` in a panel `width` wide.
+    fn drawn(
+        width: f32,
+        add: impl FnMut(&mut egui::Ui) + 'static,
+    ) -> egui_kittest::Harness<'static> {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(width, 900.0))
+            .build_ui(add);
+        design::theme::install(&harness.ctx);
+        harness.run_ok();
+        harness
+    }
+
+    /// One painted glyph: its row in its galley, its character (a no-break space reads as a
+    /// blank), its left and right edges and its baseline.
+    #[derive(Clone, Copy, Debug)]
+    struct Drawn {
+        row: usize,
+        chr: char,
+        left: f32,
+        right: f32,
+        baseline: f32,
+    }
+
+    /// The glyphs of the first painted text that holds `needle`.
+    fn glyphs_of(harness: &egui_kittest::Harness<'_>, needle: &str) -> Vec<Drawn> {
+        for shape in &harness.output().shapes {
+            let egui::Shape::Text(text) = &shape.shape else {
+                continue;
+            };
+            let glyphs: Vec<Drawn> = text
+                .galley
+                .rows
+                .iter()
+                .enumerate()
+                .flat_map(|(row_at, row)| {
+                    row.glyphs.iter().map(move |glyph| {
+                        let left = text.pos.x + row.pos.x + glyph.pos.x;
+                        Drawn {
+                            row: row_at,
+                            chr: if glyph.chr == '\u{a0}' {
+                                ' '
+                            } else {
+                                glyph.chr
+                            },
+                            left,
+                            right: left + glyph.advance_width,
+                            baseline: text.pos.y + row.pos.y + glyph.pos.y,
+                        }
+                    })
+                })
+                .collect();
+            let words: String = glyphs.iter().map(|glyph| glyph.chr).collect();
+            if words.contains(needle) {
+                return glyphs;
+            }
+        }
+        panic!("{needle} is painted");
+    }
+
+    /// The glyphs of each place `words` is drawn, in reading order.
+    fn runs(glyphs: &[Drawn], words: &str) -> Vec<Vec<Drawn>> {
+        let chars: Vec<char> = glyphs.iter().map(|glyph| glyph.chr).collect();
+        let wanted: Vec<char> = words.chars().collect();
+        (0..=chars.len().saturating_sub(wanted.len()))
+            .filter(|at| chars[*at..*at + wanted.len()] == wanted[..])
+            .map(|at| glyphs[at..at + wanted.len()].to_vec())
+            .collect()
+    }
+
+    /// Every link's press target, in reading order.
+    fn link_targets(harness: &egui_kittest::Harness<'_>) -> Vec<egui::Rect> {
+        use egui_kittest::kittest::NodeT;
+        let mut targets: Vec<egui::Rect> = harness
+            .root()
+            .children_recursive()
+            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Link)
+            .map(|node| node.rect())
+            .collect();
+        targets.sort_by(|a, b| {
+            (a.top(), a.left())
+                .partial_cmp(&(b.top(), b.left()))
+                .unwrap()
+        });
+        targets
+    }
+
+    /// FD3 joint witness: `Deception +2, Religion +2` reads with no space before the comma,
+    /// both bonuses are `XL` square targets apart from each other and from the words around them,
+    /// and each bonus is as far from its skill as the other.
+    #[test]
+    fn iter20_s_fd3_a_skills_row_has_no_space_before_its_comma() {
+        // The panel widths of a stat block beside the editor, in Library and in a narrow side.
+        for width in [960.0, 480.0, 300.0] {
+            let harness = drawn(width, |ui| skills_detail(ui, "Deception +2, Religion +2"));
+            let at = format!("at {width}");
+            let glyphs = glyphs_of(&harness, "Deception");
+            let bonuses = runs(&glyphs, "+2");
+            assert_eq!(bonuses.len(), 2, "FD3-bonuses: {at}");
+            let comma = runs(&glyphs, ",");
+            assert_eq!(comma.len(), 1, "FD3-comma: {at}");
+            let gap = comma[0][0].left - bonuses[0][1].right;
+            // The font may kern the comma under the digit; a blank would be about 3 px or more.
+            assert!(
+                gap.abs() <= 1.0,
+                "FD3-no-space-before-comma: {at}: gap {gap}"
+            );
+            let targets = link_targets(&harness);
+            assert_eq!(targets.len(), 2, "FD3-targets: {at}: {targets:?}");
+            let religion = runs(&glyphs, "Religion")[0][0];
+            for (target, bonus) in targets.iter().zip(&bonuses) {
+                assert!(
+                    target.width() >= design::XL - 0.01 && target.height() >= design::XL - 0.01,
+                    "FD3-target-size: {at}: {target:?}"
+                );
+                assert!(
+                    target.left() <= bonus[0].left + 0.5 && target.right() >= bonus[1].right - 0.5,
+                    "FD3-target-covers-bonus: {at}: {target:?} {bonus:?}"
+                );
+            }
+            // On one row, the first target ends before the next skill starts.
+            assert!(
+                religion.row != bonuses[0][0].row || targets[0].right() <= religion.left + 0.5,
+                "FD3-target-clear-of-next-skill: {at}: {:?}, Religion at {}",
+                targets[0],
+                religion.left
+            );
+            let shared = targets[0].intersect(targets[1]);
+            assert!(
+                shared.width() <= 0.01 || shared.height() <= 0.01,
+                "FD3-targets-apart: {at}: {targets:?}"
+            );
+            // Must stay true: the bonus that ends the row is as far from its skill as the one
+            // before the comma, so the row reads evenly.
+            let names = [
+                runs(&glyphs, "Deception")[0][8],
+                runs(&glyphs, "Religion")[0][7],
+            ];
+            let gaps: Vec<f32> = names
+                .iter()
+                .zip(&bonuses)
+                .map(|(name, bonus)| bonus[0].left - name.right)
+                .collect();
+            // Glyphs snap to whole pixels, so the gaps can differ by one.
+            assert!(
+                (gaps[0] - gaps[1]).abs() <= 1.0,
+                "FD3-even-skill-gaps: {at}: {gaps:?}"
+            );
+        }
+    }
+
+    /// SD3: a skill and its bonus wrap as one unit at every width, and each bonus keeps its own
+    /// link target.
+    #[test]
+    fn iter20_s_sd3_a_skill_and_its_bonus_wrap_together() {
+        const SKILLS: &str =
+            "Insight +8, Perception +14, Persuasion +9, Sleight of Hand +5, Stealth +8";
+        let skills = [
+            ("Insight", "+8"),
+            ("Perception", "+14"),
+            ("Persuasion", "+9"),
+            ("Sleight of Hand", "+5"),
+            ("Stealth", "+8"),
+        ];
+        let mut wrapped = 0;
+        // From the narrowest panel where the longest unit, `Sleight of Hand +5`, fits a line.
+        for width in (260..=600).step_by(4) {
+            let harness = drawn(width as f32, |ui| skills_detail(ui, SKILLS));
+            let at = format!("at {width}");
+            let glyphs = glyphs_of(&harness, "Insight");
+            let rows = glyphs.last().map_or(0, |glyph| glyph.row + 1);
+            if rows > 1 {
+                wrapped += 1;
+            }
+            let targets = link_targets(&harness);
+            assert_eq!(targets.len(), skills.len(), "SD3-links: {at}");
+            for ((name, bonus), target) in skills.iter().zip(&targets) {
+                let unit = format!("{name} {bonus}");
+                let found = runs(&glyphs, &unit);
+                assert_eq!(found.len(), 1, "SD3-unit-drawn: {at}: {unit}");
+                let unit_glyphs = &found[0];
+                assert!(
+                    unit_glyphs
+                        .iter()
+                        .all(|glyph| glyph.row == unit_glyphs[0].row),
+                    "SD3-one-row: {at}: {unit} is split across rows"
+                );
+                let digit = unit_glyphs.last().unwrap();
+                assert!(
+                    target.contains(egui::pos2(
+                        (digit.left + digit.right) / 2.0,
+                        digit.baseline - 2.0
+                    )),
+                    "SD3-bonus-keeps-target: {at}: {unit} target {target:?}"
+                );
+            }
+        }
+        assert!(wrapped > 0, "SD3-wrap-reached: no width wrapped the row");
+    }
+
+    /// FD4: every detail row of a stat block has one pitch, the link pitch, whether or not it
+    /// holds a link; a wrapped row keeps that pitch on every line.
+    #[test]
+    fn iter20_s_fd4_stat_detail_rows_have_one_pitch() {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        for width in [960.0, 240.0] {
+            let entry = Entry::parse("Aboleth.md", source).unwrap();
+            let harness = drawn(width, move |ui| stat_head(ui, &entry, None));
+            let at = format!("at {width}");
+            let mut rows: Vec<(f32, Vec<Drawn>)> = Vec::new();
+            for (label, first) in [
+                ("Speed", "10 ft."),
+                ("Skills", "History"),
+                ("Senses", "Darkvision"),
+                ("Languages", "Deep"),
+                ("Challenge", "(XP"),
+            ] {
+                let label_glyphs = glyphs_of(&harness, label);
+                let value = glyphs_of(&harness, first);
+                let start = value[0];
+                // Must stay true: the label sits on its value's first baseline.
+                assert!(
+                    (label_glyphs[0].baseline - start.baseline).abs() <= 0.5,
+                    "FD4-label-baseline: {at}: {label} {} vs {first} {}",
+                    label_glyphs[0].baseline,
+                    start.baseline
+                );
+                rows.push((label_glyphs[0].baseline, value));
+            }
+            for pair in rows.windows(2) {
+                let (top, value) = &pair[0];
+                let lines = value.last().unwrap().row + 1;
+                let pitch = pair[1].0 - top;
+                let expected = lines as f32 * design::XL + 2.0;
+                assert!(
+                    (pitch - expected).abs() <= 0.5,
+                    "FD4-pitch: {at}: {lines} lines then {pitch} (expected {expected})"
+                );
+                let mut baselines: Vec<f32> = value.iter().map(|glyph| glyph.baseline).collect();
+                baselines.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+                for line in baselines.windows(2) {
+                    assert!(
+                        (line[1] - line[0] - design::XL).abs() <= 0.5,
+                        "FD4-wrapped-pitch: {at}: {baselines:?}"
+                    );
+                }
+            }
+            if width < 300.0 {
+                assert!(
+                    rows.iter().any(|(_, value)| value.last().unwrap().row > 0),
+                    "FD4-wrap-reached: {at}"
+                );
+            }
+        }
     }
 }
