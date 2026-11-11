@@ -167,8 +167,6 @@ impl Tables {
                     tables.sources.push(format!("{key}: {path}"));
                 }
                 Some(error) => tables.problems.push(TableProblem {
-                    path: path.clone(),
-                    marker: key.clone(),
                     message: format!(
                         "{path}: {} Built-in {} stand in until it is fixed.",
                         error.replacen("the table", &format!("the {label} table"), 1),
@@ -178,6 +176,8 @@ impl Tables {
                             "attributes"
                         }
                     ),
+                    path,
+                    marker: key,
                 }),
             }
         }

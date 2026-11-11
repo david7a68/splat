@@ -185,6 +185,17 @@ struct Live {
     recorder: Recorder,
 }
 
+/// Whether a session is being played (W14), and which: the answer of `played_session`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Played {
+    /// No session is being played.
+    No,
+    /// A fight is open or a recording is live, and no session note is current.
+    NoNote,
+    /// This session's note is being played.
+    Session(Uuid),
+}
+
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
@@ -1622,7 +1633,9 @@ impl Sessions {
     /// what the DM changes between sessions, with no fight or recording, is not put on the
     /// last session.
     pub fn current_link(&mut self) -> Option<String> {
-        let played = self.played_session()??;
+        let Played::Session(played) = self.played_session() else {
+            return None;
+        };
         let note = self.notes.iter().find(|note| note.id == played)?;
         note.path
             .file_stem()
@@ -1630,16 +1643,18 @@ impl Sessions {
     }
 
     /// The session being played (W14): a fight is open, a recording is live, or the current
-    /// session is not dated before today. `None` when no session is being played; otherwise the
-    /// current session, which is `None` itself while a fight or a recording has no session note.
-    /// Every reader of "the session being played" asks this one function.
-    pub fn played_session(&mut self) -> Option<Option<Uuid>> {
+    /// session is not dated before today. Every reader of "the session being played" asks this
+    /// one function.
+    pub fn played_session(&mut self) -> Played {
         let today = self.today();
         let current = self.current();
         let dated = current
             .and_then(|current| self.notes.iter().find(|note| note.id == current))
             .is_some_and(|note| note.date.as_str() >= today.as_str());
-        (self.run_open || self.live.is_some() || dated).then_some(current)
+        if !(self.run_open || self.live.is_some() || dated) {
+            return Played::No;
+        }
+        current.map_or(Played::NoNote, Played::Session)
     }
 
     /// Today, as of when the app started. A game that passes midnight is still tonight.
@@ -1655,7 +1670,7 @@ impl Sessions {
         if let Some(chosen) = self.party_bar {
             return chosen;
         }
-        self.played_session().is_some()
+        self.played_session() != Played::No
     }
 
     /// The words if new events go to a session that looks like an old one.
@@ -6902,6 +6917,11 @@ mod tests {
                 ..Sessions::default()
             };
             let current = sessions.current();
+            let expected = match (played, current) {
+                (false, _) => Played::No,
+                (true, None) => Played::NoNote,
+                (true, Some(id)) => Played::Session(id),
+            };
             if recording {
                 let path = dir.path().join("live.wav");
                 sessions.live = Some(Live {
@@ -6915,11 +6935,7 @@ mod tests {
                     .unwrap(),
                 });
             }
-            assert_eq!(
-                sessions.played_session(),
-                played.then_some(current),
-                "{case}"
-            );
+            assert_eq!(sessions.played_session(), expected, "{case}");
             assert_eq!(sessions.party_bar_shows(), played, "{case}: the party bar");
             assert_eq!(
                 sessions.current_link(),
@@ -6937,11 +6953,7 @@ mod tests {
                 !played,
                 "{case}: the DM's choice"
             );
-            assert_eq!(
-                sessions.played_session(),
-                played.then_some(current),
-                "{case}"
-            );
+            assert_eq!(sessions.played_session(), expected, "{case}");
         }
     }
 }

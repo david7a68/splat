@@ -3,13 +3,10 @@
 //! Library items while the DM types. A roll names its table from a list, so a key that no
 //! table has shows on its row before play.
 use crate::design::{self, Density, Status, Tone, Type, colors, icons};
-use crate::roll_table::TableRoll;
+use crate::roll_table::{Table, TableRoll};
 use eframe::egui;
 use splat::content::loot::{Loot, MAX_ROLLS, SEPARATOR};
 use std::sync::Arc;
-
-/// One of the campaign's marked roll tables, from the one descriptor that every place shares.
-pub use crate::roll_table::Table;
 
 /// An item from the Library that a loot line can link to.
 #[derive(Clone, Debug, PartialEq)]
