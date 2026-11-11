@@ -781,7 +781,9 @@ Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the se
 Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. A menu choice's
 reason (`Already last.`) or help line (`Edit a copy in this campaign.`) starts at the choice's words, after its
 padding and any icon, and ends that padding (`S`) before the menu's right edge: the menu asks for its width with
-both, so a long note keeps the right margin and wraps before it. Side
+both, so a long note keeps the right margin and wraps before it. A row menu opens below or above its button
+inside the pane that holds the button, never beside it over a splitter or scroll bar; while it is open, the pane
+keeps its button in view, also after the window shrinks. Side
 pickers offer Party, Enemies and Other…; only Other opens a name field and replaces the value. Changed stays
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
 the full change link, removing source before base creature. Remove a source whole without an ellipsis;
@@ -1067,7 +1069,7 @@ Arrivals and the Encounters list draw a member fault's repair (`Campaign → Pac
 when it goes below the fault; when there is room, it sits beside the fault after an `L` gap.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
-with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Live initiative notices name who joins and the total. Before the current turn,
+with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Every view draws each member fault in its own tone first, then the group's own reason (`No members can join.`) as a warning message, also when no member can join. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 

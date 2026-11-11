@@ -757,6 +757,29 @@ mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, page::SessionLink};
 
+    /// Astra review of PR 231: a row menu opens below or above its button, never beside it, and
+    /// starts at the button's left edge only when ending at its right edge would cross the pane.
+    #[test]
+    fn iter22_b_row_menu_opens_below_or_above_inside_its_pane() {
+        use egui::{RectAlign, pos2, vec2};
+        let pane = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(590.0, 632.0));
+        let button = egui::Rect::from_min_max(pos2(561.0, 600.0), pos2(585.0, 628.0));
+        let menu = Some(vec2(236.0, 110.0));
+        let end = [RectAlign::BOTTOM_END, RectAlign::TOP_END];
+        // Unknown size (the first frame) and the usual case: end at the button's right edge.
+        assert_eq!(menu_aligns(button, None, pane), end);
+        assert_eq!(menu_aligns(button, menu, pane), end);
+        // A button near the pane's left edge: ending at it would cross the pane, so start at it.
+        let near_left = button.translate(vec2(160.0 - button.left(), 0.0));
+        assert_eq!(
+            menu_aligns(near_left, menu, pane),
+            [RectAlign::BOTTOM_START, RectAlign::TOP_START]
+        );
+        // A pane too narrow for either: still end at the button, never beside it.
+        let narrow = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(330.0, 632.0));
+        assert_eq!(menu_aligns(near_left, menu, narrow), end);
+    }
+
     #[test]
     fn paused_duplicates_use_session_then_one_save_time() {
         let runs = [1, 2].map(|n| SavedRunInfo {
