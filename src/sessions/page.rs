@@ -1380,8 +1380,19 @@ impl Sessions {
             if !draft.unsaved() && draft.dropped.is_none() {
                 match self.notes.iter().find(|note| note.id == id) {
                     Some(note) if note.path != draft.path => {
+                        // The one note with this ID moved, so its Undo goes with it. A copy
+                        // that claims the ID too is not followed.
+                        let moved = note
+                            .also
+                            .is_empty()
+                            .then(|| (draft.path.clone(), note.path.clone()));
                         self.draft = None;
                         self.select(Some(id));
+                        if let (Some((from, to)), Some((.., undo))) =
+                            (moved, &mut self.removed_fight)
+                        {
+                            undo.moved(&from, &to);
+                        }
                     }
                     None => {
                         self.draft = None;
@@ -3667,7 +3678,7 @@ impl Sessions {
             return;
         };
         let line = format!("- [[{name}]]");
-        let _ = draft.apply(Apply::WithTyping, |words| {
+        let _ = draft.apply(session, Apply::WithTyping, |words| {
             let mut words = words.to_owned();
             insert_in_plan(&mut words, &line);
             Some(words)
