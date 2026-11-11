@@ -1548,7 +1548,8 @@ the DM must choose before anything else. Removing an event counts notes that sti
 to it and uses warning tone when any do. Each item's save state tracks its own edits: muted Saving… during
 delay, Saved when unchanged, Unsaved with reason when blocked. Rests show default duration as a faint
 placeholder, with Starts and Ends beside duration help. Rename never changes notes automatically. The offer is the Library's, from one function:
-`Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo; custom
+`Change links from “<old>” to “<new>”.` with `Update N links`, in the list column; it updates old-title aliases as one batch with Undo,
+and checks every note first: if one is changed on disk or needs a choice, no note is written; custom
 aliases remain. Undo stays only in the list column until a note/event edit or leaving Timeline, never in
 conflict. Completed link updates use success.
 
@@ -1564,7 +1565,10 @@ Copied sessions say `<first file> and <second file> claim to be the same session
 Make <file> a separate session with Undo separate session. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
 offer the new path, a new file and red `Discard`. Discard follows the moved file when it still holds the note:
 the editor shows that file's words and saves there. With no file left, the editor keeps the last saved words in
-the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path. When Splat found the note under a new name, the warning
+the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path.
+A new file takes a new identity only once it exists: if a file arrived at that path, nothing is written, the draft
+keeps its identity and the File gone state, and the warning says why above the choices. Discarded or reloaded
+words stay recoverable when the draft follows a later outside edit; their Undo then meets the conflict choice. When Splat found the note under a new name, the warning
 says so: `This note was moved or renamed. It is now <file>. Your draft is still here.`; `gone from the folder`
 is only for a note with no new place; Discard says `Draft discarded.` with `Undo discard`. After
 `Reload and lose my draft`, a note says `Reloaded from disk.` with `Undo reload`, as World does. Missing session and run folders offer Choose folder.
@@ -1578,7 +1582,8 @@ wraps at `LIST_MEASURE`. The result of the DM's own action on the page keeps its
 saved: …`, `Recording deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run
 stays or moved, `No entry is named …`, and `Draft discarded.` or `Reloaded from disk.` with their Undo. When the
 banner makes the note's view shorter and the view was at the note's end, it stays at the end, so the line being
-typed stays in view.
+typed stays in view. The banner is at most a third of the window; longer content scrolls inside it, with the
+recording alerts at its top, and a choice that gains keyboard focus scrolls into view.
 
 ### Notes panel
 
