@@ -112,13 +112,11 @@ impl EntitySnapshot {
             if !text.contains(&self.definition.splat_id.to_string()) {
                 continue;
             }
-            // Generated words that still match their checksum hold nothing of the DM's. Such
-            // a copy never blocks a refresh, whatever Splat can read of it: when it is this
-            // sheet, the refresh writes it again and keeps the notes below it.
-            if parts(&text).intact {
-                if text.contains(&format!("\nsplat_id: {}\n", self.definition.splat_id)) {
-                    paths.push(path);
-                }
+            // Generated words that still match their checksum hold nothing of the DM's. When
+            // the properties name this sheet, the refresh writes the copy again, whatever
+            // Splat can read of it, and keeps the notes below it.
+            if parts(&text).intact && copy_id(&text) == Some(self.definition.splat_id) {
+                paths.push(path);
                 continue;
             }
             return Err(format!("{}: {}", path.display(), error.message).into());
@@ -152,8 +150,8 @@ impl EntitySnapshot {
                 if named.exists()
                     && fs::read_to_string(&named)
                         .ok()
-                        .and_then(|text| Entry::parse("sheet.md", &text).ok())
-                        .is_some_and(|entry| entry.id != self.definition.splat_id)
+                        .and_then(|text| copy_id(&text))
+                        .is_some_and(|id| id != self.definition.splat_id)
                 {
                     return Ok(named.with_file_name(format!(
                         "{} {}.md",
@@ -242,8 +240,8 @@ impl EntitySnapshot {
             if path == character_path
                 && previous
                     .as_deref()
-                    .and_then(|text| Entry::parse("sheet.md", text).ok())
-                    .is_some_and(|entry| entry.id != self.definition.splat_id)
+                    .and_then(copy_id)
+                    .is_some_and(|id| id != self.definition.splat_id)
             {
                 return Err(
                     "A different character already uses this file name. No file was replaced."
@@ -387,10 +385,20 @@ fn retire_plan(
         if annotated && !edited {
             continue;
         }
+        // A refresh does not add a second archive beside one with other words.
+        let other_archive = || {
+            let archive = path.with_extension("md.splat-archive");
+            on_edits == OnEdits::Stop
+                && archive.exists()
+                && fs::read_to_string(&archive).ok().as_ref() != Some(&text)
+        };
         let entry = match Entry::parse(&path.to_string_lossy(), &text) {
             Ok(entry) => entry,
-            // No entry can need words that no longer parse.
-            Err(_) if edited => {
+            // No entry can need words that Splat cannot read. The archive keeps them.
+            Err(_) => {
+                if !edited && other_archive() {
+                    return Err(conflict(&path.with_extension("md.splat-archive")));
+                }
                 formers.push(Former {
                     path,
                     text,
@@ -399,7 +407,6 @@ fn retire_plan(
                 });
                 continue;
             }
-            Err(e) => return Err(e.into()),
         };
         if planned.iter().any(|e| e.id == entry.id) {
             if edited {
@@ -421,11 +428,8 @@ fn retire_plan(
             });
             continue;
         }
-        if on_edits == OnEdits::Stop {
-            let archive = path.with_extension("md.splat-archive");
-            if archive.exists() && fs::read_to_string(&archive).ok().as_ref() != Some(&text) {
-                return Err(conflict(&archive));
-            }
+        if other_archive() {
+            return Err(conflict(&path.with_extension("md.splat-archive")));
         }
         candidates.insert(entry.id, (path, text, entry));
     }
@@ -440,9 +444,13 @@ fn retire_plan(
         .chain(formers.iter().map(|former| former.path.clone()))
         .collect();
     let (existing, errors) = crate::content::read_directory(campaign)?;
+    // A staged note gets its new words in this save, so what it holds now cannot stop it.
     let errors: Vec<_> = errors
         .into_iter()
-        .filter(|error| !leaving.contains(&campaign.join(&error.path)))
+        .filter(|error| {
+            let path = campaign.join(&error.path);
+            !leaving.contains(&path) && !staged.iter().any(|note| note.path == path)
+        })
         .collect();
     if !errors.is_empty() {
         return Err(format!(
@@ -485,6 +493,22 @@ fn retire_plan(
         }
     }
     Ok(formers)
+}
+/// The identity in a copy's properties. This does not use the note reader, so it also holds
+/// for a copy that Splat cannot read. Words below the properties never count.
+fn copy_id(text: &str) -> Option<uuid::Uuid> {
+    #[derive(serde::Deserialize)]
+    struct Properties {
+        splat_id: uuid::Uuid,
+    }
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let (properties, _) = text
+        .strip_prefix("---\n")
+        .or_else(|| text.strip_prefix("---\r\n"))?
+        .split_once("\n---")?;
+    serde_yaml_ng::from_str::<Properties>(properties)
+        .ok()
+        .map(|properties| properties.splat_id)
 }
 fn conflict(path: &Path) -> CampaignCopyError {
     CampaignCopyError::Conflict(path.to_path_buf())
@@ -710,22 +734,34 @@ mod tests {
         record.save_campaign_copy(root.path()).unwrap();
     }
 
+    /// A generated copy in a layout that Splat does not read.
+    fn unreadable_copy(id: uuid::Uuid, intact: bool, notes: &str) -> String {
+        let generated = format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Copy\n---\n\nSheet.\n"
+        );
+        let hash = if intact {
+            checksum(&generated)
+        } else {
+            "0".repeat(64)
+        };
+        format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}{notes}")
+    }
+
     #[test]
     fn an_unreadable_copy_is_written_again_only_while_its_generated_words_are_unchanged() {
         // Splat reads only schema 2. A copy it cannot read is still generated text while its
-        // checksum holds, so a refresh writes it again. With a change in it, it is the DM's
-        // file: a refresh or Replace names it and changes nothing.
+        // checksum holds, so a refresh writes it again. Former copies do not stop that: a
+        // readable one retires as usual, and one that Splat cannot read goes to its archive.
         let root = tempfile::tempdir().unwrap();
         let mut record = super::super::tests::sample();
+        let id = record.definition.splat_id;
         let creature = record.save_campaign_copy(root.path()).unwrap();
-        let generated = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Copy\n---\n\nSheet.\n",
-            record.definition.splat_id
-        );
-        let unreadable =
-            |hash: &str| format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}Kept note.\n");
-
-        fs::write(&creature, unreadable(&checksum(&generated))).unwrap();
+        fs::write(&creature, unreadable_copy(id, true, "Kept note.\n")).unwrap();
+        let (readable, readable_text, _) =
+            old_copy(&record, root.path(), "dnd2024:spells/fire_bolt", "");
+        let former = readable.with_file_name(format!("{}.md", uuid::Uuid::new_v4()));
+        let former_text = unreadable_copy(uuid::Uuid::new_v4(), true, "");
+        fs::write(&former, &former_text).unwrap();
         record.definition.splat_name = "Refreshed".into();
         assert_eq!(record.save_campaign_copy(root.path()).unwrap(), creature);
         let refreshed = fs::read_to_string(&creature).unwrap();
@@ -735,37 +771,52 @@ mod tests {
         );
         assert!(refreshed.ends_with("Kept note.\n"));
         assert!(!creature.with_extension("md.splat-archive").exists());
+        for (path, text) in [(readable, readable_text), (former, former_text)] {
+            assert!(!path.exists(), "{}", path.display());
+            assert_eq!(
+                fs::read_to_string(path.with_extension("md.splat-archive")).unwrap(),
+                text
+            );
+        }
 
-        let changed = unreadable(&"0".repeat(64));
-        fs::write(&creature, &changed).unwrap();
-        let expected = format!(
-            "{}: Unsupported content schema; expected 2",
-            creature.display()
-        );
-        assert_eq!(
-            record.save_campaign_copy(root.path()),
-            Err(expected.clone().into())
-        );
-        assert_eq!(
-            record.overwrite_campaign_copy(root.path()),
-            Err(expected.into())
-        );
-        assert_eq!(fs::read_to_string(&creature).unwrap(), changed);
-        assert!(!creature.with_extension("md.splat-archive").exists());
+        // With a change in it, the copy is the DM's file. So is a copy whose properties name
+        // another character, whatever its notes say. A refresh or Replace names the file and
+        // changes nothing.
+        let another = unreadable_copy(uuid::Uuid::new_v4(), true, &format!("splat_id: {id}\n"));
+        for kept in [unreadable_copy(id, false, "Kept note.\n"), another] {
+            fs::write(&creature, &kept).unwrap();
+            let expected = format!(
+                "{}: Unsupported content schema; expected 2",
+                creature.display()
+            );
+            assert_eq!(
+                record.save_campaign_copy(root.path()),
+                Err(expected.clone().into())
+            );
+            assert_eq!(
+                record.overwrite_campaign_copy(root.path()),
+                Err(expected.into())
+            );
+            assert_eq!(fs::read_to_string(&creature).unwrap(), kept);
+            assert!(!creature.with_extension("md.splat-archive").exists());
+        }
     }
 
     #[test]
     fn fmt_f1_character_names_do_not_replace_another_character() {
-        let root = tempfile::tempdir().unwrap();
         let record = super::super::tests::sample();
-        let path = record.campaign_path(root.path());
-        assert_eq!(path.file_name().unwrap(), "Example.md");
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let other = crate::content::formats::fixture("Other.md", "splat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n", "\nA different character's note.\n").unwrap();
-        fs::write(&path, &other).unwrap();
-        let saved = record.save_campaign_copy(root.path()).unwrap();
-        assert_ne!(saved, path);
-        assert_eq!(fs::read_to_string(path).unwrap(), other);
+        let readable = crate::content::formats::fixture("Other.md", "splat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n", "\nA different character's note.\n").unwrap();
+        // The properties name the other character, also in a copy that Splat cannot read.
+        for other in [readable, unreadable_copy(uuid::Uuid::new_v4(), true, "")] {
+            let root = tempfile::tempdir().unwrap();
+            let path = record.campaign_path(root.path());
+            assert_eq!(path.file_name().unwrap(), "Example.md");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, &other).unwrap();
+            let saved = record.save_campaign_copy(root.path()).unwrap();
+            assert_ne!(saved, path);
+            assert_eq!(fs::read_to_string(path).unwrap(), other);
+        }
     }
     #[test]
     fn overwrite_carries_readable_personal_notes_over() {

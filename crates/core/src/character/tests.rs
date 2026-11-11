@@ -60,6 +60,22 @@ fn cache_roundtrip_and_roster_scope_preserve_latest_records() {
     assert_eq!(records[0].source.computed, original.source.computed);
     assert_eq!(records[0].initial.hp, 17);
     assert!(cache.load_all(Uuid::new_v4(), "456").unwrap().is_empty());
+    // Splat does not read a record from an earlier version. One beside a current record does
+    // not hide it, and the next save replaces one in its place.
+    let path = cache.path(local, "456", "123").unwrap();
+    let mut earlier = serde_json::to_value(&original).unwrap();
+    earlier["version"] = (VERSION - 1).into();
+    earlier["definition"]["splat_schema"] = 1.into();
+    let earlier = serde_json::to_vec(&earlier).unwrap();
+    std::fs::write(path.with_file_name("124.json"), &earlier).unwrap();
+    cache
+        .save_roster(local, "456", &["123".into(), "124".into()])
+        .unwrap();
+    assert_eq!(cache.load_all(local, "456").unwrap().len(), 1);
+    std::fs::write(&path, &earlier).unwrap();
+    assert!(cache.load_all(local, "456").unwrap().is_empty());
+    cache.save(local, &original).unwrap();
+    assert_eq!(cache.load_all(local, "456").unwrap()[0].version, VERSION);
     cache.save_roster(local, "456", &[]).unwrap();
     assert!(cache.load_all(local, "456").unwrap().is_empty());
     assert!(cache.path(local, "../secret", "123").is_err());
@@ -93,28 +109,6 @@ fn failed_validation_does_not_replace_cache() {
     assert!(cache.save(local, &sample()).is_err());
     assert!(cache.load_all(local, "456").is_err());
     assert_eq!(std::fs::read(path).unwrap(), later);
-}
-#[test]
-fn a_record_from_an_earlier_splat_is_not_read_and_the_next_save_replaces_it() {
-    let tmp = tempfile::tempdir().unwrap();
-    let cache = Cache::at(tmp.path().into());
-    let local = Uuid::new_v4();
-    let path = cache.save(local, &sample()).unwrap();
-    let mut earlier = serde_json::to_value(sample()).unwrap();
-    earlier["version"] = (VERSION - 1).into();
-    earlier["definition"]["splat_schema"] = 1.into();
-    let earlier = serde_json::to_vec(&earlier).unwrap();
-    std::fs::write(&path, &earlier).unwrap();
-    assert!(cache.load_all(local, "456").unwrap().is_empty());
-    cache.save(local, &sample()).unwrap();
-    let records = cache.load_all(local, "456").unwrap();
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].version, VERSION);
-    // An earlier record beside a current one does not hide it.
-    std::fs::write(path.with_file_name("124.json"), earlier).unwrap();
-    let records = cache.load_all(local, "456").unwrap();
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].source.character_id, "123");
 }
 #[test]
 fn missing_totals_or_wrong_membership_are_errors() {
