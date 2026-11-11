@@ -225,7 +225,9 @@ A file line that follows a warning (the path, `Edit in Obsidian` and `Show file`
 in `message_with_actions`, so the path and both links start at the warning's words, and wrap a long path whole
 instead of cutting it. When several warnings name one file, the file line follows the last one. The warning names
 the row and the line, never the file (`Ember Cultist · line 20: …`, `Line 9: “Day 5” is day 1 in order. …`); the
-file line holds the path once. Encounters, Rules and runs, Campaign, Timeline and run setup follow this. A reader's
+file line holds the path once. Encounters, Rules and runs, Campaign, Timeline and run setup follow this. In the run
+setup, a file line that fits beside the last compact warning sits on its line after an `L` gap; otherwise it wraps
+below, at the warning's words. A reader's
 file line below its title is not a message action and keeps its place.
 A pane that can hold such an action at its text edge keeps a gutter at least `L` wide, so the target never
 reaches a column splitter. The World page's centre has an `L` left gutter for this.
