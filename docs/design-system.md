@@ -1282,6 +1282,10 @@ tooltips.
   Clipping includes ellipses and text past pane edges, read from painted shapes. Missing-glyph checks fail for
   characters absent from the chosen font and fallbacks. All checks except workflow goals have seeded unit
   failures, including an unassigned glyph. Workflow goals were verified by deliberately breaking the app.
+- An overlap of an app control or text with a scroll bar or a column splitter is an app fault
+  (`no-overlap/app-vs-chrome`), because egui can give the press to the bar or splitter. No baseline may
+  allow it. A menu item over its own popup background stays egui chrome: egui's hit test gives the item every
+  press, and a press on a disabled item reaches the background, which has no action.
 - Every scenario run must report all brief section 8 tests; the baseline refuses failed goals. `visual-compare
   <labelA> <labelB>` lists differences above rendering noise. Tests ensure thin unnamed controls in scroll
   content or popups do not count as egui chrome. The capture suite rejects consecutive identical pixels at the
