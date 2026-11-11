@@ -413,27 +413,24 @@ impl ProcessingSettings {
         let held = self.held(slot).is_some();
         let focus = slot == KeySlot::Speech && std::mem::take(&mut self.focus_speech_key);
         let mut save = false;
+        // The field and `Save key` share the form's width, so `Save key` ends at the edge the
+        // other fields end at. Its slot stays when it is hidden, so typing moves nothing. The
+        // line below holds the reason, else the saved status, so neither moves the form.
         design::small_field(ui, "API key", None, None, |ui| {
+            let mut reason = None;
             ui.horizontal(|ui| {
+                let row = ui.available_width().min(design::FORM_WIDTH);
                 let field = self.field(slot);
                 let empty = field.typing.trim().is_empty();
                 let show_save = !empty || (!saved && !held) || !fits;
-                let reason = (empty && show_save).then_some("Paste a key first.");
-                let reason_width = reason.map_or(0.0, |text| {
-                    design::number_width(ui, text, &Type::Small.font(ui)) + design::S
-                });
-                let room = if show_save {
-                    Action::secondary("Save key").natural_width(ui)
-                } else {
-                    0.0
-                } + reason_width
-                    + design::S * 3.0;
-                let width = (ui.available_width() - room - design::S * 2.0)
-                    .clamp(design::L * 4.0, design::FORM_WIDTH / 2.0);
+                reason = (empty && show_save).then_some("Paste a key first.");
+                let save_width = Action::secondary("Save key").natural_width(ui);
+                let width = (row - save_width - ui.spacing().item_spacing.x).max(design::L * 4.0);
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut field.typing)
                         .password(true)
-                        .desired_width(width)
+                        .desired_width(width - 2.0 * design::S)
+                        .min_size(egui::vec2(width, 0.0))
                         .margin(egui::vec2(design::S, 5.0))
                         .hint_text(design::placeholder(
                             ui,
@@ -456,8 +453,22 @@ impl ProcessingSettings {
                         .show(ui)
                         .clicked();
                 }
-                design::blocked_reason(ui, reason);
             });
+            // Where a field's help goes. A key error replaces the line with its message.
+            if self.field(slot).error.is_none() {
+                ui.horizontal(|ui| {
+                    ui.set_min_height(Type::Small.line());
+                    if let Some(reason) = reason {
+                        design::blocked_reason(ui, Some(reason));
+                    } else if saved && fits {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("{} Saved on this computer.", icons::OK))
+                                .color(colors().document.saved),
+                        );
+                    }
+                });
+            }
         });
         if (saved || held) && !fits {
             design::message(ui, Tone::Warning, &warning);
@@ -487,12 +498,6 @@ impl ProcessingSettings {
                 ui,
                 Tone::Warning,
                 &format!("{error} Splat keeps the key until it closes."),
-            );
-        } else if saved && fits {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{} Saved on this computer.", icons::OK))
-                    .color(colors().document.saved),
             );
         }
         if (saved || held)

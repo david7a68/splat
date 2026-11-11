@@ -840,11 +840,40 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&roster_path, &roster_text).unwrap();
     close_run(d);
 
+    // iter-25-S FF2: the warning arrives while the DM is on Timeline, and the Add strip and the
+    // list's first row keep their places.
+    d.click(NAV_TIMELINE);
+    let strip_top = |d: &Driver<'_>| d.place_of("Add Fight").map(|rect| rect.top());
+    let strip_before = [SMALL, DEFAULT, (1920.0, 1080.0)].map(|size| d.at_size(size, strip_top));
+    assert!(!d.has_containing("Line 9: "));
     let text = fs::read_to_string(&path).unwrap();
     fs::write(&path, text.replace("## Day 1:", "## Day 5:")).unwrap();
     d.app_mut().timeline.reload();
     d.click(NAV_TIMELINE);
     d.expect("Line 9: “Day 5” is day 1 in order.");
+    let strip_after = [SMALL, DEFAULT, (1920.0, 1080.0)].map(|size| {
+        d.at_size(size, |d| {
+            // The warning sits below the strip, in the list column.
+            let below = d
+                .place_of("Line 9: “Day 5” is day 1 in order. Splat renumbers it when it saves.")
+                .or_else(|| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("Line 9: "))
+                        .map(|node| node.rect)
+                })
+                .zip(d.place_of("Add Fight"))
+                .is_some_and(|(warning, add)| warning.top() > add.bottom());
+            (strip_top(d), below)
+        })
+    });
+    d.observe(
+        "iter-25-S-FF2",
+        strip_before.iter().zip(&strip_after).all(|(before, (after, below))| {
+            *below && before.zip(*after).is_some_and(|(a, b)| (a - b).abs() < 1.0)
+        }),
+        format!("The Add strip keeps its y with the warning below it: {strip_before:?} then {strip_after:?}"),
+    );
     d.expect("Splat renumbers it when it saves.");
     d.observe_both(
         "i20-S3",

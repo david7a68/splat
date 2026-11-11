@@ -6174,6 +6174,29 @@ pub mod column_resize {
         d.state_prepared("session-events-fill-their-column", Sizes::All, |d| {
             show_plan(d);
             d.wait_for_text("Add to notes");
+            // iter-25-S FB7: in the tab layout, the plan rows end at the tab row's right edge.
+            let tabs_end = d.place_of("Edit session details").map(|rect| rect.right());
+            let rows_end: Vec<f32> = d
+                .nodes()
+                .iter()
+                .filter(|node| {
+                    node.in_view()
+                        && (node.name.starts_with("Add to notes:")
+                            || node.name.starts_with("More actions for Major event"))
+                })
+                .map(|node| node.rect.right())
+                .collect();
+            let tabbed = d.has("Note");
+            d.observe(
+                "iter-25-S-FB7",
+                !tabbed
+                    || (!rows_end.is_empty()
+                        && tabs_end.is_some_and(|end| {
+                            rows_end.iter().any(|right| (right - end).abs() < 1.0)
+                                && rows_end.iter().all(|right| *right <= end + 1.0)
+                        })),
+                format!("Plan row actions {rows_end:?} end at the tab row's edge {tabs_end:?}"),
+            );
             d.observe(
                 "H1 one plan Undo",
                 d.nodes()
@@ -8857,16 +8880,57 @@ pub mod session_notes {
             "An event lists the session notes that link to it",
         );
         // Renaming keeps notes unchanged until the DM accepts the update.
-        d.expect("Update 1 link in notes");
-        d.expect_same("The rename offer is already in the event detail. Checking it leaves the view unchanged.");
+        // iter-25-S FL2: the Library's offer, from the same function.
+        const LINK_OFFER: &str = "Change links from “Long rest” to “Rest at the mill”.";
+        d.expect(LINK_OFFER);
+        d.expect("Update 1 link");
+        d.observe(
+            "iter-25-S-FL2",
+            !d.has_containing("Notes still say") && !d.has("Update 1 link in notes"),
+            "Timeline offers the link update in the Library's words",
+        );
+        // iter-25-S FL3: the offer sits in the list column, so the form keeps its place.
+        let kind_top = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.top());
+        let detail_left = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.left());
+        let with_offer = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let offer = d.place_of(LINK_OFFER);
+                (
+                    kind_top(d),
+                    offer.zip(detail_left(d)).map(|(o, l)| o.right() < l),
+                )
+            })
+        });
+        d.observe(
+            "iter-25-S-FL3-list-column",
+            with_offer
+                .iter()
+                .all(|(kind, beside)| kind.is_some() && *beside == Some(true)),
+            format!("The offer is in the list column, left of the form: {with_offer:?}"),
+        );
+        d.expect_same("The rename offer is already in the list column. Checking it leaves the view unchanged.");
         d.state("event-link-update-offered", Sizes::All);
-        d.click("Update 1 link in notes");
+        d.click("Update 1 link");
         d.expect("Links now say “Rest at the mill”.");
         d.expect("Undo link update");
+        assert!(!d.has(LINK_OFFER));
+        let without_offer = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, kind_top));
+        d.observe(
+            "iter-25-S-FL3",
+            with_offer
+                .iter()
+                .zip(without_offer)
+                .all(|((with, _), without)| {
+                    with.zip(without).is_some_and(|(a, b)| (a - b).abs() < 1.0)
+                }),
+            format!(
+                "Kind keeps its y with and without the offer: {with_offer:?} then {without_offer:?}"
+            ),
+        );
         d.state("event-links-updated", Sizes::Default);
         d.click("Undo link update");
-        d.expect("Update 1 link in notes");
-        d.click("Update 1 link in notes");
+        d.expect("Update 1 link");
+        d.click("Update 1 link");
         d.click_starting("Rest at the mill ·");
         d.click("Open this session");
         d.settle();
@@ -11098,7 +11162,36 @@ pub mod session_recording {
             d.wait_for_text("Anthropic");
         });
         d.click("Anthropic");
-        d.state("processing-settings-anthropic", Sizes::All);
+        d.state_prepared("processing-settings-anthropic", Sizes::All, |d| {
+            // iter-25-S FK4: `Save key` ends at the edge the other fields end at, and its reason
+            // stands on its own line below the key field.
+            let nodes = d.nodes();
+            let edge = d
+                .place_of("Transcript and summary model")
+                .map(|rect| rect.right());
+            let saves: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| node.name.starts_with("Save key:") && node.in_view())
+                .map(|node| node.rect)
+                .collect();
+            let reasons: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| node.name == "Paste a key first." && node.in_view())
+                .map(|node| node.rect)
+                .collect();
+            d.observe(
+                "iter-25-S-FK4",
+                !saves.is_empty()
+                    && edge.is_some_and(|edge| {
+                        saves.iter().all(|save| (save.right() - edge).abs() < 1.0)
+                    })
+                    && !reasons.is_empty()
+                    && reasons
+                        .iter()
+                        .all(|reason| saves.iter().any(|save| reason.top() >= save.bottom())),
+                format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
+            );
+        });
         d.click("Transcript and summary service");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
@@ -11343,7 +11436,8 @@ pub mod session_recording {
         d.state_prepared("marker-added", Sizes::All, |d| {
             // Round 24 FK5: the result is not held to the marker rows' width, so `Undo add`
             // follows its words on the message line.
-            let words = d.place_of("Rest at the mill added to the timeline.");
+            // iter-25-S FK7: the marker's Add result names the session, as every Add result does.
+            let words = d.place_of("Rest at the mill added to Session 1.");
             let undo = d.place_of("Undo add");
             d.observe(
                 "iter-24-S-FK5",
@@ -11748,6 +11842,13 @@ pub mod session_recording {
         // FT4: Discard has one name. Its notice and Undo say discard, not drop or reload. These
         // steps prove the words and come back to the same choices, so they are not task cost.
         d.aside(|d| {
+        // iter-25-S SM1: Discard follows the moved file. Its words, and later saves, are the
+        // moved file's; the old path never comes back. The steps after this aside need the
+        // moved-note state, so the aside puts the file and the draft back at its end.
+        let snapshot = d.app_mut().sessions.draft_snapshot().expect("the open note");
+        let old_path = snapshot.path.clone();
+        let moved_path = snapshot.moved_to.clone().expect("the note was found renamed");
+        let moved_before = std::fs::read_to_string(&moved_path).unwrap();
         d.click(DISCARD);
         // The folder scan, which follows the renamed file every few seconds, keeps the Undo.
         d.app_mut().sessions.simulate_folder_scan();
@@ -11762,6 +11863,17 @@ pub mod session_recording {
                     .is_some_and(|text| !text.contains("Words typed after the rename.")),
             "Discard says Draft discarded. with Undo discard, and the draft's words leave the editor",
         );
+        let bound = d.app_mut().sessions.draft_snapshot().map(|draft| draft.path);
+        d.observe(
+            "iter-25-S-SM1-follow",
+            bound.as_deref() == Some(moved_path.as_path())
+                && !d.visible_text("File gone")
+                && !d.has("Save my draft as a new file")
+                && d.editor_text().is_some_and(|text| {
+                    moved_before.contains(text.trim()) && !text.trim().is_empty()
+                }),
+            format!("After Discard the editor holds the moved file {moved_path:?}: {bound:?}"),
+        );
         d.state("note-discarded", Sizes::Default);
         d.click("Undo discard");
         d.observe(
@@ -11772,6 +11884,18 @@ pub mod session_recording {
             "Undo discard brings the draft's words back",
         );
         d.press_ctrl(Key::S);
+        d.expect("Notes saved");
+        d.observe(
+            "iter-25-S-SM1-save",
+            !old_path.exists()
+                && std::fs::read_to_string(&moved_path)
+                    .is_ok_and(|text| text.contains("Words typed after the rename.")),
+            "Discard, Undo discard and Save write the moved file, never the old path",
+        );
+        // Back to the moved-note state for the steps that follow.
+        std::fs::write(&moved_path, &moved_before).unwrap();
+        d.app_mut().sessions.restore_draft(snapshot);
+        d.settle();
         d.expect("Your draft is still here.");
         });
         assert!(d.in_view("Save my draft as a new file"));
@@ -11892,6 +12016,23 @@ pub mod session_recording {
                 "A paused timeline fight has a visible Resume"
             );
             check_clean_row(d, "iter-11-C-AT2");
+            // iter-25-S FM6: two notes share this title, so the Last time link names its file.
+            // T12.6 keeps a unique title without a file name.
+            let links: Vec<String> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.is_link() && node.name.starts_with("Session 1: The Bridge"))
+                .map(|node| node.name)
+                .collect();
+            d.observe(
+                "iter-25-S-FM6",
+                d.has("Last time:")
+                    && !links.is_empty()
+                    && links.iter().all(|name| {
+                        name.starts_with("Session 1: The Bridge (") && name.ends_with(".md)")
+                    }),
+                format!("The Last time link names its file: {links:?}"),
+            );
         });
         d.begin_task();
         assert!(
@@ -15781,6 +15922,13 @@ pub mod session_plan {
                 && !d.visible_text("The next fight starts from the HP the party has now."),
             "Mark everyone at full says the next fight starts at full",
         );
+        // iter-25-S FK6: the plan's ruling result is a finished change, in the success tone.
+        d.observe(
+            "iter-25-S-FK6",
+            d.place_of("Everyone starts the next fight at full.")
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            "The plan's ruling result has the success tone",
+        );
         d.expect_same(
             "The ruling and its message change words and colour; the open row stays in place.",
         );
@@ -15887,6 +16035,17 @@ pub mod session_plan {
         d.expect("Everyone at full");
         assert!(d.has("Long rest added. Everyone starts the next fight at full."));
         d.state("timeline-long-rest-restores", Sizes::All);
+        // iter-25-S FM5: the ruling changes data, so its action is a button, not a link.
+        d.observe(
+            "iter-25-S-FM5",
+            d.nodes()
+                .iter()
+                .find(|node| node.name == "Mark not at full")
+                .is_some_and(|node| !node.is_link()),
+            "Mark not at full is a quiet button",
+        );
+        let where_top = |d: &Driver<'_>| d.place_of("Where").map(|rect| rect.top());
+        let where_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, where_top));
         d.observe_both(
             "iter-18-B-S1",
             "The untitled rest header says Long rest once",
@@ -15910,6 +16069,25 @@ pub mod session_plan {
         );
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        // iter-25-S FM2: the ruling's result sits in the list column, so Where keeps its place.
+        d.expect("Undo ruling");
+        let where_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, where_top));
+        d.observe(
+            "iter-25-S-FM2",
+            where_before
+                .iter()
+                .zip(where_after)
+                .all(|(before, after)| before.zip(after).is_some_and(|(a, b)| (a - b).abs() < 1.0)),
+            format!("Where keeps its y after the ruling: {where_before:?} then {where_after:?}"),
+        );
+        // iter-25-S FM3: the ruling's result is a finished change, in the success tone.
+        const RULING_OFF: &str = "The next fight starts from the HP the party has now.";
+        d.observe(
+            "iter-25-S-FM3-off",
+            d.place_of(RULING_OFF)
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            "The Timeline ruling result has the success tone",
+        );
         d.state_prepared("timeline-rest-ruling-off", Sizes::All, |d| {
             let row = d.nodes().iter().any(|node| {
                 node.name.starts_with("Long rest ·") && node.name.contains("Not at full")
@@ -16056,6 +16234,15 @@ pub mod session_plan {
                 && !d.has_containing("carried over from the long rest")
                 && !d.has_containing("Last: Party"),
             "Last: after a long rest says full HP, in lower case",
+        );
+        // iter-25-S FK8: the run closed last says it in the DM's words.
+        d.observe(
+            "iter-25-S-FK8",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains("Played last"))
+                && !d.has_containing("Closed last"),
+            "The saved run's second line says Played last",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(

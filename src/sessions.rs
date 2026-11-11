@@ -1396,16 +1396,41 @@ impl Draft {
     }
 
     /// The file went, and the DM chose to lose the draft. One step of undo brings it back.
+    ///
+    /// When the note is known at a new path and that file still holds this note, the editor
+    /// follows it: the words, the baseline and the save target become the moved file's. With
+    /// no such file, the draft stays `Missing` with the last saved words, so no edit or Save
+    /// can write the old path; only the DM's explicit `Save as a new file` does.
     pub fn discard(&mut self) {
-        self.dropped = Some(Dropped::Discarded(self.body.clone()));
-        self.body = self
+        let words = self.body.clone();
+        let note = self
             .baseline
             .as_deref()
-            .map(body_of)
-            .unwrap_or_default()
-            .to_owned();
-        self.revision = next_revision();
-        self.state = DraftState::Clean;
+            .and_then(|text| parse_note(&self.path, text))
+            .map(|note| note.id);
+        let followed = self.moved_to.take().and_then(|path| {
+            let moved = Self::open(&path).ok()?;
+            let owner = moved
+                .baseline
+                .as_deref()
+                .and_then(|text| parse_note(&path, text))
+                .map(|found| found.id);
+            (note.is_some() && owner == note).then_some(moved)
+        });
+        match followed {
+            Some(moved) => *self = moved,
+            None => {
+                self.body = self
+                    .baseline
+                    .as_deref()
+                    .map(body_of)
+                    .unwrap_or_default()
+                    .to_owned();
+                self.revision = next_revision();
+                self.state = DraftState::Missing;
+            }
+        }
+        self.dropped = Some(Dropped::Discarded(words));
     }
 
     /// Read the file's own words, so that the DM can choose knowing both.
@@ -1883,8 +1908,18 @@ mod tests {
         draft.discard();
         assert!(!note.path.exists());
         assert!(list_notes(dir.path()).is_empty());
+        // iter-25-S SM1: with no file left, the editor says so.
+        assert_eq!(draft.state, DraftState::Missing);
+        assert_eq!(draft.body, "Start\n");
         draft.undo_dropped();
         assert_eq!(draft.body, "My words\n");
+        assert!(!note.path.exists());
+        // Discard, edit, Save: nothing is written at the old path.
+        draft.discard();
+        draft.body.push_str("Typed after discard\n");
+        draft.edited();
+        draft.save();
+        assert_eq!(draft.state, DraftState::Missing);
         assert!(!note.path.exists());
     }
 
@@ -1918,7 +1953,12 @@ mod tests {
 
         // Discard names itself, so its Undo says Undo discard, not Undo reload. It writes
         // nothing: the moved file keeps its text, and no file comes back at the old path.
-        let moved_text = fs::read_to_string(&renamed).unwrap();
+        // iter-25-S SM1: Discard follows the moved file, with the words it holds now (here an
+        // outside edit), and later saves go there.
+        let moved_text = fs::read_to_string(&renamed)
+            .unwrap()
+            .replace("My words", "Moved words");
+        fs::write(&renamed, &moved_text).unwrap();
         let mut discarded = draft.clone();
         discarded.discard();
         assert!(!note.path.exists());
@@ -1927,12 +1967,41 @@ mod tests {
             discarded.dropped,
             Some(Dropped::Discarded("My words\n".into()))
         );
-        assert_ne!(discarded.body, "My words\n");
+        assert_eq!(discarded.path, renamed);
+        assert_eq!(discarded.state, DraftState::Clean);
+        assert_eq!(discarded.body, "Moved words\n");
+        let mut typed = discarded.clone();
+        typed.body.push_str("Typed after discard\n");
+        typed.edited();
+        typed.save();
+        assert_eq!(typed.state, DraftState::Saved);
+        assert!(!note.path.exists());
+        assert!(
+            fs::read_to_string(&renamed)
+                .unwrap()
+                .contains("Moved words\nTyped after discard")
+        );
+        fs::write(&renamed, &moved_text).unwrap();
         discarded.undo_dropped();
         assert_eq!(discarded.body, "My words\n");
         assert_eq!(discarded.dropped, None);
         assert!(!note.path.exists());
         assert_eq!(fs::read_to_string(&renamed).unwrap(), moved_text);
+        // Undo discard, then Save: the words go to the moved file, never the old path.
+        discarded.save();
+        assert_eq!(discarded.state, DraftState::Saved);
+        assert!(!note.path.exists());
+        assert!(fs::read_to_string(&renamed).unwrap().contains("My words"));
+        fs::write(&renamed, &moved_text).unwrap();
+        // A moved file that no longer holds this note is not followed.
+        let mut other = draft.clone();
+        let other_text = moved_text.replace(&note.id.to_string(), &Uuid::new_v4().to_string());
+        fs::write(&renamed, &other_text).unwrap();
+        other.discard();
+        assert_eq!(other.path, note.path);
+        assert_eq!(other.state, DraftState::Missing);
+        assert_eq!(fs::read_to_string(&renamed).unwrap(), other_text);
+        fs::write(&renamed, &moved_text).unwrap();
 
         draft.save_again();
         assert_eq!(draft.state, DraftState::Saved);

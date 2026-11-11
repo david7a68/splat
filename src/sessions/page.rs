@@ -20,7 +20,10 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book, Kind,
-        page::{SessionLink, added_message, long_rest_status, problems, quick_add, rest_ruling},
+        page::{
+            SessionLink, added_message, file_notices, long_rest_status, problems, quick_add,
+            rest_ruling,
+        },
         removed_event_words,
     },
 };
@@ -1238,6 +1241,9 @@ fn session_detail(
     )
 }
 
+/// After Discard, a note with no file left: the editor shows its last saved words.
+const DISCARDED_GONE: &str = "This file is gone from the folder. The editor shows its last saved words. Save them as a new file to keep them.";
+
 /// A missing note's words. A known new place says why it is offered; with none, the file is
 /// only gone.
 fn missing_note_words(moved_to: Option<String>) -> String {
@@ -1641,11 +1647,11 @@ impl Sessions {
                                 record_again = session;
                             }
                             let here = self.on_page && self.selected == session;
-                            if !here && Action::quiet("Open the session").show(ui).clicked() {
+                            if !here && Action::secondary("Open the session").show(ui).clicked() {
                                 open = session;
                             }
                             ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            stop = Action::quiet("Stop recording")
+                            stop = Action::secondary("Stop recording")
                                 .name("Stop recording")
                                 .show(ui)
                                 .clicked();
@@ -1681,88 +1687,99 @@ impl Sessions {
                         None
                     };
                     // The choices start at the message text, and wrap there too. The words keep
-                    // their hover: what the recorder itself said.
+                    // their hover: what the recorder itself said. Dismiss is the close icon at the
+                    // message end, as every dismiss is.
                     let top = ui.cursor().min;
                     let mut words_end = top.y;
-                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
-                        words_end = ui.min_rect().top() - ui.spacing().item_spacing.y;
-                        ui.horizontal_wrapped(|ui| {
-                            let mut drawn = false;
-                            if missing_input
-                                && (if banner_primary {
-                                    Action::primary("Choose an input")
-                                } else {
-                                    Action::secondary("Choose an input")
-                                })
-                                .show(ui)
-                                .clicked()
-                            {
-                                self.wants_recording_input = true;
-                            }
-                            drawn |= missing_input;
-                            if let Some(path) = &alert.retry
-                                && (if banner_primary {
-                                    Action::primary("Continue processing")
-                                } else {
-                                    Action::secondary("Continue processing")
-                                })
-                                .blocked(retry_blocked)
-                                .show(ui)
-                                .clicked()
-                            {
-                                retry = Some((alert.session, path.clone()));
-                            }
-                            // One blocked control says why beside it, then `L` to the next. Before
-                            // Dismiss, Dismiss's own `L` gap is that gap.
-                            let mut gap = false;
-                            if alert.retry.is_some() && retry_blocked.is_some() {
-                                design::blocked_reason(ui, retry_blocked);
-                                gap = true;
-                            }
-                            let mut gap_before = |ui: &mut egui::Ui| {
-                                if std::mem::take(&mut gap) {
-                                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    let here = self.on_page
+                        && self.selected == Some(alert.session)
+                        && self.tab == Tab::Recordings;
+                    let can_record = alert.can_record && self.live.is_none();
+                    let has_choices = missing_input || alert.retry.is_some() || can_record || !here;
+                    let message_width = ui.available_width().min(design::LIST_MEASURE);
+                    ui.horizontal_top(|ui| {
+                        let room = message_width - Density::Read.control() - design::S;
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(room, 0.0),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                if !has_choices {
+                                    design::message(ui, Tone::Error, &words);
+                                    words_end = ui.min_rect().bottom();
+                                    return;
                                 }
-                            };
-                            drawn |= alert.retry.is_some();
-                            if alert.can_record && self.live.is_none() {
-                                gap_before(ui);
-                                if (if missing_input {
-                                    Action::quiet("Record again")
-                                } else if banner_primary {
-                                    Action::primary("Record again")
-                                } else {
-                                    Action::secondary("Record again")
-                                })
-                                .show(ui)
-                                .clicked()
-                                {
-                                    record_again = Some(alert.session);
-                                }
-                            }
-                            drawn |= alert.can_record && self.live.is_none();
-                            let here = self.on_page
-                                && self.selected == Some(alert.session)
-                                && self.tab == Tab::Recordings;
-                            if !here {
-                                gap_before(ui);
-                                if Action::quiet("Open the session").show(ui).clicked() {
-                                    open = Some(alert.session);
-                                }
-                            }
-                            drawn |= !here;
-                            // The `L` gap separates Dismiss from a choice before it. Alone, it
-                            // starts at the message text like any first choice.
-                            if drawn {
-                                ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            }
-                            if Action::quiet("Dismiss this error").show(ui).clicked() {
-                                dismiss = Some(index);
-                            }
-                        });
+                                design::message_with_actions(ui, Tone::Error, &words, |ui| {
+                                    words_end = ui.min_rect().top() - ui.spacing().item_spacing.y;
+                                    ui.horizontal_wrapped(|ui| {
+                                        if missing_input
+                                            && (if banner_primary {
+                                                Action::primary("Choose an input")
+                                            } else {
+                                                Action::secondary("Choose an input")
+                                            })
+                                            .show(ui)
+                                            .clicked()
+                                        {
+                                            self.wants_recording_input = true;
+                                        }
+                                        if let Some(path) = &alert.retry
+                                            && (if banner_primary {
+                                                Action::primary("Continue processing")
+                                            } else {
+                                                Action::secondary("Continue processing")
+                                            })
+                                            .blocked(retry_blocked)
+                                            .show(ui)
+                                            .clicked()
+                                        {
+                                            retry = Some((alert.session, path.clone()));
+                                        }
+                                        // One blocked control says why beside it, then `L` to the next.
+                                        let mut gap = false;
+                                        if alert.retry.is_some() && retry_blocked.is_some() {
+                                            design::blocked_reason(ui, retry_blocked);
+                                            gap = true;
+                                        }
+                                        let mut gap_before = |ui: &mut egui::Ui| {
+                                            if std::mem::take(&mut gap) {
+                                                ui.add_space(
+                                                    design::L - ui.spacing().item_spacing.x,
+                                                );
+                                            }
+                                        };
+                                        if can_record {
+                                            gap_before(ui);
+                                            // With no input, Choose an input is the one primary.
+                                            if (if banner_primary && !missing_input {
+                                                Action::primary("Record again")
+                                            } else {
+                                                Action::secondary("Record again")
+                                            })
+                                            .show(ui)
+                                            .clicked()
+                                            {
+                                                record_again = Some(alert.session);
+                                            }
+                                        }
+                                        if !here {
+                                            gap_before(ui);
+                                            if Action::secondary("Open the session")
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                open = Some(alert.session);
+                                            }
+                                        }
+                                    });
+                                });
+                            },
+                        );
+                        if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked() {
+                            dismiss = Some(index);
+                        }
                     });
                     if let Some(said) = &alert.said {
-                        let width = ui.available_width().min(design::LIST_MEASURE);
+                        let width = message_width - Density::Read.control() - design::S;
                         let words_rect =
                             egui::Rect::from_min_max(top, egui::pos2(top.x + width, words_end));
                         ui.interact(
@@ -1988,6 +2005,8 @@ impl Sessions {
         }
         self.folder_error = None;
         self.notes = list_notes(folder);
+        // A new, renamed or removed note can change which titles are shared.
+        self.last_time = None;
         if let Err(error) = super::remember_notes(folder, &self.notes) {
             self.folder_error = Some(error);
         }
@@ -2234,6 +2253,14 @@ impl Sessions {
         }
     }
 
+    /// The session an Add result names (`Session 2`), from the session's own note.
+    fn session_name(&self, session: Option<Uuid>) -> Option<String> {
+        self.notes
+            .iter()
+            .find(|note| Some(note.id) == session)
+            .map(|note| format!("Session {}", note.number))
+    }
+
     /// Only this explicit action changes a note after an event rename.
     pub fn event_link_offer(&mut self, ui: &mut egui::Ui, book: &Book, event: &str) {
         if book.renamed_links.is_empty() && self.updated_links.is_none() {
@@ -2245,11 +2272,6 @@ impl Sessions {
         let Some(current) = book.events.iter().find(|item| item.id == event) else {
             return;
         };
-        let words = format!(
-            "Notes still say “{}” for {}.",
-            renamed.join("” or “"),
-            current.title
-        );
         let mut scoped = Book::default();
         scoped.events = book.events.clone();
         scoped
@@ -2272,14 +2294,10 @@ impl Sessions {
                 changes.push((draft, body));
             }
         }
-        if count > 0
-            && design::message_with_action(
-                ui,
-                Tone::Info,
-                &words,
-                &format!("Update {} in notes", design::count(count, "link", "links")),
-            )
-        {
+        let old: Vec<&str> = renamed.iter().map(String::as_str).collect();
+        let (words, action) =
+            crate::content_workspace::link_offer_words(&old, &current.title, count);
+        if count > 0 && design::message_with_action(ui, Tone::Info, &words, &action) {
             self.update_event_link_notes(changes);
             self.link_undo_state = Some(LinkUndoState {
                 notes: self.note_bodies(),
@@ -3006,7 +3024,7 @@ impl Sessions {
                             self.notice = Some((Tone::Error, error));
                         }
                     }
-                    if Action::quiet("Not now").show(ui).clicked() {
+                    if Action::secondary("Not now").show(ui).clicked() {
                         self.confirm_record = false;
                     }
                 });
@@ -3090,6 +3108,18 @@ impl Sessions {
                         });
                     },
                 );
+            }
+            // After Discard with no file left, the editor holds the last saved words, not a
+            // draft: the one way on is a new file.
+            DraftState::Missing if matches!(draft.dropped, Some(Dropped::Discarded(_))) => {
+                let save = design::message_with_actions(ui, Tone::Warning, DISCARDED_GONE, |ui| {
+                    Action::secondary("Save these words as a new file")
+                        .show(ui)
+                        .clicked()
+                });
+                if save {
+                    draft.save_again();
+                }
             }
             DraftState::Missing => {
                 let words = missing_note_words(draft.moved_to.as_ref().map(|path| {
@@ -4234,9 +4264,20 @@ impl Sessions {
             let found = previous.map(|note| {
                 let text = fs::read_to_string(&note.path).unwrap_or_default();
                 let body = body_of(&text);
+                // Two notes with one title: the link names its file, as the list's second line
+                // does, so it cannot read as a link to the open session.
+                let label = note.label();
+                let shared = self
+                    .notes
+                    .iter()
+                    .any(|other| other.id != note.id && other.label() == label);
+                let label = match note.path.file_name() {
+                    Some(file) if shared => format!("{label} ({})", file.to_string_lossy()),
+                    _ => label,
+                };
                 LastTime {
                     id: note.id,
-                    label: note.label(),
+                    label,
                     what_happened: recap_preview(body),
                 }
             });
@@ -4323,6 +4364,7 @@ impl Sessions {
         {
             self.removed_group = None;
         }
+        file_notices(ui, book);
         if problems(ui, book) {
             return;
         }
@@ -4471,7 +4513,7 @@ impl Sessions {
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, words)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
-                        undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
+                        undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                     }
                     if !event.is_in(session) { continue; }
                     any = true;
@@ -4575,7 +4617,7 @@ impl Sessions {
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
-                    undo_row_remove |= design::undo_message(ui, Tone::Info, words, "Undo remove");
+                    undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
@@ -4827,7 +4869,7 @@ impl Sessions {
         ui.add_space(design::S);
         if design::undo_message(
             ui,
-            Tone::Info,
+            Tone::Success,
             &format!("Removed “{name}” from tonight."),
             "Undo remove",
         ) {
@@ -4896,7 +4938,7 @@ impl Sessions {
             if design::undo_message(
                 ui,
                 if deleted.unsent.is_empty() {
-                    Tone::Info
+                    Tone::Success
                 } else {
                     Tone::Warning
                 },
@@ -4938,11 +4980,7 @@ impl Sessions {
             }
         }
         if let Some(just) = &self.added {
-            let to = self
-                .notes
-                .iter()
-                .find(|note| Some(note.id) == session)
-                .map(|note| format!("Session {}", note.number));
+            let to = self.session_name(session);
             let restores = book
                 .events
                 .iter()
@@ -4961,7 +4999,7 @@ impl Sessions {
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
-            if design::undo_message(ui, Tone::Info, &words, "Undo remove") {
+            if design::undo_message(ui, Tone::Success, &words, "Undo remove") {
                 book.undo_remove();
             }
         }
@@ -5820,7 +5858,7 @@ impl Sessions {
                 if added.as_ref() == self.recording_added.as_ref()
                     && let Some(id) = &added
                 {
-                    let words = format!("{title} added to the timeline.");
+                    let words = added_message(title, self.session_name(session).as_deref(), None);
                     let undo = ui
                         .scope(|ui| {
                             ui.set_max_width(message_width);
@@ -5935,6 +5973,8 @@ impl Sessions {
         {
             self.open_reading(&recording, made, None, None);
         }
+        // A marker's Add result names the session that gets the event.
+        let added_to = self.session_name(self.selected);
         let Some(reading) = &mut self.reading else {
             return;
         };
@@ -6074,7 +6114,8 @@ impl Sessions {
                                         .is_some_and(|event| event.id == *id)
                                 {
                                     let id = id.clone();
-                                    let words = format!("{} added to the timeline.", marker.title);
+                                    let words =
+                                        added_message(&marker.title, added_to.as_deref(), None);
                                     if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                                         book.undo_add(&id);
                                         self.recording_added = None;
@@ -6561,9 +6602,19 @@ impl Sessions {
                 });
             }
             // The same ids in both layouts: crossing the width keeps typed text, focus and scroll.
-            Tab::Plan => fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                self.plan_pane(ui, book, plan)
-            }),
+            // The plan ends at the tab row's right edge, as the note's frame does, so the pane
+            // has one right edge. A group being edited keeps its own width.
+            Tab::Plan => {
+                ui.scope(|ui| {
+                    if !editing_group_here {
+                        ui.set_max_width(toolbar_width);
+                    }
+                    fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
+                        self.plan_pane(ui, book, plan)
+                    })
+                })
+                .inner
+            }
             Tab::Note => fixed_scope(ui, editing_group_here, "session_note_pane", |ui| {
                 self.note_pane(ui, book, plan, beside)
             }),
@@ -6788,7 +6839,7 @@ impl Sessions {
                 if let Some((name, _)) = self.deleted_template.clone()
                     && design::undo_message(
                         ui,
-                        Tone::Info,
+                        Tone::Success,
                         &format!("Deleted “{name}”."),
                         "Undo delete",
                     )
@@ -7353,6 +7404,15 @@ impl Sessions {
     /// The folder scan that otherwise runs every few seconds of wall time.
     pub fn simulate_folder_scan(&mut self) {
         self.scan_folder();
+    }
+
+    /// The open note's draft, to put back after a step that a scenario proves aside.
+    pub fn draft_snapshot(&self) -> Option<Draft> {
+        self.draft.clone()
+    }
+
+    pub fn restore_draft(&mut self, draft: Draft) {
+        self.draft = Some(draft);
     }
 
     /// The open note's file is renamed outside Splat, as Obsidian can do.
