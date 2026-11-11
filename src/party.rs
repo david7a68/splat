@@ -509,8 +509,7 @@ impl Party {
             .show_inside(ui, |ui| {
                 // Round 25 family: the list keeps the scroll bar's lane whether or not the bar
                 // shows, so no row or header column moves when the list starts to scroll.
-                let rows_width =
-                    ui.available_width() - ui.spacing().scroll.allocated_width();
+                let rows_width = ui.available_width() - ui.spacing().scroll.allocated_width();
                 ui.scope(|ui| {
                     ui.set_max_width(rows_width);
                     member_header(ui);
@@ -1699,7 +1698,10 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
                 None => (),
             }
         }
-        design::help(ui, "Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.");
+        design::help(
+            ui,
+            "Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.",
+        );
     });
 }
 pub(crate) fn fetch_age(seconds: u64) -> String {
@@ -2360,7 +2362,10 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         2 => {
             section_heading(ui, "Spellcasting");
             // Round 25 AI2: help keeps the reader measure; the spell list below keeps its width.
-            design::help(ui, "Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+            design::help(
+                ui,
+                "Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.",
+            );
             for (label, key) in [
                 ("Spell save DC", "saveDcs"),
                 ("Spell attack", "spellAttacks"),

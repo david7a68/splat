@@ -2138,12 +2138,16 @@ pub mod campaign_content {
                 let undo = d.place_of(UNDO_DISCARD);
                 let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
                 // The space starts below the save row; its first line is one Body line deep.
-                save.zip(undo).zip(reason).is_some_and(|((save, undo), reason)| {
-                    undo.top() >= save.bottom()
-                        && undo.center().y
-                            < save.bottom() + crate::design::Type::Body.line() + crate::design::S
-                        && reason.top() > undo.center().y
-                })
+                save.zip(undo)
+                    .zip(reason)
+                    .is_some_and(|((save, undo), reason)| {
+                        undo.top() >= save.bottom()
+                            && undo.center().y
+                                < save.bottom()
+                                    + crate::design::Type::Body.line()
+                                    + crate::design::S
+                            && reason.top() > undo.center().y
+                    })
             })
         });
         d.observe(
@@ -2162,7 +2166,8 @@ pub mod campaign_content {
         d.observe(
             "iter-25-C-FD1-undo",
             undone_tops == clean_tops
-                && d.editor_text().is_some_and(|text| text.contains("One more line."))
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("One more line."))
                 && d.visible_text("Unsaved")
                 && !d.visible_text(DISCARDED),
             format!("Editor tops after Undo discard {undone_tops:?}"),
@@ -2681,7 +2686,8 @@ pub mod party {
         // Round 25 FG7: an `L` gap ends the notice; the list and the sheet start below it.
         for size in [SMALL, DEFAULT, LARGE] {
             let (gap, detail) = d.at_size(size, |d| {
-                let words = d.painted_rect_in("so Splat stopped updating it.", egui::Rect::EVERYTHING);
+                let words =
+                    d.painted_rect_in("so Splat stopped updating it.", egui::Rect::EVERYTHING);
                 let actions = [CONNECT, "Show file"].map(|name| d.place_of(name));
                 let Some(bottom) = words
                     .into_iter()
@@ -4139,8 +4145,7 @@ pub mod empty {
                         words.height() < 1.5 * crate::design::Type::Body.line()
                             && words.right() <= row.right() - crate::design::S + 0.5
                             && words.left() >= row.left() + crate::design::S - 0.5
-                            && d
-                                .place_of("Active campaign: No campaign")
+                            && d.place_of("Active campaign: No campaign")
                                 .is_some_and(|control| row.right() <= control.right() + 0.5)
                     })
             },
@@ -5791,7 +5796,10 @@ pub mod party_from_run {
         // Round 25 AI2: the spell help keeps the reader measure at every size.
         for size in [SMALL, DEFAULT, LARGE] {
             let help = d.at_size(size, |d| {
-                d.painted_rect_in("Spell text shows the printed numbers.", egui::Rect::EVERYTHING)
+                d.painted_rect_in(
+                    "Spell text shows the printed numbers.",
+                    egui::Rect::EVERYTHING,
+                )
             });
             d.observe(
                 "iter-25-C-AI2",

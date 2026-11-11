@@ -387,9 +387,7 @@ impl Settings {
                 },
             );
         }
-        let small = |ui: &mut egui::Ui, text: &str| {
-            design::help(ui, text)
-        };
+        let small = |ui: &mut egui::Ui, text: &str| design::help(ui, text);
         self.sign_in_again |= ui.ctx().data(|data| {
             data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                 .unwrap_or(false)

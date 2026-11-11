@@ -1698,14 +1698,14 @@ impl CampaignContent {
                         // Round 25 family: a message action without an icon has the
                         // secondary border, beside `Use this folder` too.
                         if Action::secondary("Find the folder…")
-                        .blocked_if(
-                            document.selections != self.saved_selections
-                                || self.repairs.iter().any(Repair::dirty),
-                            "Save or discard changes before finding the folder.",
-                        )
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                            .blocked_if(
+                                document.selections != self.saved_selections
+                                    || self.repairs.iter().any(Repair::dirty),
+                                "Save or discard changes before finding the folder.",
+                            )
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
                             && let Some(folder) = crate::hermetic::pick_folder_from(
                                 known.as_ref().and_then(|module| module.path.parent()),
                             )

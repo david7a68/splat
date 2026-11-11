@@ -1530,7 +1530,10 @@ impl CombatSync {
             if let Some(error) = &self.error {
                 ui.colored_label(crate::design::colors().result.error, error);
             }
-            crate::design::help(ui, "Enable to read the live sheet. Edits made here will then update D&D Beyond.");
+            crate::design::help(
+                ui,
+                "Enable to read the live sheet. Edits made here will then update D&D Beyond.",
+            );
             return;
         }
         crate::design::help(ui, "Splat checks the sheet every 15 seconds.");
