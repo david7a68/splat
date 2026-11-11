@@ -52,12 +52,17 @@ session-cycle features touch: old task lines under `## Plan for tonight`, words 
 (`Bless 10 rounds`, `Hexed until the hag dies`), a marked roll table, a played fight with loot, NPCs with and
 without a stat block, a session with a recap and one without, a Travel event, the participant name
 `Ashfang, Eldest Wolf of the Southern Ridge`, and 12 participants in one fight. The scenario
-`plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`) and records 40 views:
-eight screens at 1200x800 and 960x640 with Lookup closed and open, and six Lookup readers at both sizes. For
-each view it records every named control in view and every painted text, with its rectangle. It records
-every file of the campaigns at the start and the end. `src/visual_tests/plain_evening/reference.json` holds
-them. A run's file name and ID are random, so G7 names each run by its own name before it compares; nothing
-else is changed or masked.
+`plain-evening` plays it with today's controls (`src/visual_tests/plain_evening.rs`) and records 44 views:
+eight screens at 1200x800 and 960x640 with Lookup closed and open, and six Lookup readers at both sizes. The
+screens are tonight's plan, last session with its played fight open, Encounters, the 12-person run, its
+**Keys** list, the same run after a whole round of `Next turn`, Timeline, and a new session. For each view
+it records every named control in view and every painted text, with its rectangle, and also the part a
+person can see when that is less. It records every file of the campaigns at the start and the end, a file
+over 16 KB as its hash. `src/visual_tests/plain_evening/reference.json` holds them. A run's file name and ID
+are a random UUID, so G7 names each run by its own name, as the start found it; a run the start did not have
+is a new run, and two runs with one name stop the check. Nothing else is changed or masked. A file's
+difference names each line by its number, so a moved line is a difference too. Content scrolled out of view
+is not recorded: a feature whose change is below the fold must add a screen that shows it.
 
 G7 fails on any difference that a row of `plain_evening/allowed.json` does not name whole: its row of
 section 2.5, the screen, the view, the control, text or file, and the rectangles or lines. A row that
@@ -72,14 +77,18 @@ missing. `audit-freeze` writes the reference again, and refuses while `allowed.j
 | Title | Width | Case B (1200x800, Lookup open), inside 406: room after `Edit` | Case D (960x640, Lookup open), inside 320: room after `Edit` | With art (a campaign creature, no `Edit`): B and D |
 |---|---:|---:|---:|---:|
 | `Captain Varra`, 13 letters | 160.1 | 176.8 | 90.8 | 173.9 and 87.9 |
-| `Oren Thistlewick`, 16 | 196.5 | 140.4 | 54.4 | 137.5 and 51.5 |
-| `Captain Varra Black`, 19 | 229.5 | 107.4 | 21.4 | 104.5 and 18.5 |
+| `Oren Thistlewick`, 16 | 196.5 | 140.4 | 54.4 | 129.5 and 43.9, scrolling |
+| `Captain Varra Black`, 19 | 229.5 | 107.4 | 21.4 | 96.5 and 10.9, scrolling |
 
 `Edit` is 61.1 px and starts 8 px after the title. In Lookup a campaign creature has no `Edit` (it offers
-`Open in Library`), and its art, 64 px, starts 8 px after the title. No reader scrolled. Section 1.2 of
+`Open in Library`), and its art, 64 px, starts 8 px after the title. The two creatures of 16 and 19 letters
+have long stat blocks, so their readers scroll: the scroll bar starts 8 px inside the search field's edge at
+both sizes (at 1179 and 939.4), so a reader that scrolls has 8 px less. The 16-letter row reads 129.5 and
+43.9 for that reason. Section 1.2 of
 `docs/design/session-cycle.md` estimated 82, 47 and 12 at case D, and 168, 133 and 98 at case B. The
 verdicts at case D stay. At case B the 16-letter title now has room for `Start fight` and the icon, with
-0.4 px to spare on the estimated widths of actions that do not exist yet. Section 1.2 and section 7 now
+0.4 px to spare on the estimated widths of actions that do not exist yet; in a reader that scrolls it has
+`Start fight` alone. Section 1.2 and section 7 now
 carry the measured numbers, and the limit "about 10 letters" for `Start fight` at case D is now about 11.
 
 ### Not final yet

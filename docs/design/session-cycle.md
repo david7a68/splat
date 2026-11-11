@@ -105,8 +105,8 @@ T18.2 tests the rule). A title in `Display` (26 px) is 160.1, 196.5 and 229.5 px
 about 12.2 px for each letter. `Edit` is 61 px wide and starts 8 px after the title. `Start fight` takes
 about 104, `Add to Log` about 108, and its icon 28, each with a gap of 4 before it (estimates: these do not
 exist yet). Lookup's reader is 320 px inside at case D and 406 at case B. The room after `Edit` is the width
-inside, less the title, 8 and 61. A reader that scrolls has 12 px less (an estimate: no measured reader
-scrolled), and each cell still holds. In Lookup a campaign creature has no `Edit`, and its art (64 px)
+inside, less the title, 8 and 61. A reader that scrolls has 8 px less (measured): then the 16-letter title
+at case B shows `Start fight` alone, and every other cell holds. In Lookup a campaign creature has no `Edit`, and its art (64 px)
 starts 8 px after the title, so it has about 3 px less room than an NPC with `Edit`. An entry that has both
 art and `Edit` (`src/world.rs:1750-1753`) has about 72 px less; the plain campaign has none.
 
