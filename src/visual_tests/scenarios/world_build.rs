@@ -867,6 +867,28 @@ pub fn broken(d: &mut Driver<'_>) {
         "fixture: the note has a link"
     );
     d.expect("Rename the file to Repaired watchkeeper.md");
+    // Re-check 3: directly after the DM's own Save, with no forced reload, the rename and its
+    // Undo work, so Save itself refreshes what the rename compares with.
+    let after_save = root(d).join("Notes/Repaired watchkeeper.md");
+    d.click("Rename the file to Repaired watchkeeper.md");
+    d.settle();
+    d.observe(
+        "re-check-3-D-after-save",
+        !path.exists()
+            && fs::read_to_string(&after_save).ok().as_deref() == Some(fixed.as_str())
+            && d.has("Undo file rename"),
+        "Right after the DM's Save, Rename the file moves the saved note",
+    );
+    if d.has("Undo file rename") {
+        d.click("Undo file rename");
+        d.settle();
+    }
+    d.observe(
+        "re-check-3-D-after-save-undo",
+        fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str()) && !after_save.exists(),
+        "Undo file rename moves the saved note back",
+    );
+    d.expect("Rename the file to Repaired watchkeeper.md");
     // Re-check 2, repair 2: the rename compares the whole file with the whole file the index
     // read. An unchanged note with a byte order mark and CRLF line ends renames.
     let crlf_path = root(d).join("NPCs/Crlf Note.md");
