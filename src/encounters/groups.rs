@@ -1942,7 +1942,9 @@ impl Encounters {
             {
                 discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
             }
-            if dirty && in_plan {
+            // A dirty group blocks the campaign switch wherever it is open, so it says so here,
+            // as the encounter editor does.
+            if dirty {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
         });
@@ -2577,10 +2579,11 @@ fn unread_member(
     if let Some((repair_line, block)) = &mut draft.repair
         && *repair_line == line
     {
+        // A warning has its icon, as the group's other faults do.
         let unread = ui.add(
             egui::Label::new(
                 Type::Small
-                    .rich(ui, unread_changes(&raw))
+                    .rich(ui, format!("{} {}", icons::WARN, unread_changes(&raw)))
                     .color(colors().result.warning),
             )
             .wrap(),

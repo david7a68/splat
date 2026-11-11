@@ -1148,7 +1148,15 @@ fn creature_result_row(
                 .on_hover_text("Read this entry in Lookup")
                 .clicked();
             if let Some(reason) = &c.unavailable {
-                ui.label(Type::Small.rich(ui, reason).color(colors().result.warning));
+                // A status is an icon, a word and a colour, like the other warnings here.
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: icons::WARN,
+                        word: reason,
+                        color: colors().result.warning,
+                    },
+                );
             } else {
                 detail_columns(ui, &c.detail, c.source.as_deref());
             }
@@ -4094,7 +4102,8 @@ impl Encounters {
                 let output = egui::TextEdit::multiline(&mut draft.body)
                     .id(egui::Id::new(("encounter_notes", draft.id)))
                     .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
-                    .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                    // The width holds the margins, so the field ends at the roster's right edge.
+                    .desired_width(ui.available_width() - 2.0 * design::S)
                     .desired_rows(5)
                     .margin(egui::vec2(design::S, design::S))
                     .show(ui);
@@ -4755,10 +4764,15 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
+        // FD3: the reason is a status, the warning icon and then the words.
         assert!(
             harness
-                .query_by_label("Watchkeeper Guard stat block not found")
-                .is_some()
+                .query_by_label(&format!(
+                    "{} Watchkeeper Guard stat block not found",
+                    icons::WARN
+                ))
+                .is_some(),
+            "iter18-B-FD3: the missing stat block reason has its warning icon"
         );
         assert!(harness.query_by_label("Open in World").is_some());
         assert!(harness.get_by_label("Add").accesskit_node().is_disabled());
@@ -5071,6 +5085,67 @@ mod tests {
         assert!(
             notes.width() <= design::LIST_MEASURE,
             "iter7-B-AT1: {notes:?}"
+        );
+    }
+
+    /// FD4: the loot row and the notes field end at the roster's right edge, one column edge.
+    #[test]
+    fn iter18_b_loot_and_notes_end_at_the_roster_edge() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let id = creature(dir.path(), "Cinder Wolf", false);
+        let snapshot = Snapshot::load(&active, &[]).unwrap();
+        let mut draft = Draft::new();
+        draft.add(id, false);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 1080.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    Encounters::roster_pane(
+                        ui, &mut draft, &snapshot, &mut false, &mut None, None, &mut None, false,
+                    );
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        // The roster's row rule marks the column's right edge.
+        let rule = harness
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points, .. } if points[0].y == points[1].y => {
+                    Some(points[1].x.max(points[0].x))
+                }
+                _ => None,
+            })
+            .reduce(f32::max)
+            .expect("the roster draws a row rule");
+        for name in [
+            "More actions for Cinder Wolf",
+            "Roll on a table for the encounter",
+            "Read-aloud and notes",
+        ] {
+            // The field's caption carries the same name; the widest node is the control.
+            let right = harness
+                .query_all_by_label(name)
+                .map(|node| node.rect().right())
+                .reduce(f32::max)
+                .unwrap();
+            assert!(
+                (right - rule).abs() <= 0.5,
+                "iter18-B-FD4: {name} ends at {right}, the roster rule at {rule}"
+            );
+        }
+        // Must stay true: the loot field keeps its gap before the menu.
+        let field = harness.get_by_label("Add loot to the encounter").rect();
+        let menu = harness
+            .get_by_label("Roll on a table for the encounter")
+            .rect();
+        assert!(
+            menu.left() - field.right() >= design::XS,
+            "iter18-B-FD4: the loot field and its menu stay apart: {field:?} {menu:?}"
         );
     }
 

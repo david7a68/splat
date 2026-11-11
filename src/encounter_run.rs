@@ -1085,6 +1085,38 @@ impl Run {
             .order
             .sort_by_key(|i| std::cmp::Reverse(state.participants[*i].initiative));
     }
+    /// NPCs with the same key share one `Roll NPCs` roll in this mode.
+    fn roll_key(p: &Participant, grouping: Grouping) -> String {
+        match grouping {
+            // An encounter group that arrived together stays one roll. It joins
+            // neither its like outside the group, nor another addition of itself.
+            Grouping::Identical => match &p.added_from {
+                Some(added) => added.instance.clone(),
+                None => format!(
+                    "{}:{}:{}:{}",
+                    p.definition.id,
+                    p.initiative_bonus.map_or(String::new(), |v| v.to_string()),
+                    p.initiative_mode,
+                    p.changes
+                        .as_ref()
+                        .map_or_else(String::new, |c| c.overrides.mechanics())
+                ),
+            },
+            Grouping::Individual => p.key.clone(),
+            Grouping::BySide => p.side.clone(),
+            Grouping::Explicit => p.initiative_group.clone().unwrap_or_else(|| p.key.clone()),
+        }
+    }
+    /// True when this mode gives two or more NPCs one shared roll. Their equal totals then
+    /// show tie arrows, so setup can reserve the tie column before the roll.
+    pub(crate) fn rolls_a_group(&self, grouping: Grouping) -> bool {
+        let mut keys = std::collections::BTreeSet::new();
+        self.state
+            .participants
+            .iter()
+            .filter(|p| p.npc)
+            .any(|p| !keys.insert(Self::roll_key(p, grouping)))
+    }
     /// A shared roll is one block, including its first member.
     fn roll_block_first(state: &State, index: usize) -> usize {
         let p = &state.participants[index];
@@ -1532,27 +1564,7 @@ impl Run {
                 let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
                 let mut group_order = Vec::new();
                 for (i, p) in next.participants.iter().enumerate().filter(|(_, p)| p.npc) {
-                    let key = match grouping {
-                        // An encounter group that arrived together stays one roll. It joins
-                        // neither its like outside the group, nor another addition of itself.
-                        Grouping::Identical => match &p.added_from {
-                            Some(added) => added.instance.clone(),
-                            None => format!(
-                                "{}:{}:{}:{}",
-                                p.definition.id,
-                                p.initiative_bonus.map_or(String::new(), |v| v.to_string()),
-                                p.initiative_mode,
-                                p.changes
-                                    .as_ref()
-                                    .map_or_else(String::new, |c| c.overrides.mechanics())
-                            ),
-                        },
-                        Grouping::Individual => p.key.clone(),
-                        Grouping::BySide => p.side.clone(),
-                        Grouping::Explicit => {
-                            p.initiative_group.clone().unwrap_or_else(|| p.key.clone())
-                        }
-                    };
+                    let key = Self::roll_key(p, grouping);
                     if !groups.contains_key(&key) {
                         group_order.push(key.clone());
                     }

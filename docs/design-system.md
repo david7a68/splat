@@ -817,8 +817,10 @@ share columns and picture size; shortening bonuses changes none of these.
 
 Setup reserves initiative, Absent and menu columns on the name line, centred on initiative. Only NPC rows
 reserve Roll, before initiative, so party names use that room and all initiative fields stay aligned. Reserve
-the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column only while
-the roster has tied rows; change its width only after the initiative field loses focus. Tied rows
+the place column (`XL`) from the start, with an `S` gap before Absent. Reserve the tie column from the start when the
+campaign's roll mode gives two or more NPCs one shared roll, so `Roll NPCs` moves no field. Otherwise reserve it
+only while the roster has tied rows, and change its width only after the initiative field loses focus. With no
+shared roll to come (or individual rolls), setup shows no empty tie column. Tied rows
 keep fixed up and down arrow slots, in that order, with unused directions empty. Rows use the height of their name line (at least a Scan control), their Small detail line, and an XS gap.
 Do not add the live roster's minimum height to setup rows. Setup retains its first
 condition and counts the rest when needed. Shared-roll brackets stay beside fields and stop before detail.
@@ -951,7 +953,9 @@ uses muted recovery text; failed Connect retains error state. Sync stopped links
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
 lost changes on separate lines, up to three, then the remaining count. Deleted runs with unsent changes use
 warning. App close says Keep running, Keep recording or Keep processing for each task; recording and job
-titles name the unfinished session. Sync conflicts name the character and offer Review conflict. Stop and
+titles name the unfinished session. Sync conflicts name the character and offer Review conflict.
+The app-close and run-close dialogs draw their recovery actions through one shared function: quiet, on one line,
+Connect to sync before Review conflict, and the first one starts at the dialog text. Stop and
 close is secondary when saved work remains.
 
 Incoming sheet changes remove only that character's Undo steps. Remaining snapshots keep current sheet values.

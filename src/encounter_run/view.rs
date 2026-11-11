@@ -1064,7 +1064,7 @@ impl Run {
                         format!("{} {link}", alert.text)
                     }
                 } else if nobody_present {
-                    "No participants are present".to_owned()
+                    format!("{} No participants are present", icons::WARN)
                 } else {
                     strip
                         .next
@@ -1226,9 +1226,10 @@ impl Run {
                     }
                     if nobody_present && self.recording_notice.is_none() && strip.conflict.is_none()
                     {
+                        // A warning has its icon, as `2 tied` does.
                         ui.label(
                             Type::Small
-                                .rich(ui, "No participants are present")
+                                .rich(ui, format!("{} No participants are present", icons::WARN))
                                 .color(c.result.warning),
                         )
                         .on_hover_text(NOBODY_PRESENT);
@@ -2658,25 +2659,15 @@ impl Run {
                 );
             }
             ui.add_space(design::S);
-            if (self.sync_needs_sign_in() && !stranded.is_empty()) || conflict.is_some() {
-                // The first action starts the line at the text edge; a second follows it.
-                ui.horizontal(|ui| {
-                    let connect = self.sync_needs_sign_in() && !stranded.is_empty();
-                    if connect
-                        && Action::quiet("Connect to sync")
-                            .line_start()
-                            .show(ui)
-                            .clicked()
-                    {
-                        self.wants_sign_in = true;
-                        keep = true;
-                    }
-                    if conflict.is_some() {
-                        let action = Action::quiet("Review conflict");
-                        let action = if connect { action } else { action.line_start() };
-                        review = action.show(ui).clicked();
-                    }
-                });
+            let chosen = close_recovery_actions(
+                ui,
+                conflict.is_some(),
+                self.sync_needs_sign_in() && !stranded.is_empty(),
+            );
+            review = chosen.review;
+            if chosen.connect {
+                self.wants_sign_in = true;
+                keep = true;
             }
             let (lose, ()) = design::dialog_actions(
                 ui,
@@ -4578,12 +4569,17 @@ impl Run {
 
     /// Place has a slot from the start. Only the tie slot changes on blur.
     /// Roll precedes initiative so party and NPC totals share one column.
+    /// When `Roll NPCs` will give two NPCs one roll, their tie slot is there from the start,
+    /// so the roll moves no field. Typed ties still wait for blur.
     fn setup_slots(&self, ui: &egui::Ui, npc: bool) -> ((f32, f32, f32), f32) {
-        let tie = if self
-            .state
-            .order
-            .iter()
-            .any(|&i| self.setup_tie_directions(i).is_some())
+        let grouped_roll =
+            !self.initiative.roster_ties && self.rolls_a_group(self.initiative.grouping);
+        let tie = if grouped_roll
+            || self
+                .state
+                .order
+                .iter()
+                .any(|&i| self.setup_tie_directions(i).is_some())
         {
             Density::Read.control() * 2.0
         } else {
@@ -5675,6 +5671,47 @@ fn ordinal(place: usize) -> String {
         }
     };
     format!("{place}{suffix}")
+}
+
+/// What the DM chose among a close dialog's recovery actions.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub(crate) struct CloseRecovery {
+    pub review: bool,
+    pub connect: bool,
+}
+
+/// The recovery actions that the app-close and run-close dialogs offer above their action line.
+/// Both dialogs use this one function, so the actions have one order and one place: quiet,
+/// on one line, `Connect to sync` before `Review conflict`, and the first action starts at the
+/// dialog text.
+pub(crate) fn close_recovery_actions(
+    ui: &mut egui::Ui,
+    review: bool,
+    connect: bool,
+) -> CloseRecovery {
+    let mut chosen = CloseRecovery::default();
+    if !review && !connect {
+        return chosen;
+    }
+    ui.horizontal(|ui| {
+        let mut first = true;
+        let mut action = |ui: &mut egui::Ui, label: &str| {
+            let action = Action::quiet(label);
+            let action = if std::mem::take(&mut first) {
+                action.line_start()
+            } else {
+                action
+            };
+            action.show(ui).clicked()
+        };
+        if connect {
+            chosen.connect = action(ui, "Connect to sync");
+        }
+        if review {
+            chosen.review = action(ui, "Review conflict");
+        }
+    });
+    chosen
 }
 
 fn close_saved_words(undo: bool, sync: bool) -> String {
@@ -6960,6 +6997,9 @@ mod tests {
         for width in [450.0, 960.0, 1920.0] {
             let mut run = super::super::tests::run();
             run.initiative.roster_ties = false;
+            // The guards are identical NPCs. Individual rolls give them no shared roll, so no
+            // tie slot is reserved and this test sees a typed tie wait for blur.
+            run.initiative.grouping = crate::encounter_settings::Grouping::Individual;
             for (index, total) in [Some(20), Some(15), None].into_iter().enumerate() {
                 run.state.participants[index].initiative = total;
                 run.state.participants[index].conditions.clear();
@@ -7084,6 +7124,94 @@ mod tests {
                 before.y,
                 "iter8-B-tie: a kept tie keeps the row on its line after blur"
             );
+            assert_eq!(
+                harness.get_by_label(label).rect().min.x,
+                before.x - Density::Read.control() * 2.0,
+                "iter18-B-FT3: a typed tie opens its slot only after blur"
+            );
+        }
+    }
+
+    /// FT3: a grouped `Roll NPCs` moves no field, because its tie slot is there from the
+    /// start. With no group to roll, or individual rolls, setup shows no empty tie slot.
+    #[test]
+    fn iter18_b_grouped_roll_reserves_the_tie_slot_from_the_start() {
+        use crate::encounter_settings::Grouping;
+        use egui_kittest::kittest::Queryable;
+        let slot = Density::Read.control() * 2.0;
+        let lefts = |run: super::Run| {
+            let run = std::rc::Rc::new(std::cell::RefCell::new(run));
+            let shown = run.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(1200.0, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = shown.borrow_mut();
+                        for i in 0..run.state.participants.len() {
+                            ui.push_id(i, |ui| run.setup_row(ui, i));
+                        }
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let read = |harness: &egui_kittest::Harness<'_>| {
+                ["Guard 1", "Guard 2", "Guard 3"].map(|name| {
+                    harness
+                        .get_by_label(&format!("Initiative for {name}"))
+                        .rect()
+                        .left()
+                })
+            };
+            let before = read(&harness);
+            let grouping = run.borrow().initiative.grouping;
+            run.borrow_mut().state.random = splat::execution::dice::Random::controlled([7, 9, 11]);
+            run.borrow_mut().apply(Command::RollNpcs(grouping)).unwrap();
+            harness.run_steps(2);
+            let arrows = harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|node| {
+                    node.label()
+                        .is_some_and(|label| label.starts_with("Move Guard"))
+                }))
+                .count();
+            (before, read(&harness), arrows)
+        };
+        let fresh = |grouping: Grouping, distinct: bool| {
+            let mut run = super::super::tests::run();
+            run.initiative.roster_ties = false;
+            run.initiative.grouping = grouping;
+            for p in &mut run.state.participants {
+                p.initiative = None;
+                p.conditions.clear();
+            }
+            // Guard 1 is a player, so the roll leaves its field empty.
+            run.state.participants[0].npc = false;
+            if distinct {
+                run.state.participants[2].initiative_bonus = Some(5);
+            }
+            run
+        };
+        // Two identical NPCs share the default roll: the slot is there before it.
+        let (grouped, rolled, arrows) = lefts(fresh(Grouping::Identical, false));
+        assert!(arrows > 0, "iter18-B-FT3: the shared roll shows its arrows");
+        assert_eq!(grouped, rolled, "iter18-B-FT3: Roll NPCs moves no field");
+        // No group to roll, or individual rolls: no empty slot, before or after.
+        for (case, grouping, distinct) in [
+            ("no group", Grouping::Identical, true),
+            ("individual rolls", Grouping::Individual, false),
+        ] {
+            let (before, after, arrows) = lefts(fresh(grouping, distinct));
+            assert_eq!(arrows, 0, "iter18-B-FT3: {case} has no tie");
+            for at in 0..3 {
+                assert_eq!(
+                    before[at] - grouped[at],
+                    slot,
+                    "iter18-B-FT3: {case} reserves no tie slot (row {at})"
+                );
+                assert_eq!(
+                    before[at], after[at],
+                    "iter18-B-FT3: {case} roll moves no field"
+                );
+            }
         }
     }
 
