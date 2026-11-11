@@ -129,7 +129,7 @@ pub fn broken(d: &mut Driver<'_>) {
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     let combined = "Not saved. Line 3 opens a list with [ that never closes.";
     for size in [SMALL, DEFAULT, LARGE] {
-        let (one_message, ordered) = d.at_size(size, |d| {
+        let (one_message, ordered, (state_word, within)) = d.at_size(size, |d| {
             let errors: Vec<_> = d
                 .nodes()
                 .into_iter()
@@ -143,23 +143,46 @@ pub fn broken(d: &mut Driver<'_>) {
                     .iter()
                     .all(|node| node.name == combined && node.in_view())
                 && !d.has("Not saved: fix the problem above, then save.");
-            let state = d
-                .place_of(&format!("{} Unsaved", design::icons::DRAFT))
-                .unwrap();
+            // Round 23 FF2: a changed draft that still cannot be read is Invalid, as in Library.
+            let state = d.place_of(&format!("{} Invalid", design::icons::ERROR));
+            let state_word =
+                state.is_some() && !d.has(&format!("{} Unsaved", design::icons::DRAFT));
             let discard = d.place_of("Discard").unwrap();
             let reason = d
                 .place_of(crate::encounters::draft_switch_reason())
                 .unwrap();
             let save = d.place_of("Save repaired note").unwrap();
+            // Round 23 AF1: the editor and its save row end together within `LIST_MEASURE`.
+            let editor = d.place_of("Note text").unwrap();
             (
                 one_message,
-                state.right() <= discard.left()
+                state.is_some_and(|state| state.right() <= discard.left())
                     && discard.right() <= reason.left()
                     && reason.right() <= save.left()
                     && reason.top() < save.bottom()
                     && reason.bottom() > save.top(),
+                (
+                    state_word,
+                    (
+                        save.right() - editor.left() <= design::LIST_MEASURE + 1.0,
+                        format!("editor {editor:?}, Save {save:?}"),
+                    ),
+                ),
             )
         });
+        d.observe(
+            "iter-23-D-FF2-world",
+            state_word,
+            format!("The invalid changed repair says Invalid, not Unsaved, at {size:?}"),
+        );
+        d.observe(
+            "iter-23-D-AF1",
+            within.0,
+            format!(
+                "The repair editor and Save end within the list measure at {size:?}: {}",
+                within.1
+            ),
+        );
         d.observe(
             "iter-5-D-FD9",
             one_message,
@@ -384,10 +407,26 @@ pub fn broken(d: &mut Driver<'_>) {
     // A draft whose note is gone: its choices start at the message text.
     d.click("Edit Repaired watchkeeper");
     d.type_into("Status", "lost words");
+    // Round 23 FF3: the warning sits below the file line, so the file line keeps its place.
+    d.click("Setting · ");
+    let file_line: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .map(|size| d.at_size(size, |d| d.place_of("Show file")))
+        .into();
     fs::remove_file(&path).unwrap();
     reload(d);
     d.click("Setting · ");
     let lost = "The note for your unsaved changes to Repaired watchkeeper is gone.";
+    for (size, before) in [SMALL, DEFAULT, LARGE].into_iter().zip(file_line) {
+        let (after, warning) = d.at_size(size, |d| (d.place_of("Show file"), d.painted_left(lost)));
+        d.observe(
+            "iter-23-D-FF3",
+            warning.is_some()
+                && before
+                    .zip(after)
+                    .is_some_and(|(before, after)| (before.top() - after.top()).abs() < 0.5),
+            format!("The file line stays at {before:?} → {after:?} with the lost-draft warning at {size:?}"),
+        );
+    }
     d.expect("Copy the text of Repaired watchkeeper");
     action_at_text_edge(
         d,
@@ -421,6 +460,56 @@ pub fn broken(d: &mut Driver<'_>) {
         !d.has("Copy the text of Repaired watchkeeper"),
         "Discard draft removes the lost draft and its message",
     );
+    // Round 23 FF1: Discard draft keeps the words for one Undo discard, whatever note is open.
+    // A: the discard. B: an independent change to another note. Undo A brings the draft back
+    // and keeps B's change and B's Undo.
+    let undo_lost = "Undo discard of Repaired watchkeeper";
+    d.observe(
+        "iter-23-D-FF1-offered",
+        d.visible_text("Repaired watchkeeper draft discarded.") && d.has(undo_lost),
+        "Discard draft offers Undo discard in the shared Undo message",
+    );
+    let keeper = root(d).join("NPCs/Lamp Keeper.md");
+    entry(
+        d,
+        "NPCs/Lamp Keeper.md",
+        "Lamp Keeper",
+        "npc",
+        "  in: '[[Setting]]'\n",
+    );
+    reload(d);
+    d.click_starting("Lamp Keeper · ");
+    let keeper_before = fs::read_to_string(&keeper).unwrap();
+    d.click("Change In");
+    d.click("Clear value");
+    d.expect("Undo place change");
+    let keeper_after = fs::read_to_string(&keeper).unwrap();
+    d.observe(
+        "iter-23-D-FF1-b-changed",
+        keeper_after != keeper_before && d.has(undo_lost),
+        "B clears Lamp Keeper's place, and the lost draft's Undo stays",
+    );
+    d.click(undo_lost);
+    d.observe(
+        "iter-23-D-FF1-undo",
+        d.has("Copy the text of Repaired watchkeeper")
+            && !d.has(undo_lost)
+            && fs::read_to_string(&keeper).unwrap() == keeper_after
+            && d.has("Undo place change"),
+        "Undo discard brings the lost draft back; B's change and its Undo stay",
+    );
+    // The next Edit ends the Undo: it is offered again after a second Discard, then goes.
+    d.click("Discard the draft of Repaired watchkeeper");
+    d.expect(undo_lost);
+    d.click("Edit Lamp Keeper");
+    d.observe(
+        "iter-23-D-FF1-ends",
+        !d.has(undo_lost) && !d.has("Copy the text of Repaired watchkeeper"),
+        "The next Edit ends the lost draft's Undo discard",
+    );
+    d.click("Cancel");
+    fs::remove_file(&keeper).unwrap();
+    reload(d);
     // A file that cannot be opened for repair. The pane names the file, the recovery and, in
     // Technical details, the system's words. Its bytes never change. A second unreadable note
     // with the longest realistic path crowds the list beside it.
@@ -1361,6 +1450,13 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.click("Clear value");
     d.expect("Undo place change");
+    // Round 23 FG3: the message names the place as its row did (`Ashfall Keep`), not the words
+    // in the file (`The Keep`).
+    d.observe(
+        "iter-23-D-FG3-cleared",
+        d.visible_text("In: Ashfall Keep → not set.") && !d.visible_text("The Keep"),
+        "The cleared place's message names the note the In row showed",
+    );
     d.observe(
         "iter-7-D-FD6-cleared",
         !d.has("Change In") && d.in_view("Undo place change"),
@@ -1388,8 +1484,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In: The Keep → Watch House.");
-    let (success, detail) = finished_change_tone(d, "In: The Keep → Watch House.");
+    d.expect("In: Ashfall Keep → Watch House.");
+    let (success, detail) = finished_change_tone(d, "In: Ashfall Keep → Watch House.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -1406,6 +1502,45 @@ pub fn places(d: &mut Driver<'_>) {
         d.visible_text("Loop One is in Loop Two"),
         "A place loop remains visible and says why",
     );
+    // Round 23 FG2: each note in the loop says so on its list row, and the header counts both.
+    // Lookalike: Ashfall Keep holds Rook Ambry but leads back to nothing, so its row is clear.
+    d.observe(
+        "iter-23-D-FG2-rows",
+        ["Loop One", "Loop Two"].iter().all(|name| {
+            d.nodes().iter().any(|node| {
+                node.name.starts_with(&format!("{name} · ")) && node.name.contains("Place loop")
+            })
+        }) && d.in_view_containing("2 notes need fixing")
+            && !d.nodes().iter().any(|node| {
+                node.name.starts_with("Ashfall Keep · ") && node.name.contains("Place loop")
+            }),
+        "Both loop notes show Place loop on their rows, and the header counts 2 notes",
+    );
+    // Round 23 FG5: the loop warning wraps at the reader measure, the right edge of the rows.
+    let loop_warning = "Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.";
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (inside, detail) = d.at_size(size, |d| {
+            let warning = d.place_of(loop_warning);
+            let pane = d
+                .place_of("Resize World notes column")
+                .map(|pane| pane.right());
+            match warning.zip(pane) {
+                Some((warning, pane)) => {
+                    let measure = pane + design::S + design::READER_MEASURE;
+                    (
+                        warning.right() <= measure + 1.0,
+                        format!("warning ends at {}, measure at {measure}", warning.right()),
+                    )
+                }
+                None => (false, format!("warning {warning:?}, pane {pane:?}")),
+            }
+        });
+        d.observe(
+            "iter-23-D-FG5",
+            inside,
+            format!("The loop warning wraps at the reader measure at {size:?}: {detail}"),
+        );
+    }
     d.state("place-loop", Sizes::All);
 
     d.click_containing("Rook Ambry · ");
@@ -2116,7 +2251,7 @@ pub fn held_npc(d: &mut Driver<'_>) {
     d.click_starting("Broken.md · ");
     kept(d, "iter-15-D-AD1-repair", "Broken.md");
     d.click("New ▾");
-    d.click("NPC");
+    d.click("NPC…");
     kept(d, "iter-15-D-AD1-new-npc", "Create NPC");
     d.click("Cancel");
 
@@ -2395,11 +2530,28 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             format!("At {size:?}, the one-result action says {words:?}"),
         );
     }
+    // Round 23 FI6, FJ5: Back keeps the title line's height, so the search field keeps its place.
+    let fields_before: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .map(|size| d.at_size(size, |d| d.place_of(SEARCH_LOOKUP)))
+        .into();
+    let back_before = d.has("Back");
     d.state("npc-with-stat-block-and-place", Sizes::All);
     d.begin_task();
     d.click("Guard");
     d.wait_for_text("ARMOR CLASS");
     d.audit_goal_within("W2", "read an NPC stat block beside the run", 1);
+    for (size, before) in [SMALL, DEFAULT, LARGE].into_iter().zip(fields_before) {
+        let after = d.at_size(size, |d| d.place_of(SEARCH_LOOKUP));
+        d.observe(
+            "iter-23-D-FI6",
+            !back_before
+                && d.has("Back")
+                && before
+                    .zip(after)
+                    .is_some_and(|(before, after)| (before.top() - after.top()).abs() < 0.5),
+            format!("The search field stays at {before:?} → {after:?} when Back shows at {size:?}"),
+        );
+    }
     d.state("npc-stat-block-link", Sizes::All);
     d.click("Back");
     d.click("Watch House");
@@ -4593,6 +4745,74 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.state("npc-stat-block-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
     d.wait_for_text("Watchkeeper Guard · Not found");
+    // Round 23 FG1, SG1: with Lookup open, World's rows stack each label above its value. The
+    // value keeps the label column's room, so each missing link stays on one line. Must stay
+    // true: Change still starts an `L` gap after its value.
+    // At 960 the pane is too narrow for the whole value: the name keeps its words on one line
+    // and `Not found` takes its own line, whole and visible, directly under the name, as the
+    // missing-link rule says.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (whole, detail) = d.at_size(size, |d| {
+            // Each painted text with exactly these words, wholly visible: its rows and its rect.
+            let painted = |words: &str| {
+                let mut found = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = text.visual_bounding_rect();
+                    if text.galley.job.text == words && clip.expand(1.0).contains_rect(rect) {
+                        found.push((text.galley.rows.len(), rect));
+                    }
+                });
+                found
+            };
+            let not_found = painted("Not found");
+            let mut detail = Vec::new();
+            let mut whole = true;
+            for name in ["Watchkeeper Guard", "Watch House"] {
+                let full = painted(&format!("{} {name} · Not found", design::icons::WARN));
+                let alone = painted(&format!("{} {name}", design::icons::WARN));
+                // When the value wraps, `Not found` is its own whole line directly under its
+                // name, starting at the name's left edge.
+                let under = match alone.as_slice() {
+                    [(1, name)] => not_found.iter().any(|(rows, state)| {
+                        *rows == 1
+                            && (state.left() - name.left()).abs() <= 1.0
+                            && state.top() >= name.bottom() - 0.5
+                            && state.top() - name.bottom() < design::S
+                    }),
+                    _ => false,
+                };
+                whole &= (full.len() == 1 && full[0].0 == 1)
+                    || (size == SMALL && full.is_empty() && under);
+                detail.push(format!(
+                    "{name}: one galley {full:?}, name alone {alone:?}, under {under}"
+                ));
+            }
+            detail.push(format!("Not found texts {not_found:?}"));
+            let change = d.place_of("Change Stat block");
+            // World's value only: Lookup, to the right, names the same stat block.
+            let value = change.and_then(|change| {
+                d.painted_rect_in(
+                    "Watchkeeper Guard",
+                    egui::Rect::from_min_max(
+                        egui::pos2(0.0, change.top() - 1.0),
+                        egui::pos2(change.right(), f32::INFINITY),
+                    ),
+                )
+            });
+            (
+                whole
+                    && value
+                        .zip(change)
+                        .is_some_and(|(value, change)| change.left() >= value.right()),
+                format!("{detail:?}; value {value:?}, Change Stat block {change:?}"),
+            )
+        });
+        d.observe(
+            "iter-23-D-FG1",
+            whole,
+            format!("Each missing link stays on one line before Change at {size:?}: {detail}"),
+        );
+    }
     d.state("npc-stat-block-deleted-in-lookup", Sizes::All);
     d.press(Key::Escape);
     go_encounters(d);
@@ -4765,13 +4985,22 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
                 "Existing links keep NPCs/Rook Ambry.md.",
                 "Make Rook Ambry.md a separate note",
                 "Existing links will then use NPCs/Rook Ambry copy.md.",
-                "Stat block: Guard",
+                "Stat block",
             ];
             for name in names {
                 d.expect(name);
             }
-            let [action, first, second_action, second, field] =
-                names.map(|name| d.place_of(name).unwrap());
+            // The stat block's label is its own node; a missing one fails this check.
+            let [
+                Some(action),
+                Some(first),
+                Some(second_action),
+                Some(second),
+                Some(field),
+            ] = names.map(|name| d.place_of(name))
+            else {
+                return false;
+            };
             // Neighbour: each consequence stays close below its own action.
             first.top() - action.bottom() < design::S
                 && second_action.top() - first.bottom() >= design::L - 0.5
@@ -4791,9 +5020,51 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
             format!("World's duplicate choices start at the message text at {size:?}: {detail}"),
         );
     }
+    // Round 23 FG6: a duplicate note's stat block reads as every reader's does: a muted label,
+    // then the value as a link that opens it. Only Change waits for the repair.
+    let guard_links = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .filter(|node| node.role == Role::Link && node.name == "Guard" && node.in_view())
+            .count()
+    };
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (read, detail) = d.at_size(size, |d| {
+            let links = guard_links(d);
+            let label = d.place_of("Stat block");
+            let link = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.role == Role::Link && node.name == "Guard")
+                .map(|node| node.rect);
+            (
+                links == 1
+                    && !d.visible_text("Stat block: Guard")
+                    && !d.has("Change Stat block")
+                    // Must stay true: the label stays with its value, above it or beside it.
+                    && label.zip(link).is_some_and(|(label, link)| {
+                        link.center().y >= label.top() - 0.5
+                            && link.top() - label.bottom() < design::M
+                    }),
+                format!("{links} Guard links, label {label:?}, link {link:?}"),
+            )
+        });
+        d.observe(
+            "iter-23-D-FG6-world",
+            read,
+            format!(
+                "The duplicate's stat block is a labelled link with no Change at {size:?}: {detail}"
+            ),
+        );
+    }
     d.state("duplicate-world-files-and-repair", Sizes::All);
     look_up(d, "Rook Ambry");
     d.expect("Make Rook Ambry copy.md a separate note");
+    d.observe(
+        "iter-23-D-FG6-lookup",
+        guard_links(d) == 2 && !d.visible_text("Stat block: Guard"),
+        "Lookup's duplicate reader links its stat block too, beside World's",
+    );
     for size in [SMALL, DEFAULT, LARGE] {
         let rows = d.at_size(size, |d| {
             let rows: Vec<_> = d
@@ -4951,6 +5222,18 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
     d.state("world-copy-repair-undone", Sizes::All);
+    // Round 23 FG6: the duplicate's stat block link opens Guard's stat block.
+    let shown_before = d.has_containing("ARMOR CLASS");
+    d.click("Guard");
+    d.wait_for_text("ARMOR CLASS");
+    d.observe(
+        "iter-23-D-FG6-opens",
+        !shown_before && d.has_containing("ARMOR CLASS"),
+        "Guard on the duplicate note opens its stat block",
+    );
+    // World's reader opened Guard in place; the note's row brings the duplicate back.
+    d.click_starting("Rook Ambry.md ·");
+    d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
     d.wait_for_text("Undo separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
@@ -6104,6 +6387,15 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 && links.iter().all(|node| node.in_view())
         },
     );
+    // Round 23 FA10: Edit shows `not read` in the warning colour, as the reader does.
+    d.observe(
+        "iter-23-D-FA10",
+        d.painted_color("not read") == Some(design::colors().result.warning),
+        format!(
+            "Edit's Part of `not read` is {:?}",
+            d.painted_color("not read")
+        ),
+    );
     d.state("unread-groups-edit-repair-link", Sizes::All);
     d.click("Cancel");
 
@@ -6355,6 +6647,21 @@ pub fn empty_links(d: &mut Driver<'_>) {
                 format!("Both {label} optional links say not set at {size:?}"),
             );
         }
+        // Round 23 FF6: Edit keeps the Read order: Stat block, In, Part of, then Status. Must
+        // stay true: Text still follows the fields.
+        let order = [
+            "Change Stat block",
+            "Change In",
+            "Change Part of",
+            "Status",
+            "Text",
+        ]
+        .map(|name| d.place_of(name).map(|rect| rect.top()));
+        d.observe(
+            "iter-23-D-FF6",
+            order.iter().all(Option::is_some) && order.windows(2).all(|pair| pair[0] < pair[1]),
+            format!("Edit fields top to bottom: {order:?}"),
+        );
         d.replace_text_in("Status", "ready");
         d.state(&format!("{label}-links-in-edit"), Sizes::All);
         d.click("Save changes");
