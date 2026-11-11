@@ -268,16 +268,6 @@ const SCENARIOS: [(&str, Seed, Script); 80] = [
         Seed::Campaign,
         scenarios::world_build::package_folder_copied,
     ),
-    (
-        "library-file-fault",
-        Seed::Campaign,
-        scenarios::world_build::library_file_fault,
-    ),
-    (
-        "campaign-copy-registered",
-        Seed::Campaign,
-        scenarios::world_build::campaign_copy_registered,
-    ),
     ("world-places", Seed::World, scenarios::world_build::places),
     ("world-facts", Seed::World, scenarios::world_build::facts),
     (
@@ -378,6 +368,17 @@ const SCENARIOS: [(&str, Seed, Script); 80] = [
         scenarios::list_formats::run,
     ),
     ("run-loot", Seed::Loot, scenarios::run_loot::run),
+    // New scenarios go last: a scenario's repeatable IDs and dice start from its place here.
+    (
+        "library-file-fault",
+        Seed::Campaign,
+        scenarios::world_build::library_file_fault,
+    ),
+    (
+        "campaign-copy-registered",
+        Seed::Campaign,
+        scenarios::world_build::campaign_copy_registered,
+    ),
 ];
 
 impl crate::Splat {
