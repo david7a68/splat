@@ -60,6 +60,34 @@ fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     again
 }
 
+/// What is wrong with a repair draft now, and the line to mark. A saved file whose own text does
+/// not parse has a parse fault: the draft's current parse decides, so a draft that parses has no
+/// notice. Another fault (a read fault, a deleted manifest, a manifest with another identity) is
+/// not in the draft's text, so its stored words stay until the file changes.
+fn draft_repair_problem(
+    note: &Note,
+    draft: &str,
+    recovery: Option<&(Module, String, bool)>,
+) -> (Option<String>, Option<usize>) {
+    let (problem, line) = crate::campaign_content::repair_problem(&note.path, draft);
+    let Some(error) = note.error.as_ref().filter(|_| note.fault.is_none()) else {
+        return (None, line);
+    };
+    if recovery.is_some_and(|(_, _, exists)| !exists) {
+        return (Some(error.clone()), line);
+    }
+    let parse_fault = || {
+        crate::campaign_content::repair_problem(&note.path, &note.text)
+            .0
+            .is_some()
+    };
+    match problem {
+        Some(problem) => (Some(problem), line),
+        None if parse_fault() => (None, line),
+        None => (Some(error.clone()), line),
+    }
+}
+
 /// Keep the error with its repair and consequence in both reader and source views.
 fn repair_notice(
     ui: &mut egui::Ui,
@@ -5011,7 +5039,11 @@ impl Library {
             ),
             _ => String::new(),
         };
-        let state = if note.error.is_some() {
+        let (repair_problem, repair_line) =
+            draft_repair_problem(note, &self.draft, recovery.as_ref());
+        // A parse fault ends with the draft that parses: the saved file stays unreadable on the
+        // owner line until Save, but the draft is not Invalid.
+        let state = if fault.is_some() || repair_problem.is_some() {
             Status {
                 icon: icons::ERROR,
                 word: "Invalid",
@@ -5361,19 +5393,6 @@ impl Library {
                 );
             });
         }
-        let (repair_problem, repair_line) =
-            crate::campaign_content::repair_problem(&note.path, &self.draft);
-        let repair_problem = note
-            .error
-            .as_ref()
-            .filter(|_| fault.is_none())
-            .map(|error| {
-                if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
-                    error.clone()
-                } else {
-                    repair_problem.unwrap_or_else(|| error.clone())
-                }
-            });
         let mut repair_pressed = false;
         let mut read_again = false;
         // Save and Discard are one row, as far apart as the pane allows.
@@ -9299,6 +9318,100 @@ mod tests {
                 "control: {words}\n{yaml_painted}"
             );
         }
+
+        // iter-22-E-SD1: a repair draft's notice and state come from its current parse. The saved
+        // file stays unreadable on the owner line until Save.
+        library.source = true;
+        let painted = sd1_painted(&mut library);
+        for words in [
+            "Line 4 opens a list",
+            "Invalid",
+            "Campaign · Cannot be read",
+        ] {
+            assert!(
+                painted.contains(words),
+                "SD1-saved-fault: {words}\n{painted}"
+            );
+        }
+        // The stored error has its own words: the old code fell back to them.
+        let stored = library.loaded.as_ref().unwrap().notes[library.selected.unwrap()]
+            .error
+            .clone()
+            .unwrap();
+        let stored = stored.split(" at line").next().unwrap().to_owned();
+        assert!(!stored.contains("opens a list"), "{stored}");
+        let valid = yaml.replace("splat_kind: [", "splat_kind: rule");
+        library.draft = valid.clone();
+        let painted = sd1_painted(&mut library);
+        for words in ["opens a list", stored.as_str()] {
+            assert!(
+                !painted.contains(words),
+                "SD1-valid-notice: {words}\n{painted}"
+            );
+        }
+        assert!(!painted.contains("Invalid"), "SD1-valid-state\n{painted}");
+        assert!(painted.contains("Unsaved"), "SD1-valid-unsaved\n{painted}");
+        assert!(
+            painted.contains("Campaign · Cannot be read"),
+            "SD1-owner-line-stays\n{painted}"
+        );
+        // The reader shows the same draft: it has no notice either.
+        library.source = false;
+        let painted = sd1_painted(&mut library);
+        for words in ["opens a list", stored.as_str()] {
+            assert!(
+                !painted.contains(words),
+                "SD1-reader-notice: {words}\n{painted}"
+            );
+        }
+        assert!(
+            !painted.contains("Fix in Edit Markdown"),
+            "SD1-reader-fix\n{painted}"
+        );
+        // Edited back to a new fault: the notice names the draft's line, not the saved one.
+        library.source = true;
+        library.draft = valid.replace("splat_name: Yaml", "splat_name: [");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Line 5 opens a list"),
+            "SD1-new-fault\n{painted}"
+        );
+        assert!(!painted.contains("Line 4"), "SD1-old-fault-gone\n{painted}");
+        assert!(painted.contains("Invalid"), "SD1-invalid-again\n{painted}");
+        // Discard goes back to the saved text and its fault.
+        library.draft = yaml.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Line 4 opens a list"),
+            "SD1-discard\n{painted}"
+        );
+        assert!(painted.contains("Invalid"), "SD1-discard-state\n{painted}");
+
+        // Lookalike outside the rule: another identity is not in the draft's parse, so a draft
+        // that parses keeps the stored fault and Invalid until the file changes.
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let manifest = module.path.join("Package.md");
+        let text = fs::read_to_string(&manifest).unwrap();
+        let other = text.replace(&module.id.to_string(), &Uuid::new_v4().to_string());
+        assert_ne!(other, text);
+        fs::write(&manifest, &other).unwrap();
+        let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Package.md");
+        library.source = true;
+        library.draft = format!("{other}\nA description.\n");
+        assert!(
+            crate::campaign_content::repair_problem("Package.md", &library.draft)
+                .0
+                .is_none()
+        );
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("another identity"),
+            "SD1-lookalike-notice\n{painted}"
+        );
+        assert!(
+            painted.contains("Invalid"),
+            "SD1-lookalike-state\n{painted}"
+        );
 
         let loaded = load_all(&[], Some(&campaign)).unwrap();
         let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Bad.md");
