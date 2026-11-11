@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: merges-clean-change
+expected_outcome: |
+  The verdict is MERGE. The review finds no data loss, no weakened test and no baseline change, and it does not invent a blocking fault. Small notes (for example that no step presses `Use <name>` in Edit Markdown) are listed as non-blocking known limits.

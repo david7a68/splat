@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: blocks-baseline-hiding-overlap
+expected_outcome: |
+  The review does not accept the baseline change on the author's word. It names the new `no-overlap/egui-chrome` entries for `generator-tables` and `world-held-npc` in `src/visual_tests/baseline.json` as a required repair or the reason to BLOCK: they are untraced, or they hide the `Copy the marker` press area (now `line_start`) reaching into the World column splitter.

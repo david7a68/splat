@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: blocks-weaker-gate
+expected_outcome: |
+  The verdict is BLOCK. The review says that while `no-overlap/app-vs-chrome` is in `REPORT_ONLY`, a new overlap between an app control and a splitter or scroll bar passes the gate in any scenario, which is weaker than main, where it raised a baselined count. It asks for enforcement that still fails on new overlaps (for example an exact list of the known ones).
