@@ -2712,9 +2712,9 @@ impl Run {
     /// What each group would make the fight when it joins, for the groups whose XP is known. The
     /// party is the characters who are present; the fight is every present creature against them.
     /// Worked out again only after a step, a new read of the groups or of the scale.
-    fn arrival_words(
+    pub(super) fn arrival_words(
         &mut self,
-    ) -> Option<&std::collections::BTreeMap<Uuid, crate::difficulty::Rating>> {
+    ) -> Option<&std::collections::BTreeMap<Uuid, (crate::difficulty::Rating, u64)>> {
         let (groups, scale) = (self.groups.as_ref()?, self.scale.as_ref()?);
         let key = (
             self.steps_kept,
@@ -2733,18 +2733,38 @@ impl Run {
             let (mut party, mut foes) = (Vec::new(), Vec::new());
             for p in self.state.participants.iter().filter(|p| p.present) {
                 if p.side.trim() == "party" {
-                    party.extend(crate::difficulty::character_level(&p.definition));
+                    party.extend(scale.level(&p.definition));
                 } else {
                     foes.push(crate::difficulty::creature_xp(&p.definition));
                 }
             }
             let words = groups
                 .iter()
-                .filter(|group| group.side.trim() != "party" && group.joinable_count() > 0)
                 .filter_map(|group| {
-                    let added = group.xp_unknown.is_empty().then_some(group.xp);
-                    let fight = scale.weigh(&party, foes.iter().copied().chain([added]));
-                    Some((group.id, fight.rating?))
+                    // Each member joins on its own side; one on the party's side is an ally.
+                    let added: Vec<_> = group
+                        .members
+                        .iter()
+                        .filter(|member| {
+                            member
+                                .overrides
+                                .side
+                                .as_deref()
+                                .unwrap_or(&group.side)
+                                .trim()
+                                != "party"
+                        })
+                        .flat_map(|member| {
+                            let xp = crate::difficulty::creature_xp(&member.entry);
+                            std::iter::repeat_n(xp, member.count as usize)
+                        })
+                        .collect();
+                    if added.is_empty() {
+                        return None;
+                    }
+                    let fight = scale.weigh(&party, foes.iter().copied().chain(added.clone()));
+                    let adds = added.into_iter().map(|xp| xp.unwrap_or(0)).sum();
+                    Some((group.id, (fight.rating?, adds)))
                 })
                 .collect();
             self.arrival_words = Some((key, words));
@@ -3006,6 +3026,7 @@ impl Run {
             .arrival_words()
             .and_then(|words| words.get(&group.id))
             .cloned();
+        let (rating, adds) = rating.map_or((None, 0), |(rating, adds)| (Some(rating), adds));
         let grip = ui.allocate_response(
             vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
@@ -3063,7 +3084,7 @@ impl Run {
         if let Some(rating) = shown {
             let words = format!(
                 "Adds {} XP; the fight becomes {}",
-                crate::encounter_run::grouped_number(group.xp),
+                crate::encounter_run::grouped_number(adds),
                 rating.word.text()
             );
             ui.ctx()

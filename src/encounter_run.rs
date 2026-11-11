@@ -731,7 +731,8 @@ pub(crate) struct Run {
     steps_kept: u64,
     /// What each group in Arrivals would make the fight, worked out for one `steps_kept`, one
     /// read of the groups and one scale. Never saved.
-    arrival_words: Option<(ArrivalKey, BTreeMap<Uuid, crate::difficulty::Rating>)>,
+    /// Each with the XP its members on the other side add.
+    arrival_words: Option<(ArrivalKey, BTreeMap<Uuid, (crate::difficulty::Rating, u64)>)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
@@ -9477,6 +9478,77 @@ mod tests {
                 (beast(), 2, Overrides::default()),
             ],
         )
+    }
+    /// F1 in Arrivals: what a group makes the fight. A member that joins on the party's side is an
+    /// ally and adds no XP, and a character's level is the saved sheet's now, not the copy the
+    /// run kept when it started.
+    #[test]
+    fn arrivals_weigh_each_member_on_its_side_against_the_saved_levels() {
+        let with = |field: &str, value: &str| {
+            let mut entry = creature();
+            entry.id = Uuid::new_v4();
+            entry
+                .fields
+                .insert(field.into(), serde_yaml_ng::from_str(value).unwrap());
+            entry
+        };
+        let (cr1, cr5) = (
+            with("splat_creature", "{type: humanoid, cr_text: '1'}"),
+            with("splat_creature", "{type: humanoid, cr_text: '5'}"),
+        );
+        // Five characters whose run copies say level 3; their saved sheets now say level 4.
+        let heroes: Vec<_> = (0..5)
+            .map(|_| with("splat_character", "{level: 3}"))
+            .collect();
+        let mut participants: Vec<_> = heroes
+            .iter()
+            .enumerate()
+            .map(|(i, hero)| {
+                Participant::new(
+                    format!("hero{i}"),
+                    "party".into(),
+                    hero.clone(),
+                    &Mapping::new(),
+                    false,
+                )
+                .unwrap()
+            })
+            .collect();
+        participants.extend((0..3).map(|i| {
+            Participant::new(
+                format!("foe{i}"),
+                "enemies".into(),
+                cr1.clone(),
+                &Mapping::new(),
+                true,
+            )
+            .unwrap()
+        }));
+        let mut run = Run::new("Ambush".into(), participants, String::new()).unwrap();
+        let ally = Overrides {
+            side: Some("party".into()),
+            ..Overrides::default()
+        };
+        let group = group_of(
+            "Mixed",
+            "enemies",
+            vec![
+                (cr1.clone(), 1, Overrides::default()),
+                (cr5.clone(), 1, ally),
+            ],
+        );
+        run.groups = Some(Arc::new(vec![group.clone()]));
+        run.scale = Some(Arc::new(crate::difficulty::Scale {
+            budgets: Some(crate::difficulty::builtin_budgets()),
+            party: heroes.iter().map(|hero| (hero.id, Some(4))).collect(),
+        }));
+        // 600 XP in the fight and 200 more: Low for five at level 4 (1,250). Counting the ally
+        // (1,800) would make it Above High; the run's level-3 copies would make it Moderate.
+        let (rating, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        assert_eq!(
+            (rating.word, rating.xp, rating.budgets[0], adds),
+            (crate::difficulty::Word::Low, 800, 1250, 200)
+        );
     }
     #[test]
     fn identical_rolls_once_for_a_mixed_group_with_the_first_members_bonus() {

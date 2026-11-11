@@ -894,7 +894,7 @@ impl Sessions {
                         }
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if read_encounter(ui, fight.difficulty.rating.as_ref()).clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui, fight.difficulty.rating.as_ref().filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         plan_rule(ui);

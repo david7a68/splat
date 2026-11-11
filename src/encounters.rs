@@ -2031,8 +2031,11 @@ impl Snapshot {
                 .iter()
                 .filter(|creature| creature.party)
                 .map(|creature| {
-                    crate::difficulty::character_level(&catalogue.entries[&creature.id].entry)
-                        .flatten()
+                    let entry = &catalogue.entries[&creature.id].entry;
+                    (
+                        creature.id,
+                        crate::difficulty::character_level(entry).flatten(),
+                    )
                 })
                 .collect(),
         };

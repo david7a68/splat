@@ -56,8 +56,9 @@ impl Budgets {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Scale {
     pub budgets: Option<Budgets>,
-    /// Each saved character of the campaign's party, by level. `None` is a level not known.
-    pub party: Vec<Option<u64>>,
+    /// Each saved character of the campaign's party by the ID of its copy's entry, with its
+    /// level from that saved sheet. `None` is a level not known.
+    pub party: BTreeMap<uuid::Uuid, Option<u64>>,
 }
 
 /// The four words, in rising order.
@@ -109,6 +110,13 @@ impl Scale {
     /// The one computation. `party` is the level of each character on the party's side; with
     /// none, the campaign's party stands in. `foes` is the XP of each creature that is not on
     /// the party's side, `None` where it is not known.
+    /// A character's level from the saved sheet now, by the ID of its copy's entry. A run keeps
+    /// a copy of each sheet from when it started; the saved one wins while the campaign has it.
+    pub fn level(&self, character: &Entry) -> Option<Option<u64>> {
+        let kept = character_level(character)?;
+        Some(self.party.get(&character.id).copied().unwrap_or(kept))
+    }
+
     pub fn weigh(
         &self,
         party: &[Option<u64>],
@@ -123,7 +131,13 @@ impl Scale {
             }
         }
         let campaign_party = party.is_empty();
-        let party = if campaign_party { &self.party } else { party };
+        let saved: Vec<_>;
+        let party = if campaign_party {
+            saved = self.party.values().copied().collect();
+            &saved
+        } else {
+            party
+        };
         let rating = (|| {
             if !any || unknown > 0 || party.is_empty() {
                 return None;
@@ -221,25 +235,34 @@ pub(crate) fn describe(ui: &egui::Ui, response: egui::Response, rating: &Rating)
 }
 
 #[cfg(test)]
+/// The rule as the campaign's packages hold it, read through the same path the app uses.
+pub(crate) fn builtin_budgets() -> Budgets {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/builtin/dnd2024-definitions/rules/combat_encounters_step_2_determine_your_xp_budget.md"
+    ))
+    .unwrap();
+    let entry = Entry::parse("rule.md", &text).unwrap();
+    Budgets::of_rule(&entry.fields["splat_rule"]).expect("the package's table reads")
+}
+
+#[cfg(test)]
+pub(crate) fn party_of(levels: &[u64]) -> BTreeMap<uuid::Uuid, Option<u64>> {
+    levels
+        .iter()
+        .map(|level| (uuid::Uuid::new_v4(), Some(*level)))
+        .collect()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The rule as the campaign's packages hold it, read through the same path the app uses.
-    fn builtin_budgets() -> Budgets {
-        let text = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/builtin/dnd2024-definitions/rules/combat_encounters_step_2_determine_your_xp_budget.md"
-        ))
-        .unwrap();
-        let entry = Entry::parse("rule.md", &text).unwrap();
-        Budgets::of_rule(&entry.fields["splat_rule"]).expect("the package's table reads")
-    }
 
     #[test]
     fn the_word_compares_the_xp_with_the_party_budget_from_the_rules() {
         let scale = Scale {
             budgets: Some(builtin_budgets()),
-            party: vec![Some(3); 5],
+            party: party_of(&[3; 5]),
         };
         let weigh =
             |party: &[Option<u64>], foes: &[Option<u64>]| scale.weigh(party, foes.iter().copied());
@@ -287,7 +310,7 @@ mod tests {
     fn nothing_shows_when_an_input_is_not_known() {
         let scale = Scale {
             budgets: Some(builtin_budgets()),
-            party: Vec::new(),
+            party: BTreeMap::new(),
         };
         let five = [Some(3); 5];
         // A creature with no XP and no CR keeps its count and the XP that is known.
@@ -306,7 +329,7 @@ mod tests {
         // The rules have no table.
         let no_table = Scale {
             budgets: None,
-            party: vec![Some(3)],
+            party: party_of(&[3]),
         };
         assert_eq!(no_table.weigh(&five, [Some(100)]).rating, None);
         assert_eq!(

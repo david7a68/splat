@@ -611,7 +611,7 @@ mod tests {
         };
         let party = |budgets| crate::difficulty::Scale {
             budgets,
-            party: vec![Some(3); 5],
+            party: crate::difficulty::party_of(&[3; 5]),
         };
         let rated = |budgets| party(budgets).weigh(&[], [Some(800)]).rating.unwrap();
         // A new campaign uses the SRD 5.2.1 package's table: 5 at level 3 have Low 750.
