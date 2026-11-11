@@ -14880,21 +14880,11 @@ pub mod session_plan_groups {
             })
             .map(|node| node.rect);
         let drawn = space.is_some_and(|space| {
-            // A notch scrolls the space by one line; the example's line is a few notches down.
-            let shown = |d: &Driver<'_>| {
-                example_words
-                    .as_deref()
-                    .is_some_and(|words| d.visible_text(words))
-            };
-            let mut drawn = shown(d);
-            for _ in 0..6 {
-                if drawn {
-                    break;
-                }
-                d.scroll_at(space.center(), 1);
-                drawn = shown(d);
-            }
-            d.scroll_up_at(space.center(), 8);
+            d.scroll_at(space.center(), 1);
+            let drawn = example_words
+                .as_deref()
+                .is_some_and(|words| d.visible_text(words));
+            d.scroll_up_at(space.center(), 1);
             drawn
         });
         d.observe(

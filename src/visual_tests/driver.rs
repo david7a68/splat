@@ -2119,6 +2119,11 @@ impl<'a> Driver<'a> {
     }
 
     /// Return to the start of a reader after editing its source.
+    /// Scroll down by `points`, as a touchpad does, in place of a whole wheel notch.
+    pub fn scroll_points_at(&mut self, pos: egui::Pos2, points: f32) {
+        self.scroll_by(pos, 1, egui::vec2(0.0, -points));
+    }
+
     pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
         self.scroll_by(pos, notches, egui::vec2(0.0, 100.0));
     }

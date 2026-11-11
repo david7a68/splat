@@ -2400,47 +2400,13 @@ pub fn fixed_part<R>(
     } else {
         0.0
     };
-    // A wheel notch scrolls the part by at most one text line, so no row of a message is passed
-    // over (a notch is larger than the part). A touchpad's small deltas scroll as they come. The
-    // part takes the wheel only while it can still scroll that way, so a page around a part
-    // that fits keeps scrolling; egui's smoothed rest of a notch is dropped over the part.
-    let reach = Id::new((id, "reach"));
-    let (offset, max) = ui
-        .ctx()
-        .data(|data| data.get_temp::<(f32, f32)>(reach))
-        .unwrap_or_default();
-    let wheel = if ui.rect_contains_pointer(rect) && ui.ctx().dragged_id().is_none() {
-        let line = Type::Body.line();
-        ui.input_mut(|input| {
-            let raw = input.raw_scroll_delta.y;
-            let can = (raw < 0.0 && offset < max - 0.5) || (raw > 0.0 && offset > 0.5);
-            let pending = input.smooth_scroll_delta.y;
-            let taking = can
-                || (raw == 0.0
-                    && ((pending < 0.0 && offset < max - 0.5) || (pending > 0.0 && offset > 0.5)));
-            if !taking {
-                return 0.0;
-            }
-            input.smooth_scroll_delta.y = 0.0;
-            input.raw_scroll_delta.y = 0.0;
-            // Down is a negative delta and a positive step.
-            if raw == 0.0 {
-                0.0
-            } else {
-                -raw.signum() * raw.abs().min(line)
-            }
-        })
-    } else {
-        0.0
-    };
-    let step = step + wheel;
     let mut part = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(Layout::top_down(Align::Min)),
     );
     let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
-    let output = egui::ScrollArea::vertical()
+    let inner = egui::ScrollArea::vertical()
         .id_salt(id)
         .max_height(rect.height())
         // egui's default minimum would let a short overflow grow past the part.
@@ -2452,12 +2418,8 @@ pub fn fixed_part<R>(
                 ui.scroll_with_delta(vec2(0.0, -step));
             }
             add(ui)
-        });
-    // Where the part's scroll is, for the next frame's wheel.
-    let max = (output.content_size.y - output.inner_rect.height()).max(0.0);
-    ui.ctx()
-        .data_mut(|data| data.insert_temp(reach, (output.state.offset.y, max)));
-    let inner = output.inner;
+        })
+        .inner;
     let response = ui.interact(rect, focus, Sense::focusable_noninteractive());
     // A named group that holds the message and its actions: a screen reader reads the whole
     // message, and the group is not a second target over its own Undo.
