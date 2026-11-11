@@ -4519,13 +4519,21 @@ impl Run {
                             );
                         });
                     } else {
-                        design::small_message(ui, Tone::Warning, &words);
-                        crate::world::entry_file_actions(
-                            ui,
-                            path.parent().unwrap_or(path),
-                            &filename,
-                            true,
-                        );
+                        // The file line starts at the warning's words, as every message's
+                        // actions do, and its name wraps whole rather than being cut.
+                        let words_left =
+                            design::small_message(ui, Tone::Warning, &words).rect.left();
+                        let inset = words_left - ui.cursor().left();
+                        ui.horizontal_top(|ui| {
+                            ui.add_space(inset);
+                            ui.vertical(|ui| {
+                                crate::encounters::file_line(
+                                    ui,
+                                    path.parent().unwrap_or(path),
+                                    &filename,
+                                );
+                            });
+                        });
                     }
                 });
             }

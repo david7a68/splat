@@ -211,6 +211,12 @@ pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> St
     words
 }
 
+/// A Timeline flag's words. The file line below the warning holds the path, so the words name
+/// only the line.
+fn flag_words(flag: &splat::content::layout::Flag) -> String {
+    format!("Line {}: {}", flag.line, flag.message)
+}
+
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
 /// Returns true when the comparison needs the rest of the pane.
 pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
@@ -227,18 +233,20 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     {
         book.undo_reload();
     }
-    for flag in &book.flags {
-        design::message(
-            ui,
-            Tone::Warning,
-            &format!("Timeline.md, line {}: {}", flag.line, flag.message),
-        );
-    }
-    if !book.flags.is_empty()
-        && let Some(path) = &book.path
-        && let Some(folder) = path.parent()
-    {
-        crate::world::entry_file_actions(ui, folder, super::FILE, true);
+    // The warning names the line; the file line below the last one names the file, at its words.
+    let folder = book.path.as_deref().and_then(std::path::Path::parent);
+    for (at, flag) in book.flags.iter().enumerate() {
+        let text = flag_words(flag);
+        match folder {
+            Some(folder) if at + 1 == book.flags.len() => {
+                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
+                    crate::encounters::file_line(ui, folder, super::FILE);
+                });
+            }
+            _ => {
+                design::message(ui, Tone::Warning, &text);
+            }
+        }
     }
     if let Some(warning) = &book.duplicate {
         design::message(ui, Tone::Warning, warning);

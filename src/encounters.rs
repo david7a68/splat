@@ -4831,9 +4831,10 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
-            // The file's path and links start at the last warning's words.
+            // The warning names the line; the file's path and links start at the last
+            // warning's words.
             for (at, flag) in rule_flags.iter().enumerate() {
-                let text = format!("Campaign.md, line {}: {}", flag.line, flag.message);
+                let text = format!("Line {}: {}", flag.line, flag.message);
                 if at + 1 == rule_flags.len() {
                     design::message_with_actions(ui, Tone::Warning, &text, |ui| {
                         file_line(ui, &active.path, "Campaign.md");

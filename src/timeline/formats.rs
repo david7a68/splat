@@ -241,7 +241,7 @@ fn rows(text: &str) -> (Vec<Row>, Vec<Flag>) {
             if let Some(typed) = typed.filter(|typed| *typed != expected) {
                 flags.push(Flag {
                     line: row.head.number,
-                    message: format!("\"Day {typed}\" is day {expected} in order. Splat renumbers it when it saves."),
+                    message: format!("“Day {typed}” is day {expected} in order. Splat renumbers it when it saves."),
                 });
             }
         }
@@ -773,7 +773,7 @@ mod tests {
         let (events, flags) = parse(&outside);
         assert_eq!(
             flags[0].message,
-            "\"Day 5\" is day 1 in order. Splat renumbers it when it saves."
+            "“Day 5” is day 1 in order. Splat renumbers it when it saves."
         );
         let after = patch(&outside, &events, &sessions, true).unwrap();
         assert!(after.contains("## Day 1: Start"));
@@ -870,7 +870,7 @@ mod tests {
         let (events, flags) = parse(text);
         assert_eq!(events.len(), 2);
         assert!(flags.iter().any(|flag| flag.line == 8
-            && flag.message == "\"Day 5\" is day 2 in order. Splat renumbers it when it saves."));
+            && flag.message == "“Day 5” is day 2 in order. Splat renumbers it when it saves."));
         // Round 13 FD6: the row names the number the heading was written with.
         assert_eq!(flagged_days(text), vec![("t-two".to_owned(), 5)]);
         assert!(flagged_days(&text.replace("Day 5", "Day 2")).is_empty());

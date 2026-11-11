@@ -331,7 +331,16 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("1 note cannot be read");
     d.click_containing("Notes/Broken.md");
     d.expect("Save repaired note");
+    let clean = super::session_recording::accent_filled(d);
     d.replace_text_in("Note text", &fixed);
+    // Round 22 FD3: one weight for a save row. The changed repair's save is the screen's one
+    // primary action; unchanged, it is not primary.
+    let changed = super::session_recording::accent_filled(d);
+    d.observe(
+        "iter-22-C-FD3-world",
+        !clean.iter().any(|name| name == "Save repaired note") && changed == ["Save repaired note"],
+        format!("Accent-filled unchanged {clean:?}, changed {changed:?}"),
+    );
     d.click("Save repaired note");
     d.settle();
     d.observe(

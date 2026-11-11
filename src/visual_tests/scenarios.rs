@@ -1630,6 +1630,16 @@ pub mod campaign_content {
                 rules.len() == 1 && rules[0] - save.bottom() >= crate::design::L
             },
         );
+        // Round 22 FD3: an unchanged repair has no primary action on the whole screen.
+        d.observe(
+            "iter-22-C-FD3-campaign-clean",
+            super::session_recording::accent_filled(d).is_empty()
+                && d.in_view("Save repaired note"),
+            format!(
+                "Accent-filled: {:?}",
+                super::session_recording::accent_filled(d)
+            ),
+        );
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -1661,6 +1671,12 @@ pub mod campaign_content {
             "iter-18-A-repair-lock",
             "A repair draft states the campaign switch lock",
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
+        );
+        // Round 22 FD3: a changed repair's save is the one primary action, as `Save changes` is.
+        d.observe_both(
+            "iter-22-C-FD3-campaign",
+            "Save repaired note is the only accent-filled action while the draft has changes",
+            |d| super::session_recording::accent_filled(d) == ["Save repaired note"],
         );
         d.state("repair-dirty", Sizes::All);
         d.click("Discard");
@@ -6954,8 +6970,14 @@ pub mod session_notes {
         // A rest, on the session's own page, with no step away from it.
         assert!(d.in_view("Write"), "The narrow view starts on the note");
         show_plan(d);
-        d.wait_for_text("Nothing planned yet.");
+        d.wait_for_text("Nothing planned yet");
         d.expect("Use Add to plan a fight, a group, or an event.");
+        // Round 22 FT3: an empty-state title has no full stop, as `No session notes yet` has none.
+        d.observe(
+            "iter-22-C-FT3",
+            d.in_view("Nothing planned yet") && !d.visible_text("Nothing planned yet."),
+            "The empty plan's title has no full stop",
+        );
         assert!(d.has("Add a group"));
         assert!(
             !d.in_view("Write"),
@@ -12100,7 +12122,7 @@ pub mod session_plan {
 
         // T12.1: from the plan to the fight, and back to the plan.
         show_plan(d);
-        d.wait_for_text("Nothing planned yet.");
+        d.wait_for_text("Nothing planned yet");
         d.state_prepared("plan-fight-picker", Sizes::Default, |d| {
             if !d.has(&format!("Plan {FIRST}")) {
                 d.click("Add a fight");

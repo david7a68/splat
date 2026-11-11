@@ -83,7 +83,9 @@ impl Repair {
         self.draft != self.baseline
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign) -> bool {
+    /// `run_open`: an open run owns `Next turn`, the screen's primary action, so Save stays
+    /// secondary.
+    pub fn show(&mut self, ui: &mut egui::Ui, campaign: &Campaign, run_open: bool) -> bool {
         if let Ok(path) = crate::library::note_path(&campaign.path, &self.path)
             && let Ok(text) = std::fs::read_to_string(path)
             && text != self.baseline
@@ -157,10 +159,16 @@ impl Repair {
                 } else {
                     problem.as_deref()
                 };
-                if design::Action::secondary("Save repaired note")
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked()
+                // One weight for a save row: primary while the draft has changes, unless an
+                // open run owns `Next turn`.
+                if (if reason.is_none() && !run_open {
+                    design::Action::primary("Save repaired note")
+                } else {
+                    design::Action::secondary("Save repaired note")
+                })
+                .blocked(reason)
+                .show(ui)
+                .clicked()
                     || (reason.is_none()
                         && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)))
                 {
@@ -243,14 +251,24 @@ mod tests {
         }
     }
 
-    fn show(repair: &mut Repair, campaign: &Campaign) {
+    /// Draws the repair once. True when it painted an accent-filled (primary) button.
+    fn show_with(repair: &mut Repair, campaign: &Campaign, run_open: bool) -> bool {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                assert!(!repair.show(ui, campaign));
+                assert!(!repair.show(ui, campaign, run_open));
             });
         });
+        let accent = colors().accent_fill;
+        output
+            .shapes
+            .iter()
+            .any(|clipped| matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == accent))
+    }
+
+    fn show(repair: &mut Repair, campaign: &Campaign) {
+        show_with(repair, campaign, false);
     }
 
     #[test]
@@ -312,7 +330,15 @@ mod tests {
             "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Kept\n---\n\nMy unsent text.\n",
             uuid::Uuid::new_v4()
         );
+        // Round 22 FD3: one weight for a save row. Save is primary while the draft has changes
+        // it can save, and secondary when unchanged, still invalid, or when a run owns Next turn.
+        assert!(!show_with(&mut repair, &campaign, false), "FD3-clean");
+        repair.draft = format!("{before}\nStill broken.\n");
+        assert!(!show_with(&mut repair, &campaign, false), "FD3-invalid");
         repair.draft = draft.clone();
+        assert!(show_with(&mut repair, &campaign, false), "FD3-changed");
+        assert!(!show_with(&mut repair, &campaign, true), "FD3-run-open");
+        assert_eq!(repair.draft, draft);
         for moved in [true, false] {
             if moved {
                 std::fs::rename(&path, temp.path().join("Moved.md")).unwrap();
