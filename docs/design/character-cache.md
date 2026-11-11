@@ -71,7 +71,10 @@ $XDG_DATA_HOME/splat/characters/<local-campaign-uuid>/<remote-campaign-id>/<char
 
 On Linux, the default root is `~/.local/share/splat/characters`. Each JSON file is
 a versioned snapshot envelope containing the shared creature definition and its
-current state, details, and source records. The app also writes a campaign Markdown copy as described below. Neither form
+current state, details, and source records. The envelope's `version` is 2. Splat does
+not read a record with a lower version: it leaves the file alone, shows no sheet for it,
+and the next sync writes a current record over it. A record with a higher version, or one
+that Splat cannot parse, is kept and never replaced. The app also writes a campaign Markdown copy as described below. Neither form
 introduces a second authoritative inventory table.
 A `roster-index` records the most recently fetched membership; removed members
 remain on disk but no longer appear when that roster is loaded offline.

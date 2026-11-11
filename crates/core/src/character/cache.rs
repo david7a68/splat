@@ -48,12 +48,10 @@ impl Cache {
         if bytes.len() as u64 > MAX_CACHE {
             return Err("The character cache record is too large.".into());
         }
-        // A version the app cannot read must not be silently replaced.
+        // A record the app cannot read must not be silently replaced. A record from an
+        // earlier Splat is the exception: this one holds newer data from the same source.
         if path.exists() {
-            let existing = read(&path)?;
-            if existing.version != VERSION {
-                return Err("Unsupported existing character cache; it was not replaced.".into());
-            }
+            read(&path)?;
         }
         let mut temp = tempfile::NamedTempFile::new_in(parent)
             .map_err(|_| "Could not stage the character cache.")?;
@@ -179,7 +177,9 @@ impl Cache {
                 }) {
                     continue;
                 }
-                let record = read(&path)?;
+                let Some(record) = read(&path)? else {
+                    continue;
+                };
                 if record.source.campaign_id != remote
                     || path.file_stem().and_then(|s| s.to_str())
                         != Some(&record.source.character_id)
@@ -214,7 +214,15 @@ fn decode_portrait(bytes: &[u8]) -> Result<DynamicImage, String> {
         .decode()
         .map_err(|_| "The portrait is not a usable image.".into())
 }
-fn read(path: &Path) -> Result<EntitySnapshot, String> {
+/// The version of any record, read before the rest of it.
+#[derive(serde::Deserialize)]
+struct Header {
+    version: u32,
+}
+
+/// `None` is a record that an earlier Splat wrote. Splat does not read it; the next sync
+/// replaces it.
+fn read(path: &Path) -> Result<Option<EntitySnapshot>, String> {
     let file = fs::File::open(path).map_err(|_| "Could not read a cached character.")?;
     let mut bytes = Vec::new();
     file.take(MAX_CACHE + 1)
@@ -223,10 +231,14 @@ fn read(path: &Path) -> Result<EntitySnapshot, String> {
     if bytes.len() as u64 > MAX_CACHE {
         return Err("The cached character is too large.".into());
     }
-    let record: EntitySnapshot = serde_json::from_slice(&bytes)
-        .map_err(|_| "Invalid or unsupported character cache. The file was kept.")?;
+    const UNREADABLE: &str = "Invalid or unsupported character cache. The file was kept.";
+    let header: Header = serde_json::from_slice(&bytes).map_err(|_| UNREADABLE)?;
+    if header.version < VERSION {
+        return Ok(None);
+    }
+    let record: EntitySnapshot = serde_json::from_slice(&bytes).map_err(|_| UNREADABLE)?;
     record.validate()?;
-    Ok(record)
+    Ok(Some(record))
 }
 
 #[cfg(test)]
