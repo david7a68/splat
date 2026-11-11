@@ -132,7 +132,7 @@ unmanaged file, blocks replacement and produces a visible warning. A copy that S
 read follows the same checksum, and its properties say which note it is. When they name the note
 that the refresh writes there and the generated text is unchanged, the refresh writes it again.
 Any other file that Splat cannot read counts as edited, whatever its checksum. An unchanged former
-copy without personal notes goes to its archive. One case stops **Force read** too: a changed copy
+copy that Splat cannot read, without personal notes, goes to its archive. One case stops **Force read** too: a changed copy
 of the sheet that Splat cannot read and that still names the character. Move it aside or repair it. A file that only
 changed during a save is not a conflict: the save reads it again. This covers two Splat
 writers at the same time. To resume updates, move the edited file aside or use
