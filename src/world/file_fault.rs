@@ -194,7 +194,7 @@ mod tests {
             &before.replace("Rook", "Rook Ambry"),
         );
         std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let error = saved.err().expect("the folder refuses the save");
+        let error = saved.expect_err("the folder refuses the save");
         assert!(
             error.starts_with("Splat has no permission to save NPCs/Rook.md."),
             "write-denied: {error}"
