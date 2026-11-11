@@ -1783,89 +1783,6 @@ struct PagePress {
     rosters: bool,
 }
 
-/// How many text lines each part of Edit Markdown's space below the save row holds.
-const SLOT_LINES: f32 = 2.0;
-
-/// One part of Edit Markdown's space below the save row: a fixed rect whatever it holds. Longer
-/// words wrap and scroll inside it, beside a lane kept for the scroll bar, so nothing is cut and
-/// nothing below moves. The part is one focusable widget named with its whole message, so Tab
-/// reaches it and a screen reader reads all of it. While it has focus, the up and down arrows
-/// scroll it by a line and Page Up and Page Down by the part; the wheel scrolls it too.
-fn fixed_part<R>(
-    ui: &mut egui::Ui,
-    rect: egui::Rect,
-    id: &str,
-    name: &str,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let focus = egui::Id::new((id, "focus"));
-    let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
-    let step = if focused {
-        // The arrows scroll the part instead of moving focus.
-        ui.ctx().memory_mut(|memory| {
-            memory.set_focus_lock_filter(
-                focus,
-                egui::EventFilter {
-                    vertical_arrows: true,
-                    ..Default::default()
-                },
-            );
-        });
-        let line = Type::Body.line();
-        ui.input_mut(|input| {
-            let mut step = 0.0;
-            for (key, by) in [
-                (egui::Key::ArrowDown, line),
-                (egui::Key::ArrowUp, -line),
-                (egui::Key::PageDown, rect.height()),
-                (egui::Key::PageUp, -rect.height()),
-            ] {
-                while input.consume_key(egui::Modifiers::NONE, key) {
-                    step += by;
-                }
-            }
-            step
-        })
-    } else {
-        0.0
-    };
-    let mut part = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    );
-    let lane = part.spacing().scroll.bar_width + part.spacing().scroll.bar_outer_margin;
-    let inner = egui::ScrollArea::vertical()
-        .id_salt(id)
-        .max_height(rect.height())
-        // egui's default minimum would let a short overflow grow past the part.
-        .min_scrolled_height(rect.height())
-        .auto_shrink([false, true])
-        .show(&mut part, |ui| {
-            ui.set_max_width(rect.width() - lane);
-            if step != 0.0 {
-                ui.scroll_with_delta(egui::vec2(0.0, -step));
-            }
-            add(ui)
-        })
-        .inner;
-    let response = ui.interact(rect, focus, egui::Sense::focusable_noninteractive());
-    // A named group that holds the message and its actions: a screen reader reads the whole
-    // message, and the group is not a second target over its own Undo.
-    ui.ctx().accesskit_node_builder(response.id, |node| {
-        node.set_role(egui::accesskit::Role::GenericContainer);
-        node.set_label(name);
-    });
-    if response.has_focus() {
-        // Inside the content area, clear of the part's own scroll bar lane.
-        design::focus_ring(
-            ui,
-            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right() - lane, rect.bottom())),
-        );
-    }
-    inner
-}
-
 /// The kept results of the open entry's pane, in the order they show. With an entry open, Read
 /// draws them in the reader's warnings place, after the title; Edit Markdown draws them in the
 /// reserved slot below the save row. With no entry open, they sit above the empty reader.
@@ -6653,7 +6570,7 @@ impl Library {
                 let slot_busy = discard_shown || slot_problem.is_some();
                 let slot_link = link_words.filter(|_| !slot_busy);
                 let link_above = link_words.filter(|_| slot_busy);
-                let part = SLOT_LINES * Type::Body.line();
+                let part = design::message_space_height();
                 let top = ui.cursor().min;
                 ui.allocate_exact_size(egui::vec2(editor_width, part * 2.0), egui::Sense::hover());
                 let results_shown = !choices_in_reader && results.any();
@@ -6665,12 +6582,14 @@ impl Library {
                         .chain(results_shown.then(|| results.words()).as_deref())
                         .collect::<Vec<_>>()
                         .join(" ");
-                    if let Some(press) = fixed_part(ui, upper, "library_result_part", &name, |ui| {
-                        if let Some(words) = link_above {
-                            design::message(ui, Tone::Warning, words);
-                        }
-                        results_shown.then(|| show_results(ui, &results))
-                    }) {
+                    if let Some(press) =
+                        design::fixed_part(ui, upper, "library_result_part", &name, |ui| {
+                            if let Some(words) = link_above {
+                                design::message(ui, Tone::Warning, words);
+                            }
+                            results_shown.then(|| show_results(ui, &results))
+                        })
+                    {
                         pressed = press;
                     }
                 }
@@ -6680,7 +6599,7 @@ impl Library {
                 );
                 if discard_shown {
                     let name = format!("{} draft discarded.", note.name());
-                    if fixed_part(ui, slot, "library_reason_part", &name, |ui| {
+                    if design::fixed_part(ui, slot, "library_reason_part", &name, |ui| {
                         design::draft_discarded(ui, note.name())
                     }) && let Some((_, _, text)) = self.discarded.take()
                     {
@@ -6690,16 +6609,16 @@ impl Library {
                     }
                 } else if let Some(problem) = slot_problem {
                     // Save's reason: its refusal before the write, or the disk's failure.
-                    fixed_part(ui, slot, "library_reason_part", problem, |ui| {
+                    design::fixed_part(ui, slot, "library_reason_part", problem, |ui| {
                         design::message(ui, Tone::Error, problem);
                     });
                 } else if let Some(words) = slot_link {
                     // The repair this note was opened for, in the reason line.
-                    fixed_part(ui, slot, "library_reason_part", words, |ui| {
+                    design::fixed_part(ui, slot, "library_reason_part", words, |ui| {
                         design::message(ui, Tone::Warning, words);
                     });
                 } else if let Some(reason) = draft_reason {
-                    fixed_part(ui, slot, "library_reason_part", reason, |ui| {
+                    design::fixed_part(ui, slot, "library_reason_part", reason, |ui| {
                         ui.add(
                             egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                                 .wrap(),
