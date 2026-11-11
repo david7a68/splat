@@ -1001,12 +1001,9 @@ impl CampaignContent {
                             // One weight for a save row: primary while the draft has
                             // changes, unless an open run owns `Next turn` or another
                             // repair is the active one. After Save failed on the disk it
-                            // stays open to try again, but is not primary until the next edit.
+                            // stays open to try again, but `owner` skips it until the next edit.
                             let writes = repair.dirty() && repair.refusal.is_none();
-                            let pressed = (if writes
-                                && repair.failure.is_none()
-                                && owner.as_deref() == Some(path.as_str())
-                            {
+                            let pressed = (if writes && owner.as_deref() == Some(path.as_str()) {
                                 Action::primary("Save repaired note")
                             } else {
                                 Action::secondary("Save repaired note")
