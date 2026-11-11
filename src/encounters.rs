@@ -5047,6 +5047,101 @@ mod tests {
         });
     }
 
+    /// FD3 edge content: unread rows that are not roster rows get no file line; one roster row
+    /// and two roster rows with a long path in a narrow column each end with the right sentence,
+    /// and the file line starts at the last warning's words with its links whole.
+    #[test]
+    fn iter21_b_fd3_unread_roster_rows_end_with_one_file_line_at_the_last_words() {
+        let long = "Encounters/The Emberfall Marches, Act Two/Shrine of Cinders beneath the Ashen Reaches.md";
+        for (notes, faults, path, sentence) in [
+            (
+                vec!["Campaign.md, line 3: the date was not read."],
+                0,
+                "Campaign.md",
+                None,
+            ),
+            (
+                vec!["Ember Cultist · Encounters/Shrine.md, line 20: the change was not read."],
+                1,
+                "Encounters/Shrine.md",
+                Some(fix_roster_rows(1)),
+            ),
+            (
+                vec![
+                    "Ember Cultist · line 20: the change “HP lots” was not read.",
+                    "Row on line 21 · line 21: the creature cell is empty.",
+                ],
+                2,
+                long,
+                Some(fix_roster_rows(2)),
+            ),
+        ] {
+            let notes: Vec<String> = notes.into_iter().map(str::to_owned).collect();
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.set_max_width(440.0);
+                    unread_roster_rows(ui, std::path::Path::new("/campaign"), path, &notes, faults);
+                });
+            });
+            let painted: Vec<(String, egui::Rect)> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some((
+                        text.galley.job.text.clone(),
+                        egui::Rect::from_min_size(text.pos, text.galley.size()),
+                    )),
+                    _ => None,
+                })
+                .collect();
+            let find = |words: &str| -> Vec<&(String, egui::Rect)> {
+                painted
+                    .iter()
+                    .filter(|(text, _)| text.starts_with(words))
+                    .collect()
+            };
+            let links = find("Edit in Obsidian").len() + find("Show file").len();
+            let Some(sentence) = sentence else {
+                assert_eq!(
+                    links, 0,
+                    "a fault that is not a roster row has no file line"
+                );
+                assert_eq!(find(&notes[0]).len(), 1);
+                continue;
+            };
+            assert_eq!(
+                links, 2,
+                "one file line for every unread roster row together"
+            );
+            let ended: Vec<_> = painted
+                .iter()
+                .filter(|(text, _)| text.ends_with(sentence))
+                .collect();
+            assert_eq!(ended.len(), 1, "only the last warning says what to do");
+            let last = ended[0].1;
+            assert!(ended[0].0.starts_with(notes.last().unwrap().as_str()));
+            for note in &notes[..notes.len() - 1] {
+                assert!(find(note).iter().all(|(text, rect)| !text.contains(sentence) && rect.bottom() <= last.top()));
+            }
+            for link in ["Edit in Obsidian", "Show file"] {
+                let (text, rect) = find(link)[0];
+                assert_eq!(text, link, "the link is whole");
+                assert!(rect.left() >= last.left() - 0.5 && rect.top() >= last.bottom());
+            }
+            let first_on_file_line = painted
+                .iter()
+                .filter(|(_, rect)| rect.top() >= last.bottom())
+                .map(|(_, rect)| rect.left())
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                (first_on_file_line - last.left()).abs() <= 0.5,
+                "the file line starts at the words"
+            );
+        }
+    }
+
     #[test]
     fn creature_detail_columns_reserve_room_for_their_widest_values() {
         let ctx = egui::Context::default();

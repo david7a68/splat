@@ -780,6 +780,7 @@ blocked Add reason and Open in World repair. Unreadable package creatures retain
 the roster; Open in Library opens repair. Only deleted files offer replacement. Deleted creatures keep their
 last known name or Missing creature, plus a warning such as `Enemies · Not found. Its package entry was
 deleted.` One fault has one tone: the message above the roster and the rows that state its fault share it.
+`HP not set` has the warning status (icon and words) in a search result, a roster row and a group member.
 An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. The
 check that finds the fault records its kind, and the message takes its tone from that kind, never from its
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
@@ -787,13 +788,15 @@ stored field name. Replace… uses the shared creature row with CR, HP, AC and U
 on and retains names and starting values, with one Undo.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
-Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. Side
+Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. A menu choice's
+reason (`Already last.`) or help line (`Edit a copy in this campaign.`) starts at the choice's words, after its
+padding and any icon. Side
 pickers offer Party, Enemies and Other…; only Other opens a name field and replaces the value. Changed stays
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
 the full change link, removing source before base creature. Remove a source whole without an ellipsis;
 hover keeps the full detail.
 
-An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
+An unread roster row stays visible by participant name, file and line, with Edit in Obsidian and Show file. The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
