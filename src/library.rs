@@ -273,10 +273,10 @@ impl HeadingChoice {
         let fix = self.fix.as_ref().is_some_and(|(text, action, _)| {
             design::message_with_action(ui, Tone::Warning, text, action)
         });
-        // A quiet action at the start of a line: its word starts at the text edge.
+        // A quiet action at the start of a line, outside a message: no icon, and its words
+        // start at the text edge.
         let undo = self.undo
             && Action::quiet("Undo heading change")
-                .icon(icons::UNDO)
                 .line_start()
                 .show(ui)
                 .clicked();
@@ -3487,10 +3487,7 @@ impl Library {
                 * 2.0
                 + design::S * 2.0
                 + ui.spacing().item_spacing.x;
-        // The reader's gutter for a hanging icon (`HANG_GUTTER`, wider than the `L` it was) comes
-        // out of the list's share, so the reader keeps its width.
-        let list_width = (ui.available_width() * 0.38 - (design::HANG_GUTTER - design::L))
-            .clamp(min_list_width, 420.0);
+        let list_width = (ui.available_width() * 0.38).clamp(min_list_width, 420.0);
         let mut peek = None;
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
         let hide_list =
@@ -3684,12 +3681,10 @@ impl Library {
             .unwrap_or_default();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                // A gutter that a quiet action with an icon that starts a line (`Undo heading
-                // change`) can hang into and stay clear of the entries column's splitter.
                 left: if self.disk_change.is_some() {
                     0
                 } else {
-                    design::HANG_GUTTER as i8
+                    design::L as i8
                 },
                 right: 0,
                 top: 0,

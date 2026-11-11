@@ -531,7 +531,7 @@ pub mod library_browse {
         d.click_starting(SPELL_ROW);
         let reader_at_left = |d: &Driver<'_>| {
             d.painted_left("Fireball").is_some_and(|left| {
-                (left - d.column_edge("library_entries") - crate::design::HANG_GUTTER).abs() < 2.0
+                (left - d.column_edge("library_entries") - crate::design::L).abs() < 2.0
             })
         };
         let large_anchor = d.at_size(LARGE, reader_at_left);
@@ -11860,22 +11860,22 @@ pub mod session_plan {
             &[SMALL, DEFAULT, LARGE],
             field_left,
         );
-        // ST2: the words of `New NPC “Miller”` start at the result names; its plus hangs left.
+        // ST2: the words of `New NPC “Miller”` start at the result names. Outside a message, a
+        // line-start action has no icon, so nothing of it sits left of the names.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (words, names, plus) = d.at_size(size, |d| {
+            let (words, names, icon) = d.at_size(size, |d| {
                 let target = d.place_of("New NPC “Miller”");
                 (
                     target.and_then(|target| words_left_in(d, target)),
                     lookup_row_text_left(d),
-                    target.and_then(|target| {
-                        let mut plus = None;
+                    target.is_some_and(|target| {
+                        let mut icon = false;
                         d.each_painted_text(|text, _| {
                             let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                            if target.contains(rect.center()) && is_icon(&text.galley.job.text) {
-                                plus = Some(rect.left());
-                            }
+                            icon |=
+                                target.contains(rect.center()) && is_icon(&text.galley.job.text);
                         });
-                        plus
+                        icon
                     }),
                 )
             });
@@ -11883,13 +11883,11 @@ pub mod session_plan {
                 "iter-18-A-ST2",
                 words
                     .zip(names)
-                    .zip(plus)
-                    .is_some_and(|((words, names), plus)| {
-                        (words - names).abs() <= 1.0 && plus < names - crate::design::XS
-                    }),
+                    .is_some_and(|(words, names)| (words - names).abs() <= 1.0)
+                    && !icon,
                 format!(
                     "At {size:?}, New NPC's words start at {words:?}, the result names at \
-                     {names:?}, and its plus hangs left at {plus:?}"
+                     {names:?}; an icon in its target: {icon}"
                 ),
             );
         }

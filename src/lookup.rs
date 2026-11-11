@@ -1737,22 +1737,14 @@ impl Lookup {
                 egui::Frame::new()
                     .fill(colors().page)
                     .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                    // A `line_start` action with an icon hangs into the left gutter, clear
-                    // of the column's splitter.
-                    .inner_margin(egui::Margin {
-                        left: design::HANG_GUTTER as i8,
-                        ..egui::Margin::same(PANEL_MARGIN as i8)
-                    }),
+                    .inner_margin(egui::Margin::same(PANEL_MARGIN as i8)),
             )
             .show(ctx, |ui| self.panel(ui));
     }
 
     fn panel(&mut self, ui: &mut egui::Ui) {
         // With the margin, so a press anywhere on the panel counts as here.
-        let panel = ui
-            .max_rect()
-            .expand(PANEL_MARGIN)
-            .with_min_x(ui.max_rect().min.x - design::HANG_GUTTER);
+        let panel = ui.max_rect().expand(PANEL_MARGIN);
         self.panel_rect = Some(panel);
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("lookup"))
@@ -1931,8 +1923,8 @@ impl Lookup {
             && !matches.is_empty()
             && !self.results_open
             && (self.current.is_some() || self.reading_written.is_some())
+            // Outside a message, a line-start action has no icon: its words start at the edge.
             && Action::quiet(&design::count(matches.len(), "result", "results"))
-                .icon(icons::DOWN)
                 .density(Density::Read)
                 .name("Show the results")
                 .line_start()
@@ -2126,9 +2118,9 @@ impl Lookup {
                         .enumerate()
                     {
                         let label = format!("{word} “{name}”");
-                        let action = Action::quiet(&label)
-                            .icon(icons::ADD)
-                            .density(Density::Read);
+                        // No plus: a line-start action outside a message has no icon, so its
+                        // words start at the result names. The second keeps the same form.
+                        let action = Action::quiet(&label).density(Density::Read);
                         // The second action starts a line only when it wraps.
                         if world::starts_line(ui, action, at == 0).show(ui).clicked() {
                             made = Some(world::create_entry(&campaign, &name, kind));
@@ -2139,7 +2131,6 @@ impl Lookup {
                     && self.current.is_none()
                     && self.generated.is_none()
                     && Action::quiet("Generate NPC")
-                        .icon(icons::DICE)
                         .density(Density::Read)
                         .line_start()
                         .show(ui)
@@ -2511,9 +2502,9 @@ pub(crate) fn generator_card(
                 if copied {
                     design::message(ui, Tone::Success, MARKER_COPIED);
                 } else {
-                    // A quiet action that starts a line keeps the card's text edge.
+                    // A quiet action that starts a line, outside a message, has no icon: its
+                    // words start at the card's text edge.
                     let response = Action::quiet(COPY_MARKER)
-                        .icon(icons::COPY)
                         .density(Density::Read)
                         .line_start()
                         .show(ui)

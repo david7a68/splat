@@ -2810,13 +2810,11 @@ impl Encounters {
         party: &Party,
         story: &Story<'_>,
     ) {
-        // The page keeps a `HANG_GUTTER` from the navigation splitter (the shell gives `M`), so a
-        // quiet action with an icon at its text edge, such as `Undo replacement`, never reaches
-        // the splitter.
+        // The page keeps an `L` gutter from the navigation splitter (the shell gives `M`), so a
+        // quiet action at its text edge, such as `Undo replacement`, never reaches the splitter.
         let room = ui.available_rect_before_wrap();
         ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(room.with_min_x(room.min.x + design::HANG_GUTTER - design::M)),
+            egui::UiBuilder::new().max_rect(room.with_min_x(room.min.x + design::L - design::M)),
             |ui| self.show_page(ui, campaigns, party, story),
         );
     }
@@ -3722,18 +3720,16 @@ impl Encounters {
                         Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
                     }
                 });
-                // A panel clips to its own rect. It starts `LINE_START_HANG` before the roster's
-                // text edge, so a quiet action with an icon there (`Undo replacement`) keeps its
-                // whole press area.
+                // A panel clips to its own rect. It starts `S` before the roster's text edge, so
+                // a quiet action there (`Undo replacement`) keeps its whole press area.
                 let rest = ui.available_rect_before_wrap();
                 let mut roster_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(rest.with_min_x(rest.min.x - design::LINE_START_HANG)),
+                    egui::UiBuilder::new().max_rect(rest.with_min_x(rest.min.x - design::S)),
                 );
                 egui::CentralPanel::default()
                     // The panel's drag handle lies on this edge, so the roster stops short of it.
                     .frame(egui::Frame::new().inner_margin(egui::Margin {
-                        left: design::LINE_START_HANG as i8,
+                        left: design::S as i8,
                         right: design::S as i8,
                         top: design::S as i8,
                         bottom: 0,
@@ -4061,21 +4057,21 @@ impl Encounters {
         tabbed: bool,
     ) -> bool {
         // All of it scrolls, so that the settings give up their room to a group being built.
-        // A quiet action with an icon at the text edge (`Undo replacement`) hangs
-        // `LINE_START_HANG` into the page's gutter. The scroll area starts there too, so it shows
-        // the whole target, and its margin keeps the text where it was.
+        // A quiet action at the text edge (`Undo replacement`) reaches `S` into the page's
+        // gutter. The scroll area starts there too, so it shows the whole target, and its margin
+        // keeps the text where it was.
         let area = ui.available_rect_before_wrap();
         ui.scope_builder(
             egui::UiBuilder::new()
                 .id(("encounter_roster", draft.id))
-                .max_rect(area.with_min_x(area.min.x - design::LINE_START_HANG)),
+                .max_rect(area.with_min_x(area.min.x - design::S)),
             |ui| {
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 egui::Frame::new()
-                    .inner_margin(egui::Margin { left: design::LINE_START_HANG as i8, ..egui::Margin::ZERO })
+                    .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
                     .show(ui, |ui| {
                 ui.set_width(ui.available_width().min(design::LIST_MEASURE));
                 if !tabbed { design::group_heading(ui, "Roster", draft.setup.roster.len()); }
@@ -4208,8 +4204,9 @@ impl Encounters {
             .data_mut(|data| data.get_temp::<ReplacementUndo>(undo_key));
         if let Some(undo) = undo {
             if undo.after == draft.setup.roster {
+                // Outside a message, a line-start action has no icon: its words start at the
+                // slot rows' words.
                 if Action::quiet("Undo replacement")
-                    .icon(icons::UNDO)
                     .line_start()
                     .show(ui)
                     .clicked()

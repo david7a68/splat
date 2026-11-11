@@ -1574,8 +1574,8 @@ pub fn generator(d: &mut Driver<'_>) {
             && !d.visible_text("splat:rolls"),
         "The World card says how to use your own names in words, and copies the marker",
     );
-    // FD4, SD1: the action starts a line, so its words start at the card's text edge, with the
-    // help above it and `Will save` below it. Its icon and target hang into the gutter.
+    // FD4, ST2 ruling: the action starts a line outside a message, so it has no icon and its words
+    // start at the card's text edge, with the help above it and `Will save` below it.
     let icon = super::words_left(d, crate::lookup::COPY_MARKER);
     let help = d.painted_left(crate::lookup::OWN_NAMES_HELP);
     let save = d.painted_left("Will save ");
@@ -2290,7 +2290,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.observe_both(
         "iter-16-E-FD7-undo-edge",
-        "Undo heading change is a line-start action: its words start at the reader text edge, and its icon and target hang into the gutter",
+        "Undo heading change is a line-start action outside a message: no icon, its words start at the reader text edge, and its target reaches S into the gutter",
         |d| {
             let Some(title) = reader_title(d, "Watch Ashfall") else {
                 return false;
@@ -2300,8 +2300,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
             };
             d.painted_word_rect("Undo heading change", egui::Rect::EVERYTHING)
                 .is_some_and(|word| {
-                    undo.left() <= title.left() - design::LINE_START_HANG + 1.0
+                    (undo.left() - (title.left() - design::S)).abs() <= 1.0
                         && (word.left() - title.left()).abs() <= 1.0
+                        && !d.painted_in(undo).contains(design::icons::UNDO)
                 })
         },
     );
@@ -3180,9 +3181,10 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
-    // iter-17-B, SD1: Undo replacement starts its line above the slot rows. Their words start at
-    // the row edge, so the action uses `line_start`: its words start at the rows' words, and its
-    // icon and press area hang into the page's gutter, never into the navigation splitter.
+    // iter-17-B: Undo replacement starts its line above the slot rows. Their words start at the
+    // row edge, so the action uses `line_start` with no icon (it is outside a message): its words
+    // start at the rows' words, and its press area reaches `S` into the page's gutter, never
+    // into the navigation splitter.
     for size in [SMALL, DEFAULT, LARGE] {
         let (undo, slot, clear) = d.at_size(size, |d| {
             let slot = d

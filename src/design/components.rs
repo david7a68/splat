@@ -543,7 +543,10 @@ impl<'a> Action<'a> {
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
-    /// Align a quiet action's word with the text above it. Its target extends into the gutter.
+    /// Align a quiet action's words with the text above it. Its padding, and any icon, hang left
+    /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
+    /// then sits in the message's icon column. Outside a message, give it no icon, so its target
+    /// reaches only `S` into the pane's gutter.
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
         self
@@ -640,17 +643,6 @@ impl<'a> Action<'a> {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
 
-    /// How far a `line_start` action reaches left of the text edge: its padding and its icon,
-    /// so its words start at the edge. A pane keeps a gutter at least this wide beside such an
-    /// action, so the whole target clears a splitter or scroll bar.
-    pub fn hang(&self) -> f32 {
-        if self.kind == Kind::Quiet && self.line_start {
-            self.padding() + self.icon_width()
-        } else {
-            0.0
-        }
-    }
-
     /// The width before any text is cut, using the same parts as the painted button.
     pub fn natural_width(&self, ui: &Ui) -> f32 {
         let icon = self.icon_width();
@@ -691,13 +683,16 @@ impl<'a> Action<'a> {
             .max(self.height)
             .max(self.min_width.unwrap_or_default());
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
-            let size = vec2(width, self.height);
+            // The words start at the text edge; the padding and any icon hang in the gutter. The
+            // row allocates all but the icon, so the next item keeps the same gap after the
+            // target as it has after a `line_start` action without an icon.
+            let size = vec2(width - icon_width, self.height);
             let (id, allocated) = ui.allocate_space(size);
-            // The words start at the text edge; the padding and any icon hang in the gutter.
             let rect = ui
                 .layout()
                 .align_size_within_rect(size, allocated)
-                .translate(vec2(-self.hang(), 0.0));
+                .translate(vec2(-padding, 0.0));
+            let rect = rect.with_min_x(rect.min.x - icon_width);
             (rect, ui.interact(rect, id, Sense::click()))
         } else {
             ui.allocate_exact_size(vec2(width, self.height), Sense::click())
@@ -3512,7 +3507,7 @@ mod tests {
     }
 
     /// SD1, ST2: a `line_start` quiet action puts its words at the text edge. With an icon, the
-    /// icon and the padding hang left of it (`LINE_START_HANG`); without one, only the padding.
+    /// icon and the padding hang left of it (`S + ICON_SLOT`); without one, only the padding.
     /// A normal quiet action keeps its icon and words inside its target from the edge.
     #[test]
     fn iter18_a_a_line_start_action_hangs_its_icon_and_padding() {
@@ -3559,7 +3554,7 @@ mod tests {
         let hanging = node("Undo heading change");
         assert!(
             (words("Undo heading change") - EDGE).abs() <= 0.5
-                && (hanging.left() - (EDGE - LINE_START_HANG)).abs() <= 0.5,
+                && (hanging.left() - (EDGE - S - ICON_SLOT)).abs() <= 0.5,
             "hang-icon: words {}, target {hanging:?}",
             words("Undo heading change")
         );

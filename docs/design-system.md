@@ -205,12 +205,11 @@ reason after Unsaved and Discard in the save row. Reserve its height so the firs
 settings keep their full save actions on a second line at the right edge, so neither action is cut short.
 
 A quiet action at the start of a line uses `line_start`: its words start at the text edge of the line above,
-and its padding and any icon hang in the gutter (`LINE_START_HANG`, 28 px with an icon, `S` without one). A
-pane that holds such an action with an icon beside a splitter keeps a `HANG_GUTTER` (36 px) left gutter, so
-the whole target clears the splitter's grab area: Lookup, the World page, the Library reader and the encounter
-editor do, and the Library list gives up that width so the reader keeps its own. This also applies to an
-icon-bearing quiet message action below its message: its words start at the message's words, and its icon sits
-in the message's icon column. In a
+and its padding hangs `S` into the gutter. Outside a message, such an action has no icon (`Undo heading
+change`, `Undo replacement`, Lookup's `N results`, `New NPC “<name>”`, `New location “<name>”`, `Generate NPC`
+and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
+(`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
+hangs its icon into the message's own icon column, so its words start at the message's words. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
@@ -312,7 +311,7 @@ sits 2 px below its words' baseline and covers only its words, never at the bott
 link target is at least 24 × 24 px, stays on its own line, and never overlaps another link's target. Links 24 px
 or wider keep their layout, and the paragraph's words do not change. The focus ring sits `XS / 2` outside the
 link's words, so it never covers a letter, even at the start of a line, and it stays inside the reader's visible
-area (World, Library and Lookup keep a `HANG_GUTTER` beside the text). Focus stays on the link when the layout around it changes, and another reader with the same words, or
+area (World and Library keep an `L` gutter beside the text). Focus stays on the link when the layout around it changes, and another reader with the same words, or
 a reader with a document beside one without (Lookup beside a Sessions note), does not take it.
 Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against World notes and entries the
 campaign can use. Duplicate names open a chooser. Missing names keep their words, a dotted underline and `Not
@@ -684,7 +683,7 @@ heading. Fixed headers cover passing rows with page fill and a hairline. Generat
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
-marker` action drawn with `line_start`, so its words start at the card's text edge and its icon hangs in the gutter. It copies the exact marker line,
+marker` action drawn with `line_start` and no icon, so its words start at the card's text edge. It copies the exact marker line,
 and then a success message in its place says `Copied. Change 1d6 to the number of names.` until the card shows another
 NPC. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says
