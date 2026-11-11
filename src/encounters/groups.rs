@@ -299,7 +299,7 @@ impl GroupDraft {
         list_formats::resolve(&mut entry, &entries, &source);
         if changes.is_some() {
             if let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) {
-                return Err(flag.message.clone());
+                return Err(flag.words().unwrap_or_else(|| flag.message.clone()));
             }
             let setup: GroupSetup =
                 serde_yaml_ng::from_value(entry.fields["splat_encounter_group"].clone())
@@ -717,8 +717,18 @@ fn resolve_group(
         };
         warnings.push(MemberFault::new(
             FaultKind::CannotJoin,
-            // `(line 15)` wraps whole.
-            format!("{fault_name} needs fixing (line\u{a0}{})", member.flag.line),
+            // The row, its line and the cause, as a roster row says them; the help stays in the
+            // editor. `line 15` wraps whole. A flag without its parts says its own sentence.
+            member.flag.cause().map_or_else(
+                || format!("{fault_name}: {}", member.flag.message),
+                |cause| {
+                    format!(
+                        "{fault_name} · line\u{a0}{}: {}.",
+                        member.flag.line,
+                        cause.trim_end_matches('.')
+                    )
+                },
+            ),
         ));
         let count = member.count.unwrap_or(1);
         unavailable = unavailable.saturating_add(count);
@@ -1541,11 +1551,31 @@ fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &s
             colors().muted,
         );
         let mut text = value.clone().unwrap_or_default();
-        let width = (ui.available_width() - design::S).clamp(120.0, 320.0);
+        let width = text_field_width(ui.available_width());
         if design::text_input(ui, label, &mut text, hint, width).changed() {
             *value = (!text.trim().is_empty()).then_some(text);
         }
     });
+}
+
+/// A text row's field, from the room after its label.
+fn text_field_width(room: f32) -> f32 {
+    (room - design::S).clamp(120.0, 320.0)
+}
+
+/// FB6: where the change form's fields end, from its left: a text row's label and field. The
+/// Other effect field with its Add, and the Loot field, end here too.
+fn form_edge(ui: &egui::Ui) -> f32 {
+    let label = LABEL_WIDTH + ui.spacing().item_spacing.x;
+    label + text_field_width(ui.available_width() - label)
+}
+
+/// The Other effect field's width, so that its Add ends at the form's edge.
+fn other_effect_width(ui: &egui::Ui) -> f32 {
+    let add = Action::secondary("Add")
+        .density(Density::Read)
+        .natural_width(ui);
+    (form_edge(ui) - ui.spacing().item_spacing.x - add).max(design::XXL)
 }
 
 /// The whole list of changes this slot or member can build in. `sides` is for a roster slot,
@@ -1726,12 +1756,19 @@ pub(super) fn overrides_form(
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
     // A group of rows, as Starting conditions is.
     design::group_label(ui, "Loot");
-    crate::loot_editor::show_cell(
-        ui,
-        id,
-        &shown_name(block, entry.name.clone()),
-        &mut overrides.loot,
-    );
+    // The loot field ends at the form's edge; `Roll on a table` follows it.
+    let loot_width = form_edge(ui)
+        + ui.spacing().item_spacing.x
+        + design::menu_button_width(ui, crate::loot_editor::ROLL_MENU);
+    ui.scope(|ui| {
+        ui.set_max_width(loot_width.min(ui.available_width()));
+        crate::loot_editor::show_cell(
+            ui,
+            id,
+            &shown_name(block, entry.name.clone()),
+            &mut overrides.loot,
+        );
+    });
     if overrides != before {
         *block = overrides.to_mapping();
     }
@@ -1772,7 +1809,7 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     let mut text = ui
         .data(|data| data.get_temp::<String>(id))
         .unwrap_or_default();
-    let width = design::FORM_WIDTH.min(ui.available_width() - design::L * 8.0);
+    let width = other_effect_width(ui);
     if crate::encounter_run::view::other_effect_field(ui, &mut text, width) {
         if !conditions.iter().any(|c| same_condition(c, text.trim())) {
             conditions.push(text.trim().to_owned());
@@ -1792,13 +1829,17 @@ impl Encounters {
         let Some(draft) = self.group_draft.as_mut() else {
             return;
         };
-        self.validation_path = Some(draft.path.clone());
+        let path = draft.path.clone();
+        self.watch_refusals(path);
+        let Some(draft) = self.group_draft.as_mut() else {
+            return;
+        };
         if let Some(error) = self
             .snapshot
             .as_ref()
             .and_then(|snapshot| draft.validate(snapshot, None).err())
         {
-            self.validation_error = Some(error.clone().into());
+            self.refused(Some(error.clone().into()));
             self.error = Some(error);
             return;
         }
@@ -1833,12 +1874,13 @@ impl Encounters {
                 }
             }
             Err(e) => {
-                self.validation_error = self
+                let invalid = self
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.validate(snapshot, None).err())
                     .filter(|validation| *validation == e)
                     .map(Into::into);
+                self.refused(invalid);
                 self.error = Some(e);
             }
         }
@@ -1902,6 +1944,14 @@ impl Encounters {
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
         let (mut back, mut save, mut discard) = (false, false, false);
         let mut name_right = f32::INFINITY;
+        // AK1, AB2: the header is one block that ends where the members column ends. Save group
+        // sits at that edge on the save row, above the member actions and beside the save state
+        // and Discard, never across the Add creatures column. The name keeps its measure, so it
+        // still ends with `Belongs to` and, in a narrow column, at the column's edge. Before the
+        // column is first drawn (and in the compact Add pane), the page's edge stands in for it.
+        let block_right = column_right.map_or(ui.max_rect().right(), |right| {
+            right.min(ui.max_rect().right())
+        });
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
                 .name(back_name)
@@ -1909,15 +1959,8 @@ impl Encounters {
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
-            let width = (ui.available_width()
-                - design::S * 17.0
-                - if draft.setup.members.is_empty() {
-                    design::number_width(ui, "Add a creature first", &Type::Small.font(ui))
-                        + design::L
-                } else {
-                    0.0
-                })
-            .max(Density::Scan.control());
+            let room = (block_right - ui.cursor().left()).min(ui.available_width());
+            let width = (room - 2.0 * design::S).max(Density::Scan.control());
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
             });
@@ -1934,33 +1977,12 @@ impl Encounters {
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = if dirty && !has_run {
-                    Action::primary("Save group")
-                } else {
-                    Action::secondary("Save group")
-                }
-                .blocked(if draft.setup.members.is_empty() {
-                    Some("Add a creature first")
-                } else if !dirty {
-                    Some("No changes to save.")
-                } else {
-                    None
-                })
-                .show(ui)
-                .clicked();
-                super::blocked_reason(
-                    ui,
-                    if draft.setup.members.is_empty() {
-                        Some("Add a creature first")
-                    } else {
-                        None
-                    },
-                );
-            });
         });
-        ui.horizontal_wrapped(|ui| {
-            ui.set_min_height(design::Density::Read.control());
+        // The save row: the state and Discard at its start, Save group at the block's edge. A
+        // reason that has no room on the row takes its own line below it.
+        let mut below: Vec<&'static str> = Vec::new();
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Scan.control());
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if saved_note.is_some() {
@@ -1970,25 +1992,66 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            {
-                discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            let empty = draft
+                .setup
+                .members
+                .is_empty()
+                .then_some("Add a creature first");
+            let button = if dirty && !has_run {
+                Action::primary("Save group")
+            } else {
+                Action::secondary("Save group")
             }
-            // A dirty group blocks the campaign switch wherever it is open, so it says so here,
-            // as the encounter editor does.
-            if dirty {
-                super::blocked_reason(ui, Some(super::draft_switch_reason()));
-            }
+            .blocked(if empty.is_some() {
+                empty
+            } else if !dirty {
+                Some("No changes to save.")
+            } else {
+                None
+            });
+            let gap = ui.spacing().item_spacing.x;
+            let font = Type::Small.font(ui);
+            let mut room = block_right - ui.cursor().left() - button.natural_width(ui) - gap;
+            let mut fits = |reason: Option<&'static str>| {
+                reason.filter(|reason| {
+                    let width = design::number_width(ui, reason, &font) + gap;
+                    let fits = width <= room;
+                    if fits {
+                        room -= width;
+                    } else {
+                        below.push(reason);
+                    }
+                    fits
+                })
+            };
+            // Save's own reason first: it stays beside Save while there is room.
+            let empty = fits(empty);
+            // A dirty group blocks the campaign switch wherever it is open, so it says so, as
+            // the encounter editor does.
+            let switch = fits(dirty.then(super::draft_switch_reason));
+            super::blocked_reason(ui, switch);
+            ui.allocate_ui_with_layout(
+                egui::vec2(
+                    (block_right - ui.cursor().left()).max(0.0),
+                    Density::Scan.control(),
+                ),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    save = button.show(ui).clicked();
+                    super::blocked_reason(ui, empty);
+                },
+            );
         });
+        for reason in below {
+            super::blocked_reason(ui, Some(reason));
+        }
         design::rule(ui);
         let unread =
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
         for flag in &draft.flags {
             if !unread.iter().any(|member| member.flag.line == flag.line) {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("Line {}: {}", flag.line, flag.message),
-                );
+                design::message(ui, Tone::Warning, &flag.message);
             }
         }
 
@@ -2015,7 +2078,7 @@ impl Encounters {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
         self.discard_undo(ui);
-        self.refresh_validation_error(true);
+        self.refresh_validation_error(true, super::edit_input(ui.ctx()));
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -2191,6 +2254,10 @@ fn members_pane(
     name_right: f32,
 ) {
     let top = ui.cursor().top();
+    // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
+    // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
+    let width = (ui.available_width() - ui.spacing().scroll.allocated_width())
+        .clamp(0.0, design::LIST_MEASURE);
     egui::ScrollArea::vertical()
         .id_salt("group_editor")
         .auto_shrink([false, false])
@@ -2199,7 +2266,7 @@ fn members_pane(
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
             let column = ui.scope(|ui| {
-                ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+                ui.set_width(width.min(ui.available_width()));
                 group_fields(ui, draft, snapshot, expanded, None, tabbed, name_right);
             });
             // The name field is drawn before this column; when the column moves (a resize, a
@@ -2613,11 +2680,7 @@ fn unread_member(
     design::message_with_actions(
         ui,
         Tone::Warning,
-        &format!(
-            "Line {}: {}",
-            member.flag.line,
-            member.flag.message.trim_end_matches('.').to_owned() + "."
-        ),
+        &(member.flag.message.trim_end_matches('.').to_owned() + "."),
         |ui| {
             ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
             super::file_line(ui, &snapshot.campaign_root, &draft.path);
@@ -2728,12 +2791,15 @@ fn packages_repair(ui: &mut egui::Ui) -> bool {
     crate::encounter_run::view::hanging_link(ui, icons::CAMPAIGN, packages_link)
 }
 
+/// Where a missing creature's package is chosen.
+pub(super) const PACKAGES_LINK: &str = "Campaign → Packages";
+
 pub(super) fn packages_link(ui: &mut egui::Ui) -> bool {
     design::status_link(
         ui,
         Status {
             icon: icons::CAMPAIGN,
-            word: "Campaign → Packages",
+            word: PACKAGES_LINK,
             color: colors().accent,
         },
     )
@@ -2901,13 +2967,14 @@ mod tests {
         let mut encounters = Encounters {
             validation_path: Some(group.path.clone()),
             validation_error: Some(error.clone().into()),
+            refusal_watch: true,
             error: Some(error),
             snapshot: Some(snapshot),
             group_draft: Some(group),
             ..Default::default()
         };
         encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
-        encounters.refresh_validation_error(true);
+        encounters.refresh_validation_error(true, true);
         assert!(encounters.error.is_none());
         encounters
             .group_draft
@@ -2916,7 +2983,7 @@ mod tests {
             .setup
             .members
             .clear();
-        encounters.refresh_validation_error(true);
+        encounters.refresh_validation_error(true, true);
         assert_eq!(
             encounters.error.as_deref(),
             Some("This group is empty. Add at least one creature.")
@@ -3242,11 +3309,20 @@ mod tests {
             "all named members remain visible"
         );
         assert!(group.summary().contains("2 of 9 can join"));
+        // FB2: the summary names the row, its line and the cause; the example is the editor's.
+        assert!(group.warnings.iter().any(|warning| warning.text
+            == "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read."));
         assert!(
             group
                 .warnings
                 .iter()
-                .any(|warning| warning.contains("Lookout (as Scout) needs fixing (line\u{a0}13)"))
+                .all(|warning| !warning.text.contains("Use a number")),
+            "{:?}",
+            group
+                .warnings
+                .iter()
+                .map(|warning| &warning.text)
+                .collect::<Vec<_>>()
         );
         assert_eq!(group.xp_label(), "XP 100");
         let draft = GroupDraft::open(dir.path(), "Broken row.md").unwrap();
@@ -3254,10 +3330,42 @@ mod tests {
             splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
         assert_eq!(unread.len(), 1);
         assert_eq!(
+            unread[0].flag.message,
+            "Line 13: the change “HP lots” was not read. Use a number, such as HP +5.",
+            "the editor's words keep the example"
+        );
+        assert_eq!(
             unread[0].before, 0,
             "the rejected row precedes the valid member"
         );
         assert_eq!(unread[0].count, Some(7));
+        // Contract F: a member link that names no creature is found by its kind, not its words.
+        // A plain fault with the old words on that row is a row fault like any other.
+        use splat::content::layout::{Flag, FlagKind};
+        let mut flags = draft.flags.clone();
+        for flag in &mut flags {
+            flag.message = "Other words".into();
+        }
+        flags.push(Flag::of(
+            FlagKind::CreatureNotFound,
+            14,
+            "Other words".into(),
+        ));
+        let unread = splat::content::list_formats::unread_group_members(&draft.source, &flags);
+        assert_eq!(
+            unread.iter().map(|m| m.count).collect::<Vec<_>>(),
+            [Some(7)]
+        );
+        flags.pop();
+        flags.push(Flag::new(
+            14,
+            "Creature [[Scout]] not found or ambiguous".into(),
+        ));
+        let unread = splat::content::list_formats::unread_group_members(&draft.source, &flags);
+        assert_eq!(
+            unread.iter().map(|m| m.count).collect::<Vec<_>>(),
+            [Some(7), Some(2)]
+        );
         assert_eq!(
             fs::read_to_string(dir.path().join("Broken row.md")).unwrap(),
             source

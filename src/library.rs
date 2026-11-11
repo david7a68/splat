@@ -1462,6 +1462,9 @@ struct SaveFailure {
     path: String,
     revision: u64,
     reason: String,
+    /// FL1: Save found the file or its folder read only, so the owner line says `Read only`
+    /// for as long as this failure lasts.
+    read_only: Option<ReadOnly>,
 }
 
 impl SaveFailure {
@@ -2140,6 +2143,33 @@ pub(crate) fn note_path(root: &Path, relative: &str) -> Result<PathBuf, String> 
     Ok(path)
 }
 
+/// What makes `write_note` refuse a note before it writes: the file is read only, or the
+/// campaign folder is. Save's reason names it and says what to do (AL1, FL2, SL1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReadOnly {
+    File,
+    Folder,
+}
+
+impl ReadOnly {
+    pub(crate) fn of(root: &Path, path: &Path) -> Option<Self> {
+        if fs::metadata(path).is_ok_and(|m| m.permissions().readonly()) {
+            Some(Self::File)
+        } else if fs::metadata(root).is_ok_and(|m| m.permissions().readonly()) {
+            Some(Self::Folder)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn reason(self) -> &'static str {
+        match self {
+            Self::File => "This file is read only. Make it writable, then Save again.",
+            Self::Folder => "The campaign folder is read only. Make it writable, then Save again.",
+        }
+    }
+}
+
 pub(crate) fn write_note(
     root: &Path,
     relative: &str,
@@ -2148,10 +2178,8 @@ pub(crate) fn write_note(
 ) -> Result<Entry, String> {
     let entry = Entry::parse(relative, text)?;
     let path = note_path(root, relative)?;
-    if fs::metadata(&path).is_ok_and(|m| m.permissions().readonly())
-        || fs::metadata(root).is_ok_and(|m| m.permissions().readonly())
-    {
-        return Err("This file is read only.".into());
+    if let Some(read_only) = ReadOnly::of(root, &path) {
+        return Err(read_only.reason().into());
     }
     let current = match fs::read_to_string(&path) {
         Ok(text) => Some(text),
@@ -5353,6 +5381,9 @@ impl Library {
                         path: note.path.clone(),
                         revision: self.draft_revision,
                         reason: e,
+                        read_only: note_path(&root, &note.path)
+                            .ok()
+                            .and_then(|path| ReadOnly::of(&root, &path)),
                     });
                 }
                 Ok(_) => self.error = Some(e),
@@ -5962,11 +5993,25 @@ impl Library {
                     crate::world::entry_file_parts(ui, root, shown_path, obsidian);
                 }
             };
+            // FL1: once Save has found the file or its folder read only, the owner line says so,
+            // as long as that failure lasts (the next edit, another entry or a Save ends it).
+            let read_only = self
+                .save_failure
+                .as_ref()
+                .is_some_and(|failure| failure.read_only.is_some())
+                && note.error.is_none()
+                && !stopped_reading;
+            let read_only_word;
             let owner_word = match &note.owner {
+                Owner::Package(module) if read_only => {
+                    read_only_word = format!("{} · Read only", module.name);
+                    read_only_word.as_str()
+                }
                 Owner::Package(_) => package_word.as_str(),
                 Owner::Campaign(_) if note.error.is_some() || stopped_reading => {
                     "Campaign · Cannot be read"
                 }
+                _ if read_only => "Campaign · Read only",
                 _ => "Campaign · Editable",
             };
             let file_below = ui.available_width()
@@ -6008,10 +6053,18 @@ impl Library {
             let owner_line = |ui: &mut egui::Ui| {
                 design::status(
                     ui,
-                    Status {
-                        icon: icons::EDIT,
-                        word: owner_word,
-                        color: d.clean,
+                    if read_only {
+                        Status {
+                            icon: icons::READ_ONLY,
+                            word: owner_word,
+                            color: d.read_only,
+                        }
+                    } else {
+                        Status {
+                            icon: icons::EDIT,
+                            word: owner_word,
+                            color: d.clean,
+                        }
                     },
                 );
                 if let Owner::Package(module) = &note.owner
@@ -7093,15 +7146,13 @@ mod tests {
         );
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
         let diagnostics = &library.loaded.as_ref().unwrap().diagnostic_texts();
+        assert!(diagnostics.iter().any(|s| s.starts_with("Wolf.md: Line ")
+            && s.contains(": Hit Points “about twenty” was not read")));
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Wolf.md: Hit Points “about twenty” not read"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|s| s.contains("Spark.md: Level “many” not read"))
+                .any(|s| s.starts_with("Spark.md: Line ")
+                    && s.contains(": Level “many” was not read"))
         );
     }
 
@@ -7295,7 +7346,7 @@ mod tests {
             loaded
                 .diagnostic_texts()
                 .iter()
-                .any(|text| text.starts_with("Both.md: Hit Points"))
+                .any(|text| text.starts_with("Both.md: Line") && text.contains(": Hit Points"))
         );
         // Two Watch files and Both.md: three, not two (by path) and not five (by problem).
         assert_eq!(loaded.files_to_fix(&broken, None), 3);
@@ -10450,6 +10501,20 @@ mod tests {
         );
         assert_eq!(fs::read(&path).unwrap(), saved, "disk-failure-not-written");
         assert_eq!(library.draft, accepted, "disk-failure-draft-kept");
+        // iter-24-B FL1, lookalike outside the rule: a folder inside the campaign refused the
+        // write, not the file or the campaign folder, so the owner line stays Editable.
+        assert_eq!(
+            library
+                .save_failure
+                .as_ref()
+                .and_then(|failure| failure.read_only),
+            None,
+            "FL1-folder-inside-not-read-only"
+        );
+        assert!(
+            painted.contains("Campaign · Editable") && !painted.contains("Read only"),
+            "FL1-folder-inside-owner-line\n{painted}"
+        );
         // Unchanged frames and a resize keep the failure and never read the draft's words to do
         // so. Each paint is two frames, and each frame checks.
         let steady = failure_work
@@ -10556,6 +10621,41 @@ mod tests {
             fs::read_to_string(&path).unwrap(),
             accepted,
             "disk-failure-then-written"
+        );
+        // iter-24-B FL1, AL1, FL2, SL1: the file itself is read only. Save's reason says what to
+        // do next, and the owner line says Read only while that failure lasts. The next edit
+        // ends both.
+        let file_permissions = fs::metadata(&path).unwrap().permissions();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        library.draft = format!("{accepted}\nA locked file.\n");
+        library.draft_revision += 1;
+        library.save_selected(false);
+        let painted = sd1_painted(&mut library);
+        fs::set_permissions(&path, file_permissions).unwrap();
+        assert_eq!(
+            library
+                .save_failure
+                .as_ref()
+                .and_then(|failure| failure.read_only),
+            Some(ReadOnly::File),
+            "FL1-kind"
+        );
+        assert!(
+            painted.contains("Campaign · Read only")
+                && !painted.contains("Campaign · Editable")
+                && painted.contains("This file is read only. Make it writable, then Save again."),
+            "FL1-read-only-owner-line\n{painted}"
+        );
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            accepted,
+            "FL1-not-written"
+        );
+        sd1_type(&mut library, "More.");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Campaign · Editable") && !painted.contains("Read only"),
+            "FL1-edit-ends\n{painted}"
         );
         // The repair-link flow: an entry that cannot be read opens as a repair draft in Edit
         // Markdown (as `repair_file` opens it). Its fixed draft parses, so Save would accept it,

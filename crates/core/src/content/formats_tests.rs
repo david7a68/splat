@@ -355,7 +355,12 @@ fn world_relations_and_dates_read_from_flat_properties_and_stay_on_a_patch() {
         Value::from("Kaun")
     );
     assert_eq!(entry.flags.len(), 1);
-    assert!(entry.flags[0].message.starts_with("When “120” not read"));
+    assert!(
+        entry.flags[0]
+            .cause()
+            .unwrap()
+            .starts_with("When “120” was not read")
+    );
 }
 
 #[test]
@@ -659,7 +664,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
     );
     assert!(entry.fields["splat_stats"].get("save_dexterity").is_none());
     for words in [
-        "Hit Points “about twenty” not read (line 21). Start with a number, such as 22 (4d8 + 4).",
+        "Hit Points “about twenty” was not read. Start with a number, such as 22 (4d8 + 4).",
         "Duplicate Hit Points",
         "Save needs",
         "Unused data ignored",
@@ -675,7 +680,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             entry
                 .flags
                 .iter()
-                .find(|f| f.message.contains("Hit Points “about twenty” not read"))
+                .find(|f| f.kind == super::layout::FlagKind::Unread(super::layout::Field::HitPoints))
                 .unwrap()
                 .line
                 - 1
@@ -844,7 +849,7 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(
         entry.flags[0].message,
-        "the change “HP lots” was not read. Use a number, such as HP +5."
+        "Line 16: the change “HP lots” was not read. Use a number, such as HP +5."
     );
     assert_eq!(
         entry.fields["splat_encounter_group"]["members"]
@@ -1027,7 +1032,7 @@ fn i19_challenge_derives_missing_xp_and_pb_and_flags_explicit_mismatches() {
         );
         if let Some(warning) = warning {
             assert!(
-                entry.flags.iter().any(|flag| flag.message == warning
+                entry.flags.iter().any(|flag| flag.cause() == Some(warning)
                     && text
                         .lines()
                         .nth(flag.line - 1)
@@ -1154,7 +1159,7 @@ fn i19_write_keeps_explicit_challenge_mismatch_and_flags_it() {
         entry
             .flags
             .iter()
-            .any(|flag| flag.message == "CR 3 is XP 700; XP 200 is used")
+            .any(|flag| flag.cause() == Some("CR 3 is XP 700; XP 200 is used"))
     );
 }
 
@@ -1194,7 +1199,8 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     // by its kind, not its words, that Rules and runs repairs it.
     assert!(
         entry.flags[0]
-            .message
+            .cause()
+            .unwrap()
             .starts_with("Combat initiative choice “Imaginary initiative” is not a rule."),
         "{}",
         entry.flags[0].message
@@ -1202,7 +1208,7 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
     // A plain flag with the same words is not a rule choice: a second resolve keeps it and
     // replaces only its own rule-choice flag.
-    let lookalike = super::layout::Flag::new(1, entry.flags[0].message.clone());
+    let lookalike = super::layout::Flag::new(1, entry.flags[0].cause().unwrap().to_owned());
     entry.flags.push(lookalike.clone());
     super::list_formats::resolve(&mut entry, &[], &source);
     assert_eq!(entry.flags.len(), 2, "{:?}", entry.flags);
@@ -1239,7 +1245,8 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
     assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
     assert!(
         entry.flags[0]
-            .message
+            .cause()
+            .unwrap()
             .starts_with("combat initiative choice “Imaginary initiative”"),
         "{}",
         entry.flags[0].message
@@ -1295,9 +1302,8 @@ fn i19_world_properties_accept_case_and_explain_bad_values() {
         assert_eq!(entry.fields["splat_world"]["type"], Value::from(stored));
         assert_eq!(entry.flags.len(), 1);
         assert!(
-            entry.flags[0]
-                .message
-                .contains("Status “[alive]” not read (line 7). Use a short word, such as alive.")
+            entry.flags[0].message
+                == "Line 7: Status “[alive]” was not read. Use a short word, such as alive."
         );
     }
 }
@@ -1474,8 +1480,27 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
                 ambiguous
                     .flags
                     .iter()
-                    .any(|flag| flag.message.contains("ambiguous"))
+                    .any(|flag| flag.message.contains("ambiguous")
+                        && flag.kind == super::layout::FlagKind::CreatureNotFound)
             );
+            // Contract F: resolving again finds the old flag by its kind, not its words. A plain
+            // flag with the same words is another fault and stays.
+            for flag in &mut ambiguous.flags {
+                flag.message = "Other words".into();
+            }
+            let lookalike =
+                super::layout::Flag::new(1, "Creature [[X]] not found or ambiguous".into());
+            ambiguous.flags.push(lookalike.clone());
+            super::list_formats::resolve(&mut ambiguous, std::slice::from_ref(&target), &text);
+            assert!(
+                ambiguous
+                    .flags
+                    .iter()
+                    .all(|flag| flag.kind != super::layout::FlagKind::CreatureNotFound),
+                "{:?}",
+                ambiguous.flags
+            );
+            assert!(ambiguous.flags.contains(&lookalike));
         }
     }
 }
@@ -1672,7 +1697,7 @@ fn i20_x27_copied_party_row_is_flagged_and_monster_copy_keeps_only_visible_cells
         entry
             .flags
             .iter()
-            .any(|flag| flag.message == "This party member is already in the roster")
+            .any(|flag| flag.cause() == Some("This party member is already in the roster"))
     );
     assert_eq!(
         entry.fields["splat_encounter"]["roster"]
@@ -1993,21 +2018,21 @@ fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
         .replace("| Hit Points | 22 (4d8 + 4) |", "| HP | about twenty |")
         .replace("| Armor Class | 13 |", "| Armor Class | about fifteen |");
     let entry = Entry::parse("Rook.md", &bad).unwrap();
-    let messages: Vec<&str> = entry.flags.iter().map(|f| f.message.as_str()).collect();
+    let messages: Vec<String> = entry.flags.iter().flat_map(|f| f.words()).collect();
     // The alias row still names the stat by its full name, with the example.
     assert!(
         messages
             .iter()
-            .any(|m| m.starts_with("Hit Points “about twenty” not read")
+            .any(|m| m.starts_with("Hit Points “about twenty” was not read")
                 && m.ends_with(". Start with a number, such as 22 (4d8 + 4).")),
         "{messages:?}"
     );
     // Only Hit Points changed: Armor Class keeps the short hint.
     assert!(
-        messages
-            .iter()
-            .any(|m| m.starts_with("Armor Class “about fifteen” not read")
-                && m.ends_with(". Use a number first.")),
+        messages.iter().any(
+            |m| m.starts_with("Armor Class “about fifteen” was not read")
+                && m.ends_with(". Use a number first.")
+        ),
         "{messages:?}"
     );
 }

@@ -1,5 +1,9 @@
 //! Schema-2 notes: their flat properties, model edits, and the writer. Loading never writes files.
-use super::{Entry, Mapping, Value, layout::Flag, patch_fields};
+use super::{
+    Entry, Mapping, Value,
+    layout::{Field, Flag, FlagKind},
+    patch_fields,
+};
 
 pub const WORLD_FIELDS: &[(&str, &str)] = &[
     ("type", "splat_type"),
@@ -292,9 +296,12 @@ pub fn read(text: &str, fields: &mut Mapping) -> Vec<Flag> {
                         flag(&mut flags, flat, "");
                         let last = flags.last_mut().unwrap();
                         let (shown, line) = unread_value(text, last.line);
-                        last.line = line;
-                        last.message =
-                            format!("{label} {} not read (line {line}). {help}", quoted(&shown));
+                        let field = match old {
+                            "status" => Field::Status,
+                            "part_of" => Field::PartOf,
+                            _ => Field::Other,
+                        };
+                        *last = Flag::unread(field, line, label, &shown, help);
                     }
                 }
             }
@@ -803,7 +810,7 @@ pub fn write(path: &str, fields: &Mapping, body: &str) -> Result<String, String>
     let blocking_flag = checked
         .flags
         .iter()
-        .any(|flag| !(flag.message.starts_with("CR ") && flag.message.ends_with(" is used")));
+        .any(|flag| flag.kind != FlagKind::PrintedValueUsed);
     if *entry.fields != read_back || blocking_flag {
         return Err("The written note does not read back to the same values.".into());
     }
