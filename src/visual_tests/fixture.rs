@@ -47,14 +47,19 @@ pub const GROUP_ARENA: &str = "Arena Beasts";
 pub const GROUP_ORPHAN: &str = "Cellar Rats";
 /// The plain campaign's fight in progress, with 12 participants.
 pub const PLAIN_RUN: &str = "Ambush at the Ropes";
-/// The plain campaign's played fight, with loot.
-pub const PLAIN_PLAYED: &str = "Wolves at the Ford";
+/// The plain campaign's played fight, with loot and a title longer than its row.
+pub const PLAIN_PLAYED: &str = "Wolves at the Ford Below the Burning Shrine Road";
 pub const PLAIN_LAST: &str = "The Road to Emberfall";
 pub const PLAIN_TONIGHT: &str = "The Crossing";
 /// A participant's name that is longer than a roster row likes.
 pub const PLAIN_LONG_NAME: &str = "Ashfang, Eldest Wolf of the Southern Ridge";
 /// The titles that `docs/design/session-cycle.md` section 1.2 sums: 13, 16 and 19 letters.
 pub const PLAIN_TITLES: [&str; 3] = ["Captain Varra", "Oren Thistlewick", "Captain Varra Black"];
+
+/// The package creature that the plain campaign selects.
+pub fn plain_package_creature() -> uuid::Uuid {
+    module_entry_id("cinder_wolf")
+}
 
 /// A reader in the plain campaign: a World NPC, with no portrait, or a humanoid creature,
 /// which has its type's art.
@@ -997,7 +1002,7 @@ fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> 
     fs::write(
         root.join("World/Road Encounters.md"),
         "# Road Encounters\n\n<!-- splat:rolls key=road dice=1d6 -->\n\n| d6 | Encounter |\n| --- | --- |\n\
-         | 1-2 | [[Wolves at the Ford]] |\n| 3-5 | Nothing on the road. |\n| 6 | A cart stuck in the mud. |\n",
+         | 1-2 | [[Bridge Ambush]] |\n| 3-5 | Nothing on the road. |\n| 6 | A cart stuck in the mud. |\n",
     )
     .map_err(|e| e.to_string())?;
 

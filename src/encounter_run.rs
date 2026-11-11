@@ -4475,6 +4475,14 @@ pub(crate) fn write_in_progress_run(
     )
 }
 
+/// A fixture run's ID comes from its campaign and name, so its file is the same on every run of
+/// a test. It takes no ID from `hermetic::new_uuid`, so the seeded IDs and dice that follow do
+/// not move.
+#[cfg(test)]
+fn fixture_run_id(campaign: Uuid, name: &str) -> Uuid {
+    splat::character::stable_id(&format!("visual:run:{campaign}:{name}"))
+}
+
 /// As `write_in_progress_run`, with the encounter's own text.
 #[cfg(test)]
 pub(crate) fn write_in_progress_run_with(
@@ -4499,6 +4507,7 @@ pub(crate) fn write_in_progress_run_marked(
 ) -> Result<(), String> {
     let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
     let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    run.id = fixture_run_id(campaign, name);
     // The test campaign uses the SRD 5.2.1 package, whose inspiration rule is a reroll.
     run.set_inspiration(Some(Inspiration::Reroll));
     run.state.random = Random::seeded(20_260_101);
@@ -4558,6 +4567,7 @@ pub(crate) fn write_ended_run_with(
 ) -> Result<crate::timeline::RunFact, String> {
     let count = participants.len();
     let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    run.id = fixture_run_id(campaign, name);
     run.state.random = Random::seeded(20_260_101);
     run.source = source;
     for index in 0..count {

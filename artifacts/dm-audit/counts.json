@@ -1,5 +1,5 @@
 {
-  "about": "G6 reads this. Written by audit-freeze from the dm-audit scenario: 40 tasks, 15 page transitions, 233 interactions.",
+  "about": "G6 reads this. Written by audit-freeze from the dm-audit scenario: 42 tasks, 17 page transitions, 240 interactions.",
   "tasks": [
     {
       "phase": "before",
@@ -111,6 +111,13 @@
       "task": "Fireball hits three enemies: apply half to one, full to two",
       "transitions": 0,
       "interactions": 6,
+      "path": "Run"
+    },
+    {
+      "phase": "during",
+      "task": "The table rules that the Fireball missed: undo it",
+      "transitions": 0,
+      "interactions": 1,
       "path": "Run"
     },
     {
@@ -273,6 +280,13 @@
       "transitions": 0,
       "interactions": 4,
       "path": "Session"
+    },
+    {
+      "phase": "after",
+      "task": "Link the fight in the note",
+      "transitions": 2,
+      "interactions": 6,
+      "path": "Session > Timeline > Session"
     },
     {
       "phase": "after",

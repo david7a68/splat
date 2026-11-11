@@ -1,54 +1,141 @@
 //! G7, the plain-campaign check of `docs/design/session-cycle.md` section 5.3.
 //!
 //! The scenario `plain-evening` plays the frozen plain campaign (`Seed::Plain`) with today's
-//! controls only. On each screen it records, at 1200x800 and 960x640 and with Lookup closed and
-//! open, every named control with its rectangle and every painted text with its rectangle. It
-//! also records every file of the campaigns at the start and at the end of the evening. It then
-//! compares all of it with `plain_evening/reference.json`.
+//! controls only, and compares what it shows and writes with `plain_evening/reference.json`:
 //!
-//! Any difference fails, unless one row of `plain_evening/allowed.json` names exactly that
-//! difference: the screen, the view, the control, text or file, and its rectangle or lines. A
-//! row also names its row of section 2.5. A row that matches nothing fails too, so the list
-//! stays exact. Nothing is masked.
+//! - **Views.** `SCREENS` fixes every view in code. A page is seen at 1200x800 and 960x640 with
+//!   Lookup closed and open; a Lookup reader at both sizes; an open menu or a hover text at both
+//!   sizes as it stands. Each view holds every named control in view and every painted text,
+//!   with its rectangle, and the part a person sees when that is less. A missing or extra view
+//!   always fails, and no allowed row can excuse it.
+//! - **Acts.** Every input of the evening is an act. For each, the words that any frame painted
+//!   and the last frame before it did not, the words that went, and each campaign file that was
+//!   written or changed, by digest. A notice shown for one frame, or a file written and put
+//!   back, is in this record.
+//! - **Files.** Every campaign file at the start and the end, compared by its bytes. A run's
+//!   file must open as a run (`Run::open`); in it, and nowhere else, the test folder in
+//!   `splat_run_source_path` becomes `<world>`. Each file that the evening changed is kept
+//!   whole in `plain_evening/files/`, so a new reference shows as a readable diff.
 //!
-//! `audit-freeze <label>` sets `SPLAT_PLAIN_EVENING_WRITE=1`: the scenario then writes the
-//! reference and `artifacts/dm-audit/titles.tsv` in place of the check. It refuses while
-//! `allowed.json` has a row, because the rows describe changes from the reference.
+//! Any other difference fails unless one row of `plain_evening/allowed.json` names exactly that
+//! difference, with its row of section 2.5. A row that matches nothing fails.
+//!
+//! `audit-freeze` sets `SPLAT_PLAIN_EVENING_WRITE=1`: the scenario then writes the reference,
+//! its files and `artifacts/dm-audit/titles.tsv` in place of the check. It refuses while
+//! `allowed.json` has a row. A feature pull request never writes the reference again.
 use super::{
     driver::{Driver, Sizes},
-    fixture::{PLAIN_LAST, PLAIN_PLAYED, PLAIN_RUN, PLAIN_TITLES, plain_reader},
+    fixture::{
+        PLAIN_LAST, PLAIN_PLAYED, PLAIN_RUN, PLAIN_TITLES, plain_package_creature, plain_reader,
+    },
     steps::*,
 };
 use eframe::egui::{self, Key};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use splat::character::stable_id;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt::Write as _,
     fs,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 const WRITE: &str = "SPLAT_PLAIN_EVENING_WRITE";
+const SCENARIO: &str = "plain-evening";
 const WIDE: (f32, f32) = (1200.0, 800.0);
 const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 21.
 const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=21;
+/// What the test folder becomes in a run's `splat_run_source_path`.
+const WORLD: &str = "<world>";
+const SAME: &str = "the same as at the start";
+
+/// How a screen is seen.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Shown {
+    /// A page: both sizes, with Lookup closed and open.
+    Page,
+    /// Lookup's reader: both sizes, Lookup open.
+    Reader,
+    /// An open menu or a hover text: both sizes, as it stands.
+    Held,
+}
+use Shown::{Held, Page, Reader};
+
+/// Every screen of the plain evening, in the order it reaches them. G7 needs each view of each,
+/// and no other; `allowed.json` cannot change this list.
+const SCREENS: &[(&str, Shown)] = &[
+    ("session-tonight", Page),
+    ("session-tonight: More open", Held),
+    ("session-tonight: Travel row menu", Held),
+    ("session-tonight: fight row menu", Held),
+    ("session-tonight: Last time hover", Held),
+    ("session-tonight: Travel row open", Page),
+    ("session-tonight: planned fight open", Page),
+    ("session-last: played fight open", Page),
+    ("run-ended", Page),
+    ("encounters", Page),
+    ("encounters: row menu", Held),
+    ("encounter-editor", Page),
+    ("encounter-editor: loot table menu", Held),
+    ("run-twelve", Page),
+    ("run-twelve: row hover", Held),
+    ("run-keys", Page),
+    ("run-conditions", Page),
+    ("run-arrivals", Page),
+    ("run-next-round", Page),
+    ("run-next-round: Undo hover", Held),
+    ("timeline", Page),
+    ("lookup-reader Captain Varra, npc", Reader),
+    ("lookup-reader Captain Varra, creature", Reader),
+    ("lookup-reader Oren Thistlewick, npc", Reader),
+    ("lookup-reader Oren Thistlewick, creature", Reader),
+    ("lookup-reader Captain Varra Black, npc", Reader),
+    ("lookup-reader Captain Varra Black, creature", Reader),
+    ("lookup-reader Road Encounters", Reader),
+    ("lookup-reader Cinder Wolf", Reader),
+    ("world-reader", Page),
+    ("session-new", Page),
+];
+
+fn view_name(size: (f32, f32), lookup: Option<bool>) -> String {
+    match lookup {
+        Some(open) => format!(
+            "{}x{} Lookup {}",
+            size.0,
+            size.1,
+            if open { "open" } else { "closed" }
+        ),
+        None => format!("{}x{}", size.0, size.1),
+    }
+}
+
+/// Every view G7 needs, in order.
+fn required_views() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (screen, shown) in SCREENS {
+        let lookups: &[Option<bool>] = match shown {
+            Page => &[Some(false), Some(true)],
+            Reader => &[Some(true)],
+            Held => &[None],
+        };
+        for lookup in lookups {
+            for size in [WIDE, NARROW] {
+                out.push(((*screen).to_owned(), view_name(size, *lookup)));
+            }
+        }
+    }
+    out
+}
 
 /// A control (`Role: name`) or a painted text, with its rectangle `[x, y, width, height]`, then
 /// the part a person can see when that is less: 4 numbers, or 8.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 struct Item(String, Vec<f32>);
 
-fn item(name: String, whole: egui::Rect, shown: egui::Rect) -> Item {
-    let mut at = rect(whole).to_vec();
-    if rect(shown) != rect(whole) {
-        at.extend(rect(shown));
-    }
-    Item(name, at)
-}
-
-/// One screen at one size, with Lookup closed or open.
+/// One screen at one size.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 struct View {
     screen: String,
@@ -57,34 +144,24 @@ struct View {
     texts: Vec<Item>,
 }
 
-/// Each file of the campaigns: its lines, or for a file that is not text or is longer than
-/// `WHOLE`, its hash and size. At the end, a file that the evening did not change is `SAME`.
-type Files = BTreeMap<String, Vec<String>>;
-const WHOLE: usize = 16 * 1024;
-const SAME: &str = "the same as at the start";
+/// One act of the evening: what appeared in any frame, what went, and what it wrote.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+struct Act {
+    act: String,
+    appeared: Vec<String>,
+    gone: Vec<String>,
+    files: Vec<String>,
+}
 
 #[derive(Serialize, Deserialize, Default)]
 struct Reference {
     about: String,
     views: Vec<View>,
-    files_at_start: Files,
-    files_at_end: Files,
-}
-
-impl Reference {
-    /// Start and end, apart: `start:` and `end:` before each path.
-    fn files(&self) -> Files {
-        let tagged = |when: &str, files: &Files| {
-            files
-                .iter()
-                .map(|(path, lines)| (format!("{when}:{path}"), lines.clone()))
-                .collect::<Vec<_>>()
-        };
-        tagged("start", &self.files_at_start)
-            .into_iter()
-            .chain(tagged("end", &self.files_at_end))
-            .collect()
-    }
+    acts: Vec<Act>,
+    /// Each file at the start, by the SHA-256 of its bytes.
+    files_at_start: BTreeMap<String, String>,
+    /// Each file at the end: `SAME`, or the SHA-256 of its bytes, kept whole in `files/`.
+    files_at_end: BTreeMap<String, String>,
 }
 
 /// One difference from the reference. An allowed row holds one of these, whole.
@@ -92,12 +169,12 @@ impl Reference {
 struct Difference {
     screen: String,
     view: String,
-    /// `control`, `text`, `file` or `view`.
+    /// `control`, `text`, `act` or `file`.
     what: String,
-    /// `new`, `gone`, `moved`, `height`, `width`, `resized`, `clipped` or `lines`.
+    /// `new`, `gone`, `moved`, `height`, `width`, `resized`, `clipped`, `changed` or `bytes`.
     change: String,
     name: String,
-    /// The rectangles, or the lines that differ.
+    /// The rectangles, the words, or the lines that differ.
     detail: String,
 }
 
@@ -142,6 +219,14 @@ fn rect(r: egui::Rect) -> [f32; 4] {
     ]
 }
 
+fn item(name: String, whole: egui::Rect, shown: egui::Rect) -> Item {
+    let mut at = rect(whole).to_vec();
+    if rect(shown) != rect(whole) {
+        at.extend(rect(shown));
+    }
+    Item(name, at)
+}
+
 fn words(r: &[f32]) -> String {
     let mut out = format!("{} {} {}x{}", r[0], r[1], r[2], r[3]);
     if let [_, _, _, _, x, y, w, h] = r {
@@ -150,8 +235,17 @@ fn words(r: &[f32]) -> String {
     out
 }
 
-/// What a person can see now: each named control in view, and each painted text in view.
-fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
+/// What a person can see now: each named control in view, and each painted text in view. The
+/// World page names a note by its full path, so the test folder `world` becomes `<world>`; a
+/// name that already says `<world>` is marked, so it cannot pass for a path.
+fn look(d: &Driver<'_>, world: &str, screen: &str, view: String) -> View {
+    let portable = |words: String| {
+        if words.contains(WORLD) {
+            format!("G7: the app shows {WORLD} itself: {words}")
+        } else {
+            words.replace(world, WORLD)
+        }
+    };
     let size = d.window_size();
     let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size.0, size.1));
     let controls = d
@@ -160,7 +254,7 @@ fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
         .filter(|node| !node.name.trim().is_empty() && node.in_view())
         .map(|node| {
             item(
-                format!("{:?}: {}", node.role, node.name),
+                portable(format!("{:?}: {}", node.role, node.name)),
                 node.rect,
                 node.shown,
             )
@@ -172,7 +266,7 @@ fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
         let at = text.galley.rect.translate(text.pos.to_vec2());
         let shown = at.intersect(clip).intersect(window);
         if !words.trim().is_empty() && shown.is_positive() {
-            texts.push(item(words, at, shown));
+            texts.push(item(portable(words), at, shown));
         }
     });
     View {
@@ -183,137 +277,273 @@ fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
     }
 }
 
-/// A run's file and its ID are a random UUID, so each run's ID becomes `<run NAME>` in every
-/// path and every file's text. Nothing else in a file changes before the comparison. `runs` holds
-/// the names given at the start: at the end a run keeps its name, and a run with an ID the start
-/// did not have is `<new run NAME>`, so a run replaced under the same name still differs. Two
-/// runs with one name stop the check, because their order would be random.
-fn files(root: &Path, runs: &mut Vec<(String, String)>) -> Files {
-    fn walk(at: &Path, out: &mut Vec<PathBuf>) {
-        let mut entries: Vec<_> = fs::read_dir(at)
-            .unwrap_or_else(|error| panic!("G7: cannot list {}: {error}", at.display()))
-            .map(|entry| entry.expect("a folder entry").path())
-            .collect();
-        entries.sort();
-        for path in entries {
-            if path.is_dir() {
-                walk(&path, out);
-            } else {
-                out.push(path);
-            }
-        }
-    }
-    #[derive(Deserialize)]
-    struct RunName {
-        name: String,
-    }
-    let mut paths = Vec::new();
-    walk(root, &mut paths);
-    let known = runs.len();
-    for path in &paths {
-        let (Some(stem), Some("json")) = (
-            path.file_stem().and_then(|stem| stem.to_str()),
-            path.extension().and_then(|extension| extension.to_str()),
-        ) else {
-            continue;
-        };
-        if uuid::Uuid::parse_str(stem).is_err() {
-            continue;
-        }
-        let text = fs::read_to_string(path)
-            .unwrap_or_else(|error| panic!("G7: cannot read {}: {error}", path.display()));
-        let run: RunName = serde_json::from_str(&text)
-            .unwrap_or_else(|error| panic!("G7: {} is not a run: {error}", path.display()));
-        if runs.iter().any(|(id, _)| id == stem) {
-            continue;
-        }
-        // The start names every run. At the end, only a run the start did not have is new.
-        let label = if known == 0 {
-            format!("<run {}>", run.name)
-        } else {
-            format!("<new run {}>", run.name)
-        };
-        assert!(
-            !runs.iter().any(|(_, other)| *other == label),
-            "G7: two runs are named {:?}, so their order is not stable",
-            run.name
-        );
-        runs.push((stem.to_owned(), label));
-    }
-    let named = |text: &str| {
-        runs.iter()
-            .fold(text.to_owned(), |text, (id, label)| text.replace(id, label))
-    };
-    let hashed = |bytes: &[u8]| {
-        vec![
-            format!("sha256 {:x}", Sha256::digest(bytes)),
-            format!("{} bytes", bytes.len()),
-        ]
-    };
-    paths
-        .iter()
-        .map(|path| {
-            let bytes = fs::read(path)
-                .unwrap_or_else(|error| panic!("G7: cannot read {}: {error}", path.display()));
-            let lines = match String::from_utf8(bytes) {
-                Ok(text) => {
-                    let text = named(&text);
-                    if text.len() <= WHOLE {
-                        text.lines().map(str::to_owned).collect()
-                    } else {
-                        hashed(text.as_bytes())
-                    }
-                }
-                Err(error) => hashed(error.as_bytes()),
-            };
-            let name = path
-                .strip_prefix(root)
-                .expect("inside the root")
-                .to_string_lossy();
-            (named(&name), lines)
-        })
-        .collect()
+fn hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
-/// The evening's captures, in order.
+/// The campaigns' files, as G7 compares them.
+struct Files {
+    root: PathBuf,
+    /// The test folder, which a run's source path holds.
+    world: String,
+}
+
+impl Files {
+    fn paths(&self) -> Vec<PathBuf> {
+        fn walk(at: &Path, out: &mut Vec<PathBuf>) {
+            let mut entries: Vec<_> = fs::read_dir(at)
+                .unwrap_or_else(|error| panic!("G7: cannot list {}: {error}", at.display()))
+                .map(|entry| entry.expect("a folder entry").path())
+                .collect();
+            entries.sort();
+            for path in entries {
+                if path.is_dir() {
+                    walk(&path, out);
+                } else {
+                    out.push(path);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.root, &mut out);
+        out
+    }
+
+    fn name(&self, path: &Path) -> String {
+        path.strip_prefix(&self.root)
+            .expect("inside the campaigns")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// The file's bytes. A run's file must open as a run of its campaign, and only its typed
+    /// `splat_run_source_path` loses the test folder. A file that is not right says why instead.
+    fn bytes(&self, path: &Path) -> Vec<u8> {
+        let bytes = fs::read(path)
+            .unwrap_or_else(|error| panic!("G7: cannot read {}: {error}", path.display()));
+        let name = self.name(path);
+        let mut out = bytes.clone();
+        if name.contains("/Encounter Runs/") && name.ends_with(".json") {
+            let folder = name.split('/').next().unwrap_or_default();
+            let campaign = stable_id(&format!("visual:{SCENARIO}:{folder}"));
+            if let Err(error) = crate::encounter_run::Run::open(path, campaign) {
+                return format!("G7: this file does not open as a run: {error}").into_bytes();
+            }
+            let value: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("a run that opened is JSON");
+            let mut sources = BTreeSet::new();
+            collect_sources(&value, &mut sources);
+            let field = |path: &str| {
+                format!(
+                    "\"splat_run_source_path\": {}",
+                    serde_json::to_string(path).expect("a JSON string")
+                )
+            };
+            let mut text = String::from_utf8(out).expect("a run is UTF-8");
+            for source in sources {
+                if source.contains(WORLD) {
+                    return format!("G7: a source path already says {WORLD}: {source}")
+                        .into_bytes();
+                }
+                if let Some(rest) = source.strip_prefix(&self.world) {
+                    text = text.replace(&field(&source), &field(&format!("{WORLD}{rest}")));
+                }
+            }
+            out = text.into_bytes();
+        }
+        if out
+            .windows(self.world.len())
+            .any(|window| window == self.world.as_bytes())
+        {
+            return format!("G7: this file holds the test folder {}", self.world).into_bytes();
+        }
+        out
+    }
+
+    fn all(&self) -> BTreeMap<String, Vec<u8>> {
+        self.paths()
+            .into_iter()
+            .map(|path| (self.name(&path), self.bytes(&path)))
+            .collect()
+    }
+
+    /// Each file's time and digest, to see which an act wrote.
+    fn stamps(&self) -> BTreeMap<String, (Option<SystemTime>, String)> {
+        self.paths()
+            .into_iter()
+            .map(|path| {
+                let time = fs::metadata(&path)
+                    .and_then(|metadata| metadata.modified())
+                    .ok();
+                (self.name(&path), (time, hex(&self.bytes(&path))))
+            })
+            .collect()
+    }
+}
+
+fn collect_sources(value: &serde_json::Value, out: &mut BTreeSet<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                if key == "splat_run_source_path"
+                    && let Some(path) = value.as_str()
+                {
+                    out.insert(path.to_owned());
+                }
+                collect_sources(value, out);
+            }
+        }
+        serde_json::Value::Array(values) => values.iter().for_each(|v| collect_sources(v, out)),
+        _ => {}
+    }
+}
+
+/// The evening's record, in order.
 struct Evening {
+    files: Files,
     views: Vec<View>,
+    acts: Vec<Act>,
     titles: Vec<String>,
 }
 
 impl Evening {
-    /// Record this screen at both sizes, with Lookup closed and open. Lookup shows what it
-    /// showed last, as Ctrl+K opens it.
-    fn screen(&mut self, d: &mut Driver<'_>, screen: &str) {
-        let was_open = d.app_mut().lookup.open;
-        for open in [was_open, !was_open] {
-            if d.app_mut().lookup.open != open {
-                d.press_ctrl(Key::K);
-                assert_eq!(
-                    d.app_mut().lookup.open,
-                    open,
-                    "G7: Ctrl+K did not toggle Lookup on {screen}"
-                );
+    /// One input of the evening, with what it showed and wrote.
+    fn act(&mut self, d: &mut Driver<'_>, what: &str, step: impl FnOnce(&mut Driver<'_>)) {
+        let before = d.last_words();
+        let files = self.files.stamps();
+        let ((), during) = d.traced(step);
+        let after = d.last_words();
+        let now = self.files.stamps();
+        let mut written = Vec::new();
+        for (path, (time, digest)) in &now {
+            match files.get(path) {
+                None => written.push(format!("{path}: new, sha256 {}", &digest[..16])),
+                Some((old_time, old)) if old != digest || old_time != time => {
+                    written.push(format!(
+                        "{path}: written, sha256 {}{}",
+                        &digest[..16],
+                        if old == digest {
+                            ", the same bytes"
+                        } else {
+                            ""
+                        }
+                    ));
+                }
+                Some(_) => {}
             }
-            self.both_sizes(d, screen, open);
         }
-        if d.app_mut().lookup.open != was_open {
-            d.press_ctrl(Key::K);
+        for path in files.keys().filter(|path| !now.contains_key(*path)) {
+            written.push(format!("{path}: removed"));
+        }
+        let portable = |words: &String| {
+            if words.contains(WORLD) {
+                format!("G7: the app shows {WORLD} itself: {words}")
+            } else {
+                words.replace(&self.files.world, WORLD)
+            }
+        };
+        self.acts.push(Act {
+            act: what.to_owned(),
+            appeared: during.difference(&before).map(portable).collect(),
+            gone: before.difference(&after).map(portable).collect(),
+            files: written,
+        });
+    }
+
+    fn lookup(&mut self, d: &mut Driver<'_>, open: bool) {
+        if d.app_mut().lookup.open != open {
+            let what = if open {
+                "Ctrl+K opens Lookup"
+            } else {
+                "Ctrl+K closes Lookup"
+            };
+            self.act(d, what, |d| d.press_ctrl(Key::K));
+            assert_eq!(
+                d.app_mut().lookup.open,
+                open,
+                "G7: Ctrl+K did not toggle Lookup"
+            );
         }
     }
 
-    /// Record Lookup's reader only, at both sizes, open on this entry. The DM would search
-    /// for it; the ID keeps apart two entries of one name.
-    fn reader(&mut self, d: &mut Driver<'_>, title: &str, portrait: bool) {
-        d.app_mut().lookup.open_id(plain_reader(title, portrait));
-        d.settle();
+    fn both_sizes(&mut self, d: &mut Driver<'_>, screen: &str, lookup: Option<bool>) {
+        for size in [WIDE, NARROW] {
+            let view = view_name(size, lookup);
+            let world = &self.files.world;
+            self.views
+                .push(d.at_size(size, |d| look(d, world, screen, view)));
+        }
+    }
+
+    /// A page with Lookup closed, then open, as Ctrl+K shows what Lookup showed last. Also a
+    /// capture for the gate's ergonomics.
+    fn page(&mut self, d: &mut Driver<'_>, screen: &str) {
+        let was_open = d.app_mut().lookup.open;
+        self.lookup(d, false);
+        d.state(screen, Sizes::Standard);
+        self.both_sizes(d, screen, Some(false));
+        self.lookup(d, true);
+        self.both_sizes(d, screen, Some(true));
+        self.lookup(d, was_open);
+    }
+
+    /// An open menu at both sizes, opened at each, since a resize closes it. Each of `items`
+    /// must be in each view.
+    fn menu(&mut self, d: &mut Driver<'_>, screen: &str, button: &str, items: &[&str]) {
+        for size in [WIDE, NARROW] {
+            let view = view_name(size, None);
+            d.set_base(size);
+            self.act(d, &format!("open {button} at {view}"), |d| d.click(button));
+            let seen = look(d, &self.files.world, screen, view.clone());
+            for wanted in items {
+                assert!(
+                    seen.controls
+                        .iter()
+                        .any(|Item(name, _)| name.ends_with(wanted)),
+                    "G7: the menu of {screen} at {view} does not hold {wanted:?}"
+                );
+            }
+            self.views.push(seen);
+            self.act(d, &format!("close {button} at {view}"), |d| {
+                d.press(Key::Escape);
+            });
+        }
+        d.set_base(WIDE);
+    }
+
+    /// A hover text, as it stands at both sizes. `rest` puts the pointer on its target.
+    fn hover(&mut self, d: &mut Driver<'_>, screen: &str, rest: impl Fn(&mut Driver<'_>)) {
+        for size in [WIDE, NARROW] {
+            let view = view_name(size, None);
+            let world = &self.files.world;
+            let seen = d.at_size_mut(size, |d| {
+                rest(d);
+                let seen = look(d, world, screen, view);
+                d.pointer_away();
+                seen
+            });
+            self.views.push(seen);
+        }
+    }
+
+    /// Lookup's reader on one entry, at both sizes.
+    fn reader(&mut self, d: &mut Driver<'_>, screen: &str, open: impl FnOnce(&mut Driver<'_>)) {
+        self.act(d, &format!("open {screen}"), open);
+        assert!(d.app_mut().lookup.open, "G7: {screen} did not open Lookup");
+        self.both_sizes(d, screen, Some(true));
+    }
+
+    /// A reader of a title that section 1.2 sums, with the title measured.
+    fn title_reader(&mut self, d: &mut Driver<'_>, title: &str, portrait: bool) {
         let screen = format!(
             "lookup-reader {title}, {}",
             if portrait { "creature" } else { "npc" }
         );
+        self.reader(d, &screen, |d| {
+            d.app_mut().lookup.open_id(plain_reader(title, portrait));
+            d.settle();
+        });
         for size in [WIDE, NARROW] {
-            self.views
-                .push(d.at_size(size, |d| look(d, &screen, view_name(size, true))));
             let measured = d.at_size(size, |d| measure_title(d, title));
             self.titles.push(format!(
                 "Lookup\t{}x{}\t{title}\t{}\t{measured}",
@@ -326,25 +556,8 @@ impl Evening {
                 }
             ));
         }
-        d.press_ctrl(Key::K);
-        assert!(!d.app_mut().lookup.open, "G7: Ctrl+K did not close Lookup");
+        self.lookup(d, false);
     }
-
-    fn both_sizes(&mut self, d: &mut Driver<'_>, screen: &str, open: bool) {
-        for size in [WIDE, NARROW] {
-            self.views
-                .push(d.at_size(size, |d| look(d, screen, view_name(size, open))));
-        }
-    }
-}
-
-fn view_name(size: (f32, f32), open: bool) -> String {
-    format!(
-        "{}x{} Lookup {}",
-        size.0,
-        size.1,
-        if open { "open" } else { "closed" }
-    )
 }
 
 /// The reader's title in the `Display` type, what follows it, and the room left after them.
@@ -420,102 +633,172 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
     )
 }
 
-/// The plain evening: today's controls only, and no act that a feature adds. Its capture, with
-/// no `about`, and the reader titles it measured.
-fn play(d: &mut Driver<'_>) -> (Reference, Vec<String>) {
+/// The plain evening: today's controls only, and no act that a feature adds. Returns the
+/// record and the files at the start and the end.
+fn play(
+    d: &mut Driver<'_>,
+) -> (
+    Evening,
+    BTreeMap<String, Vec<u8>>,
+    BTreeMap<String, Vec<u8>>,
+) {
     d.set_base(WIDE);
-    let root = d.root.join("campaigns");
-    let mut runs = Vec::new();
-    let at_start = files(&root, &mut runs);
-    let mut evening = Evening {
+    let mut ev = Evening {
+        files: Files {
+            root: d.root.join("campaigns"),
+            world: d.root.to_string_lossy().into_owned(),
+        },
         views: Vec::new(),
+        acts: Vec::new(),
         titles: Vec::new(),
     };
+    let at_start = ev.files.all();
     // Lookup holds Captain Varra's page, as the DM left it.
-    d.app_mut()
-        .lookup
-        .open_id(plain_reader("Captain Varra", true));
-    d.settle();
-    d.press_ctrl(Key::K);
+    ev.act(d, "open Captain Varra in Lookup", |d| {
+        d.app_mut()
+            .lookup
+            .open_id(plain_reader("Captain Varra", true));
+        d.settle();
+    });
+    ev.lookup(d, false);
 
-    d.click(NAV_SESSIONS);
-    show_plan(d);
+    ev.act(d, "Session", |d| {
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+    });
     d.expect("Road to the ford");
-    d.state("session-tonight", Sizes::Standard);
-    evening.screen(d, "session-tonight");
+    ev.page(d, "session-tonight");
+    ev.menu(
+        d,
+        "session-tonight: More open",
+        "More Add actions",
+        &["Add Travel", "Add Short rest"],
+    );
+    ev.menu(
+        d,
+        "session-tonight: Travel row menu",
+        "More actions for Road to the ford",
+        &["Remove this event"],
+    );
+    ev.menu(
+        d,
+        "session-tonight: fight row menu",
+        "More actions for Shrine of Cinders",
+        &["Remove from tonight"],
+    );
+    ev.hover(d, "session-tonight: Last time hover", |d| {
+        d.hover_name(&format!("Session 7: {PLAIN_LAST}"));
+    });
+    ev.act(d, "open the Travel row", |d| d.click("Road to the ford"));
+    ev.page(d, "session-tonight: Travel row open");
+    ev.act(d, "open the planned fight", |d| {
+        d.click("Shrine of Cinders")
+    });
+    ev.page(d, "session-tonight: planned fight open");
 
-    d.click_starting(&format!("Session 7: {PLAIN_LAST} ·"));
+    ev.act(d, "open last session", |d| {
+        d.click_starting(&format!("Session 7: {PLAIN_LAST} ·"));
+    });
     d.expect(PLAIN_PLAYED);
-    d.click(PLAIN_PLAYED);
-    d.state("session-last-played", Sizes::Standard);
-    evening.screen(d, "session-last-played");
+    ev.act(d, "open the played fight", |d| d.click(PLAIN_PLAYED));
+    ev.page(d, "session-last: played fight open");
+    // `Whole run` opens the ended run in place, in the Encounters history.
+    ev.act(d, "Whole run", |d| d.click_link("Whole run"));
+    ev.page(d, "run-ended");
+    ev.act(d, "close the ended run", |d| {
+        d.click_starting(&format!("Close the run of {PLAIN_PLAYED}"));
+    });
 
-    d.click(NAV_ENCOUNTERS);
-    d.state("encounters", Sizes::Standard);
-    evening.screen(d, "encounters");
+    ev.act(d, "Encounters", |d| d.click(NAV_ENCOUNTERS));
+    ev.page(d, "encounters");
+    ev.menu(
+        d,
+        "encounters: row menu",
+        "More actions for Shrine of Cinders",
+        &["Start fight"],
+    );
+    ev.act(d, "edit Shrine of Cinders", |d| {
+        open_saved_encounter(d, "Shrine of Cinders");
+    });
+    ev.page(d, "encounter-editor");
+    ev.menu(
+        d,
+        "encounter-editor: loot table menu",
+        "Roll on a table for the encounter",
+        &["road · 1d6 · World/Road Encounters.md"],
+    );
+    ev.act(d, "back to Encounters", |d| d.click("Back to encounters"));
 
-    resume_run(d, PLAIN_RUN);
-    d.state("run-twelve", Sizes::Standard);
-    evening.screen(d, "run-twelve");
-    d.click("Keyboard commands");
-    d.state("run-keys", Sizes::Standard);
-    evening.screen(d, "run-keys");
-    d.click("Keyboard commands");
-    // A whole round, so words typed as conditions meet a turn and a round as they are played.
-    for _ in 0..12 {
-        d.click(NEXT_TURN);
+    ev.act(d, "resume the 12-person fight", |d| {
+        resume_run(d, PLAIN_RUN)
+    });
+    ev.page(d, "run-twelve");
+    ev.hover(d, "run-twelve: row hover", |d| {
+        d.hover_words("Bless 10 rounds");
+    });
+    ev.act(d, "open Keys", |d| d.click("Keyboard commands"));
+    ev.page(d, "run-keys");
+    ev.act(d, "close Keys", |d| d.click("Keyboard commands"));
+    ev.act(d, "select Brannoch", |d| d.click_row("Brannoch Vale"));
+    ev.act(d, "Conditions", |d| d.click(CONDITIONS));
+    d.expect("Other effect");
+    ev.page(d, "run-conditions");
+    ev.act(d, "Add to fight", |d| d.click("Add to fight"));
+    ev.page(d, "run-arrivals");
+    // A whole round, so words typed as conditions meet each turn and a new round.
+    for turn in 1..=12 {
+        ev.act(d, &format!("Next turn {turn}"), |d| d.click(NEXT_TURN));
     }
-    d.state("run-next-round", Sizes::Standard);
-    evening.screen(d, "run-next-round");
-    close_run(d);
+    ev.page(d, "run-next-round");
+    let undo = d.name_starting("Undo");
+    ev.hover(d, "run-next-round: Undo hover", |d| d.hover_name(&undo));
+    ev.act(d, "close the run", close_run);
 
-    d.click(NAV_TIMELINE);
-    d.state("timeline", Sizes::Standard);
-    evening.screen(d, "timeline");
+    ev.act(d, "Timeline", |d| d.click(NAV_TIMELINE));
+    ev.page(d, "timeline");
 
-    d.click(NAV_SESSIONS);
+    ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
     for title in PLAIN_TITLES {
         for portrait in [false, true] {
-            evening.reader(d, title, portrait);
+            ev.title_reader(d, title, portrait);
         }
     }
-
-    d.click("New session");
-    d.type_into("Session title", "The Shrine");
-    d.click("Create session");
-    d.state("session-new", Sizes::Standard);
-    evening.screen(d, "session-new");
-    write_note(d);
-    d.type_into_editor("\nThe party camps at the shrine.\n");
-    d.press_ctrl(Key::S);
-    d.app_mut().sessions.flush();
-    d.app_mut().timeline.save();
-    d.settle();
-    let at_end = files(&root, &mut runs)
-        .into_iter()
-        .map(|(path, lines)| {
-            if at_start.get(&path) == Some(&lines) {
-                (path, vec![SAME.to_owned()])
-            } else {
-                (path, lines)
-            }
-        })
-        .collect();
-    evening.views.iter().for_each(|view| {
-        assert!(
-            !view.controls.is_empty() && !view.texts.is_empty(),
-            "G7: {} / {} captured nothing",
-            view.screen,
-            view.view
-        );
+    ev.reader(d, "lookup-reader Road Encounters", |d| {
+        assert!(d.app_mut().lookup.open_name("Road Encounters"));
+        d.settle();
     });
-    let capture = Reference {
-        about: String::new(),
-        views: evening.views,
-        files_at_start: at_start,
-        files_at_end: at_end,
-    };
-    (capture, evening.titles)
+    ev.lookup(d, false);
+    ev.reader(d, "lookup-reader Cinder Wolf", |d| {
+        d.app_mut().lookup.open_id(plain_package_creature());
+        d.settle();
+    });
+    ev.lookup(d, false);
+
+    ev.act(d, "World", |d| d.click(NAV_WORLD));
+    ev.act(d, "open Captain Varra Black", |d| {
+        d.click_starting("Captain Varra Black");
+    });
+    ev.page(d, "world-reader");
+
+    ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
+    ev.act(d, "New session", |d| d.click("New session"));
+    ev.act(d, "type the title", |d| {
+        d.type_into("Session title", "The Shrine");
+    });
+    ev.act(d, "Create session", |d| d.click("Create session"));
+    ev.page(d, "session-new");
+    ev.act(d, "write in the note", |d| {
+        write_note(d);
+        d.type_into_editor("\nThe party camps at the shrine.\n");
+    });
+    ev.act(d, "save", |d| {
+        d.press_ctrl(Key::S);
+        d.app_mut().sessions.flush();
+        d.app_mut().timeline.save();
+        d.settle();
+    });
+    let at_end = ev.files.all();
+    (ev, at_start, at_end)
 }
 
 fn compare_items(
@@ -581,6 +864,14 @@ fn compare_items(
     }
 }
 
+/// A file's lines as they are, with a carriage return shown as `\r`.
+fn lines(bytes: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(bytes)
+        .split('\n')
+        .map(|line| line.replace('\r', "\\r"))
+        .collect()
+}
+
 /// The lines that differ, each with its line number: `-3 old words` from the reference and
 /// `+3 new words` from this evening, along the longest run of lines that both keep in order.
 /// A line that moves is one removal and one addition, each at its place.
@@ -612,81 +903,146 @@ fn line_diff(old: &[String], new: &[String]) -> Vec<String> {
     out
 }
 
-fn compare_files(old: &Files, new: &Files, out: &mut Vec<Difference>) {
-    let difference = |change: &str, path: &str, detail: String| {
-        let (when, path) = path.split_once(':').unwrap_or(("", path));
-        Difference {
-            screen: format!("files at the {when}"),
-            view: String::new(),
-            what: "file".to_owned(),
-            change: change.to_owned(),
-            name: path.to_owned(),
-            detail,
+fn file_difference(when: &str, change: &str, path: &str, detail: String) -> Difference {
+    Difference {
+        screen: format!("files at the {when}"),
+        view: String::new(),
+        what: "file".to_owned(),
+        change: change.to_owned(),
+        name: path.to_owned(),
+        detail,
+    }
+}
+
+fn compare_files(
+    reference: &Reference,
+    start: &BTreeMap<String, Vec<u8>>,
+    end: &BTreeMap<String, Vec<u8>>,
+    out: &mut Vec<Difference>,
+) {
+    for (path, digest) in &reference.files_at_start {
+        match start.get(path) {
+            None => out.push(file_difference("start", "gone", path, String::new())),
+            Some(bytes) if hex(bytes) != *digest => out.push(file_difference(
+                "start",
+                "bytes",
+                path,
+                format!("sha256 {digest} -> {}", hex(bytes)),
+            )),
+            Some(_) => {}
         }
-    };
-    for (path, was) in old {
-        match new.get(path) {
-            None => out.push(difference("gone", path, format!("{} lines", was.len()))),
-            Some(now) if now != was => {
-                out.push(difference("lines", path, line_diff(was, now).join(" | ")));
+    }
+    for (path, bytes) in start {
+        if !reference.files_at_start.contains_key(path) {
+            out.push(file_difference(
+                "start",
+                "new",
+                path,
+                lines(bytes).join(" | "),
+            ));
+        }
+    }
+    for (path, kept) in &reference.files_at_end {
+        // A file the evening changed is kept whole beside the reference, so it diffs by line.
+        let was = if kept == SAME {
+            start.get(path).cloned().unwrap_or_default()
+        } else {
+            let copy = fs::read(folder().join("files").join(path)).unwrap_or_default();
+            assert_eq!(
+                hex(&copy),
+                *kept,
+                "G7: plain_evening/files/{path} is not the file the reference names"
+            );
+            copy
+        };
+        match end.get(path) {
+            None => out.push(file_difference("end", "gone", path, String::new())),
+            Some(now) if *now != was => {
+                let mut detail = line_diff(&lines(&was), &lines(now));
+                if detail.is_empty() {
+                    detail.push(format!("sha256 {} -> {}", hex(&was), hex(now)));
+                }
+                out.push(file_difference("end", "bytes", path, detail.join(" | ")));
             }
             Some(_) => {}
         }
     }
-    for (path, now) in new {
-        if !old.contains_key(path) {
-            out.push(difference("new", path, now.join(" | ")));
+    for (path, bytes) in end {
+        if !reference.files_at_end.contains_key(path) {
+            out.push(file_difference(
+                "end",
+                "new",
+                path,
+                lines(bytes).join(" | "),
+            ));
         }
     }
 }
 
-fn differences(reference: &Reference, capture: &Reference) -> Vec<Difference> {
-    let views = &capture.views;
-    let mut out = Vec::new();
-    let key = |view: &View| (view.screen.clone(), view.view.clone());
-    for old in &reference.views {
-        match views.iter().find(|new| key(new) == key(old)) {
-            None => out.push(Difference {
-                screen: old.screen.clone(),
-                view: old.view.clone(),
-                what: "view".into(),
-                change: "gone".into(),
-                name: String::new(),
-                detail: "the evening no longer reaches this view".into(),
-            }),
-            Some(new) => {
-                compare_items(
-                    &old.screen,
-                    &old.view,
-                    "control",
-                    &old.controls,
-                    &new.controls,
-                    &mut out,
-                );
-                compare_items(
-                    &old.screen,
-                    &old.view,
-                    "text",
-                    &old.texts,
-                    &new.texts,
-                    &mut out,
-                );
+fn compare_acts(old: &[Act], new: &[Act], out: &mut Vec<Difference>) {
+    for index in 0..old.len().max(new.len()) {
+        let (a, b) = (old.get(index), new.get(index));
+        if a == b {
+            continue;
+        }
+        let name = |act: Option<&Act>| act.map_or("(none)".to_owned(), |act| act.act.clone());
+        let mut detail = Vec::new();
+        if a.map(|act| &act.act) != b.map(|act| &act.act) {
+            detail.push(format!("the act was {:?}, now {:?}", name(a), name(b)));
+        }
+        let parts: [(&str, fn(&Act) -> &Vec<String>); 3] = [
+            ("appeared", |act| &act.appeared),
+            ("went", |act| &act.gone),
+            ("files", |act| &act.files),
+        ];
+        for (label, of) in parts {
+            let was: BTreeSet<&String> = a.map(of).into_iter().flatten().collect();
+            let now: BTreeSet<&String> = b.map(of).into_iter().flatten().collect();
+            for word in now.difference(&was) {
+                detail.push(format!("{label} + {word}"));
+            }
+            for word in was.difference(&now) {
+                detail.push(format!("{label} - {word}"));
             }
         }
+        out.push(Difference {
+            screen: format!("act {}", index + 1),
+            view: String::new(),
+            what: "act".to_owned(),
+            change: "changed".to_owned(),
+            name: name(b.or(a)),
+            detail: detail.join(" | "),
+        });
     }
-    for new in views {
-        if !reference.views.iter().any(|old| key(old) == key(new)) {
-            out.push(Difference {
-                screen: new.screen.clone(),
-                view: new.view.clone(),
-                what: "view".into(),
-                change: "new".into(),
-                name: String::new(),
-                detail: "a view the reference does not hold".into(),
-            });
+}
+
+fn differences(
+    reference: &Reference,
+    ev: &Evening,
+    start: &BTreeMap<String, Vec<u8>>,
+    end: &BTreeMap<String, Vec<u8>>,
+) -> Vec<Difference> {
+    let mut out = Vec::new();
+    for old in &reference.views {
+        if let Some(new) = ev
+            .views
+            .iter()
+            .find(|new| new.screen == old.screen && new.view == old.view)
+        {
+            let (screen, view) = (&old.screen, &old.view);
+            compare_items(
+                screen,
+                view,
+                "control",
+                &old.controls,
+                &new.controls,
+                &mut out,
+            );
+            compare_items(screen, view, "text", &old.texts, &new.texts, &mut out);
         }
     }
-    compare_files(&reference.files(), &capture.files(), &mut out);
+    compare_acts(&reference.acts, &ev.acts, &mut out);
+    compare_files(reference, start, end, &mut out);
     out
 }
 
@@ -714,7 +1070,10 @@ fn reference_text(reference: &Reference) -> String {
             "},\n"
         });
     }
-    out.push_str("],\n");
+    out.push_str("],\n\"acts\": [\n");
+    let acts: Vec<String> = reference.acts.iter().map(json).collect();
+    out.push_str(&acts.join(",\n"));
+    out.push_str("\n],\n");
     for (name, files) in [
         ("files_at_start", &reference.files_at_start),
         ("files_at_end", &reference.files_at_end),
@@ -722,10 +1081,7 @@ fn reference_text(reference: &Reference) -> String {
         let _ = writeln!(out, "\"{name}\": {{");
         let entries: Vec<String> = files
             .iter()
-            .map(|(path, lines)| {
-                let lines: Vec<String> = lines.iter().map(json).collect();
-                format!("{}: [\n{}\n]", json(path), lines.join(",\n"))
-            })
+            .map(|(path, digest)| format!("{}: {}", json(path), json(digest)))
             .collect();
         out.push_str(&entries.join(",\n"));
         out.push_str(if name == "files_at_start" {
@@ -750,58 +1106,132 @@ fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> T {
         .unwrap_or_else(|error| panic!("G7: cannot read {}: {error}", path.display()))
 }
 
+/// The views of `views`, in order, against the views G7 needs. No allowed row changes this.
+fn view_faults(what: &str, views: &[View]) -> Vec<String> {
+    let views: Vec<(String, String)> = views
+        .iter()
+        .map(|view| (view.screen.clone(), view.view.clone()))
+        .collect();
+    let required = required_views();
+    let mut faults = Vec::new();
+    for view in &required {
+        if !views.contains(view) {
+            faults.push(format!("{what} lacks the view {} / {}", view.0, view.1));
+        }
+    }
+    for view in &views {
+        if !required.contains(view) {
+            faults.push(format!(
+                "{what} has a view that G7 does not name: {} / {}",
+                view.0, view.1
+            ));
+        }
+    }
+    if faults.is_empty() && views != required {
+        faults.push(format!("{what} holds the views in another order"));
+    }
+    faults
+}
+
+fn write_reference(
+    ev: Evening,
+    start: &BTreeMap<String, Vec<u8>>,
+    end: &BTreeMap<String, Vec<u8>>,
+) {
+    let files = folder().join("files");
+    let _ = fs::remove_dir_all(&files);
+    let mut at_end = BTreeMap::new();
+    for (path, bytes) in end {
+        if start.get(path) == Some(bytes) {
+            at_end.insert(path.clone(), SAME.to_owned());
+        } else {
+            let copy = files.join(path);
+            fs::create_dir_all(copy.parent().expect("a file has a folder"))
+                .expect("create the files folder");
+            fs::write(&copy, bytes).expect("keep the file");
+            at_end.insert(path.clone(), hex(bytes));
+        }
+    }
+    let reference = Reference {
+        about: "G7 reads this. Written by audit-freeze from the plain-evening scenario on main. \
+                A feature pull request never writes it again: it adds rows to allowed.json."
+            .into(),
+        views: ev.views,
+        acts: ev.acts,
+        files_at_start: start
+            .iter()
+            .map(|(path, bytes)| (path.clone(), hex(bytes)))
+            .collect(),
+        files_at_end: at_end,
+    };
+    fs::write(folder().join("reference.json"), reference_text(&reference))
+        .expect("write the reference");
+    let mut titles = String::from(
+        "reader\twindow\ttitle\tentry\tfont size\ttitle width\ttitle left\tart\tEdit\tscroll bar\tinside\troom after\n",
+    );
+    for line in &ev.titles {
+        let _ = writeln!(titles, "{line}");
+    }
+    fs::write(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit/titles.tsv"),
+        titles,
+    )
+    .expect("write titles.tsv");
+}
+
 /// G7. The scenario `plain-evening`.
 pub fn run(d: &mut Driver<'_>) {
-    let (mut capture, titles) = play(d);
-    let files = capture.files();
+    let (ev, start, end) = play(d);
     let allowed: Allowed = read(&folder().join("allowed.json"));
-    assert!(
-        !capture.views.is_empty() && !files.is_empty(),
-        "G7: the evening captured no view or no file, so it can prove nothing"
-    );
+    let mut faults = view_faults("this evening", &ev.views);
+    for view in &ev.views {
+        if view.controls.is_empty() || view.texts.is_empty() {
+            faults.push(format!("{} / {} captured nothing", view.screen, view.view));
+        }
+    }
+    if ev.acts.is_empty() || start.is_empty() || end.is_empty() {
+        faults.push("the evening recorded no act or no file, so it can prove nothing".into());
+    }
     if std::env::var_os(WRITE).is_some() {
+        assert!(
+            faults.is_empty(),
+            "G7: nothing written:\n{}",
+            faults.join("\n")
+        );
         assert!(
             allowed.rows.is_empty(),
             "G7: allowed.json has rows. They describe changes from this reference, so write it only on main with no rows"
         );
-        capture.about = "G7 reads this. Written by audit-freeze from the plain-evening scenario \
-            on main. Change it only by writing it again on main."
-            .into();
-        fs::write(folder().join("reference.json"), reference_text(&capture))
-            .expect("write the reference");
-        let mut table = String::from(
-            "reader\twindow\ttitle\tentry\tfont size\ttitle width\ttitle left\tart\tEdit\tscroll bar\tinside\troom after\n",
-        );
-        for line in &titles {
-            let _ = writeln!(table, "{line}");
-        }
-        fs::write(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit/titles.tsv"),
-            table,
-        )
-        .expect("write titles.tsv");
+        write_reference(ev, &start, &end);
         println!("plain-evening: wrote the reference");
         return;
     }
     let reference: Reference = read(&folder().join("reference.json"));
-    assert!(
-        !reference.views.is_empty()
-            && reference
-                .views
-                .iter()
-                .all(|view| !view.controls.is_empty() && !view.texts.is_empty())
-            && !reference.files_at_start.is_empty()
-            && !reference.files_at_end.is_empty(),
-        "G7: the reference holds an empty view or no files, so it can prove nothing"
-    );
-    let mut found = differences(&reference, &capture);
-    let mut faults = Vec::new();
+    faults.extend(view_faults("the reference", &reference.views));
+    if reference.acts.is_empty()
+        || reference.files_at_start.is_empty()
+        || reference.files_at_end.is_empty()
+        || reference
+            .views
+            .iter()
+            .any(|view| view.controls.is_empty() || view.texts.is_empty())
+    {
+        faults.push("the reference holds an empty view, no act or no files".into());
+    }
+    let mut found = differences(&reference, &ev, &start, &end);
     for row in &allowed.rows {
         if !CONTRACT_ROWS.contains(&row.row) {
             faults.push(format!(
                 "allowed.json names row {}, which section 2.5 does not have: {}",
                 row.row, row.difference
             ));
+        }
+        if !["control", "text", "act", "file"].contains(&row.difference.what.as_str()) {
+            faults.push(format!(
+                "allowed.json row {} names a {:?}: only a control, a text, an act or a file can differ",
+                row.row, row.difference.what
+            ));
+            continue;
         }
         match found
             .iter()
@@ -832,9 +1262,10 @@ pub fn run(d: &mut Driver<'_>) {
         "G7",
         true,
         format!(
-            "{} views and {} files match the reference, with {} allowed rows",
-            capture.views.len(),
-            files.len(),
+            "{} views, {} acts and {} files match the reference, with {} allowed rows",
+            ev.views.len(),
+            ev.acts.len(),
+            end.len(),
             allowed.rows.len()
         ),
     );

@@ -97,7 +97,7 @@ during	Fireball hits three enemies: apply half to one, full to two	Find	add the 
 during	Fireball hits three enemies: apply half to one, full to two	Do	half for Wolf 1	1	Run		false
 during	Fireball hits three enemies: apply half to one, full to two	Do	type the damage	1	Run		false
 during	Fireball hits three enemies: apply half to one, full to two	Do	apply with Enter	1	Run		false
-during	Set-up	Setup	undo the Fireball, so later turns are as frozen	1	Run		false
+during	The table rules that the Fireball missed: undo it	Do	Undo with U	1	Run		false
 during	A wolf frightens Oren: mark the condition	Find	select Oren	1	Run		false
 during	A wolf frightens Oren: mark the condition	Sub	Conditions for this participant	1	Run		false
 during	A wolf frightens Oren: mark the condition	Do	Frightened	1	Run		false
@@ -227,4 +227,8 @@ after	Process the recording and read the summary	Sub	Back to recordings	1	Sessio
 after	Add a suggested event to the timeline	Do	add the marker	1	Session		false
 after	Write the wrap-up in the note	Sub	Plan and notes	1	Session		false
 after	Write the wrap-up in the note	Do	type the wrap-up	3	Session		false
+after	Link the fight in the note	Nav	open the fight on the Timeline	1	Session	Timeline	false
+after	Link the fight in the note	Do	Copy link	1	Timeline		false
+after	Link the fight in the note	Nav	Session	1	Timeline	Session	false
+after	Link the fight in the note	Do	paste the link at the end of the note	3	Session		false
 after	Check the party's HP for next time	Nav	Party	1	Session	Party	false

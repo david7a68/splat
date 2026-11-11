@@ -403,10 +403,9 @@ fn during_the_session(a: &mut Audit<'_, '_>) {
         "one step of undo for all three: {}",
         a.d.has_containing("to 3 participants")
     ));
-    // The frozen evening plays its later turns on the HP from before the Fireball.
-    a.setup("undo the Fireball, so later turns are as frozen", |d| {
-        d.press(Key::U);
-    });
+    // A DM's act, so it is counted. The later turns then play on the HP from before it.
+    a.task("The table rules that the Fireball missed: undo it");
+    a.act(Do, "Undo with U", |d| d.press(Key::U));
 
     a.task("A wolf frightens Oren: mark the condition");
     a.act(Find, "select Oren", |d| d.click_row("Oren Thistlewick"));
@@ -570,6 +569,23 @@ fn after_the_session(a: &mut Audit<'_, '_>) {
     a.act(Do, "type the wrap-up", |d| {
         d.type_into_editor("\nThe party held the ford. Next: the shrine.\n");
     });
+
+    // A played fight has no `Add to notes`. The Timeline's detail of the fight copies its link,
+    // and the DM pastes it in the note.
+    a.task("Link the fight in the note");
+    a.act(Nav, "open the fight on the Timeline", |d| {
+        d.click_link("Timeline");
+    });
+    a.click(Do, "Copy link");
+    a.click(Nav, NAV_SESSIONS);
+    a.act(Do, "paste the link at the end of the note", |d| {
+        d.paste_into_editor()
+    });
+    a.fact(format!(
+        "the note holds the fight's link: {}",
+        a.d.editor_text()
+            .is_some_and(|text| text.contains("[[Timeline#^") && text.contains(TONIGHT))
+    ));
 
     a.task("Check the party's HP for next time");
     a.click(Nav, NAV_PARTY);
