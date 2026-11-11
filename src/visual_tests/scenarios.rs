@@ -1659,8 +1659,10 @@ pub mod campaign_content {
     use super::*;
     const PAGE_TITLE: &str = "entries chosen";
     const MODULE_ROW: &str = "Ashen Marches · ";
-    const PARTIAL: &str = "5 of 6";
-    const CHANGED: &str = "6 of 6";
+    // Round 25 FA2: `chosen` counts the DM's own choices; the entry the other choices need is
+    // counted once, as needed.
+    const PARTIAL: &str = "4 of 6 chosen · 1 needed";
+    const CHANGED: &str = "5 of 6 chosen · 1 needed";
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
@@ -1733,6 +1735,11 @@ pub mod campaign_content {
             );
         }
         d.expect(CHANGED);
+        d.observe(
+            "iter-25-C-FA2",
+            !d.has_containing("6 of 6 chosen"),
+            "A needed entry is not counted as chosen as well",
+        );
         d.expect("Include future additions");
         d.expect("2,070 entries chosen · 1 needed");
         d.observe_both(
@@ -1832,6 +1839,18 @@ pub mod campaign_content {
             d.is_disabled(SAVE_SELECTIONS) && d.visible_text("Fix Notes/Broken.md first."),
             "Save disabled by a repair states its reason",
         );
+        // Round 25 FB6: a package change while a repair blocks Save selections names Discard
+        // only in its switch lock.
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
+        d.expect(CHANGED);
+        d.observe(
+            "iter-25-C-FB6-selections",
+            d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                && !d.visible_text(crate::encounters::draft_switch_reason())
+                && d.is_disabled(SAVE_SELECTIONS),
+            "A package draft that a repair blocks states the switch lock without Save",
+        );
+        d.click(DISCARD_SELECTION);
         // The repair opens here, with the note's text in it.
         d.click(REPAIR);
         d.expect("Note text");
@@ -1847,26 +1866,29 @@ pub mod campaign_content {
                     })
             },
         );
-        // FD2: one rule separates the open repair from the package list, an `L` gap below Save
-        // repaired note. The rule must sit above the first thing drawn after the repair.
+        // FD2: one rule separates the open repair from the package list, an `L` gap below the
+        // repair. Round 25 FD1: the repair ends with its message space below Save repaired note,
+        // so the gap is below that space. The rule must sit above the first thing drawn after
+        // the repair.
         d.observe_both(
             "iter-14-E-FD2",
-            "One rule, an L gap below Save repaired note, separates the repair from the list",
+            "One rule, an L gap below the repair's message space, separates the repair from the list",
             |d| {
                 let Some(save) = d.place_of("Save repaired note") else {
                     return false;
                 };
+                let end = save.bottom() + crate::design::message_space_height();
                 let Some(next) = d
                     .nodes()
                     .into_iter()
-                    .filter(|node| node.in_view() && node.rect.top() > save.bottom() + 1.0)
+                    .filter(|node| node.in_view() && node.rect.top() > end + 1.0)
                     .map(|node| node.rect.top())
                     .min_by(f32::total_cmp)
                 else {
                     return false;
                 };
-                let rules = d.horizontal_rules(save.left(), save.bottom(), next);
-                rules.len() == 1 && rules[0] - save.bottom() >= crate::design::L
+                let rules = d.horizontal_rules(save.left(), end, next);
+                rules.len() == 1 && rules[0] - end >= crate::design::L
             },
         );
         // Round 22 FD3: an unchanged repair has no primary action on the whole screen.
@@ -1927,19 +1949,24 @@ pub mod campaign_content {
             d.nodes()
                 .into_iter()
                 .find(|node| node.name == crate::world::repair::editor_name("Notes/Broken.md"))
-                .map(|node| node.rect.top())
+                // A long draft scrolls inside the editor; its visible viewport must stay put.
+                .map(|node| node.shown.top())
         };
-        let before = [(960.0, 640.0), (1200.0, 800.0)].map(|size| {
+        const REPAIR_SIZES: [(f32, f32); 3] = [SMALL, DEFAULT, LARGE];
+        let before = REPAIR_SIZES.map(|size| {
             d.at_size(size, |d| {
                 (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
             })
         });
+        // Round 25 FD1: the editor's top at each size, in every later state of this repair.
+        let editor_tops = |d: &mut Driver<'_>| REPAIR_SIZES.map(|size| d.at_size(size, editor_top));
+        let clean_tops = before.map(|(_, editor)| editor);
         let draft = d
             .editor_text()
             .unwrap()
             .replacen("splat_id: [", "splat_id: [ ", 1);
         d.replace_text_in("Note text", &draft);
-        for (size, (y, editor)) in [(960.0, 640.0), (1200.0, 800.0)].into_iter().zip(before) {
+        for (size, (y, editor)) in REPAIR_SIZES.into_iter().zip(before) {
             let (after, editor_after) = d.at_size(size, |d| {
                 (d.place_of(SAVE_SELECTIONS).unwrap().top(), editor_top(d))
             });
@@ -1956,10 +1983,14 @@ pub mod campaign_content {
                 format!("At {size:?}, the repair editor top {editor:?} → {editor_after:?}"),
             );
         }
+        // Round 25 FB6: Save refuses this draft, so the lock names Discard only.
         d.observe_both(
             "iter-18-A-repair-lock",
-            "A repair draft states the campaign switch lock",
-            |d| d.visible_text(crate::encounters::draft_switch_reason()),
+            "A repair draft that Save refuses states the campaign switch lock without Save",
+            |d| {
+                d.visible_text(crate::encounters::blocked_draft_switch_reason())
+                    && !d.visible_text(crate::encounters::draft_switch_reason())
+            },
         );
         // Round 23 FA3: the changed draft still fails as Save would fail it. It says Invalid with
         // its cause, Save is blocked, and nothing on the screen is primary.
@@ -2010,6 +2041,13 @@ pub mod campaign_content {
                 && !d.visible_text("Invalid")
                 && !d.is_disabled("Save repaired note"),
             "A draft that Save would write says Unsaved, and Save is open",
+        );
+        // Round 25 FB6: with Save open, the lock names Save again.
+        d.observe(
+            "iter-25-C-FB6-valid",
+            d.visible_text(crate::encounters::draft_switch_reason())
+                && !d.visible_text(crate::encounters::blocked_draft_switch_reason()),
+            "A draft that Save would write states the lock with Save",
         );
         // Round 22 FD3: a changed repair's save is the one primary action, as `Save changes` is.
         d.observe_both(
@@ -2073,6 +2111,75 @@ pub mod campaign_content {
             ),
         );
         set_read_only(false);
+        d.click("Discard");
+        // Round 25 FD1: the discard result sits in the message space below the save row. Its
+        // Undo is live, so it comes first, on the space's first line, and the invalid file's
+        // reason follows it in the same part. The editor keeps its top through the result, Undo
+        // discard, an invalid draft and a valid one, at every size.
+        const DISCARDED: &str = "Broken.md draft discarded.";
+        const UNDO_DISCARD: &str = "Undo discard of Broken.md";
+        let discarded_tops = editor_tops(d);
+        let first_line = REPAIR_SIZES.map(|size| {
+            d.at_size(size, |d| {
+                let save = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.name == "Save repaired note")
+                    .map(|node| node.rect)
+                    .next();
+                let undo = d.place_of(UNDO_DISCARD);
+                let reason = d.painted_rect_in("Line 3 opens a list", egui::Rect::EVERYTHING);
+                // The space starts below the save row; its first line is one Body line deep.
+                save.zip(undo).zip(reason).is_some_and(|((save, undo), reason)| {
+                    undo.top() >= save.bottom()
+                        && undo.center().y
+                            < save.bottom() + crate::design::Type::Body.line() + crate::design::S
+                        && reason.top() > undo.center().y
+                })
+            })
+        });
+        d.observe(
+            "iter-25-C-FD1-discard",
+            clean_tops.iter().all(Option::is_some)
+                && discarded_tops == clean_tops
+                && first_line.iter().all(|ok| *ok)
+                && d.visible_text(DISCARDED)
+                && d.visible_text("Invalid"),
+            format!(
+                "Editor tops: clean {clean_tops:?}, after Discard {discarded_tops:?}; Undo on the first line, reason after it, at 960/1200/1920: {first_line:?}"
+            ),
+        );
+        d.click(UNDO_DISCARD);
+        let undone_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-undo",
+            undone_tops == clean_tops
+                && d.editor_text().is_some_and(|text| text.contains("One more line."))
+                && d.visible_text("Unsaved")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops after Undo discard {undone_tops:?}"),
+        );
+        // An edit ends the result's owner; Save's reason takes the space, and no edit moves the
+        // editor.
+        d.replace_text_in("Note text", &draft);
+        let invalid_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-invalid",
+            invalid_tops == clean_tops
+                && d.visible_text("Line 3 opens a list")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops with an invalid draft {invalid_tops:?}"),
+        );
+        d.replace_text_in("Note text", &valid);
+        let valid_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-valid",
+            valid_tops == clean_tops
+                && d.visible_text("Unsaved")
+                && !d.visible_text("Line 3 opens a list")
+                && !d.visible_text(DISCARDED),
+            format!("Editor tops with a valid draft {valid_tops:?}"),
+        );
         d.click("Discard");
         two_changed_repairs_have_one_primary(d);
         std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
@@ -2264,6 +2371,11 @@ pub mod campaign_content {
             permissions.set_readonly(read_only);
             std::fs::set_permissions(file, permissions).unwrap();
         };
+        // Two open repairs, each with its reserved message space, are taller than a 960x640
+        // window, and the page does not scroll above the package list. B's steps run where both
+        // fit (a known limit, named in round 25's PR).
+        let base = d.window_size();
+        d.set_base(DEFAULT);
         set_read_only(&a_file, true);
         d.click_first("Save repaired note");
         d.settle();
@@ -2325,6 +2437,7 @@ pub mod campaign_content {
         d.click(RELOAD);
         d.settle();
         assert!(!d.visible_text("Notes/Cracked.md"));
+        d.set_base(base);
     }
 }
 
@@ -2524,6 +2637,75 @@ pub mod party {
                     && d.visible_text("Not connected · Fetched")
             },
         );
+        // Round 25 FG7: an `L` gap ends the notice; the list and the sheet start below it.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (gap, detail) = d.at_size(size, |d| {
+                let words = d.painted_rect_in("so Splat stopped updating it.", egui::Rect::EVERYTHING);
+                let actions = [CONNECT, "Show file"].map(|name| d.place_of(name));
+                let Some(bottom) = words
+                    .into_iter()
+                    .chain(actions.into_iter().flatten())
+                    .map(|rect| rect.bottom())
+                    .reduce(f32::max)
+                else {
+                    return (None, "no notice".to_owned());
+                };
+                let next = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| node.in_view() && node.rect.top() > bottom)
+                    .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()));
+                let heading = d
+                    .painted_rect_in("NAME", egui::Rect::EVERYTHING)
+                    .map(|rect| rect.top());
+                let gap = next
+                    .as_ref()
+                    .map(|node| node.rect.top())
+                    .into_iter()
+                    .chain(heading)
+                    .map(|top| top - bottom)
+                    .reduce(f32::min);
+                (
+                    gap.filter(|_| words.is_some() && actions.iter().all(Option::is_some)),
+                    format!(
+                        "notice bottom {bottom}, next {:?}, NAME {heading:?}",
+                        next.map(|node| (node.name, node.rect.top()))
+                    ),
+                )
+            });
+            d.observe(
+                "iter-25-C-FG7",
+                gap.is_some_and(|gap| gap >= crate::design::L - 0.5),
+                format!("At {size:?}, the gap below the local-edit notice is {gap:?}: {detail}"),
+            );
+        }
+        // Round 25 family: the member list keeps the scroll bar's lane with no bar, so its rows
+        // and header columns do not move when the list starts to scroll.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (kept, detail) = d.at_size(size, |d| {
+                let lane = d.app_style().spacing.scroll.allocated_width();
+                let edge = d.column_edge("party_members");
+                // The member's row in the list: its name holds AC and HP, left of the splitter.
+                let row = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name.starts_with(FIRST_MEMBER)
+                            && COMPARE.iter().all(|word| node.name.contains(word))
+                            && node.rect.right() < edge
+                    })
+                    .map(|node| node.rect);
+                (
+                    row.is_some_and(|row| row.right() <= edge - crate::design::M - lane + 1.0),
+                    format!("row {row:?}, column edge {edge}, lane {lane}"),
+                )
+            });
+            d.observe(
+                "iter-25-C-party-lane",
+                kept,
+                format!("At {size:?}, the member rows keep the scroll bar lane: {detail}"),
+            );
+        }
         d.state("copy-has-local-edits-signed-out", Sizes::All);
         d.click(CONNECT);
         d.observe(
@@ -2556,6 +2738,27 @@ pub mod party {
         d.click(FORCE_READ);
         d.settle();
         d.expect(REPLACED);
+        // Round 25 FD3: one dismiss form on the page. The replaced-sheet notice ends its first
+        // line with the close icon, as the stopped-sync notice does; no word `Dismiss` is left.
+        d.observe_both(
+            "iter-25-C-FD3",
+            "The replaced-sheet notice has the close icon at the end of its first line",
+            |d| {
+                let words = d.painted_rect_in(REPLACED, egui::Rect::EVERYTHING);
+                let file = d.place_of("Show file");
+                let close = d.place_of(DISMISS);
+                let word = d.nodes().iter().any(|node| node.name == "Dismiss");
+                match (words, file, close) {
+                    (Some(words), Some(file), Some(close)) => {
+                        !word
+                            && close.left() > file.right()
+                            && close.left() > words.right()
+                            && close.top() < words.top() + crate::design::L
+                    }
+                    _ => false,
+                }
+            },
+        );
         d.state("force-read-replaced", Sizes::Default);
         let archive = note.with_extension("md.splat-archive");
         d.observe(
@@ -2604,7 +2807,7 @@ pub mod party {
     const CONNECT_FIRST: &str = "Connect to refresh";
     const CONNECT: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
-    const DISMISS: &str = "Dismiss";
+    const DISMISS: &str = "Dismiss this message";
     const EDITED_NOTE: &str = "My own words";
 }
 
@@ -3600,16 +3803,44 @@ pub mod settings {
         d.click(EDIT_DETAILS);
         let saved_name = d.field_text(EDIT_FORM).unwrap();
         d.replace_text_in(EDIT_FORM, "Quiet Harbor revised");
+        // Round 25 FG5: the discard result sits in the message space below the save row, so the
+        // campaign rows below the form keep their y through Discard and Undo discard.
+        let rows = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT].map(|size| {
+                d.at_size(size, |d| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| node.name.contains(UNLINKED_CAMPAIGN) && node.in_view())
+                        .map(|node| node.rect.top())
+                        .reduce(f32::min)
+                })
+            })
+        };
+        let changed = rows(d);
         d.click("Discard");
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some(saved_name.as_str())
+        );
+        let discarded = rows(d);
+        d.observe(
+            "iter-25-C-FG5",
+            changed.iter().all(Option::is_some)
+                && changed == discarded
+                && d.visible_text("Campaign details draft discarded."),
+            format!("{UNLINKED_CAMPAIGN} row y: changed {changed:?}, discarded {discarded:?}"),
         );
         d.state("campaign-details-discarded", Sizes::Default);
         d.click("Undo discard of Campaign details");
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
             Some("Quiet Harbor revised")
+        );
+        let undone = rows(d);
+        d.observe(
+            "iter-25-C-FG5-undo",
+            undone == changed && !d.visible_text("Campaign details draft discarded."),
+            format!("{UNLINKED_CAMPAIGN} row y after Undo discard: {undone:?}"),
         );
         d.click("Discard");
         d.click(CANCEL);
@@ -3856,6 +4087,23 @@ pub mod empty {
         d.check_state("first-launch", Sizes::Default);
         d.click("Active campaign: No campaign");
         d.expect("Add campaign…");
+        // Round 25 FE4: the popup's one command is one line, inside the popup.
+        d.observe_both(
+            "iter-25-C-FE4",
+            "The switcher's Add campaign… is one line, with S on each side, inside the column",
+            |d| {
+                d.painted_rect_in("Add campaign…", egui::Rect::EVERYTHING)
+                    .zip(d.place_of("Add campaign…"))
+                    .is_some_and(|(words, row)| {
+                        words.height() < 1.5 * crate::design::Type::Body.line()
+                            && words.right() <= row.right() - crate::design::S + 0.5
+                            && words.left() >= row.left() + crate::design::S - 0.5
+                            && d
+                                .place_of("Active campaign: No campaign")
+                                .is_some_and(|control| row.right() <= control.right() + 0.5)
+                    })
+            },
+        );
         d.state("empty-campaign-switcher", Sizes::Default);
         d.click("Add campaign…");
         assert_eq!(d.current_page(), "Settings");
@@ -5499,6 +5747,17 @@ pub mod party_from_run {
         d.click_row(CASTER);
         d.click(SHEET_SUBPAGE);
         d.expect("Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.");
+        // Round 25 AI2: the spell help keeps the reader measure at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let help = d.at_size(size, |d| {
+                d.painted_rect_in("Spell text shows the printed numbers.", egui::Rect::EVERYTHING)
+            });
+            d.observe(
+                "iter-25-C-AI2",
+                help.is_some_and(|help| help.width() <= crate::design::READER_MEASURE + 0.5),
+                format!("At {size:?}, the spell help is {help:?}"),
+            );
+        }
         d.state("sheet-spells-beside-run", Sizes::All);
         d.observe(
             "Spells beside run",

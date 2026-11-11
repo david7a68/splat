@@ -5323,6 +5323,12 @@ pub(crate) fn draft_switch_reason() -> &'static str {
     "Save or discard to switch campaign."
 }
 
+/// The campaign switch lock of a draft whose Save is blocked: Discard is the one way out, so
+/// the reason does not name Save (round 25 FB6).
+pub(crate) fn blocked_draft_switch_reason() -> &'static str {
+    "Discard to switch campaign."
+}
+
 fn roster_detail(detail: &str) -> String {
     let parts: Vec<_> = detail.split(" · ").collect();
     let mut result = Vec::new();

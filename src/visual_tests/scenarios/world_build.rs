@@ -4078,6 +4078,14 @@ pub fn package_rename(d: &mut Driver<'_>) {
         });
         d.observe("iter-4-C-FD1-FD14", aligned && spaced,
             "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
+        // Round 25 family: every action on the message has the secondary border.
+        let borders = ["Use this folder", "Find the folder…", "Remove from this campaign"]
+            .map(|name| d.control_frame(name).map(|frame| frame.stroke.width > 0.0));
+        d.observe(
+            "iter-25-C-message-actions",
+            borders.iter().all(|border| *border == Some(true)),
+            format!("Moved-folder actions bordered: {borders:?}"),
+        );
     });
     let wrong = d.root.join("modules/wrong-package");
     fs::create_dir(&wrong).unwrap();

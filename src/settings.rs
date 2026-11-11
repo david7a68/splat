@@ -378,7 +378,6 @@ impl Settings {
     }
 
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
-        let c = colors();
         if heading {
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width(), Density::Read.control()),
@@ -389,11 +388,7 @@ impl Settings {
             );
         }
         let small = |ui: &mut egui::Ui, text: &str| {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
-            })
-            .response
+            design::help(ui, text)
         };
         self.sign_in_again |= ui.ctx().data(|data| {
             data.get_temp::<bool>(egui::Id::new("focus_cookie"))

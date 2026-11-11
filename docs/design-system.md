@@ -684,7 +684,8 @@ words are those links. Unregister keeps the last folder in Settings. Library
 offers Undo unregister; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
-this folder; Find the folder… is then quiet. Show one warning naming the old and new folders, followed by
+this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
+secondary. Show one warning naming the old and new folders, followed by
 the affected encounter links with word spaces. Align Use this folder, Find the folder… and Remove from this
 campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker

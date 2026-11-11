@@ -1516,13 +1516,9 @@ impl CombatSync {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
         ui.checkbox(&mut self.enabled, "Sync this sheet with D&D Beyond");
-        ui.label(
-            crate::design::Type::Small
-                .rich(
-                    ui,
-                    "During a fight, Sync party in the run turns sync on for the whole party.",
-                )
-                .color(crate::design::colors().muted),
+        crate::design::help(
+            ui,
+            "During a fight, Sync party in the run turns sync on for the whole party.",
         );
         if was && !self.enabled {
             self.stop();
@@ -1534,14 +1530,10 @@ impl CombatSync {
             if let Some(error) = &self.error {
                 ui.colored_label(crate::design::colors().result.error, error);
             }
-            ui.label(crate::design::Type::Small.rich(ui, "Enable to read the live sheet. Edits made here will then update D&D Beyond.").color(crate::design::colors().muted));
+            crate::design::help(ui, "Enable to read the live sheet. Edits made here will then update D&D Beyond.");
             return;
         }
-        ui.label(
-            crate::design::Type::Small
-                .rich(ui, "Splat checks the sheet every 15 seconds.")
-                .color(crate::design::colors().muted),
-        );
+        crate::design::help(ui, "Splat checks the sheet every 15 seconds.");
         if self.busy() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -1569,6 +1561,8 @@ impl CombatSync {
         });
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
+            // Help with a link in it: the reader measure, as `design::help` keeps.
+            ui.set_max_width(ui.available_width().min(crate::design::READER_MEASURE));
             ui.horizontal_wrapped(|ui| {
                 use crate::design::{self, Type};
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -1614,12 +1608,10 @@ impl CombatSync {
                 ActionNotice::Taken(words) => (Tone::Success, words),
                 ActionNotice::Failed(words) => (Tone::Error, words),
             };
-            let mut close = false;
-            ui.horizontal(|ui| {
-                close = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+            // Round 25 FD3: a dismiss is the close icon at the message end, in the one Party form.
+            if crate::party::dismissable(ui, |ui| {
                 design::message(ui, tone, words);
-            });
-            if close {
+            }) {
                 self.action_notice = None;
             }
         }
@@ -1910,7 +1902,7 @@ impl CombatSync {
                 {
                     ui.checkbox(reduce_exhaustion, "Reduce Exhaustion by one level");
                 }
-                ui.label(Type::Small.rich(ui, note).color(colors().muted));
+                design::help(ui, note);
                 let (mut take, mut cancel) = (false, false);
                 ui.horizontal(|ui| {
                     take = Action::primary(take_label)
@@ -2237,10 +2229,10 @@ fn stepper_and_note(
     range: std::ops::RangeInclusive<i64>,
     note: Option<String>,
 ) -> bool {
-    use crate::design::{self, Type, colors};
+    use crate::design;
     let changed = design::stepper(ui, name, value, range);
     if let Some(note) = note {
-        ui.label(Type::Small.rich(ui, note).color(colors().muted));
+        design::help(ui, &note);
     }
     changed
 }
@@ -3079,6 +3071,10 @@ mod tests {
         *sync.desired.write() = remote.groups.clone();
         sync.remote = Some(remote);
         let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        // Round 25 FD3: the action notice ends with its close icon, after its words.
+        const TAKEN: &str = "D&D Beyond took the long rest.";
+        sync.action_notice = Some(ActionNotice::Taken(TAKEN.into()));
         let before = sync.desired.clone();
         for form in [
             None,
@@ -3105,6 +3101,29 @@ mod tests {
                 },
             );
             assert!(!out.shapes.is_empty());
+            let words = out.shapes.iter().find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.job.text == TAKEN => {
+                    Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
+                }
+                _ => None,
+            });
+            let close = out
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .and_then(|update| {
+                    update.nodes.iter().find_map(|(_, node)| {
+                        (node.label() == Some("Dismiss this message")).then(|| node.bounds())
+                    })
+                })
+                .flatten();
+            assert!(
+                words
+                    .zip(close)
+                    .is_some_and(|(words, close)| close.x0 as f32 > words.right()
+                        && (close.y0 as f32) < words.top() + crate::design::L),
+                "words {words:?}, close {close:?}"
+            );
         }
         assert_eq!(*sync.desired, before);
     }

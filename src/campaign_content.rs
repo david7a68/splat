@@ -282,7 +282,9 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
 }
 
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
-/// `3 of 6 chosen`, `5 of 6 chosen · 1 needed`, `None chosen · 3 needed`.
+/// `3 of 6 chosen`, `5 of 6 chosen · 1 needed`, `None chosen · 3 needed`. `chosen` counts only
+/// the DM's own choices, as the page header does; `needed` counts the entries that other choices
+/// need and the DM did not choose, and is left out when it is 0 (round 25 FA2).
 fn package_count(
     count: usize,
     required: usize,
@@ -303,7 +305,7 @@ fn package_count(
     } else if required > 0 {
         format!(
             "{} of {} chosen · {} needed",
-            number(count + required),
+            number(count),
             number(total),
             number(required)
         )
@@ -880,13 +882,16 @@ impl CampaignContent {
             let path = &path;
             // A failed Save shows once, in the save row's state slot, so the message stops at
             // the way to fix the file.
+            let id = egui::Id::new(("repair_open", path.as_str()));
+            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
+            // Round 25 FD1: while the repair is open, its message keeps the same words, and the
+            // cause moves to the message space below the save row. So no edit moves the editor.
             let problem = match (&repair.refusal, &repair.failure) {
+                _ if open => None,
                 (Some(refusal), _) => Some(refusal.clone()),
                 (None, Some(_)) => None,
                 (None, None) => Some("The repair has not been saved".into()),
             };
-            let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
             if design::message_with_action(
                 ui,
                 Tone::Error,
@@ -911,12 +916,26 @@ impl CampaignContent {
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
-                    let (edited, focused) = crate::world::repair::editor_events(
-                        ui,
-                        path,
-                        &mut repair.draft,
-                        repair.error_line,
-                    );
+                    // Round 25: in a short window the editor gives way. Below it, the save row,
+                    // the reserved message space, the gap and a few package rows keep their
+                    // size, so the package list stays in view. Only the window size changes this
+                    // height, never the draft's state, and the editor's top never moves.
+                    let below = Density::Read.control()
+                        + design::message_space_height()
+                        + design::L
+                        + 3.0 * (Density::Glance.row() + design::XS)
+                        + design::XXL;
+                    let room = (ui.available_height() - below).max(design::XXL * 3.0);
+                    let (edited, focused) = ui
+                        .allocate_ui(egui::vec2(ui.available_width(), room), |ui| {
+                            crate::world::repair::editor_events(
+                                ui,
+                                path,
+                                &mut repair.draft,
+                                repair.error_line,
+                            )
+                        })
+                        .inner;
                     if edited || focused {
                         self.active_repair = Some(path.clone());
                     }
@@ -983,18 +1002,15 @@ impl CampaignContent {
                         {
                             self.discarded_repair = None;
                         }
-                        if let Some((_, text)) =
-                            self.discarded_repair.as_ref().filter(|(p, _)| p == path)
-                            && design::draft_discarded(ui, path.rsplit('/').next().unwrap_or(path))
-                        {
-                            repair.draft = text.clone();
-                            self.discarded_repair = None;
-                            repair.draft_changed(active, checks);
-                        }
                         if repair.dirty() {
+                            // Save refuses the draft: Discard is the one way to switch.
                             design::blocked_reason(
                                 ui,
-                                Some(crate::encounters::draft_switch_reason()),
+                                Some(if repair.refusal.is_some() {
+                                    crate::encounters::blocked_draft_switch_reason()
+                                } else {
+                                    crate::encounters::draft_switch_reason()
+                                }),
                             );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1028,6 +1044,46 @@ impl CampaignContent {
                             }
                         });
                     });
+                    // Round 25 FD1: one message space below the save row, two lines high
+                    // whatever it holds, as Library and World have. A result with a live Undo
+                    // comes first and Save's reason follows it in the same part (lead ruling).
+                    // Discard returns to the unreadable file, so its reason follows the discard
+                    // result. The result lives from Discard to this draft's next edit, its Undo,
+                    // a Save, a reload or another campaign; then the reason leads.
+                    let name = path.rsplit('/').next().unwrap_or(path);
+                    let discarded = self
+                        .discarded_repair
+                        .as_ref()
+                        .filter(|(p, _)| p == path)
+                        .map(|(_, text)| text.clone());
+                    let result = discarded.as_ref().map(|_| format!("{name} draft discarded."));
+                    let words = [result.as_deref(), repair.refusal.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let words = (!words.is_empty()).then_some(words);
+                    let width = ui.available_width();
+                    let undo = design::message_space(
+                        ui,
+                        &format!("campaign_repair_message {path}"),
+                        width,
+                        words.as_deref(),
+                        |ui| {
+                            let undo = discarded.is_some() && design::draft_discarded(ui, name);
+                            if let Some(refusal) = &repair.refusal {
+                                design::message(ui, Tone::Error, refusal);
+                            }
+                            undo
+                        },
+                    );
+                    if undo == Some(true)
+                        && let Some(text) = discarded
+                    {
+                        repair.draft = text;
+                        self.discarded_repair = None;
+                        repair.draft_changed(active, checks);
+                    }
                 });
             }
         }
@@ -1128,7 +1184,15 @@ impl CampaignContent {
                     .clicked();
             }
             if document.selections != self.saved_selections {
-                design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+                // A repair blocks Save selections: Discard is the one way to switch.
+                design::blocked_reason(
+                    ui,
+                    Some(if repair.is_some() {
+                        crate::encounters::blocked_draft_switch_reason()
+                    } else {
+                        crate::encounters::draft_switch_reason()
+                    }),
+                );
             }
             let pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1229,13 +1293,9 @@ impl CampaignContent {
                                 Action::secondary(&label).show(ui).clicked()
                             });
                         });
-                        ui.label(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    crate::content_workspace::manifest_replace_consequence(path),
-                                )
-                                .color(colors().muted),
+                        design::help(
+                            ui,
+                            &crate::content_workspace::manifest_replace_consequence(path),
                         );
                         pressed
                     })
@@ -1610,11 +1670,7 @@ impl CampaignContent {
                     if relocated.is_none()
                         && let Some(known) = &known
                     {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, format!("It was in {}/.", folder_words(&known.path)))
-                                .color(c.muted),
-                        );
+                        design::help(ui, &format!("It was in {}/.", folder_words(&known.path)));
                     }
                     ui.horizontal_wrapped(|ui| {
                         if let Some(module) = &relocated
@@ -1648,11 +1704,9 @@ impl CampaignContent {
                                 Err(error) => self.error = Some(error),
                             }
                         }
-                        if (if relocated.is_some() {
-                            Action::quiet("Find the folder…")
-                        } else {
-                            Action::secondary("Find the folder…")
-                        })
+                        // Round 25 family: a message action without an icon has the
+                        // secondary border, beside `Use this folder` too.
+                        if Action::secondary("Find the folder…")
                         .blocked_if(
                             document.selections != self.saved_selections
                                 || self.repairs.iter().any(Repair::dirty),
@@ -1677,7 +1731,7 @@ impl CampaignContent {
                                 Err(error) => self.error = Some(error),
                             }
                         }
-                        if Action::quiet("Remove from this campaign")
+                        if Action::secondary("Remove from this campaign")
                             .density(Density::Read)
                             .show(ui)
                             .clicked()
@@ -2334,6 +2388,12 @@ mod tests {
         );
         assert_eq!(
             package_count(4, 1, 6, true, true),
+            "4 of 6 chosen · 1 needed"
+        );
+        // Round 25 FA2: a needed entry is never also counted as chosen, so a package whose
+        // other five entries are chosen does not read as `6 of 6 chosen`.
+        assert_eq!(
+            package_count(5, 1, 6, false, true),
             "5 of 6 chosen · 1 needed"
         );
         assert_eq!(
