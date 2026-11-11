@@ -1566,11 +1566,29 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
     ui.add_space(design::S);
 }
 
-/// The totals of an outcome in Strong, with their dice in hover.
+/// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
+/// the parts, as in a run's `11 vs AC 13 · 10 damage`; it never ends a line, so it wraps with
+/// the part after it.
 pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     let c = colors();
+    let mut first = true;
+    let mut part = |ui: &mut egui::Ui, words: &str, kind: Type| {
+        if !std::mem::take(&mut first) {
+            let gap = ui.spacing().item_spacing.x;
+            let width = design::number_width(ui, "·", &Type::Body.font(ui))
+                + gap
+                + design::number_width(ui, words, &kind.font(ui));
+            // A wrapping line's available width is the whole line, so measure from the cursor.
+            let (cursor, line) = (ui.cursor().left(), ui.max_rect());
+            if cursor > line.left() && line.right() - cursor < width {
+                ui.end_row();
+            }
+            ui.label(Type::Body.rich(ui, "·").color(c.muted));
+        }
+        ui.label(kind.rich(ui, words).color(c.text))
+    };
     for rolled in [&outcome.first, &outcome.damage].into_iter().flatten() {
-        let response = ui.label(Type::Strong.rich(ui, rolled.headline()).color(c.text));
+        let response = part(ui, &rolled.headline(), Type::Strong);
         design::named(ui, &response, &rolled.line());
         response.on_hover_ui(|ui| {
             ui.add(egui::Label::new(rolled.parts_job(ui, c.muted)));
@@ -1579,7 +1597,7 @@ pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
             }
         });
         if let Some(words) = rolled.natural_words() {
-            ui.label(Type::Body.rich(ui, words).color(c.text));
+            part(ui, words, Type::Body);
         }
     }
 }
@@ -1776,6 +1794,88 @@ mod tests {
             1 + 2 + 3 + 4 + 2 + 1
         );
         assert_eq!(outcome.lines().len(), 2);
+    }
+
+    #[test]
+    fn a_preview_has_one_muted_separator_between_parts_and_never_ends_a_line_with_it() {
+        // iter-21-T-FT3: `24 to hit · Natural 20 · 12 damage`, and a narrow line moves each
+        // `·` to the next line with the part after it.
+        let outcome = make(
+            "Wolf",
+            &attack(),
+            Mode::Normal,
+            (0, 0),
+            None,
+            &mut Random::controlled([20, 1, 2, 3, 4]),
+        )
+        .unwrap();
+        let (first, damage) = (outcome.first.as_ref(), outcome.damage.as_ref());
+        let expected = [
+            first.unwrap().headline(),
+            "·".into(),
+            "Natural 20".into(),
+            "·".into(),
+            damage.unwrap().headline(),
+        ];
+        let mut wrapped = false;
+        // From the narrowest line that holds the damage words whole.
+        for width in [180.0, 220.0, 260.0, 320.0, 600.0] {
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            // The second frame, once egui knows its sizes.
+            let mut output = None;
+            for _ in 0..2 {
+                let input = egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 400.0),
+                    )),
+                    ..Default::default()
+                };
+                output = Some(ctx.run(input, |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = design::S;
+                            outcome_line(ui, &outcome);
+                        });
+                    });
+                }));
+            }
+            let output = output.unwrap();
+            let texts: Vec<(String, egui::Rect, egui::Color32)> = output
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) => Some((
+                        text.galley.job.text.clone(),
+                        // The first row: a long part may wrap inside its own label.
+                        text.galley.rows[0]
+                            .rect_without_leading_space()
+                            .translate(text.pos.to_vec2()),
+                        text.galley.job.sections[0].format.color,
+                    )),
+                    _ => None,
+                })
+                .collect();
+            let words: Vec<&str> = texts.iter().map(|(words, ..)| words.as_str()).collect();
+            assert_eq!(words, expected, "at {width}");
+            for pair in texts.windows(2).filter(|pair| pair[0].0 == "·") {
+                let (dot, next) = (&pair[0], &pair[1]);
+                assert_eq!(dot.2, colors().muted, "at {width}");
+                assert!(
+                    (next.1.top()..next.1.bottom()).contains(&dot.1.center().y)
+                        && dot.1.right() < next.1.left(),
+                    "at {width}, `·` {:?} sits on the line of {:?} {:?}",
+                    dot.1,
+                    next.0,
+                    next.1
+                );
+            }
+            wrapped |= texts
+                .iter()
+                .any(|(words, rect, _)| words == "·" && rect.top() > texts[0].1.bottom());
+        }
+        assert!(wrapped, "a narrow line moves a `·` to the next line");
     }
 
     #[test]

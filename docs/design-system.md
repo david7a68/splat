@@ -1029,7 +1029,8 @@ cell. After `Roll damage`, each target says its own result, from the amount Ente
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
 damage` go, the rows show their AC again, and the panel and the dock go back to the caster. Undo of that step arms the
 save again as it stood, with its saves, its damage in Amount and its results. Outside a run a tile previews, and its
-totals show in Strong under the tiles.
+totals show in Strong under the tiles, with a muted `·` between parts (`11 to hit · 5 damage: 4 piercing, 1 fire`), as
+in a run. A narrow line moves the `·` to the next line with the part after it.
 
 While Lookup or Notes hide the panel, its tiles are one line of secondary Read buttons above the dock, with the run's
 changes in their numbers (`Dagger +6`, `Fire Bolt +7`). The line keeps an `XS` gap above the dock, and its first button
