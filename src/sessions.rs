@@ -1466,6 +1466,174 @@ impl Draft {
             }
         }
     }
+
+    /// The one way an act changes this note's words (section 4.1 of the session-cycle design).
+    /// `note` is the session the act is for, which its place knows; the file is checked against
+    /// it, never against what a reload last read. `patch` gets the words and returns them with
+    /// one fragment changed, or `None` when the fragment's place is gone. The Undo that comes
+    /// back is the act's, and the act's place keeps it. `Apply` says how the act meets the DM's
+    /// typing; see each of its values.
+    pub fn apply(
+        &mut self,
+        note: Uuid,
+        write: Apply,
+        patch: impl FnOnce(&str) -> Option<String>,
+    ) -> Result<NoteUndo, ActFault> {
+        if write == Apply::Now {
+            // An edit made elsewhere a moment ago is in the words that the act changes.
+            self.follow_disk();
+            match fs::read_to_string(&self.path) {
+                Err(_) => return Err(ActFault::Missing),
+                // Unsaved words and a changed file: the conflict view decides first.
+                Ok(current)
+                    if Some(&current) != self.baseline.as_ref()
+                        || self.state == DraftState::Conflict =>
+                {
+                    return Err(ActFault::Changed);
+                }
+                Ok(_) if self.state == DraftState::Missing => return Err(ActFault::Missing),
+                // Also on a retry: the file holds another note for as long as it does.
+                Ok(_) if self.note_id() != Some(note) => return Err(ActFault::OtherNote),
+                Ok(_) => {}
+            }
+        }
+        let before = self.body.clone();
+        let after = patch(&before).ok_or(ActFault::LineChanged)?;
+        self.body.clone_from(&after);
+        self.edited();
+        let mut undo = NoteUndo {
+            path: self.path.clone(),
+            note,
+            before,
+            after,
+            written: false,
+        };
+        if write == Apply::WithTyping {
+            return Ok(undo);
+        }
+        self.save();
+        // Otherwise the fragment waits in the draft, and the note's own state says why: a
+        // failed save, or a file that changed or went between the check and the save.
+        match &self.state {
+            DraftState::Saved => {
+                undo.written = true;
+                Ok(undo)
+            }
+            DraftState::Failed(error) => Err(ActFault::NotSaved(error.clone(), undo)),
+            _ => Err(ActFault::NotSaved(String::new(), undo)),
+        }
+    }
+
+    /// The note's ID in the words Splat last read from its file.
+    fn note_id(&self) -> Option<Uuid> {
+        parse_note(&self.path, self.baseline.as_deref()?).map(|note| note.id)
+    }
+}
+
+/// How a note act meets the DM's typing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Apply {
+    /// An act of the session-cycle design: follow the disk, refuse while unsaved words meet a
+    /// changed file, and save at once.
+    Now,
+    /// Today's plan acts, as they were: the change joins the draft as typed words do, and saves
+    /// with them. A changed file then shows the note's conflict.
+    WithTyping,
+}
+
+/// Why a note act did not change the note, or did not reach the file.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ActFault {
+    /// Splat holds unsaved words and the file changed on disk. Nothing was applied.
+    Changed,
+    /// The file is gone from the folder. Nothing was applied.
+    Missing,
+    /// The file now holds another note. Nothing was applied.
+    OtherNote,
+    /// The fragment's place is gone or changed. Nothing was applied.
+    LineChanged,
+    /// The act is in the draft and not in the file: the save failed with these words, or the
+    /// file changed or went before the save. The note's own state says which. The Undo works.
+    NotSaved(String, NoteUndo),
+}
+
+impl ActFault {
+    /// The words at the act's place.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the note acts of P3, P7 and P8 show them")
+    )]
+    pub fn words(&self) -> &str {
+        match self {
+            Self::Changed => "The note changed on disk. Choose in the note first.",
+            Self::Missing => "The note is gone from its folder.",
+            Self::OtherNote => "The file now holds another note.",
+            Self::LineChanged => "That line changed on disk.",
+            Self::NotSaved(..) => "Notes not saved",
+        }
+    }
+}
+
+/// The Undo of one note act. It works while the note's words are the words that the act left,
+/// with no time limit. Any other change of the words, in Splat or on disk, ends it, and so does
+/// another note. The act's place owns it; nothing keeps it across a restart.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NoteUndo {
+    /// The note's file. It follows a move of that note, never a copy.
+    path: PathBuf,
+    /// The session the act was for.
+    note: Uuid,
+    before: String,
+    after: String,
+    /// Whether the act's save wrote the fragment. One that waits in the draft is taken back
+    /// from the draft alone.
+    written: bool,
+}
+
+impl NoteUndo {
+    /// The words that the act left.
+    pub fn after(&self) -> &str {
+        &self.after
+    }
+
+    /// Whether this Undo still applies to the note in this draft.
+    pub fn live(&self, draft: &Draft) -> bool {
+        self.owns(draft) && draft.body == self.after
+    }
+
+    /// Whether the draft is the note that the act changed: its file and its ID.
+    fn owns(&self, draft: &Draft) -> bool {
+        draft.path == self.path && draft.note_id() == Some(self.note)
+    }
+
+    /// The folder scan followed this note, the one note with its ID, to a new file.
+    pub fn moved(&mut self, from: &Path, to: &Path) {
+        if self.path == from {
+            to.clone_into(&mut self.path);
+        }
+    }
+
+    /// Put back the words from before the act. A fragment that waits in the draft leaves the
+    /// draft, with no look at the disk, as typed words would. A written one goes back through
+    /// the act's own checked path, and is saved at once.
+    pub fn undo(&self, draft: &mut Draft) -> Result<(), ActFault> {
+        if !self.owns(draft) {
+            return Err(ActFault::OtherNote);
+        }
+        if self.written {
+            return draft
+                .apply(self.note, Apply::Now, |words| {
+                    (words == self.after).then(|| self.before.clone())
+                })
+                .map(drop);
+        }
+        if draft.body != self.after {
+            return Err(ActFault::LineChanged);
+        }
+        draft.body.clone_from(&self.before);
+        draft.edited();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1829,9 +1997,38 @@ mod tests {
 
         draft.body = "Mine\n".into();
         draft.edited();
+        // A note act beside unsaved words and a changed file is not applied, and says so.
+        // The words and the file stay as they were, and the conflict view decides.
+        let act = draft.apply(note.id, Apply::Now, |words| {
+            Some(format!("{words}- [[Act]]\n"))
+        });
+        assert_eq!(act, Err(ActFault::Changed));
+        assert_eq!(
+            act.unwrap_err().words(),
+            "The note changed on disk. Choose in the note first."
+        );
+        assert_eq!(draft.body, "Mine\n");
+        assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
+        // Today's plan acts are as they were: the line joins the draft, as typed words do.
+        let undo = draft
+            .apply(note.id, Apply::WithTyping, |words| {
+                Some(format!("{words}- [[Plan]]\n"))
+            })
+            .unwrap();
+        assert_eq!(draft.body, "Mine\n- [[Plan]]\n");
+        assert_eq!(draft.state, DraftState::Unsaved);
+        undo.undo(&mut draft).unwrap();
+        assert_eq!(draft.body, "Mine\n");
         draft.save();
         assert_eq!(draft.state, DraftState::Conflict);
         assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
+        assert_eq!(
+            draft.apply(note.id, Apply::Now, |words| Some(format!(
+                "{words}- [[Act]]\n"
+            ))),
+            Err(ActFault::Changed),
+            "a conflict waits for the DM's choice"
+        );
         // More typing does not hide the choice.
         draft.body.push_str("And more\n");
         draft.edited();
@@ -1865,6 +2062,191 @@ mod tests {
         draft.reload().unwrap();
         assert_eq!(draft.state, DraftState::Clean);
         assert!(draft.body.contains("From Obsidian"));
+    }
+
+    /// Section 4.1's path for one note act: an edit on disk a moment before, a failed save, a
+    /// restart, a missing file, another note, a line that is gone, then act A, an unrelated act
+    /// B and Undo of A. Unsaved words with a changed file are in the test above.
+    #[cfg(unix)]
+    #[test]
+    fn a_note_act_follows_the_disk_saves_at_once_and_keeps_its_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("Sessions");
+        fs::create_dir(&folder).unwrap();
+        let plan = "## Plan for tonight\n\n- [[Bridge]]\n\n## What happened\n";
+        let note = create_note(&folder, &new_note(1, "", plan)).unwrap();
+        let other = create_note(&folder, &new_note(2, "", plan)).unwrap();
+        let add = |line: &'static str| {
+            move |words: &str| {
+                let mut words = words.to_owned();
+                insert_in_plan(&mut words, line);
+                Some(words)
+            }
+        };
+        let mut draft = Draft::open(&note.path).unwrap();
+
+        // An edit made in Obsidian a moment before the act is kept, under the act's line.
+        let outside = fs::read_to_string(&note.path)
+            .unwrap()
+            .replace("## What happened\n", "## What happened\n\nFrom Obsidian.\n");
+        fs::write(&note.path, &outside).unwrap();
+        let a = draft
+            .apply(note.id, Apply::Now, add("- [[Wolf Pack]]"))
+            .unwrap();
+        let saved = fs::read_to_string(&note.path).unwrap();
+        assert_eq!(
+            draft.state,
+            DraftState::Saved,
+            "saved at once, with no pause"
+        );
+        assert!(
+            saved.contains("- [[Bridge]]\n- [[Wolf Pack]]\n") && saved.contains("From Obsidian.")
+        );
+        assert!(a.live(&draft));
+        // An Undo belongs to its own file: a copy with the same ID and the same words at
+        // another path does not take it. A move that the folder scan follows does (the plan's
+        // test of Undo remove).
+        let copy = folder.join("Session 1 (copy).md");
+        fs::copy(&note.path, &copy).unwrap();
+        let mut copied = Draft::open(&copy).unwrap();
+        assert_eq!(
+            (copied.note_id(), copied.body.as_str()),
+            (Some(note.id), a.after())
+        );
+        assert!(!a.live(&copied));
+        assert_eq!(a.undo(&mut copied), Err(ActFault::OtherNote));
+        assert_eq!(fs::read(&copy).unwrap(), fs::read(&note.path).unwrap());
+        fs::remove_file(&copy).unwrap();
+
+        // Act B is unrelated: another note. Undo of A puts back only A's line, at once, and B
+        // stays.
+        let mut second = Draft::open(&other.path).unwrap();
+        let b = second
+            .apply(other.id, Apply::Now, add("- [[Toll Gang]]"))
+            .unwrap();
+        a.undo(&mut draft).unwrap();
+        assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
+        assert!(!a.live(&draft), "an Undo acts once");
+        assert!(
+            fs::read_to_string(&other.path)
+                .unwrap()
+                .contains("- [[Toll Gang]]")
+        );
+        assert!(b.live(&second));
+        // Another change of the words ends an Undo, also with no time limit before it.
+        second.body.push_str("Typed.\n");
+        second.edited();
+        assert!(!b.live(&second));
+        assert_eq!(b.undo(&mut second), Err(ActFault::LineChanged));
+
+        // A failed save is reported and writes nothing; the line waits in the draft.
+        let listed = |folder: &Path| {
+            let mut names: Vec<_> = fs::read_dir(folder)
+                .unwrap()
+                .map(|file| file.unwrap().file_name())
+                .collect();
+            names.sort();
+            names
+        };
+        let files = listed(&folder);
+        let before = fs::read_to_string(&note.path).unwrap();
+        let locked = |mode| {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&folder, fs::Permissions::from_mode(mode)).unwrap();
+        };
+        locked(0o555);
+        assert!(
+            fs::write(folder.join("probe"), "").is_err(),
+            "the folder takes no new file"
+        );
+        let failed = draft.apply(note.id, Apply::Now, add("- [[Ash Pack]]"));
+        locked(0o755);
+        let Err(fault @ ActFault::NotSaved(..)) = failed else {
+            panic!("{failed:?}");
+        };
+        assert_eq!(fault.words(), "Notes not saved");
+        assert!(matches!(draft.state, DraftState::Failed(_)));
+        assert!(draft.body.contains("- [[Ash Pack]]"));
+        assert_eq!(fs::read_to_string(&note.path).unwrap(), before);
+        assert_eq!(listed(&folder), files, "nothing half written");
+        // The next act saves both lines.
+        draft.apply(note.id, Apply::Now, add("- [[Rook]]")).unwrap();
+
+        // After a restart the file holds the lines, and nothing else remembers the acts.
+        let reopened = Draft::open(&note.path).unwrap();
+        assert!(reopened.body.contains("- [[Ash Pack]]\n- [[Rook]]\n"));
+        assert_eq!(listed(&folder), files);
+        assert_eq!(listed(dir.path()), [std::ffi::OsString::from("Sessions")]);
+
+        // A line that is gone writes nothing and says so.
+        let gone = draft.apply(note.id, Apply::Now, |_| None);
+        assert_eq!(
+            gone.as_ref().unwrap_err().words(),
+            "That line changed on disk."
+        );
+        assert_eq!(gone, Err(ActFault::LineChanged));
+
+        // A missing file is not an outside edit.
+        let moved = folder.join("Moved.md");
+        fs::rename(&note.path, &moved).unwrap();
+        assert_eq!(
+            draft.apply(note.id, Apply::Now, add("- [[Lost]]")),
+            Err(ActFault::Missing)
+        );
+        assert!(!draft.body.contains("Lost"));
+        // A file that now holds another note is not this one, also after the one-second poll
+        // took that note's words, and on every retry: the act is for note 1.
+        fs::copy(&other.path, &note.path).unwrap();
+        draft.follow_disk();
+        assert_eq!(draft.note_id(), Some(other.id), "the poll follows the file");
+        for _ in 0..2 {
+            assert_eq!(
+                draft.apply(note.id, Apply::Now, add("- [[Lost]]")),
+                Err(ActFault::OtherNote)
+            );
+        }
+        assert_eq!(
+            fs::read(&note.path).unwrap(),
+            fs::read(&other.path).unwrap()
+        );
+
+        // An Undo belongs to its note's ID too: the same path and words in another note are not
+        // that note, and its Undo writes nothing there.
+        let third = create_note(&folder, &new_note(3, "", plan)).unwrap();
+        let mut replaced = Draft::open(&third.path).unwrap();
+        let c = replaced
+            .apply(third.id, Apply::Now, add("- [[Ash]]"))
+            .unwrap();
+        let text = fs::read_to_string(&other.path).unwrap();
+        let (prefix, _) = split_note(&text).unwrap();
+        let swapped = format!("{prefix}{}", c.after());
+        fs::write(&third.path, &swapped).unwrap();
+        replaced.follow_disk();
+        assert_eq!(replaced.body, c.after());
+        assert!(!c.live(&replaced));
+        assert_eq!(c.undo(&mut replaced), Err(ActFault::OtherNote));
+        assert_eq!(fs::read_to_string(&third.path).unwrap(), swapped);
+
+        // An outside write after the act's check and before its save: the fragment waits in the
+        // draft with the conflict, and its Undo takes it back from the draft alone.
+        let fourth = create_note(&folder, &new_note(4, "", plan)).unwrap();
+        let mut pending = Draft::open(&fourth.path).unwrap();
+        let outside = fs::read_to_string(&fourth.path)
+            .unwrap()
+            .replace("## What happened\n", "## What happened\n\nOutside.\n");
+        let result = pending.apply(fourth.id, Apply::Now, |words| {
+            fs::write(&fourth.path, &outside).unwrap();
+            add("- [[Pending]]")(words)
+        });
+        let Err(ActFault::NotSaved(_, d)) = result else {
+            panic!("{result:?}");
+        };
+        assert_eq!(pending.state, DraftState::Conflict);
+        assert!(d.live(&pending));
+        d.undo(&mut pending).unwrap();
+        assert!(!pending.body.contains("Pending"));
+        assert_eq!(pending.state, DraftState::Conflict, "the DM still chooses");
+        assert_eq!(fs::read_to_string(&fourth.path).unwrap(), outside);
     }
 
     #[test]

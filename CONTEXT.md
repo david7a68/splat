@@ -240,6 +240,10 @@ The one count of standard hours, computed from the timeline, whatever world the 
 **Session**:
 One meeting of the table, with its notes in a Markdown file in the campaign's folder.
 
+**Session being played**:
+The current session, while a fight is open, a recording is live, or its note is not dated before today. The party
+bar and a World entry's Log line follow it.
+
 **Session plan**:
 The encounters a session's note links to under its plan, with what has happened so far. The note holds the
 plan, so that Obsidian sees it too.
