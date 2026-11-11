@@ -1358,16 +1358,16 @@ impl CampaignContent {
             .errors
             .iter()
             .filter(|error| {
-                !campaign_flags
-                    .iter()
-                    .any(|flag| error.contains(&flag.message))
-                    && !catalogue.manifest_problems.iter().any(|(id, problem)| {
-                        error.contains(problem)
-                            || catalogue
-                                .entries
-                                .get(id)
-                                .is_some_and(|entry| error.contains(&entry.entry.path))
-                    })
+                !campaign_flags.iter().any(|flag| {
+                    flag.words()
+                        .map_or_else(|| error.contains(&flag.message), |w| error.contains(&w))
+                }) && !catalogue.manifest_problems.iter().any(|(id, problem)| {
+                    error.contains(problem)
+                        || catalogue
+                            .entries
+                            .get(id)
+                            .is_some_and(|entry| error.contains(&entry.entry.path))
+                })
             })
             .chain(&closure.errors)
             .collect();
@@ -1389,7 +1389,7 @@ impl CampaignContent {
                 let last = at + 1 == campaign_flags.len();
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                    let words = format!("Line {}: {}", flag.line, flag.message);
+                    let words = flag.message.clone();
                     let choice = flag.kind == splat::content::layout::FlagKind::RuleChoice;
                     if !choice && !last {
                         design::message(ui, Tone::Warning, &words);

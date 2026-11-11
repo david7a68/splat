@@ -70,7 +70,13 @@ fn runs(root: &Path) -> Result<Vec<PathBuf>, String> {
         })
         .collect())
 }
-fn check_run_entries(value: &serde_json::Value, problems: &mut Vec<String>) {
+/// Collect a run file's errors, and the flags its saved entry copies hold. A saved flag has only
+/// its sentence, which names its line in the entry's note, so it is given with its entry only.
+fn check_run_entries(
+    value: &serde_json::Value,
+    problems: &mut Vec<String>,
+    flags: &mut Vec<String>,
+) {
     if value
         .get("fields")
         .and_then(|v| v.get("splat_schema"))
@@ -78,23 +84,23 @@ fn check_run_entries(value: &serde_json::Value, problems: &mut Vec<String>) {
     {
         match serde_json::from_value::<Entry>(value.clone()) {
             Err(error) => problems.push(error.to_string()),
-            Ok(entry) => problems.extend(
+            Ok(entry) => flags.extend(
                 entry
                     .flags
                     .iter()
-                    .map(|f| format!("{} (entry {}, line {})", f.message, entry.path, f.line)),
+                    .map(|f| format!("{} (entry {})", f.message, entry.path)),
             ),
         }
     } else {
         match value {
             serde_json::Value::Object(map) => {
                 for child in map.values() {
-                    check_run_entries(child, problems);
+                    check_run_entries(child, problems, flags);
                 }
             }
             serde_json::Value::Array(values) => {
                 for child in values {
-                    check_run_entries(child, problems);
+                    check_run_entries(child, problems, flags);
                 }
             }
             _ => {}
@@ -112,7 +118,7 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             entry
                 .flags
                 .iter()
-                .map(|f| format!("{}:{}: {}", entry.path, f.line, f.message)),
+                .map(|f| format!("{}: {}", entry.path, f.message)),
         );
     }
     let mut count = entries.len();
@@ -132,7 +138,7 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                         crate::timeline::formats::parse(&text)
                             .1
                             .into_iter()
-                            .map(|f| format!("{name}:{}: {}", f.line, f.message)),
+                            .map(|f| format!("{name}: {}", f.message)),
                     );
                 }
             },
@@ -145,13 +151,14 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
             .display()
             .to_string();
         let mut run_problems = Vec::new();
+        let mut entry_flags = Vec::new();
         let result = fs::read_to_string(&path)
             .map_err(|e| e.to_string())
             .and_then(|text| {
                 let value: serde_json::Value =
                     serde_json::from_str(&text).map_err(|e| e.to_string())?;
-                check_run_entries(&value, &mut run_problems);
-                if run_problems.is_empty() {
+                check_run_entries(&value, &mut run_problems, &mut entry_flags);
+                if run_problems.is_empty() && entry_flags.is_empty() {
                     crate::encounter_run::check_saved_text(&text)?;
                 }
                 Ok(())
@@ -159,13 +166,18 @@ pub fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
         if let Err(error) = result {
             run_problems.push(error);
         }
-        if run_problems.is_empty() {
+        if run_problems.is_empty() && entry_flags.is_empty() {
             count += 1;
         }
         problems.extend(
             run_problems
                 .into_iter()
                 .map(|error| format!("{name}:{}: {error}", diagnostic_line(&error))),
+        );
+        problems.extend(
+            entry_flags
+                .into_iter()
+                .map(|flag| format!("{name}: {flag}")),
         );
     }
     problems.sort();

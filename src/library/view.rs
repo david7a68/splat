@@ -235,15 +235,7 @@ fn show_inner(
         ui.ctx()
             .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
         for flag in &entry.flags {
-            design::message(
-                ui,
-                crate::design::Tone::Warning,
-                &if flag.message.contains(" not read (line ") {
-                    flag.message.clone()
-                } else {
-                    format!("Line {}: {}", flag.line, flag.message)
-                },
-            );
+            design::message(ui, crate::design::Tone::Warning, &flag.message);
         }
     }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
@@ -631,5 +623,63 @@ mod tests {
             prose_top(&warned, false),
             "iter-18-E-FT2-warning: a line warning keeps the gap before the prose"
         );
+        // The reader shows a flag's words as they were made or saved, and adds no line: an
+        // older saved flag and a new one each name line 19 once, in their whole sentence.
+        let old_words = "Hit Points “about twenty” not read (line 19). Start with a number, such as 22 (4d8 + 4).";
+        let new_words = "Line 19: Hit Points “about twenty” was not read. Start with a number, such as 22 (4d8 + 4).";
+        let saved = note(vec![
+            serde_json::from_value(serde_json::json!({"line": 19, "message": old_words})).unwrap(),
+            splat::content::layout::Flag::unread(
+                splat::content::layout::Field::HitPoints,
+                19,
+                "Hit Points",
+                "about twenty",
+                "Start with a number, such as 22 (4d8 + 4).",
+            ),
+        ]);
+        let painted = painted_texts(&saved);
+        for words in [old_words, new_words] {
+            assert!(
+                painted.iter().any(|text| text == words),
+                "{words} in {painted:?}"
+            );
+        }
+        let lines: usize = painted
+            .iter()
+            .map(|text| text.to_lowercase().matches("line 19").count())
+            .sum();
+        assert_eq!(lines, 2, "one line reference for each flag: {painted:?}");
+    }
+
+    /// Every text the reader paints for this entry.
+    fn painted_texts(entry: &Entry) -> Vec<String> {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_with_related(
+                    ui,
+                    &entry.name,
+                    Some(entry),
+                    &entry.body,
+                    &Origin {
+                        path: &entry.path,
+                        owner: "Campaign",
+                        builtin: false,
+                    },
+                    &NoLinks,
+                    false,
+                    |_| None,
+                );
+            });
+        });
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect()
     }
 }

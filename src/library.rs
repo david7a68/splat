@@ -7093,15 +7093,13 @@ mod tests {
         );
         assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("3 files need fixing"))));
         let diagnostics = &library.loaded.as_ref().unwrap().diagnostic_texts();
+        assert!(diagnostics.iter().any(|s| s.starts_with("Wolf.md: Line ")
+            && s.contains(": Hit Points “about twenty” was not read")));
         assert!(
             diagnostics
                 .iter()
-                .any(|s| s.contains("Wolf.md: Hit Points “about twenty” not read"))
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|s| s.contains("Spark.md: Level “many” not read"))
+                .any(|s| s.starts_with("Spark.md: Line ")
+                    && s.contains(": Level “many” was not read"))
         );
     }
 
@@ -7295,7 +7293,7 @@ mod tests {
             loaded
                 .diagnostic_texts()
                 .iter()
-                .any(|text| text.starts_with("Both.md: Hit Points"))
+                .any(|text| text.starts_with("Both.md: Line") && text.contains(": Hit Points"))
         );
         // Two Watch files and Both.md: three, not two (by path) and not five (by problem).
         assert_eq!(loaded.files_to_fix(&broken, None), 3);
