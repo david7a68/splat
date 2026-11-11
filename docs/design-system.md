@@ -209,7 +209,8 @@ and its padding hangs `S` into the gutter. Outside a message, such an action has
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. A quiet
-message choice without an icon (`Use the copy's entries` below the registration message) hangs its padding
+message choice without an icon (`Use the copy in encounters` below a package's registration message, and
+`Build an encounter` below a copied campaign's) hangs its padding
 into that column instead, so its words also start at the message's words. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
@@ -221,9 +222,11 @@ reaches a column splitter. The World page's centre has an `L` left gutter for th
 Other message actions use a secondary border. Undo messages use `undo_message`: a quiet action and undo
 icon on the message line, or below when needed. An Undo never stands alone: its result is a short message
 that it follows (`Links now say <name>.` with `Undo link update`, `The first heading now says <name>.` with
-`Undo heading change`, `Encounters now use the copy's entries.` with `Undo source change`, and `The stat
-block now says Hit Points 24.` with `Undo stat change`). One exception is still open: `Undo register campaign`
-in Campaign stands alone. On reload, a result whose Undo would rewrite files checks
+`Undo heading change`, `Encounters now use the copy.` with `Undo source change`, `The stat
+block now says Hit Points 24.` with `Undo stat change`, and `<name> is registered as a new campaign. Its D&D
+Beyond link is off.` with `Undo register campaign`). Another choice after the result, such as `Build an
+encounter`, does not end the result or its Undo; a later result does. `Undo register campaign` takes back
+only that registration: settings changed since, such as a registered package, stay. On reload, a result whose Undo would rewrite files checks
 those files. If one no longer holds what the action wrote, the result and its Undo go away. A result that also
 offers another action stays, and its Undo is blocked with the reason. Discard recovery is an Undo message too: info icon, bar,
 `Body` text that names the draft, and quiet `Undo discard`, whose accessible name also names the draft. Inline creation uses a Label title, fields, a named Create
@@ -293,6 +296,17 @@ links and quiet actions centre in that row, so the title stays at one height whe
 another. When the line is too narrow and the path goes to a second row, that row is also one Read row. During a
 draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Used here`.
+A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
+or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
+(`Text format cannot be read`). Its reader keeps the title and a file line with only `Show file`: no Edit in
+Obsidian, because no editor can open the file either. Below the title, an error names the file (`Splat cannot read
+Notes/Broken.md as text.`), then the recovery in plain words, then quiet `Try again` at the message words.
+Technical details holds the system's words. Edit Markdown is blocked with its reason, and the reader offers no
+`Fix in Edit Markdown` or manifest replacement, until a read succeeds. Try again reads every file again. When an
+open entry's file stops reading, a draft stays: the message names the file and says the draft is safe, with
+`Try again` and red `Reload and lose my draft` (with Undo discard), never a save over the file. With a draft
+open, the reader's `Try again` reads the file at once and compares it with the draft, as any outside change. Splat never
+changes that file.
 Below its title, show only the kind when known and the specific error with its file line.
 Offer bordered `Fix in Edit Markdown` below an unreadable entry's error, at the text edge.
 It opens the editor at the error line. In Edit Markdown, put the error in the reserved reason
@@ -527,10 +541,11 @@ off when the original is used. Keep the warning above the `Register a copy` Labe
 Quiet Cancel follows the named Register action after an `L` gap. It closes the form without writing
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
 original and the copy is registered but not used. When on, it says every entry is used, including future
-entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo. After registration,
+entries. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
 quiet `Undo package registration` sits on the message line, as every Undo after a message does, and quiet
-`Use the copy's entries`, without an icon, sits on the next line as a `line_start` action: its words start at
-the message words. Its result `Encounters now use the copy's entries.` keeps `Undo source change` on its
+`Use the copy in encounters`, without an icon, sits on the next line as a `line_start` action: its words start at
+the message words. The choice names what it changes, in its result's words: its result `Encounters now use the
+copy.` keeps `Undo source change` on its
 message line; after an outside change that Undo is blocked with its reason.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no
@@ -955,33 +970,44 @@ cannot apply, such as speed. Splat's rolls include attack and damage changes: th
 as `in Splat’s rolls`, the tiles show the numbers rolled, and nothing tells the DM to add them again. An arriving member says `Changed
 · arrived with <group>` once. Use run AC, current/maximum HP and initiative bonus, with printed values below
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
-Paused snapshots state when they differ from the current file.
+Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
+the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
+was deleted, cannot be read or is not in the campaign), then `Read the new version`. Under that notice a character's
+card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
+current values.`
 
 ### Rolls
 
 A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
-wrapping row with `S` gaps. A tile is 208 px wide when two fit on a line; a tile alone on its line takes the line's
-width, up to the reader measure. Tiles in one row share one height. A tile has a hairline frame with control radius:
+wrapping row with `S` gaps. As many 208 px tiles as fit share a line; a tile alone on its line (the only tile, or the
+last of an odd row) takes the line's width, up to the reader measure, in a run, the Library and Party. Tiles on one line
+share one height. A tile has a hairline frame with control radius:
 a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in faint Small at the
 right in a run, then its numbers in muted Small, then, when the text says, where it lands and what a save does
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
 changes in them; its hover adds the printed numbers. Spellcasting stays prose. A character's Actions page shows its
-attacks as tiles.
+attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 120 ft`).
 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
-it. Enter applies the damage. Escape stops.`), led by the way the d20 rolls when it is not plain (`With advantage.
+it. Enter applies the damage. Escape stops.`), the crosshair centred on the first line when the words wrap, led by the way the d20 rolls when it is not plain (`With advantage.
 Click a target…`). Then quiet actions on their own line, the first of each line with `line_start`, so its words start
 at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
-`Roll for them`. Each other row shows, in accent Small, under its state or after its second line, the chance to hit it
-while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the result against it, a plain comparison
-with no hit or miss verdict (`17 vs AC 13 · 10 damage`). It takes the longest form that fits whole, dropping words before the result first; the
-result's last two parts (the comparison and the damage) never drop, and are cut by words only where no place holds
-them. A save's creature targets show their roll in the AC cell. After `Roll damage`, each target says its own result,
-from the amount Enter gives it (`Saved · 1 damage (half)`, `Failed · 3 damage`), and keeps it after Enter. Outside a
-run a tile previews, and its totals show in Strong under the tiles.
+`Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
+name, after its conditions (and after its state word where the row has no state column), never in the state column.
+They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
+result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
+form that fits whole, dropping words before the result first; the result's last two parts (the comparison and the
+damage) never drop, and are cut by whole words only where the line has no room. The row's accessible name holds them
+whole. Roll words never move a row's columns. When the conditions leave no room for one word, the words take a line
+of their own under them, at the name's edge, and that row grows by the line. A save's creature targets show their roll in the AC
+cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
+(half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
+damage` go, the rows show their AC again, and the panel and the dock go back to the caster. Undo of that step arms the
+save again as it stood, with its saves, its damage in Amount and its results. Outside a run a tile previews, and its
+totals show in Strong under the tiles.
 
 While Lookup or Notes hide the panel, its tiles are one line of secondary Read buttons above the dock, with the run's
 changes in their numbers (`Dagger +6`, `Fire Bolt +7`). The line keeps an `XS` gap above the dock, and its first button
@@ -989,10 +1015,12 @@ starts at the dock's content edge, where Amount starts.
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
-and the character allow it. A row's menu opens under the row, so the row stays in view. Each of its sections has a
-heading in muted Small: `Bite against Cinder Wolf 2`, then `Inspiration: reroll one die` with a line for each die
-(`4 on the d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small,
-wrapped at 320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
+and the character allow it. Every such menu opens under its tile, number or row, so what it is about stays in view,
+and stays inside its pane: a tile's menu is the tile's width, so it never crosses the panel's splitter.
+Each of its sections has a heading in muted Small with what it rolls: `Bite` or `Dexterity save` for a tile or a
+number, `Bite against Cinder Wolf 2` for a row, then `Inspiration: reroll one die` with a line for each die (`4 on the
+d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small, wrapped at
+320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
 save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.

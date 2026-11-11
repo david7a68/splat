@@ -1072,7 +1072,14 @@ first heading. A copied package folder offers **Register as a new package** unde
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
 
-Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
+Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy in encounters** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once. In the reader, the choices follow the entry's title and scroll with the entry.
+
+A Library file that Splat cannot read at all, such as a note saved in another text encoding, says why and how to
+fix it, with **Show file** and **Try again**. It offers no editor link and no repair in Edit Markdown until the file
+reads again, and Splat never changes it. If an open entry's file stops reading, your draft stays until you choose.
+
+A copied campaign folder registers with **Register as a new campaign**. Its result names the new campaign, with
+**Undo register campaign** on the same message and **Build an encounter** below it.
 
 After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path. When one matching folder is nearby, one warning names the old and new
 folders and the affected encounters. **Use this folder** comes first on the action line. Folder recovery has Undo.

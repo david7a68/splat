@@ -26,6 +26,24 @@ pub(super) struct Armed {
     pub damage: Option<i64>,
 }
 
+/// A save as it stood when its damage step applied: the armed save with its damage rolled,
+/// each creature's save, the dock's targets and halves, and Amount. That step keeps it, so
+/// Undo of the step arms the save again with its results. Its owner is the state before the
+/// step: it ends when Undo takes it back, or when the step leaves Undo.
+#[derive(Clone, Debug)]
+pub(super) struct Cast {
+    armed: Armed,
+    saves: std::collections::BTreeMap<usize, i64>,
+    selected: usize,
+    also: std::collections::BTreeSet<usize>,
+    halved: std::collections::BTreeSet<usize>,
+    amount: String,
+    /// The DM had edited Amount since the damage was rolled.
+    amount_typed: bool,
+    /// The rows' own words then, such as `No damage · see the text`.
+    badges: BTreeMap<usize, String>,
+}
+
 /// A target that waits for the DM to say which damage condition holds, as in `if the goat
 /// moved 20+ feet straight toward the target`. Each choice is its words and its damage.
 #[derive(Clone, Debug)]
@@ -1213,6 +1231,63 @@ impl Run {
             .collect()
     }
 
+    /// The save as it stands, when `results` are its damage step's results. `None` for any
+    /// other step.
+    pub(super) fn finished_cast(&self, results: &[(usize, String)]) -> Option<Cast> {
+        if results.is_empty() {
+            return None;
+        }
+        let armed = self
+            .armed
+            .clone()
+            .filter(|armed| matches!(armed.link, RollLink::SaveDc { .. }))?;
+        Some(Cast {
+            armed,
+            saves: self.saves.clone(),
+            selected: self.selected,
+            also: self.also.clone(),
+            halved: self.halved.clone(),
+            amount: self.amount.clone(),
+            amount_typed: self.amount_typed,
+            badges: self.badges.clone(),
+        })
+    }
+
+    /// A save's damage is applied, so the save is finished. Its tile disarms, each row shows
+    /// its AC again beside its result, and the panel and the dock go back to the caster, as
+    /// before the save was armed.
+    pub(super) fn end_cast(&mut self) {
+        let Some(armed) = self.armed.take() else {
+            return;
+        };
+        self.asking = None;
+        self.saves.clear();
+        if armed.actor < self.state.participants.len() {
+            self.selected = armed.actor;
+        }
+    }
+
+    /// Undo of a save's damage step: the save is armed again as it stood, with its saves, its
+    /// targets, its damage in Amount, and each target's result from it. What a later action
+    /// left on the rows, and a roll it kept for a reroll, go.
+    pub(super) fn resume_cast(&mut self, cast: Cast) {
+        let rows = self.state.participants.len();
+        if cast.armed.actor >= rows || cast.selected >= rows {
+            return;
+        }
+        self.armed = Some(cast.armed);
+        self.asking = None;
+        // A later action's results and its kept roll were not part of the save.
+        self.badges = cast.badges;
+        self.reroll = None;
+        self.saves = cast.saves;
+        self.selected = cast.selected;
+        self.also = cast.also;
+        self.halved = cast.halved;
+        self.amount = cast.amount;
+        self.amount_typed = cast.amount_typed;
+    }
+
     /// Mark the save targets at or above the DC to take half, and no target under it. A
     /// target with no rolled save, such as a player, keeps the mark the DM gave it.
     fn half_made(&mut self, armed: &Armed) {
@@ -1373,6 +1448,9 @@ impl Run {
         self.sheet_inspiration.retain(|row, _| *row < rows);
         self.badges.retain(|row, _| *row < rows);
         self.saves.retain(|row, _| *row < rows);
+        // A save's targets go with their rows, so Amount never names a row that is gone.
+        self.also.retain(|row| *row < rows);
+        self.halved.retain(|row| *row < rows);
     }
 }
 
@@ -2243,15 +2321,373 @@ mod tests {
         run.amount = "4".into();
         assert_eq!(run.row_badge(other), None, "no save words on another row");
         run.amount.clear();
-        // iter-19-R2-1: Undo takes back the later step, then the save's step and its results.
+        // iter-19-R2-1: Undo takes back the later step, then the save's step and its applied
+        // results. iter-20-R-FT1: the save is armed again as it stood, so its rows show what
+        // Enter would give them again, from Amount, not the applied results.
         run.undo();
         assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
         run.undo();
         assert_eq!(hp(&run), before, "Undo gives each row back its own HP");
+        assert!(
+            run.state.roll_results.is_empty(),
+            "iter-19-R2-1: Undo takes the applied results with their step"
+        );
+        assert_eq!(run.amount, "10", "the save's damage is in Amount again");
         assert_eq!(
             [run.row_badge(saved), run.row_badge(failed)],
+            [
+                Some("Saved · 5 damage (half)".to_owned()),
+                Some("Failed · 10 damage".to_owned())
+            ],
+        );
+    }
+
+    fn fire_breath() -> RollLink {
+        RollLink::SaveDc {
+            label: "Fire Breath".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "4d6".into(),
+                kind: Some("Fire".into()),
+                when: None,
+            }],
+        }
+    }
+
+    /// What Enter in the dock does: apply Amount to the targets, then clear Amount and them.
+    fn enter(run: &mut Run) {
+        let amount = run.amount.parse().unwrap();
+        run.apply(run.amount_command(amount, Command::Damage))
+            .unwrap();
+        run.amount.clear();
+        run.also.clear();
+        run.halved.clear();
+    }
+
+    /// Each row's HP and temporary HP.
+    fn health(run: &Run) -> Vec<(Option<i64>, i64)> {
+        run.state
+            .participants
+            .iter()
+            .map(|p| (p.hp, p.temporary_hp))
+            .collect()
+    }
+
+    /// iter-20-R-FT1, and the transition table's save rows: arm, target, roll the damage,
+    /// apply, Undo, apply again, next turn, and Undo of the turn.
+    #[test]
+    fn a_save_finishes_when_its_damage_applies_and_undo_arms_it_again() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let (saved, failed) = (others[0], others[1]);
+        run.roll_link(ask(fire_breath(), actor));
+        run.target(saved, None);
+        run.target(failed, None);
+        run.saves.insert(saved, 15);
+        run.saves.insert(failed, 9);
+        let armed = run.armed.clone().unwrap();
+        run.half_made(&armed);
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        let before = health(&run);
+        let shown = [run.row_badge(saved), run.row_badge(failed)];
+        assert_eq!(
+            shown,
+            [
+                Some("Saved · 5 damage (half)".to_owned()),
+                Some("Failed · 10 damage".to_owned())
+            ]
+        );
+        assert!(run.armed_view().unwrap().status.starts_with("2 targets."));
+
+        // Apply: one Undo step; the save is finished.
+        let steps = run.history.len();
+        enter(&mut run);
+        let applied = health(&run);
+        assert_eq!(run.history.len(), steps + 1);
+        assert!(run.armed.is_none(), "iter-20-R-FT1: the save tile disarms");
+        assert!(
+            run.armed_view().is_none(),
+            "no `Roll damage`, no `1 target` hint"
+        );
+        assert_eq!(
+            [run.save_on_row(saved), run.save_on_row(failed)],
             [None, None],
-            "iter-19-R2-1: Undo takes the save's results off its rows"
+            "the rows show their AC again"
+        );
+        assert_eq!(
+            [run.row_badge(saved), run.row_badge(failed)],
+            shown,
+            "each row keeps its result"
+        );
+        // Must stay true: the panel stays on the caster, and nothing waits on the dock.
+        assert_eq!(run.panel_row(), actor);
+        assert_eq!(run.targets(), vec![actor]);
+        assert!(run.amount.is_empty());
+
+        // Undo: HP back, and the save is armed again as it stood, with its results.
+        run.undo();
+        assert_eq!(health(&run), before);
+        assert!(run.state.roll_results.is_empty());
+        let armed = run
+            .armed
+            .clone()
+            .expect("iter-20-R-FT1: Undo arms the save again");
+        assert_eq!(armed.damage, Some(10));
+        assert_eq!(run.amount, "10");
+        assert_eq!(run.save_on_row(saved), Some(("DEX".to_owned(), 15)));
+        assert_eq!(run.save_on_row(failed), Some(("DEX".to_owned(), 9)));
+        assert_eq!([run.row_badge(saved), run.row_badge(failed)], shown);
+        let view = run.armed_view().unwrap();
+        assert!(view.status.starts_with("2 targets."), "{}", view.status);
+        assert!(
+            view.actions
+                .iter()
+                .any(|(_, action)| *action == ArmedAction::RollDamage)
+        );
+        assert_eq!(run.panel_row(), actor);
+
+        // Apply again: the same amounts, and the save finishes again.
+        enter(&mut run);
+        assert_eq!(health(&run), applied);
+        assert!(run.armed.is_none());
+        assert_eq!([run.row_badge(saved), run.row_badge(failed)], shown);
+
+        // Next turn: the results go. Undo of the turn brings back the applied results, which
+        // belong to the step, but not the armed save.
+        run.apply(Command::Next).unwrap();
+        assert_eq!([run.row_badge(saved), run.row_badge(failed)], [None, None]);
+        run.undo();
+        assert_eq!([run.row_badge(saved), run.row_badge(failed)], shown);
+        assert!(run.armed.is_none());
+        // Undo of the damage step after that arms the save again, once.
+        run.undo();
+        assert!(run.armed.is_some());
+        assert!(run.state.cast.is_none(), "the step's copy is spent");
+    }
+
+    /// The transition table's attack rows: roll, apply, the next target, Stop, the next
+    /// action, and next turn.
+    #[test]
+    fn an_attacks_results_end_with_the_next_action_or_turn_and_not_with_stop() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        run.roll_link(ask(attack(), actor));
+        run.state.random = Random::controlled([12, 3, 4]);
+        run.target(others[0], None);
+        let first = run.row_badge(others[0]).unwrap();
+        assert!(first.ends_with(" damage"), "{first}");
+        // Apply: Undo has the step; the attack stays armed for the next target.
+        enter(&mut run);
+        assert!(run.armed.is_some());
+        assert_eq!(run.row_badge(others[0]).as_deref(), Some(first.as_str()));
+        // The next target: its own result, and the first keeps its own.
+        run.state.random = Random::controlled([15, 5, 6]);
+        run.target(others[1], None);
+        let second = run.row_badge(others[1]).unwrap();
+        assert!(second.ends_with(" damage") && second != first, "{second}");
+        assert_eq!(run.row_badge(others[0]).as_deref(), Some(first.as_str()));
+        // Undo of the apply: HP back, and a roll is history, so the results stay.
+        run.undo();
+        assert!(run.armed.is_some());
+        assert_eq!(run.row_badge(others[0]).as_deref(), Some(first.as_str()));
+        // Stop: disarmed, and the results stay until the next action or turn.
+        run.disarm();
+        assert!(run.armed.is_none());
+        assert_eq!(run.row_badge(others[1]).as_deref(), Some(second.as_str()));
+        // The next action: the results of the last one go.
+        run.roll_link(ask(attack(), actor));
+        assert!(run.row_badge(others[1]).unwrap().ends_with("% to hit"));
+        run.state.random = Random::controlled([12, 3, 4]);
+        run.target(others[0], None);
+        // Next turn: disarmed, and no row keeps a result.
+        run.apply(Command::Next).unwrap();
+        assert!(run.armed.is_none());
+        assert!((0..3).all(|row| run.row_badge(row).is_none()));
+    }
+
+    fn frost_breath() -> RollLink {
+        RollLink::SaveDc {
+            label: "Frost Breath".into(),
+            ability: "Dexterity".into(),
+            dc: 14,
+            half: true,
+            damage: vec![DamagePart {
+                dice: "2d6".into(),
+                kind: Some("Cold".into()),
+                when: None,
+            }],
+        }
+    }
+
+    /// Save A applied to both others, then Next turn. Returns the row that is not the new
+    /// actor, A's result on it, and the new actor.
+    fn save_applied_then_next_turn(run: &mut Run) -> (usize, String, usize) {
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        run.roll_link(ask(fire_breath(), actor));
+        for row in &others {
+            run.target(*row, None);
+            run.saves.insert(*row, 1);
+        }
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([1, 1, 1, 1]);
+        run.save_damage(&armed).unwrap();
+        enter(run);
+        let results = run.state.roll_results.clone();
+        run.apply(Command::Next).unwrap();
+        let actor = run.current().unwrap();
+        let row = *others.iter().find(|row| **row != actor).unwrap();
+        let result = results.get(&row).cloned().unwrap();
+        assert!(run.row_badge(row).is_none(), "Next turn clears the rows");
+        (row, result, actor)
+    }
+
+    /// Review repair 2, on the live path: save A applied, Next turn, save B armed and its
+    /// damage rolled, then Undo of the turn brings A's applied result back into the state.
+    /// B's target shows what Enter gives it now, not A's result.
+    #[test]
+    fn undo_of_the_turn_never_shows_an_older_result_over_a_new_saves_words() {
+        let mut run = live();
+        let (row, older, actor) = save_applied_then_next_turn(&mut run);
+        run.roll_link(ask(frost_breath(), actor));
+        run.target(row, None);
+        run.saves.insert(row, 1);
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([6, 6]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "12");
+        run.undo();
+        assert_eq!(
+            run.state.roll_results.get(&row),
+            Some(&older),
+            "Undo of the turn brings A's applied result back into the state"
+        );
+        assert_eq!(
+            run.row_badge(row).as_deref(),
+            Some("Failed · 12 damage"),
+            "B's target shows the Amount words, not A's {older:?}"
+        );
+    }
+
+    /// Review repair 2: B's damage, rolled after Undo brought A's result back, takes that
+    /// result off B's target, so it does not show again when B stops.
+    #[test]
+    fn a_new_saves_damage_takes_an_older_result_off_its_target() {
+        let mut run = live();
+        let (row, older, actor) = save_applied_then_next_turn(&mut run);
+        run.roll_link(ask(frost_breath(), actor));
+        run.target(row, None);
+        run.saves.insert(row, 1);
+        run.undo();
+        assert_eq!(run.state.roll_results.get(&row), Some(&older));
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([6, 6]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.row_badge(row).as_deref(), Some("Failed · 12 damage"));
+        assert_eq!(run.state.roll_results.get(&row), None);
+        run.disarm();
+        assert_eq!(run.row_badge(row), None, "A's {older:?} does not come back");
+    }
+
+    /// Review repair 3: Undo of a save's damage step arms the save again as it stood. A
+    /// later action's result and its kept reroll were not part of it, and go.
+    #[test]
+    fn undo_of_a_saves_damage_takes_a_later_actions_result_and_reroll_away() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        let (target, player) = (others[0], others[1]);
+        inspired_player(&mut run, player);
+        run.roll_link(ask(fire_breath(), actor));
+        run.target(target, None);
+        run.saves.insert(target, 1);
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        let save_words = run.row_badge(target);
+        assert!(save_words.is_some());
+        enter(&mut run);
+        // A later action: the player's attack, rolled for them against the caster.
+        run.roll_link(ask(attack(), player));
+        run.state.random = Random::controlled([12, 3, 4]);
+        run.row_choice(actor, RowChoice::Roll(Mode::Normal, false));
+        assert!(run.row_badge(actor).unwrap().ends_with(" damage"));
+        assert!(offers_reroll(&run, actor));
+        run.undo();
+        assert!(
+            run.armed
+                .as_ref()
+                .is_some_and(|armed| matches!(armed.link, RollLink::SaveDc { .. }))
+        );
+        assert_eq!(run.row_badge(actor), None, "the attack's result goes");
+        assert!(!offers_reroll(&run, actor), "its reroll goes");
+        // Must stay true: the save's own target shows its words again.
+        assert_eq!(run.row_badge(target), save_words);
+    }
+
+    /// The transition table's last rows, and the carried row-index limit: a result belongs to
+    /// a participant. Rows only join at the end of the roster, so a move keeps each result on
+    /// its own participant, and a row that Undo takes away takes its result and target too.
+    #[test]
+    fn a_result_stays_with_its_participant_when_rows_move_or_go() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        run.apply(Command::AddGroup(
+            super::super::tests::guard_group("Tied", 2),
+            Some(15),
+        ))
+        .unwrap();
+        assert_eq!(run.state.participants.len(), 5);
+        let (old, new) = ((0..3).find(|row| *row != actor).unwrap(), 3);
+        let names = [old, new].map(|row| run.state.participants[row].name.clone());
+        run.roll_link(ask(fire_breath(), actor));
+        run.target(old, None);
+        run.target(new, None);
+        let armed = run.armed.clone().unwrap();
+        run.state.random = Random::controlled([1, 2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        enter(&mut run);
+        let results = [old, new].map(|row| run.row_badge(row).unwrap());
+        // A move changes the order, not the rows: each result stays with its participant.
+        let order = run.state.order.clone();
+        run.apply(Command::MoveArrivalBefore(new, 1)).unwrap();
+        assert_ne!(run.state.order, order, "the arrival moved");
+        for (at, row) in [old, new].into_iter().enumerate() {
+            assert_eq!(run.state.participants[row].name, names[at]);
+            assert_eq!(run.row_badge(row).as_deref(), Some(results[at].as_str()));
+        }
+        // Undo the move, then the save's step: the save is armed again on both rows.
+        run.undo();
+        run.undo();
+        assert!(run.also.contains(&new) || run.selected == new);
+        assert!(run.row_badge(new).is_some());
+        // Undo of the arrival takes its rows away, with the save's target and result there.
+        run.undo();
+        assert_eq!(run.state.participants.len(), 3);
+        assert!(run.also.iter().chain(&run.halved).all(|row| *row < 3));
+        assert!(
+            run.saves
+                .keys()
+                .chain(run.badges.keys())
+                .all(|row| *row < 3)
+        );
+        assert!(run.selected < 3);
+        assert_eq!(run.state.participants[old].name, names[0]);
+        assert!(
+            run.row_badge(old).is_some(),
+            "the other target keeps its result"
+        );
+        // Amount names only rows that are still here.
+        let amount = run.amount.parse().unwrap();
+        assert!(
+            run.apply(run.amount_command(amount, Command::Damage))
+                .is_ok()
         );
     }
 
@@ -2412,7 +2848,7 @@ mod tests {
     fn a_target_added_after_the_roll_shows_what_enter_gives_it_not_an_older_result() {
         let mut run = live();
         let actor = run.current().unwrap();
-        let (_, others) = armed_save(&mut run, actor);
+        let (armed, others) = armed_save(&mut run, actor);
         for row in &others {
             run.saves.insert(*row, 1);
         }
@@ -2425,6 +2861,14 @@ mod tests {
         run.halved.clear();
         let later = *others.iter().find(|row| **row != run.selected).unwrap();
         assert_eq!(run.row_badge(later).as_deref(), Some("Failed · 6 damage"));
+        // iter-20-R-FT1: the applied save is finished. Armed again, it starts afresh: the
+        // applied result goes, and a target added after the new roll shows what Enter gives.
+        assert!(run.armed.is_none());
+        run.roll_link(ask(armed.link.clone(), actor));
+        assert_eq!(run.row_badge(later), None, "the applied result goes");
+        let first = *others.iter().find(|row| **row != later).unwrap();
+        run.target(first, None);
+        run.saves.insert(first, 1);
         run.state.random = Random::controlled([4, 4, 4]);
         run.armed_action(ArmedAction::RollDamage);
         assert_eq!(run.amount, "12");
@@ -2456,7 +2900,7 @@ mod tests {
         let mut run = live();
         let actor = run.current().unwrap();
         let (_, others) = armed_save(&mut run, actor);
-        run.roll_link(ask(link, actor));
+        run.roll_link(ask(link.clone(), actor));
         let target = others[0];
         run.state.participants[target].hp = Some(25);
         run.target(target, None);
@@ -2469,6 +2913,10 @@ mod tests {
         run.halved.clear();
         assert!(run.state.participants[target].hp.unwrap() <= 20);
         assert!(run.row_badge(target).unwrap().contains("9 damage"));
+        // iter-20-R-FT1: the applied save is finished; the DM arms it again at the target.
+        assert!(run.armed.is_none());
+        run.roll_link(ask(link, actor));
+        run.target(target, None);
         run.armed_action(ArmedAction::RollDamage);
         assert_eq!(run.amount, "");
         assert_eq!(run.armed.as_ref().unwrap().damage, None);
@@ -2526,7 +2974,10 @@ mod tests {
         run.amount.clear();
         run.also.clear();
         run.halved.clear();
-        assert_eq!(run.armed.as_ref().unwrap().damage, None);
+        assert!(
+            run.armed.is_none(),
+            "iter-20-R-FT1: the applied save is finished"
+        );
         run.undo();
         assert_eq!(
             others
@@ -2535,7 +2986,19 @@ mod tests {
                 .collect::<Vec<_>>(),
             before
         );
-        assert!(others.iter().all(|row| run.row_badge(*row).is_none()));
+        // The applied results go with their step; the save is armed again with the damage
+        // it had, the rerolled 14, and each row says again what Enter gives it.
+        assert!(run.state.roll_results.is_empty());
+        assert_eq!(run.armed.as_ref().unwrap().damage, Some(14));
+        assert_eq!(
+            run.row_badge(others[0]).as_deref(),
+            Some("Saved · 7 damage (half)")
+        );
+        assert_eq!(
+            run.row_badge(others[1]).as_deref(),
+            Some("Failed · 14 damage")
+        );
+        // The reroll was spent, and a step ends a kept roll for good.
         assert!(run.reroll.is_none());
     }
 

@@ -1743,6 +1743,17 @@ impl Tone {
     }
 }
 
+/// The row of a message's choice without an icon, below the message. Its words start at the
+/// message words: `message` puts them `S + 1`, the icon and `XS` from its left edge. Put a quiet
+/// `line_start` action in it, so its words, not its padding, start there.
+pub fn message_choice_row<R>(ui: &mut Ui, tone: Tone, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.horizontal(|ui| {
+        ui.add_space(S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS);
+        add(ui)
+    })
+    .inner
+}
+
 /// An inline message: a bar, an icon and words. It never blocks anything. The gaps are its
 /// own, so the words start the same distance after the icon in every caller.
 pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
