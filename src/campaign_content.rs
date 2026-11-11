@@ -122,18 +122,45 @@ struct Reconcile {
 /// The error that says Campaign.md is missing, as `Campaigns` words it.
 const MISSING_CAMPAIGN: &str = "Campaign.md is missing";
 
-/// A new result on the Campaign page ends the earlier one and its Undo: the page keeps one
-/// latest result, in the message space below `Save selections`. A macro, so the fields clear
-/// while other fields of the page are borrowed.
-macro_rules! end_results {
-    ($page:expr) => {
-        let _ = $page.campaign_write.take();
-        let _ = $page.recovered.take();
-        let _ = $page.discarded_selections.take();
+/// One result on the Campaign page. Each Undo stays with its own object and action; the
+/// message space below `Save selections` lists every live one, newest first. A plain result
+/// (no Undo) gives way to any newer result.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PageResult {
+    CampaignWrite,
+    Recovered,
+    Discarded,
+    ManifestWrite,
+    Removed,
+    Saved,
+    Applied,
+}
+
+impl PageResult {
+    const ALL: [PageResult; 7] = [
+        PageResult::CampaignWrite,
+        PageResult::Recovered,
+        PageResult::Discarded,
+        PageResult::ManifestWrite,
+        PageResult::Removed,
+        PageResult::Saved,
+        PageResult::Applied,
+    ];
+    fn has_undo(self) -> bool {
+        !matches!(self, PageResult::Saved | PageResult::Applied)
+    }
+}
+
+/// A new result comes first. It ends the plain results, never another action's Undo. A macro,
+/// so it runs while other fields of the page are borrowed.
+macro_rules! new_result {
+    ($page:expr, $kind:expr) => {
         let _ = $page.message.take();
-        let _ = $page.manifest_write.take();
-        let _ = $page.removed_package.take();
         let _ = $page.reconcile.message.take();
+        $page
+            .result_order
+            .retain(|kind: &PageResult| *kind != $kind && kind.has_undo());
+        $page.result_order.insert(0, $kind);
     };
 }
 
@@ -148,6 +175,10 @@ pub struct CampaignContent {
     /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
     /// editor, which scrolls the page to its own viewport.
     editor_rects: Vec<egui::Rect>,
+    /// The page's results, newest first. Each lives while its own field holds it.
+    result_order: Vec<PageResult>,
+    /// How often the page prepared a package removal's words: once per removal.
+    removal_text_preparations: usize,
     reconcile: Reconcile,
     active: Option<Campaign>,
     pending: Option<mpsc::Receiver<Loaded>>,
@@ -185,7 +216,8 @@ pub struct CampaignContent {
 }
 struct RemovedPackage {
     campaign: Uuid,
-    name: String,
+    /// The result's words, prepared once when the removal succeeds.
+    words: String,
     before: Vec<PackageSelection>,
     after: Vec<PackageSelection>,
     users: Vec<(Uuid, String)>,
@@ -306,6 +338,17 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
         }
     }
     (found.len() == 1).then(|| found.into_values().next().unwrap())
+}
+
+/// A package removal's result words: the package, or the encounters it leaves without
+/// creatures. Prepared once, when the removal succeeds.
+fn removal_words(name: &str, users: &[(Uuid, String)]) -> String {
+    if users.is_empty() {
+        format!("{name} removed from this campaign.")
+    } else {
+        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
+        format!("{} {}", names.join(", "), removed_suffix(names.len()))
+    }
 }
 
 /// The words after the encounter names when a removed package leaves them without creatures.
@@ -534,7 +577,7 @@ impl CampaignContent {
         }
         match checked.applied {
             Some(Ok(count)) => {
-                end_results!(self);
+                new_result!(self, PageResult::Applied);
                 self.reconcile.message = Some(design::count(
                     count,
                     "change applied. The old note is archived beside its path.",
@@ -871,187 +914,247 @@ impl CampaignContent {
         }
     }
 
-    /// The page's latest result: its words and whether its Undo is live. One action's result
-    /// ends the one before it (`end_results!`), so at most one is ever kept.
+    /// The page's live results: those with a live Undo first, newest first, then the plain one.
+    /// So every Undo stays in view while it lives. A result set without `new_result!` (a page
+    /// made in a test) comes after the others of its kind.
+    fn live_results(&self, active: &Campaign) -> Vec<PageResult> {
+        let live = |kind: &PageResult| match kind {
+            PageResult::CampaignWrite => self.campaign_write.is_some(),
+            PageResult::Recovered => self.recovered.is_some(),
+            PageResult::Discarded => self.discarded_selections.is_some(),
+            PageResult::ManifestWrite => self.manifest_write.is_some(),
+            PageResult::Removed => self
+                .removed_package
+                .as_ref()
+                .is_some_and(|removed| removed.campaign == active.id),
+            PageResult::Saved => self.message.is_some(),
+            PageResult::Applied => self.reconcile.message.is_some(),
+        };
+        let mut results: Vec<_> = self.result_order.iter().copied().filter(live).collect();
+        results.extend(
+            PageResult::ALL
+                .into_iter()
+                .filter(|kind| live(kind) && !self.result_order.contains(kind)),
+        );
+        // Stable: the order within each group stays newest first.
+        results.sort_by_key(|kind| !kind.has_undo());
+        results
+    }
+
+    /// The words of every live result, newest first, and whether any has a live Undo.
     fn result_words(&self, active: &Campaign) -> Option<(String, bool)> {
-        if self.campaign_write.is_some() {
-            Some(("Campaign.md was written again.".into(), true))
-        } else if let Some((module, _)) = &self.recovered {
-            Some((
-                format!("{} found in {}/.", module.name, folder_words(&module.path)),
-                true,
-            ))
-        } else if self.discarded_selections.is_some() {
-            Some(("Campaign packages draft discarded.".into(), true))
-        } else if let Some(write) = &self.manifest_write {
-            Some((write.message(), true))
-        } else if let Some(removed) = self
-            .removed_package
-            .as_ref()
-            .filter(|removed| removed.campaign == active.id)
-        {
-            Some((
-                if removed.users.is_empty() {
-                    format!("{} removed from this campaign.", removed.name)
-                } else {
-                    let names: Vec<_> = removed
-                        .users
-                        .iter()
-                        .map(|(_, name)| name.as_str())
-                        .collect();
-                    format!("{} {}", names.join(", "), removed_suffix(names.len()))
-                },
-                true,
-            ))
-        } else if let Some(message) = &self.message {
-            Some((message.clone(), false))
-        } else {
-            self.reconcile
-                .message
-                .clone()
-                .map(|message| (message, false))
+        let results = self.live_results(active);
+        if results.is_empty() {
+            return None;
+        }
+        let words: Vec<String> = results.iter().map(|kind| self.words_of(*kind)).collect();
+        Some((words.join(" "), results.iter().any(|kind| kind.has_undo())))
+    }
+
+    /// One live result's words.
+    fn words_of(&self, kind: PageResult) -> String {
+        match kind {
+            PageResult::CampaignWrite => "Campaign.md was written again.".into(),
+            PageResult::Recovered => self
+                .recovered
+                .as_ref()
+                .map(|(module, _)| {
+                    format!("{} found in {}/.", module.name, folder_words(&module.path))
+                })
+                .unwrap_or_default(),
+            PageResult::Discarded => "Campaign packages draft discarded.".into(),
+            PageResult::ManifestWrite => self
+                .manifest_write
+                .as_ref()
+                .map(|write| write.message())
+                .unwrap_or_default(),
+            PageResult::Removed => self
+                .removed_package
+                .as_ref()
+                .map(|removed| removed.words.clone())
+                .unwrap_or_default(),
+            PageResult::Saved => self.message.clone().unwrap_or_default(),
+            PageResult::Applied => self.reconcile.message.clone().unwrap_or_default(),
         }
     }
 
-    /// Draw the page's latest result. While a draft waits, a manifest write's Undo greys
+    /// Draw every live result, newest first. While a draft waits, a manifest write's Undo greys
     /// (`locked`): the write happened, so its words keep the text colour.
     fn draw_result(
         &self,
         ui: &mut egui::Ui,
         active: &Campaign,
         locked: Option<&str>,
+    ) -> Option<(PageResult, ResultPress)> {
+        let mut press = None;
+        for kind in self.live_results(active) {
+            if let Some(pressed) = self.draw_one(ui, kind, locked) {
+                press = Some((kind, pressed));
+            }
+        }
+        press
+    }
+
+    fn draw_one(
+        &self,
+        ui: &mut egui::Ui,
+        kind: PageResult,
+        locked: Option<&str>,
     ) -> Option<ResultPress> {
         let undo = |pressed: bool| pressed.then_some(ResultPress::Undo);
-        if self.campaign_write.is_some() {
-            undo(design::undo_message(
+        match kind {
+            PageResult::CampaignWrite => undo(design::undo_message(
                 ui,
                 Tone::Success,
                 "Campaign.md was written again.",
                 "Undo write Campaign.md",
-            ))
-        } else if let Some((module, _)) = &self.recovered {
-            let message = format!("{} found in {}/.", module.name, folder_words(&module.path));
-            undo(design::undo_message(
+            )),
+            PageResult::Recovered => undo(design::undo_message(
                 ui,
                 Tone::Success,
-                &message,
+                &self.words_of(kind),
                 "Undo folder recovery",
-            ))
-        } else if self.discarded_selections.is_some() {
-            undo(design::draft_discarded(ui, "Campaign packages"))
-        } else if let Some(write) = &self.manifest_write {
-            undo(crate::library::kept_undo_message(
-                ui,
-                Tone::Success,
-                &write.message(),
-                &format!("Undo write {}", write.path()),
-                locked,
-                false,
-            ))
-        } else if let Some(removed) = self
-            .removed_package
-            .as_ref()
-            .filter(|removed| removed.campaign == active.id)
-        {
-            if removed.users.is_empty() {
-                undo(design::undo_message(
+            )),
+            PageResult::Discarded => undo(design::draft_discarded(ui, "Campaign packages")),
+            PageResult::ManifestWrite => self.manifest_write.as_ref().and_then(|write| {
+                undo(crate::library::kept_undo_message(
                     ui,
                     Tone::Success,
-                    &format!("{} removed from this campaign.", removed.name),
-                    "Undo package removal",
+                    &write.message(),
+                    &format!("Undo write {}", write.path()),
+                    locked,
+                    false,
                 ))
-            } else {
-                let names: Vec<_> = removed
-                    .users
-                    .iter()
-                    .map(|(_, name)| name.as_str())
-                    .collect();
-                let (pressed, link) = design::undo_message_with_links(
-                    ui,
-                    Tone::Warning,
-                    &names,
-                    removed_suffix(names.len()),
-                    "Undo package removal",
-                );
-                link.map(ResultPress::Link).or(undo(pressed))
+            }),
+            PageResult::Removed => self.removed_package.as_ref().and_then(|removed| {
+                if removed.users.is_empty() {
+                    undo(design::undo_message(
+                        ui,
+                        Tone::Success,
+                        &removed.words,
+                        "Undo package removal",
+                    ))
+                } else {
+                    // Borrowed names, for the links; the words were prepared at the removal.
+                    let names: Vec<_> = removed
+                        .users
+                        .iter()
+                        .map(|(_, name)| name.as_str())
+                        .collect();
+                    let (pressed, link) = design::undo_message_with_links(
+                        ui,
+                        Tone::Warning,
+                        &names,
+                        removed_suffix(names.len()),
+                        "Undo package removal",
+                    );
+                    link.map(ResultPress::Link).or(undo(pressed))
+                }
+            }),
+            PageResult::Saved | PageResult::Applied => {
+                design::message(ui, Tone::Success, &self.words_of(kind));
+                None
             }
-        } else if let Some(message) = self.message.as_ref().or(self.reconcile.message.as_ref()) {
-            design::message(ui, Tone::Success, message);
-            None
-        } else {
-            None
         }
     }
 
-    /// Act on a press in the page's result.
-    fn press_result(&mut self, press: Option<ResultPress>) {
+    /// Act on a press in one of the page's results.
+    fn press_result(&mut self, press: Option<(PageResult, ResultPress)>) {
         match press {
-            Some(ResultPress::Link(at)) => {
+            Some((_, ResultPress::Link(at))) => {
                 if let Some(removed) = &self.removed_package {
                     self.open_lookup = Some(removed.users[at].0);
                 }
             }
-            Some(ResultPress::Undo) => self.undo_result(),
+            Some((kind, ResultPress::Undo)) => self.undo_result(kind),
             None => {}
         }
     }
 
-    /// Undo the page's latest result.
-    fn undo_result(&mut self) {
-        if let Some(write) = self.campaign_write.take() {
-            match write.undo() {
-                Ok(_) => self.refresh_pending = true,
-                Err(error) => self.error = Some(error),
-            }
-        } else if let Some((module, previous)) = self.recovered.take() {
-            if let Some(previous) = previous {
-                self.found_package = Some(previous);
-            } else {
-                self.forget_package = Some(module.id);
-            }
-        } else if let Some((selections, _)) = self.discarded_selections.take() {
-            if let Some(snapshot) = self.snapshot.as_mut() {
-                snapshot.document.selections = selections;
-            }
-        } else if let Some(write) = &self.manifest_write {
-            match write.undo() {
-                Ok(_) => {
-                    self.manifest_write = None;
-                    self.refresh_pending = true;
-                }
-                Err(error) => self.error = Some(error),
-            }
-        } else if let Some(removed) = &self.removed_package
-            && let Some(snapshot) = self.snapshot.as_mut()
-        {
-            let document = &mut snapshot.document;
-            if document.selections != removed.after {
-                self.error = Some(
-                    "Campaign choices changed. Keep them and edit the package choices here.".into(),
-                );
-            } else {
-                let after = document.selections.clone();
-                document.selections = removed.before.clone();
-                match document.save() {
-                    Ok(()) => {
-                        self.saved_selections = document.selections.clone();
-                        self.removed_package = None;
-                        self.reconcile.checked_at = None;
-                    }
-                    Err(error) => {
-                        document.selections = after;
-                        self.error = Some(error);
+    /// Undo one result. Each Undo ends only after it worked: a failed Undo keeps its result
+    /// and its Undo, with the failure in the page's errors.
+    fn undo_result(&mut self, kind: PageResult) {
+        match kind {
+            PageResult::CampaignWrite => {
+                if let Some(write) = &self.campaign_write {
+                    match write.undo() {
+                        Ok(_) => {
+                            self.campaign_write = None;
+                            self.refresh_pending = true;
+                        }
+                        Err(error) => self.error = Some(error),
                     }
                 }
             }
+            PageResult::Recovered => {
+                if let Some((module, previous)) = self.recovered.take() {
+                    if let Some(previous) = previous {
+                        self.found_package = Some(previous);
+                    } else {
+                        self.forget_package = Some(module.id);
+                    }
+                }
+            }
+            PageResult::Discarded => {
+                if let Some((selections, _)) = self.discarded_selections.take()
+                    && let Some(snapshot) = self.snapshot.as_mut()
+                {
+                    snapshot.document.selections = selections;
+                }
+            }
+            PageResult::ManifestWrite => {
+                if let Some(write) = &self.manifest_write {
+                    match write.undo() {
+                        Ok(_) => {
+                            self.manifest_write = None;
+                            self.refresh_pending = true;
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+            }
+            PageResult::Removed => {
+                if let Some(removed) = &self.removed_package
+                    && let Some(snapshot) = self.snapshot.as_mut()
+                {
+                    let document = &mut snapshot.document;
+                    if document.selections != removed.after {
+                        self.error = Some(
+                            "Campaign choices changed. Keep them and edit the package choices here."
+                                .into(),
+                        );
+                    } else {
+                        let after = document.selections.clone();
+                        document.selections = removed.before.clone();
+                        match document.save() {
+                            Ok(()) => {
+                                self.saved_selections = document.selections.clone();
+                                self.removed_package = None;
+                                self.reconcile.checked_at = None;
+                            }
+                            Err(error) => {
+                                document.selections = after;
+                                self.error = Some(error);
+                            }
+                        }
+                    }
+                }
+            }
+            PageResult::Saved | PageResult::Applied => {}
         }
+    }
+
+    /// How often the page prepared a package removal's words.
+    #[cfg(test)]
+    pub fn removal_text_preparations(&self) -> usize {
+        self.removal_text_preparations
     }
 
     /// Write Campaign.md again from the copy Splat last read.
     fn write_campaign(&mut self, campaigns: &Campaigns, active: &Campaign) {
         match campaigns.write_campaign_again(active) {
             Ok(write) => {
-                end_results!(self);
+                new_result!(self, PageResult::CampaignWrite);
                 self.campaign_write = Some(write);
                 self.refresh_pending = true;
             }
@@ -1453,7 +1556,7 @@ impl CampaignContent {
                     .show(ui)
                     .clicked()
                 {
-                    end_results!(self);
+                    new_result!(self, PageResult::Discarded);
                     self.discarded_selections = Some((
                         std::mem::replace(&mut document.selections, self.saved_selections.clone()),
                         document.baseline.clone(),
@@ -1522,7 +1625,7 @@ impl CampaignContent {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
-                        end_results!(self);
+                        new_result!(self, PageResult::Saved);
                         self.message = Some("Campaign selections saved.".into());
                         self.error = None;
                     }
@@ -1627,7 +1730,7 @@ impl CampaignContent {
                 if pressed {
                     match crate::content_workspace::ManifestWrite::write_as(module, path, exists) {
                         Ok(write) => {
-                            end_results!(self);
+                            new_result!(self, PageResult::ManifestWrite);
                             self.manifest_write = Some(write);
                             self.refresh_pending = true;
                         }
@@ -1926,7 +2029,7 @@ impl CampaignContent {
                                 .show(ui)
                                 .clicked()
                         {
-                            end_results!(self);
+                            new_result!(self, PageResult::Recovered);
                             self.recovered = Some((module.clone(), registered.clone()));
                             self.found_package = Some(module.clone());
                         }
@@ -1945,7 +2048,7 @@ impl CampaignContent {
                                 &known.path,
                             ) {
                                 Ok(module) => {
-                                    end_results!(self);
+                                    new_result!(self, PageResult::Recovered);
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
                                 }
@@ -1973,7 +2076,7 @@ impl CampaignContent {
                                 &folder,
                             ) {
                                 Ok(module) => {
-                                    end_results!(self);
+                                    new_result!(self, PageResult::Recovered);
                                     self.recovered = Some((module.clone(), registered.clone()));
                                     self.found_package = Some(module);
                                 }
@@ -2005,10 +2108,12 @@ impl CampaignContent {
             match document.save() {
                 Ok(()) => {
                     self.saved_selections = document.selections.clone();
-                    end_results!(self);
+                    new_result!(self, PageResult::Removed);
+                    self.removal_text_preparations += 1;
+                    let name = selection.display_name().to_owned();
                     self.removed_package = Some(RemovedPackage {
                         campaign: active.id,
-                        name: selection.display_name().to_owned(),
+                        words: removal_words(&name, &users),
                         before,
                         after: document.selections.clone(),
                         users,
@@ -2914,7 +3019,7 @@ mod tests {
         document.save().unwrap();
         let removed = |campaign: &Campaign| RemovedPackage {
             campaign: campaign.id,
-            name: "Gone".into(),
+            words: removal_words("Gone", &[]),
             before: before.clone(),
             after: Vec::new(),
             users: Vec::new(),

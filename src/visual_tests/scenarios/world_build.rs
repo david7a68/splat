@@ -5086,8 +5086,34 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "A replaced manifest says it was written again, as its Undo write does",
         );
     });
+    // Round 25 review: an independent action (B, a saved package choice) shows its own result
+    // and leaves A's Undo with A. Undo A brings back A's exact bytes and keeps B's choices.
+    let campaign_md = d.root.join("campaigns/emberfall/Campaign.md");
+    d.click_starting("Ashen Marches · ");
+    d.click("Use Ash Wraith");
+    d.click("Save selections");
+    d.settle();
+    let b_saved = fs::read(&campaign_md).unwrap();
+    let a_kept = d.in_view("Undo write Package.md")
+        && d.visible_text("Package.md was written again.")
+        // B's plain result is listed after A's live Undo, in the same part (its name).
+        && d.has_containing("Campaign selections saved.");
     d.click("Undo write Package.md");
     d.wait_for_text("Package.md cannot be read (line 4)");
+    let a_back = fs::read_to_string(&path).unwrap() == broken;
+    let b_kept = fs::read(&campaign_md).unwrap() == b_saved;
+    d.observe(
+        "iter-25-C-undo-owner",
+        a_kept && a_back && b_kept && !d.has("Undo write Package.md"),
+        format!(
+            "A's Undo after B's Save {a_kept}; A's bytes back {a_back}; B's choices kept {b_kept}"
+        ),
+    );
+    // B again, and the needed entries in the right pane, so the steps below start as before.
+    d.click("Use Ash Wraith");
+    d.click("Save selections");
+    d.wait_for_text("Campaign selections saved.");
+    d.click_starting("Needed by your entries");
     assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     d.click("Open in Library");
     d.expect("Markdown editor");

@@ -2290,6 +2290,27 @@ pub mod campaign_content {
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
+        // Round 25 review: a failed Undo keeps the write and its Undo; once the fault is gone,
+        // the same Undo works. The test namespace runs as root, so permission bits do not stop
+        // a delete there; the fault is a folder where Campaign.md was, so the Undo cannot read it.
+        let written = std::fs::read(&manifest).unwrap();
+        std::fs::remove_file(&manifest).unwrap();
+        std::fs::create_dir(&manifest).unwrap();
+        d.click("Undo write Campaign.md");
+        d.settle();
+        let kept =
+            d.has("Undo write Campaign.md") && d.visible_text("Campaign.md was written again.");
+        std::fs::remove_dir(&manifest).unwrap();
+        std::fs::write(&manifest, &written).unwrap();
+        d.observe(
+            "iter-25-C-undo-failed",
+            kept,
+            format!(
+                "After a failed Undo: Undo kept {}, result kept {}",
+                d.has("Undo write Campaign.md"),
+                d.visible_text("Campaign.md was written again.")
+            ),
+        );
         d.click("Undo write Campaign.md");
         d.wait_for_text("Write Campaign.md again");
         assert!(!manifest.exists());
@@ -2624,6 +2645,27 @@ pub mod campaign_content {
         let a_back = draft(d, "Notes/Broken.md").contains("First draft.")
             && !d.has("Undo discard of Broken.md");
         let b_kept = draft(d, "Notes/Cracked.md").contains("Kept B line.");
+        // The displayed words too: each editor scrolled into view shows its own draft.
+        let shown = |d: &mut Driver<'_>, editor: &str, words: &str| {
+            d.type_into(editor, "");
+            d.settle();
+            let shown = d.visible_passage(words);
+            d.press(Key::Escape);
+            shown
+        };
+        let a_shown = shown(
+            d,
+            &crate::world::repair::editor_name("Notes/Broken.md"),
+            "First draft.",
+        );
+        let b_shown = shown(d, &b_name, "Kept B line.");
+        d.observe(
+            "iter-25-C-FD1-owner-shown",
+            a_shown && b_shown,
+            format!(
+                "A's editor shows First draft. {a_shown}; B's editor shows Kept B line. {b_shown}"
+            ),
+        );
         d.observe(
             "iter-25-C-FD1-owner",
             a_discarded && b_changed && a_result && a_back && b_kept,
@@ -17307,6 +17349,18 @@ pub mod remove_package_in_use {
                 ),
             );
         });
+        // Round 25 review: the removal's words are prepared once, at the removal. Unchanged
+        // frames at two sizes prepare nothing.
+        let prepared = d.app_mut().campaign_content.removal_text_preparations();
+        d.at_size(SMALL, |_| ());
+        d.at_size(LARGE, |_| ());
+        d.settle();
+        let unchanged = d.app_mut().campaign_content.removal_text_preparations();
+        d.observe(
+            "iter-25-C-removal-words-once",
+            prepared == 1 && unchanged == prepared,
+            format!("Removal words prepared {prepared} times at the removal, {unchanged} after unchanged frames"),
+        );
         d.click("Undo package removal");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");

@@ -630,11 +630,12 @@ repair choice and file line start at its words. Packages keeps its save row dire
 The Packages page scrolls as one page and keeps the scroll bar's lane whether or not the bar shows; the package list
 fills the rest of the window and keeps room for a few rows, so tall repairs make the page scroll. A control that
 gains focus (Tab or a screen reader) scrolls into view, and a repair editor brings its whole viewport into view.
-Below `Save selections`, the page keeps one message space, two text lines high whatever it holds: the page's latest
-result (`Campaign selections saved.`, a discard, a written Campaign.md or manifest, a found folder, a removed
-package, applied changes), first while its Undo is live, then the page's errors (Save's or a load's, the change
-check's). A new result ends the earlier one and its Undo. So no result or error moves the repairs or the package
-list below. With nothing loaded, the errors stand alone.
+Below `Save selections`, the page keeps one message space, two text lines high whatever it holds: every live
+result with an Undo (a discard, a written Campaign.md or manifest, a found folder, a removed package), newest
+first, then the latest plain result (`Campaign selections saved.`, applied changes), then the page's errors
+(Save's or a load's, the change check's). Each Undo stays with its own object and action until it is used or its
+object ends it; a failed Undo keeps it. A plain result gives way to any newer result. The space scrolls when they
+need more than two lines. So no result or error moves the repairs or the package list below. With nothing loaded, the errors stand alone.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row. Its save row lays out `Save repaired note` first at that edge; a long
 state (`Not saved. …`) or lock reason wraps beside it and never cuts it.
