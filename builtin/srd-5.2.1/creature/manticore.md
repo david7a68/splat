@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "994a14d1-2309-5860-a680-8a97776beeed"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/manticore"
-splat_name: "Manticore"
+splat_id: 994a14d1-2309-5860-a680-8a97776beeed
+splat_kind: reference
+splat_key: dnd2024:reference/creature/manticore
+splat_name: Manticore
 splat_pages:
 - 306
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ae654ddf-abff-52c5-8323-be1e4ba9cfc3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/dretch"
-splat_name: "Dretch"
+splat_id: ae654ddf-abff-52c5-8323-be1e4ba9cfc3
+splat_kind: reference
+splat_key: dnd2024:reference/creature/dretch
+splat_name: Dretch
 splat_pages:
 - 281
 ---

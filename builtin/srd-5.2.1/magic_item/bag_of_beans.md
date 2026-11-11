@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "783f73fb-a0df-5508-ac56-84408c524ad6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bag_of_beans"
-splat_name: "Bag of Beans"
+splat_id: 783f73fb-a0df-5508-ac56-84408c524ad6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bag_of_beans
+splat_name: Bag of Beans
 splat_pages:
 - 211
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ffabdd3-a671-548d-b2c1-379287e3685b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/blood_hawk"
-splat_name: "Blood Hawk"
+splat_id: 2ffabdd3-a671-548d-b2c1-379287e3685b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/blood_hawk
+splat_name: Blood Hawk
 splat_pages:
 - 345
 - 346

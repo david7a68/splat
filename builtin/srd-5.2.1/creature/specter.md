@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e4375356-a4a4-5888-9b89-97981c97921d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/specter"
-splat_name: "Specter"
+splat_id: e4375356-a4a4-5888-9b89-97981c97921d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/specter
+splat_name: Specter
 splat_pages:
 - 327
 ---

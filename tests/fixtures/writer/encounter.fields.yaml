@@ -1,11 +1,4 @@
----
-splat_schema: 1
 splat_id: 00000000-0000-0000-0000-000000000001
 splat_kind: encounter
 splat_name: Fixture
 splat_encounter: {roster: [{key: actor_one, creature: {key: 'dnd2024:creatures/goblin_warrior'}, side: enemies, controller: {kind: manual, role: gm}, overrides: {max_hp: {add: 5}}}], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 20, resolution_events: 10000}}
----
-
-# Fixture
-
-Keep this prose.

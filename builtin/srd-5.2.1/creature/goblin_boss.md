@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2002c125-cd18-547a-b884-fb5494241548"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/goblin_boss"
-splat_name: "Goblin Boss"
+splat_id: 2002c125-cd18-547a-b884-fb5494241548
+splat_kind: reference
+splat_key: dnd2024:reference/creature/goblin_boss
+splat_name: Goblin Boss
 splat_pages:
 - 290
 ---

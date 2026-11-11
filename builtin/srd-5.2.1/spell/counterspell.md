@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "20346446-bd26-5784-ba29-7d167068dda6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/counterspell"
-splat_name: "Counterspell"
+splat_id: 20346446-bd26-5784-ba29-7d167068dda6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/counterspell
+splat_name: Counterspell
 splat_pages:
 - 120
 ---

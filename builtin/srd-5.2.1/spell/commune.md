@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6fcbb769-6ac9-5d14-b6ec-2b8ebb077cd6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/commune"
-splat_name: "Commune"
+splat_id: 6fcbb769-6ac9-5d14-b6ec-2b8ebb077cd6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/commune
+splat_name: Commune
 splat_pages:
 - 116
 ---

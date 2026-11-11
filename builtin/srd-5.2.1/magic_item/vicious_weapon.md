@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1be03299-5f1d-58b1-9b2f-f0a99253b3ad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/vicious_weapon"
-splat_name: "Vicious Weapon"
+splat_id: 1be03299-5f1d-58b1-9b2f-f0a99253b3ad
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/vicious_weapon
+splat_name: Vicious Weapon
 splat_pages:
 - 250
 ---

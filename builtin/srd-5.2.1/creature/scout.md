@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6edfd207-496e-5f46-8813-5bcc15edf04b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/scout"
-splat_name: "Scout"
+splat_id: 6edfd207-496e-5f46-8813-5bcc15edf04b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/scout
+splat_name: Scout
 splat_pages:
 - 322
 ---

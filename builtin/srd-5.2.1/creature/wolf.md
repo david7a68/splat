@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6512fffb-0831-59db-9f06-35b6a49f9464"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wolf"
-splat_name: "Wolf"
+splat_id: 6512fffb-0831-59db-9f06-35b6a49f9464
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wolf
+splat_name: Wolf
 splat_pages:
 - 364
 ---

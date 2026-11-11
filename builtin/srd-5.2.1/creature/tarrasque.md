@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94790282-1920-5693-85ae-6f74f020c859"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/tarrasque"
-splat_name: "Tarrasque"
+splat_id: 94790282-1920-5693-85ae-6f74f020c859
+splat_kind: reference
+splat_key: dnd2024:reference/creature/tarrasque
+splat_name: Tarrasque
 splat_pages:
 - 331
 - 332

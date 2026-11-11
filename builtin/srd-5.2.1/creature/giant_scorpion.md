@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "41d571b1-4899-58a6-a33b-44282b91fe52"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_scorpion"
-splat_name: "Giant Scorpion"
+splat_id: 41d571b1-4899-58a6-a33b-44282b91fe52
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_scorpion
+splat_name: Giant Scorpion
 splat_pages:
 - 353
 ---

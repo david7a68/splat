@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c00f27e2-032a-533a-8a0f-c34d146de0c2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/finger_of_death"
-splat_name: "Finger of Death"
+splat_id: c00f27e2-032a-533a-8a0f-c34d146de0c2
+splat_kind: reference
+splat_key: dnd2024:reference/spell/finger_of_death
+splat_name: Finger of Death
 splat_pages:
 - 131
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "607c10b6-5687-546c-be9d-0baa958efcc1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magic_jar"
-splat_name: "Magic Jar"
+splat_id: 607c10b6-5687-546c-be9d-0baa958efcc1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magic_jar
+splat_name: Magic Jar
 splat_pages:
 - 146
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f40cc57e-1dfb-571c-b98b-38aa19a916d2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/improvised_weapons"
-splat_name: "Improvised Weapons"
+splat_id: f40cc57e-1dfb-571c-b98b-38aa19a916d2
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/improvised_weapons
+splat_name: Improvised Weapons
 splat_pages:
 - 183
 ---

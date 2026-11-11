@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f9d3d088-764c-59be-ad0e-3c574fb20d35"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/xorn"
-splat_name: "Xorn"
+splat_id: f9d3d088-764c-59be-ad0e-3c574fb20d35
+splat_kind: reference
+splat_key: dnd2024:reference/creature/xorn
+splat_name: Xorn
 splat_pages:
 - 343
 ---

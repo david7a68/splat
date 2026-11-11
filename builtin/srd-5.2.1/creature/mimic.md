@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fccac7d8-1ff4-5cf0-a590-f58302d4d255"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mimic"
-splat_name: "Mimic"
+splat_id: fccac7d8-1ff4-5cf0-a590-f58302d4d255
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mimic
+splat_name: Mimic
 splat_pages:
 - 308
 - 309

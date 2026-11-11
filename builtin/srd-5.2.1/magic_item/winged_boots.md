@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "451d404a-3687-5d09-96ae-dc738b29fbb4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/winged_boots"
-splat_name: "Winged Boots"
+splat_id: 451d404a-3687-5d09-96ae-dc738b29fbb4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/winged_boots
+splat_name: Winged Boots
 splat_pages:
 - 253
 ---

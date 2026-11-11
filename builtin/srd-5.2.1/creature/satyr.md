@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f5da0a47-3904-55da-a877-4a794655aae8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/satyr"
-splat_name: "Satyr"
+splat_id: f5da0a47-3904-55da-a877-4a794655aae8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/satyr
+splat_name: Satyr
 splat_pages:
 - 321
 - 322

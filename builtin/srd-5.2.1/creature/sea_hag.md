@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "496185fe-8142-5b94-aac2-a80eb915edad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sea_hag"
-splat_name: "Sea Hag"
+splat_id: 496185fe-8142-5b94-aac2-a80eb915edad
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sea_hag
+splat_name: Sea Hag
 splat_pages:
 - 322
 ---

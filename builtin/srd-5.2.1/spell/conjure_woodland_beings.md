@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ef262da2-969c-5f29-8f5c-dc3ed5a13710"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_woodland_beings"
-splat_name: "Conjure Woodland Beings"
+splat_id: ef262da2-969c-5f29-8f5c-dc3ed5a13710
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_woodland_beings
+splat_name: Conjure Woodland Beings
 splat_pages:
 - 118
 - 119

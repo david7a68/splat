@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b9c96b39-424e-5bb4-8cb2-81951c3eed4a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/antipathy_sympathy"
-splat_name: "Antipathy/Sympathy"
+splat_id: b9c96b39-424e-5bb4-8cb2-81951c3eed4a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/antipathy_sympathy
+splat_name: Antipathy/Sympathy
 splat_pages:
 - 109
 - 110

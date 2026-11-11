@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e9485182-42ae-5083-9cf4-5c4c3197a970"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/carpet_of_flying"
-splat_name: "Carpet of Flying"
+splat_id: e9485182-42ae-5083-9cf4-5c4c3197a970
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/carpet_of_flying
+splat_name: Carpet of Flying
 splat_pages:
 - 215
 ---

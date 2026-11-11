@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d4a60e09-3433-5533-a5be-dd2400f8d079"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_frog"
-splat_name: "Giant Frog"
+splat_id: d4a60e09-3433-5533-a5be-dd2400f8d079
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_frog
+splat_name: Giant Frog
 splat_pages:
 - 351
 ---

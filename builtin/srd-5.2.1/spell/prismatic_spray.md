@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c7d7b38a-f6ea-5297-a16b-18cdfc157034"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/prismatic_spray"
-splat_name: "Prismatic Spray"
+splat_id: c7d7b38a-f6ea-5297-a16b-18cdfc157034
+splat_kind: reference
+splat_key: dnd2024:reference/spell/prismatic_spray
+splat_name: Prismatic Spray
 splat_pages:
 - 154
 - 155

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5951cefd-4875-5388-aa82-c1e39b175e19"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/healing"
-splat_name: "Healing"
+splat_id: 5951cefd-4875-5388-aa82-c1e39b175e19
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/healing
+splat_name: Healing
 splat_pages:
 - 182
 ---

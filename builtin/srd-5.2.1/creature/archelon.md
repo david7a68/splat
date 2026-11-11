@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f30c2d12-2067-5f36-bc3c-46308707a3a0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/archelon"
-splat_name: "Archelon"
+splat_id: f30c2d12-2067-5f36-bc3c-46308707a3a0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/archelon
+splat_name: Archelon
 splat_pages:
 - 344
 - 345

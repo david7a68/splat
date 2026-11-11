@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9107b81d-294c-5402-8cf2-83e2d07a54ad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hold_monster"
-splat_name: "Hold Monster"
+splat_id: 9107b81d-294c-5402-8cf2-83e2d07a54ad
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hold_monster
+splat_name: Hold Monster
 splat_pages:
 - 140
 - 141

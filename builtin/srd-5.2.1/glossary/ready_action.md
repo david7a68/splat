@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0cd5bbc9-650b-5e3c-af1c-d4dea90e2781"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/ready_action"
-splat_name: "Ready [Action]"
+splat_id: 0cd5bbc9-650b-5e3c-af1c-d4dea90e2781
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/ready_action
+splat_name: Ready [Action]
 splat_pages:
 - 186
 - 187

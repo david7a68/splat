@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e2584077-1962-5934-b270-491e97fa3a03"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/archmage"
-splat_name: "Archmage"
+splat_id: e2584077-1962-5934-b270-491e97fa3a03
+splat_kind: reference
+splat_key: dnd2024:reference/creature/archmage
+splat_name: Archmage
 splat_pages:
 - 305
 ---

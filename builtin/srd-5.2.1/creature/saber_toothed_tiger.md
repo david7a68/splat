@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5e32447f-418b-5af4-92d6-0e125886161d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/saber_toothed_tiger"
-splat_name: "Saber-Toothed Tiger"
+splat_id: 5e32447f-418b-5af4-92d6-0e125886161d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/saber_toothed_tiger
+splat_name: Saber-Toothed Tiger
 splat_pages:
 - 360
 ---

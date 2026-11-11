@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5b7e02e7-cb66-53e4-8677-360f26e6392d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_frost"
-splat_name: "Staff of Frost"
+splat_id: 5b7e02e7-cb66-53e4-8677-360f26e6392d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_frost
+splat_name: Staff of Frost
 splat_pages:
 - 245
 ---

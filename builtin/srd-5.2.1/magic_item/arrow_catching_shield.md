@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ec944739-c730-5afe-a623-1d9eb9f045e6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/arrow_catching_shield"
-splat_name: "Arrow-Catching Shield"
+splat_id: ec944739-c730-5afe-a623-1d9eb9f045e6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/arrow_catching_shield
+splat_name: Arrow-Catching Shield
 splat_pages:
 - 211
 ---

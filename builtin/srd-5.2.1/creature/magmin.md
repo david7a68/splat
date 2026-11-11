@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2984c38d-8409-5d32-8391-3d19309337ce"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/magmin"
-splat_name: "Magmin"
+splat_id: 2984c38d-8409-5d32-8391-3d19309337ce
+splat_kind: reference
+splat_key: dnd2024:reference/creature/magmin
+splat_name: Magmin
 splat_pages:
 - 305
 - 306

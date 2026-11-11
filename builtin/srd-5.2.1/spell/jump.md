@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "db31c54b-f1af-585b-804b-2e96a46c277e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/jump"
-splat_name: "Jump"
+splat_id: db31c54b-f1af-585b-804b-2e96a46c277e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/jump
+splat_name: Jump
 splat_pages:
 - 143
 ---

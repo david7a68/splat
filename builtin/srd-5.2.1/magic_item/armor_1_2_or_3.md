@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e07f68e9-ed4d-5293-bdfb-232e9ea9131c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/armor_1_2_or_3"
-splat_name: "Armor, +1, +2, or +3"
+splat_id: e07f68e9-ed4d-5293-bdfb-232e9ea9131c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/armor_1_2_or_3
+splat_name: Armor, +1, +2, or +3
 splat_pages:
 - 210
 ---

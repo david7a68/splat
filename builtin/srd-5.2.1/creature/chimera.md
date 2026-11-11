@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "70b2c4be-643c-5563-9925-89a843ba18fa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/chimera"
-splat_name: "Chimera"
+splat_id: 70b2c4be-643c-5563-9925-89a843ba18fa
+splat_kind: reference
+splat_key: dnd2024:reference/creature/chimera
+splat_name: Chimera
 splat_pages:
 - 273
 ---

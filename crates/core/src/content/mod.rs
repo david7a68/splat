@@ -39,6 +39,7 @@ pub mod legacy;
 pub mod list_formats;
 pub mod loot;
 mod markdown;
+mod model;
 pub use markdown::{body_text, inline_text};
 mod shared;
 pub mod stat_blocks;
@@ -281,7 +282,10 @@ impl Entry {
             fields.contains_key("splat_character") || body.contains("path=splat_payload"),
         );
         if tables {
-            markdown::read(&stat_blocks::without_legacy(&body, &kind), &mut fields)?;
+            markdown::read(
+                &stat_blocks::without_marked_stats(&body, &kind),
+                &mut fields,
+            )?;
         } else {
             markdown::read(&body, &mut fields)?;
         }

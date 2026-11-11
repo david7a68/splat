@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b291162a-18fc-526c-982f-b4f75648c15d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/size"
-splat_name: "Size"
+splat_id: b291162a-18fc-526c-982f-b4f75648c15d
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/size
+splat_name: Size
 splat_pages:
 - 188
 ---

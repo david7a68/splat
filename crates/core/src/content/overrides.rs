@@ -757,10 +757,7 @@ mod tests {
     fn a_linked_character_cannot_change_what_its_sheet_decides() {
         let linked = Entry::parse(
             "hero.md",
-            &crate::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond}}\nsplat_stats:\n  max_hp: {{value: 20}}\n---\n",
-                Uuid::new_v4()
-            )).expect("schema-2 fixture"),
+            &crate::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond}}\nsplat_stats:\n  max_hp: {{value: 20}}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         assert!(
@@ -827,10 +824,7 @@ mod tests {
         let creature = |extra: &str, body: &str| {
             Entry::parse(
                 "c.md",
-                &crate::content::formats::convert("Fixture.md", &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {{{extra}}}\n---\n\n{body}\n",
-                    Uuid::new_v4()
-                )).expect("schema-2 fixture"),
+                &crate::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {{{extra}}}\n", Uuid::new_v4()), &format!("\n{body}\n")).expect("schema-2 fixture"),
             )
             .unwrap()
         };

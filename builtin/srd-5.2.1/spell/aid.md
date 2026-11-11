@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "efc13259-3ad6-5e98-9b2f-95efc448655b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/aid"
-splat_name: "Aid"
+splat_id: efc13259-3ad6-5e98-9b2f-95efc448655b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/aid
+splat_name: Aid
 splat_pages:
 - 107
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "871abc9b-8aa7-5f63-8783-842fe280d1ec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hunter_s_mark"
-splat_name: "Hunter’s Mark"
+splat_id: 871abc9b-8aa7-5f63-8783-842fe280d1ec
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hunter_s_mark
+splat_name: Hunter’s Mark
 splat_pages:
 - 141
 ---

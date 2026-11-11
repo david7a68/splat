@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b5d60cbc-8bf3-5d27-9da1-ff0471332e3b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/adventure"
-splat_name: "Adventure"
+splat_id: b5d60cbc-8bf3-5d27-9da1-ff0471332e3b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/adventure
+splat_name: Adventure
 splat_pages:
 - 176
 ---

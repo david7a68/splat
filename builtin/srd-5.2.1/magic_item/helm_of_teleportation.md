@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1aa78d00-b5d5-5691-8928-227e1102b505"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/helm_of_teleportation"
-splat_name: "Helm of Teleportation"
+splat_id: 1aa78d00-b5d5-5691-8928-227e1102b505
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/helm_of_teleportation
+splat_name: Helm of Teleportation
 splat_pages:
 - 226
 ---

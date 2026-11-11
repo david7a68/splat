@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af8282e2-4315-5ca4-955b-ed9aaa94de8e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dancing_sword"
-splat_name: "Dancing Sword"
+splat_id: af8282e2-4315-5ca4-955b-ed9aaa94de8e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dancing_sword
+splat_name: Dancing Sword
 splat_pages:
 - 217
 ---

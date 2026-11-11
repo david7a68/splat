@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "828b83c9-0c32-500d-8e2c-4d6d94209b29"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/water_walk"
-splat_name: "Water Walk"
+splat_id: 828b83c9-0c32-500d-8e2c-4d6d94209b29
+splat_kind: reference
+splat_key: dnd2024:reference/spell/water_walk
+splat_name: Water Walk
 splat_pages:
 - 173
 - 174

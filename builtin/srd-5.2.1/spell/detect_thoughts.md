@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "18122431-451e-592b-93e2-d866579db43f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/detect_thoughts"
-splat_name: "Detect Thoughts"
+splat_id: 18122431-451e-592b-93e2-d866579db43f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/detect_thoughts
+splat_name: Detect Thoughts
 splat_pages:
 - 123
 ---

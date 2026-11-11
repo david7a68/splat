@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6b7c5ebd-5be7-539e-b4a6-72cd2680903e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_spider"
-splat_name: "Giant Spider"
+splat_id: 6b7c5ebd-5be7-539e-b4a6-72cd2680903e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_spider
+splat_name: Giant Spider
 splat_pages:
 - 353
 - 354

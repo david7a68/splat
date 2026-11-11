@@ -596,9 +596,7 @@ mod tests {
             record.definition.splat_id
         ));
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let generated = crate::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_name: Old copied rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_origin:\n  key: {key}\n---\n\nOld generated content.\n"
-        )).expect("schema-2 fixture");
+        let generated = crate::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_name: Old copied rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_origin:\n  key: {key}\n"), "\nOld generated content.\n").expect("schema-2 fixture");
         let hash = format!("{:x}", Sha256::digest(generated.as_bytes()));
         let text = format!("{generated}{MARKER}{hash} -->\n{PERSONAL_NOTES}{extra}");
         fs::write(&path, &text).unwrap();
@@ -614,7 +612,7 @@ mod tests {
         routed_notes(record, campaign).remove(0).0
     }
     fn custom_entry_requiring(campaign: &Path, id: uuid::Uuid) {
-        fs::write(campaign.join("Custom.md"), crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).expect("schema-2 fixture")).unwrap();
+        fs::write(campaign.join("Custom.md"), crate::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n", uuid::Uuid::new_v4()), "").expect("schema-2 fixture")).unwrap();
     }
     #[test]
     fn retires_only_unreferenced_unannotated_copies_and_preserves_all_bytes() {
@@ -761,7 +759,7 @@ mod tests {
         let path = record.campaign_path(root.path());
         assert_eq!(path.file_name().unwrap(), "Example.md");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let other = crate::content::formats::convert("Other.md", "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n---\n\nA different character's note.\n").unwrap();
+        let other = crate::content::formats::fixture("Other.md", "splat_id: 00000000-0000-0000-0000-000000000099\nsplat_kind: creature\nsplat_name: Example\nsplat_creature: {}\n", "\nA different character's note.\n").unwrap();
         fs::write(&path, &other).unwrap();
         let saved = record.save_campaign_copy(root.path()).unwrap();
         assert_ne!(saved, path);

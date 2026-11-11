@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3eddd049-b24b-521c-9395-17d9d9104def"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/searing_smite"
-splat_name: "Searing Smite"
+splat_id: 3eddd049-b24b-521c-9395-17d9d9104def
+splat_kind: reference
+splat_key: dnd2024:reference/spell/searing_smite
+splat_name: Searing Smite
 splat_pages:
 - 160
 ---

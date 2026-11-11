@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f29097ae-77bc-596e-9183-c8ee0f41c8d3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/forcecage"
-splat_name: "Forcecage"
+splat_id: f29097ae-77bc-596e-9183-c8ee0f41c8d3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/forcecage
+splat_name: Forcecage
 splat_pages:
 - 134
 ---

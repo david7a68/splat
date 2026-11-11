@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "34511173-6022-531c-822b-c32b9d82f7d0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/water_elemental"
-splat_name: "Water Elemental"
+splat_id: 34511173-6022-531c-822b-c32b9d82f7d0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/water_elemental
+splat_name: Water Elemental
 splat_pages:
 - 337
 ---

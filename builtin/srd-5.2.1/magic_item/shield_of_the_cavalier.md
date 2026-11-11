@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9879eeb7-ed3d-5905-b104-0c0c1d1a34e5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/shield_of_the_cavalier"
-splat_name: "Shield of the Cavalier"
+splat_id: 9879eeb7-ed3d-5905-b104-0c0c1d1a34e5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/shield_of_the_cavalier
+splat_name: Shield of the Cavalier
 splat_pages:
 - 243
 ---

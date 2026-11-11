@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7dbc9493-a6be-5860-bdc6-d2455663a53c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sphinx_of_valor"
-splat_name: "Sphinx of Valor"
+splat_id: 7dbc9493-a6be-5860-bdc6-d2455663a53c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sphinx_of_valor
+splat_name: Sphinx of Valor
 splat_pages:
 - 328
 ---

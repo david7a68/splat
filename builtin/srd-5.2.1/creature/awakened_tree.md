@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "37014774-bb0e-572d-b798-6923d0717bde"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/awakened_tree"
-splat_name: "Awakened Tree"
+splat_id: 37014774-bb0e-572d-b798-6923d0717bde
+splat_kind: reference
+splat_key: dnd2024:reference/creature/awakened_tree
+splat_name: Awakened Tree
 splat_pages:
 - 260
 ---

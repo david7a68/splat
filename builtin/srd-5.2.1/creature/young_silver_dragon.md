@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6db4f78c-a2ee-5abf-94bd-045636725293"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_silver_dragon"
-splat_name: "Young Silver Dragon"
+splat_id: 6db4f78c-a2ee-5abf-94bd-045636725293
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_silver_dragon
+splat_name: Young Silver Dragon
 splat_pages:
 - 324
 ---

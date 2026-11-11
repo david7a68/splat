@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4d607109-8fa4-519b-9411-827092f62c3c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gelatinous_cube"
-splat_name: "Gelatinous Cube"
+splat_id: 4d607109-8fa4-519b-9411-827092f62c3c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gelatinous_cube
+splat_name: Gelatinous Cube
 splat_pages:
 - 286
 - 287

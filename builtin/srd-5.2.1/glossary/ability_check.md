@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "be448140-b5f9-5ccd-b0ab-78134634f8f7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/ability_check"
-splat_name: "Ability Check"
+splat_id: be448140-b5f9-5ccd-b0ab-78134634f8f7
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/ability_check
+splat_name: Ability Check
 splat_pages:
 - 176
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b5c10081-bf10-5aea-b748-3d5bebe84fde"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/horn_of_blasting"
-splat_name: "Horn of Blasting"
+splat_id: b5c10081-bf10-5aea-b748-3d5bebe84fde
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/horn_of_blasting
+splat_name: Horn of Blasting
 splat_pages:
 - 226
 ---

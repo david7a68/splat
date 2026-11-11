@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9dd7f18b-3855-56f2-9360-c619bbf554fa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/vicious_mockery"
-splat_name: "Vicious Mockery"
+splat_id: 9dd7f18b-3855-56f2-9360-c619bbf554fa
+splat_kind: reference
+splat_key: dnd2024:reference/spell/vicious_mockery
+splat_name: Vicious Mockery
 splat_pages:
 - 171
 - 172

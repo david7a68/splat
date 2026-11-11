@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7a1c096a-4ae8-51c2-a98b-8fdeff177325"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/stone_golem"
-splat_name: "Stone Golem"
+splat_id: 7a1c096a-4ae8-51c2-a98b-8fdeff177325
+splat_kind: reference
+splat_key: dnd2024:reference/creature/stone_golem
+splat_name: Stone Golem
 splat_pages:
 - 330
 ---

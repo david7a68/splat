@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "038251dd-4233-5de2-b158-44f7d15316f8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/clairvoyance"
-splat_name: "Clairvoyance"
+splat_id: 038251dd-4233-5de2-b158-44f7d15316f8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/clairvoyance
+splat_name: Clairvoyance
 splat_pages:
 - 115
 ---

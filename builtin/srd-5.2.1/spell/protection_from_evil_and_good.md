@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c783df53-b783-5512-a362-a4da14e253a1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/protection_from_evil_and_good"
-splat_name: "Protection from Evil and Good"
+splat_id: c783df53-b783-5512-a362-a4da14e253a1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/protection_from_evil_and_good
+splat_name: Protection from Evil and Good
 splat_pages:
 - 157
 ---

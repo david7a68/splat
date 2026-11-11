@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d8fef7b9-a876-5975-8031-9f3fd3e6a233"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/plate_armor_of_etherealness"
-splat_name: "Plate Armor of Etherealness"
+splat_id: d8fef7b9-a876-5975-8031-9f3fd3e6a233
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/plate_armor_of_etherealness
+splat_name: Plate Armor of Etherealness
 splat_pages:
 - 234
 ---

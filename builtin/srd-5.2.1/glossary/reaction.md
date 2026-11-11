@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6bcbc10-44c3-5336-b7dd-e970c45221c7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/reaction"
-splat_name: "Reaction"
+splat_id: b6bcbc10-44c3-5336-b7dd-e970c45221c7
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/reaction
+splat_name: Reaction
 splat_pages:
 - 186
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94c15fa5-c758-52dd-936e-de73227edab5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/horned_devil"
-splat_name: "Horned Devil"
+splat_id: 94c15fa5-c758-52dd-936e-de73227edab5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/horned_devil
+splat_name: Horned Devil
 splat_pages:
 - 299
 - 300

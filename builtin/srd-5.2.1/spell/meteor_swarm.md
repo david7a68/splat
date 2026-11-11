@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d3f28ca2-0502-5afe-9b1e-b2147c4479e9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/meteor_swarm"
-splat_name: "Meteor Swarm"
+splat_id: d3f28ca2-0502-5afe-9b1e-b2147c4479e9
+splat_kind: reference
+splat_key: dnd2024:reference/spell/meteor_swarm
+splat_name: Meteor Swarm
 splat_pages:
 - 149
 ---

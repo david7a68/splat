@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7b0c0925-4c7c-5aac-ad13-b4ce832aaf4b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/eagle"
-splat_name: "Eagle"
+splat_id: 7b0c0925-4c7c-5aac-ad13-b4ce832aaf4b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/eagle
+splat_name: Eagle
 splat_pages:
 - 348
 ---

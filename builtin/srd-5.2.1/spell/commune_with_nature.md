@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8287fc71-669e-5966-8c5b-9624772a94e8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/commune_with_nature"
-splat_name: "Commune with Nature"
+splat_id: 8287fc71-669e-5966-8c5b-9624772a94e8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/commune_with_nature
+splat_name: Commune with Nature
 splat_pages:
 - 116
 - 117

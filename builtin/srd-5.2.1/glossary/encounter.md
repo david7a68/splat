@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f448b555-9856-5faa-b0bc-c1f03e7c02bc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/encounter"
-splat_name: "Encounter"
+splat_id: f448b555-9856-5faa-b0bc-c1f03e7c02bc
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/encounter
+splat_name: Encounter
 splat_pages:
 - 181
 ---

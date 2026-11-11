@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b07f66d3-1c06-5e2e-86dc-3039cac9bf5b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/telepathic_bond"
-splat_name: "Telepathic Bond"
+splat_id: b07f66d3-1c06-5e2e-86dc-3039cac9bf5b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/telepathic_bond
+splat_name: Telepathic Bond
 splat_pages:
 - 168
 ---

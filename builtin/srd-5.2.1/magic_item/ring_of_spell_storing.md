@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1f0699d9-4fa5-5497-9f38-1b90117eec1b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_spell_storing"
-splat_name: "Ring of Spell Storing"
+splat_id: 1f0699d9-4fa5-5497-9f38-1b90117eec1b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_spell_storing
+splat_name: Ring of Spell Storing
 splat_pages:
 - 239
 ---

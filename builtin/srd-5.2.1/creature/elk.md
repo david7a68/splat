@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "83cd640e-6ebd-56ba-93fb-87910dbea88b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/elk"
-splat_name: "Elk"
+splat_id: 83cd640e-6ebd-56ba-93fb-87910dbea88b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/elk
+splat_name: Elk
 splat_pages:
 - 348
 ---

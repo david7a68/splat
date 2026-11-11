@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eb4762e5-bad2-5e9a-a961-736e06db6934"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/barkskin"
-splat_name: "Barkskin"
+splat_id: eb4762e5-bad2-5e9a-a961-736e06db6934
+splat_kind: reference
+splat_key: dnd2024:reference/spell/barkskin
+splat_name: Barkskin
 splat_pages:
 - 112
 ---

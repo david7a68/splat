@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3084d9f6-4092-51d0-873b-a8d95e0def73"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wall_of_fire"
-splat_name: "Wall of Fire"
+splat_id: 3084d9f6-4092-51d0-873b-a8d95e0def73
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wall_of_fire
+splat_name: Wall of Fire
 splat_pages:
 - 172
 ---

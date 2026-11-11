@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3a06bd8e-d8e7-538d-a8e9-1d73a158b046"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wall_of_stone"
-splat_name: "Wall of Stone"
+splat_id: 3a06bd8e-d8e7-538d-a8e9-1d73a158b046
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wall_of_stone
+splat_name: Wall of Stone
 splat_pages:
 - 173
 ---

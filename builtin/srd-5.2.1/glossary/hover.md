@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fe0fe45d-54b8-5bf6-8608-471bdec875e9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hover"
-splat_name: "Hover"
+splat_id: fe0fe45d-54b8-5bf6-8608-471bdec875e9
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hover
+splat_name: Hover
 splat_pages:
 - 183
 ---

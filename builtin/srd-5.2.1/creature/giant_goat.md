@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5ada3587-10c6-5ce6-a4bb-90cb5114f0cc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_goat"
-splat_name: "Giant Goat"
+splat_id: 5ada3587-10c6-5ce6-a4bb-90cb5114f0cc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_goat
+splat_name: Giant Goat
 splat_pages:
 - 351
 ---

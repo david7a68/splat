@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "722a3d0e-8164-50c2-8bae-c575d562e3e1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/slippers_of_spider_climbing"
-splat_name: "Slippers of Spider Climbing"
+splat_id: 722a3d0e-8164-50c2-8bae-c575d562e3e1
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/slippers_of_spider_climbing
+splat_name: Slippers of Spider Climbing
 splat_pages:
 - 244
 ---

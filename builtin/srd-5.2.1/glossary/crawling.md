@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6e298d04-6e8d-589d-b67b-3d0956f55ade"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/crawling"
-splat_name: "Crawling"
+splat_id: 6e298d04-6e8d-589d-b67b-3d0956f55ade
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/crawling
+splat_name: Crawling
 splat_pages:
 - 179
 ---

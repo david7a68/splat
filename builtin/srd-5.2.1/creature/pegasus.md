@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "edff89ae-32ab-5c24-bbce-a957286edb0c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pegasus"
-splat_name: "Pegasus"
+splat_id: edff89ae-32ab-5c24-bbce-a957286edb0c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pegasus
+splat_name: Pegasus
 splat_pages:
 - 313
 ---

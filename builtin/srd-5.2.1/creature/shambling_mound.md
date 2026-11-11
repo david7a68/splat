@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "abb7aee5-d64e-52ca-9697-5b17ee0d7764"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/shambling_mound"
-splat_name: "Shambling Mound"
+splat_id: abb7aee5-d64e-52ca-9697-5b17ee0d7764
+splat_kind: reference
+splat_key: dnd2024:reference/creature/shambling_mound
+splat_name: Shambling Mound
 splat_pages:
 - 323
 ---

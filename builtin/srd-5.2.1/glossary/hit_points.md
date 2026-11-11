@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4cbb2224-0093-5096-a1ea-b5f1b31c669b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hit_points"
-splat_name: "Hit Points"
+splat_id: 4cbb2224-0093-5096-a1ea-b5f1b31c669b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hit_points
+splat_name: Hit Points
 splat_pages:
 - 183
 ---

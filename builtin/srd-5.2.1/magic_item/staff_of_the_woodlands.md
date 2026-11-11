@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5df572f4-289c-5114-bd4c-ca35c7af7898"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_the_woodlands"
-splat_name: "Staff of the Woodlands"
+splat_id: 5df572f4-289c-5114-bd4c-ca35c7af7898
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_the_woodlands
+splat_name: Staff of the Woodlands
 splat_pages:
 - 247
 ---

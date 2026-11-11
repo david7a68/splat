@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ce9b20fb-a51f-5782-bb83-670d1af415cd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/hat_of_many_spells"
-splat_name: "Hat of Many Spells"
+splat_id: ce9b20fb-a51f-5782-bb83-670d1af415cd
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/hat_of_many_spells
+splat_name: Hat of Many Spells
 splat_pages:
 - 224
 - 225

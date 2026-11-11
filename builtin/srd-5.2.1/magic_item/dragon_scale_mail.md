@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d3da95b1-7c96-59b4-8cd4-aee01c3fff7a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dragon_scale_mail"
-splat_name: "Dragon Scale Mail"
+splat_id: d3da95b1-7c96-59b4-8cd4-aee01c3fff7a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dragon_scale_mail
+splat_name: Dragon Scale Mail
 splat_pages:
 - 218
 - 219

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "63084369-da78-5284-820e-4fb5133d9d0e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/helm_of_brilliance"
-splat_name: "Helm of Brilliance"
+splat_id: 63084369-da78-5284-820e-4fb5133d9d0e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/helm_of_brilliance
+splat_name: Helm of Brilliance
 splat_pages:
 - 225
 - 226

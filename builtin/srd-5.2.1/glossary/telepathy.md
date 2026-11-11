@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a4de36f6-bcbf-599c-87f7-0bd92ea54c2a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/telepathy"
-splat_name: "Telepathy"
+splat_id: a4de36f6-bcbf-599c-87f7-0bd92ea54c2a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/telepathy
+splat_name: Telepathy
 splat_pages:
 - 190
 ---

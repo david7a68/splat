@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c351ea8c-752c-5963-8c05-297f9b1eeba7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/boots_of_the_winterlands"
-splat_name: "Boots of the Winterlands"
+splat_id: c351ea8c-752c-5963-8c05-297f9b1eeba7
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/boots_of_the_winterlands
+splat_name: Boots of the Winterlands
 splat_pages:
 - 214
 ---

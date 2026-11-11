@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "07e0ebb0-4deb-52e9-8c37-f5b060fe835e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_vulture"
-splat_name: "Giant Vulture"
+splat_id: 07e0ebb0-4deb-52e9-8c37-f5b060fe835e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_vulture
+splat_name: Giant Vulture
 splat_pages:
 - 354
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b2755577-29c6-5b16-a159-f48f70ff07f7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/magical_effect"
-splat_name: "Magical Effect"
+splat_id: b2755577-29c6-5b16-a159-f48f70ff07f7
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/magical_effect
+splat_name: Magical Effect
 splat_pages:
 - 185
 ---

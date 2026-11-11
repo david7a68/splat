@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fe70bf1d-02ed-5ee6-ae37-bbb57b2f7f10"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_charming"
-splat_name: "Staff of Charming"
+splat_id: fe70bf1d-02ed-5ee6-ae37-bbb57b2f7f10
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_charming
+splat_name: Staff of Charming
 splat_pages:
 - 245
 ---

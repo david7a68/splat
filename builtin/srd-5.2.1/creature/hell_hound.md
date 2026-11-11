@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6efcb11f-b269-57ae-b25e-0d1baacb19ab"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hell_hound"
-splat_name: "Hell Hound"
+splat_id: 6efcb11f-b269-57ae-b25e-0d1baacb19ab
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hell_hound
+splat_name: Hell Hound
 splat_pages:
 - 297
 ---

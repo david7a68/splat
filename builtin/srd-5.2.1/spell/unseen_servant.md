@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "06e74af4-2f59-5912-9610-e1796265372e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/unseen_servant"
-splat_name: "Unseen Servant"
+splat_id: 06e74af4-2f59-5912-9610-e1796265372e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/unseen_servant
+splat_name: Unseen Servant
 splat_pages:
 - 171
 ---

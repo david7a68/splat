@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "19d521b1-d97d-5a01-931a-704358636064"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/eyes_of_charming"
-splat_name: "Eyes of Charming"
+splat_id: 19d521b1-d97d-5a01-931a-704358636064
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/eyes_of_charming
+splat_name: Eyes of Charming
 splat_pages:
 - 221
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b8e1315-308a-5385-b31f-291dd47bf0ea"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/petrified_condition"
-splat_name: "Petrified [Condition]"
+splat_id: 9b8e1315-308a-5385-b31f-291dd47bf0ea
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/petrified_condition
+splat_name: Petrified [Condition]
 splat_pages:
 - 186
 ---

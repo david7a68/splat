@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "30197233-1bae-5caf-a6f1-a408987b722e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/skill"
-splat_name: "Skill"
+splat_id: 30197233-1bae-5caf-a6f1-a408987b722e
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/skill
+splat_name: Skill
 splat_pages:
 - 188
 ---

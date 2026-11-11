@@ -163,9 +163,9 @@ fn numeric(fields: &Mapping, key: &str) -> Option<i64> {
     val(fields, "splat_stats", key)?.get("value")?.as_i64()
 }
 
-/// Remove obsolete marked data blocks and the headings they leave empty.
-/// Used before the legacy marker reader too, so stale YAML cannot mask table data.
-pub fn without_legacy(text: &str, kind: &str) -> String {
+/// Remove marked data blocks for the stat roots, and the headings they leave empty.
+/// The stat table owns these values, so stale marked data cannot mask it.
+pub fn without_marked_stats(text: &str, kind: &str) -> String {
     // Only a marker naming one of these roots changes the text. Most notes have none,
     // and two full Markdown parses would find nothing.
     if !roots(kind).iter().any(|root| {
@@ -1991,7 +1991,7 @@ pub fn comparison_body(entry: &Entry) -> String {
     for root in roots(&entry.kind) {
         body = body.replace(&format!("path={root}_extras "), &format!("path={root} "));
     }
-    body = without_legacy(&body, &entry.kind);
+    body = without_marked_stats(&body, &entry.kind);
     if entry.kind == "creature" {
         body = fold_printed_stats(&body);
     }

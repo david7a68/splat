@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2368c0da-e365-5d02-b6ba-20c2beb46a4e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/blue_dragon_wyrmling"
-splat_name: "Blue Dragon Wyrmling"
+splat_id: 2368c0da-e365-5d02-b6ba-20c2beb46a4e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/blue_dragon_wyrmling
+splat_name: Blue Dragon Wyrmling
 splat_pages:
 - 266
 ---

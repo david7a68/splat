@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "90645d95-1b1b-535c-bddf-c7a8d1835f2f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/compulsion"
-splat_name: "Compulsion"
+splat_id: 90645d95-1b1b-535c-bddf-c7a8d1835f2f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/compulsion
+splat_name: Compulsion
 splat_pages:
 - 117
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9f608f75-1ebb-52b2-b9da-985ee95008d7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_gold_dragon"
-splat_name: "Young Gold Dragon"
+splat_id: 9f608f75-1ebb-52b2-b9da-985ee95008d7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_gold_dragon
+splat_name: Young Gold Dragon
 splat_pages:
 - 291
 ---

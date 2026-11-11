@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "032850e2-ece2-5640-acdb-0f5ceb10290d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/harpy"
-splat_name: "Harpy"
+splat_id: 032850e2-ece2-5640-acdb-0f5ceb10290d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/harpy
+splat_name: Harpy
 splat_pages:
 - 297
 ---

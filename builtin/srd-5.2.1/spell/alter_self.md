@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0a4be6e9-d8f1-5e07-beeb-1919c36ab713"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/alter_self"
-splat_name: "Alter Self"
+splat_id: 0a4be6e9-d8f1-5e07-beeb-1919c36ab713
+splat_kind: reference
+splat_key: dnd2024:reference/spell/alter_self
+splat_name: Alter Self
 splat_pages:
 - 107
 ---

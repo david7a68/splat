@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a3ec1b96-62be-5c0b-a249-6da1de79a670"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hawk"
-splat_name: "Hawk"
+splat_id: a3ec1b96-62be-5c0b-a249-6da1de79a670
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hawk
+splat_name: Hawk
 splat_pages:
 - 355
 ---

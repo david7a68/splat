@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6e060fa-ff3d-5634-8f98-2bafd0e3ccc5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/thunderwave"
-splat_name: "Thunderwave"
+splat_id: b6e060fa-ff3d-5634-8f98-2bafd0e3ccc5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/thunderwave
+splat_name: Thunderwave
 splat_pages:
 - 169
 ---

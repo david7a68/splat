@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6f17e2e-c324-51ea-9c7e-d916f6a04532"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/project_image"
-splat_name: "Project Image"
+splat_id: b6f17e2e-c324-51ea-9c7e-d916f6a04532
+splat_kind: reference
+splat_key: dnd2024:reference/spell/project_image
+splat_name: Project Image
 splat_pages:
 - 156
 - 157

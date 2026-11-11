@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bd974e33-4a8e-5f80-97fe-7a94fd3483d7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sorcerous_burst"
-splat_name: "Sorcerous Burst"
+splat_id: bd974e33-4a8e-5f80-97fe-7a94fd3483d7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sorcerous_burst
+splat_name: Sorcerous Burst
 splat_pages:
 - 163
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "537a573b-768f-537a-85a6-dfcc7ce2e9ee"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/move_earth"
-splat_name: "Move Earth"
+splat_id: 537a573b-768f-537a-85a6-dfcc7ce2e9ee
+splat_kind: reference
+splat_key: dnd2024:reference/spell/move_earth
+splat_name: Move Earth
 splat_pages:
 - 151
 ---

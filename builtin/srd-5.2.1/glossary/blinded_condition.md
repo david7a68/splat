@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c15cd0fe-062c-5a70-8596-8847f3e23003"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/blinded_condition"
-splat_name: "Blinded [Condition]"
+splat_id: c15cd0fe-062c-5a70-8596-8847f3e23003
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/blinded_condition
+splat_name: Blinded [Condition]
 splat_pages:
 - 177
 ---

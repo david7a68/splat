@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "88ed0ea7-e339-5dcd-b52a-9f73587db829"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/find_the_path"
-splat_name: "Find the Path"
+splat_id: 88ed0ea7-e339-5dcd-b52a-9f73587db829
+splat_kind: reference
+splat_key: dnd2024:reference/spell/find_the_path
+splat_name: Find the Path
 splat_pages:
 - 131
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ff667992-2a10-58c0-bd29-43b61bbbbaa9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_polymorph"
-splat_name: "Wand of Polymorph"
+splat_id: ff667992-2a10-58c0-bd29-43b61bbbbaa9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_polymorph
+splat_name: Wand of Polymorph
 splat_pages:
 - 251
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5bfadae9-0d0d-5be6-9682-24387e10a04e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mirror_image"
-splat_name: "Mirror Image"
+splat_id: 5bfadae9-0d0d-5be6-9682-24387e10a04e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mirror_image
+splat_name: Mirror Image
 splat_pages:
 - 150
 ---

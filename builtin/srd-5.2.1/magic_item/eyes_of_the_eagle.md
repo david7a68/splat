@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9bd922ac-fa56-5cc3-b2c0-4e67e96060b2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/eyes_of_the_eagle"
-splat_name: "Eyes of the Eagle"
+splat_id: 9bd922ac-fa56-5cc3-b2c0-4e67e96060b2
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/eyes_of_the_eagle
+splat_name: Eyes of the Eagle
 splat_pages:
 - 221
 ---

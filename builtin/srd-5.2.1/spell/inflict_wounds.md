@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ede27620-d88c-5b51-926d-9ca0fee1347b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/inflict_wounds"
-splat_name: "Inflict Wounds"
+splat_id: ede27620-d88c-5b51-926d-9ca0fee1347b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/inflict_wounds
+splat_name: Inflict Wounds
 splat_pages:
 - 143
 ---

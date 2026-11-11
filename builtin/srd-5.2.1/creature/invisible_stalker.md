@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "294244df-f5f1-50ab-a483-59a062bfffe9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/invisible_stalker"
-splat_name: "Invisible Stalker"
+splat_id: 294244df-f5f1-50ab-a483-59a062bfffe9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/invisible_stalker
+splat_name: Invisible Stalker
 splat_pages:
 - 301
 - 302

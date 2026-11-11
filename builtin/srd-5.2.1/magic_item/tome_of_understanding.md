@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "489d64cc-6762-5801-b6eb-52c992211adb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/tome_of_understanding"
-splat_name: "Tome of Understanding"
+splat_id: 489d64cc-6762-5801-b6eb-52c992211adb
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/tome_of_understanding
+splat_name: Tome of Understanding
 splat_pages:
 - 250
 ---

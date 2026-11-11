@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "355fc5d3-e360-597b-a274-b484bea6af22"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/action"
-splat_name: "Action"
+splat_id: 355fc5d3-e360-597b-a274-b484bea6af22
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/action
+splat_name: Action
 splat_pages:
 - 176
 ---

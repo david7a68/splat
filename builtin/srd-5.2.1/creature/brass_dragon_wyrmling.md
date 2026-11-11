@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "059324c8-e6db-5256-8fee-35c841ed5d5c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/brass_dragon_wyrmling"
-splat_name: "Brass Dragon Wyrmling"
+splat_id: 059324c8-e6db-5256-8fee-35c841ed5d5c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/brass_dragon_wyrmling
+splat_name: Brass Dragon Wyrmling
 splat_pages:
 - 268
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f7306562-61e1-5633-88c3-99104c579f4b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/succubus"
-splat_name: "Succubus"
+splat_id: f7306562-61e1-5633-88c3-99104c579f4b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/succubus
+splat_name: Succubus
 splat_pages:
 - 331
 ---

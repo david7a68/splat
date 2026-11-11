@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "28d8c3ff-5b4b-594e-b55c-f274f29cf153"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/creature"
-splat_name: "Creature"
+splat_id: 28d8c3ff-5b4b-594e-b55c-f274f29cf153
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/creature
+splat_name: Creature
 splat_pages:
 - 179
 ---

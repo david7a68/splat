@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "382c7762-1f6f-5410-9c11-6e4dfdb605fb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/druidcraft"
-splat_name: "Druidcraft"
+splat_id: 382c7762-1f6f-5410-9c11-6e4dfdb605fb
+splat_kind: reference
+splat_key: dnd2024:reference/spell/druidcraft
+splat_name: Druidcraft
 splat_pages:
 - 126
 ---

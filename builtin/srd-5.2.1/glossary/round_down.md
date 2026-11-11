@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ab7eb47-803b-5d50-ab7b-3108832ff1f3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/round_down"
-splat_name: "Round Down"
+splat_id: 2ab7eb47-803b-5d50-ab7b-3108832ff1f3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/round_down
+splat_name: Round Down
 splat_pages:
 - 187
 ---

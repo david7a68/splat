@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "93a58bb5-2d99-5049-b27b-e252d2cfca5b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/nightmare"
-splat_name: "Nightmare"
+splat_id: 93a58bb5-2d99-5049-b27b-e252d2cfca5b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/nightmare
+splat_name: Nightmare
 splat_pages:
 - 311
 ---

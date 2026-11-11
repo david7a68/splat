@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eefd4bd6-fc09-54c2-aec4-aca2dafcffe4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/animal_shapes"
-splat_name: "Animal Shapes"
+splat_id: eefd4bd6-fc09-54c2-aec4-aca2dafcffe4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/animal_shapes
+splat_name: Animal Shapes
 splat_pages:
 - 108
 ---

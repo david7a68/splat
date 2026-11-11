@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "61de4e66-6d60-567d-abb6-c2b56ca59bba"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/circlet_of_blasting"
-splat_name: "Circlet of Blasting"
+splat_id: 61de4e66-6d60-567d-abb6-c2b56ca59bba
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/circlet_of_blasting
+splat_name: Circlet of Blasting
 splat_pages:
 - 215
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8c092231-c46c-5ca2-b300-3a5e038907b0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/javelin_of_lightning"
-splat_name: "Javelin of Lightning"
+splat_id: 8c092231-c46c-5ca2-b300-3a5e038907b0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/javelin_of_lightning
+splat_name: Javelin of Lightning
 splat_pages:
 - 228
 ---

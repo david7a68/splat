@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d9abdcbe-0695-58a4-9ea4-337c553e982f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_withering"
-splat_name: "Staff of Withering"
+splat_id: d9abdcbe-0695-58a4-9ea4-337c553e982f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_withering
+splat_name: Staff of Withering
 splat_pages:
 - 248
 ---

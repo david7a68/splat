@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ddb82ad3-4311-5a86-8c2c-d761fc6b8669"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_the_bat"
-splat_name: "Cloak of the Bat"
+splat_id: ddb82ad3-4311-5a86-8c2c-d761fc6b8669
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_the_bat
+splat_name: Cloak of the Bat
 splat_pages:
 - 216
 ---

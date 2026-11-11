@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b96ff000-0f06-5bf4-8405-9f32943cb1f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/create_undead"
-splat_name: "Create Undead"
+splat_id: b96ff000-0f06-5bf4-8405-9f32943cb1f0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/create_undead
+splat_name: Create Undead
 splat_pages:
 - 121
 ---

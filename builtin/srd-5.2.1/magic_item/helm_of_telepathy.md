@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c0961e98-6c95-5621-9c0c-18088ecf9551"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/helm_of_telepathy"
-splat_name: "Helm of Telepathy"
+splat_id: c0961e98-6c95-5621-9c0c-18088ecf9551
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/helm_of_telepathy
+splat_name: Helm of Telepathy
 splat_pages:
 - 226
 ---

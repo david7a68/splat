@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "19e96f2a-e699-5bf2-b8c9-83310d860a10"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/lich"
-splat_name: "Lich"
+splat_id: 19e96f2a-e699-5bf2-b8c9-83310d860a10
+splat_kind: reference
+splat_key: dnd2024:reference/creature/lich
+splat_name: Lich
 splat_pages:
 - 304
 ---

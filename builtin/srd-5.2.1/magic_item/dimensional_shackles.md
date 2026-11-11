@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e13e6bc1-f8bd-534e-bd6b-37b7a70589ee"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dimensional_shackles"
-splat_name: "Dimensional Shackles"
+splat_id: e13e6bc1-f8bd-534e-bd6b-37b7a70589ee
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dimensional_shackles
+splat_name: Dimensional Shackles
 splat_pages:
 - 218
 ---

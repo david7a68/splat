@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e8e270af-bf75-53dd-80b9-781a9b50c3cf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_water_breathing"
-splat_name: "Potion of Water Breathing"
+splat_id: e8e270af-bf75-53dd-80b9-781a9b50c3cf
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_water_breathing
+splat_name: Potion of Water Breathing
 splat_pages:
 - 236
 - 237

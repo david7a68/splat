@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eaee7bb7-b873-54d4-8a1c-82439f5a642c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sleep"
-splat_name: "Sleep"
+splat_id: eaee7bb7-b873-54d4-8a1c-82439f5a642c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sleep
+splat_name: Sleep
 splat_pages:
 - 163
 ---

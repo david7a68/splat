@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a9bae4f7-acf8-54fd-8237-7a5dd0cb9c65"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/floating_disk"
-splat_name: "Floating Disk"
+splat_id: a9bae4f7-acf8-54fd-8237-7a5dd0cb9c65
+splat_kind: reference
+splat_key: dnd2024:reference/spell/floating_disk
+splat_name: Floating Disk
 splat_pages:
 - 133
 ---

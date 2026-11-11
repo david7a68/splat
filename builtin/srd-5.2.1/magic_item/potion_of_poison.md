@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "06486e41-fd6e-5fb2-bff5-48deb33ad200"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_poison"
-splat_name: "Potion of Poison"
+splat_id: 06486e41-fd6e-5fb2-bff5-48deb33ad200
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_poison
+splat_name: Potion of Poison
 splat_pages:
 - 236
 ---

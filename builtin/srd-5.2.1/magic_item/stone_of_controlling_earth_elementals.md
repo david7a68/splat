@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "419abf96-672e-50a0-9749-b9e7891b45ac"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/stone_of_controlling_earth_elementals"
-splat_name: "Stone of Controlling Earth Elementals"
+splat_id: 419abf96-672e-50a0-9749-b9e7891b45ac
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/stone_of_controlling_earth_elementals
+splat_name: Stone of Controlling Earth Elementals
 splat_pages:
 - 248
 ---

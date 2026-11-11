@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0e366cdf-8afa-50da-b473-9d5705207b72"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/violet_fungus"
-splat_name: "Violet Fungus"
+splat_id: 0e366cdf-8afa-50da-b473-9d5705207b72
+splat_kind: reference
+splat_key: dnd2024:reference/creature/violet_fungus
+splat_name: Violet Fungus
 splat_pages:
 - 286
 ---

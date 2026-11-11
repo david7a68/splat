@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c816413b-3ef4-58c2-b327-46e168f64a73"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/teleportation"
-splat_name: "Teleportation"
+splat_id: c816413b-3ef4-58c2-b327-46e168f64a73
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/teleportation
+splat_name: Teleportation
 splat_pages:
 - 190
 ---

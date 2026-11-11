@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "29767d6d-f931-55dd-88a4-89a525b679de"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bead_of_nourishment"
-splat_name: "Bead of Nourishment"
+splat_id: 29767d6d-f931-55dd-88a4-89a525b679de
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bead_of_nourishment
+splat_name: Bead of Nourishment
 splat_pages:
 - 213
 ---

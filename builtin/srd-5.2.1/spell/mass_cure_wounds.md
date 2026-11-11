@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "45813fb7-9e5e-54ac-8103-4f0a217db4c7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mass_cure_wounds"
-splat_name: "Mass Cure Wounds"
+splat_id: 45813fb7-9e5e-54ac-8103-4f0a217db4c7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mass_cure_wounds
+splat_name: Mass Cure Wounds
 splat_pages:
 - 147
 ---

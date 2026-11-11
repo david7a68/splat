@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ab7e5300-8171-5ad2-bbde-e4552b5fb313"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mastiff"
-splat_name: "Mastiff"
+splat_id: ab7e5300-8171-5ad2-bbde-e4552b5fb313
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mastiff
+splat_name: Mastiff
 splat_pages:
 - 357
 ---

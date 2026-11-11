@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0c36666f-e8e3-5252-ac32-cad10b1002d9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_copper_dragon"
-splat_name: "Adult Copper Dragon"
+splat_id: 0c36666f-e8e3-5252-ac32-cad10b1002d9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_copper_dragon
+splat_name: Adult Copper Dragon
 splat_pages:
 - 276
 - 277

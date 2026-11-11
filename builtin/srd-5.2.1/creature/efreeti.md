@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "75c9f449-2f93-5b3e-bd63-74ba151f371c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/efreeti"
-splat_name: "Efreeti"
+splat_id: 75c9f449-2f93-5b3e-bd63-74ba151f371c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/efreeti
+splat_name: Efreeti
 splat_pages:
 - 283
 ---

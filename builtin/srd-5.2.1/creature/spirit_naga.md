@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f6147528-7253-5e4b-9ebe-5252143bf824"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/spirit_naga"
-splat_name: "Spirit Naga"
+splat_id: f6147528-7253-5e4b-9ebe-5252143bf824
+splat_kind: reference
+splat_key: dnd2024:reference/creature/spirit_naga
+splat_name: Spirit Naga
 splat_pages:
 - 329
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "68cf8909-1d0d-5421-941f-f10093242d85"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/spell_scroll"
-splat_name: "Spell Scroll"
+splat_id: 68cf8909-1d0d-5421-941f-f10093242d85
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/spell_scroll
+splat_name: Spell Scroll
 splat_pages:
 - 244
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1f79299f-8e87-5020-b60a-2fc32da6bace"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/oil_of_sharpness"
-splat_name: "Oil of Sharpness"
+splat_id: 1f79299f-8e87-5020-b60a-2fc32da6bace
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/oil_of_sharpness
+splat_name: Oil of Sharpness
 splat_pages:
 - 233
 ---

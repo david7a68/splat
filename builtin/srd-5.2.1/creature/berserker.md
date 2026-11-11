@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f822d67f-d4be-5860-a298-a1a9108336b8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/berserker"
-splat_name: "Berserker"
+splat_id: f822d67f-d4be-5860-a298-a1a9108336b8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/berserker
+splat_name: Berserker
 splat_pages:
 - 263
 ---

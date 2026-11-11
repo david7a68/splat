@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fbf7fc0f-5573-5a29-b9fe-cc819b35d578"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_protection"
-splat_name: "Cloak of Protection"
+splat_id: fbf7fc0f-5573-5a29-b9fe-cc819b35d578
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_protection
+splat_name: Cloak of Protection
 splat_pages:
 - 216
 ---

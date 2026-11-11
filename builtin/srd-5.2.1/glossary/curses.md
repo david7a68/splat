@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cf7355a6-9557-5325-8207-a8889926edf7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/curses"
-splat_name: "Curses"
+splat_id: cf7355a6-9557-5325-8207-a8889926edf7
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/curses
+splat_name: Curses
 splat_pages:
 - 179
 ---

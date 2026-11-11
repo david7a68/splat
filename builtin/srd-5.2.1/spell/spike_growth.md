@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0afae4ac-6086-50af-b137-faf5160ce0f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/spike_growth"
-splat_name: "Spike Growth"
+splat_id: 0afae4ac-6086-50af-b137-faf5160ce0f0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/spike_growth
+splat_name: Spike Growth
 splat_pages:
 - 164
 ---

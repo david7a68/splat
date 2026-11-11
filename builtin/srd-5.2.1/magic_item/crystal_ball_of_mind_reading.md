@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ead30404-672b-5121-9d26-4944467fd385"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/crystal_ball_of_mind_reading"
-splat_name: "Crystal Ball of Mind Reading"
+splat_id: ead30404-672b-5121-9d26-4944467fd385
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/crystal_ball_of_mind_reading
+splat_name: Crystal Ball of Mind Reading
 splat_pages:
 - 216
 ---

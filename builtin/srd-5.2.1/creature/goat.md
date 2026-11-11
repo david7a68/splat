@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "10d1a821-7111-5b6a-af49-459d0d175a3e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/goat"
-splat_name: "Goat"
+splat_id: 10d1a821-7111-5b6a-af49-459d0d175a3e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/goat
+splat_name: Goat
 splat_pages:
 - 355
 ---

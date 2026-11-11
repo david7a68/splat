@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4d469c4c-82c6-5891-b340-6551ee2b6a96"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/light"
-splat_name: "Light"
+splat_id: 4d469c4c-82c6-5891-b340-6551ee2b6a96
+splat_kind: reference
+splat_key: dnd2024:reference/spell/light
+splat_name: Light
 splat_pages:
 - 144
 ---

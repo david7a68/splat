@@ -214,56 +214,6 @@ pub fn timeline<T: serde::de::DeserializeOwned>(text: &str) -> Result<Vec<T>, St
     serde_yaml_ng::from_value(value).map_err(|e| e.to_string())
 }
 
-/// Convert embedded note models in a saved run. Run state and JSON version stay intact.
-pub fn convert_run(text: &str) -> Result<String, String> {
-    fn visit(value: &mut serde_json::Value) -> Result<bool, String> {
-        if value
-            .get("fields")
-            .and_then(|v| v.get("splat_schema"))
-            .and_then(serde_json::Value::as_u64)
-            == Some(1)
-        {
-            let fields: Mapping = serde_yaml_ng::from_value(
-                serde_yaml_ng::to_value(&value["fields"]).map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())?;
-            let body = value["body"].as_str().ok_or("Saved entry has no body")?;
-            let path = value["path"].as_str().unwrap_or("Run copy.md");
-            let source = format!(
-                "---\n{}---\n{body}",
-                serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-            );
-            let after = formats::convert(path, &source)?;
-            *value =
-                serde_json::to_value(Entry::parse(path, &after)?).map_err(|e| e.to_string())?;
-            return Ok(true);
-        }
-        let mut changed = false;
-        match value {
-            serde_json::Value::Object(map) => {
-                for child in map.values_mut() {
-                    changed |= visit(child)?;
-                }
-            }
-            serde_json::Value::Array(values) => {
-                for child in values {
-                    changed |= visit(child)?;
-                }
-            }
-            _ => {}
-        }
-        Ok(changed)
-    }
-    let mut value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    if visit(&mut value)? {
-        serde_json::to_string_pretty(&value)
-            .map(|s| s + "\n")
-            .map_err(|e| e.to_string())
-    } else {
-        Ok(text.into())
-    }
-}
-
 fn normalize(fields: &mut Mapping) {
     if let Some(value) = fields.remove("splat_origin") {
         fields.insert("splat_origin".into(), formats::model_reference(value));

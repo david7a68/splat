@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c64e0d17-0df3-51e1-b751-b4c589e0dd34"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_white_dragon"
-splat_name: "Young White Dragon"
+splat_id: c64e0d17-0df3-51e1-b751-b4c589e0dd34
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_white_dragon
+splat_name: Young White Dragon
 splat_pages:
 - 340
 ---

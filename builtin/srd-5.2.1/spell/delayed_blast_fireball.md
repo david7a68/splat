@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d7b6040f-bab4-53f6-8e7e-33d019a46480"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/delayed_blast_fireball"
-splat_name: "Delayed Blast Fireball"
+splat_id: d7b6040f-bab4-53f6-8e7e-33d019a46480
+splat_kind: reference
+splat_key: dnd2024:reference/spell/delayed_blast_fireball
+splat_name: Delayed Blast Fireball
 splat_pages:
 - 122
 ---

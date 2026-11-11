@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "659fed0e-af5b-5e2b-b245-b26e3d39a32e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/boar"
-splat_name: "Boar"
+splat_id: 659fed0e-af5b-5e2b-b245-b26e3d39a32e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/boar
+splat_name: Boar
 splat_pages:
 - 346
 ---

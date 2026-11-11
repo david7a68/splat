@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8ec2a9e4-8c2e-5a45-970b-816f95c5e370"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/iron_flask"
-splat_name: "Iron Flask"
+splat_id: 8ec2a9e4-8c2e-5a45-970b-816f95c5e370
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/iron_flask
+splat_name: Iron Flask
 splat_pages:
 - 228
 ---

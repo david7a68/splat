@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3fb168fe-86ff-5cd8-bfed-fea20b362799"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/high_jump"
-splat_name: "High Jump"
+splat_id: 3fb168fe-86ff-5cd8-bfed-fea20b362799
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/high_jump
+splat_name: High Jump
 splat_pages:
 - 183
 ---

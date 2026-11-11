@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3700211f-8949-529e-ad49-68014085ecaa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/darkness"
-splat_name: "Darkness"
+splat_id: 3700211f-8949-529e-ad49-68014085ecaa
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/darkness
+splat_name: Darkness
 splat_pages:
 - 180
 ---

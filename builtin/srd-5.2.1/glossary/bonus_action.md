@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "825ffe67-c414-50c0-b133-d091f3557d76"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/bonus_action"
-splat_name: "Bonus Action"
+splat_id: 825ffe67-c414-50c0-b133-d091f3557d76
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/bonus_action
+splat_name: Bonus Action
 splat_pages:
 - 177
 ---

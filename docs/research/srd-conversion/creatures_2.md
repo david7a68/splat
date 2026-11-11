@@ -3,7 +3,7 @@ format: 1
 source: SRD 5.2.1
 definitions:
   dnd2024:creatures/adult_black_dragon:
-    source_sha256: 5a4252178fc9241b15ea70ced1ab1fac7b5f70f73a472775127794a7b93eb304
+    source_sha256: 6cfcf9d1c6c1199a6b856a471abc80d9505380a631d10859aba7925e7b28e4d2
     disposition: specified
     fields:
       splat_rule:
@@ -308,7 +308,7 @@ definitions:
     - SRD 5.2.1 pp. 264; builtin/srd-5.2.1/creature/adult_black_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/adult_bronze_dragon:
-    source_sha256: 701ddd39b822934e03b7e5bcc664e4b6ba314493d518a422c52dc871e61d270c
+    source_sha256: 3da6982105cc75bac35c592a4613da3797435fd3d53232fa9240a35440c03975
     disposition: specified
     fields:
       splat_rule:
@@ -645,7 +645,7 @@ definitions:
     - SRD 5.2.1 pp. 270, 271; builtin/srd-5.2.1/creature/adult_bronze_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/adult_green_dragon:
-    source_sha256: 296ccfce8cecd84bbe785585be9b5ffbc86218bba5276ac3bebca000b5f2887b
+    source_sha256: 6633b3a677bf1ff70374d115894ec94002a20eccf5417069ec5b62687aed09ac
     disposition: specified
     fields:
       splat_rule:
@@ -941,7 +941,7 @@ definitions:
     - SRD 5.2.1 pp. 294; builtin/srd-5.2.1/creature/adult_green_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/adult_white_dragon:
-    source_sha256: f7da2ab5453c83811218d19c3a99543c4420ee667477545639b87f92496ec166
+    source_sha256: 8141a18fbf7014e732c4fa1d0485fd05d73ddfa441f70fc2a609b1b2914aa4e1
     disposition: specified
     fields:
       splat_rule:
@@ -1216,7 +1216,7 @@ definitions:
     - SRD 5.2.1 pp. 340; builtin/srd-5.2.1/creature/adult_white_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ancient_black_dragon:
-    source_sha256: 18421002f5542c45777dd4306e9920df8b47a6a6d3f280646d60af17c1906efc
+    source_sha256: 5cab99de300a22a164fd6e836a500cf879b665244c7b733ed312f1e28cbf2475
     disposition: specified
     fields:
       splat_rule:
@@ -1528,7 +1528,7 @@ definitions:
     - SRD 5.2.1 pp. 265; builtin/srd-5.2.1/creature/ancient_black_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ancient_bronze_dragon:
-    source_sha256: 196597c12e7ba4a40c80550136d1d277f65a1d7749820055ba6270eba61add9c
+    source_sha256: 90b430055606f00b760d7380790ff11d8de3718a4fa2ecbcee1f40d638cda7b0
     disposition: specified
     fields:
       splat_rule:
@@ -1879,7 +1879,7 @@ definitions:
     - SRD 5.2.1 pp. 271; builtin/srd-5.2.1/creature/ancient_bronze_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ancient_green_dragon:
-    source_sha256: 68baa291096367ad70dd4e8527b0f7e8722bb847ffa658c8863a9b80c53f2797
+    source_sha256: e70297ccf9b245ad4c16ed1dea826157764129a924377e63a36dfe7dd12775a7
     disposition: specified
     fields:
       splat_rule:
@@ -2182,7 +2182,7 @@ definitions:
     - SRD 5.2.1 pp. 294, 295; builtin/srd-5.2.1/creature/ancient_green_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ancient_white_dragon:
-    source_sha256: 95a3918b5ab711ef095fc1ae4302d3818712f8da8310c40a454317f3db3453fa
+    source_sha256: ee58995365f7e50068e4c62e9a8c7ff6fa93f349bf9e928a88a0831208d5c490
     disposition: specified
     fields:
       splat_rule:
@@ -2457,7 +2457,7 @@ definitions:
     - SRD 5.2.1 pp. 341; builtin/srd-5.2.1/creature/ancient_white_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/animated_object:
-    source_sha256: c33badfcabb22d3a08ff8a278dc9fd30e904238832acc0f17b6b5cc737adfa22
+    source_sha256: d492cacec1732f44351bd6d50e6f7ea589e32b07158270ed466578f1d5fa769f
     disposition: specified
     fields:
       splat_rule:
@@ -2626,7 +2626,7 @@ definitions:
     - SRD 5.2.1 pp. 109; builtin/srd-5.2.1/creature/animated_object.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ankylosaurus:
-    source_sha256: f7a61934cdb484bdf6e61d2564f9eebf27a45fdc78f66071b50ff8cab46e766c
+    source_sha256: 2319fc3479321972c83f48945ccd7531cea2b9fe99843739cff7d03c87fe351b
     disposition: specified
     fields:
       splat_rule:
@@ -2740,7 +2740,7 @@ definitions:
     - SRD 5.2.1 pp. 344; builtin/srd-5.2.1/creature/ankylosaurus.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/archmage:
-    source_sha256: ad8a22c8e004ba3101e8fb3787066fa7a36b8905f13543c3d81fe46eaa5590bb
+    source_sha256: 2b8566ceb5db5b4d5c572ace6236beabf00829e21f7bf93bcf850f574f6159d8
     disposition: specified
     fields:
       splat_rule:
@@ -2993,7 +2993,7 @@ definitions:
     - SRD 5.2.1 pp. 305; builtin/srd-5.2.1/creature/archmage.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/awakened_shrub:
-    source_sha256: 7d18013ad00a9ad752278cce9fe3abc7bb214b439b449feabaf715806e2445d1
+    source_sha256: 1c24be475b46a97d25d40441d8919827ae4b20be2b23c1aef6321801a5ada895
     disposition: specified
     fields:
       splat_rule:
@@ -3104,7 +3104,7 @@ definitions:
     - SRD 5.2.1 pp. 260; builtin/srd-5.2.1/creature/awakened_shrub.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/azer_sentinel:
-    source_sha256: f6f9011df139e6444a4fae4c6d13376fa231a1c9b0b83b948c6876c928080dde
+    source_sha256: 11ff563c312e647f94a3adcdbe98c5f5a2405e9a9e8527bb1fa73e6fe3479ad8
     disposition: specified
     fields:
       splat_rule:
@@ -3249,7 +3249,7 @@ definitions:
     - SRD 5.2.1 pp. 261; builtin/srd-5.2.1/creature/azer_sentinel.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/balor:
-    source_sha256: 0e5077cb788c6d0ac5363277f5c6ca3fc0746a06df19d60853bcca2d888bf1de
+    source_sha256: d925923482b65dd9c9d1a2a6afe2bb57bf5f46ec2d732c5ba850f4c61d333846
     disposition: specified
     fields:
       splat_rule:
@@ -3533,7 +3533,7 @@ definitions:
     - SRD 5.2.1 pp. 261; builtin/srd-5.2.1/creature/balor.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/barbed_devil:
-    source_sha256: d1403471a53bbda5bcae99329041beb7bd67739e01cc238a3f5c6a6845d00ab3
+    source_sha256: aef9548ae0bd2b0e4075ed94d8532880807935321d556f85a338f12c04ce8951
     disposition: specified
     fields:
       splat_rule:
@@ -3770,7 +3770,7 @@ definitions:
     - SRD 5.2.1 pp. 262; builtin/srd-5.2.1/creature/barbed_devil.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/bearded_devil:
-    source_sha256: c1d60d1b7d0f4de0edc44750c6c689b05ede90ae5df16100f01fa5d339652c54
+    source_sha256: 7f629fd01162dd92247948b9bff6c66409a0b33032d7402878349dcc6c1b7286
     disposition: specified
     fields:
       splat_rule:
@@ -3968,7 +3968,7 @@ definitions:
     - SRD 5.2.1 pp. 262, 263; builtin/srd-5.2.1/creature/bearded_devil.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/black_bear:
-    source_sha256: eb2da17dca46d0aa18636179ce0bb0721420a8394c26a1c89fac431a348375c7
+    source_sha256: b990c17c627e4d47a1714c1463d901f771eae33020bf8e2f1953f1fb83465af0
     disposition: specified
     fields:
       splat_rule:
@@ -4079,7 +4079,7 @@ definitions:
     - SRD 5.2.1 pp. 345; builtin/srd-5.2.1/creature/black_bear.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/blink_dog:
-    source_sha256: c02dbb98cb0de24eabdce270034662f2b238e91bab292f96f04bab1ff11f622d
+    source_sha256: b0c1dabab24f405b9f81e3fa3599ffcb93fc694567f2ddfa8d8ed571069ed84c
     disposition: specified
     fields:
       splat_rule:
@@ -4217,7 +4217,7 @@ definitions:
     - SRD 5.2.1 pp. 266; builtin/srd-5.2.1/creature/blink_dog.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/boar:
-    source_sha256: 788bebef8ba2359053975d5a5bdd73f29b447457769cc385681de09be6a87793
+    source_sha256: b2f141b2c92f1b5701d343665bec1920da0ecfdf7b5a8cafd0f34c525976ac35
     disposition: specified
     fields:
       splat_rule:
@@ -4340,7 +4340,7 @@ definitions:
     - SRD 5.2.1 pp. 346; builtin/srd-5.2.1/creature/boar.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/bronze_dragon_wyrmling:
-    source_sha256: f2fae3a462dd7963a9a7862a1f802d3b372d35147670c060107883833a810a71
+    source_sha256: ac165f5886f9894b24d2ce033794256bacb81085e64460a5b0ee278af94dc668
     disposition: specified
     fields:
       splat_rule:
@@ -4529,7 +4529,7 @@ definitions:
     - SRD 5.2.1 pp. 269, 270; builtin/srd-5.2.1/creature/bronze_dragon_wyrmling.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/bugbear_warrior:
-    source_sha256: 4f245dfcb0640f2587f17f5cb295dcc8e87ce1462f67f3615d2110dff76161bf
+    source_sha256: 966a49949e63cac104748b8aab0180059b105741a7d3dadf982049b14f5d2478
     disposition: specified
     fields:
       splat_rule:
@@ -4679,7 +4679,7 @@ definitions:
     - SRD 5.2.1 pp. 272; builtin/srd-5.2.1/creature/bugbear_warrior.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/cat:
-    source_sha256: 571e41391cf71dd42518c52ed4c7a7b665c98c134d819ea9dea646d83ffa3cad
+    source_sha256: 9ee7c0088dbeb623b7b47e9243c3eb84de081cec46948563c17541354da799e6
     disposition: specified
     fields:
       splat_rule:
@@ -4784,7 +4784,7 @@ definitions:
     - SRD 5.2.1 pp. 346; builtin/srd-5.2.1/creature/cat.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/chimera:
-    source_sha256: fe068496957bdcefa11b4f2374fa5a493752ac6cef5934034c3a5de7c5cb8f3d
+    source_sha256: 4191504e3d35812003f595f402b8bc7e188833ba108a813f8433a7488c1ab560
     disposition: specified
     fields:
       splat_rule:
@@ -5009,7 +5009,7 @@ definitions:
     - SRD 5.2.1 pp. 273; builtin/srd-5.2.1/creature/chimera.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/cloaker:
-    source_sha256: 2dc841c581c30a7bbed497382416bf3e21edbe0642ab02f488eb97d3e380073b
+    source_sha256: 0a1a3dcb136f1cf630a55d5a89cdbd3ea8ffeff017dde8f912ff46edaab85e52
     disposition: specified
     fields:
       splat_rule:
@@ -5231,7 +5231,7 @@ definitions:
     - SRD 5.2.1 pp. 274; builtin/srd-5.2.1/creature/cloaker.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/commoner:
-    source_sha256: 503fc2318ff198ef9712b7f07d3293a9cf0971cde97e7406f0714104a42419f1
+    source_sha256: 464c18b41cf62ce6a8db2b72b401164409e66f17e7080d15c5fb490b573ac7b0
     disposition: specified
     fields:
       splat_rule:
@@ -5346,7 +5346,7 @@ definitions:
     - SRD 5.2.1 pp. 275; builtin/srd-5.2.1/creature/commoner.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/couatl:
-    source_sha256: a885cbde512981e10028dce360b8bf65d1ac5459bf0632a2c827ced94204ad53
+    source_sha256: d1c1f7a41b828c5ccd36552a86a6d6d150211233e07c73802164fedad638203f
     disposition: specified
     fields:
       splat_rule:
@@ -5592,7 +5592,7 @@ definitions:
     - SRD 5.2.1 pp. 277, 278; builtin/srd-5.2.1/creature/couatl.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/cultist:
-    source_sha256: aceb3c78291e38dcfe6fac3c2d7870afed4fdbfe42b81a3fddcd609ce1ae9682
+    source_sha256: e0adc85e4b44e9d25db449485f2a56a3cab690f67b5b35d1945f8a64d6784cc7
     disposition: specified
     fields:
       splat_rule:
@@ -5707,7 +5707,7 @@ definitions:
     - SRD 5.2.1 pp. 278; builtin/srd-5.2.1/creature/cultist.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/death_dog:
-    source_sha256: 469efe80922dc4ac2c033197abe8bd844542f09cd5e4c6548bd69d8fe05bb7ed
+    source_sha256: c5d29335daf0cba8bef34ab95547b5dbf91ac4865e190b1349dec7c8d4b0eb4d
     disposition: specified
     fields:
       splat_rule:
@@ -5871,7 +5871,7 @@ definitions:
     - SRD 5.2.1 pp. 279; builtin/srd-5.2.1/creature/death_dog.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/dire_wolf:
-    source_sha256: 9ee6e2bad48165cc78705e31602b5c619b46d45712902383ab4b556b2691b0db
+    source_sha256: 51e5b82bfef02c58198bbc7721e0c11603365a0b61b3c883830666c0444cabff
     disposition: specified
     fields:
       splat_rule:
@@ -5991,7 +5991,7 @@ definitions:
     - SRD 5.2.1 pp. 347; builtin/srd-5.2.1/creature/dire_wolf.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/draconic_spirit:
-    source_sha256: c281d75e03ac461f86b9d87832212aa304947b1f180c968584ccee20ae959217
+    source_sha256: a61cb5fc7440f99f19fcb986f66d7323726fce4750ade60da82f0f24a79c296a
     disposition: specified
     fields:
       splat_rule:
@@ -6202,7 +6202,7 @@ definitions:
     - SRD 5.2.1 pp. 166; builtin/srd-5.2.1/creature/draconic_spirit.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/dretch:
-    source_sha256: 794702b86f77d5a88810a2d5286c448ab3da078422dbee1b00795d9d8b6ad6e7
+    source_sha256: 7f301e74d8aec1113177a94dc0784517a0f9a58a2c824d66a4ac924d4ffaeb14
     disposition: specified
     fields:
       splat_rule:
@@ -6349,7 +6349,7 @@ definitions:
     - SRD 5.2.1 pp. 281; builtin/srd-5.2.1/creature/dretch.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/dryad:
-    source_sha256: 0429a53f14da1bf08c80160476cf7874ccba2a01ebdf6a97f72ad141ba26899e
+    source_sha256: e993b54b9236a4e039e839f371003e0b6748d2ce70293164096cc6a63d6884a0
     disposition: specified
     fields:
       splat_rule:
@@ -6561,7 +6561,7 @@ definitions:
     - SRD 5.2.1 pp. 282; builtin/srd-5.2.1/creature/dryad.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/earth_elemental:
-    source_sha256: 216d7118e403382b287ebf9acfd15c26171ba6a5e066e0d10496bcd1cfdd6ba7
+    source_sha256: b91ece571ec31d284385b109ec58929e5699bd467fd8daeed99682e0095fc4bd
     disposition: specified
     fields:
       splat_rule:
@@ -6728,7 +6728,7 @@ definitions:
     - SRD 5.2.1 pp. 282, 283; builtin/srd-5.2.1/creature/earth_elemental.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/elk:
-    source_sha256: 3e8716e7d3e75b98d94f140e0b7593d9733ef75b341b36641dda6a1e069a04b4
+    source_sha256: da6f9d7eb3f7f3468ac021e98c43057ae136498d9f4483221ee0537838119b98
     disposition: specified
     fields:
       splat_rule:
@@ -6850,7 +6850,7 @@ definitions:
     - SRD 5.2.1 pp. 348; builtin/srd-5.2.1/creature/elk.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ettin:
-    source_sha256: 50a380e1665c6edeea93f253c970a6b1378cec50f443c0e401964c109b9cacba
+    source_sha256: ffb46f6f22dbd73dc9688792eb759a3e808eefb139a899aea0fe1738e73e1f37
     disposition: specified
     fields:
       splat_rule:
@@ -7012,7 +7012,7 @@ definitions:
     - SRD 5.2.1 pp. 284; builtin/srd-5.2.1/creature/ettin.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/flesh_golem:
-    source_sha256: 8ce627c03d370ba7c7ec3a1815b2d6e0c13c63cf48259e5adfbcc003d3042a77
+    source_sha256: 6ee0d3cd00af05c264334b722d1600273a2f2b776d9a86f49e3bf668d13af163
     disposition: specified
     fields:
       splat_rule:
@@ -7222,7 +7222,7 @@ definitions:
     - SRD 5.2.1 pp. 285; builtin/srd-5.2.1/creature/flesh_golem.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/frost_giant:
-    source_sha256: 0c563f4631b757d125422d7fbb429a1e371ecf7efb981178f7f8e1a74fc511b5
+    source_sha256: 30691829df452658c3789f39a88b7f8ebf76a0f81ce926663e84294acb552ac0
     disposition: specified
     fields:
       splat_rule:
@@ -7418,7 +7418,7 @@ definitions:
     - SRD 5.2.1 pp. 285, 286; builtin/srd-5.2.1/creature/frost_giant.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ghast:
-    source_sha256: 0fa781798fc4a066639eb0c8073f0956f8855e9bcc8f32569b5df6f3067b3233
+    source_sha256: d67eaca551d360a1a23648c572076ac9623dad43a92ce239fe32e097f0354063
     disposition: specified
     fields:
       splat_rule:
@@ -7605,7 +7605,7 @@ definitions:
     - SRD 5.2.1 pp. 287; builtin/srd-5.2.1/creature/ghast.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_ape:
-    source_sha256: a2d0dc7eb85ba78c4f7e176a01a72cbc7156f1e68fba52462bb45abf11109fc3
+    source_sha256: 8cc4775c27f2655390da8836cabd1fc2e64d07c91b6ff250aeec50af7467d2f7
     disposition: specified
     fields:
       splat_rule:
@@ -7773,7 +7773,7 @@ definitions:
     - SRD 5.2.1 pp. 349; builtin/srd-5.2.1/creature/giant_ape.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_boar:
-    source_sha256: 35539c9d7b1f18acec40121692a20e8b77c8507f2325b964d8050ea2b915448d
+    source_sha256: 6113f0302e9b3703e5737d0b1584f7e109156f2154e0deb5ee4542c3ab6716b2
     disposition: specified
     fields:
       splat_rule:
@@ -7896,7 +7896,7 @@ definitions:
     - SRD 5.2.1 pp. 349; builtin/srd-5.2.1/creature/giant_boar.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_crab:
-    source_sha256: c9c8a5c5dbbe38de05ec5ec19b54c5e94fa967b990416cbb2c297f0d96db4aea
+    source_sha256: 638f984fecd5afe43deea685e7b9f950a142456a659ca5c27b8668b1971cbfd4
     disposition: specified
     fields:
       splat_rule:
@@ -8019,7 +8019,7 @@ definitions:
     - SRD 5.2.1 pp. 350; builtin/srd-5.2.1/creature/giant_crab.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_elk:
-    source_sha256: 0b1b1f526bf85cbb8eac495a517e976c57fb2d0c870373dfac17394621c2a0c6
+    source_sha256: 186b03521b38aec9f844ad837126f19c96ba34faeed2065976d6ac3911087327
     disposition: specified
     fields:
       splat_rule:
@@ -8158,7 +8158,7 @@ definitions:
     - SRD 5.2.1 pp. 351; builtin/srd-5.2.1/creature/giant_elk.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_frog:
-    source_sha256: 4f854cb66a9a7c3d6acf4ae907441b2f74fd707febf1b5d3a67b1a988209347f
+    source_sha256: d33e8d7d0fe0aecfb09d9ff82d1b2ff8bd09696f6e7cf30dc84e446cfa52e33d
     disposition: specified
     fields:
       splat_rule:
@@ -8327,7 +8327,7 @@ definitions:
     - SRD 5.2.1 pp. 351; builtin/srd-5.2.1/creature/giant_frog.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_insect:
-    source_sha256: 31ef2f34e423a2a6c72aaf4f901ad0e1d5aae7ab6795b832ccd084459473aadf
+    source_sha256: b30eb4fad0790b70ce41acf5af020703fc15f924fe54bdac602d9b8b97352d56
     disposition: specified
     fields:
       splat_rule:
@@ -8539,7 +8539,7 @@ definitions:
     - SRD 5.2.1 pp. 136; builtin/srd-5.2.1/creature/giant_insect.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_owl:
-    source_sha256: c1538c2c07bc1eb1cacb1ab1cc4181fc566299b82a502b9d74467108a70f5ade
+    source_sha256: 08267964d97ad41f90722ad4727cc100f0db11e81de3e7362ed15b7dfc429759
     disposition: specified
     fields:
       splat_rule:
@@ -8684,7 +8684,7 @@ definitions:
     - SRD 5.2.1 pp. 352; builtin/srd-5.2.1/creature/giant_owl.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_seahorse:
-    source_sha256: f4e06445654b1ffc2c5efccb6ff485fa90abaea7194d12143a42b0fb0bcb15fb
+    source_sha256: dd7fb2bc56e362913e821b2add6e810c63f4d5b149909a80319050fb6a045ea9
     disposition: specified
     fields:
       splat_rule:
@@ -8815,7 +8815,7 @@ definitions:
     - SRD 5.2.1 pp. 353; builtin/srd-5.2.1/creature/giant_seahorse.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_toad:
-    source_sha256: 90abb51128c7215373e29d798f88f0288e2bdb62a6a716751a1705677cbf9a02
+    source_sha256: f66ba266df60dad110cf5bab216dfe30732df482f414a3f8fb1d87c6cf492679
     disposition: specified
     fields:
       splat_rule:
@@ -8983,7 +8983,7 @@ definitions:
     - SRD 5.2.1 pp. 354; builtin/srd-5.2.1/creature/giant_toad.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/giant_wasp:
-    source_sha256: fed5e5f842dfb92bbcc5896fcbe7392f497726d2e3f90a33e59ec809c9155ab2
+    source_sha256: b2b9f9783aebe63e65c0ba9cf09c393268367d2003965ebb4dc544e53e8b8d2a
     disposition: specified
     fields:
       splat_rule:
@@ -9097,7 +9097,7 @@ definitions:
     - SRD 5.2.1 pp. 354, 355; builtin/srd-5.2.1/creature/giant_wasp.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/gibbering_mouther:
-    source_sha256: 67b8594fdb7bdf882f0f252100fc04a20ae28661898371d3ab260f89a8df0aab
+    source_sha256: cba0c8b87d8e862cc717fdd8ce2e8411c7fb88f3373e9184dc858da6ade22699
     disposition: specified
     fields:
       splat_rule:
@@ -9314,7 +9314,7 @@ definitions:
     - SRD 5.2.1 pp. 288; builtin/srd-5.2.1/creature/gibbering_mouther.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/gnoll_warrior:
-    source_sha256: 30a2349ea318801c48c8d34c433f1d20c88bcf2b216389b35eee99c01a6ea7c7
+    source_sha256: 48a80dc69132a6c8a6a4b49ea3adc88c1b20b76e4b370ee93f4a1b4bb12349d3
     disposition: specified
     fields:
       splat_rule:
@@ -9459,7 +9459,7 @@ definitions:
     - SRD 5.2.1 pp. 289; builtin/srd-5.2.1/creature/gnoll_warrior.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/goblin_minion:
-    source_sha256: dcc05fd62ce2ab9fdca06c5a44168712271d9c5b641653baf017f314d35e4067
+    source_sha256: fb742d01b95e73aab38a6a1944f5dd03972d42bec48a2af76c407dd73245b299
     disposition: specified
     fields:
       splat_rule:
@@ -9579,7 +9579,7 @@ definitions:
     - SRD 5.2.1 pp. 290; builtin/srd-5.2.1/creature/goblin_minion.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/gorgon:
-    source_sha256: 7426082db5b8e51b3365fd3447fb8209c0b2b0aacba5c89db6a3bedb536acf8a
+    source_sha256: 7306094af5a5cc321c0e369bec3f947dedb1d128a052d8f97a960ba4176c809b
     disposition: specified
     fields:
       splat_rule:
@@ -9772,7 +9772,7 @@ definitions:
     - SRD 5.2.1 pp. 292, 293; builtin/srd-5.2.1/creature/gorgon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/green_hag:
-    source_sha256: bf0cadc815bec32b6c79fd23d329a16f8216c46675a71ab430f58c0b2050926d
+    source_sha256: 0824374c702ca9681fc24564296910602fffd0fa658f3fed083692ed328a8c9b
     disposition: specified
     fields:
       splat_rule:
@@ -10011,7 +10011,7 @@ definitions:
     - SRD 5.2.1 pp. 295; builtin/srd-5.2.1/creature/green_hag.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/grimlock:
-    source_sha256: badbb0c19d8774fee1e45755aa4d3ab7b99675c74bf36687f26298a64ca601b2
+    source_sha256: 1b7bf16fdbcbc0243d6a699a0cdb0dd4deeee32c61b1dbb8bc32e1739497b5ae
     disposition: specified
     fields:
       splat_rule:
@@ -10125,7 +10125,7 @@ definitions:
     - SRD 5.2.1 pp. 296; builtin/srd-5.2.1/creature/grimlock.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/guardian_naga:
-    source_sha256: 34817ac16147735a9da3ae87d802f05520dc425ada960e3f2348093e7c4fb6e7
+    source_sha256: 1ff0fcb66cca1e34327ad341991d2b970542854e2b25b6a18fa92c39bdd683ad
     disposition: specified
     fields:
       splat_rule:
@@ -10363,7 +10363,7 @@ definitions:
     - SRD 5.2.1 pp. 296; builtin/srd-5.2.1/creature/guardian_naga.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/hawk:
-    source_sha256: f296f108ad0b0643355734fd0f98897315bfae65b5f4c232209f3adea679beb3
+    source_sha256: 4d24b78d90ef0b8091196fbe545826979be093373da83a16ab5744c133e21679
     disposition: specified
     fields:
       splat_rule:
@@ -10462,7 +10462,7 @@ definitions:
     - SRD 5.2.1 pp. 355; builtin/srd-5.2.1/creature/hawk.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/hill_giant:
-    source_sha256: 9efc749b7028eed38ed1efa71485888aa7b5ad1dffc5077b0425312fd5036c10
+    source_sha256: a96817d4fe3dee0418806c8ca9674a88c87a00cf7a1bc61965d540a801ea30b3
     disposition: specified
     fields:
       splat_rule:
@@ -10606,7 +10606,7 @@ definitions:
     - SRD 5.2.1 pp. 298; builtin/srd-5.2.1/creature/hill_giant.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/hobgoblin_captain:
-    source_sha256: 073bf61b2b075db143c6f500df02b08feb57c6d91d10ce84e2731dfadb8846e2
+    source_sha256: 4c84c02185886023bac8c95ed12ef83cc6730b86eca806b163c8ddb83a3cf876
     disposition: specified
     fields:
       splat_rule:
@@ -10779,7 +10779,7 @@ definitions:
     - SRD 5.2.1 pp. 299; builtin/srd-5.2.1/creature/hobgoblin_captain.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/horned_devil:
-    source_sha256: 345007e52d2b547cd79f02d4ebfd306038fbb9832bffc28956a6b7d837680f36
+    source_sha256: 00ad6ba8962050c3332b44054015dbd62079a2a395333e62b360630029d89331
     disposition: specified
     fields:
       splat_rule:
@@ -11016,7 +11016,7 @@ definitions:
     - SRD 5.2.1 pp. 299, 300; builtin/srd-5.2.1/creature/horned_devil.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/hyena:
-    source_sha256: f8e1f77db92b87911942ea1ae39ecc4aedaf63c9d0f2d0d84faf1489e5b90162
+    source_sha256: c5a185921e856c774737a91dda6feb62fa787e2afea552820ce460ac45ab6fcf
     disposition: specified
     fields:
       splat_rule:
@@ -11128,7 +11128,7 @@ definitions:
     - SRD 5.2.1 pp. 356; builtin/srd-5.2.1/creature/hyena.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/imp:
-    source_sha256: 1b6318a8a52b9a0216c5f5b0536fc2187b5c4c45ff415723766dcc4d0b988686
+    source_sha256: d738fc9877d80688888c811b30791658b1f6d8e42e8d985eb89923d35bd5bef3
     disposition: specified
     fields:
       splat_rule:
@@ -11296,7 +11296,7 @@ definitions:
     - SRD 5.2.1 pp. 300, 301; builtin/srd-5.2.1/creature/imp.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/iron_golem:
-    source_sha256: 096dc672f7dd729e9b258d94bff7c10281fd0d0839a43bf139dd440f0d130473
+    source_sha256: bd2352926f723397a1f598c1b4a4b30cd85aac3efde02e84ddcda9891d655f8d
     disposition: specified
     fields:
       splat_rule:
@@ -11515,7 +11515,7 @@ definitions:
     - SRD 5.2.1 pp. 302; builtin/srd-5.2.1/creature/iron_golem.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/knight:
-    source_sha256: f37909d4eca900ca3e711e83bc27fc19ba72d6b497f4fd034dc0a87c8922f57d
+    source_sha256: 5c28a2c8c47943247d1190c64bdbce7bedc8a8f4cd5fe6ac416c2723096294a9
     disposition: specified
     fields:
       splat_rule:
@@ -11686,7 +11686,7 @@ definitions:
     - SRD 5.2.1 pp. 302; builtin/srd-5.2.1/creature/knight.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/lamia:
-    source_sha256: bd87ba2aa15210dbf83bd430dda05263e2d475b592be96236d4b1cf596b177c5
+    source_sha256: 7a9f2ae953e12fe93435e83907f4d3c621720c4c82681a3fcff30eda4a9c268e
     disposition: specified
     fields:
       splat_rule:
@@ -11894,7 +11894,7 @@ definitions:
     - SRD 5.2.1 pp. 303, 304; builtin/srd-5.2.1/creature/lamia.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/lion:
-    source_sha256: dc50d49a1ab9f748932611bbca81dbf3904f32c3415aa4d81ba7c3e85fcfdb2f
+    source_sha256: 46dc4f98f124a42dc0bd68e9a71b2cdac11b785aabdb42d776346364402e5c88
     disposition: specified
     fields:
       splat_rule:
@@ -12040,7 +12040,7 @@ definitions:
     - SRD 5.2.1 pp. 356, 357; builtin/srd-5.2.1/creature/lion.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/magma_mephit:
-    source_sha256: 17ec317746cea43f3638786fbc26889dd8346d3ac06514c483b3d4d88d4b54cc
+    source_sha256: e9db7fc66907783b6b2575aabc08c2956fd7a26710a74eaaa38812837368701d
     disposition: specified
     fields:
       splat_rule:
@@ -12239,7 +12239,7 @@ definitions:
     - SRD 5.2.1 pp. 307; builtin/srd-5.2.1/creature/magma_mephit.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/manticore:
-    source_sha256: 78bcf05f83553de1131e07ba67f6ad8a2f79e6808d727302812593f755b7ad2c
+    source_sha256: e15ff0415ad814add67ac16257219500c2ca238eb3123dfa1db9f2a2d9de1235
     disposition: specified
     fields:
       splat_rule:
@@ -12369,7 +12369,7 @@ definitions:
     - SRD 5.2.1 pp. 306; builtin/srd-5.2.1/creature/manticore.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/medusa:
-    source_sha256: 1c8f94e2bb9e1c3cd78bb77511d722b5f57d600c41052c5a8080cd5560bfbb81
+    source_sha256: 86c0e08b37d233d349e3a3353b50bf489ddc2acbfaf14e88c1b9d42c2de912cb
     disposition: specified
     fields:
       splat_rule:
@@ -12594,7 +12594,7 @@ definitions:
     - SRD 5.2.1 pp. 306, 307; builtin/srd-5.2.1/creature/medusa.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/mimic:
-    source_sha256: 1bfda6543e9d35edf1d170ebf5d03ff1064f5725ab176d454951e4f11ce04fdb
+    source_sha256: bd0610458015d8bb5f8717bbf393d1c25880f5d8e5fe9e3c5d86c46da56e6c01
     disposition: specified
     fields:
       splat_rule:
@@ -12790,7 +12790,7 @@ definitions:
     - SRD 5.2.1 pp. 308, 309; builtin/srd-5.2.1/creature/mimic.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/mule:
-    source_sha256: 5559cd6a6ac522a77a99d3e9043a21ed882afcc2022eb8fab3284f640feb34d0
+    source_sha256: 3aff7726ddaefe49580b744729045a49ef9990d0601c847031c83019f4d80db4
     disposition: specified
     fields:
       splat_rule:
@@ -12893,7 +12893,7 @@ definitions:
     - SRD 5.2.1 pp. 357; builtin/srd-5.2.1/creature/mule.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/nalfeshnee:
-    source_sha256: 51bdec4b5207590efde103e494224ac6e79db44a04eec21bba30b08debbbed69
+    source_sha256: 5253fef54c6baab4d9cccb0fbf6deb0e18f403bd22175696e0cdce97ddc3b726
     disposition: specified
     fields:
       splat_rule:
@@ -13128,7 +13128,7 @@ definitions:
     - SRD 5.2.1 pp. 310, 311; builtin/srd-5.2.1/creature/nalfeshnee.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/noble:
-    source_sha256: 007d15e142d34a05dcfb99c6d2a0c288f0eaa7f3c895462d6313f87730499825
+    source_sha256: 78810f6bdf62eaf24c401682e178ecd554ac8bffcbf345a7539169e2974fa4f8
     disposition: specified
     fields:
       splat_rule:
@@ -13256,7 +13256,7 @@ definitions:
     - SRD 5.2.1 pp. 312; builtin/srd-5.2.1/creature/noble.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/ogre:
-    source_sha256: 278932cbada85d1ef87cf8dc4bad3013c12504fd5db18865613d219d7d9680fe
+    source_sha256: 0fbc4d511eea24641f8cd4053cebda1ec96e2b5724fda3d566ef241aba86baa1
     disposition: specified
     fields:
       splat_rule:
@@ -13388,7 +13388,7 @@ definitions:
     - SRD 5.2.1 pp. 312; builtin/srd-5.2.1/creature/ogre.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/otherworldly_steed:
-    source_sha256: 8a98d3bf5412794762556809890594b1ca130852f36e1b114c6c9a3502435c24
+    source_sha256: a2e20478ed0f8773d534c5161270909cfd6fa761aa40fe6970681df1f41183c5
     disposition: specified
     fields:
       splat_rule:
@@ -13605,7 +13605,7 @@ definitions:
     - SRD 5.2.1 pp. 131; builtin/srd-5.2.1/creature/otherworldly_steed.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/owlbear:
-    source_sha256: 028b0770894ae9aeadd160cecf789fe1c047d52a6f770d205fe9e9b9f6c15cc7
+    source_sha256: a7d6f16a35ddb4f7c33fb7b3e19d01b68473745cdeba1a6f483e004b81ceaa86
     disposition: specified
     fields:
       splat_rule:
@@ -13716,7 +13716,7 @@ definitions:
     - SRD 5.2.1 pp. 313; builtin/srd-5.2.1/creature/owlbear.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/phase_spider:
-    source_sha256: 8b8e5fa61e06770eba3a069914ca705ab6246b88ebfef0ca531845d15278a741
+    source_sha256: 1a7844564ce4f20139ab98b7aef77b7f8e0c12bc6ef538fb65ce0cb8624ce254
     disposition: specified
     fields:
       splat_rule:
@@ -13875,7 +13875,7 @@ definitions:
     - SRD 5.2.1 pp. 313, 314; builtin/srd-5.2.1/creature/phase_spider.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/pirate_captain:
-    source_sha256: 75d36fb2cb0bb5dadd1e87e299342a8b2fff787babe0d2c0c48935b232efbe08
+    source_sha256: 8ae83a748faa69f917e0dbb519c8536ba87ab2fa271f5b9cc2be8da492b0181c
     disposition: specified
     fields:
       splat_rule:
@@ -14066,7 +14066,7 @@ definitions:
     - SRD 5.2.1 pp. 314; builtin/srd-5.2.1/creature/pirate_captain.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/plesiosaurus:
-    source_sha256: 822d3635e964eb8048273bc5bac7f363f8a3c020823a2e4766051075b1dacfa0
+    source_sha256: d6645293220b2d6eca564048478d7394229d4e20396dd24fadc0cf080e414810
     disposition: specified
     fields:
       splat_rule:
@@ -14173,7 +14173,7 @@ definitions:
     - SRD 5.2.1 pp. 358, 359; builtin/srd-5.2.1/creature/plesiosaurus.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/priest:
-    source_sha256: 0d19e62a96b9a63d1cb04fb73fd216d04646a8e713056b69558e223b679ffdf5
+    source_sha256: 3fb917e210dd4997b971b4bfe5faf3f27a6652702c0c498e4ea3939ed8a01c86
     disposition: specified
     fields:
       splat_rule:
@@ -14370,7 +14370,7 @@ definitions:
     - SRD 5.2.1 pp. 316; builtin/srd-5.2.1/creature/priest.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/pteranodon:
-    source_sha256: 96dd21ffc714527fc968c75164bb3127b8ea2c087b5c1683465ce1b0c8db1346
+    source_sha256: 27aba0cd6c565c4444605c25ba96799cf36f24507c1418c2e51219f1093b304f
     disposition: specified
     fields:
       splat_rule:
@@ -14478,7 +14478,7 @@ definitions:
     - SRD 5.2.1 pp. 359; builtin/srd-5.2.1/creature/pteranodon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/rakshasa:
-    source_sha256: 56c193049cdc905dee054b56cc91f1d3dfc5d57df420ae0a1bb0d9f9b1ff6a88
+    source_sha256: d61c003627ba18126d5aaf573acff9cec6abed6874727ded2e5a52f3aed9abaf
     disposition: specified
     fields:
       splat_rule:
@@ -14770,7 +14770,7 @@ definitions:
     - SRD 5.2.1 pp. 317, 318; builtin/srd-5.2.1/creature/rakshasa.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/red_dragon_wyrmling:
-    source_sha256: 2ebcbe96be83cc21b0b45abc74aeeba7718bf85be78cf4631d797a86c6302179
+    source_sha256: f5fe57fed12b27657a2668e446696caed37ac94602084f78633bb7df20795454
     disposition: specified
     fields:
       splat_rule:
@@ -14942,7 +14942,7 @@ definitions:
     - SRD 5.2.1 pp. 318; builtin/srd-5.2.1/creature/red_dragon_wyrmling.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/rhinoceros:
-    source_sha256: f828e33db6535961b65fc8f2b407362310b4a964b22932bd33777b461b6899e3
+    source_sha256: cd4b327f12b1d7813ffbfc55591772cdfe9933d1f69c5d0ca3f54f2899c078c3
     disposition: specified
     fields:
       splat_rule:
@@ -15060,7 +15060,7 @@ definitions:
     - SRD 5.2.1 pp. 360; builtin/srd-5.2.1/creature/rhinoceros.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/roper:
-    source_sha256: 0399252cda4d4bb374acb407464d98de19e9fcfa99f2372d6a0b7ab9a62c9e78
+    source_sha256: 622f10b5871f6b680bfa76c7e619074f3db866d6e8c29c995544c99d5d4f6d11
     disposition: specified
     fields:
       splat_rule:
@@ -15231,7 +15231,7 @@ definitions:
     - SRD 5.2.1 pp. 320; builtin/srd-5.2.1/creature/roper.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/sahuagin_warrior:
-    source_sha256: ddad4f8ab53d105e968ea423f73d97824e54ed8f4dd36303ef414bdcb61986fd
+    source_sha256: b842b472f9565a7d1015439233cd25728fe97af61790b9021b92cb134bb77297
     disposition: specified
     fields:
       splat_rule:
@@ -15380,7 +15380,7 @@ definitions:
     - SRD 5.2.1 pp. 321; builtin/srd-5.2.1/creature/sahuagin_warrior.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/scorpion:
-    source_sha256: 5cc7cd4946a45ce2e6934e71d7d60bcf929a8575d95529110e885c4361f5003f
+    source_sha256: e6095b76047b1e345d264fd2d2adc3b60904112e5f16857810d9cbbf947c0c2a
     disposition: specified
     fields:
       splat_rule:
@@ -15487,7 +15487,7 @@ definitions:
     - SRD 5.2.1 pp. 360; builtin/srd-5.2.1/creature/scorpion.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/seahorse:
-    source_sha256: dcd3db5c6f2d2f75d5cf88724a0a8a2dfc0f8fe3f3f6422d0de2748b90654962
+    source_sha256: e0a6b59a12d1b23bfbe5379c715bcbec8ea75733a9dcc96072b220a89074a27c
     disposition: specified
     fields:
       splat_rule:
@@ -15587,7 +15587,7 @@ definitions:
     - SRD 5.2.1 pp. 361; builtin/srd-5.2.1/creature/seahorse.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/shield_guardian:
-    source_sha256: 26eebc11e73ce965acdfa3c94350a75e94d24b2080d3f527812d735cac44a8d4
+    source_sha256: 608cfa8d600e05e340ff2feb560a8c93b72f19f5d2a42cf7b8e45fe8bec09824
     disposition: specified
     fields:
       splat_rule:
@@ -15787,7 +15787,7 @@ definitions:
     - SRD 5.2.1 pp. 323; builtin/srd-5.2.1/creature/shield_guardian.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/skeleton:
-    source_sha256: 94b5b9946d3e170e17d7c9a1c29633eb8b47cff0e75552af1f0c12402abaf753
+    source_sha256: 868f9d94d07d703ab6536e8da4319836cbc10fd1d9dfee83423bd636c81a0bb9
     disposition: specified
     fields:
       splat_rule:
@@ -15930,7 +15930,7 @@ definitions:
     - SRD 5.2.1 pp. 325, 326; builtin/srd-5.2.1/creature/skeleton.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/sphinx_of_lore:
-    source_sha256: 04bb96258456bd9bbff488de242e4f8e91ec0f4f39b59be538b8f49629c9a90b
+    source_sha256: fd4ed085e1e7919456defd686e859048505280b909545495bb99b22045fb2411
     disposition: specified
     fields:
       splat_rule:
@@ -16256,7 +16256,7 @@ definitions:
     - SRD 5.2.1 pp. 327, 328; builtin/srd-5.2.1/creature/sphinx_of_lore.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/spider:
-    source_sha256: e87bf195ab928ef3ad67a7f087912fe4870dd278e11322ff229b2cc7821edc6f
+    source_sha256: 0f59eac339b18f99e232026f1eac2a7724b5cf8494bdf8f658a478752cfd7150
     disposition: specified
     fields:
       splat_rule:
@@ -16377,7 +16377,7 @@ definitions:
     - SRD 5.2.1 pp. 361; builtin/srd-5.2.1/creature/spider.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/spy:
-    source_sha256: 12794dd04ebfc02dbff602034a9293a29546ead6b5be39d30786e9bf800fe9ec
+    source_sha256: b905d277fdf37ca5978a1564f807bbc7731b6a9ee9ea515771d4d3956ad27771
     disposition: specified
     fields:
       splat_rule:
@@ -16541,7 +16541,7 @@ definitions:
     - SRD 5.2.1 pp. 329; builtin/srd-5.2.1/creature/spy.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/stone_giant:
-    source_sha256: 05a6da2f82003f9272858af285e440f4989eb9f97d8774357789b34691768db5
+    source_sha256: 2ee46878a975dff59d686d04d3f59a8b149e5976479b8d6d3bf01869afc12874
     disposition: specified
     fields:
       splat_rule:
@@ -16742,7 +16742,7 @@ definitions:
     - SRD 5.2.1 pp. 330; builtin/srd-5.2.1/creature/stone_giant.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/succubus:
-    source_sha256: 4640a6bdb4d15a37bfda7d7b81cbdabd1bfed825360a70256daf0a01f22f9704
+    source_sha256: 653c9d99afaaec1fbe845cc5ea70691ff8a465bebd1a3cbb59c4ee708043bee8
     disposition: specified
     fields:
       splat_rule:
@@ -16944,7 +16944,7 @@ definitions:
     - SRD 5.2.1 pp. 331; builtin/srd-5.2.1/creature/succubus.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/swarm_of_insects:
-    source_sha256: e7071e8368e4711e237e1adb0987a84c9342bb75654cca2799bf8ad07a889089
+    source_sha256: 1b045da5bb774419108ac8e3218b987fb3437017465ddb4bd2d83b700473165a
     disposition: specified
     fields:
       splat_rule:
@@ -17094,7 +17094,7 @@ definitions:
     - SRD 5.2.1 pp. 361; builtin/srd-5.2.1/creature/swarm_of_insects.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/swarm_of_ravens:
-    source_sha256: b83d2d7e7e92e18d17da41915f849e70f2e379e16cd3d0d793ab465ee4216a4b
+    source_sha256: 876efd6ae7700dd03cecde4b83df7e148d5e4967326341c410cbc4101ebbc736
     disposition: specified
     fields:
       splat_rule:
@@ -17270,7 +17270,7 @@ definitions:
     - SRD 5.2.1 pp. 362; builtin/srd-5.2.1/creature/swarm_of_ravens.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/tiger:
-    source_sha256: d2933cb05fc454fd96ea6e699ec276e4cfcfed6345d8b6d0ed258760e7a77962
+    source_sha256: 9392abc91d30b6a11be0fd2e35164c1e5f9b98a56b201c64989067ddde711bf3
     disposition: specified
     fields:
       splat_rule:
@@ -17388,7 +17388,7 @@ definitions:
     - SRD 5.2.1 pp. 363; builtin/srd-5.2.1/creature/tiger.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/treant:
-    source_sha256: 5f7766a98d6f72d8e712aab6c74fc6ed58436ed336a1df8ba2286b5335a5e68b
+    source_sha256: f8e2c31d0fbc6ba9220ad3491806040153e5ef92c980a0309951fb5ece005fea
     disposition: specified
     fields:
       splat_rule:
@@ -17568,7 +17568,7 @@ definitions:
     - SRD 5.2.1 pp. 333; builtin/srd-5.2.1/creature/treant.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/troll_limb:
-    source_sha256: 5495a5bba4afddfa4720b92cffd238bc9e345665686355569d410d48504fe959
+    source_sha256: 17f33098ff2a9ef848fc826d3082ac45df727585dea12cb13881b4bc911fb1f9
     disposition: specified
     fields:
       splat_rule:
@@ -17716,7 +17716,7 @@ definitions:
     - SRD 5.2.1 pp. 333; builtin/srd-5.2.1/creature/troll_limb.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/vampire:
-    source_sha256: bfd53c038f12e06a4ce9a7fac3a7692b5b04f0eca4dfec692940571735f0b4b1
+    source_sha256: 6ecb7164f5e33949cbeaf2724952d6679d24dbf4378f334055be2e359f9c1648
     disposition: specified
     fields:
       splat_rule:
@@ -18142,7 +18142,7 @@ definitions:
     - SRD 5.2.1 pp. 335, 336; builtin/srd-5.2.1/creature/vampire.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/venomous_snake:
-    source_sha256: 854139e7f8a29241642ec25aece9d98b222fa2e27677a16c76ab38835c70d6e3
+    source_sha256: 9fc87b56cbc21fcebece1a8f24585d117ba382dc8fe3b8994de1d738beb29a63
     disposition: specified
     fields:
       splat_rule:
@@ -18252,7 +18252,7 @@ definitions:
     - SRD 5.2.1 pp. 363; builtin/srd-5.2.1/creature/venomous_snake.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/vulture:
-    source_sha256: a6f491560571095ad2b4d9366fc83e48f6467d3d736aab468a450243f5d10420
+    source_sha256: 142e125ea27abe73c139a2c3d958b659eda75decc766ff9d2c787c79a5f21ff5
     disposition: specified
     fields:
       splat_rule:
@@ -18362,7 +18362,7 @@ definitions:
     - SRD 5.2.1 pp. 363, 364; builtin/srd-5.2.1/creature/vulture.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/warrior_infantry:
-    source_sha256: 32a2aa0391accb433d5c5e536bf83583de160697a0b4b1fb11cfba8b18e97fd6
+    source_sha256: 22d0d5f48109c0adc055db4c5198ac1d770b4c27549dbb29667ac78bbd182cc2
     disposition: specified
     fields:
       splat_rule:
@@ -18480,7 +18480,7 @@ definitions:
     - SRD 5.2.1 pp. 336, 337; builtin/srd-5.2.1/creature/warrior_infantry.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/weasel:
-    source_sha256: 2f6e2b6e409caa39264add52fe21a3544f5643bb0d9e68ed0dca735d554774db
+    source_sha256: a3072e27131132c720045f8e387337cca67ce1c8c9cc0ff339960738807c6440
     disposition: specified
     fields:
       splat_rule:
@@ -18583,7 +18583,7 @@ definitions:
     - SRD 5.2.1 pp. 364; builtin/srd-5.2.1/creature/weasel.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/wererat:
-    source_sha256: 5176721e429937d7b564740917708f9d17ca581f5453872c0785c5fe6cb6e574
+    source_sha256: cfcc7e0ae2dd6fb01c48c7d396d38bf40e35ccd4f30a6301e18675dcf1e81e79
     disposition: specified
     fields:
       splat_rule:
@@ -18791,7 +18791,7 @@ definitions:
     - SRD 5.2.1 pp. 338; builtin/srd-5.2.1/creature/wererat.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/white_dragon_wyrmling:
-    source_sha256: 3c5568fee2ea191270034901feca4901335a42890f25d94cd50f3a736f2a7a36
+    source_sha256: 35d252968c56bfaa5d20ed58481a12a96fe0b97d695319acca83c7bdfc7f141b
     disposition: specified
     fields:
       splat_rule:
@@ -18974,7 +18974,7 @@ definitions:
     - SRD 5.2.1 pp. 339, 340; builtin/srd-5.2.1/creature/white_dragon_wyrmling.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/winter_wolf:
-    source_sha256: e804222454a25d020924b081306c4e32b51cdbacf42e4bdda8173c03c77ee3c4
+    source_sha256: 502dc966ef92f5bb7d030dde49ead66d180348016171a9f5108b6ae137b1dd27
     disposition: specified
     fields:
       splat_rule:
@@ -19144,7 +19144,7 @@ definitions:
     - SRD 5.2.1 pp. 342; builtin/srd-5.2.1/creature/winter_wolf.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/wraith:
-    source_sha256: d36ab8675ba91c989da6d14345c5b8768cd2af148509b7f1a131dc005979a799
+    source_sha256: ad7252727091c06a9f6079f0f6e584ddd93d6c084c72595713126759aab34737
     disposition: specified
     fields:
       splat_rule:
@@ -19323,7 +19323,7 @@ definitions:
     - SRD 5.2.1 pp. 342, 343; builtin/srd-5.2.1/creature/wraith.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/young_black_dragon:
-    source_sha256: cc4dbf976c57328237e7315d28adcc109720504af6fc81a1a9ebff2e09c375bf
+    source_sha256: eb66b73440c58eb7ea1ab50102476166e55c0a0d2b678aed1cb56d2ccb7a8d18
     disposition: specified
     fields:
       splat_rule:
@@ -19503,7 +19503,7 @@ definitions:
     - SRD 5.2.1 pp. 264; builtin/srd-5.2.1/creature/young_black_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/young_bronze_dragon:
-    source_sha256: 0f749149ffc7f70602b8bcda78b23c79253743c6b941c7c8d954a685c5f9b038
+    source_sha256: 876975c61fcf9b2ce38426b0d7e875d4eaafb57839774b7e510797a1f241e45f
     disposition: specified
     fields:
       splat_rule:
@@ -19699,7 +19699,7 @@ definitions:
     - SRD 5.2.1 pp. 270; builtin/srd-5.2.1/creature/young_bronze_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/young_green_dragon:
-    source_sha256: 9fb8ac81e2c6c021f83d7c3d0d0be33cd4966d7a56f066170531e167f078b533
+    source_sha256: e8c115b5c8fae3d3d80e547b2400100d48ca85575efcebfe7c07a0288ce9a3c4
     disposition: specified
     fields:
       splat_rule:
@@ -19881,7 +19881,7 @@ definitions:
     - SRD 5.2.1 pp. 293, 294; builtin/srd-5.2.1/creature/young_green_dragon.md
     - SRD 5.2.1 p. 257; builtin/srd-5.2.1/pages/257.md
   dnd2024:creatures/young_white_dragon:
-    source_sha256: 00adbe6e6bc970ccf9c6237ebf53db2aaaddbc92596a3ff45884ae23d1113a16
+    source_sha256: b33af9bdc67e8077789b9d6cffbab9642813970051fdd9de754fb1bda4228e29
     disposition: specified
     fields:
       splat_rule:

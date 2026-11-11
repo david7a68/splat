@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "aa3552c3-d7a3-5d72-9247-ab8aeb7f6fb5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/spy"
-splat_name: "Spy"
+splat_id: aa3552c3-d7a3-5d72-9247-ab8aeb7f6fb5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/spy
+splat_name: Spy
 splat_pages:
 - 329
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4209af0c-d4c2-53d0-be44-5fde7e2ee823"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mummy"
-splat_name: "Mummy"
+splat_id: 4209af0c-d4c2-53d0-be44-5fde7e2ee823
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mummy
+splat_name: Mummy
 splat_pages:
 - 309
 ---

@@ -29,15 +29,9 @@ fn all_old_note_kinds_are_flagged_and_not_loaded() {
         assert_eq!(Entry::parse(kind, &text).unwrap_err(), legacy::OLD_LAYOUT);
         std::fs::write(root.path().join(format!("{kind}.md")), text).unwrap();
     }
-    let character = include_str!("../../../../tests/fixtures/conversion/character.old.md");
-    assert_eq!(
-        Entry::parse("Character.md", character).unwrap_err(),
-        legacy::OLD_LAYOUT
-    );
-    std::fs::write(root.path().join("Character.md"), character).unwrap();
     let (entries, errors) = super::read_directory(root.path()).unwrap();
     assert!(entries.is_empty());
-    assert_eq!(errors.len(), kinds.len() + 1);
+    assert_eq!(errors.len(), kinds.len());
     assert!(
         errors
             .iter()
@@ -64,28 +58,28 @@ fn every_builtin_note_is_schema_two_without_flags() {
     );
 }
 
+/// Each fixture is a note model (`<kind>.fields.yaml` and `<kind>.body.md`) and the note
+/// the writer must give for it (`<kind>.md`).
 #[test]
-fn conversion_keeps_models_and_exact_output_for_every_note_kind() {
+fn writer_keeps_models_and_exact_output_for_every_note_kind() {
     let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
-        .join("tests/fixtures/conversion");
+        .join("tests/fixtures/writer");
+    let mut kinds = 0;
     for file in std::fs::read_dir(&root).unwrap() {
         let path = file.unwrap().path();
-        if !path.to_string_lossy().ends_with(".old.md") {
+        if !path.to_string_lossy().ends_with(".fields.yaml") {
             continue;
         }
-        let old = std::fs::read_to_string(&path).unwrap();
-        let expected = std::fs::read_to_string(
-            path.with_file_name(
-                path.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .replace(".old.md", ".new.md"),
-            ),
-        )
-        .unwrap();
-        let new = super::formats::convert("Fixture.md", &old).unwrap();
+        kinds += 1;
+        let read = |extension: &str| {
+            std::fs::read_to_string(path.with_extension("").with_extension(extension)).unwrap()
+        };
+        let model: super::Mapping =
+            serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let (body, expected) = (&read("body.md"), read("md"));
+        let new = super::formats::write("Fixture.md", &model, body).unwrap();
         assert_eq!(new, expected, "{}", path.display());
-        let before = legacy::parse("Fixture.md", &old).unwrap();
+        let before = super::model::entry("Fixture.md", body, &model).unwrap();
         let after = Entry::parse("Fixture.md", &new).unwrap();
         let mut fields = (*before.fields).clone();
         fields.insert("splat_schema".into(), 2.into());
@@ -104,4 +98,8 @@ fn conversion_keeps_models_and_exact_output_for_every_note_kind() {
             serde_json::to_value(after.inventory).unwrap()
         );
     }
+    assert_eq!(
+        kinds, 17,
+        "a fixture for each note kind, and one for a character"
+    );
 }

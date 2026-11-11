@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b86dd7a8-c592-5e5f-8c26-7da91b0ee2d4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_green_dragon"
-splat_name: "Ancient Green Dragon"
+splat_id: b86dd7a8-c592-5e5f-8c26-7da91b0ee2d4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_green_dragon
+splat_name: Ancient Green Dragon
 splat_pages:
 - 294
 - 295

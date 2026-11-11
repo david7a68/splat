@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "90d087a9-fe9d-5316-a1b1-b806109567cb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/storm_of_vengeance"
-splat_name: "Storm of Vengeance"
+splat_id: 90d087a9-fe9d-5316-a1b1-b806109567cb
+splat_kind: reference
+splat_key: dnd2024:reference/spell/storm_of_vengeance
+splat_name: Storm of Vengeance
 splat_pages:
 - 165
 - 166

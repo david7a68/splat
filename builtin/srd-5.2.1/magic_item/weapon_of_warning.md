@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "87ef1d2f-e8fd-5a59-a0e5-c84903b288db"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/weapon_of_warning"
-splat_name: "Weapon of Warning"
+splat_id: 87ef1d2f-e8fd-5a59-a0e5-c84903b288db
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/weapon_of_warning
+splat_name: Weapon of Warning
 splat_pages:
 - 253
 ---

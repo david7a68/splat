@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "80fa1608-01ad-56a4-a388-f5bb4e498650"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/heal"
-splat_name: "Heal"
+splat_id: 80fa1608-01ad-56a4-a388-f5bb4e498650
+splat_kind: reference
+splat_key: dnd2024:reference/spell/heal
+splat_name: Heal
 splat_pages:
 - 139
 ---

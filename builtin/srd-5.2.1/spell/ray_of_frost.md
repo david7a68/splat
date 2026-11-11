@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9bf4dcf0-e67b-5761-ba18-19c2c0e409a1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ray_of_frost"
-splat_name: "Ray of Frost"
+splat_id: 9bf4dcf0-e67b-5761-ba18-19c2c0e409a1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ray_of_frost
+splat_name: Ray of Frost
 splat_pages:
 - 157
 ---

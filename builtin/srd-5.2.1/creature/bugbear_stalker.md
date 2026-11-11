@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "283a4c43-9de8-5dce-9d5c-4d000fc2b7cc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bugbear_stalker"
-splat_name: "Bugbear Stalker"
+splat_id: 283a4c43-9de8-5dce-9d5c-4d000fc2b7cc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bugbear_stalker
+splat_name: Bugbear Stalker
 splat_pages:
 - 271
 ---

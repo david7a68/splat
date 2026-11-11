@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5e5351ea-efc0-5c68-a622-519c35ec72df"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/chime_of_opening"
-splat_name: "Chime of Opening"
+splat_id: 5e5351ea-efc0-5c68-a622-519c35ec72df
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/chime_of_opening
+splat_name: Chime of Opening
 splat_pages:
 - 215
 ---

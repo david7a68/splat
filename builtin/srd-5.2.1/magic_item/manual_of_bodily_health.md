@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "20714c5a-8d47-5c3d-b5bf-5a48f94a9ee3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/manual_of_bodily_health"
-splat_name: "Manual of Bodily Health"
+splat_id: 20714c5a-8d47-5c3d-b5bf-5a48f94a9ee3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/manual_of_bodily_health
+splat_name: Manual of Bodily Health
 splat_pages:
 - 229
 ---

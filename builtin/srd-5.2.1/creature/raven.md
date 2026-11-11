@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "57362c9e-1c35-5b9e-984b-8f4eb2426156"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/raven"
-splat_name: "Raven"
+splat_id: 57362c9e-1c35-5b9e-984b-8f4eb2426156
+splat_kind: reference
+splat_key: dnd2024:reference/creature/raven
+splat_name: Raven
 splat_pages:
 - 359
 ---

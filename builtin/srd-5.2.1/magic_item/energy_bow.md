@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fa3ecc97-7e29-559b-8da2-65fcbe519c01"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/energy_bow"
-splat_name: "Energy Bow"
+splat_id: fa3ecc97-7e29-559b-8da2-65fcbe519c01
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/energy_bow
+splat_name: Energy Bow
 splat_pages:
 - 220
 ---

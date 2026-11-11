@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3cd085bb-e56e-5580-a6eb-c26f575bc91a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_red_dragon"
-splat_name: "Ancient Red Dragon"
+splat_id: 3cd085bb-e56e-5580-a6eb-c26f575bc91a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_red_dragon
+splat_name: Ancient Red Dragon
 splat_pages:
 - 319
 ---

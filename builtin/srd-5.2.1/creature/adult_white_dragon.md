@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7c37a348-de71-55f7-ad1b-962891580824"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_white_dragon"
-splat_name: "Adult White Dragon"
+splat_id: 7c37a348-de71-55f7-ad1b-962891580824
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_white_dragon
+splat_name: Adult White Dragon
 splat_pages:
 - 340
 ---

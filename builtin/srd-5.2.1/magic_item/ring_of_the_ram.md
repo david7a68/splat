@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b634e5b8-ecb3-58e8-8e53-48d37c612de8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_the_ram"
-splat_name: "Ring of the Ram"
+splat_id: b634e5b8-ecb3-58e8-8e53-48d37c612de8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_the_ram
+splat_name: Ring of the Ram
 splat_pages:
 - 239
 ---

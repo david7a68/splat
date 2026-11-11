@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b00ce872-8db1-5d76-8f4d-7248607624bc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_blue_dragon"
-splat_name: "Ancient Blue Dragon"
+splat_id: b00ce872-8db1-5d76-8f4d-7248607624bc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_blue_dragon
+splat_name: Ancient Blue Dragon
 splat_pages:
 - 267
 ---
