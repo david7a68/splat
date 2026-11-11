@@ -408,6 +408,18 @@ enum Enforce {
     Report,
 }
 
+/// The first line of a panic's message.
+fn panic_line(panic: &(dyn std::any::Any + Send)) -> &str {
+    panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or("panicked")
+        .lines()
+        .next()
+        .unwrap_or("panicked")
+}
+
 fn enforcement() -> Enforce {
     match std::env::var("SPLAT_VISUAL_ENFORCE").as_deref() {
         Ok("strict") => Enforce::Strict,
@@ -983,17 +995,7 @@ fn visual_suite() {
                 look_review.extend(outcome.look_review);
                 videos.extend(outcome.video);
             }
-            Err(panic) => failed.push(format!(
-                "{name}: {}",
-                panic
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| panic.downcast_ref::<&str>().copied())
-                    .unwrap_or("panicked")
-                    .lines()
-                    .next()
-                    .unwrap_or("panicked")
-            )),
+            Err(panic) => failed.push(format!("{name}: {}", panic_line(panic.as_ref()))),
         }
     }
     let names: Vec<&str> = scenarios.iter().map(|(name, ..)| *name).collect();

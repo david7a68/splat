@@ -71,6 +71,22 @@ struct Reference {
     files_at_end: Files,
 }
 
+impl Reference {
+    /// Start and end, apart: `start:` and `end:` before each path.
+    fn files(&self) -> Files {
+        let tagged = |when: &str, files: &Files| {
+            files
+                .iter()
+                .map(|(path, lines)| (format!("{when}:{path}"), lines.clone()))
+                .collect::<Vec<_>>()
+        };
+        tagged("start", &self.files_at_start)
+            .into_iter()
+            .chain(tagged("end", &self.files_at_end))
+            .collect()
+    }
+}
+
 /// One difference from the reference. An allowed row holds one of these, whole.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 struct Difference {
@@ -228,6 +244,12 @@ fn files(root: &Path, runs: &mut Vec<(String, String)>) -> Files {
         runs.iter()
             .fold(text.to_owned(), |text, (id, label)| text.replace(id, label))
     };
+    let hashed = |bytes: &[u8]| {
+        vec![
+            format!("sha256 {:x}", Sha256::digest(bytes)),
+            format!("{} bytes", bytes.len()),
+        ]
+    };
     paths
         .iter()
         .map(|path| {
@@ -239,19 +261,10 @@ fn files(root: &Path, runs: &mut Vec<(String, String)>) -> Files {
                     if text.len() <= WHOLE {
                         text.lines().map(str::to_owned).collect()
                     } else {
-                        vec![
-                            format!("sha256 {:x}", Sha256::digest(text.as_bytes())),
-                            format!("{} bytes", text.len()),
-                        ]
+                        hashed(text.as_bytes())
                     }
                 }
-                Err(error) => {
-                    let bytes = error.into_bytes();
-                    vec![
-                        format!("sha256 {:x}", Sha256::digest(&bytes)),
-                        format!("{} bytes", bytes.len()),
-                    ]
-                }
+                Err(error) => hashed(error.as_bytes()),
             };
             let name = path
                 .strip_prefix(root)
@@ -353,19 +366,20 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
         return "no title\t\t\t\t\t\t\t".to_owned();
     };
     let nodes = d.nodes();
-    let beside = |node: &&super::driver::Found| {
-        node.in_view() && node.rect.left() >= at.right() && node.rect.top() < at.bottom()
+    // The first control of this name in view, right of the title and level with it.
+    let beside = |name: &str| {
+        nodes
+            .iter()
+            .find(|node| {
+                node.name == name
+                    && node.in_view()
+                    && node.rect.left() >= at.right()
+                    && node.rect.top() < at.bottom()
+            })
+            .map(|node| node.rect)
     };
-    let art = nodes
-        .iter()
-        .filter(beside)
-        .find(|node| node.name == title)
-        .map(|node| node.rect);
-    let edit = nodes
-        .iter()
-        .filter(beside)
-        .find(|node| node.name == format!("Edit {title}"))
-        .map(|node| node.rect);
+    let art = beside(title);
+    let edit = beside(&format!("Edit {title}"));
     let search = nodes
         .iter()
         .find(|node| node.name == SEARCH_LOOKUP && node.in_view())
@@ -378,12 +392,9 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
         })
         .map(|lane| lane.left())
         .fold(f32::NAN, f32::min);
-    let inside = if lane.is_nan() {
-        search
-    } else {
-        search.min(lane)
-    };
-    let last = [Some(at), art, edit]
+    // `min` keeps the number when the other side is NaN: no lane, or no search field.
+    let inside = search.min(lane);
+    let last = [art, edit]
         .into_iter()
         .flatten()
         .map(|rect| rect.right())
@@ -409,8 +420,9 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
     )
 }
 
-/// The plain evening: today's controls only, and no act that a feature adds.
-fn play(d: &mut Driver<'_>) -> (Evening, Files) {
+/// The plain evening: today's controls only, and no act that a feature adds. Its capture, with
+/// no `about`, and the reader titles it measured.
+fn play(d: &mut Driver<'_>) -> (Reference, Vec<String>) {
     d.set_base(WIDE);
     let root = d.root.join("campaigns");
     let mut runs = Vec::new();
@@ -497,19 +509,13 @@ fn play(d: &mut Driver<'_>) -> (Evening, Files) {
             view.view
         );
     });
-    (evening, merge_files(at_start, at_end))
-}
-
-/// Start and end, apart: `start:` and `end:` before each path.
-fn merge_files(start: Files, end: Files) -> Files {
-    start
-        .into_iter()
-        .map(|(path, lines)| (format!("start:{path}"), lines))
-        .chain(
-            end.into_iter()
-                .map(|(path, lines)| (format!("end:{path}"), lines)),
-        )
-        .collect()
+    let capture = Reference {
+        about: String::new(),
+        views: evening.views,
+        files_at_start: at_start,
+        files_at_end: at_end,
+    };
+    (capture, evening.titles)
 }
 
 fn compare_items(
@@ -634,7 +640,8 @@ fn compare_files(old: &Files, new: &Files, out: &mut Vec<Difference>) {
     }
 }
 
-fn differences(reference: &Reference, views: &[View], files: &Files) -> Vec<Difference> {
+fn differences(reference: &Reference, capture: &Reference) -> Vec<Difference> {
+    let views = &capture.views;
     let mut out = Vec::new();
     let key = |view: &View| (view.screen.clone(), view.view.clone());
     for old in &reference.views {
@@ -679,11 +686,7 @@ fn differences(reference: &Reference, views: &[View], files: &Files) -> Vec<Diff
             });
         }
     }
-    let old_files = merge_files(
-        reference.files_at_start.clone(),
-        reference.files_at_end.clone(),
-    );
-    compare_files(&old_files, files, &mut out);
+    compare_files(&reference.files(), &capture.files(), &mut out);
     out
 }
 
@@ -749,10 +752,11 @@ fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> T {
 
 /// G7. The scenario `plain-evening`.
 pub fn run(d: &mut Driver<'_>) {
-    let (evening, files) = play(d);
+    let (mut capture, titles) = play(d);
+    let files = capture.files();
     let allowed: Allowed = read(&folder().join("allowed.json"));
     assert!(
-        !evening.views.is_empty() && !files.is_empty(),
+        !capture.views.is_empty() && !files.is_empty(),
         "G7: the evening captured no view or no file, so it can prove nothing"
     );
     if std::env::var_os(WRITE).is_some() {
@@ -760,35 +764,20 @@ pub fn run(d: &mut Driver<'_>) {
             allowed.rows.is_empty(),
             "G7: allowed.json has rows. They describe changes from this reference, so write it only on main with no rows"
         );
-        let (start, end): (Files, Files) = files
-            .into_iter()
-            .partition(|(path, _)| path.starts_with("start:"));
-        let strip = |files: Files, prefix: &str| -> Files {
-            files
-                .into_iter()
-                .map(|(path, lines)| (path[prefix.len()..].to_owned(), lines))
-                .collect()
-        };
-        let reference = Reference {
-            about:
-                "G7 reads this. Written by audit-freeze from the plain-evening scenario on main. \
-                    Change it only by writing it again on main."
-                    .into(),
-            views: evening.views,
-            files_at_start: strip(start, "start:"),
-            files_at_end: strip(end, "end:"),
-        };
-        fs::write(folder().join("reference.json"), reference_text(&reference))
+        capture.about = "G7 reads this. Written by audit-freeze from the plain-evening scenario \
+            on main. Change it only by writing it again on main."
+            .into();
+        fs::write(folder().join("reference.json"), reference_text(&capture))
             .expect("write the reference");
-        let mut titles = String::from(
+        let mut table = String::from(
             "reader\twindow\ttitle\tentry\tfont size\ttitle width\ttitle left\tart\tEdit\tscroll bar\tinside\troom after\n",
         );
-        for line in &evening.titles {
-            let _ = writeln!(titles, "{line}");
+        for line in &titles {
+            let _ = writeln!(table, "{line}");
         }
         fs::write(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/dm-audit/titles.tsv"),
-            titles,
+            table,
         )
         .expect("write titles.tsv");
         println!("plain-evening: wrote the reference");
@@ -805,7 +794,7 @@ pub fn run(d: &mut Driver<'_>) {
             && !reference.files_at_end.is_empty(),
         "G7: the reference holds an empty view or no files, so it can prove nothing"
     );
-    let mut found = differences(&reference, &evening.views, &files);
+    let mut found = differences(&reference, &capture);
     let mut faults = Vec::new();
     for row in &allowed.rows {
         if !CONTRACT_ROWS.contains(&row.row) {
@@ -844,7 +833,7 @@ pub fn run(d: &mut Driver<'_>) {
         true,
         format!(
             "{} views and {} files match the reference, with {} allowed rows",
-            evening.views.len(),
+            capture.views.len(),
             files.len(),
             allowed.rows.len()
         ),

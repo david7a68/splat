@@ -130,17 +130,9 @@ impl<'a> Audit<'_, 'a> {
         let trail = self.d.page_trail.len();
         let from = self.d.current_page();
         let result = catch_unwind(AssertUnwindSafe(|| step(self.d)));
-        let blocked = result.err().map(|panic| {
-            panic
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| panic.downcast_ref::<&str>().copied())
-                .unwrap_or("panicked")
-                .lines()
-                .next()
-                .unwrap_or("panicked")
-                .to_owned()
-        });
+        let blocked = result
+            .err()
+            .map(|panic| super::panic_line(panic.as_ref()).to_owned());
         let task = if kind == Kind::Setup {
             "Set-up".to_owned()
         } else {
@@ -705,18 +697,24 @@ fn summary(record: &Record) -> String {
     out
 }
 
+/// Each counted act that found no control, one line each.
+fn blocked(rows: &[Row]) -> Vec<String> {
+    rows.iter()
+        .filter(|row| row.kind != Kind::Setup)
+        .filter_map(|row| {
+            let why = row.blocked.as_ref()?;
+            Some(format!(
+                "{} / {}: the act {:?} found no control: {why}",
+                row.phase, row.task, row.what
+            ))
+        })
+        .collect()
+}
+
 /// What differs between the frozen counts and this evening's, one line each.
 fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Vec<String> {
     let name = |task: &TaskCount| format!("{} / {}", task.phase, task.task);
-    let mut out = Vec::new();
-    for row in rows.iter().filter(|row| row.kind != Kind::Setup) {
-        if let Some(why) = &row.blocked {
-            out.push(format!(
-                "{} / {}: the act {:?} found no control: {why}",
-                row.phase, row.task, row.what
-            ));
-        }
-    }
+    let mut out = blocked(rows);
     for old in frozen {
         match measured
             .iter()
@@ -749,12 +747,13 @@ fn differences(frozen: &[TaskCount], measured: &[TaskCount], rows: &[Row]) -> Ve
             ));
         }
     }
-    let order = |tasks: &[TaskCount]| -> Vec<String> { tasks.iter().map(name).collect() };
-    let kept: Vec<String> = order(measured)
-        .into_iter()
-        .filter(|task| order(frozen).contains(task))
+    let order: Vec<String> = frozen.iter().map(name).collect();
+    let kept: Vec<String> = measured
+        .iter()
+        .map(name)
+        .filter(|task| order.contains(task))
         .collect();
-    if out.is_empty() && kept != order(frozen) {
+    if out.is_empty() && kept != order {
         out.push("the frozen tasks are played in another order".to_owned());
     }
     out
@@ -794,7 +793,7 @@ pub fn run(d: &mut Driver<'_>) {
         )
     };
     if std::env::var_os(WRITE).is_some() {
-        let blocked = differences(&measured, &measured, &record.rows);
+        let blocked = blocked(&record.rows);
         assert!(
             blocked.is_empty(),
             "dm-audit: an act found no control, so nothing is frozen:\n{}",
