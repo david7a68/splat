@@ -2209,7 +2209,11 @@ fn attack_damage(attack: &Value) -> String {
 fn attack_chip(attack: &Value) -> Option<Chip> {
     let name = text(&attack["name"]).to_owned();
     let kind = text(&attack["damage"]["type"]);
-    let words = format!("{name} · {} {kind}", attack_damage(attack));
+    let mut words = format!("{name} · {} {kind}", attack_damage(attack));
+    // Where it lands, as a stat block says it, so the tile shows it as other tiles do.
+    if let Some(lands) = attack_reach(attack) {
+        words.push_str(&format!(". {lands}."));
+    }
     let parts: Vec<DamagePart> = attack["damage"]["value"]["diceString"]
         .as_str()
         .filter(|_| attack["damage"]["value"].as_i64().is_none())
@@ -2244,6 +2248,24 @@ fn attack_chip(attack: &Value) -> Option<Chip> {
         return None;
     };
     Chip::new(link, words)
+}
+
+/// Where a sheet's attack lands, in a stat block's words: `Reach 5 ft` or `Range 80/320 ft`.
+/// `None` when the sheet gives no distance.
+fn attack_reach(attack: &Value) -> Option<String> {
+    let range = &attack["range"];
+    let feet = range["value"].as_u64().filter(|feet| *feet > 0)?;
+    let reach = range["label"].as_str() == Some("Reach")
+        || range["origin"]
+            .as_str()
+            .is_some_and(|origin| origin == "Melee");
+    Some(
+        match range["longRangeValue"].as_u64().filter(|long| *long > feet) {
+            Some(long) if !reach => format!("Range {feet}/{long} ft"),
+            _ if reach => format!("Reach {feet} ft"),
+            _ => format!("Range {feet} ft"),
+        },
+    )
 }
 
 /// A character's actions, from its sheet's attacks.
@@ -2694,5 +2716,31 @@ mod sheet_now_tests {
             ..SheetNow::default()
         };
         assert_eq!(whole.line(), "HP 38/38");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// iter-20-R-FD8: a Party tile says where its attack lands, as Library and run tiles do,
+    /// when the sheet gives it; a sheet without a distance keeps one line.
+    #[test]
+    fn a_sheets_attack_tile_says_where_it_lands() {
+        let attack = |range: Value| json!({"name": "Dagger", "toHit": 6, "damage": {"value": {"diceString": "1d4", "fixedValue": 3}, "type": "Piercing"}, "range": range});
+        let words = |range: Value| attack_chip(&attack(range)).unwrap().text;
+        assert!(words(json!({"label": "Reach", "value": 5})).ends_with(". Reach 5 ft."));
+        assert!(words(json!({"origin": "Ranged", "value": 120})).ends_with(". Range 120 ft."));
+        assert!(
+            words(json!({"origin": "Ranged", "value": 80, "longRangeValue": 320}))
+                .ends_with(". Range 80/320 ft.")
+        );
+        // Must stay true: no distance, no second line, and the numbers are as before.
+        for none in [Value::Null, json!({"origin": "Touch", "value": 0})] {
+            let text = words(none);
+            assert!(!text.contains("Reach") && !text.contains("Range"), "{text}");
+            assert!(text.starts_with("Dagger · "), "{text}");
+        }
     }
 }

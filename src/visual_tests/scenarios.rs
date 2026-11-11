@@ -1657,6 +1657,14 @@ pub mod party {
                     Sizes::Default
                 },
             );
+            if page == "Actions" {
+                // A Party tile shows where its attack lands, as Library and run tiles do.
+                d.observe(
+                    "iter-20-R-FD8",
+                    d.visible_text("Reach 5 ft") && d.visible_text("Range 120 ft"),
+                    "Party's Dagger and Fire Bolt tiles show their reach and range",
+                );
+            }
             if page == "Equipment" {
                 d.observe(
                     "P29",
@@ -3234,7 +3242,7 @@ pub mod run_long_names {
         d.focus_window(false);
         d.focus_window(true);
         d.click_row(ENEMY);
-        if d.has("Stat block") && !d.has_containing("has changed since") {
+        if d.has("Stat block") && !d.has_containing("Cinder Wolf.md has changed.") {
             d.click("Stat block");
         }
         d.wait_for_text("Read the new version");
@@ -3242,7 +3250,7 @@ pub mod run_long_names {
             d,
             "iter-17-B-read-new",
             "Read the new version",
-            "has changed since",
+            "Cinder Wolf.md has changed.",
             &[SMALL, DEFAULT, LARGE],
             None,
         );
@@ -13212,7 +13220,9 @@ pub mod remove_package_in_use {
         go_encounters(d);
         resume_run_from_cold_start(d);
         d.wait_for_text(NEXT_TURN);
-        d.expect("As at the start of this fight. Ashen Marches is not used in this campaign now.");
+        d.expect(
+            "This stat block uses the copy from the start of the fight. Ashen Marches is not used in this campaign now.",
+        );
         d.observe(
             "i19 removed package",
             !d.visible_text("was deleted"),
@@ -13236,6 +13246,115 @@ pub mod run_rolls {
     const PLAYER: &str = "Iselle Marrowind";
     const BITE: &str = "Bite · +4";
     const BURST: &str = "Ember Burst · DC 12";
+    const ROWS: [&str; 8] = [
+        "Brannoch Vale",
+        ATTACKER,
+        TARGET,
+        PLAYER,
+        "Kestrel Dunmoor",
+        "Oren Thistlewick",
+        "Sable Harrowgate",
+        CASTER,
+    ];
+
+    /// Each row's height and its AC label's place. Roll words must change neither.
+    fn row_geometry(d: &Driver<'_>) -> Vec<Option<(f32, egui::Rect)>> {
+        ROWS.iter()
+            .map(|row| {
+                let node = d.row_node(row)?;
+                let ac = d.painted_word_rect("AC", node.shown)?;
+                Some((node.rect.height(), ac))
+            })
+            .collect()
+    }
+
+    /// iter-20-R-FT4: a row's roll words have one place. They start on the line under the
+    /// name, left of the AC column (never the state column), after the condition line when
+    /// the row has one, else at the name's edge. They are whole or cut by whole words, and
+    /// the row's accessible name holds them whole. `start` is how they begin. What is wrong,
+    /// or `None`.
+    fn roll_words_fault(
+        d: &Driver<'_>,
+        row: &str,
+        start: &str,
+        condition: Option<&str>,
+    ) -> Option<String> {
+        let Some(node) = d.row_node(row) else {
+            return Some(format!("{row}: no row"));
+        };
+        let Some((_, full)) = node
+            .name
+            .rsplit_once(", ")
+            .filter(|(_, words)| words.contains(start))
+        else {
+            return Some(format!("{row}: its name {:?} has no {start:?}", node.name));
+        };
+        let first = full.split(' ').next().unwrap_or(full);
+        let (Some(words), Some(name), Some(ac)) = (
+            d.painted_rect_in(first, node.shown),
+            d.painted_rect_in(row, node.shown),
+            d.painted_word_rect("AC", node.shown)
+                .or_else(|| d.painted_word_rect("DEX", node.shown)),
+        ) else {
+            return Some(format!("{row}: its words, name or AC are not painted"));
+        };
+        let shown = d.painted_in(words.expand(1.0)).replace('\u{a0}', " ");
+        let kept = shown.trim_end_matches('…');
+        let whole_words = shown == full
+            || (shown.ends_with('…')
+                && full.starts_with(kept)
+                && full[kept.len()..].starts_with(' '));
+        let after = match condition {
+            Some(condition) => d
+                .painted_rect_in(condition, node.shown)
+                .is_some_and(|line| {
+                    words.left() >= line.right() && (words.top() - line.top()).abs() < 2.0
+                }),
+            None => (words.left() - name.left()).abs() < 1.0,
+        };
+        let wrong = [
+            // Under the name's last line: a name's galley holds its line spacing below.
+            (
+                words.top() >= name.top() + name.height() * 0.75,
+                "under the name",
+            ),
+            (words.left() < ac.left(), "in the name column"),
+            (after, "after the conditions, or at the name's edge"),
+            (whole_words, "whole or cut by whole words"),
+        ]
+        .into_iter()
+        .filter(|(holds, _)| !holds)
+        .map(|(_, what)| what)
+        .collect::<Vec<_>>();
+        (!wrong.is_empty()).then(|| {
+            format!("{row}: {shown:?} at {words:?} (name {name:?}, AC {ac:?}) is not {wrong:?}")
+        })
+    }
+
+    /// `roll_words_fault` for each row, at 960, 1200 and 1920.
+    fn roll_words_faults(d: &mut Driver<'_>, rows: &[(&str, &str, Option<&str>)]) -> Vec<String> {
+        let mut faults = Vec::new();
+        for size in [SMALL, DEFAULT, LARGE] {
+            faults.extend(d.at_size(size, |d| {
+                rows.iter()
+                    .filter_map(|(row, start, condition)| {
+                        roll_words_fault(d, row, start, *condition)
+                    })
+                    .map(|fault| format!("{}x{}: {fault}", size.0, size.1))
+                    .collect::<Vec<_>>()
+            }));
+        }
+        faults
+    }
+
+    /// A row's result from its accessible name: whether it saved, and its damage.
+    fn save_said(d: &Driver<'_>, row: &str) -> Option<(bool, i64)> {
+        let name = d.row_node(row)?.name;
+        let (saved, rest) = ["Saved · ", "Failed · "]
+            .into_iter()
+            .find_map(|word| Some((word == "Saved · ", name.split_once(word)?.1.to_owned())))?;
+        Some((saved, rest.split(' ').next()?.parse().ok()?))
+    }
 
     /// A tile's control, by the start of its name.
     fn tile(d: &Driver<'_>, start: &str) -> Option<Found> {
@@ -13286,6 +13405,7 @@ pub mod run_rolls {
         );
         d.state("tiles-in-the-stat-block", Sizes::All);
 
+        let geometry = row_geometry(d);
         d.begin_task();
         d.click_starting(BITE);
         d.observe(
@@ -13295,6 +13415,13 @@ pub mod run_rolls {
         );
         d.goal_within("T16.1", "arm the selected creature's attack", 1);
         action_at_text(d, "iter-19-R-FT4", BITE, "Stop");
+        // Must stay true (iter-20-R-FT4): roll words move no row's AC and change no height.
+        let armed = row_geometry(d);
+        d.observe(
+            "iter-20-R-FT4",
+            geometry.iter().all(Option::is_some) && armed == geometry,
+            format!("Rows keep their height and AC place when roll words show: {geometry:?} then {armed:?}"),
+        );
         d.state("attack-armed", Sizes::All);
 
         d.begin_task();
@@ -13358,6 +13485,28 @@ pub mod run_rolls {
         d.click_row(ATTACKER);
         d.begin_task();
         d.right_click_starting(BITE);
+        // iter-20-R-FT3: one roll menu. It opens under its tile, headed in muted Small with the
+        // action's name, and its choices start at the heading's words.
+        let tile_rect = tile(d, BITE).map(|tile| tile.rect);
+        let below = tile_rect.map(|tile| {
+            egui::Rect::from_min_max(
+                egui::pos2(tile.left() - 48.0, tile.bottom()),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        });
+        let heading = below.and_then(|below| d.painted_rect_in("Bite", below));
+        let choice = d.painted_left("Roll with disadvantage");
+        let first = below.and_then(|below| d.painted_rect_in("Roll with advantage", below));
+        d.observe(
+            "iter-20-R-FT3",
+            tile_rect.zip(heading).zip(first).is_some_and(|((tile, heading), first)| {
+                heading.top() >= tile.bottom() && first.top() >= heading.bottom() - 1.0
+            }) && heading.zip(choice).is_some_and(|(heading, choice)| (heading.left() - choice).abs() < 1.0)
+                && heading.is_some_and(|heading| {
+                    d.painted_size(heading, "Bite") == Some(crate::design::Type::Small.size())
+                }),
+            format!("The tile menu opens under the tile with its heading: tile {tile_rect:?}, heading {heading:?}, choices at {choice:?}, first choice {first:?}"),
+        );
         d.state("tile-menu", Sizes::Default);
         d.click("Roll with advantage");
         d.observe(
@@ -13375,6 +13524,39 @@ pub mod run_rolls {
             d.visible_text("With advantage. Click a target")
                 && d.visible_text("% to hit · advantage"),
             "An attack armed with advantage says so in its hint and on the rows",
+        );
+        // iter-20-R-FT7: the wrapped hint keeps its crosshair on its first line.
+        d.observe_both(
+            "iter-20-R-FT7",
+            "The armed hint's crosshair is centred on the hint's first line",
+            |d| {
+                let tile_bottom = tile(d, BITE).map_or(f32::INFINITY, |tile| tile.rect.bottom());
+                let below = egui::Rect::from_min_max(
+                    egui::pos2(0.0, tile_bottom),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                let hint = d.painted_rect_in("With advantage. Click a target", below);
+                let icon = d.painted_rect_in(crate::design::icons::ARMED, below);
+                hint.zip(icon).is_some_and(|(hint, icon)| {
+                    let first_line = hint.top() + crate::design::Type::Small.line() / 2.0;
+                    hint.height() > crate::design::Type::Small.line()
+                        && (icon.center().y - first_line).abs() <= 3.0
+                })
+            },
+        );
+        // iter-20-R-FT4: with advantage, the chance sits under the name, after `Conc`.
+        let faults = roll_words_faults(
+            d,
+            &[
+                ("Brannoch Vale", "% to hit · advantage", None),
+                (TARGET, "% to hit · advantage", Some("Conc")),
+                ("Kestrel Dunmoor", "% to hit · advantage", Some("Poisoned")),
+            ],
+        );
+        d.observe(
+            "iter-20-R-FT4",
+            faults.is_empty(),
+            format!("Each row's chance sits in its one place at every size: {faults:?}"),
         );
         d.right_click_row(TARGET);
         d.observe(
@@ -13456,6 +13638,19 @@ pub mod run_rolls {
             d.click("Half for those at or above DC");
         }
         d.click("Roll damage");
+        // iter-20-R-FT4: each save result sits in the one place too, and a long result
+        // (`Saved · 10 damage (half)`) is whole or cut by whole words at every size.
+        let rows = [
+            (ATTACKER, " damage", Some("Prone")),
+            (TARGET, " damage", Some("Conc")),
+        ];
+        let faults = roll_words_faults(d, &rows);
+        d.observe(
+            "iter-20-R-FT4",
+            faults.is_empty(),
+            format!("Each save result sits in its one place at every size: {faults:?}"),
+        );
+        let rolled = [ATTACKER, TARGET].map(|row| save_said(d, row));
         let hp_before = [d.row_hp(ATTACKER), d.row_hp(TARGET)];
         d.press(Key::Enter);
         d.goal_within(
@@ -13496,6 +13691,30 @@ pub mod run_rolls {
         d.observe_both("iter-19-R-FT1", "The rows name each result in words", |d| {
             d.visible_text("Saved · ") && d.visible_text("Failed · ")
         });
+        // iter-20-R-FT1: a finished save is finished. The tile disarms, and the rows show AC.
+        let finished = |d: &Driver<'_>| {
+            let rows_show_ac = [ATTACKER, TARGET].map(|row| {
+                d.row_node(row).is_some_and(|node| {
+                    !node.name.contains(" save ")
+                        && d.painted_word_rect("AC", node.shown).is_some()
+                        && d.painted_word_rect("DEX", node.shown).is_none()
+                })
+            });
+            !d.has("Roll damage")
+                && !d.has_containing("target. Click more")
+                && !d.has_containing("targets. Click more")
+                && !d.has_containing("Click each target")
+                && rows_show_ac == [true, true]
+                // Must stay true: the panel stays on the caster's tiles, with the results.
+                && tile(d, BURST).is_some()
+                && d.visible_text("Saved · ")
+                && d.visible_text("Failed · ")
+        };
+        d.observe_both(
+            "iter-20-R-FT1",
+            "After its damage applies, the save is disarmed, its rows show AC with their results",
+            finished,
+        );
         d.state("save-applied", Sizes::Default);
         // Undo gives each target back its own HP.
         d.press(Key::U);
@@ -13507,13 +13726,71 @@ pub mod run_rolls {
                 "Undo restores each row's HP: {hp_before:?} then {hp_after:?}, undone {hp_undone:?}"
             ),
         );
-        // The save's results go with the step that applied them (iter-19-R2-1).
-        d.observe_both(
-            "iter-19-R2-1",
-            "After Undo no row still names the save's result",
-            |d| !d.visible_text("Failed · ") && !d.visible_text("Saved · "),
+        // iter-20-R-FT1: Undo arms the save again as it stood: its saves where AC is, Roll
+        // damage, and each row's result from the damage in Amount again (iter-19-R2-1: the
+        // applied results went with their step; the unit test asserts the step's results).
+        let armed_again = [ATTACKER, TARGET].map(|row| {
+            d.row_node(row)
+                .is_some_and(|node| node.name.contains(", DEX save "))
+        });
+        d.observe(
+            "iter-20-R-FT1",
+            d.has("Roll damage")
+                && armed_again == [true, true]
+                && [ATTACKER, TARGET].map(|row| save_said(d, row)) == rolled,
+            format!(
+                "Undo arms the save again with its results: {armed_again:?}, {:?}",
+                [ATTACKER, TARGET].map(|row| save_said(d, row))
+            ),
         );
-        d.press(Key::Escape);
+        let full = rolled
+            .iter()
+            .flatten()
+            .find(|(saved, _)| !saved)
+            .map(|(_, amount)| *amount);
+        // Outside the task's count: another amount gives longer words.
+        d.replace_text_in("Amount", "20");
+        let said =
+            [ATTACKER, TARGET].map(|row| d.row_node(row).map(|node| node.name).unwrap_or_default());
+        let faults = roll_words_faults(d, &rows);
+        d.observe(
+            "iter-20-R-FT4",
+            said.iter()
+                .any(|name| name.ends_with("Saved · 10 damage (half)"))
+                && said.iter().any(|name| name.ends_with("Failed · 20 damage"))
+                && faults.is_empty(),
+            format!(
+                "`Saved · 10 damage (half)` is whole or cut by whole words: {said:?}, {faults:?}"
+            ),
+        );
+        d.replace_text_in("Amount", &full.unwrap_or_default().to_string());
+        d.observe(
+            "iter-20-R-FT4",
+            full.is_some() && [ATTACKER, TARGET].map(|row| save_said(d, row)) == rolled,
+            format!("Amount has the rolled damage again: {rolled:?}"),
+        );
+        // Apply again: the same amounts, and the save is finished again.
+        d.press(Key::Enter);
+        let hp_again = [d.row_hp(ATTACKER), d.row_hp(TARGET)];
+        d.observe(
+            "iter-20-R-FT1",
+            hp_again == hp_after && finished(d),
+            format!(
+                "Applying again gives the same HP, {hp_after:?} then {hp_again:?}, and disarms"
+            ),
+        );
+        // Next turn ends the results; Undo of the turn brings back those the step applied.
+        d.press(Key::N);
+        let next_clears = !d.visible_text("Saved · ") && !d.visible_text("Failed · ");
+        d.press(Key::U);
+        d.observe(
+            "iter-20-R-FT1",
+            next_clears
+                && d.visible_text("Saved · ")
+                && d.visible_text("Failed · ")
+                && !d.has("Roll damage"),
+            format!("Next turn clears the save's results ({next_clears}), and Undo of it brings them back, disarmed"),
+        );
 
         // A player rolls their own dice: the tile targets, and the DM types the damage.
         d.click_row(PLAYER);
@@ -13551,6 +13828,17 @@ pub mod run_rolls {
             "A tile in the Library previews its attack and damage",
         );
         d.goal_within("T16.7", "preview an attack in the Library", 1);
+        // iter-20-R-ST2: a lone tile takes the reader's line in the Library too, not the
+        // 208 px of a tile that shares its line.
+        let widths = [DEFAULT, LARGE]
+            .map(|size| d.at_size(size, |d| tile(d, BITE).map(|tile| tile.rect.width())));
+        d.observe(
+            "iter-20-R-ST2",
+            widths
+                .iter()
+                .all(|width| width.is_some_and(|width| width > 2.0 * 208.0)),
+            format!("The Library's lone Bite tile takes the line at 1200 and 1920: {widths:?}"),
+        );
         d.state("library-preview", Sizes::All);
 
         // Two tiles share a line where the reader has room, each with its facts line, and a

@@ -512,6 +512,11 @@ struct State {
     /// belongs to the step, so Undo takes it back with the HP. Not saved.
     #[serde(skip)]
     roll_results: BTreeMap<usize, String>,
+    /// The save as it stood before the next step applied its damage, so Undo of that step
+    /// arms the save again with its results. Only the state before a save's damage step has
+    /// one. Not saved.
+    #[serde(skip)]
+    cast: Option<rolling::Cast>,
 }
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
@@ -883,6 +888,7 @@ impl Run {
                 last_change: None,
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
+                cast: None,
                 random: Random::seeded(seed),
             },
             history: Vec::new(),
@@ -1555,6 +1561,7 @@ impl Run {
         let undo_label = self.describe(&command);
         // A save's damage names each target's own result once it is applied.
         let roll_results = self.save_results(&command);
+        let cast = self.finished_cast(&roll_results);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
         let follow_turn = matches!(command, Command::Begin | Command::Next);
@@ -1798,13 +1805,8 @@ impl Run {
         if follow_turn {
             next.roll_results.clear();
         }
-        if !roll_results.is_empty() {
-            next.roll_results.extend(roll_results);
-            // The save's damage is spent: a later step on these rows is not its result.
-            if let Some(armed) = self.armed.as_mut() {
-                armed.damage = None;
-            }
-        }
+        next.roll_results.extend(roll_results);
+        next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
         if self.history.len() == 100 {
             self.history.remove(0);
@@ -1813,7 +1815,13 @@ impl Run {
         }
         self.dm_steps += 1;
         self.notice = None;
+        // The step keeps the save as it stood, and the save is finished: its tile disarms.
+        let finished = cast.is_some();
+        self.state.cast = cast;
         self.history.push(std::mem::replace(&mut self.state, next));
+        if finished {
+            self.end_cast();
+        }
         if began {
             self.panel = Panel::Reference;
         }
@@ -2068,6 +2076,10 @@ impl Run {
                 p.combat_values = values;
             }
             self.forget_removed_participants();
+            // Undo of a save's damage step arms the save again, as it stood.
+            if let Some(cast) = self.state.cast.take() {
+                self.resume_cast(cast);
+            }
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
@@ -6987,7 +6999,7 @@ mod tests {
     }
 
     // ---- Encounter groups ------------------------------------------------------------
-    fn guard_group(name: &str, count: u64) -> Arc<RunGroup> {
+    pub(super) fn guard_group(name: &str, count: u64) -> Arc<RunGroup> {
         group_of(
             name,
             "enemies",

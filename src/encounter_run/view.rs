@@ -3975,6 +3975,7 @@ impl Run {
             return;
         }
         let mut link = None;
+        let mut notice = None;
         if let Some(content) = &self.content {
             let at = content.position_of(&Reference::Id(definition.id));
             let current = at.map(|at| &content.items[at].entry);
@@ -3982,7 +3983,8 @@ impl Run {
                 .errors
                 .iter()
                 .any(|error| error.contains(&definition.path));
-            if let Some(message) = snapshot_notice(definition, current, unreadable) {
+            notice = snapshot_notice(definition, current, unreadable);
+            if let Some(message) = &notice {
                 ui.label(Type::Small.rich(ui, message).color(colors().muted));
                 if let Some(at) = at
                     && Action::quiet("Read the new version")
@@ -3998,10 +4000,7 @@ impl Run {
             ui.add(
                 egui::Label::new(
                     Type::Small
-                        .rich(
-                            ui,
-                            "Saved when this run began. The roster has the current values.",
-                        )
+                        .rich(ui, snapshot_values_line(notice.is_some()))
                         .color(colors().document.read_only),
                 )
                 .wrap(),
@@ -5469,6 +5468,16 @@ fn set_exhaustion(index: usize, at: usize, level: u8) -> Command {
     ])
 }
 
+/// The line under a character's card. The notice above it, when it shows, already says the
+/// card is the copy from the start of the fight, so the line does not say it again.
+fn snapshot_values_line(notice_shown: bool) -> &'static str {
+    if notice_shown {
+        "The roster has the current values."
+    } else {
+        "Saved when this run began. The roster has the current values."
+    }
+}
+
 /// The action names what it does, so its label cannot be read as a state.
 /// What an encounter or group changed on this creature: the value it replaced and the new
 /// one, each marked. It stays out in the open, above the stat block that keeps its own values.
@@ -5477,6 +5486,15 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
         .file_name()
         .unwrap_or_default()
         .to_string_lossy();
+    // The card says first what it shows: the copy the run took at its start.
+    let lead = format!(
+        "This {} uses the copy from the start of the fight.",
+        if snapshot.fields.contains_key("splat_external") {
+            "sheet"
+        } else {
+            "stat block"
+        }
+    );
     let Some(current) = current else {
         if !unreadable
             && let Some(path) = snapshot
@@ -5490,12 +5508,10 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
                 .get("splat_run_source_owner")
                 .and_then(|value| value.as_str())
                 .unwrap_or("This package");
-            return Some(format!(
-                "As at the start of this fight. {owner} is not used in this campaign now."
-            ));
+            return Some(format!("{lead} {owner} is not used in this campaign now."));
         }
         return Some(format!(
-            "As at the start of this fight. {name} {}.",
+            "{lead} {name} {}.",
             if unreadable {
                 "cannot be read now"
             } else if snapshot.fields.contains_key("splat_run_source_path") {
@@ -5522,7 +5538,7 @@ fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) 
         || ((snapshot.body != current.body || snapshot.kind != current.kind)
             && splat::content::stat_blocks::comparison_body(snapshot)
                 != splat::content::stat_blocks::comparison_body(current)))
-    .then(|| format!("As at the start of this fight. {name} has changed since."))
+    .then(|| format!("{lead} {name} has changed."))
 }
 
 fn change_origin(p: &Participant) -> Option<String> {
@@ -6829,6 +6845,40 @@ fn condition_links(
     opened
 }
 
+/// Where a row's roll words go: their left edge, their top below the second line's top, and
+/// their room. After the last line of the row's second line, or at its start when it has none;
+/// they end before the HP column, as the second line does.
+fn badge_place(layout: &RowLayout, x: f32) -> (f32, f32, f32) {
+    let (after, top) = layout
+        .second_line
+        .as_ref()
+        .and_then(|line| line.rows.last())
+        .map_or((0.0, 0.0), |row| {
+            (row.rect().right() + design::S, row.rect().top())
+        });
+    let left = x + layout.second_left + after;
+    (left, top, x + layout.temp_right - left - design::S)
+}
+
+/// The words of `badge` that fit `room`: the longest form that fits whole, dropping its first
+/// parts but never its last two, or else its last form cut by whole words. `None` when not
+/// one word fits.
+fn badge_words(ui: &egui::Ui, badge: &str, font: &egui::FontId, room: f32) -> Option<String> {
+    let parts: Vec<&str> = badge.split(" · ").collect();
+    let kept = parts.len().min(2);
+    let forms: Vec<String> = (0..=parts.len() - kept)
+        .map(|from| parts[from..].join(" · "))
+        .collect();
+    if let Some(words) = forms
+        .iter()
+        .find(|words| design::number_width(ui, words, font) <= room)
+    {
+        return Some(words.clone());
+    }
+    let words = design::words_that_fit(ui, forms.last()?, font, room);
+    (!words.is_empty()).then_some(words)
+}
+
 /// `save` is a save's result for this row, such as `DEX` and 19, shown where AC is, and
 /// `badge` what the current action says about the row, such as `60% to hit`.
 #[allow(clippy::too_many_arguments)]
@@ -7000,48 +7050,19 @@ fn paint_row(
         pos2(hp_right, bar_top + bar_height),
     );
     design::hp_bar(painter, bar, p.hp, p.max_hp, p.temporary_hp);
-    // The current action's word on this row: the chance to hit, or the result. It goes under
-    // the row's state, or, where the state column has no room, after its second line. The
-    // longest form that fits whole, dropping its first parts; the result itself (its last two
-    // parts: an attack's comparison and damage, a save's result and damage, a chance and its
-    // mode) never drops, and is cut by words only where no place holds it whole.
+    // The current action's words on this row: the chance to hit, or the result. They have one
+    // place on every row and at every size: the line under the name, after its conditions
+    // (and after the state word where the row has no state column). The longest form that fits
+    // whole, dropping its first parts; the result itself (its last two parts: an attack's
+    // comparison and damage, a save's result and damage, a chance and its mode) never drops,
+    // and is cut by whole words only where the line has no room for it. The row's accessible
+    // name has the whole text.
     if let Some(badge) = badge {
         let font = Type::Small.font(ui);
-        let parts: Vec<&str> = badge.split(" · ").collect();
-        let state_left = hp_right + design::S;
-        let after_detail = x
-            + layout.second_left
-            + layout
-                .second_line
-                .as_ref()
-                .map_or(0.0, |line| line.size().x + design::S);
-        let places = [
-            (state_left, rect.right() - state_left - design::XS),
-            (
-                after_detail,
-                x + layout.temp_right - after_detail - design::S,
-            ),
-        ];
-        let kept = parts.len().min(2);
-        let forms: Vec<String> = (0..=parts.len() - kept)
-            .map(|from| parts[from..].join(" · "))
-            .collect();
-        let place = forms
-            .iter()
-            .find_map(|words| {
-                places
-                    .iter()
-                    .find(|(_, room)| design::number_width(ui, words, &font) <= *room)
-                    .map(|(left, _)| (*left, words.clone()))
-            })
-            .or_else(|| {
-                let (left, room) = places.iter().copied().max_by(|a, b| a.1.total_cmp(&b.1))?;
-                let words = design::words_that_fit(ui, forms.last()?, &font, room);
-                (!words.is_empty()).then_some((left, words))
-            });
-        if let Some((left, words)) = place {
+        let (left, top, room) = badge_place(layout, x);
+        if let Some(words) = badge_words(ui, badge, &font, room) {
             painter.text(
-                pos2(left, second_y),
+                pos2(left, second_y + top),
                 Align2::LEFT_TOP,
                 words,
                 font,
@@ -8041,7 +8062,7 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, Some(&changed), false)
                 .unwrap()
-                .contains("has changed since")
+                .contains("has changed.")
         );
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("Wolf.md");
@@ -8118,6 +8139,131 @@ mod tests {
         assert_eq!(change_origin(&p).as_deref(), Some("as Guard"));
     }
 
+    /// iter-20-R-FT6, ST1: the notice says first what the card shows, with the card's own
+    /// word, and the line under a character's card does not say it again.
+    #[test]
+    fn the_snapshot_notice_names_the_copy_once() {
+        let text = crate::library::note_text("Cinder Wolf", "creature", None);
+        let snapshot = Entry::parse("Cinder Wolf.md", &text).unwrap();
+        let mut current = snapshot.clone();
+        current.body.push_str("The pack howls.");
+        assert_eq!(
+            snapshot_notice(&snapshot, Some(&current), false).as_deref(),
+            Some(
+                "This stat block uses the copy from the start of the fight. Cinder Wolf.md has changed."
+            )
+        );
+        assert_eq!(
+            snapshot_notice(&snapshot, None, true).as_deref(),
+            Some(
+                "This stat block uses the copy from the start of the fight. Cinder Wolf.md cannot be read now."
+            )
+        );
+        let mut sheet = snapshot.clone();
+        sheet
+            .fields
+            .insert("splat_external".into(), serde_yaml_ng::Value::Bool(true));
+        assert!(
+            snapshot_notice(&sheet, Some(&current), false)
+                .unwrap()
+                .starts_with("This sheet uses the copy from the start of the fight.")
+        );
+        assert_eq!(
+            snapshot_values_line(true),
+            "The roster has the current values."
+        );
+        // Must stay true: with no notice above it, the line still says when it was saved.
+        assert_eq!(
+            snapshot_values_line(false),
+            "Saved when this run began. The roster has the current values."
+        );
+    }
+
+    /// iter-20-R-FT4: a row's roll words have one place at every size: the line under the
+    /// name, after its conditions, never the state column. Long words fit whole or are cut by
+    /// whole words.
+    #[test]
+    fn roll_words_sit_under_the_name_after_its_conditions_at_every_size() {
+        let mut base = super::super::tests::run().state.participants[0].clone();
+        base.initiative = Some(17);
+        let mut plain = base.clone();
+        plain.hp = Some(22);
+        plain.max_hp = Some(22);
+        let mut conc = plain.clone();
+        conc.concentration = true;
+        let mut bloodied = conc.clone();
+        bloodied.hp = Some(4);
+        bloodied.conditions = vec!["Poisoned".into()];
+        let mut long = plain.clone();
+        long.name = "Cinder Wolf of the Long Ash Road Beyond the Ember Hills".into();
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                for (scale, width) in [
+                    (design::RUN_COMPACT, 442.0),
+                    (design::RUN_REGULAR, 596.0),
+                    (design::RUN_LARGE, 760.0),
+                ] {
+                    for p in [&plain, &conc, &bloodied, &long] {
+                        let layout =
+                            RowLayout::new(ui, width, p, None, scale, RowFit::Natural, 0.0);
+                        let (left, top, room) = badge_place(&layout, 0.0);
+                        let at = format!("{} at {width}", p.name);
+                        assert!(left >= layout.name_left, "{at}");
+                        assert!(
+                            left + room < layout.hp_right,
+                            "{at}: never in the state column"
+                        );
+                        match &layout.second_line {
+                            Some(line) => {
+                                let last = line.rows.last().unwrap().rect();
+                                assert!(left >= layout.second_left + last.right(), "{at}");
+                                assert_eq!(top, last.top(), "{at}");
+                            }
+                            None => assert_eq!(left, layout.second_left, "{at}"),
+                        }
+                        // Under the name's last line, also when a long name wraps.
+                        let rect =
+                            Rect::from_min_size(pos2(0.0, 0.0), vec2(width, layout.height(scale)));
+                        let name_top =
+                            layout.line_y(scale, rect.height()) - layout.name_line(scale) / 2.0;
+                        // A name's galley holds its line spacing under the last line.
+                        let spacing = (layout.name.rows[0].rect().height()
+                            - layout.name_line(scale))
+                        .max(0.0);
+                        assert!(
+                            layout.second_y(scale, rect) + top
+                                >= name_top + layout.name.size().y - spacing - 1.0,
+                            "{at}: the words start under the name's last line"
+                        );
+                        for full in ["Saved · 10 damage (half)", "84% to hit · advantage"] {
+                            let shown = badge_words(ui, full, &font, room).unwrap();
+                            let kept = shown.trim_end_matches('…');
+                            assert!(
+                                shown == full
+                                    || (shown.ends_with('…')
+                                        && full.starts_with(kept)
+                                        && full[kept.len()..].starts_with(' ')),
+                                "{at}: {shown:?} is {full:?} or cut by whole words"
+                            );
+                            // With at most `Conc` before them, they are whole from 1200 up.
+                            if scale.row >= design::RUN_REGULAR.row && p.conditions.is_empty() {
+                                assert_eq!(
+                                    shown,
+                                    full,
+                                    "{at}: whole where the line has room; room {room}, second {:?}",
+                                    layout.second_line.as_ref().map(|l| l.text().to_owned())
+                                );
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
     #[test]
     fn run_snapshot_notice_distinguishes_unchanged_changed_unreadable_and_deleted() {
         let text = crate::library::note_text("Wolf", "creature", None);
@@ -8128,7 +8274,7 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, Some(&current), false)
                 .unwrap()
-                .contains("has changed since")
+                .contains("has changed.")
         );
         assert!(
             snapshot_notice(&snapshot, None, true)

@@ -57,9 +57,10 @@ with a condition follows as `or 2d6+2 slashing` or `plus 1d4 slashing`. In a
 run, a creature changed for the encounter shows the numbers Splat rolls (`+4 ·
 1d6+3 slashing` for Attack +1 and Damage +1); hover adds the printed ones.
 
-A right-click on a tile or on a number that rolls a d20 opens a menu: `Roll`,
-`Roll with advantage`, `Roll with disadvantage`, and, by a campaign rule that
-gives advantage for inspiration, `Roll with inspiration (advantage)` when the
+A right-click on a tile or on a number that rolls a d20 opens a menu under it,
+headed with what it rolls (`Bite`, `Dexterity save`): `Roll`, `Roll with
+advantage`, `Roll with disadvantage`, and, by a campaign rule that gives
+advantage for inspiration, `Roll with inspiration (advantage)` when the
 character has it.
 
 ### An attack
@@ -132,6 +133,10 @@ a synced sheet; without sync, the run remembers it and the Log says so.
    the damage once, for every target, into Amount; each target's row then says
    what Enter gives it, `Saved · 1 damage (half)` or `Failed · 3 damage`. Enter
    applies it, halving where marked, and each row keeps its own result.
+3. The save is then finished: its tile disarms, and the rows show their AC
+   again beside their results. The panel and the dock go back to the caster.
+   Undo of the damage arms the save again as it was, with each save, the
+   damage in Amount and each row's result.
 
 ### A player's attack
 
@@ -157,11 +162,44 @@ the tiles, and nothing is saved.
   repeats the dice.
 - The run keeps the armed action (`Armed`), each row's result (`badges`) and each
   save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
+  A save's damage step keeps its applied results in the run's state
+  (`roll_results`), and the state before it keeps the save as it stood
+  (`Cast`), so Undo of that step arms the save again.
+- Results are kept by the row's place in the roster. Rows join only at its end,
+  and only Undo of their arrival takes them away, so a place is one participant
+  for as long as it shows a result. A move changes the turn order, not the
+  places.
 - `dice_text` marks a damage part's condition (`When`: its words, and whether it
   replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
   run-in title, skipping printed quotes, tables and headings. A test checks every
   built-in creature: each `Attack Roll:` and each damage group is found.
+
+## Transitions
+
+What each event does to an armed action, the results on the rows, a save's
+rolls in the AC cells, and Amount. Each line has a focused test in
+`src/encounter_run/rolling.rs` (`a_save_finishes_…`, `an_attacks_results_end_…`,
+`a_result_stays_with_its_participant_…`); the `run-rolls` scenario checks the
+save's lines in the app.
+
+| Event | Armed action | Results on rows | Saves in AC cells | Amount and targets |
+| --- | --- | --- | --- | --- |
+| Arm (tile, Ctrl+number, menu) | This action; the panel stays on the actor | The last action's go; each row shows its chance | Go | The actor is selected |
+| Roll against a row (attack) | Stays armed | That row: `17 vs AC 13 · 10 damage`; others keep theirs | — | The row is the target; Amount has the damage |
+| Click a save's target | Stays armed | — | Its save | The row joins the targets |
+| `Roll damage` (save) | Stays armed | Each target: what Enter gives it | Stay | Amount has the damage |
+| Enter, attack | Stays armed, for the next target | Stay | — | Cleared; one Undo step |
+| Enter, save | Disarms | Each target keeps its result | Go; AC shows | Cleared; the caster is selected; one Undo step |
+| Undo of a save's damage | The save again | What Enter gives each target again | Back | Targets, halves and Amount as they were (beside Lookup or Notes, Amount stays empty, as after every step) |
+| Undo of another step | Unchanged | Unchanged (rolls are history) | Unchanged | — |
+| The next target or attack | Stays armed | The new row gets its own; others keep theirs | — | The new row |
+| The next action | That action | The last action's go | Go | The actor is selected |
+| `Stop` or Escape | Disarms | Stay until the next action or turn | Go with the action | Unchanged |
+| Next turn | Disarms | Go | Go | Cleared |
+| Undo of Next turn | Stays disarmed | A save's applied results come back with their step | — | — |
+| A row moved (tie order, an arrival moved before) | Unchanged | Stay with their participant | Stay | Unchanged |
+| A row taken away (Undo of its arrival) | Ends if it was the actor's | That row's go; others keep theirs | That row's go | That row leaves the targets |
 
 ## Tasks
 
