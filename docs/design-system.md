@@ -214,10 +214,10 @@ and its padding hangs `S` into the gutter. Outside a message, such an action has
 and `Copy the marker`), so its whole target clears every splitter without a wider gutter. Inside a message
 (`undo_message`, `message_with_actions` and other message choices), an action with an icon that starts a line
 hangs its icon into the message's own icon column, so its words start at the message's words. A
-message choice without an icon (`Use the copy in encounters` below a package's registration message, and
-`Build an encounter` below a copied campaign's) has the secondary border, as the same choice beside a
-plain result has. It takes its own line below the result and its Undo, and its border starts at the
-message's words. Only Undo is quiet in a message. In a
+choice without an icon on its own line below a result message (`message_choice_row`: `Use the copy in
+encounters` below a package's registration message, and `Build an encounter` below a copied campaign's) has
+the secondary border, as the same choice beside a plain result has. It sits below the result and its Undo,
+and its border starts at the message's words. On a result, only Undo is quiet. In a
 wrapping row, the first action uses it, and a later one uses it only when it wraps to a line of its own. Lookup's
 `Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
