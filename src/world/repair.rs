@@ -21,8 +21,9 @@ pub(crate) fn editor_events(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> (bool, bool) {
+    const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
     let editor = egui::ScrollArea::vertical()
-        .max_height(design::XXL * 6.0 + design::L + design::S + design::XS)
+        .max_height(MAX_HEIGHT)
         .id_salt(("repair", path))
         .show(ui, |ui| {
             let output = egui::TextEdit::multiline(draft)
@@ -62,7 +63,16 @@ pub(crate) fn editor_events(
         })
     });
     if active.1 || reveal {
-        ui.scroll_to_rect(editor.inner_rect, None);
+        // The editor's viewport: its text, up to the editor's maximum height.
+        let viewport = egui::Rect::from_min_size(
+            editor.inner_rect.min,
+            egui::vec2(
+                editor.inner_rect.width(),
+                editor.content_size.y.min(MAX_HEIGHT),
+            ),
+        );
+        // At once: an animation would be cut short by the editor's own scroll to its cursor.
+        ui.scroll_to_rect_animation(viewport, None, egui::style::ScrollAnimation::none());
     }
     active
 }

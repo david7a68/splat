@@ -724,10 +724,14 @@ impl CampaignContent {
             .id_salt("campaign_packages_page")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                ui.set_max_width(width);
-                self.editor_rects.clear();
-                self.page(ui, campaigns, &active, page_height);
-                self.scroll_to_focus(ui);
+                // egui gives the content only the visible height, so a scroll area inside it (a
+                // repair editor, a list) would shrink below the fold. The page's content has all
+                // the height it needs; the page scrolls instead.
+                ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
+                    self.editor_rects.clear();
+                    self.page(ui, campaigns, &active, page_height);
+                    self.scroll_to_focus(ui);
+                });
             });
     }
 
@@ -756,7 +760,7 @@ impl CampaignContent {
                     .any(|editor| editor.intersects(*rect))
             })
         {
-            ui.scroll_to_rect(rect, None);
+            ui.scroll_to_rect_animation(rect, None, egui::style::ScrollAnimation::none());
         }
     }
 

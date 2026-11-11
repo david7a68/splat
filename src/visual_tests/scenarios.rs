@@ -2519,8 +2519,13 @@ pub mod campaign_content {
             .into_iter()
             .filter(|node| node.name == "Save repaired note")
             .all(|node| node.in_view());
-        let a_tab = d.tab_to("Save repaired note") && ring_in_view(d);
-        let b_tab = d.tab_to("Save repaired note") && ring_in_view(d);
+        let tab_save = |d: &mut Driver<'_>| {
+            let reached = d.tab_to("Save repaired note");
+            d.settle();
+            reached && ring_in_view(d)
+        };
+        let a_tab = tab_save(d);
+        let b_tab = tab_save(d);
         let lower = d
             .focus_rings()
             .into_iter()
@@ -2546,6 +2551,44 @@ pub mod campaign_content {
                 && node.in_view()
                 && b_message_top(d).is_some_and(|message| node.rect.top() > message.top())
         });
+        // Tab into B's editor from the top of the page, where the page cuts it: the editor
+        // scrolls the page until the whole editor is in view.
+        let b_editor_name = crate::world::repair::editor_name("Notes/Cracked.md");
+        let whole = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .is_some_and(|node| {
+                    // The editor's own viewport: its text, up to the editor's maximum height.
+                    let viewport = node.rect.height().min(
+                        crate::design::XXL * 6.0
+                            + crate::design::L
+                            + crate::design::S
+                            + crate::design::XS,
+                    );
+                    node.in_view() && node.shown.height() >= viewport - 2.0
+                })
+        };
+        d.scroll_up_at(page, 20);
+        let rects = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == b_editor_name)
+                .map(|node| (node.rect, node.shown))
+        };
+        let before_rects = rects(d);
+        let editor_cut = !whole(d);
+        let editor_tab = d.tab_to(&b_editor_name);
+        // The page scrolls with egui's animation.
+        d.settle();
+        let editor_whole = whole(d);
+        let after_rects = rects(d);
+        d.press(Key::Escape);
+        d.observe(
+            "iter-25-C-page-tab-editor",
+            editor_cut && editor_tab && editor_whole,
+            format!("B's editor cut at the top {editor_cut}; Tab reaches it {editor_tab}; then whole in view {editor_whole}; (rect, shown) before {before_rects:?}, after {after_rects:?}"),
+        );
         d.observe(
             "iter-25-C-page-wheel",
             a_wheel && b_wheel,
