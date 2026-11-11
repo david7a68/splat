@@ -2060,6 +2060,14 @@ mod tests {
             saved.contains("- [[Bridge]]\n- [[Wolf Pack]]\n") && saved.contains("From Obsidian.")
         );
         assert!(a.live(&draft));
+        // An Undo belongs to its own note, also when another note holds the same words.
+        let mut same_words = Draft::open(&other.path).unwrap();
+        same_words.body = a.after().to_owned();
+        assert!(!a.live(&same_words));
+        assert_eq!(
+            a.undo(&mut same_words, Apply::Now),
+            Err(ActFault::OtherNote)
+        );
 
         // Act B is unrelated: another note. Undo of A puts back only A's line, at once, and B
         // stays.
@@ -2079,7 +2087,6 @@ mod tests {
         second.edited();
         assert!(!b.live(&second));
         assert_eq!(b.undo(&mut second, Apply::Now), Err(ActFault::LineChanged));
-        assert!(!a.live(&second), "an Undo belongs to its own note");
 
         // A failed save is reported and writes nothing; the line waits in the draft.
         let listed = |folder: &Path| {
