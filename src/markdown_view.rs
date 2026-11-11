@@ -1045,7 +1045,7 @@ fn draw_with_links(
 ) -> egui::Rect {
     // The paragraph's own words, before any display space is added.
     let text = job.text.clone();
-    reserve_short_links(ui, &mut job, &mut links);
+    let held = reserve_short_links(ui, &mut job, &mut links);
     lift_link_rows(ui, &mut job);
     // A one-line linked paragraph still needs a full target. Set only after `lift_link_rows`:
     // that measures each row, and a first row already raised to `XL` here would not be lifted,
@@ -1112,7 +1112,7 @@ fn draw_with_links(
             }
         }
     }
-    let targets = link_targets(&words, response.rect);
+    let targets = link_targets(&words, &held, response.rect);
     let links_id = paragraph_id(ui.ctx(), reader, &text);
     for (index, ((range, destination), rects)) in links.iter().zip(&targets).enumerate() {
         let words_text = &galley.job.text[range.clone()];
@@ -1178,14 +1178,20 @@ fn draw_with_links(
 
 /// A link whose words are narrower than `XL` gets `XL` of layout width. A link inside a line has
 /// its words in the middle of that space, so the spare width is split before and after them. A
-/// link that starts a line keeps its words at the text edge, with all the space after them. The
-/// text after a link starts after its space, so the line wraps if it must. The space is display
-/// only: the paragraph's words do not change. Links `XL` or wider keep their layout.
+/// link that starts a line keeps its words at the text edge, with all the space after them. A
+/// link that punctuation follows, or that ends its line, keeps its words where the text puts
+/// them: the punctuation sits directly after its words and the spare width goes after the
+/// punctuation. The text after a link starts after its space, so the line wraps if it must. The
+/// space is display only: the paragraph's words do not change. Links `XL` or wider keep their
+/// layout.
+///
+/// Returns, for each link, whether its words are held at the left of its space, so its last
+/// target grows right from its words.
 fn reserve_short_links(
     ui: &egui::Ui,
     job: &mut LayoutJob,
     links: &mut [(std::ops::Range<usize>, LinkTarget)],
-) {
+) -> Vec<bool> {
     let mut measure = job.clone();
     measure.wrap.max_width = f32::INFINITY;
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(measure));
@@ -1200,7 +1206,7 @@ fn reserve_short_links(
         })
         .collect();
     if short.is_empty() {
-        return;
+        return vec![false; links.len()];
     }
     // A link at the start of the paragraph or after a line break starts a line. One that wraps to
     // the start of a row is found by laying the paragraph out at the width its label wraps at.
@@ -1217,7 +1223,7 @@ fn reserve_short_links(
     for _ in 0..4 {
         *job = original.0.clone();
         links.clone_from_slice(&original.1);
-        place_short_links(ui, job, links, &short, &starts);
+        let held = place_short_links(ui, job, links, &short, &starts);
         let mut measure = job.clone();
         measure.wrap.max_width = ui.available_width();
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(measure));
@@ -1230,44 +1236,91 @@ fn reserve_short_links(
             }
         }
         if !changed {
-            return;
+            return held;
         }
     }
     *job = original.0;
     links.clone_from_slice(&original.1);
-    place_short_links(ui, job, links, &short, &starts);
+    place_short_links(ui, job, links, &short, &starts)
+}
+
+/// Punctuation that closes a phrase. It sits directly after a short link's words.
+fn closes_phrase(character: char) -> bool {
+    matches!(
+        character,
+        ',' | '.'
+            | ';'
+            | ':'
+            | '!'
+            | '?'
+            | ')'
+            | ']'
+            | '}'
+            | '\''
+            | '"'
+            | '\u{2019}'
+            | '\u{201D}'
+            | '\u{2026}'
+    )
+}
+
+/// Cuts the section that holds byte `at` in two, so that a space can start at `at`.
+fn cut_section_at(job: &mut LayoutJob, at: usize) {
+    if let Some(index) = job
+        .sections
+        .iter()
+        .position(|section| section.byte_range.start < at && at < section.byte_range.end)
+    {
+        let mut tail = job.sections[index].clone();
+        tail.leading_space = 0.0;
+        tail.byte_range = at..tail.byte_range.end;
+        job.sections[index].byte_range.end = at;
+        job.sections.insert(index + 1, tail);
+    }
 }
 
 /// Adds each short link's space: half before and half after its words, or all after them when
-/// it starts a line.
+/// it starts a line, ends its line or punctuation follows it. Returns, for each link, whether its
+/// words are held at the left of its space.
 fn place_short_links(
     ui: &egui::Ui,
     job: &mut LayoutJob,
     links: &mut [(std::ops::Range<usize>, LinkTarget)],
     short: &[(usize, f32)],
     starts: &[bool],
-) {
+) -> Vec<bool> {
+    let mut held = vec![false; links.len()];
     // Where each short link ends, and the space that still goes there, in text order.
     let mut spaces: Vec<(usize, f32)> = Vec::new();
     // Where the last short link ended, and the space after it.
     let mut previous: Option<(usize, f32)> = None;
     for (&(index, space), &starts) in short.iter().zip(starts) {
         let range = links[index].0.clone();
+        // Punctuation after the link sits directly after its words. The space goes after it.
+        let punctuation: usize = job.text[range.end..]
+            .chars()
+            .take_while(|character| closes_phrase(*character))
+            .map(char::len_utf8)
+            .sum();
+        let end = range.end + punctuation;
+        let at_line_end = job.text[end..].starts_with('\n') || end == job.text.len();
+        let link_follows = links.iter().any(|(other, _)| other.start == end);
+        // Nothing after the words needs keeping apart from them, so they stay where the text
+        // puts them, with all the space after them.
+        held[index] = punctuation > 0 || at_line_end;
         let own = job.sections.iter_mut().find(|section| {
             section.byte_range.start == range.start && !section.byte_range.is_empty()
         });
         // A row drops the space before its first glyph, so a link that starts a line keeps its
         // words at the text edge.
         let before = match own {
-            Some(own) if !starts => {
+            Some(own) if !starts && !held[index] => {
                 own.leading_space += space / 2.0;
                 space / 2.0
             }
             _ => 0.0,
         };
         let mut space = space - before;
-        let at_line_end = job.text[range.end..].starts_with('\n') || range.end == job.text.len();
-        let link_follows = links.iter().any(|(other, _)| other.start == range.end);
         // A link right after another short link has the first one's space before it as well as
         // its own. It gets as much space after it, so the pair reads evenly; a blank that
         // follows in the text counts toward it.
@@ -1275,14 +1328,14 @@ fn place_short_links(
             && !at_line_end
             && !link_follows
         {
-            let next = job.text[range.end..].chars().next();
+            let next = job.text[end..].chars().next();
             let blank = next
                 .filter(|next| next.is_whitespace())
                 .map_or(0.0, |next| {
                     let font = job
                         .sections
                         .iter()
-                        .find(|section| section.byte_range.start == range.end)
+                        .find(|section| section.byte_range.contains(&end))
                         .map(|section| section.format.font_id.clone());
                     font.map_or(0.0, |font| {
                         ui.fonts_mut(|fonts| fonts.glyph_width(&font, next))
@@ -1291,21 +1344,39 @@ fn place_short_links(
             space += (after - blank).max(0.0);
         }
         previous = Some((range.end, space));
+        if punctuation > 0 {
+            // The punctuation's own width is part of the link's spare width.
+            let font = job
+                .sections
+                .iter()
+                .find(|section| section.byte_range.contains(&range.end))
+                .map(|section| section.format.font_id.clone());
+            let width: f32 = font.map_or(0.0, |font| {
+                ui.fonts_mut(|fonts| {
+                    job.text[range.end..end]
+                        .chars()
+                        .map(|character| fonts.glyph_width(&font, character))
+                        .sum()
+                })
+            });
+            space = (space - width).max(0.0);
+            cut_section_at(job, end);
+        }
         match job
             .sections
             .iter_mut()
-            .find(|section| section.byte_range.start == range.end && !section.byte_range.is_empty())
+            .find(|section| section.byte_range.start == end && !section.byte_range.is_empty())
         {
             // The text after the link starts after the reserved space.
             Some(next) if !at_line_end && !link_follows => next.leading_space += space,
             // A blank holds the space: where nothing follows on the line, so the paragraph's own
             // width includes it, and before another link, so one underline does not join both.
-            _ => spaces.push((range.end, space)),
+            _ => spaces.push((end, space)),
         }
     }
     spaces.sort_by_key(|(at, _)| *at);
     if spaces.is_empty() {
-        return;
+        return held;
     }
     let mut text = String::with_capacity(job.text.len() + spaces.len());
     let mut sections = Vec::with_capacity(job.sections.len() + spaces.len());
@@ -1349,6 +1420,7 @@ fn place_short_links(
     }
     job.text = text;
     job.sections = sections;
+    held
 }
 
 /// Where the body line is shorter than `XL`, every row of a paragraph that holds a link grows to
@@ -1546,13 +1618,18 @@ fn link_words(
 
 /// Each link part's press target: at least `XL` square where the paragraph has room. Inside a
 /// line it is centred on the words, as `reserve_short_links` centres them in their space; at the
-/// start of a row it grows right from the text edge. Two targets never share a point: where
-/// grown targets meet, they split halfway between the words. The paragraph's own layout stays.
-fn link_targets(words: &[Vec<LinkPart>], bounds: egui::Rect) -> Vec<Vec<egui::Rect>> {
-    let grow = |part: &LinkPart| {
+/// start of a row, and for the last part of a link whose words `held` keeps at the left of its
+/// space, it grows right from the words. Two targets never share a point: where grown targets
+/// meet, they split halfway between the words. The paragraph's own layout stays.
+fn link_targets(
+    words: &[Vec<LinkPart>],
+    held: &[bool],
+    bounds: egui::Rect,
+) -> Vec<Vec<egui::Rect>> {
+    let grow = |part: &LinkPart, held: bool| {
         let words = part.rect;
         let width = words.width().max(design::XL);
-        let left = if part.row_start {
+        let left = if part.row_start || held {
             words.left()
         } else {
             (words.center().x - width / 2.0).max(bounds.left())
@@ -1570,7 +1647,15 @@ fn link_targets(words: &[Vec<LinkPart>], bounds: egui::Rect) -> Vec<Vec<egui::Re
     };
     let mut targets: Vec<Vec<egui::Rect>> = words
         .iter()
-        .map(|parts| parts.iter().map(grow).collect())
+        .enumerate()
+        .map(|(link, parts)| {
+            let held = held.get(link).copied().unwrap_or(false);
+            parts
+                .iter()
+                .enumerate()
+                .map(|(at, part)| grow(part, held && at + 1 == parts.len()))
+                .collect()
+        })
         .collect();
     let all: Vec<(usize, usize)> = words
         .iter()
@@ -2388,7 +2473,7 @@ mod tests {
             vec![part(12.0, 26.0, 22.0)],
         ];
         let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 44.0));
-        let targets = link_targets(&words, bounds);
+        let targets = link_targets(&words, &[], bounds);
         let all: Vec<egui::Rect> = targets.iter().flatten().copied().collect();
         for (at, a) in all.iter().enumerate() {
             assert!(bounds.contains_rect(*a), "AD1-inside: {a:?}");
@@ -2570,7 +2655,7 @@ mod tests {
         None
     }
 
-    const SHORT_LINK_CASES: [&str; 8] = [
+    const SHORT_LINK_CASES: [&str; 9] = [
         // Side by side, with no space between them.
         "[Jo](splat-note:Jo)[Li](splat-note:Li)",
         "Ask [Jo](splat-note:Jo) or [Li](splat-note:Li) about the ferry.",
@@ -2586,10 +2671,12 @@ mod tests {
         "On the second crossing [Jo](splat-note:Jo) hands the rope to [the ferry master of the inner sea and the outer islands](splat-note:Wren), then [Li](splat-note:Li) ties it off.",
         // Short links in bold.
         "**[Jo](splat-note:Jo)** rows and **[Li](splat-note:Li)** steers.",
+        // Punctuation after short links: at the start, inside the line and at the end.
+        "[Jo](splat-note:Jo), [Li](splat-note:Li); then [Wren](splat-note:Wren) and [Io](splat-note:Io).",
     ];
 
     /// The links each case holds, by their first part.
-    const SHORT_LINK_COUNTS: [usize; 8] = [2, 2, 1, 3, 26, 3, 3, 2];
+    const SHORT_LINK_COUNTS: [usize; 9] = [2, 2, 1, 3, 26, 3, 3, 2, 4];
 
     /// Every case, with a short `[[Name|Li]]` alias as World notes write it.
     fn short_link_cases() -> Vec<(&'static str, usize)> {
@@ -2843,6 +2930,158 @@ mod tests {
             wrapped > 0,
             "FD5-wrapped-reached: no width put Jo first on a row"
         );
+    }
+
+    /// Every place `words` is drawn in the first paragraph: left, right and baseline.
+    fn spans_of(harness: &egui_kittest::Harness<'_>, words: &str) -> Vec<(f32, f32, f32)> {
+        let (pos, galley) = galleys_in(harness)[0].clone();
+        galley
+            .job
+            .text
+            .match_indices(words)
+            .map(|(start, _)| {
+                let end = start + words.len();
+                let mut byte_at = 0;
+                let mut span: Option<(f32, f32, f32)> = None;
+                for row in &galley.rows {
+                    for glyph in &row.glyphs {
+                        if (start..end).contains(&byte_at) {
+                            let x = pos.x + row.pos.x + glyph.pos.x;
+                            let y = pos.y + row.pos.y + glyph.pos.y;
+                            let right = x + glyph.advance_width;
+                            span =
+                                Some(span.map_or((x, right, y), |(left, _, y)| (left, right, y)));
+                        }
+                        byte_at += glyph.chr.len_utf8();
+                    }
+                    if row.ends_with_newline {
+                        byte_at += 1;
+                    }
+                }
+                span.expect("the words are drawn")
+            })
+            .collect()
+    }
+
+    /// FD3 (iteration 20): punctuation that follows a short link sits directly after its words,
+    /// and the link's spare width goes after the punctuation. Its target stays `XL` square, grows
+    /// right from its words, and stays clear of the words before and after it.
+    #[test]
+    fn iter20_s_fd3_punctuation_sits_directly_after_a_short_link() {
+        let markdown =
+            "Ask [Jo](splat-note:Jo), [Li](splat-note:Li); then [Io](splat-note:Io)!) or row.";
+        for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
+            let harness = reader_at(markdown, width, dense);
+            let at = format!("at {width} (dense {dense})");
+            for (words, name, punctuation, before, after) in [
+                ("Jo", "Jo (opens Jo)", ",", "Ask", "Li"),
+                ("Li", "Li (opens Li)", ";", ",", "then"),
+                ("Io", "Io (opens Io)", "!)", "then", "or"),
+            ] {
+                let (left, right, _) = spans_of(&harness, words)[0];
+                let (mark, _, _) = spans_of(&harness, punctuation)[0];
+                let (_, before, _) = spans_of(&harness, before)[0];
+                let (after, _, _) = spans_of(&harness, after)[0];
+                let target = target_of(&harness, name);
+                assert!(
+                    (mark - right).abs() <= 1.0,
+                    "FD3-tight: {at}: {words} ends {right}, {punctuation} starts {mark}"
+                );
+                assert!(
+                    target.width() >= design::XL - 0.01
+                        && target.height() >= design::XL - 0.01
+                        && (target.left() - left).abs() <= 0.5,
+                    "FD3-target: {at}: {words} at {left}..{right}, target {target:?}"
+                );
+                assert!(
+                    before <= target.left() + 0.5 && after >= target.right() - 0.5,
+                    "FD3-apart: {at}: {words} target {target:?}, before ends {before}, after starts {after}"
+                );
+            }
+        }
+    }
+
+    /// The left edge of every glyph of the first paragraph, and its baseline.
+    fn glyph_edges(harness: &egui_kittest::Harness<'_>) -> Vec<(char, f32, f32)> {
+        let (pos, galley) = galleys_in(harness)[0].clone();
+        galley
+            .rows
+            .iter()
+            .flat_map(|row| {
+                row.glyphs.iter().map(move |glyph| {
+                    (
+                        glyph.chr,
+                        pos.x + row.pos.x + glyph.pos.x,
+                        pos.y + row.pos.y + glyph.pos.y,
+                    )
+                })
+            })
+            .collect()
+    }
+
+    /// FD3 (iteration 20), must stay true: a link `XL` or wider keeps its layout when
+    /// punctuation follows it, and a short link that ends its line or meets punctuation keeps its
+    /// words and that punctuation where the plain text puts them (its spare width comes after
+    /// them). A paragraph without a link keeps its layout too.
+    #[test]
+    fn iter20_s_fd3_wide_links_and_plain_prose_keep_their_layout() {
+        // Each case, its plain text, and how many of its first glyphs keep their place.
+        let cases = [
+            (
+                "Ask [Oskar Wren](splat-note:Oskar), then [the bell keeper](splat-note:Wren).",
+                "Ask Oskar Wren, then the bell keeper.",
+                usize::MAX,
+            ),
+            (
+                "The ferry hands are [Jo](splat-note:Jo)",
+                "The ferry hands are Jo",
+                usize::MAX,
+            ),
+            (
+                "Ask [Jo](splat-note:Jo), then row.",
+                "Ask Jo, then row.",
+                "Ask Jo,".len(),
+            ),
+            (
+                "The ferry crosses the inner sea twice each day.",
+                "The ferry crosses the inner sea twice each day.",
+                usize::MAX,
+            ),
+        ];
+        for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
+            let at = format!("at {width} (dense {dense})");
+            for (linked, plain, kept) in cases {
+                let linked_harness = reader_at(linked, width, dense);
+                let plain_harness = reader_at(plain, width, dense);
+                let linked_edges = glyph_edges(&linked_harness);
+                let plain_edges = glyph_edges(&plain_harness);
+                // The plain words come first; a short link's space after its words is a blank
+                // that the plain text does not have.
+                assert!(
+                    linked_edges.len() >= plain_edges.len(),
+                    "FD3-keep-count: {at}: {linked}"
+                );
+                for ((chr, x, y), (plain_chr, plain_x, plain_y)) in
+                    linked_edges.iter().zip(&plain_edges).take(kept)
+                {
+                    assert_eq!(chr, plain_chr, "FD3-keep-words: {at}: {linked}");
+                    // A dense linked paragraph has the link pitch, so only reader prose
+                    // compares baselines.
+                    assert!(
+                        (x - plain_x).abs() <= 0.5 && (dense || (y - plain_y).abs() <= 0.5),
+                        "FD3-keep-layout: {at}: {linked}: {chr} at {x},{y}, plain at {plain_x},{plain_y}"
+                    );
+                }
+            }
+            // A wide link's target is its words.
+            let harness = reader_at(cases[0].0, width, dense);
+            let (left, right, _) = spans_of(&harness, "Oskar Wren")[0];
+            let target = target_of(&harness, "Oskar Wren (opens Oskar)");
+            assert!(
+                (target.left() - left).abs() <= 0.5 && (target.right() - right).abs() <= 0.5,
+                "FD3-wide-target: {at}: words {left}..{right}, target {target:?}"
+            );
+        }
     }
 
     /// FT1: in compact prose, every row of a paragraph that holds a link has the link pitch, so
