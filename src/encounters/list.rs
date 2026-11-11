@@ -824,6 +824,7 @@ mod iter_2_c_tests {
             standing: crate::encounter_run::Standing::Unfinished,
             saved_at: Some(1_767_229_200 + n as u64 * 60),
             unsent: vec![],
+            fact: None,
         });
         let refs = runs.iter().collect::<Vec<_>>();
         let sessions = [1, 2].map(|n| SessionLink {

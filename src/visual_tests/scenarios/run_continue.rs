@@ -283,24 +283,42 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.state("plan-with-continued-fight", Sizes::Default);
     d.click(BACK_TO_RUN);
+    // An outside edit makes Timeline.md unreadable. Undo of Continue fight comes before the
+    // repair, and so do Close run and a restart, so nothing in memory can carry it. The run
+    // file says how its fight stands, and the Timeline takes that when it reads again.
+    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+    let timeline = crate::sessions::folder(&campaign)
+        .unwrap()
+        .join(crate::timeline::FILE);
+    d.app_mut().timeline.save();
+    let valid = std::fs::read(&timeline).unwrap();
+    std::fs::write(&timeline, "---\ntimeline_version: [broken\n---\n").unwrap();
+    d.app_mut().timeline.reload();
     // Undo of Continue fight is the ended fight again, with its loot.
     d.click_containing(CONTINUE_STEP);
     d.expect("Outcome: Undecided");
-    let told = story(d);
     d.observe(
         "T15.2",
-        undo_step(d) == LOOT_STEP && d.visible_text(" on 1d4") && told == "Undecided, round 2",
+        undo_step(d) == LOOT_STEP && d.visible_text(" on 1d4"),
         format!(
-            "Undo of Continue fight restores the ending, its loot and its Timeline result: {}, {}",
-            undo_step(d),
-            told
+            "Undo of Continue fight restores the ending and its loot: {}",
+            undo_step(d)
         ),
     );
 
-    // The ended run is closed, and the app starts again. The plan's played row leads to the
-    // run in History, which offers the same action.
+    // The ended run is closed, and the app starts again. Then the file is repaired. The
+    // plan's played row leads to the run in History, which offers the same action.
     close_run(d);
     d.restart();
+    std::fs::write(&timeline, &valid).unwrap();
+    d.app_mut().timeline.reload();
+    d.settle();
+    let told = story(d);
+    d.observe(
+        "T15.4",
+        told == "Undecided, round 2",
+        format!("After the repair, Timeline has the ending that Undo restored: {told}"),
+    );
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.begin_task();

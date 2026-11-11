@@ -7375,6 +7375,7 @@ mod tests {
             standing: crate::encounter_run::Standing::Unfinished,
             saved_at: None,
             unsent: vec![],
+            fact: None,
         }
     }
 
@@ -7447,6 +7448,7 @@ mod tests {
             standing: Standing::Unfinished,
             saved_at: None,
             unsent: vec!["Kestrel".into()],
+            fact: None,
         };
         let mut other = saved.clone();
         other.id = Some(Uuid::new_v4());

@@ -1961,6 +1961,8 @@ pub struct Encounters {
     run: Option<crate::encounter_run::Run>,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
+    /// How many times the list of saved runs was read again without a whole reload.
+    runs_read: u64,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -2223,6 +2225,23 @@ impl Encounters {
             .as_ref()
             .map(|d| d.name.clone())
             .or_else(|| self.group_draft.as_ref().map(GroupDraft::name))
+    }
+    /// A value that changes when the list of saved runs is read again.
+    pub fn runs_revision(&self) -> (Option<Uuid>, u64) {
+        (
+            self.snapshot.as_ref().map(|snapshot| snapshot.revision),
+            self.runs_read,
+        )
+    }
+    /// What each saved run's file says to the Timeline: its result, and when it was last
+    /// played. The open run speaks for itself, so its file is not here.
+    pub fn saved_facts(&self) -> impl Iterator<Item = &crate::timeline::RunFact> {
+        let open = self.run.as_ref().map(crate::encounter_run::Run::id);
+        self.snapshot
+            .iter()
+            .flat_map(|snapshot| &snapshot.runs)
+            .filter_map(|run| run.fact.as_ref())
+            .filter(move |fact| Some(fact.id) != open)
     }
     /// The saved runs used by the Session plan and Timeline.
     pub fn saved_runs(&self) -> Vec<crate::encounter_run::SavedRunInfo> {
@@ -3149,6 +3168,7 @@ impl Encounters {
             {
                 Ok(runs) => {
                     s.runs = runs;
+                    self.runs_read += 1;
                     s.issues
                         .retain(|issue| !issue.starts_with("Run folder not found"));
                 }
@@ -6928,14 +6948,23 @@ mod tests {
         let run = editor.run().unwrap();
         assert_eq!(run.path(), Some(path.as_path()));
         assert_eq!(run.state_words(false), "Round 3");
-        assert_eq!(
-            run.timeline_fact().steps,
-            1,
-            "one step, which Undo takes back"
-        );
+        let steps = |editor: &mut Encounters| {
+            editor.run_mut().unwrap().autosave();
+            let saved: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            saved["undo"]["steps"].as_array().unwrap().len()
+        };
+        assert_eq!(steps(&mut editor), 1, "one step, which Undo takes back");
         // The same action on the open run does nothing more to a fight that is live.
         editor.continue_saved_run(&path, &campaign);
-        assert_eq!(editor.run().unwrap().timeline_fact().steps, 1);
+        assert_eq!(steps(&mut editor), 1);
+        // Continue fight came before the app could say when. It counts as play from the
+        // moment the app says so, and the run's file has it.
+        let run = editor.run_mut().unwrap();
+        assert_eq!(run.timeline_fact().played.order, 0);
+        run.set_play_next(4, None);
+        assert_eq!(run.timeline_fact().played.order, 4);
+        assert!(run.needs_save());
     }
 
     #[test]

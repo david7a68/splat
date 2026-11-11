@@ -573,6 +573,9 @@ enum Phase {
     Running,
     Ended { outcome: String },
 }
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
     participants: Vec<Participant>,
@@ -583,6 +586,11 @@ struct State {
     log: Vec<String>,
     #[serde(default)]
     last_change: Option<String>,
+    /// When this fight was last played. A step sets it, and Undo of the step puts the older
+    /// one back with the rest of the state. The run file is its one owner: the Timeline
+    /// applies what the run says. Saves from before this have none.
+    #[serde(default, skip_serializing_if = "is_default")]
+    played: crate::timeline::Played,
     random: Random,
     /// What each loot line rolled, by its place: `loot::place`. Saves from before loot have none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -651,12 +659,12 @@ pub(crate) struct Run {
     also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
     halved: BTreeSet<usize>,
-    /// How many steps the DM has taken since this opened and not taken back. Zero means the
-    /// run is as it opened. A sheet's change is not a step, and neither is opening a run to
-    /// read it. Undo of a step from before this opening is one. Never saved.
-    dm_steps: usize,
-    /// How many of the newest Undo steps the DM took since this opened. Never saved.
+    /// How many of the newest Undo steps the DM took since this opened. Undo of one of them
+    /// leaves the run as it was. Undo of an older step is a change the DM makes now. Never saved.
     own_steps: usize,
+    /// The next place in the campaign's order of play, and the session being played, as the
+    /// app last gave them. None in a run with no app around it. Never saved.
+    play_next: Option<(u64, Option<Uuid>)>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -993,6 +1001,7 @@ impl Run {
                     "DM run prepared from saved encounter. Rules are resolved by the DM.".into(),
                 ],
                 last_change: None,
+                played: crate::timeline::Played::default(),
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
                 cast: None,
@@ -1004,8 +1013,8 @@ impl Run {
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            dm_steps: 0,
             own_steps: 0,
+            play_next: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1147,11 +1156,30 @@ impl Run {
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
     }
-    /// Keep a step of this opening. It counts as play until Undo takes it back.
+    /// Keep a step of this opening. The fight is played now. Undo of the step gives back the
+    /// state before it, and with that state when the fight was played before.
     fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
         self.keep_step(before, label, from_sheet);
-        self.dm_steps += 1;
         self.own_steps = (self.own_steps + 1).min(self.history.len());
+        self.state.played = self.played_now();
+    }
+    /// When this fight is last played, if the DM changes it now.
+    fn played_now(&self) -> crate::timeline::Played {
+        match self.play_next {
+            Some((next, session)) => self.state.played.now(next, session),
+            None => self.state.played,
+        }
+    }
+    /// The next place in the campaign's order of play, and the session being played. The app
+    /// gives these when they change, so that a step can say when the fight was played.
+    pub fn set_play_next(&mut self, next: u64, session: Option<Uuid>) {
+        let first = self.play_next.replace((next, session)).is_none();
+        // A step taken before the app could say when, as Continue fight from History is,
+        // counts from now. Undo of it still gives back when the fight was played before.
+        if first && self.own_steps > 0 {
+            self.state.played = self.played_now();
+            self.dirty = true;
+        }
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -2222,13 +2250,10 @@ impl Run {
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.notice = None;
-            // A step from this opening is taken back. An older step that goes is a change.
-            if self.own_steps > 0 {
-                self.own_steps -= 1;
-                self.dm_steps -= 1;
-            } else {
-                self.dm_steps += 1;
-            }
+            // A step from this opening is taken back: the run is as it was before it. An
+            // older step that goes is a change that the DM makes now.
+            let older = self.own_steps == 0;
+            self.own_steps = self.own_steps.saturating_sub(1);
             self.history_labels.pop();
             self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
@@ -2241,6 +2266,9 @@ impl Run {
             self.state = previous;
             for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
                 p.combat_values = values;
+            }
+            if older {
+                self.state.played = self.played_now();
             }
             self.forget_removed_participants();
             // Undo of a save's damage step arms the save again, as it stood.
@@ -2496,7 +2524,7 @@ impl Run {
                 Phase::Running => crate::timeline::RunState::Running,
                 Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
             },
-            steps: self.dm_steps,
+            played: self.state.played,
         }
     }
     /// The strip's Next turn, usable from any page.
@@ -3811,8 +3839,8 @@ impl Run {
             history_from_sheet: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            dm_steps: 0,
             own_steps: 0,
+            play_next: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -3913,6 +3941,7 @@ impl Run {
                             standing: Standing::Unreadable,
                             saved_at: modified,
                             unsent: Vec::new(),
+                            fact: None,
                             path,
                         });
                     }
@@ -4048,6 +4077,7 @@ impl Run {
             standing,
             saved_at,
             unsent: self.unsent_in_save(),
+            fact: Some(self.timeline_fact()),
         }
     }
     /// Who holds values that D&D Beyond did not confirm, in a run that keeps the party matched.
@@ -4099,6 +4129,9 @@ pub struct SavedRunInfo {
     pub saved_at: Option<u64>,
     /// Who holds values not sent to D&D Beyond.
     pub unsent: Vec<String>,
+    /// What the run's file says to the Timeline: its result, and when it was last played.
+    /// None for a file that is not a run.
+    pub fact: Option<crate::timeline::RunFact>,
 }
 
 /// A run file the DM deleted, kept in memory for one step of undo.
@@ -5103,12 +5136,18 @@ mod tests {
         assert_same_undo(&setup, &reopened);
 
         // A file with one step too many, as another program can leave it: the newest are read.
+        // The extra step is not a step at all, so that decoding it would lose every step.
         with_undo_field(&path, |saved| {
             let steps = saved["undo"]["steps"].as_array_mut().unwrap();
-            steps.insert(0, steps[0].clone());
+            steps.insert(0, serde_json::json!({"this": "is not a step"}));
             assert_eq!(steps.len(), undo::LIMIT + 1);
         });
-        assert_same_undo(&run, &Run::open(&path, campaign).unwrap());
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert!(
+            !reopened.undo_unread,
+            "the step over the limit is never decoded"
+        );
+        assert_same_undo(&run, &reopened);
     }
     /// Steps that would make the file too large for a reopen stay out of the file, oldest
     /// first. Steps that would take too much memory are not read, oldest first.
@@ -5151,6 +5190,25 @@ mod tests {
         let campaign = stored(&mut run, dir.path());
         let reopened = close_and_reopen(&mut run, campaign);
         newest(&run, &reopened);
+        // The first step that does not fit is never built: its state would break the budget
+        // before it could be weighed. Here that step gives a state that no run can have, so
+        // building it would lose every step. The same holds for decoding: a step whose text
+        // alone is too long is passed over, though here it is not a step at all.
+        let path = run.path().unwrap().to_path_buf();
+        let kept = reopened.history.len();
+        let first_out = run.history.len() - kept - 1;
+        with_undo_field(&path, |saved| {
+            saved["undo"]["steps"][first_out]["cursor"] = 99.into();
+        });
+        let again = Run::open(&path, campaign).unwrap();
+        assert!(!again.undo_unread, "a state over the budget is never built");
+        assert_eq!(again.history.len(), kept);
+        with_undo_field(&path, |saved| {
+            saved["undo"]["steps"][first_out] = "x".repeat(1024 * 1024).into();
+        });
+        let again = Run::open(&path, campaign).unwrap();
+        assert!(!again.undo_unread, "text over the budget is never decoded");
+        assert_eq!(again.history.len(), kept);
 
         // Long text in a row's starting values, which no step changes: each state read from
         // the file holds its own copy, and the budget counts it.
@@ -6180,7 +6238,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (mut reopened, _, max) = reopened_with_steps(dir.path());
         first_sync(&mut reopened, max, 9);
-        assert_eq!(reopened.timeline_fact().steps, 0, "as it opened");
+        let opened = reopened.timeline_fact();
+        reopened.set_play_next(7, None);
+        assert_eq!(reopened.timeline_fact(), opened, "as it opened");
         // Two steps of this opening. The sheet confirms the first, then replaces its value.
         reopened.apply(Command::Damage(0, 2)).unwrap();
         connected_tick(&mut reopened);
@@ -6188,13 +6248,13 @@ mod tests {
         reopened.apply(Command::Damage(1, 1)).unwrap();
         read_sheet(&mut reopened, max, 14);
         assert_eq!(reopened.state.participants[0].hp, Some(max - 14));
-        assert_eq!(reopened.timeline_fact().steps, 2);
+        assert_eq!(reopened.timeline_fact().played.order, 7);
         // Undo of the step that is left, and then of a step from before the run opened: the
-        // run never reads as it opened, because the removed step's change stays.
+        // run never says what it said when it opened, because the removed step's change stays.
         reopened.undo();
-        assert_eq!(reopened.timeline_fact().steps, 1);
+        assert_eq!(reopened.timeline_fact().played.order, 7);
         reopened.undo();
-        assert_eq!(reopened.timeline_fact().steps, 2);
+        assert_eq!(reopened.timeline_fact().played.order, 7);
     }
     #[test]
     fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {
@@ -7253,36 +7313,54 @@ mod tests {
     }
     #[test]
     fn only_the_dm_moves_a_run_on_the_timeline() {
+        use crate::timeline::Played;
+        let (first, later) = (Some(Uuid::from_u128(1)), Some(Uuid::from_u128(2)));
         let mut run = run();
+        // The app says that the next place in the order of play is 3, in the first session.
+        run.set_play_next(3, first);
         begin(&mut run);
-        let fact = run.timeline_fact();
-        // A sheet's change reaches the log with no step of the DM's.
-        run.state
-            .log
-            .push("Kestrel: HP changed on D&D Beyond.".into());
-        assert_eq!(run.timeline_fact(), fact);
         run.apply(Command::Damage(0, 1)).unwrap();
-        let hit = run.timeline_fact();
-        assert!(hit.played_since(&fact));
-        // Undo of that step leaves the run as it was. The Timeline hears of it, and not as play.
-        run.undo();
-        let back = run.timeline_fact();
-        assert_ne!(back, hit);
-        assert_eq!(back, fact);
-        assert!(!back.played_since(&hit));
-        // Undo of a step from before the run opened is a change the DM makes now.
-        run.apply(Command::Damage(0, 1)).unwrap();
+        let played = Played {
+            order: 3,
+            session: first,
+        };
+        assert_eq!(run.timeline_fact().played, played);
         let dir = tempfile::tempdir().unwrap();
         let campaign = stored(&mut run, dir.path());
+        // Opened again later, under another session, when the next place is 9. Opening is
+        // not play, and neither is a sheet's change, which reaches the log with no step.
         let mut reopened = close_and_reopen(&mut run, campaign);
+        reopened.set_play_next(9, later);
         let opened = reopened.timeline_fact();
-        assert_eq!(opened.steps, 0);
+        assert_eq!(opened.played, played, "the file keeps it");
+        reopened
+            .state
+            .log
+            .push("Kestrel: HP changed on D&D Beyond.".into());
+        assert_eq!(reopened.timeline_fact(), opened);
+        // A step plays the fight now, here.
+        reopened.apply(Command::Damage(0, 1)).unwrap();
+        let hit = Played {
+            order: 9,
+            session: later,
+        };
+        assert_eq!(reopened.timeline_fact().played, hit);
+        // Undo of that step leaves the run as it opened, also after a close.
         reopened.undo();
-        assert!(reopened.timeline_fact().played_since(&opened));
+        assert_eq!(reopened.timeline_fact(), opened);
+        reopened.apply(Command::Damage(0, 1)).unwrap();
+        let mut again = close_and_reopen(&mut reopened, campaign);
+        assert_eq!(again.timeline_fact().played, hit);
+        again.undo();
+        assert_eq!(again.timeline_fact().played, played);
+        // Undo of a step from before the run opened is a change that the DM makes now.
+        again.set_play_next(12, later);
+        again.undo();
+        assert_eq!(again.timeline_fact().played.order, 12);
         // A step and its Undo there leave that change standing.
-        reopened.apply(Command::Next).unwrap();
-        reopened.undo();
-        assert_eq!(reopened.timeline_fact().steps, 1);
+        again.apply(Command::Next).unwrap();
+        again.undo();
+        assert_eq!(again.timeline_fact().played.order, 12);
     }
 
     #[test]
@@ -8531,11 +8609,14 @@ mod tests {
     fn an_added_creature_counts_as_the_dms_step_and_follows_the_side_rule() {
         let mut run = run();
         run.initiative.grouping = Grouping::BySide;
+        run.set_play_next(5, None);
         begin(&mut run);
         let side_total = run.state.participants[0].initiative;
-        let fact = run.timeline_fact();
+        assert_eq!(run.timeline_fact().played.order, 5);
+        // Something else was played or ruled on since. The added creature plays this fight.
+        run.set_play_next(9, None);
         add_from(&mut run, &form("Ghost", "5"), &[]);
-        assert!(run.timeline_fact().played_since(&fact));
+        assert_eq!(run.timeline_fact().played.order, 9);
         assert_eq!(
             run.state.participants.last().unwrap().initiative,
             side_total,

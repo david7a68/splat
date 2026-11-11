@@ -463,7 +463,6 @@ impl Run {
             state.log.extend(lines.iter().cloned());
             state.random = random.clone();
         }
-        self.dm_steps += 1;
         self.dirty = true;
         self.error = None;
         Ok(made)
