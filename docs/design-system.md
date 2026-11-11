@@ -183,7 +183,7 @@ eye during long sessions.
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
 All form labels use sentence-case muted `Small`, including `field`, `text_field`, `small_field` and
-`small_text_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. An empty section inside a list page
+`small_text_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. These two notes fields come from one builder (`notes_field`): an `S` inner margin, and the frame ends at the column's right edge. An empty section inside a list page
 has one muted line below its heading, with no zero count or full empty state. Tabs and page headers omit zero
 counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Overflow tabs use a quiet
 caret menu without a button border; it names and underlines the selected page when that page is inside. Fight and Packages
@@ -305,8 +305,10 @@ a line (at the start of the paragraph, after a line break, or where it wraps) ke
 with all the space after them. A link right after another short link gets as much space after it as before it,
 so the pair reads evenly. The text after a link starts after its space, and the line wraps if it must. Two links
 side by side have a blank between them, so each keeps its own underline. Where the body line is shorter than
-24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, so the paragraph
-keeps one line pitch and its baselines; a paragraph without a link keeps its own line height. A link's underline
+24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, the first line
+too. Each line keeps its words where an unlinked line has them and adds the extra height below them. So every
+line has the same baseline offset, the baselines are 24 px apart, and the first line starts as an unlinked
+paragraph's first line does. A paragraph without a link keeps its own line height. A link's underline
 sits 2 px below its words' baseline and covers only its words, never at the bottom of a taller line. So every
 link target is at least 24 × 24 px, stays on its own line, and never overlaps another link's target. Links 24 px
 or wider keep their layout, and the paragraph's words do not change. The focus ring sits `XS / 2` outside the
@@ -732,7 +734,8 @@ override, without changing the saved encounter format. A missing NPC stat block 
 blocked Add reason and Open in World repair. Unreadable package creatures retain filename and error line in
 the roster; Open in Library opens repair. Only deleted files offer replacement. Deleted creatures keep their
 last known name or Missing creature, plus a warning such as `Enemies · Not found. Its package entry was
-deleted.` Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
+deleted.` One fault has one tone: the message above the roster and the rows that state its fault share it.
+An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
@@ -758,7 +761,11 @@ closed section. Frames use Move to… for ownership; full editors use Belongs to
 
 ### Groups and changes
 
-The group name field ends at `FORM_WIDTH`. Member rows and Group notes end at `LIST_MEASURE`, inside the scroll content and anchored left. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
+Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
+content and anchored left. The group name field and Belongs to end at one edge: the column's edge, or
+`FORM_WIDTH` when that comes first by at least `XL`. So the edges are the same or clearly apart. In an
+encounter's group frame, the name starts at the frame's left edge and ends at `FORM_WIDTH` or before its
+actions. Removing any member shows `Removed <name>.` and `Undo remove member` on a result line. Undo restores the full member at its place and keeps other draft edits.
 
 A plan group editor stays beside the note when `LIST_MEASURE`, an `L` gap and `READER_MEASURE` fit.
 Bound the editor at `LIST_MEASURE`, anchored left. Below that width, the note stays behind its tab. Plan summaries start directly
