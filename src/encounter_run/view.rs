@@ -428,6 +428,11 @@ impl Run {
             self.live_initiative = None;
             return;
         }
+        // An open menu (a row's, a tile's, a split button's) takes Escape first: it closes,
+        // and the armed action, the selection and the panel stay.
+        if egui::Popup::is_any_open(ui.ctx()) && ui.input(|i| i.key_pressed(Key::Escape)) {
+            return;
+        }
         if self.disarm_on_escape(ui) {
             return;
         }
@@ -845,26 +850,14 @@ impl Run {
                                         ),
                                         Layout::left_to_right(Align::TOP),
                                         |ui| {
-                                            if self.notice_summary.is_some() {
-                                                design::small_message(ui, Tone::Warning, shown)
+                                            // One form for every result: the tone marks
+                                            // the icon and bar, the words keep text colour.
+                                            let tone = if self.notice_summary.is_some() {
+                                                Tone::Warning
                                             } else {
-                                                ui.horizontal_top(|ui| {
-                                                    ui.label(
-                                                        Type::Small
-                                                            .rich(ui, icons::SUCCESS)
-                                                            .color(colors().result.success),
-                                                    );
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            Type::Small
-                                                                .rich(ui, shown)
-                                                                .color(colors().result.success),
-                                                        )
-                                                        .wrap(),
-                                                    )
-                                                })
-                                                .inner
-                                            }
+                                                Tone::Success
+                                            };
+                                            design::small_message(ui, tone, shown)
                                         },
                                     )
                                     .inner;
@@ -891,25 +884,32 @@ impl Run {
                         let first = error
                             .split_once(" Its row")
                             .map_or(error.as_str(), |(first, _)| first);
+                        // As the sheet-change notice: the fault in an error message, then its
+                        // place to repair it as the action.
                         ui.horizontal(|ui| {
-                            let tone = colors().result.error;
-                            ui.label(Type::Small.rich(ui, icons::ERROR).color(tone));
-                            let summary = format!(
-                                "{} · Repair in Campaign → Packages",
-                                first.trim_end_matches('.')
-                            );
                             let detail = format!(
                                 "{first} Its row still works. Repair in Campaign → Packages."
                             );
-                            let fitted = design::words_that_fit(
-                                ui,
-                                &summary,
-                                &Type::Small.font(ui),
-                                ui.available_width() - Density::Read.control() - design::S,
-                            );
-                            let response = design::small_link(ui, &fitted);
-                            design::named(ui, &response, &detail);
-                            if response.on_hover_text(&detail).clicked() {
+                            let font = Type::Small.font(ui);
+                            let action = "Campaign → Packages";
+                            let lead = design::S
+                                + design::HAIRLINE_WIDTH
+                                + design::number_width(ui, icons::ERROR, &font)
+                                - design::XS;
+                            let room = ui.available_width()
+                                - Density::Read.control()
+                                - design::number_width(ui, action, &font)
+                                - design::L
+                                - design::S * 2.0
+                                - lead;
+                            let fitted = design::words_that_fit(ui, first, &font, room.max(0.0));
+                            let message = design::small_message(ui, Tone::Error, &fitted);
+                            design::named(ui, &message, &detail);
+                            message.on_hover_text(&detail);
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            let response = design::small_link(ui, action);
+                            design::named(ui, &response, "Repair in Campaign → Packages");
+                            if response.clicked() {
                                 self.wants_packages = true;
                             }
                             if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked()
@@ -1227,6 +1227,21 @@ impl Run {
                             shown = words;
                             keyless = drop_key;
                             break;
+                        }
+                    }
+                    // No target fits: the step's words without it, `Undo: 8 damage to 3`,
+                    // before `Undo` alone. Hover keeps the whole step.
+                    if shown == "Undo"
+                        && let Some(compact) = undo_compact(&undo_label, &self.state.participants)
+                    {
+                        for drop_key in [false, true] {
+                            let action = self.undo_action(&compact);
+                            let action = if drop_key { action.key("") } else { action };
+                            if action.natural_width(ui) <= slot {
+                                shown = compact;
+                                keyless = drop_key;
+                                break;
+                            }
                         }
                     }
                     shown
@@ -2318,12 +2333,15 @@ impl Run {
             .id_salt("run_conditions")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                // A form, not the pane: the grid, the effects and Add stay within its width.
+                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
                 let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM { 3 } else { 2 };
+                // Columns as wide as their longest choice, `S` apart: never spread across the form.
                 egui::Grid::new("official_conditions")
                     .num_columns(columns)
-                    .min_col_width((ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN))
-                    .spacing([design::XS, design::XS])
+                    .min_col_width(0.0)
+                    .spacing([design::S, design::XS])
                     .show(ui, |ui| {
                         for (position, (_, name)) in
                             crate::combat_sync::CONDITIONS.iter().enumerate()
@@ -3303,14 +3321,33 @@ impl Run {
         }
     }
 
+    /// A group's side, size and worth: `Enemies · 3 members · XP 150`.
+    fn group_totals_text(group: &super::RunGroup) -> String {
+        format!(
+            "{} · {} · {}",
+            style::human_label(&group.side),
+            group.count_label(),
+            group.xp_label()
+        )
+    }
+
     /// The roster shows members; this notice keeps just the group and its totals.
     /// Roll details and member names remain in the unmodified Log.
     fn group_arrival_notice(&self, start: usize) -> Option<String> {
         let added = self.state.participants.get(start..)?;
         let origin = added.first()?.added_from.as_ref()?;
-        if origin.group.is_empty() {
-            return None;
-        }
+        // A creature added by hand has no group: the notice names the rows it added, in the
+        // group's words. `entered by the DM` stays in the Log, which is not spoken to the DM.
+        let who = if origin.group.is_empty() {
+            let names: Vec<_> = added.iter().map(|p| p.name.as_str()).collect();
+            match names.as_slice() {
+                [] => return None,
+                [one] => (*one).to_owned(),
+                [first @ .., last] => format!("{} and {last}", first.join(", ")),
+            }
+        } else {
+            origin.group.clone()
+        };
         let totals: std::collections::BTreeSet<_> =
             added.iter().filter_map(|p| p.initiative).collect();
         let totals = totals
@@ -3318,7 +3355,7 @@ impl Run {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(", ");
-        Some(format!("{} joined at\u{a0}{totals}.", origin.group))
+        Some(format!("{who} joined at\u{a0}{totals}."))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
@@ -3379,30 +3416,80 @@ impl Run {
                     .natural_width(ui)
             })
             .fold(0.0, f32::max);
-        let mut add = None;
-        for (heading, list) in [
-            ("For this encounter", offered.own.as_slice()),
-            ("In tonight’s plan", planned.as_slice()),
-            ("For any encounter", any.as_slice()),
-            ("For one encounter", offered.other.as_slice()),
-        ] {
-            if labelled && !list.is_empty() {
-                design::group_heading(ui, heading, list.len());
+        // One block for every group, as wide as its widest heading or summary with Initiative
+        // and Add, and no wider than a list: the controls stay near the names they add, at one
+        // x in every group.
+        let gap = ui.spacing().item_spacing.x;
+        let controls = design::number_width(ui, "Initiative", &Type::Small.font(ui))
+            + gap
+            + ARRIVAL_FIELD_WIDTH
+            + design::XS
+            + gap
+            + add_width;
+        let block = offered
+            .own
+            .iter()
+            .chain(&planned)
+            .chain(&any)
+            .chain(&offered.other)
+            .map(|group| {
+                let status = self.group_status(group);
+                let totals = Self::group_totals_text(group);
+                let heading = design::number_width(
+                    ui,
+                    &format!("{} {}", icons::DRAG, group.name),
+                    &Type::Strong.font(ui),
+                ) + design::L
+                    + design::number_width(
+                        ui,
+                        &if status.is_empty() {
+                            totals
+                        } else {
+                            format!("{status} · {totals}")
+                        },
+                        &Type::Small.font(ui),
+                    );
+                let summary =
+                    design::number_width(ui, &group.member_summary(), &Type::Small.font(ui))
+                        + gap
+                        + controls;
+                heading.max(summary)
+            })
+            .fold(0.0, f32::max)
+            .min(design::LIST_MEASURE)
+            .min(ui.available_width());
+        // A child of its own: the pane's earlier rows already make this Ui as wide as the pane,
+        // and a Ui cannot shrink below what it holds. A group's faults may use a list's width,
+        // so a repair link stays on its fault's line; its name, members and controls keep to
+        // the block.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            let mut add = None;
+            for (heading, list) in [
+                ("For this encounter", offered.own.as_slice()),
+                ("In tonight’s plan", planned.as_slice()),
+                ("For any encounter", any.as_slice()),
+                ("For one encounter", offered.other.as_slice()),
+            ] {
+                if labelled && !list.is_empty() {
+                    design::group_heading(ui, heading, list.len());
+                }
+                if heading == "For one encounter" && !list.is_empty() {
+                    ui.add(egui::Label::new(Type::Small.rich(ui,
+                        "This run was saved before groups had an encounter, so all groups show.").color(c.muted)).wrap());
+                }
+                for group in list {
+                    ui.push_id(group.id, |ui| {
+                        if self.group_row(ui, group, add_width, block) {
+                            add = Some(group.id);
+                        }
+                    });
+                    design::rule(ui);
+                }
             }
-            if heading == "For one encounter" && !list.is_empty() {
-                ui.add(egui::Label::new(Type::Small.rich(ui,
-                    "This run was saved before groups had an encounter, so all groups show.").color(c.muted)).wrap());
-            }
-            for group in list {
-                ui.push_id(group.id, |ui| {
-                    if self.group_row(ui, group, add_width) {
-                        add = Some(group.id);
-                    }
-                });
-                design::rule(ui);
-            }
-        }
-        add
+            add
+        })
+        .inner
     }
 
     /// By side, a creature joins its side's initiative with no roll, when the side has one.
@@ -3415,15 +3502,13 @@ impl Run {
                 .any(|p| p.npc && p.side == side && p.initiative.is_some())
     }
 
-    /// Returns true when the DM chooses to add this group.
-    fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup, add_width: f32) -> bool {
-        let c = colors();
-        let name = &group.name;
+    /// What a group's row says about it before its members: when it joined, whose encounter it
+    /// is for, and `Changed`.
+    fn group_status(&self, group: &super::RunGroup) -> String {
         let changed = group
             .members
             .iter()
             .any(|member| member.overrides.changes_creature());
-        let change_hint = if changed { " Changed." } else { "" };
         let added = self
             .state
             .participants
@@ -3455,8 +3540,27 @@ impl Run {
             }
             status.push_str(&format!("{} Changed", icons::CHANGED));
         }
+        status
+    }
+
+    /// Returns true when the DM chooses to add this group.
+    fn group_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        group: &super::RunGroup,
+        add_width: f32,
+        block: f32,
+    ) -> bool {
+        let c = colors();
+        let name = &group.name;
+        let changed = group
+            .members
+            .iter()
+            .any(|member| member.overrides.changes_creature());
+        let change_hint = if changed { " Changed." } else { "" };
+        let status = self.group_status(group);
         let grip = ui.allocate_response(
-            vec2(ui.available_width(), Density::Read.control()),
+            vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
         );
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
@@ -3470,12 +3574,7 @@ impl Run {
                 ),
             )
         });
-        let totals_text = format!(
-            "{} · {} · {}",
-            style::human_label(&group.side),
-            group.count_label(),
-            group.xp_label()
-        );
+        let totals_text = Self::group_totals_text(group);
         let heading_width = design::number_width(
             ui,
             &format!("{} {name}", icons::DRAG),
@@ -3581,9 +3680,9 @@ impl Run {
         let members = group.member_summary_wrapped();
         let mut add = false;
         let add_word = arrival_add_word(group);
-        // Initiative and Add end at the panel's inner right edge in every group, so they share
+        // Initiative and Add end at the group block's right edge in every group, so they share
         // one column. The summary takes what is left.
-        let right = ui.max_rect().right();
+        let right = ui.max_rect().left() + block.min(ui.available_width());
         ui.horizontal(|ui| {
             let gap = ui.spacing().item_spacing.x;
             // The field's margins draw it a little wider than it asks for; XS covers that, and
@@ -3916,10 +4015,12 @@ impl Run {
                     .split_once(" · ")
                     .unwrap_or((&freshness.word, ""))
             };
+            // The facts start with their own blank, and the line adds none: the gap before
+            // each `·` is one space, the status word's too.
             let facts = if ready {
-                "· Sync reads this sheet · HP from this run".to_owned()
+                " · Sync reads this sheet · HP from this run".to_owned()
             } else {
-                format!("· {age} · HP from this run")
+                format!(" · {age} · HP from this run")
             };
             // Beside an open conflict, green words would say the opposite of what matters.
             if !self
@@ -3946,17 +4047,24 @@ impl Run {
                         );
                     }
                     ui.vertical(|ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: freshness.icon,
-                                    word,
-                                    color: freshness.color,
+                        // One text, so the blank before each `·` is the same space.
+                        let font = Type::Small.font(ui);
+                        let mut job = egui::text::LayoutJob::default();
+                        for (text, color) in [
+                            (format!("{} {word}", freshness.icon), freshness.color),
+                            (facts, colors().muted),
+                        ] {
+                            job.append(
+                                &text,
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: font.clone(),
+                                    color,
+                                    ..Default::default()
                                 },
                             );
-                            ui.label(Type::Small.rich(ui, facts).color(colors().muted));
-                        });
+                        }
+                        ui.add(egui::Label::new(job).wrap());
                     });
                 });
             }
@@ -4000,14 +4108,34 @@ impl Run {
                 .any(|error| error.contains(&definition.path));
             notice = snapshot_notice(definition, current, unreadable);
             if let Some(message) = &notice {
-                ui.label(Type::Small.rich(ui, message).color(colors().muted));
-                if let Some(at) = at
-                    && Action::quiet("Read the new version")
-                        .line_start()
-                        .show(ui)
-                        .clicked()
-                {
-                    self.lookup_request = Some(at);
+                // A file that changed on disk: its state's icon and colour, then words in the
+                // text colour, so it does not read as part of the stat block.
+                let font = Type::Small.font(ui);
+                let inset = design::number_width(ui, icons::WARN, &font) + design::XS;
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = design::XS;
+                    ui.label(
+                        Type::Small
+                            .rich(ui, icons::WARN)
+                            .color(colors().document.external),
+                    );
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, message).color(colors().text)).wrap(),
+                    );
+                });
+                if let Some(at) = at {
+                    let read = ui
+                        .horizontal(|ui| {
+                            ui.add_space(inset);
+                            Action::quiet("Read the new version")
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                        })
+                        .inner;
+                    if read {
+                        self.lookup_request = Some(at);
+                    }
                 }
             }
         }
@@ -4453,15 +4581,18 @@ impl Run {
         }
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), Density::Read.control()),
-            Layout::right_to_left(Align::Center),
+            Layout::left_to_right(Align::Center),
             |ui| {
-                // Add to fight keeps its room beside Undo, which shortens first.
-                let add = self.add_to_fight(true, Density::Read);
-                let undo_room = ui.available_width() - add.natural_width(ui) - design::S;
+                // Add to fight has a fixed place at the roster's left edge, so a longer Undo
+                // never moves it. Undo takes the rest of the line, from the right.
+                if self.add_to_fight(true, Density::Read).show(ui).clicked() {
+                    self.show_arrivals();
+                }
+                ui.add_space(design::S);
                 let label = self.undo_label();
                 let undo = ui
                     .allocate_ui_with_layout(
-                        vec2(undo_room, Density::Read.control()),
+                        vec2(ui.available_width(), Density::Read.control()),
                         Layout::right_to_left(Align::Center),
                         |ui| {
                             if self.history.is_empty() {
@@ -4476,10 +4607,6 @@ impl Run {
                         },
                     )
                     .inner;
-                ui.add_space(design::S);
-                if add.show(ui).clicked() {
-                    self.show_arrivals();
-                }
                 if undo {
                     self.undo();
                     self.return_focus = self.lookup_open;
@@ -5049,7 +5176,13 @@ impl Run {
                             self.close_lookup = true;
                             ui.close();
                         }
-                        if Action::quiet("NPC and roll mode").show(ui).clicked() {
+                        // A verb, so the choice says it opens the settings in the row.
+                        let words = if expanded {
+                            "Hide NPC and roll mode"
+                        } else {
+                            "Change NPC and roll mode"
+                        };
+                        if Action::quiet(words).show(ui).clicked() {
                             self.setup_expanded = if expanded { None } else { Some(index) };
                             self.return_focus = self.lookup_open;
                             ui.close();
@@ -5289,12 +5422,20 @@ impl Run {
                                 });
                         },
                     );
-                    if choosing {
-                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
-                    } else {
-                        design::group_label(ui, "Combat log");
-                        self.log_tab(ui);
-                    }
+                    // The scroll area's margin, so `Combat log` starts where `Prep` does.
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            if choosing {
+                                design::section(ui, "Combat log", |ui| self.log_tab(ui));
+                            } else {
+                                design::group_label(ui, "Combat log");
+                                self.log_tab(ui);
+                            }
+                        });
                 });
         }
         let mut roster_right = ui.available_rect_before_wrap().left();
@@ -5970,6 +6111,27 @@ fn undo_words(
         }
     }
     format!("{prefix}{shown}")
+}
+
+/// A step's words without its target, for an Undo too narrow for any shortened target:
+/// `Undo: 8 damage to 3` for a step on several rows, `Undo: exhaustion 0 → 3` for one row.
+/// `None` when the words name no row to leave out.
+fn undo_compact(label: &str, participants: &[Participant]) -> Option<String> {
+    let action = label.strip_prefix("Undo: ")?;
+    let several = action.split(super::HALF_FOR).next().unwrap_or(action);
+    if let Some(counted) = several.strip_suffix(super::SEVERAL_TARGETS) {
+        return Some(format!("Undo: {counted}"));
+    }
+    // The row is named last, after its joining word: `initiative for Brannoch Vale`.
+    let target = participants
+        .iter()
+        .filter(|p| !p.name.is_empty() && action.ends_with(&p.name))
+        .max_by_key(|p| p.name.len())?;
+    let words = action.strip_suffix(&target.name)?;
+    let words = [" on ", " off ", " for ", " to "]
+        .into_iter()
+        .find_map(|joining| words.strip_suffix(joining))?;
+    (!words.trim().is_empty()).then(|| format!("Undo: {}", words.trim()))
 }
 
 /// False when shortening left a name as only `…` and its copy number (`move … 2 before`):
@@ -7204,11 +7366,29 @@ fn paint_row(
 /// A number that can be unknown. `Mark unknown` clears it, away from the value,
 /// so that a click meant for the number cannot lose it.
 fn correction_label(ui: &mut egui::Ui, label: &str) {
-    let size = vec2(design::L * 6.0, Density::Read.control());
+    let size = vec2(correction_label_width(ui), Density::Read.control());
     ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(Align::Center), |ui| {
         ui.set_min_size(size);
         ui.label(Type::Body.rich(ui, label).color(colors().text));
     });
+}
+
+/// Every label the Correct tab has, so they share one column as wide as the widest.
+const CORRECTION_LABELS: [&str; 5] = [
+    "Current HP",
+    "Maximum HP",
+    "Initiative bonus",
+    "Initiative",
+    "Note",
+];
+
+/// The Correct tab's label column: the widest label and an `S` gap, and never under `L * 6`.
+fn correction_label_width(ui: &egui::Ui) -> f32 {
+    let font = Type::Body.font(ui);
+    CORRECTION_LABELS
+        .iter()
+        .map(|label| design::number_width(ui, label, &font) + design::S)
+        .fold(design::L * 6.0, f32::max)
 }
 
 fn signed_bonus(value: i64) -> String {
@@ -7561,9 +7741,10 @@ mod tests {
     }
 
     #[test]
-    fn iter10_b_arrival_controls_end_at_the_panel_edge_and_bad_totals_warn_once() {
+    fn iter10_b_arrival_controls_share_one_edge_and_bad_totals_warn_once() {
         use egui_kittest::kittest::Queryable;
         let names = ["Ash Hounds", "Shrine Reserve", "Lost Patrol"];
+        let mut edges = Vec::new();
         for width in [440.0, 600.0, 760.0] {
             let mut run = super::super::tests::run();
             let groups: Vec<_> = [
@@ -7625,9 +7806,12 @@ mod tests {
                     .get_by_label(&format!("Add {name} to the initiative list"))
                     .rect()
             });
+            edges.push(buttons[0].right());
             for (button, field) in buttons.iter().zip(&fields) {
+                // AH1: one Add edge for every group, at the group block's edge, inside the pane.
                 assert!(
-                    (button.right() - edge).abs() <= 0.5,
+                    (button.right() - buttons[0].right()).abs() <= 0.5
+                        && button.right() <= edge + 0.5,
                     "iter10-B-SD5-edge at {width}: {buttons:?} vs {edge}"
                 );
                 assert!(
@@ -7666,6 +7850,12 @@ mod tests {
                 "iter10-B-FT4-mark-apart at {width}"
             );
         }
+        // AH1: the block is as wide as its groups need, not the pane: in a pane wider than that,
+        // Add stays where it was.
+        assert!(
+            (edges[1] - edges[2]).abs() <= 0.5,
+            "iter-23-R-AH1: Add follows the group block, not the pane: {edges:?}"
+        );
     }
 
     #[test]
@@ -8674,6 +8864,39 @@ mod tests {
                 }
             });
         });
+        // SJ1, SH1: when no target fits, Undo keeps the step's words without the row. A step
+        // that names no row in that place has no short form, so it shows `Undo` alone.
+        let compact = |label: &str| undo_compact(label, std::slice::from_ref(&p));
+        for (label, short) in [
+            (
+                "Undo: 3 damage to 2 participants, half for 1",
+                Some("Undo: 3 damage to 2"),
+            ),
+            (
+                "Undo: 8 damage to 3 participants",
+                Some("Undo: 8 damage to 3"),
+            ),
+            (
+                "Undo: exhaustion 2 → 3 on Cinder Wolf 3",
+                Some("Undo: exhaustion 2 → 3"),
+            ),
+            (
+                "Undo: initiative for Cinder Wolf 3",
+                Some("Undo: initiative"),
+            ),
+            ("Undo: 7 damage to Cinder Wolf 3", Some("Undo: 7 damage")),
+            (
+                "Undo: D&D Beyond HP for Cinder Wolf 3",
+                Some("Undo: D&D Beyond HP"),
+            ),
+            // Lookalikes: the name first, a row not in the run, or no row at all.
+            ("Undo: Cinder Wolf 3 absent", None),
+            ("Undo: initiative for Cinder Wolf 4", None),
+            ("Undo: next turn", None),
+            ("Undo: add 2 × Wolf", None),
+        ] {
+            assert_eq!(compact(label).as_deref(), short, "{label}");
+        }
     }
 
     /// FT3: a long name wraps in the shared name column, and AC, temporary HP and HP keep the
