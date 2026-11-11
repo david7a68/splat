@@ -1077,6 +1077,45 @@ impl<'a> Driver<'a> {
         self.click_rect(target, &format!("Click: {name}"));
     }
 
+    /// Right-click a run row, on its name, to open its menu.
+    pub fn right_click_row(&mut self, name: &str) {
+        let prefix = format!("{name},");
+        let rect = self.aim(&format!("the row of {name:?}"), |node| {
+            node.name.starts_with(&prefix) && Self::is_control(node)
+        });
+        let name_at = egui::pos2(rect.left() + 80.0, rect.top() + 12.0);
+        let target = egui::Rect::from_center_size(name_at, egui::Vec2::splat(4.0));
+        self.secondary_click_rect(target, &format!("Right-click: {name}"));
+    }
+
+    /// Right-click the control whose name starts with these words, to open its menu.
+    pub fn right_click_starting(&mut self, words: &str) {
+        let rect = self.aim(&format!("a control starting {words:?}"), |node| {
+            node.name.starts_with(words) && Self::is_control(node)
+        });
+        self.secondary_click_rect(rect, &format!("Right-click: {words}"));
+    }
+
+    fn secondary_click_rect(&mut self, rect: egui::Rect, caption: &str) {
+        let pos = rect.center();
+        self.film_aim(rect, caption);
+        self.harness.hover_at(pos);
+        self.harness.step();
+        for pressed in [true, false] {
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Secondary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result(caption);
+    }
+
     /// Ctrl+click a run row, to add it to the targets of one amount.
     pub fn ctrl_click_row(&mut self, name: &str) {
         let prefix = format!("{name},");

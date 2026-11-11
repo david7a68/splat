@@ -2708,6 +2708,7 @@ impl Encounters {
             ),
         )?;
         run.came_from(entry.id);
+        run.set_inspiration(snapshot.options.inspiration());
         run.configure_storage(
             campaign.id,
             &snapshot.options.directory(campaign)?,
@@ -4554,6 +4555,40 @@ impl Encounters {
                 &mut snapshot.options.initiative.roster_ties,
                 "Break initiative ties in roster order",
             );
+            // The campaign's packages decide inspiration. Only several rules need a choice.
+            if snapshot.options.inspiration_rules.len() > 1 {
+                let rules = snapshot.options.inspiration_rules.clone();
+                let line = |rule: &crate::encounter_settings::InspirationRule| {
+                    format!("{}: {}", rule.name, rule.effect.effect())
+                };
+                let selected = rules
+                    .iter()
+                    .find(|rule| Some(rule.id) == snapshot.options.inspiration_choice)
+                    .map_or_else(|| "Choose a rule".to_owned(), line);
+                design::small_field(ui, "Inspiration rule", None, None, |ui| {
+                    let combo = egui::ComboBox::from_id_salt("campaign_inspiration")
+                        .icon(design::combo_icon)
+                        .width(ui.available_width().min(320.0))
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            for rule in &rules {
+                                ui.selectable_value(
+                                    &mut snapshot.options.inspiration_choice,
+                                    Some(rule.id),
+                                    line(rule),
+                                );
+                            }
+                        });
+                    design::named(ui, &combo.response, "Inspiration rule");
+                });
+                if snapshot.options.inspiration().is_none() {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "This campaign's packages have more than one inspiration rule. Runs offer inspiration once you choose one.")
+                            .color(colors().muted),
+                    );
+                }
+            }
             let changed = snapshot.options != snapshot.saved_options;
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, &active);
             let run_files = left.as_ref().map_or(0, Vec::len);

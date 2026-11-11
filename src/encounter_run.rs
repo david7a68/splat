@@ -8,6 +8,7 @@ pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
+use splat::content::inspiration::Inspiration;
 use splat::{
     content::{
         Entry,
@@ -530,6 +531,15 @@ pub(crate) struct Run {
     roster_names: BTreeMap<String, String>,
     roster_names_revision: Option<Uuid>,
     initiative: Initiative,
+    /// What a player character's inspiration does, from the campaign's rules. None when its
+    /// packages define no inspiration rule.
+    inspiration: Option<Inspiration>,
+    /// A target waiting for the DM to say which damage condition holds.
+    asking: Option<rolling::Asking>,
+    /// The last d20 rolled for a player, which their inspiration can reroll.
+    reroll: Option<rolling::Reroll>,
+    /// Rows whose inspiration was expended without a synced sheet to send it to.
+    spent_inspiration: BTreeSet<usize>,
     storage: Option<Storage>,
     recovery: Recovery,
     /// Each character's cached portrait, by D&D Beyond ID.
@@ -848,6 +858,10 @@ impl Run {
             roster_names: BTreeMap::new(),
             roster_names_revision: None,
             initiative: Initiative::default(),
+            inspiration: None,
+            asking: None,
+            reroll: None,
+            spent_inspiration: BTreeSet::new(),
             storage: None,
             recovery: Recovery::default(),
             portraits: BTreeMap::new(),
@@ -3069,6 +3083,9 @@ struct SavedRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     source: Option<Uuid>,
     initiative: Initiative,
+    /// Saves from before this have none, and offer no inspiration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inspiration: Option<Inspiration>,
     state: State,
     setup_details: String,
     /// Saves from before this choice load with it off. The DM can start sync from the run.
@@ -3198,6 +3215,10 @@ impl Run {
         });
         self.save()
     }
+    /// Set the campaign's inspiration rule, before the run is first saved.
+    pub fn set_inspiration(&mut self, inspiration: Option<Inspiration>) {
+        self.inspiration = inspiration;
+    }
     pub fn guard_campaign(&mut self, root: &Path) {
         if let Some(storage) = &mut self.storage {
             storage.root = root.to_owned();
@@ -3273,6 +3294,7 @@ impl Run {
             name: self.name.clone(),
             source: self.source,
             initiative: self.initiative.clone(),
+            inspiration: self.inspiration,
             state: self.state.clone(),
             setup_details: self.setup_details.clone(),
             keep_party_synced: self.keep_party_synced,
@@ -3480,6 +3502,10 @@ impl Run {
             roster_names_revision: None,
             recovery: saved.recovery,
             initiative: saved.initiative,
+            inspiration: saved.inspiration,
+            asking: None,
+            reroll: None,
+            spent_inspiration: BTreeSet::new(),
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
                 _ => 0,

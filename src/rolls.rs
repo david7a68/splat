@@ -1,7 +1,7 @@
-//! Rolls in a stat block or a sheet. A run's roster has an action strip under the selected
-//! row; a reader outside a run has the same line under its stat head. Numbers in tables (an
-//! ability, a save, a skill) also roll. A roll changes nothing: in a run it goes to the Log,
-//! and its damage waits for a click on a target's HP. Outside a run it is a preview.
+//! Rolls in a stat block or a sheet. Its actions are tiles: in a run a tile arms its action
+//! against the roster's rows; outside a run it previews. Numbers in tables (an ability, a
+//! save, a skill) also roll. A right-click on a tile or a number chooses how its d20 rolls. A
+//! roll changes nothing: in a run it goes to the Log, and its damage goes into Amount.
 use crate::design::{self, Action, Density, Type, colors};
 use eframe::egui::{self, Id, text::LayoutJob};
 use splat::content::dice_text::{self, D20, DamagePart, RollLink};
@@ -41,6 +41,8 @@ pub(crate) struct Ask {
     pub roller: Option<usize>,
     /// The entry or character the number is in.
     pub entry: String,
+    /// The roller expends inspiration for advantage, by a rule that gives it before the roll.
+    pub inspired: bool,
 }
 
 fn ask_id() -> Id {
@@ -51,6 +53,9 @@ fn roller_id() -> Id {
 }
 fn entry_id() -> Id {
     Id::new("roll_entry")
+}
+fn inspired_id() -> Id {
+    Id::new("roll_inspired")
 }
 fn preview_id() -> Id {
     Id::new("roll_preview_random")
@@ -76,13 +81,19 @@ pub(crate) fn set_roller(ctx: &egui::Context, roller: Option<usize>) {
     });
 }
 
+/// Whether the roller drawn next can expend inspiration for advantage before a roll. Set it
+/// around a run's reader, by the campaign's inspiration rule and the character's sheet.
+pub(crate) fn set_inspired(ctx: &egui::Context, inspired: bool) {
+    ctx.data_mut(|data| data.insert_temp(inspired_id(), inspired));
+}
+
 /// The entry whose numbers are drawn next, to name its rolls.
 pub(crate) fn set_entry(ctx: &egui::Context, name: &str) {
     ctx.data_mut(|data| data.insert_temp(entry_id(), name.to_owned()));
 }
 
 /// Ask for `link`, from the roller and entry set for what is drawn now.
-fn ask(ctx: &egui::Context, link: RollLink, mode: Mode) {
+fn ask(ctx: &egui::Context, link: RollLink, mode: Mode, inspired: bool) {
     let roller = ctx.data(|data| data.get_temp::<usize>(roller_id()));
     let entry = ctx
         .data(|data| data.get_temp::<String>(entry_id()))
@@ -95,14 +106,76 @@ fn ask(ctx: &egui::Context, link: RollLink, mode: Mode) {
                 mode,
                 roller,
                 entry,
+                inspired,
             },
         );
     });
 }
 
+/// How a right-click on a d20 roll can roll it: the mode, and whether inspiration pays for
+/// advantage. `verb` names the press: `Roll`, or `Roll for them`.
+pub(crate) fn mode_choices(verb: &str, inspired: bool) -> Vec<(String, Mode, bool)> {
+    let mut choices = vec![
+        (verb.to_owned(), Mode::Normal, false),
+        (format!("{verb} with advantage"), Mode::Advantage, false),
+        (
+            format!("{verb} with disadvantage"),
+            Mode::Disadvantage,
+            false,
+        ),
+    ];
+    if inspired {
+        choices.push((
+            format!("{verb} with inspiration (advantage)"),
+            Mode::Advantage,
+            true,
+        ));
+    }
+    choices
+}
+
+/// An action's name: `Bite`, `Ember Burst`.
+pub(crate) fn link_label(link: &RollLink) -> &str {
+    match link {
+        RollLink::D20 { label, .. }
+        | RollLink::Damage { label, .. }
+        | RollLink::SaveDc { label, .. }
+        | RollLink::Dice { label, .. } => label,
+    }
+}
+
+/// One line of a right-click menu.
+pub(crate) fn menu_item(ui: &mut egui::Ui, words: &str) -> bool {
+    Action::quiet(words)
+        .density(Density::Read)
+        .show(ui)
+        .clicked()
+}
+
+/// The right-click menu on a d20 roll. Returns how to roll it, when one was chosen.
+fn mode_menu(response: &egui::Response, link: &RollLink) -> Option<(Mode, bool)> {
+    if !matches!(link, RollLink::D20 { .. }) {
+        return None;
+    }
+    let inspired = response
+        .ctx
+        .data(|data| data.get_temp::<bool>(inspired_id()))
+        .unwrap_or(false);
+    let mut chosen = None;
+    egui::Popup::context_menu(response).show(|ui| {
+        for (words, mode, inspired) in mode_choices("Roll", inspired) {
+            if menu_item(ui, &words) {
+                chosen = Some((mode, inspired));
+                ui.close();
+            }
+        }
+    });
+    chosen
+}
+
 /// What a press on this number does, in words, for hover.
 pub(crate) fn hint(link: &RollLink) -> String {
-    let keys = " Shift: advantage. Ctrl: disadvantage.";
+    let keys = " Shift: advantage. Ctrl: disadvantage. Right-click for more.";
     match link {
         RollLink::D20 {
             what, bonus, label, ..
@@ -150,9 +223,18 @@ fn part_text(part: &DamagePart) -> String {
     }
 }
 
-/// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll.
+/// `2d6+2 bludgeoning, 1d6 fire`: every part of a damage roll. A part with a condition
+/// follows as `or 4d6+4 piercing` or `plus 1d4 slashing`; its condition is in the text.
 fn parts_text(parts: &[DamagePart]) -> String {
-    parts.iter().map(part_text).collect::<Vec<_>>().join(", ")
+    parts
+        .iter()
+        .map(|part| match &part.when {
+            None => part_text(part),
+            Some(when) if when.instead => format!("or {}", part_text(part)),
+            Some(_) => format!("plus {}", part_text(part)),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// A number in a table that rolls: an ability's modifier, a save, a skill, a sheet's bonus.
@@ -199,13 +281,16 @@ pub(crate) fn link(ui: &mut egui::Ui, text: &str, role: Type, link: &RollLink) -
 
 /// Hover words and a press with its keys, on a drawn number that rolls.
 pub(crate) fn interact(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
+    if let Some((mode, inspired)) = mode_menu(response, link) {
+        ask(ui.ctx(), link.clone(), mode, inspired);
+    }
     if !response.hovered() && !response.clicked() {
         return;
     }
     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     response.clone().on_hover_text(hint(link));
     if response.clicked() {
-        ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link));
+        ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link), false);
     }
 }
 
@@ -596,6 +681,11 @@ pub(crate) fn make(
     random: &mut Random,
 ) -> Result<Outcome, String> {
     let (attack_change, damage_change) = changes;
+    // A condition this roll settles counts; any other is false. A run settles the rest
+    // before it calls this, by the target and by asking.
+    let settled = |parts: &[DamagePart]| {
+        dice_text::resolve(parts, |when| condition_by_mode(when, mode).unwrap_or(false))
+    };
     let (first, damage) = match link {
         RollLink::D20 {
             what: D20::Attack,
@@ -603,6 +693,7 @@ pub(crate) fn make(
             damage,
             ..
         } => {
+            let damage = &settled(damage);
             let attack = roll_with(who, link, mode, attack_change, extra, random)?;
             let critical = if attack.natural == Some(20) || mode == Mode::Critical {
                 Mode::Critical
@@ -613,11 +704,24 @@ pub(crate) fn make(
             (Some(attack), damage)
         }
         RollLink::D20 { .. } => (Some(roll_with(who, link, mode, 0, extra, random)?), None),
-        RollLink::Damage { .. } => (None, Some(roll(who, link, mode, damage_change, random)?)),
+        RollLink::Damage { label, parts } => {
+            let link = RollLink::Damage {
+                label: label.clone(),
+                parts: settled(parts),
+            };
+            (None, Some(roll(who, &link, mode, damage_change, random)?))
+        }
         RollLink::Dice { .. } => (Some(roll(who, link, mode, 0, random)?), None),
         RollLink::SaveDc { label, damage, .. } => (
             None,
-            damage_roll(who, label, damage, Mode::Normal, damage_change, random)?,
+            damage_roll(
+                who,
+                label,
+                &settled(damage),
+                Mode::Normal,
+                damage_change,
+                random,
+            )?,
         ),
     };
     Ok(Outcome {
@@ -625,6 +729,16 @@ pub(crate) fn make(
         first,
         damage,
     })
+}
+
+/// Whether a damage condition holds, when the roll's mode settles it: `if the attack roll had
+/// Advantage`. `None` when the mode does not say.
+pub(crate) fn condition_by_mode(when: &dice_text::When, mode: Mode) -> Option<bool> {
+    let words = when.text.to_lowercase();
+    (words.contains("attack roll")
+        && words.contains("advantage")
+        && !words.contains("disadvantage"))
+    .then_some(mode == Mode::Advantage)
 }
 
 /// A feature's damage, if it has any.
@@ -644,6 +758,72 @@ fn damage_roll(
         parts: parts.to_vec(),
     };
     roll(who, &link, mode, change, random).map(Some)
+}
+
+/// Reroll an outcome's d20 with inspiration. A new die takes the place of the one that
+/// counted, and the keep is made again; the new roll stands. On an attack the damage rolls
+/// again only when a critical hit begins or ends. Returns the outcome, the old die and the new.
+pub(crate) fn reroll_d20(
+    who: &str,
+    outcome: &Outcome,
+    changes: (i64, i64),
+    random: &mut Random,
+) -> Result<(Outcome, i64, i64), String> {
+    let mut first = outcome.first.clone().ok_or("There is no d20 to reroll.")?;
+    let piece = first
+        .pieces
+        .iter_mut()
+        .find(|piece| piece.label == "d20")
+        .ok_or("There is no d20 to reroll.")?;
+    let kept = piece
+        .faces
+        .iter()
+        .position(|(_, dropped)| !dropped)
+        .ok_or("There is no d20 to reroll.")?;
+    let old = piece.faces[kept].0;
+    let new = Dice::parse("1d20")?.roll(random, false)?.total;
+    piece.faces[kept].0 = new;
+    let faces: Vec<i64> = piece.faces.iter().map(|(face, _)| *face).collect();
+    let pick = match first.mode {
+        Mode::Disadvantage => faces.iter().enumerate().min_by_key(|(_, face)| **face),
+        _ => faces.iter().enumerate().max_by_key(|(_, face)| **face),
+    }
+    .map_or(kept, |(at, _)| at);
+    for (at, face) in piece.faces.iter_mut().enumerate() {
+        face.1 = at != pick;
+    }
+    let counted = faces[pick];
+    first.total = counted + first.flat;
+    let was_critical = first.natural == Some(20);
+    if first.natural.is_some() {
+        first.natural = Some(counted);
+    }
+    let critical = first.natural == Some(20);
+    let damage = match &outcome.link {
+        RollLink::D20 {
+            what: D20::Attack,
+            label,
+            damage,
+            ..
+        } if was_critical != critical => {
+            let mode = if critical {
+                Mode::Critical
+            } else {
+                Mode::Normal
+            };
+            damage_roll(who, label, damage, mode, changes.1, random)?
+        }
+        _ => outcome.damage.clone(),
+    };
+    Ok((
+        Outcome {
+            link: outcome.link.clone(),
+            first: Some(first),
+            damage,
+        },
+        old,
+        new,
+    ))
 }
 
 /// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a
@@ -766,7 +946,7 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
     let keys = number.map_or_else(String::new, |n| format!(" Ctrl+{n}."));
     let label = format!(
         "{} · {}.{keys}",
-        chip_name(&chip.link),
+        link_label(&chip.link),
         tile_detail(&chip.link)
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
@@ -819,7 +999,7 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
             );
         }
         let room = (inner.width() - mark_width - digit_width).max(1.0);
-        let name = design::words_that_fit(ui, &chip_name(&chip.link), &Type::Strong.font(ui), room);
+        let name = design::words_that_fit(ui, link_label(&chip.link), &Type::Strong.font(ui), room);
         let name = design::one_line(ui, &name, Type::Strong.font(ui), c.text, room);
         painter.galley(inner.min + egui::vec2(mark_width, 0.0), name, c.text);
         let detail = tile_detail(&chip.link);
@@ -839,26 +1019,10 @@ fn tile(ui: &mut egui::Ui, chip: &Chip, number: Option<usize>, armed: bool) -> e
         ui.add(egui::Label::new(Type::Body.rich(ui, &chip.text).color(c.text)).wrap());
         ui.label(
             Type::Small
-                .rich(
-                    ui,
-                    format!(
-                        "{} Shift: advantage. Ctrl: disadvantage.{keys}",
-                        hint(&chip.link)
-                    ),
-                )
+                .rich(ui, format!("{}{keys}", hint(&chip.link)))
                 .color(c.muted),
         );
     })
-}
-
-/// An action's name: `Bite`, `Ember Burst`.
-fn chip_name(link: &RollLink) -> String {
-    match link {
-        RollLink::D20 { label, .. }
-        | RollLink::Damage { label, .. }
-        | RollLink::SaveDc { label, .. }
-        | RollLink::Dice { label, .. } => label.clone(),
-    }
 }
 
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
@@ -879,8 +1043,17 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
         for (at, chip) in chips.iter().enumerate() {
             let number = (in_run && at < 9).then_some(at + 1);
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
-            if tile(ui, chip, number, lit).clicked() {
-                ask(&ctx, chip.link.clone(), Mode::from_keys(ui, &chip.link));
+            let response = tile(ui, chip, number, lit);
+            if response.clicked() {
+                ask(
+                    &ctx,
+                    chip.link.clone(),
+                    Mode::from_keys(ui, &chip.link),
+                    false,
+                );
+            }
+            if let Some((mode, inspired)) = mode_menu(&response, &chip.link) {
+                ask(&ctx, chip.link.clone(), mode, inspired);
             }
         }
     });
@@ -961,7 +1134,15 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 .hint(&hint(&chip.link))
                 .show(ui);
             if response.clicked() {
-                ask(&ctx, chip.link.clone(), Mode::from_keys(ui, &chip.link));
+                ask(
+                    &ctx,
+                    chip.link.clone(),
+                    Mode::from_keys(ui, &chip.link),
+                    false,
+                );
+            }
+            if let Some((mode, inspired)) = mode_menu(&response, &chip.link) {
+                ask(&ctx, chip.link.clone(), mode, inspired);
             }
         }
     });
@@ -979,6 +1160,7 @@ mod tests {
             damage: vec![DamagePart {
                 dice: "2d6+2".into(),
                 kind: Some("Bludgeoning".into()),
+                when: None,
             }],
         }
     }
@@ -1025,10 +1207,12 @@ mod tests {
                 DamagePart {
                     dice: "1d6+4".into(),
                     kind: Some("Piercing".into()),
+                    when: None,
                 },
                 DamagePart {
                     dice: "1d6".into(),
                     kind: Some("Fire".into()),
+                    when: None,
                 },
             ],
         };

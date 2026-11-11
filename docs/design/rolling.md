@@ -49,6 +49,12 @@ prose, with its spell links. A character's Actions page shows its attacks as
 tiles. A tile has an icon (sword for an attack, shield for a save, fire for
 damage), its name, its number in a run (Ctrl+1 to Ctrl+9 arm it), and its
 numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
+Damage with a condition follows as `or 2d6+2 slashing` or `plus 1d4 slashing`.
+
+A right-click on a tile or on a number that rolls a d20 opens a menu: `Roll`,
+`Roll with advantage`, `Roll with disadvantage`, and, by a campaign rule that
+gives advantage for inspiration, `Roll with inspiration (advantage)` when the
+character has it.
 
 ### An attack
 
@@ -61,6 +67,53 @@ numbers: `+4 · 2d4+2 piercing, 1d6 fire` or `DC 12 Dexterity · 2d6 fire`.
    10. Enter applies it, as one named step of Undo.
 3. The tile stays armed: click the next target for a Multiattack. Escape, `Stop`
    or Next turn disarms it.
+
+A right-click on a target row opens a menu under the row, headed `Bite against
+Cinder Wolf 2`: `Roll`, `Roll with advantage`, `Roll with disadvantage`. For a
+save it rolls that creature's save another way; for a player's attack it rolls
+for them.
+
+### Damage that depends on a condition
+
+The printed text can put a condition on damage: `or 6 (1d8 + 2) Piercing damage
+if the target is Bloodied` replaces the damage, and `plus 2 (1d4) Slashing damage
+if the attack roll had Advantage` adds to it. The run settles what it can tell:
+the roll's advantage, and whether the target or the attacker is Bloodied. For
+anything else, such as `if the goat moved 20+ feet straight toward the target`,
+the click on the target opens a question under the row before anything rolls:
+the condition, then `Yes · 2d8+2 bludgeoning`, `No · 2d6+2 bludgeoning` and
+`Cancel`. In the built-in creatures, 16 attacks have such damage; 3 need the
+question. A save's damage, rolled once for every target, rolls without its
+conditions.
+
+### Inspiration
+
+No ruleset comes first. The engine runs inspiration contracts with the
+parameters their rule entries give, and a campaign takes its rule from its
+packages and notes (`splat::content::inspiration`):
+
+- `dnd2024:glossary_heroic_inspiration` (SRD 5.2.1, Heroic Inspiration): reroll
+  one die immediately after rolling it, and use the new roll.
+- `dnd2014:inspiration` (SRD 5.1, Inspiration): advantage on an attack roll, a
+  saving throw or an ability check, chosen before the roll. Its parameters are
+  `expend: {timing: when_making_d20_test, grants: advantage, applies_to:
+  [attack_roll, saving_throw, ability_check]}`.
+
+With one such rule, the campaign uses it. With several, campaign settings shows
+`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`.
+With none, a run offers no inspiration. A run keeps the rule it started with.
+
+Only a player character with inspiration is offered it: by the synced D&D Beyond
+sheet, or else by the sheet's last read. Expending it sends `No inspiration` to
+a synced sheet; without sync, the run remembers it and the Log says so.
+
+- **Reroll rule.** After the run rolls a d20 for a player (`Roll for them`, or a
+  check, save or skill from the sheet), a right-click on the row with the result
+  offers `Reroll the d20 with inspiration`. The new die takes the place of the
+  one that counted, the keep is made again, and the Log says `3 becomes 17`. On
+  an attack, the damage rolls again only when a critical hit begins or ends.
+- **Advantage rule.** The tile, number or target menu offers `with inspiration
+  (advantage)`; the roll has advantage and the Log says inspiration was expended.
 
 ### A save
 
@@ -94,6 +147,8 @@ the tiles, and nothing is saved.
   repeats the dice.
 - The run keeps the armed action (`Armed`), each row's result (`badges`) and each
   save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
+- `dice_text` marks a damage part's condition (`When`: its words, and whether it
+  replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
   run-in title, skipping printed quotes, tables and headings. A test checks every
   built-in creature: each `Attack Roll:` and each damage group is found.
@@ -111,6 +166,9 @@ The `run-rolls` visual scenario measures these:
 | T16.5 | Arm an action by Ctrl+number | 1 |
 | T16.6 | A player's attack with their own typed damage | ≤ 4 |
 | T16.7 | Preview an attack in the Library | 1 |
+| T16.8 | Arm an attack with advantage from its menu | 2 |
+| T16.9 | Roll against one target with disadvantage from its menu | 2 |
+| T16.10 | Attack when its damage depends on a condition | 3 |
 
 ## History
 
@@ -138,6 +196,7 @@ The `run-rolls` visual scenario measures these:
 
 - Keyboard: a key to step through target rows while an action is armed.
 - A situational bonus, such as Bless.
+- Heroic Inspiration on a damage die, and gaining or giving inspiration.
 - Recharge: `(Recharge 5–6)` rolls a d6 against the range.
 - Multiattack: one press for all of its attacks. Its structured data has at
   least three shapes.

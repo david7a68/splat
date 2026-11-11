@@ -29,6 +29,7 @@ pub mod creature_filter;
 pub mod definitions;
 pub mod dice_text;
 pub mod encounter_group;
+pub mod inspiration;
 pub mod overrides;
 mod reading;
 pub use reading::Reading;

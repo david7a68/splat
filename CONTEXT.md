@@ -128,6 +128,11 @@ An action waiting for targets in a run. Each row shows the chance to hit it; a
 click on a row rolls against it and puts the damage in Amount. A player's attack
 only targets, and the DM types the damage the player rolled.
 
+**Inspiration rule**:
+The rule entry that says what a player character's inspiration does, from the
+campaign's packages or notes: a reroll after the roll (SRD 5.2.1) or advantage
+before it (SRD 5.1). No ruleset is the default; a campaign with several picks one.
+
 **Encounter participant**:
 One particular creature or character taking part in an encounter run, with its
 own current combat state. An inline control used during play acts on that participant.

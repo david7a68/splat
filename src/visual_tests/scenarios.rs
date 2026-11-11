@@ -12841,6 +12841,52 @@ pub mod run_rolls {
         d.goal_within("T16.5", "arm an action by its number", 1);
         d.press(Key::Escape);
 
+        // Right-click a tile: how its d20 rolls.
+        d.click_row(ATTACKER);
+        d.begin_task();
+        d.right_click_starting(BITE);
+        d.state("tile-menu", Sizes::Default);
+        d.click("Roll with advantage");
+        d.observe(
+            "T16.8",
+            d.has_containing("Click a target"),
+            "A tile's right-click menu arms it with advantage",
+        );
+        d.goal_within("T16.8", "arm an attack with advantage from its menu", 2);
+
+        // Right-click a target row: roll against that one row another way.
+        d.begin_task();
+        d.right_click_row(TARGET);
+        d.state("row-menu", Sizes::Default);
+        d.click("Roll with disadvantage");
+        d.observe(
+            "T16.9",
+            d.has_containing(" vs AC 13"),
+            "A row's right-click menu rolls against it with disadvantage",
+        );
+        d.goal_within("T16.9", "roll against one target with disadvantage", 2);
+        d.press(Key::Escape);
+
+        // Damage that depends on what only the DM knows: the click asks before it rolls.
+        d.click_row(CASTER);
+        d.begin_task();
+        d.click_starting("Scorching Sickle");
+        d.click_row(TARGET);
+        d.observe(
+            "T16.10",
+            d.has_containing("If the cultist moved") && d.has_containing("No · 1d6+2 slashing"),
+            "The question names the condition, with the damage for yes and for no",
+        );
+        d.state("damage-question", Sizes::Default);
+        d.click_starting("Yes · 2d6+2 slashing");
+        d.observe(
+            "T16.10",
+            d.has_containing(" vs AC 13"),
+            "The chosen damage rolls against the row",
+        );
+        d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
+        d.press(Key::Escape);
+
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);
         d.begin_task();

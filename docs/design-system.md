@@ -922,6 +922,12 @@ Small, under its state or after its second line, the chance to hit it while an a
 against it (`11 vs AC 13 · 10 damage`); the longest form that fits whole, dropping its first parts. A save's creature
 targets show their roll in the AC cell. Outside a run a tile previews, and its totals show in Strong under the tiles.
 
+A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
+(Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
+and the character allow it. A row's menu opens under the row, headed in muted Small (`Bite against Cinder Wolf 2`), so
+the row stays in view. A damage question opens there too: the condition in Small, wrapped at 320 px, then `Yes · …`,
+`No · …` and `Cancel`.
+
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
 save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.
 

@@ -1539,6 +1539,7 @@ impl Run {
         }
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
+        let mut row_choice = None;
         let mut rule = None;
         let mut toggle_half = None;
         // A changed window size must not leave the selected row out of view. The bar of
@@ -1668,6 +1669,10 @@ impl Run {
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
                         clicked = Some((index, ui.input(|i| i.modifiers.command)));
+                    }
+                    // Right-click: how to roll against this row, or a question it waits on.
+                    if let Some(choice) = self.row_menu(&response, index) {
+                        row_choice = Some((index, choice));
                     }
                     if let (Some(span), Some(galley)) =
                         (&layout.initiative_span, &layout.second_line)
@@ -1899,6 +1904,9 @@ impl Run {
                     self.select(index);
                 }
             }
+        }
+        if let Some((index, choice)) = row_choice {
+            self.row_choice(index, choice);
         }
         if rule == Some(usize::MAX) || rule == Some(usize::MAX - 2) {
             self.panel = Panel::Conditions;

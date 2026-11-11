@@ -20,6 +20,47 @@ pub struct DamagePart {
     pub dice: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// The condition the text puts on this part, as in `plus 2 (1d4) Slashing damage if the
+    /// attack roll had Advantage`. Such a part rolls only when its condition holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<When>,
+}
+
+/// A condition on a damage part.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct When {
+    /// The words from `if`: `if the target is Bloodied`.
+    pub text: String,
+    /// True for `or 6 (1d8 + 2) … if …`: the part replaces the damage without a condition.
+    /// False for `plus 2 (1d4) … if …`: the part adds to it.
+    pub instead: bool,
+}
+
+/// The damage to roll when `holds` says which conditions are true. A part that replaces the
+/// damage wins over the parts with no condition; a part that adds joins either.
+pub fn resolve(parts: &[DamagePart], holds: impl Fn(&When) -> bool) -> Vec<DamagePart> {
+    let true_of = |part: &&DamagePart, instead: bool| {
+        part.when
+            .as_ref()
+            .is_some_and(|when| when.instead == instead && holds(when))
+    };
+    let replaced = parts.iter().any(|part| true_of(&part, true));
+    parts
+        .iter()
+        .filter(|part| match &part.when {
+            None => !replaced,
+            Some(when) => true_of(part, when.instead),
+        })
+        .map(|part| DamagePart {
+            when: None,
+            ..part.clone()
+        })
+        .collect()
+}
+
+/// The conditions in a damage roll, in printed order.
+pub fn conditions(parts: &[DamagePart]) -> Vec<&When> {
+    parts.iter().filter_map(|part| part.when.as_ref()).collect()
 }
 
 /// What a d20 roll is for. Only an attack or a death save has a rule for a natural 20 or 1.
@@ -224,6 +265,29 @@ fn damage_kind(after: &str) -> Option<Option<String>> {
     })
 }
 
+/// The condition on the damage group at `start..end`: `if …` after its words, up to the next
+/// comma or the end of its sentence. `before` is where the group before it ends; an `or`
+/// between them makes this group replace the damage instead of adding to it.
+fn condition(text: &str, before: Option<usize>, start: usize, end: usize) -> Option<When> {
+    let sentence = sentence_end(text, end);
+    let clause = &text[end..sentence];
+    let clause = &clause[..clause.find([',', ';', '\u{2014}']).unwrap_or(clause.len())];
+    let at = clause.find(" if ")?;
+    let words = clause[at + 1..].trim().trim_end_matches('.');
+    // From the group before, or else from the start of the sentence.
+    let sentence_start = text[..start].rfind(". ").map_or(0, |at| at + 2);
+    let from = before
+        .filter(|before| *before >= sentence_start && *before <= start)
+        .unwrap_or(sentence_start);
+    let instead = text[from..start]
+        .split(|c: char| !c.is_alphabetic())
+        .any(|word| word == "or");
+    Some(When {
+        text: words.to_owned(),
+        instead,
+    })
+}
+
 /// Where each sentence of a paragraph ends, so a hit's damage is the sentence after it.
 fn sentence_end(text: &str, from: usize) -> usize {
     let bytes = text.as_bytes();
@@ -267,11 +331,22 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         let dice = plain_dice(&text[open + 1..end]);
         let kind = damage_kind(&text[end + 1..]);
         let damage = kind.is_some();
+        let when = damage
+            .then(|| {
+                condition(
+                    text,
+                    groups.last().map(|(range, ..)| range.end),
+                    average_start,
+                    end + 1,
+                )
+            })
+            .flatten();
         groups.push((
             average_start..end + 1,
             DamagePart {
                 dice,
                 kind: kind.flatten(),
+                when,
             },
             damage,
         ));
@@ -442,7 +517,64 @@ mod tests {
         DamagePart {
             dice: dice.into(),
             kind: Some(kind.into()),
+            when: None,
         }
+    }
+
+    fn hit_damage(text: &str) -> Vec<DamagePart> {
+        find(text, "x")
+            .into_iter()
+            .find_map(|span| match span.link {
+                RollLink::D20 { damage, .. } => Some(damage),
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_conditional_part_says_its_condition_and_whether_it_replaces_or_adds() {
+        let or = hit_damage(
+            "Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 + 2) Piercing damage if the target is Bloodied.",
+        );
+        assert_eq!(or[0].when, None);
+        assert_eq!(
+            or[1].when,
+            Some(When {
+                text: "if the target is Bloodied".into(),
+                instead: true
+            })
+        );
+        let plus = hit_damage(
+            "Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, plus 2 (1d4) Slashing damage if the attack roll had Advantage.",
+        );
+        assert_eq!(
+            plus[1].when,
+            Some(When {
+                text: "if the attack roll had Advantage".into(),
+                instead: false
+            })
+        );
+        let plain = hit_damage(
+            "Melee Attack Roll: +4, reach 10 ft. Hit: 9 (2d6 + 2) Bludgeoning damage plus 3 (1d6) Fire damage.",
+        );
+        assert!(plain.iter().all(|part| part.when.is_none()));
+    }
+
+    #[test]
+    fn resolve_rolls_the_parts_whose_conditions_hold() {
+        let or = hit_damage(
+            "Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 + 2) Piercing damage if the target is Bloodied.",
+        );
+        assert_eq!(resolve(&or, |_| false), vec![part("1d4+2", "Piercing")]);
+        assert_eq!(resolve(&or, |_| true), vec![part("1d8+2", "Piercing")]);
+        let plus = hit_damage(
+            "Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, plus 2 (1d4) Slashing damage if the attack roll had Advantage.",
+        );
+        assert_eq!(resolve(&plus, |_| false), vec![part("1d6+2", "Slashing")]);
+        assert_eq!(
+            resolve(&plus, |_| true),
+            vec![part("1d6+2", "Slashing"), part("1d4", "Slashing")]
+        );
     }
 
     #[test]

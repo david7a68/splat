@@ -2216,6 +2216,7 @@ fn attack_chip(attack: &Value) -> Option<Chip> {
         .map(|_| DamagePart {
             dice: splat::content::dice_text::plain_dice(&attack_damage(attack)),
             kind: (!kind.is_empty()).then(|| design::reader::human_label(kind)),
+            when: None,
         })
         .into_iter()
         .collect();
