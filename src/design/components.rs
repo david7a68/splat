@@ -1398,6 +1398,114 @@ pub fn two_line_row(
     )
 }
 
+/// What the add field keeps between frames. Its caller owns one for each list.
+#[derive(Clone, Debug, Default)]
+pub struct AddField {
+    /// The words typed so far.
+    pub words: String,
+    /// The suggestion that Enter takes. Only arrows choose one, so Enter adds the words.
+    highlight: Option<usize>,
+    /// The field takes focus on the next frame.
+    pub focus: bool,
+}
+
+impl AddField {
+    /// A line was added from these words: the field is empty again.
+    pub fn clear(&mut self) {
+        self.words.clear();
+        self.highlight = None;
+    }
+}
+
+/// One group of suggestions under the add field: its label, then each row's title, its second
+/// line and the value a choice of it gives.
+pub struct Suggestions<T> {
+    pub label: &'static str,
+    pub rows: Vec<(String, String, T)>,
+}
+
+/// What the add field did this frame.
+pub struct AddFieldResult<T> {
+    pub field: Response,
+    /// A suggestion, or a choice of the control beside the field.
+    pub chosen: Option<T>,
+    /// Enter, as the field let go. With nothing `chosen`, the caller adds the typed words.
+    pub enter: bool,
+}
+
+/// Add typed words to a list: one field with no button. Enter adds. A suggestion adds by an arrow
+/// key and Enter, or a click. Escape clears the highlight, then the words. `beside` draws a
+/// control right of the field, `beside_width` wide, and can choose a value too. `suggest` lists
+/// the suggestions for the typed words, which show only while there are words.
+pub fn add_field<T>(
+    ui: &mut Ui,
+    state: &mut AddField,
+    name: &str,
+    hint: &str,
+    beside_width: f32,
+    beside: impl FnOnce(&mut Ui) -> Option<T>,
+    suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
+) -> AddFieldResult<T> {
+    let mut chosen = None;
+    let field = ui
+        .horizontal(|ui| {
+            let width = (ui.available_width() - beside_width).max(160.0);
+            let field = text_input(ui, name, &mut state.words, hint, width);
+            chosen = beside(ui);
+            field
+        })
+        .inner;
+    if std::mem::take(&mut state.focus) {
+        field.request_focus();
+    }
+    if field.changed() {
+        state.highlight = None;
+    }
+    let groups = if state.words.trim().is_empty() {
+        Vec::new()
+    } else {
+        suggest(&state.words)
+    };
+    let count: usize = groups.iter().map(|group| group.rows.len()).sum();
+    if field.has_focus() && count > 0 {
+        ui.input_mut(|input| {
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                state.highlight = Some(state.highlight.map_or(0, |at| (at + 1).min(count - 1)));
+            }
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                state.highlight = state.highlight.and_then(|at| at.checked_sub(1));
+            }
+        });
+    }
+    let enter = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+    // Escape closes the top layer first: the chosen suggestion, then the typed words.
+    if ui.input(|input| input.key_pressed(egui::Key::Escape))
+        && (field.has_focus() || field.lost_focus())
+        && state.highlight.take().is_none()
+    {
+        state.words.clear();
+    }
+    // While there are typed words, so that a click on a suggestion lands after the field
+    // lets go of the keyboard.
+    let mut place = 0;
+    for group in groups.into_iter().filter(|group| !group.rows.is_empty()) {
+        group_label(ui, group.label);
+        for (title, detail, value) in group.rows {
+            let selected = state.highlight == Some(place);
+            let clicked = two_line_row(ui, XXL + S, selected, &title, &detail).clicked();
+            if clicked || (enter && selected) {
+                chosen = Some(value);
+            }
+            place += 1;
+        }
+    }
+    AddFieldResult {
+        field,
+        chosen,
+        enter,
+    }
+}
+
 /// A state as an icon, a word and a colour. Colour is never the only signal.
 #[derive(Clone, Copy)]
 pub struct Status<'a> {

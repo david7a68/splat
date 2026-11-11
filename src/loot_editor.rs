@@ -3,22 +3,10 @@
 //! Library items while the DM types. A roll names its table from a list, so a key that no
 //! table has shows on its row before play.
 use crate::design::{self, Density, Status, Tone, Type, colors, icons};
-use crate::roll_table::{RollRow, TableRoll};
+use crate::roll_table::{Table, TableRoll};
 use eframe::egui;
 use splat::content::loot::{Loot, MAX_ROLLS, SEPARATOR};
 use std::sync::Arc;
-
-/// One of the campaign's marked roll tables.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Table {
-    pub key: String,
-    pub dice: String,
-    pub path: String,
-    /// Why it cannot roll, when it cannot.
-    pub problem: Option<String>,
-    /// Its rows, checked against its dice. Empty when it cannot roll.
-    pub rows: Vec<RollRow>,
-}
 
 /// An item from the Library that a loot line can link to.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,28 +34,7 @@ impl Sources {
     /// The marked tables in `(path, body)` notes, in that order. The first table with a key
     /// decides it, so a bad one says why and no later table takes its place by surprise.
     pub fn tables_from<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Table> {
-        let mut tables: Vec<Table> = Vec::new();
-        for (path, body) in notes {
-            for (marker, rows) in crate::roll_table::marked_tables(body) {
-                let Ok((key, dice)) = marker else {
-                    continue;
-                };
-                if tables.iter().any(|table| table.key == key) {
-                    continue;
-                }
-                let (rows, problem) = match crate::roll_table::table_rows(&dice, &rows) {
-                    Ok(rows) => (rows, None),
-                    Err(error) => (Vec::new(), Some(format!("{path}: {error}"))),
-                };
-                tables.push(Table {
-                    key,
-                    dice,
-                    path: path.to_owned(),
-                    problem,
-                    rows,
-                });
-            }
-        }
+        let mut tables = crate::roll_table::tables_in(notes);
         tables.sort_by(|a, b| a.key.cmp(&b.key));
         tables
     }
@@ -94,7 +61,7 @@ impl Sources {
     pub fn problem(&self, key: &str) -> Option<String> {
         match self.table(key) {
             None => Some(format!("No roll table has the key “{key}”.")),
-            Some(table) => table.problem.clone(),
+            Some(table) => table.fault(),
         }
     }
 
@@ -204,16 +171,13 @@ pub fn plain(line: &str) -> String {
 /// What the editor keeps between frames.
 #[derive(Clone, Default)]
 struct State {
-    add: String,
-    /// The suggestion that Enter takes. Only arrows choose one, so Enter adds words.
-    highlight: Option<usize>,
+    add: design::AddField,
     /// The line being typed in, which keeps its field until it loses focus.
     editing: Option<usize>,
     /// A count being typed, by line.
     count: Option<(usize, String)>,
     removed: Option<(usize, String)>,
     reason: Option<String>,
-    focus_add: bool,
 }
 
 /// One pick from the suggestions or the table menu.
@@ -478,104 +442,62 @@ fn add_row(
     sources: Option<&Sources>,
     one_cell: bool,
 ) {
-    let field = format!("Add loot to {name}");
-    let mut pick = None;
-    let mut enter = false;
-    let response = ui
-        .horizontal(|ui| {
-            // The gap is the row's item spacing, so the menu ends at the column's right edge.
-            let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
-            let width = (ui.available_width() - menu).max(160.0);
-            let response = design::text_input(
-                ui,
-                &field,
-                &mut state.add,
-                "Type loot, or find an item or table",
-                width,
-            );
-            if let Some(key) =
-                table_menu(ui, ROLL_MENU, &format!("{ROLL_MENU} for {name}"), sources)
-            {
-                pick = Some(Pick::Table(key));
-            }
-            response
-        })
-        .inner;
-    if state.focus_add {
-        response.request_focus();
-        state.focus_add = false;
-    }
-    if response.changed() {
-        state.highlight = None;
+    // The gap is the row's item spacing, so the menu ends at the column's right edge.
+    let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
+    let added = design::add_field(
+        ui,
+        &mut state.add,
+        &format!("Add loot to {name}"),
+        "Type loot, or find an item or table",
+        menu,
+        |ui| {
+            table_menu(ui, ROLL_MENU, &format!("{ROLL_MENU} for {name}"), sources).map(Pick::Table)
+        },
+        |typed| {
+            let Some(sources) = sources else {
+                return Vec::new();
+            };
+            let (tables, items) = sources.matching(typed);
+            let times = typed_times(typed);
+            vec![
+                design::Suggestions {
+                    label: "Roll tables",
+                    rows: tables
+                        .into_iter()
+                        .map(|table| {
+                            let title = if times == 1 {
+                                table.key.clone()
+                            } else {
+                                format!("{times} × {}", table.key)
+                            };
+                            let detail = table
+                                .fault()
+                                .unwrap_or_else(|| format!("{} · {}", table.dice, table.path));
+                            (title, detail, Pick::Table(table.key.clone()))
+                        })
+                        .collect(),
+                },
+                design::Suggestions {
+                    label: "Items",
+                    rows: items
+                        .into_iter()
+                        .map(|item| {
+                            (
+                                item.name.clone(),
+                                item.detail.clone(),
+                                Pick::Item(item.link.clone()),
+                            )
+                        })
+                        .collect(),
+                },
+            ]
+        },
+    );
+    if added.field.changed() {
         state.reason = None;
     }
-    let (tables, items) = sources.map_or((Vec::new(), Vec::new()), |sources| {
-        if state.add.trim().is_empty() {
-            (Vec::new(), Vec::new())
-        } else {
-            sources.matching(&state.add)
-        }
-    });
-    let count = tables.len() + items.len();
-    if response.has_focus() && count > 0 {
-        ui.input_mut(|input| {
-            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                state.highlight = Some(state.highlight.map_or(0, |at| (at + 1).min(count - 1)));
-            }
-            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                state.highlight = state.highlight.and_then(|at| at.checked_sub(1));
-            }
-        });
-    }
-    if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
-        enter = true;
-    }
-    // Escape closes the top layer first: the chosen suggestion, then the typed words.
-    if ui.input(|input| input.key_pressed(egui::Key::Escape))
-        && (response.has_focus() || response.lost_focus())
-        && state.highlight.take().is_none()
-    {
-        state.add.clear();
-    }
-    // While there are typed words, so that a click on a suggestion lands after the field
-    // lets go of the keyboard.
-    if count > 0 {
-        let mut place = 0;
-        let mut row = |ui: &mut egui::Ui, title: &str, detail: &str, chosen: Pick| {
-            let selected = state.highlight == Some(place);
-            let clicked =
-                design::two_line_row(ui, design::XXL + design::S, selected, title, detail)
-                    .clicked();
-            if clicked || (enter && selected) {
-                pick = Some(chosen);
-            }
-            place += 1;
-        };
-        if !tables.is_empty() {
-            design::group_label(ui, "Roll tables");
-            for table in &tables {
-                let detail = table
-                    .problem
-                    .clone()
-                    .unwrap_or_else(|| format!("{} · {}", table.dice, table.path));
-                let times = typed_times(&state.add);
-                let title = if times == 1 {
-                    table.key.clone()
-                } else {
-                    format!("{times} × {}", table.key)
-                };
-                row(ui, &title, &detail, Pick::Table(table.key.clone()));
-            }
-        }
-        if !items.is_empty() {
-            design::group_label(ui, "Items");
-            for item in &items {
-                row(ui, &item.name, &item.detail, Pick::Item(item.link.clone()));
-            }
-        }
-    }
-    let typed = state.add.trim().to_owned();
-    let line = match pick {
+    let typed = state.add.words.trim().to_owned();
+    let line = match added.chosen {
         Some(Pick::Table(key)) => Some(
             Loot::Roll {
                 times: typed_times(&typed),
@@ -584,11 +506,11 @@ fn add_row(
             .line(),
         ),
         Some(Pick::Item(link)) => Some(link),
-        None if enter && too_many(&typed) => {
+        None if added.enter && too_many(&typed) => {
             state.reason = Some(format!("One line rolls at most {MAX_ROLLS} times."));
             None
         }
-        None if enter && !typed.is_empty() => Some(typed),
+        None if added.enter && !typed.is_empty() => Some(typed),
         None => None,
     };
     if let Some(line) = line {
@@ -597,11 +519,11 @@ fn add_row(
         } else {
             lines.push(line);
             state.add.clear();
-            state.highlight = None;
             state.reason = None;
             state.removed = None;
         }
-        state.focus_add = enter;
+        // The field stays open after Enter, because several lines often follow each other.
+        state.add.focus = added.enter;
     }
     if let Some(reason) = &state.reason {
         design::blocked_reason(ui, Some(reason));
@@ -643,6 +565,7 @@ mod tests {
                     key: "gems".into(),
                     dice: "1d4".into(),
                     path: "Treasure.md".into(),
+                    heading: None,
                     problem: None,
                     rows: Vec::new(),
                 },
@@ -650,7 +573,8 @@ mod tests {
                     key: "broken".into(),
                     dice: "1d6".into(),
                     path: "Treasure.md".into(),
-                    problem: Some("Treasure.md: 1d6 needs a row for 3.".into()),
+                    heading: None,
+                    problem: Some("1d6 needs a row for 3.".into()),
                     rows: Vec::new(),
                 },
             ],

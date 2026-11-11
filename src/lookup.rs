@@ -1535,6 +1535,9 @@ pub struct Lookup {
     create_error: Option<String>,
     /// What the generator rolled, until the DM saves it or lets it go.
     generated: Option<crate::npc_generator::Generated>,
+    /// Whether that NPC's card is the view. An entry that opens takes its place, under the
+    /// row `Unsaved NPC: <name> · Show`.
+    generated_shown: bool,
     /// Campaign tables the generator could not use.
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
@@ -1619,6 +1622,7 @@ impl Lookup {
                             self.current = identity.and_then(|id| index.position(id));
                             if let Some(id) = self.waiting_for.take() {
                                 self.current = index.position(id);
+                                self.generated_shown = false;
                             }
                             self.index = Some(Arc::new(index));
                             self.matches = None;
@@ -1727,6 +1731,7 @@ impl Lookup {
     /// Take back a generated NPC that the World page did not take.
     pub fn keep_generated(&mut self, card: GeneratedCard) {
         self.generated = Some(card.npc);
+        self.generated_shown = true;
         self.generator_problems = card.problems;
         self.generator_sources = card.sources;
     }
@@ -1800,6 +1805,7 @@ impl Lookup {
             self.trail.leave(self.current_id());
         }
         self.current = Some(position);
+        self.generated_shown = false;
     }
 
     /// Go to a result. A heading's result opens its note at that heading.
@@ -1808,6 +1814,8 @@ impl Lookup {
         if self.current != Some(position) {
             self.navigate(position);
         }
+        // The entry on screen, chosen again, also takes the NPC card's place.
+        self.generated_shown = false;
         self.reader.show_heading(heading);
     }
 
@@ -1840,6 +1848,7 @@ impl Lookup {
         {
             self.current = Some(position);
             self.results_open = false;
+            self.generated_shown = false;
         }
     }
 
@@ -2026,8 +2035,12 @@ impl Lookup {
                     self.current = Some(position);
                     self.reader.show_heading(heading);
                     self.reading_written = None;
+                    self.generated_shown = false;
                 }
-                Some(Hit::Written(top)) => self.reading_written = Some(*top),
+                Some(Hit::Written(top)) => {
+                    self.reading_written = Some(*top);
+                    self.generated_shown = false;
+                }
                 None => {}
             }
         }
@@ -2210,7 +2223,10 @@ impl Lookup {
                     self.reading_written = None;
                     self.open_result(&index, position);
                 }
-                Hit::Written(at) => self.reading_written = Some(at),
+                Hit::Written(at) => {
+                    self.reading_written = Some(at);
+                    self.generated_shown = false;
+                }
             }
             // Arrow keys walk the list. A click on a row means read it.
             if !response.has_focus() {
@@ -2260,7 +2276,7 @@ impl Lookup {
                 });
             }
             let mut reroll = generate;
-            if let Some(npc) = &self.generated {
+            if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
                 let choice = generator_card(
                     ui,
                     npc,
@@ -2294,6 +2310,7 @@ impl Lookup {
                 match crate::npc_generator::roll(&tables) {
                     Ok(npc) => {
                         self.generated = Some(npc);
+                        self.generated_shown = true;
                         self.create_error = None;
                     }
                     Err(error) => self.create_error = Some(error),
@@ -2315,11 +2332,16 @@ impl Lookup {
             }
         }
         design::rule(ui);
+        if let Some(npc) = &self.generated {
+            if self.generated_shown {
+                return;
+            }
+            if world::page::unsaved_npc_row(ui, &npc.name) {
+                self.generated_shown = true;
+            }
+        }
         if let Some(at) = self.reading_written {
             self.written_reader(ui, at, &query);
-            return;
-        }
-        if self.generated.is_some() {
             return;
         }
         if self.current.is_none() {
@@ -3031,6 +3053,47 @@ mod tests {
             Some(0),
             "nothing ahead keeps the note open"
         );
+
+        // Row 17 of the session-cycle design: while an unsaved NPC is held, an entry that opens
+        // takes the card's place, under the NPC's row, and Back is such an entry. The NPC stays.
+        lookup.generated = Some(crate::npc_generator::Generated {
+            name: "Tally".into(),
+            attributes: Default::default(),
+        });
+        lookup.generated_shown = true;
+        lookup.open_position(3);
+        assert_eq!(lookup.current, Some(3));
+        assert!(!lookup.generated_shown && lookup.generated.is_some());
+        lookup.generated_shown = true;
+        let index = lookup.index.clone().unwrap();
+        lookup.open_result(&index, 3);
+        assert_eq!(lookup.current, Some(3));
+        assert!(!lookup.generated_shown, "the entry on screen, chosen again");
+        lookup.generated_shown = true;
+        lookup.step(Step::Back);
+        assert_eq!(lookup.current, Some(2), "Back is as before");
+        assert!(!lookup.generated_shown && lookup.generated.is_some());
+
+        // Section 7 records these places as they are. A found note is not on Back's trail: an
+        // entry that opens leaves it, and Back does not return to it.
+        lookup.reading_written = Some(0);
+        lookup.generated_shown = true;
+        lookup.open_position(4);
+        lookup.step(Step::Back);
+        assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
+        assert!(
+            !lookup.generated_shown,
+            "a found note that opens is a view too"
+        );
+        // Lookup closed and opened again reads the notes again, so the found note goes, and
+        // the entry, the trail and the held NPC stay.
+        lookup.reading_written = Some(0);
+        lookup.toggle();
+        lookup.toggle();
+        assert!(lookup.wants_written());
+        lookup.set_written(Vec::new());
+        assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
+        assert!(lookup.trail.peek(Step::Forward).is_some() && lookup.generated.is_some());
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves

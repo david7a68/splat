@@ -82,18 +82,96 @@ pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
 /// Each marked table in a note, with its marker and its rows, heading row first. A marker
 /// belongs to the table right after it, as the reader draws it.
 pub fn marked_tables(body: &str) -> Vec<MarkedTable> {
+    marked_tables_under_headings(body)
+        .into_iter()
+        .map(|(_, table)| table)
+        .collect()
+}
+
+/// One marked table, as a place outside its own note names it: its source note, its heading,
+/// its key and its dice, and its rows checked against the dice. A table's identity is its key;
+/// its heading is for reading.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Table {
+    pub key: String,
+    pub dice: String,
+    /// The note that holds it.
+    pub path: String,
+    /// The note's last heading above it, when there is one.
+    pub heading: Option<String>,
+    /// Why it cannot roll, when it cannot.
+    pub problem: Option<String>,
+    /// Its rows, checked against its dice. Empty when it cannot roll.
+    pub rows: Vec<RollRow>,
+}
+
+impl Table {
+    /// Why it cannot roll, with the note that holds it.
+    pub fn fault(&self) -> Option<String> {
+        let path = &self.path;
+        self.problem
+            .as_ref()
+            .map(|problem| format!("{path}: {problem}"))
+    }
+}
+
+/// The marked tables with a key in `(path, body)` notes, in that order. The first table with a
+/// key decides it, so a bad one says why and no later table takes its place by surprise.
+pub fn tables_in<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<Table> {
+    let mut tables: Vec<Table> = Vec::new();
+    for (path, body) in notes {
+        for (heading, (marker, rows)) in marked_tables_under_headings(body) {
+            let Ok((key, dice)) = marker else {
+                continue;
+            };
+            if tables.iter().any(|table| table.key == key) {
+                continue;
+            }
+            let (rows, problem) = match table_rows(&dice, &rows) {
+                Ok(rows) => (rows, None),
+                Err(error) => (Vec::new(), Some(error)),
+            };
+            tables.push(Table {
+                key,
+                dice,
+                path: path.to_owned(),
+                heading,
+                problem,
+                rows,
+            });
+        }
+    }
+    tables
+}
+
+/// `marked_tables`, with the last heading above each table.
+fn marked_tables_under_headings(body: &str) -> Vec<(Option<String>, MarkedTable)> {
     let mut found = Vec::new();
     let mut marker = None;
     let mut rows: Option<Vec<Vec<String>>> = None;
+    let mut heading: Option<String> = None;
+    let mut in_heading = false;
     for event in Parser::new_ext(body, Options::ENABLE_TABLES) {
         match event {
+            Event::Start(Tag::Heading { .. }) if rows.is_none() => {
+                marker = None;
+                in_heading = true;
+                heading = Some(String::new());
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                in_heading = false;
+                heading = heading
+                    .map(|words| words.trim().to_owned())
+                    .filter(|words| !words.is_empty());
+            }
+            Event::Text(ref text) | Event::Code(ref text) if in_heading => {
+                if let Some(words) = &mut heading {
+                    words.push_str(text);
+                }
+            }
             Event::Html(ref text) if rolls_marker(text).is_some() => marker = rolls_marker(text),
             Event::Start(
-                Tag::Paragraph
-                | Tag::Heading { .. }
-                | Tag::List(_)
-                | Tag::CodeBlock(_)
-                | Tag::BlockQuote(_),
+                Tag::Paragraph | Tag::List(_) | Tag::CodeBlock(_) | Tag::BlockQuote(_),
             ) if rows.is_none() => marker = None,
             Event::Start(Tag::Table(_)) => rows = Some(Vec::new()),
             Event::Start(Tag::TableHead | Tag::TableRow) => {
@@ -117,7 +195,7 @@ pub fn marked_tables(body: &str) -> Vec<MarkedTable> {
             }
             Event::End(TagEnd::Table) => {
                 if let (Some(marker), Some(rows)) = (marker.take(), rows.take()) {
-                    found.push((marker, rows));
+                    found.push((heading.clone(), (marker, rows)));
                 }
                 rows = None;
             }
@@ -382,6 +460,23 @@ mod tests {
         assert_eq!(rows.len(), 3, "the heading row and two more");
         assert_eq!(rows[1], ["1", "A knife"]);
         assert_eq!(table_rows("1d2", rows).unwrap()[1].text, "A net");
+        // The descriptor that names a table outside its note: its note, its heading, its key
+        // and its dice. A heading belongs to the tables under it until the next one.
+        let headed = format!("# Gifts\n\n## On the `road`\n\n{note}\n## Empty\n");
+        let tables = tables_in([("World/Road.md", headed.as_str()), ("Other.md", note)]);
+        assert_eq!(tables.len(), 1, "the first table with a key decides it");
+        let table = &tables[0];
+        assert_eq!(
+            (
+                table.path.as_str(),
+                table.heading.as_deref(),
+                table.key.as_str(),
+                table.dice.as_str()
+            ),
+            ("World/Road.md", Some("On the road"), "gifts", "1d2")
+        );
+        assert_eq!((table.rows.len(), table.fault()), (2, None));
+        assert_eq!(tables_in([("Other.md", note)])[0].heading, None);
     }
 
     #[test]
