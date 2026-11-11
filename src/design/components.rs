@@ -283,10 +283,20 @@ fn run_nav_detail(ui: &Ui, detail: &str, width: f32) -> String {
     }
 }
 
-/// The quiet menu at the right edge of a list row.
+/// The quiet menu at the right edge of a list row. It opens under its `⋯`. When it would
+/// cross the right edge of the row's pane (a splitter or a scroll bar), it ends at the
+/// `⋯`'s right edge instead, so it stays inside the pane.
 pub fn row_menu(ui: &mut Ui, name: &str, add: impl FnOnce(&mut Ui)) {
     let response = icon_button(ui, icons::EXPAND, &format!("More actions for {name}"));
-    egui::Popup::menu(&response).show(add);
+    let popup = egui::Popup::menu(&response);
+    // Egui sizes a popup on the frame it opens, before it shows it.
+    let width = popup.get_expected_size().map_or(0.0, |size| size.x);
+    let align = if response.rect.left() + width > ui.clip_rect().right() - S {
+        egui::RectAlign::BOTTOM_END
+    } else {
+        egui::RectAlign::BOTTOM_START
+    };
+    popup.align(align).show(add);
 }
 
 /// The visible reason beside a blocked control. A tooltip is only a second route.

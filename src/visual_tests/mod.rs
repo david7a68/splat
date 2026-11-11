@@ -436,6 +436,77 @@ fn world_root(locked: Option<fs::File>) -> (fs::File, PathBuf) {
     (lock, root)
 }
 
+/// FNV-1a, 64 bit, over the exact UTF-8 bytes. A fixed algorithm, unlike Rust's
+/// `DefaultHasher`, so a scenario keeps its IDs from one toolchain to the next.
+fn name_hash(name: &str) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    name.bytes().fold(OFFSET, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(PRIME)
+    })
+}
+
+/// A scenario's first generated ID: the hash of its name in the high half, with the
+/// low half left for the IDs it generates. Run creation takes its dice seed from the
+/// high half. The same IDs and dice on each run, whatever scenarios are added, removed
+/// or moved in `SCENARIOS`, and apart from those of every other scenario. A renamed
+/// scenario gets new IDs and new dice.
+fn first_uuid(scenarios: &[&str], name: &str) -> u128 {
+    assert_eq!(
+        scenarios.iter().filter(|other| **other == name).count(),
+        1,
+        "{name} must be listed once"
+    );
+    let hash = name_hash(name);
+    assert_ne!(hash, 0, "{name} hashes to the nil ID: rename it");
+    if let Some(other) = scenarios
+        .iter()
+        .find(|other| **other != name && name_hash(other) == hash)
+    {
+        panic!("{name} and {other} hash to the same IDs: rename one");
+    }
+    u128::from(hash) << 64
+}
+
+/// A scenario's IDs and dice come from its name alone. Other scenarios, their order
+/// and a focused selection change nothing.
+#[test]
+fn a_scenarios_ids_come_from_its_name_alone() {
+    // Published FNV-1a vectors and one scenario's start, so the algorithm cannot drift.
+    assert_eq!(name_hash(""), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(name_hash("a"), 0xaf63_dc4c_8601_ec8c);
+    assert_eq!(name_hash("foobar"), 0x8594_4171_f739_67e8);
+    let names: Vec<&str> = SCENARIOS.iter().map(|(name, ..)| *name).collect();
+    let name = "encounter-owned-groups";
+    let start = first_uuid(&names, name);
+    let position = names
+        .iter()
+        .position(|other| *other == name)
+        .expect("listed");
+    assert!(position > 0, "a scenario before it can be removed");
+    let mut inserted = names.clone();
+    inserted.insert(0, "a-new-first-scenario");
+    let mut removed = names.clone();
+    removed.remove(0);
+    let mut reversed = names.clone();
+    reversed.reverse();
+    for list in [inserted, removed, reversed, vec![name]] {
+        assert_eq!(first_uuid(&list, name), start, "{list:?}");
+    }
+    assert_eq!(start, 0x778e_2ce9_ee43_99d9_u128 << 64);
+    // Each listed scenario has IDs of its own, none of them the nil ID.
+    let mut hashes: Vec<u64> = names.iter().map(|name| name_hash(name)).collect();
+    hashes.sort_unstable();
+    hashes.dedup();
+    assert_eq!(hashes.len(), names.len(), "two scenarios share IDs");
+    for name in &names {
+        first_uuid(&names, name);
+    }
+    // A name listed twice is refused, not shared.
+    let twice = std::panic::catch_unwind(|| first_uuid(&["party", "party"], "party"));
+    assert!(twice.is_err());
+}
+
 fn run_scenario(
     root: &Path,
     output: Option<&Path>,
@@ -443,13 +514,9 @@ fn run_scenario(
     (name, seed, script): (&'static str, Seed, Script),
 ) -> Outcome {
     let cache = root.join("character-cache");
-    // The same IDs on each run, and apart from those of other scenarios.
-    let index = SCENARIOS
-        .iter()
-        .position(|(other, ..)| *other == name)
-        .expect("listed scenario") as u128;
+    let names: Vec<&str> = SCENARIOS.iter().map(|(name, ..)| *name).collect();
     // Workers run several scenarios, so start each from clean thread state.
-    crate::hermetic::closed::repeatable_uuids((index + 1) << 64);
+    crate::hermetic::closed::repeatable_uuids(first_uuid(&names, name));
     crate::hermetic::closed::clear_next_folder();
     let started = Instant::now();
     let world = World::build(&root.join(name), &cache, name, seed)

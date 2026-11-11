@@ -11352,6 +11352,13 @@ pub mod encounter_owned_groups {
             "Dragging an encounter's own group in combat adds each member",
         );
         d.expect("Maximum HP would become −28. It must be 1 or more.");
+        // The dragged group's initiative comes from the run's dice. A tie adds a notice at the
+        // top of the panel, which can push the faults below a small window: the panel scrolls,
+        // so bring the second fault's link into view first. With no tie, this scrolls nothing.
+        let panel = d
+            .painted_rect_in("Cannot join", egui::Rect::EVERYTHING)
+            .expect("the panel names the groups that cannot join");
+        d.scroll_until(panel.center(), "Edit group", 5);
         // A repair link under its member fault starts its words at the warning text, and its
         // icon hangs in the gutter. In a wide panel, it stays beside the fault on its line.
         for size in [SMALL, DEFAULT, LARGE] {
