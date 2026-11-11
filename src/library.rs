@@ -3087,39 +3087,43 @@ impl Library {
             }
         }
         let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
-            design::message_with_actions(
+            let words = format!(
+                "{} is registered · {}",
+                copy.module.name,
+                if self.copy_campaign_before.is_some() {
+                    "Used here"
+                } else {
+                    "Not used here"
+                }
+            );
+            // The Undo sits on the message line, as every Undo after a message does. After an
+            // outside change it stays there, blocked, and says why.
+            let undo = design::locked(
                 ui,
-                Tone::Success,
-                &format!(
-                    "{} is registered · {}",
-                    copy.module.name,
-                    if self.copy_campaign_before.is_some() {
-                        "Used here"
-                    } else {
-                        "Not used here"
-                    }
-                ),
-                |ui| {
-                    let undo = Action::quiet("Undo package registration")
-                        .icon(icons::UNDO)
-                        .density(Density::Read)
-                        .line_start()
-                        .blocked(
-                            self.registration_changed
-                                .then_some(crate::content_workspace::UNDO_ENDED),
-                        )
-                        .show(ui)
-                        .clicked();
-                    let use_copy = campaigns.active_campaign().is_some()
-                        && self.copied_rosters.is_none()
-                        && Action::secondary("Use the copy's entries")
+                self.registration_changed
+                    .then_some(crate::content_workspace::UNDO_ENDED),
+                |ui| design::undo_message(ui, Tone::Success, &words, "Undo package registration"),
+            );
+            // The other choice starts below, at the message words: `design::message` puts them
+            // `S + 1`, the icon and `XS` from its left edge.
+            let use_copy = campaigns.active_campaign().is_some()
+                && self.copied_rosters.is_none()
+                && ui
+                    .horizontal(|ui| {
+                        ui.add_space(
+                            design::S
+                                + 1.0
+                                + design::number_width(ui, icons::SUCCESS, &Type::Body.font(ui))
+                                + design::XS,
+                        );
+                        Action::secondary("Use the copy's entries")
                             .density(Density::Read)
                             .blocked(self.draft_reason())
                             .show(ui)
-                            .clicked();
-                    (undo, use_copy)
-                },
-            )
+                            .clicked()
+                    })
+                    .inner;
+            (undo, use_copy)
         } else {
             (false, false)
         };
@@ -5047,8 +5051,12 @@ impl Library {
         } else {
             "Markdown source"
         };
-        let base_width = Action::quiet("Read").natural_width(ui)
-            + Action::quiet(edit_label).natural_width(ui)
+        let base_width = Action::quiet("Read")
+            .density(Density::Read)
+            .natural_width(ui)
+            + Action::quiet(edit_label)
+                .density(Density::Read)
+                .natural_width(ui)
             + if self.trail.peek(Step::Back).is_none() {
                 0.0
             } else {
@@ -5063,7 +5071,10 @@ impl Library {
         } else {
             0.0
         } + if can_make {
-            Action::quiet("Make NPC note").natural_width(ui) + design::S
+            Action::quiet("Make NPC note")
+                .density(Density::Read)
+                .natural_width(ui)
+                + design::S
         } else {
             0.0
         };
@@ -5096,6 +5107,7 @@ impl Library {
                 }
                 if can_make {
                     make_clicked = Action::quiet("Make NPC note")
+                        .density(Density::Read)
                         .blocked(draft_reason)
                         .show(ui)
                         .clicked();
@@ -5122,12 +5134,14 @@ impl Library {
                         if can_copy {
                             copy_clicked = Action::quiet("Copy to…")
                                 .icon(icons::COPY)
+                                .density(Density::Read)
                                 .blocked(copy_reason)
                                 .show(ui)
                                 .clicked();
                         }
                         if can_make {
                             make_clicked = Action::quiet("Make NPC note")
+                                .density(Density::Read)
                                 .blocked(draft_reason)
                                 .show(ui)
                                 .clicked();
@@ -5687,6 +5701,8 @@ impl Library {
                                 builtin: note.owner == Owner::Builtin,
                             },
                             self.loaded.as_ref().unwrap(),
+                            // The Library draws no value block above the entry.
+                            false,
                             |ui| {
                                 if let Owner::Package(package) = &note.owner
                                     && let Some(entry) = &note.entry

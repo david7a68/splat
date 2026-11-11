@@ -261,10 +261,16 @@ line`.
 ## The Reader
 
 `library::view::show` is the only entry reader. Library, Lookup, the run panel and campaign entries call it
-(T6.4). `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
+(T6.4). A caller that draws a value block above the entry tells the reader when that block drew no row
+(`empty_value_block`). The reader then leaves out its own gap before the prose, unless line warnings sit
+above it. World uses this, so a typed note with no set values starts its prose where a plain note's does.
+Lookup has no file line: there an empty value block draws nothing, and the prose keeps the reader's gap below
+the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
+opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy and creation
 actions, then Back. Drop Back's key hint first; fold Copy and Make NPC note into quiet More when needed, with
-Back before More. Lookup keeps its Back hint. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
+Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
+(28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name. Owner status
 and `Use in this campaign` stay on the wrapping file line in Read and Edit Markdown, so Back does not move the
@@ -511,7 +517,9 @@ off when the original is used. Keep the warning above the `Register a copy` Labe
 Quiet Cancel follows the named Register action after an `L` gap. It closes the form without writing
 and keeps the name and use choice for reopening. When use is off, help says the campaign keeps the
 original and the copy is registered but not used. When on, it says every entry is used, including future
-entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo.
+entries. `Use the copy's entries` keeps roster names, counts and changes, with one Undo. After registration,
+quiet `Undo package registration` sits on the message line, as every Undo after a message does, and
+`Use the copy's entries` sits on the next line at the message words.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no
 longer on this computer`. Count affected campaign entries when references are known, with Remove from this
