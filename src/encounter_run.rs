@@ -4252,6 +4252,23 @@ impl Run {
             .values_mut()
             .for_each(crate::combat_sync::CombatSync::stop_simulating);
     }
+    /// How many lines the Log has.
+    #[cfg(test)]
+    pub fn log_len(&self) -> usize {
+        self.state.log.len()
+    }
+    /// A read of this character's sheet that shows inspiration or none. Test builds have no
+    /// live sheet; this is the same note a read of the sheet makes.
+    #[cfg(test)]
+    pub fn simulate_sheet_inspiration(&mut self, name: &str, has: bool) {
+        let row = self
+            .state
+            .participants
+            .iter()
+            .position(|p| p.name == name)
+            .expect("participant in this run");
+        self.note_sheet_inspiration(row, has);
+    }
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
     }

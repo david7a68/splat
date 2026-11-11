@@ -1687,12 +1687,11 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     } else {
         2
     };
+    // The run's grid: columns as wide as their longest choice, `S` apart.
     egui::Grid::new("starting_conditions")
         .num_columns(columns)
-        .min_col_width(
-            (ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN),
-        )
-        .spacing([design::XS, design::XS])
+        .min_col_width(0.0)
+        .spacing([design::S, design::XS])
         .show(ui, |ui| {
             for (position, (_, name)) in crate::combat_sync::CONDITIONS.iter().enumerate() {
                 let found = conditions.iter().position(|c| same_condition(c, name));

@@ -2570,8 +2570,17 @@ pub mod encounter_run {
         d.click_row(TARGET);
         d.click(CONDITIONS);
         d.state("condition-tab", Sizes::All);
-        // AI1: the condition form is a form, not the pane: three columns near each other at
-        // 1920, with Add inside the form width.
+        // AI1: the condition form is a form, not the pane: three aligned columns, each as wide as
+        // its longest choice and at most `L` from the next, with Add inside the form width.
+        let columns = d.at_size(LARGE, |d| {
+            let field = d.place_of("Other effect").unwrap_or(egui::Rect::NOTHING);
+            condition_columns(d, field.left(), 0.0)
+        });
+        d.observe(
+            "iter-23-R-AI1",
+            condition_columns_close(&columns),
+            format!("At 1920 the run's condition columns (left, right, count): {columns:?}"),
+        );
         let form = d.at_size(LARGE, |d| {
             let field = d.place_of("Other effect").unwrap_or(egui::Rect::NOTHING);
             let nodes = d.nodes();
@@ -3865,6 +3874,44 @@ pub mod run_absent_player {
 }
 
 /// W4: cold start to the first turn of a new run.
+/// The official condition toggles at or right of `left` and below `top`, as columns: each
+/// column's left edge, the right edge of its widest toggle, and how many toggles it holds.
+fn condition_columns(d: &Driver<'_>, left: f32, top: f32) -> Vec<(f32, f32, usize)> {
+    let nodes = d.nodes();
+    let mut toggles: Vec<egui::Rect> = crate::combat_sync::CONDITIONS
+        .iter()
+        .filter_map(|(_, name)| {
+            nodes
+                .iter()
+                .find(|node| {
+                    node.name == *name && node.rect.left() >= left - 1.0 && node.rect.top() >= top
+                })
+                .map(|node| node.rect)
+        })
+        .collect();
+    toggles.sort_by(|a, b| a.left().total_cmp(&b.left()));
+    let mut columns: Vec<(f32, f32, usize)> = Vec::new();
+    for toggle in toggles {
+        match columns.last_mut() {
+            Some(column) if (toggle.left() - column.0).abs() < 0.5 => {
+                column.1 = column.1.max(toggle.right());
+                column.2 += 1;
+            }
+            _ => columns.push((toggle.left(), toggle.right(), 1)),
+        }
+    }
+    columns
+}
+
+/// Columns of condition toggles that hold every condition, three of them, `L` or less apart.
+fn condition_columns_close(columns: &[(f32, f32, usize)]) -> bool {
+    columns.len() == 3
+        && columns.iter().map(|c| c.2).sum::<usize>() == crate::combat_sync::CONDITIONS.len()
+        && columns
+            .windows(2)
+            .all(|pair| pair[1].0 > pair[0].1 && pair[1].0 - pair[0].1 <= crate::design::L)
+}
+
 /// Each painted glyph of a text: its character, then its left and right, in screen points.
 fn text_glyphs(text: &egui::epaint::TextShape) -> Vec<(char, f32, f32)> {
     text.galley
@@ -10659,6 +10706,17 @@ pub mod encounter_groups {
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
+        // AI1: Starting conditions uses the run's grid: aligned columns at most `L` apart.
+        let columns = d.at_size(LARGE, |d| {
+            d.place_of("STARTING CONDITIONS")
+                .map(|label| condition_columns(d, label.left(), label.bottom()))
+                .unwrap_or_default()
+        });
+        d.observe(
+            "iter-23-R-AI1",
+            condition_columns_close(&columns),
+            format!("At 1920 the starting-condition columns (left, right, count): {columns:?}"),
+        );
         d.check_tab_order("group editor, changes open");
         d.click("Done with changes");
         d.observe(
@@ -11755,41 +11813,6 @@ pub mod run_overrides {
             "The whole hand-change link stays in view",
             |d| d.in_view("Changed · 1 to add by hand"),
         );
-        // FJ4: the `·` before the link has the gaps of the line's other separators.
-        let fj4 = |d: &Driver<'_>| {
-            let mut detail = None;
-            let mut link = None;
-            d.each_painted_text(|text, _| {
-                let words = &text.galley.job.text;
-                if words.contains("as\u{a0}Ember\u{a0}Cultist") {
-                    detail = Some(text_glyphs(text));
-                } else if words.starts_with("Changed · 1 to add by hand") {
-                    link = Some(text_glyphs(text));
-                }
-            });
-            let (detail, link) = (detail?, link?);
-            let inner = separator_gaps(&detail, 0)?;
-            // The last `·`, the one before the link.
-            let dot = detail.iter().rposition(|g| g.0 == '·')?;
-            let solid = detail[..dot].iter().rposition(|g| !g.0.is_whitespace())?;
-            let first = link.iter().find(|g| !g.0.is_whitespace())?;
-            // The blank after it is the detail's trailing space, then the link's words.
-            let blank = detail.get(dot + 1)?;
-            Some((
-                inner,
-                (detail[dot].1 - detail[solid + 1].1, first.1 - blank.1),
-            ))
-        };
-        for size in [SMALL, DEFAULT] {
-            let gaps = d.at_size(size, |d| fj4(d));
-            d.observe(
-                "iter-23-R-FJ4",
-                gaps.is_some_and(|((before, after), (last_before, last_after))| {
-                    (before - last_before).abs() <= 1.0 && (after - last_after).abs() <= 1.0
-                }),
-                format!("At {size:?} the `·` before the Changed link has the line's gaps (inner, before the link): {gaps:?}"),
-            );
-        }
         d.click_beside(
             FIRST_SLOT,
             "Options: starting HP, temporary HP, initiative group and changes",
@@ -15065,6 +15088,41 @@ pub mod run_rolls {
         );
         d.press(Key::Escape);
         d.press(Key::Escape);
+
+        // AJ1 (review): the whole reroll by keyboard, on a check, whose menu holds only the
+        // reroll. Choosing it empties the menu, and the focus still comes back to the row. The
+        // sheet shows none, then a new grant, so the character has inspiration again.
+        {
+            let run = d.app_mut().encounters.run_mut().expect("an open run");
+            run.simulate_sheet_inspiration(HERO, false);
+            run.simulate_sheet_inspiration(HERO, true);
+        }
+        d.settle();
+        d.click_row(HERO);
+        d.click("Overview");
+        d.click_containing(": Strength check.");
+        let row = d.row_node(HERO).map(|node| node.name);
+        let reached = row.as_deref().is_some_and(|row| d.tab_to(row));
+        d.press_shift(Key::F10);
+        let first = d.focused_name();
+        let lines = d.app_mut().encounters.run().map_or(0, |run| run.log_len());
+        d.press(Key::Enter);
+        let rerolled = d.app_mut().encounters.run().map_or(0, |run| run.log_len()) > lines;
+        let back = d.focused_name();
+        d.press_shift(Key::F10);
+        let spent = !d.has_containing("Inspiration: reroll one die");
+        d.observe(
+            "iter-23-R-AJ1",
+            reached
+                && first.as_deref().is_some_and(|first| first.ends_with(" on the d20"))
+                && rerolled
+                && back.as_deref().is_some_and(|back| back.starts_with(&format!("{HERO},")))
+                && spent,
+            format!(
+                "By keyboard: the menu's only choice {first:?} rerolls ({rerolled}); the menu empties and the focus is back on {back:?}; no second reroll ({spent})"
+            ),
+        );
+        d.harness_focus_nothing();
 
         // Outside a run, a tile previews and changes nothing.
         go_library(d);

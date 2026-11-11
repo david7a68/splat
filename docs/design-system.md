@@ -862,7 +862,8 @@ Every change field shows printed value and result, including changes added by ha
 fault details share that preview. An invalid stat names only the limit crossed: `Maximum HP would become -28.
 It must be 1 or more.` Give an upper limit only when exceeded. Done closes the form and returns to its row.
 Change forms use the run's condition grid. The grid, its Other effect field and Add stay within `FORM_WIDTH` at
-the pane's left edge, in the run and in Starting conditions, so the columns sit near each other in a wide pane. Attack and damage changes sit below the affected action, with `XS`
+the pane's left edge, in the run and in Starting conditions. Each column is as wide as its longest choice, and
+columns are `S` apart, so they sit near each other in a wide pane. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
 ### Loot lists

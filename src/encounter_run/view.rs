@@ -2337,10 +2337,11 @@ impl Run {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
                 let columns = if ui.available_width() >= design::CONDITION_THREE_COLUMNS_FROM { 3 } else { 2 };
+                // Columns as wide as their longest choice, `S` apart: never spread across the form.
                 egui::Grid::new("official_conditions")
                     .num_columns(columns)
-                    .min_col_width((ui.available_width() / columns as f32 - design::XS).max(design::CONDITION_COLUMN_MIN))
-                    .spacing([design::XS, design::XS])
+                    .min_col_width(0.0)
+                    .spacing([design::S, design::XS])
                     .show(ui, |ui| {
                         for (position, (_, name)) in
                             crate::combat_sync::CONDITIONS.iter().enumerate()

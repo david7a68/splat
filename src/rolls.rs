@@ -169,7 +169,16 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
     {
         response.request_focus();
     }
+    if response.has_focus() {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(menu_choice_focus_id(), response.id));
+    }
     response.clicked()
+}
+
+/// The menu choice that had the keyboard focus last.
+fn menu_choice_focus_id() -> egui::Id {
+    egui::Id::new("roll_menu_focused_choice")
 }
 
 fn focus_first_choice_id() -> egui::Id {
@@ -178,6 +187,29 @@ fn focus_first_choice_id() -> egui::Id {
 
 fn menu_keys_owner_id() -> egui::Id {
     egui::Id::new("roll_menu_opened_by_keys")
+}
+
+/// At the end of each frame: when a menu the keys opened has closed, by any path (a choice, the
+/// last choice going away, Escape, a click outside, or its control gone), it ends here, and the
+/// focus goes back to the control that owned it. A click outside that gave the focus to another
+/// control keeps it there. Run after everything that draws a menu.
+pub(crate) fn end_menu_frame(ctx: &egui::Context) {
+    let Some(owner) = ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) else {
+        return;
+    };
+    if egui::Popup::is_id_open(ctx, owner.with("popup")) {
+        return;
+    }
+    let choice = ctx.data(|data| data.get_temp::<egui::Id>(menu_choice_focus_id()));
+    let focused = ctx.memory(|memory| memory.focused());
+    ctx.data_mut(|data| {
+        data.remove::<egui::Id>(menu_keys_owner_id());
+        data.remove::<bool>(focus_first_choice_id());
+        data.remove::<egui::Id>(menu_choice_focus_id());
+    });
+    if focused.is_none() || focused == choice {
+        ctx.memory_mut(|memory| memory.request_focus(owner));
+    }
 }
 
 /// Whether a right-click menu opens or closes this frame. A right-click opens it; so do
@@ -198,15 +230,6 @@ pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOp
             data.insert_temp(focus_first_choice_id(), true);
         });
         return Some(egui::SetOpenCommand::Bool(true));
-    }
-    if ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) == Some(response.id)
-        && !egui::Popup::is_id_open(ctx, egui::Popup::default_response_id(response))
-    {
-        ctx.data_mut(|data| {
-            data.remove::<egui::Id>(menu_keys_owner_id());
-            data.remove::<bool>(focus_first_choice_id());
-        });
-        response.request_focus();
     }
     if response.secondary_clicked() {
         Some(egui::SetOpenCommand::Bool(true))

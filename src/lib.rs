@@ -2533,6 +2533,8 @@ impl eframe::App for Splat {
                 self.sessions.return_focus_to_note();
             }
         }
+        // A roll menu the keys opened gives the focus back when it closes, however it closed.
+        rolls::end_menu_frame(ctx);
         self.skip_unnamed_focus(ctx);
         self.remember(ctx);
     }
