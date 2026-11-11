@@ -530,7 +530,7 @@ impl ProcessingSettings {
         }
         match &self.probe {
             None => {
-                help(ui, "Looking for a recorder…");
+                design::help(ui, "Looking for a recorder…");
             }
             Some(Probe { tool: None, .. }) => {
                 design::message(
@@ -543,7 +543,7 @@ impl ProcessingSettings {
                 tool: Some(tool),
                 inputs,
             }) => {
-                help(
+                design::help(
                     ui,
                     &format!(
                         "Records with {}, as 16 kHz mono WAV in the campaign folder.",
@@ -617,7 +617,7 @@ impl ProcessingSettings {
 
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Speech service", 0);
-        help(
+        design::help(
             ui,
             "Turns your recording into text. Choose a speech service and enter its API key.",
         );
@@ -654,7 +654,7 @@ impl ProcessingSettings {
             ui.ctx().request_repaint();
         }
         if current == OTHER_SERVICE {
-            help(
+            design::help(
                 ui,
                 "The custom service must support the OpenAI audio/transcriptions API.",
             );
@@ -685,7 +685,7 @@ impl ProcessingSettings {
 
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Transcript and summary", 0);
-        help(
+        design::help(
             ui,
             "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
         );
@@ -754,7 +754,7 @@ impl ProcessingSettings {
             } else {
                 "The codex command was not found on this computer."
             };
-            help(ui, words);
+            design::help(ui, words);
         } else {
             self.key_row(ui, KeySlot::Llm, "Transcript and summary API key");
         }
@@ -787,7 +787,7 @@ impl ProcessingSettings {
                     design::named(ui, &response, label);
                     changed |= response.changed();
                     // The field's own help, at the reader measure like the rest of this tab.
-                    self::help(ui, help);
+                    design::help(ui, help);
                 });
                 if *prompt != default
                     && Action::quiet("Reset")
@@ -806,7 +806,7 @@ impl ProcessingSettings {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        help(
+        design::help(
             ui,
             "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.",
         );
@@ -858,10 +858,3 @@ impl ProcessingSettings {
     }
 }
 
-/// Help on the Recording tab keeps the reader measure, as Account help does.
-fn help(ui: &mut egui::Ui, words: &str) {
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
-    });
-}

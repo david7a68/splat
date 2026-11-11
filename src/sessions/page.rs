@@ -4281,17 +4281,7 @@ impl Sessions {
             ui.horizontal_wrapped(|ui| actions(ui));
         }
         if destination_here {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, recording_destination(settings, recording))
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                );
-            });
+            design::help(ui, &recording_destination(settings, recording));
         }
         if self.confirm_again.as_deref() == Some(recording.path.as_path()) {
             // Processing help keeps the reader's measure, as the destination line above does.

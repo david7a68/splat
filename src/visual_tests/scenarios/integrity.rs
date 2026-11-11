@@ -65,6 +65,34 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Undo separate session");
     d.expect("Session 0.md is now a separate session.");
     d.state("session-copy-repaired", Sizes::All);
+    // iter-25-S AB2 caller: at 1920 the open-session warning and its action stay inside the
+    // list measure, and the action starts at the warning's words.
+    let capped = d.at_size((1920.0, 1080.0), |d| {
+        let nodes = d.nodes();
+        let words = nodes
+            .iter()
+            .find(|node| node.name.contains("is not the session being played") && node.in_view())
+            .map(|node| node.rect);
+        let action = nodes
+            .iter()
+            .find(|node| {
+                node.in_view()
+                    && (node.name == "Return to the session being played"
+                        || node.name.starts_with("Open "))
+                    && words.is_some_and(|words| node.rect.top() >= words.bottom() - 1.0)
+            })
+            .map(|node| node.rect);
+        (words, action)
+    });
+    d.observe(
+        "iter-25-S-AB2",
+        capped.0.zip(capped.1).is_some_and(|(words, action)| {
+            words.width() <= crate::design::LIST_MEASURE + 1.0
+                && (action.left() - words.left()).abs() < 1.0
+                && action.right() <= words.left() + crate::design::LIST_MEASURE + 1.0
+        }),
+        format!("The open-session warning and its action at 1920: {capped:?}"),
+    );
     d.observe(
         "D9",
         crate::sessions::list_notes(&folder).len() == 2,
