@@ -317,7 +317,7 @@ fn write_module(root: &Path) -> Result<Module, String> {
                 12,
                 1,
                 "humanoid",
-                "Scorching Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, or 9 (2d6 + 2) Slashing damage if the cultist moved 10+ feet straight toward the target immediately before the hit.\n\nEmber Burst. Dexterity Saving Throw: DC 12, each creature in a 10-foot Emanation originating from the cultist. Failure: 7 (2d6) Fire damage. Success: Half damage.\n\nSpellcasting. The cultist casts Ashfall, using Wisdom as the spellcasting ability.",
+                "Scorching Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, or 9 (2d6 + 2) Slashing damage if the cultist moved 10+ feet straight toward the target immediately before the hit.\n\nEmber Burst. Dexterity Saving Throw: DC 12, each creature in a 10-foot Emanation originating from the cultist. Failure: 7 (2d6) Fire damage. Success: Half damage.\n\nSpellcasting. The cultist casts Ashfall, using Wisdom as the spellcasting ability.\n\nCinder Dart. Ranged Attack Roll: +3, range 30/90 ft. Hit: 4 (1d4 + 2) Fire damage.",
             ),
         ),
         (

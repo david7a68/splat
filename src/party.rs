@@ -2283,9 +2283,12 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
         1 => {
             sheet_heading(ui, "Attacks", record.character.attacks.len());
             // Each attack is an action tile: in a run it arms, elsewhere it previews.
-            let chips: Vec<Chip> = sheet_chips(record)
+            // A tile keeps its number in the whole list while a search hides others.
+            let chips: Vec<(Option<usize>, Chip)> = sheet_chips(record)
                 .into_iter()
-                .filter(|chip| chip.label.to_lowercase().contains(&search.to_lowercase()))
+                .enumerate()
+                .filter(|(_, chip)| chip.label.to_lowercase().contains(&search.to_lowercase()))
+                .map(|(place, chip)| (Some(place), chip))
                 .collect();
             crate::rolls::tiles(ui, &record.definition.splat_name, &chips);
             ui.add_space(design::S);

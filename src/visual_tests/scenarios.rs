@@ -6681,6 +6681,9 @@ pub mod world {
         );
         d.expect("Stat block: not set → Guard.");
         d.expect("Undo stat block change");
+        let (success, detail) =
+            world_build::finished_change_tone(d, "Stat block: not set → Guard.");
+        d.observe("iter-20-D-FD5-stat-block", success, detail);
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
@@ -8204,7 +8207,34 @@ pub mod session_notes {
                 ),
             );
         }
+        // FT5 (round 20): the card has one `L` gap after its kind line, as a spell has in
+        // Lookup. Bless below sets the gap.
+        let card_gaps: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                d.at_size(size, |d| {
+                    world_build::lookup_prose_gap(d, "Session 4: Ferry Watch", "Session note · ")
+                })
+            })
+            .collect();
         d.state("lookup-written-card-link", Sizes::Default);
+        look_up_again(d, "bless");
+        d.wait_for_text("Spell · Level 1 · Campaign");
+        for (size, card) in [SMALL, DEFAULT, LARGE].into_iter().zip(card_gaps) {
+            let spell = d.at_size(size, |d| {
+                world_build::lookup_prose_gap(d, "Bless", "Spell · Level 1 · Campaign")
+            });
+            d.observe(
+                "iter-20-D-FT5",
+                card.zip(spell).is_some_and(|(card, spell)| {
+                    card >= crate::design::L && (card - spell).abs() <= 1.0
+                }),
+                format!(
+                    "At {size:?}, Lookup's session-note card has {card:?} px from its kind line \
+                     to its words, Bless {spell:?} px"
+                ),
+            );
+        }
     }
 }
 
@@ -10622,6 +10652,8 @@ pub mod encounter_owned_groups {
         open_saved_encounter(d, SHRINE);
         d.expect("GROUPS FOR THIS ENCOUNTER 1");
         d.expect("Adding to the roster");
+        // Add participants says where party members come from in the DM's words.
+        d.expect("Party members come from the sheets Splat saved last.");
         d.state_prepared("encounter-with-its-groups", Sizes::All, |d| {
             // FD3 family: a group's name in the encounter's frame starts at the frame's left edge,
             // where its notes start, at every width.
@@ -13252,6 +13284,7 @@ pub mod run_rolls {
     const TARGET: &str = "Cinder Wolf 2";
     const CASTER: &str = "Ember Cultist";
     const PLAYER: &str = "Iselle Marrowind";
+    const HERO: &str = "Brannoch Vale";
     const BITE: &str = "Bite · +4";
     const BURST: &str = "Ember Burst · DC 12";
     const ROWS: [&str; 8] = [
@@ -13624,6 +13657,27 @@ pub mod run_rolls {
         d.goal_within("T16.10", "attack when its damage depends on a condition", 3);
         d.press(Key::Escape);
 
+        // A tile's number is its place among all of the creature's actions. Spellcasting, which
+        // is prose, parts the cultist's third tile from the first two, and takes no number.
+        d.click_row(CASTER);
+        d.observe(
+            "T16.5",
+            d.name_starting("Scorching Sickle").contains("Ctrl+1.")
+                && d.name_starting(BURST).contains("Ctrl+2.")
+                && d.name_starting("Cinder Dart").contains("Ctrl+3."),
+            format!(
+                "The tile after the Spellcasting text says Ctrl+3, not Ctrl+1 again: {:?}",
+                d.name_starting("Cinder Dart")
+            ),
+        );
+        d.press_ctrl(Key::Num3);
+        d.observe(
+            "T16.5",
+            d.has_containing("Click a target to roll against it"),
+            "Ctrl+3 arms the tile that says Ctrl+3, the attack after the prose",
+        );
+        d.press(Key::Escape);
+
         // A save: each clicked row is a target, and its save stands where its AC is.
         d.click_row(CASTER);
         d.begin_task();
@@ -13812,14 +13866,6 @@ pub mod run_rolls {
             d.has_containing("Player rolls"),
             "A player's attack only targets the row",
         );
-        // iter-20-R-FT6: under the notice, the character's card says only what the roster has.
-        d.observe(
-            "iter-20-R-FT6",
-            d.visible_text("This sheet uses the copy from the start of the fight.")
-                && d.visible_text("The roster has the current values.")
-                && !d.visible_text("Saved when this run began."),
-            "The sheet's notice says it once, and the next line names only the roster",
-        );
         d.state("player-attack", Sizes::Default);
         d.type_text("5");
         d.press(Key::Enter);
@@ -13830,6 +13876,40 @@ pub mod run_rolls {
             format!("The player's typed damage applies to the target: {before:?} then {after:?}"),
         );
         d.goal_within("T16.6", "a player's attack with their own damage", 4);
+        d.press(Key::Escape);
+
+        // Inspiration, by the campaign's rule: one die of a roll made for a player rolls again.
+        d.click_row(HERO);
+        d.click("Actions");
+        d.click_starting("Longsword");
+        d.click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            d.has("Roll for them"),
+            "The panel keeps the player's sheet and its tiles while their attack has a target",
+        );
+        d.click("Roll for them");
+        d.begin_task();
+        d.right_click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            d.has_containing("Inspiration: reroll one die") && d.has_containing(" on the d20"),
+            "The row's menu offers each die of the roll made for the player",
+        );
+        d.state("reroll-menu", Sizes::Default);
+        d.click_containing(" on 1d8");
+        d.right_click_row(ATTACKER);
+        d.observe(
+            "T16.11",
+            !d.has_containing("Inspiration: reroll one die"),
+            "The inspiration is spent, so the menu offers no second reroll",
+        );
+        d.goal_within(
+            "T16.11",
+            "reroll one die of a player's roll with inspiration",
+            3,
+        );
+        d.press(Key::Escape);
         d.press(Key::Escape);
 
         // Outside a run, a tile previews and changes nothing.
