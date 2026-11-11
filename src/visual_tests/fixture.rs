@@ -963,6 +963,10 @@ fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
 /// and 12 participants in one fight. G7 holds these files in its reference, so a change here
 /// shows as a difference of the fixture.
 fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> Result<(), String> {
+    // A long stat block, so these two readers scroll in Lookup at both sizes.
+    const ACTIONS: &str = "Longsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n\n\
+        Crossbow. Ranged Attack Roll: +4, range 80/320 ft. Hit: 6 (1d8 + 2) Piercing damage.\n\n\
+        Parry. Reaction: +2 AC against one melee attack that would hit.\n\n";
     let root = &campaign.path;
     for name in ["Hobb the Miller"].into_iter().chain(PLAIN_TITLES) {
         write_model(
@@ -983,7 +987,7 @@ fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> 
                 "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 14}}\n  initiative: {{value: 1}}\n",
                 plain_reader(name, true)
             ),
-            &format!("\n# {name}\n\nA sword for hire on the ford road.\n"),
+            &format!("\n# {name}\n\nA sword for hire on the ford road.\n\n## Actions\n\n{}", ACTIONS.repeat(4)),
         )?;
     }
     fs::create_dir_all(root.join("World")).map_err(|e| e.to_string())?;

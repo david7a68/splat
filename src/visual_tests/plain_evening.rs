@@ -35,9 +35,18 @@ const NARROW: (f32, f32) = (960.0, 640.0);
 /// Section 2.5 numbers its rows 1 to 21.
 const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=21;
 
-/// A control (`Role: name`) or a painted text, with its rectangle `[x, y, width, height]`.
+/// A control (`Role: name`) or a painted text, with its rectangle `[x, y, width, height]`, then
+/// the part a person can see when that is less: 4 numbers, or 8.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-struct Item(String, [f32; 4]);
+struct Item(String, Vec<f32>);
+
+fn item(name: String, whole: egui::Rect, shown: egui::Rect) -> Item {
+    let mut at = rect(whole).to_vec();
+    if rect(shown) != rect(whole) {
+        at.extend(rect(shown));
+    }
+    Item(name, at)
+}
 
 /// One screen at one size, with Lookup closed or open.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -69,7 +78,7 @@ struct Difference {
     view: String,
     /// `control`, `text`, `file` or `view`.
     what: String,
-    /// `new`, `gone`, `moved`, `height`, `width`, `resized` or `lines`.
+    /// `new`, `gone`, `moved`, `height`, `width`, `resized`, `clipped` or `lines`.
     change: String,
     name: String,
     /// The rectangles, or the lines that differ.
@@ -117,8 +126,12 @@ fn rect(r: egui::Rect) -> [f32; 4] {
     ]
 }
 
-fn words(r: [f32; 4]) -> String {
-    format!("{} {} {}x{}", r[0], r[1], r[2], r[3])
+fn words(r: &[f32]) -> String {
+    let mut out = format!("{} {} {}x{}", r[0], r[1], r[2], r[3]);
+    if let [_, _, _, _, x, y, w, h] = r {
+        let _ = write!(out, ", seen {x} {y} {w}x{h}");
+    }
+    out
 }
 
 /// What a person can see now: each named control in view, and each painted text in view.
@@ -129,14 +142,21 @@ fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
         .nodes()
         .into_iter()
         .filter(|node| !node.name.trim().is_empty() && node.in_view())
-        .map(|node| Item(format!("{:?}: {}", node.role, node.name), rect(node.rect)))
+        .map(|node| {
+            item(
+                format!("{:?}: {}", node.role, node.name),
+                node.rect,
+                node.shown,
+            )
+        })
         .collect();
     let mut texts = Vec::new();
     d.each_painted_text(|text, clip| {
         let words = text.galley.job.text.clone();
         let at = text.galley.rect.translate(text.pos.to_vec2());
-        if !words.trim().is_empty() && at.intersect(clip).intersect(window).is_positive() {
-            texts.push(Item(words, rect(at)));
+        let shown = at.intersect(clip).intersect(window);
+        if !words.trim().is_empty() && shown.is_positive() {
+            texts.push(item(words, at, shown));
         }
     });
     View {
@@ -148,8 +168,11 @@ fn look(d: &Driver<'_>, screen: &str, view: String) -> View {
 }
 
 /// A run's file and its ID are a random UUID, so each run's ID becomes `<run NAME>` in every
-/// path and every file's text. Nothing else in a file changes before the comparison.
-fn files(root: &Path) -> Files {
+/// path and every file's text. Nothing else in a file changes before the comparison. `runs` holds
+/// the names given at the start: at the end a run keeps its name, and a run with an ID the start
+/// did not have is `<new run NAME>`, so a run replaced under the same name still differs. Two
+/// runs with one name stop the check, because their order would be random.
+fn files(root: &Path, runs: &mut Vec<(String, String)>) -> Files {
     fn walk(at: &Path, out: &mut Vec<PathBuf>) {
         let mut entries: Vec<_> = fs::read_dir(at)
             .unwrap_or_else(|error| panic!("G7: cannot list {}: {error}", at.display()))
@@ -170,7 +193,7 @@ fn files(root: &Path) -> Files {
     }
     let mut paths = Vec::new();
     walk(root, &mut paths);
-    let mut runs: Vec<(String, String)> = Vec::new();
+    let known = runs.len();
     for path in &paths {
         let (Some(stem), Some("json")) = (
             path.file_stem().and_then(|stem| stem.to_str()),
@@ -185,12 +208,20 @@ fn files(root: &Path) -> Files {
             .unwrap_or_else(|error| panic!("G7: cannot read {}: {error}", path.display()));
         let run: RunName = serde_json::from_str(&text)
             .unwrap_or_else(|error| panic!("G7: {} is not a run: {error}", path.display()));
-        let mut label = format!("<run {}>", run.name);
-        let mut more = 1;
-        while runs.iter().any(|(_, other)| *other == label) {
-            more += 1;
-            label = format!("<run {} {more}>", run.name);
+        if runs.iter().any(|(id, _)| id == stem) {
+            continue;
         }
+        // The start names every run. At the end, only a run the start did not have is new.
+        let label = if known == 0 {
+            format!("<run {}>", run.name)
+        } else {
+            format!("<new run {}>", run.name)
+        };
+        assert!(
+            !runs.iter().any(|(_, other)| *other == label),
+            "G7: two runs are named {:?}, so their order is not stable",
+            run.name
+        );
         runs.push((stem.to_owned(), label));
     }
     let named = |text: &str| {
@@ -342,10 +373,12 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
     let lane = d
         .chrome_lanes()
         .into_iter()
-        .filter(|lane| lane.left() > at.right() && lane.left() < search && lane.top() < at.bottom())
+        .filter(|lane| {
+            lane.left() > at.right() && lane.top() <= at.bottom() && lane.bottom() >= at.top()
+        })
         .map(|lane| lane.left())
         .fold(f32::NAN, f32::min);
-    let inside = if lane.is_nan() { search } else { lane };
+    let inside = if lane.is_nan() { search } else { search.min(lane) };
     let last = [Some(at), art, edit]
         .into_iter()
         .flatten()
@@ -362,7 +395,11 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
         tenth(at.left()),
         edge(art),
         edge(edit),
-        if lane.is_nan() { "no" } else { "yes" },
+        if lane.is_nan() {
+            "no".to_owned()
+        } else {
+            format!("at {}", tenth(lane))
+        },
         tenth(inside - at.left()),
         tenth(inside - last)
     )
@@ -372,7 +409,8 @@ fn measure_title(d: &Driver<'_>, title: &str) -> String {
 fn play(d: &mut Driver<'_>) -> (Evening, Files) {
     d.set_base(WIDE);
     let root = d.root.join("campaigns");
-    let at_start = files(&root);
+    let mut runs = Vec::new();
+    let at_start = files(&root, &mut runs);
     let mut evening = Evening {
         views: Vec::new(),
         titles: Vec::new(),
@@ -407,6 +445,12 @@ fn play(d: &mut Driver<'_>) -> (Evening, Files) {
     d.state("run-keys", Sizes::Standard);
     evening.screen(d, "run-keys");
     d.click("Keyboard commands");
+    // A whole round, so words typed as conditions meet a turn and a round as they are played.
+    for _ in 0..12 {
+        d.click(NEXT_TURN);
+    }
+    d.state("run-next-round", Sizes::Standard);
+    evening.screen(d, "run-next-round");
     close_run(d);
 
     d.click(NAV_TIMELINE);
@@ -431,7 +475,7 @@ fn play(d: &mut Driver<'_>) -> (Evening, Files) {
     d.app_mut().sessions.flush();
     d.app_mut().timeline.save();
     d.settle();
-    let at_end = files(&root)
+    let at_end = files(&root, &mut runs)
         .into_iter()
         .map(|(path, lines)| {
             if at_start.get(&path) == Some(&lines) {
@@ -472,13 +516,13 @@ fn compare_items(
     new: &[Item],
     out: &mut Vec<Difference>,
 ) {
-    let group = |items: &[Item]| {
-        let mut by: BTreeMap<String, Vec<[f32; 4]>> = BTreeMap::new();
+    fn group(items: &[Item]) -> BTreeMap<String, Vec<&[f32]>> {
+        let mut by: BTreeMap<String, Vec<&[f32]>> = BTreeMap::new();
         for Item(name, at) in items {
-            by.entry(name.clone()).or_default().push(*at);
+            by.entry(name.clone()).or_default().push(at.as_slice());
         }
         by
-    };
+    }
     let (old, new) = (group(old), group(new));
     let difference = |change: &str, name: &str, detail: String| Difference {
         screen: screen.to_owned(),
@@ -492,9 +536,11 @@ fn compare_items(
         let now = new.get(name).map_or(&[][..], Vec::as_slice);
         for (index, a) in was.iter().enumerate() {
             match now.get(index) {
-                None => out.push(difference("gone", name, format!("was {}", words(*a)))),
+                None => out.push(difference("gone", name, format!("was {}", words(a)))),
                 Some(b) if a != b => {
-                    let change = if a[2] == b[2] && a[3] == b[3] {
+                    let change = if a[..4] == b[..4] {
+                        "clipped"
+                    } else if a[2] == b[2] && a[3] == b[3] {
                         "moved"
                     } else if a[0] == b[0] && a[1] == b[1] && a[2] == b[2] {
                         "height"
@@ -506,23 +552,54 @@ fn compare_items(
                     out.push(difference(
                         change,
                         name,
-                        format!("{} -> {}", words(*a), words(*b)),
+                        format!("{} -> {}", words(a), words(b)),
                     ));
                 }
                 Some(_) => {}
             }
         }
         for b in now.iter().skip(was.len()) {
-            out.push(difference("new", name, format!("at {}", words(*b))));
+            out.push(difference("new", name, format!("at {}", words(b))));
         }
     }
     for (name, now) in &new {
         if !old.contains_key(name) {
             for b in now {
-                out.push(difference("new", name, format!("at {}", words(*b))));
+                out.push(difference("new", name, format!("at {}", words(b))));
             }
         }
     }
+}
+
+/// The lines that differ, each with its line number: `-3 old words` from the reference and
+/// `+3 new words` from this evening, along the longest run of lines that both keep in order.
+/// A line that moves is one removal and one addition, each at its place.
+fn line_diff(old: &[String], new: &[String]) -> Vec<String> {
+    let (n, m) = (old.len(), new.len());
+    let mut kept = vec![vec![0_u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            kept[i][j] = if old[i] == new[j] {
+                kept[i + 1][j + 1] + 1
+            } else {
+                kept[i + 1][j].max(kept[i][j + 1])
+            };
+        }
+    }
+    let (mut i, mut j, mut out) = (0, 0, Vec::new());
+    while i < n || j < m {
+        if i < n && j < m && old[i] == new[j] {
+            i += 1;
+            j += 1;
+        } else if j == m || (i < n && kept[i + 1][j] >= kept[i][j + 1]) {
+            out.push(format!("-{} {}", i + 1, old[i]));
+            i += 1;
+        } else {
+            out.push(format!("+{} {}", j + 1, new[j]));
+            j += 1;
+        }
+    }
+    out
 }
 
 fn compare_files(old: &Files, new: &Files, out: &mut Vec<Difference>) {
@@ -541,20 +618,7 @@ fn compare_files(old: &Files, new: &Files, out: &mut Vec<Difference>) {
         match new.get(path) {
             None => out.push(difference("gone", path, format!("{} lines", was.len()))),
             Some(now) if now != was => {
-                let mut left: Vec<&String> = now.iter().collect();
-                let mut lines = Vec::new();
-                for line in was {
-                    if let Some(at) = left.iter().position(|other| *other == line) {
-                        left.remove(at);
-                    } else {
-                        lines.push(format!("- {line}"));
-                    }
-                }
-                lines.extend(left.into_iter().map(|line| format!("+ {line}")));
-                if lines.is_empty() {
-                    lines.push("the same lines in another order".to_owned());
-                }
-                out.push(difference("lines", path, lines.join(" | ")));
+                out.push(difference("lines", path, line_diff(was, now).join(" | ")));
             }
             Some(_) => {}
         }
