@@ -280,6 +280,42 @@ pub fn broken(d: &mut Driver<'_>) {
     };
     undo_first(d, "Undo discard of Broken.md");
     tops.push(("discarded, Undo and reason", editor_tops(d)));
+    // Round 25 FD1 review: the Undo row and the reason overflow the two-line part. Tab reaches
+    // the part by its whole message, the keyboard and the wheel scroll it, its focus ring keeps
+    // clear of its scroll bar at every size, and none of it moves the editor.
+    let part_reachable = |d: &mut Driver<'_>, message: &str, state: &str| {
+        let before = editor_tops(d);
+        let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, message);
+        let owner = d.focused_name();
+        d.observe(
+            "iter-25-D-FD1-part-focus",
+            tabbed && owner.as_deref() == Some(message),
+            format!("{state}: Tab reaches the part named {message:?}; focus is on {owner:?}"),
+        );
+        d.observe(
+            "iter-25-D-FD1-part-scroll",
+            keyed && wheeled,
+            format!("{state}: the part scrolls by key {keyed} and by wheel {wheeled}"),
+        );
+        d.observe(
+            "iter-25-D-FD1-part-ring",
+            ring.iter().all(|clear| *clear),
+            format!("{state}: the focus ring keeps clear of the scroll bar at 960, 1200, 1920: {ring:?}"),
+        );
+        // Back to the part's top, so its Undo is in view again.
+        d.press(Key::PageUp);
+        let after = editor_tops(d);
+        d.observe(
+            "iter-25-D-FD1-part-editor",
+            before.iter().all(Option::is_some) && before == after,
+            format!("{state}: the editor stays at {before:?} → {after:?}"),
+        );
+    };
+    part_reachable(
+        d,
+        &format!("Broken.md draft discarded. {combined}"),
+        "Undo discard",
+    );
     d.click("Undo discard of Broken.md");
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     tops.push(("Undo discard, reason", editor_tops(d)));
@@ -328,6 +364,11 @@ pub fn broken(d: &mut Driver<'_>) {
     );
     undo_first(d, "Undo reload");
     tops.push(("reloaded, Undo and reason", editor_tops(d)));
+    part_reachable(
+        d,
+        &format!("Reloaded from disk. Your draft is kept until you edit. {combined}"),
+        "Undo reload",
+    );
     d.state("repair-reloaded-with-undo", Sizes::All);
     d.click("Undo reload");
     assert_eq!(d.editor_text().as_deref(), Some(fixed.as_str()));
@@ -7842,6 +7883,38 @@ fn unread_reason(groups: &str) -> String {
     )
 }
 
+/// The same sentence with the object whole: the unread warning's hover and accessible
+/// description (round 25 FD4 review).
+fn unread_whole(groups: &str) -> String {
+    let value = groups
+        .lines()
+        .find_map(|line| line.strip_prefix("- {id:"))
+        .expect("fixture: an object group");
+    format!(
+        "Line 9: Part of “{{id:{value}” was not read. Write each group as a link, such as [[Arena Guild]]."
+    )
+}
+
+/// Round 25 FD4 review: the cut warning keeps its whole sentence in its hover and in its
+/// accessible description. Observes each apart, under `where_`.
+fn whole_value_kept(d: &mut Driver<'_>, reason: &str, whole: &str, where_: &str) {
+    assert_ne!(reason, whole, "fixture: the warning is cut");
+    let described = d.descriptions();
+    d.observe(
+        "iter-25-D-FD4-description",
+        described.iter().any(|text| text == whole),
+        format!("{where_}: the warning's accessible description is the whole sentence; descriptions {described:?}"),
+    );
+    // The warning's own words are painted; resting on them paints the whole sentence once more.
+    let start: String = reason.chars().take(30).collect();
+    let hovered = d.painted_tooltip_shows(&start, whole);
+    d.observe(
+        "iter-25-D-FD4-hover",
+        hovered,
+        format!("{where_}: hovering the warning shows the whole sentence {whole:?}"),
+    );
+}
+
 pub fn part_of_safety(d: &mut Driver<'_>) {
     flat_entry(
         d,
@@ -7972,6 +8045,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         d.has(reason) && !d.has_containing(id) && !d.in_view_containing(id),
         format!("The unread warning quotes the value's start and end, not the id {id}"),
     );
+    let whole = &unread_whole(&unread_groups);
+    whole_value_kept(d, reason, whole, "World");
     d.observe_both(
         "iter-9-D-SD1-reader",
         "The refused write closes the picker and gives the source line and repair link",
@@ -8425,6 +8500,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     reload(d);
     d.click("Edit Safe Rook");
     d.expect(reason);
+    whole_value_kept(d, reason, whole, "World edit form");
     d.observe_both(
         "iter-9-D-FD4",
         "Unread groups name the source line and put a quiet repair link beside it",
@@ -8658,6 +8734,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "A refused group change writes nothing, gives no Undo and does not say it is in the note",
     );
     d.expect(reason);
+    whole_value_kept(d, reason, whole, "Lookup");
     d.observe_both("iter-9-D-AT1", "The live group change keeps unread disk groups, closes the form and keeps Next turn visible", |d| {
         d.expect(reason);
         d.expect(NEXT_TURN);

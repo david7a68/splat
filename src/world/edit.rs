@@ -1534,6 +1534,45 @@ mod tests {
                 .line,
             9
         );
+        // Round 25 review: the reader draws the unread warning from a borrow of the cached
+        // fault. The first render copies the warning's words once, when it caches the fault; an
+        // unchanged second render copies none.
+        let (_dir, campaign, index, id, _) = unread_group_note();
+        let item = &index.items[index.position(id).unwrap()];
+        let mut reader = Reader::default();
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let render = |reader: &mut Reader| {
+            let mut words = String::new();
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    reader.read(ui, item, &index, Some(&campaign));
+                });
+            });
+            for clipped in &output.shapes {
+                if let egui::Shape::Text(text) = &clipped.shape {
+                    words.push_str(&text.galley.job.text);
+                }
+            }
+            words
+        };
+        let before = super::super::word_copies();
+        let first = render(&mut reader);
+        let cached = super::super::word_copies();
+        assert!(
+            cached > before && first.contains("was not read"),
+            "the first render caches the fault and shows its warning\n{first}"
+        );
+        let second = render(&mut reader);
+        assert!(
+            second.contains("was not read"),
+            "the warning still shows\n{second}"
+        );
+        assert_eq!(
+            super::super::word_copies(),
+            cached,
+            "review-25-2: an unchanged render copies no warning words"
+        );
     }
 
     #[test]

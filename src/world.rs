@@ -654,13 +654,21 @@ fn unread_groups_message(
     reason: &str,
     whole: &str,
 ) {
-    let shown = ui.scope(|ui| {
-        design::message_with_actions(ui, Tone::Warning, reason, |ui| {
-            design::link(ui, "Edit in Obsidian").clicked()
+    // `design::message_with_actions`'s layout, with the message's own response kept: its words
+    // carry the whole sentence's hover and description (round 25 FD4).
+    let open = ui
+        .scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+            let response = design::message(ui, Tone::Warning, reason);
+            whole_value(ui, &response, reason, whole);
+            let inset = response.rect.left() - ui.cursor().left();
+            ui.horizontal_top(|ui| {
+                ui.add_space(inset);
+                design::link(ui, "Edit in Obsidian").clicked()
+            })
+            .inner
         })
-    });
-    whole_value(ui, &shown.response, reason, whole);
-    let open = shown.inner;
+        .inner;
     if open {
         ui.ctx().open_url(egui::OpenUrl::new_tab(obsidian_url(
             &campaign.path.join(path),
@@ -1753,7 +1761,30 @@ fn status_unread(entry: &Entry) -> bool {
 /// A value the reader could not read, as the shared reader says it (`src/library/view.rs`):
 /// the sentence with a long value cut, then whole.
 fn flag_words(flag: &splat::content::layout::Flag) -> (String, String) {
-    (flag.short_message().to_owned(), flag.message.clone())
+    (
+        copy_words(flag.short_message()),
+        copy_words(&flag.message),
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// `copy_words` calls on this (the UI) thread.
+    static WORD_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How often an unread warning's words were copied out of a flag on this thread.
+#[cfg(test)]
+pub(crate) fn word_copies() -> usize {
+    WORD_COPIES.with(std::cell::Cell::get)
+}
+
+/// The one copy of an unread warning's words, made when its fault is cached. The reader draws
+/// from a borrow, so an unchanged frame makes none.
+pub(super) fn copy_words(words: &str) -> String {
+    #[cfg(test)]
+    WORD_COPIES.with(|count| count.set(count.get() + 1));
+    words.to_owned()
 }
 
 impl GroupFault {
@@ -2090,15 +2121,16 @@ impl Reader {
                     .and_then(|path| fs::read_to_string(path).ok())
             });
         }
-        let unread_reason = self
+        // The reader draws the unread warning from a borrow of the cached fault: no frame copies
+        // its words (round 25 review).
+        let has_unread = self
             .group_fault
             .as_ref()
             .filter(|fault| !editing && fault.id == id)
-            .and_then(|fault| fault.unread.as_ref())
-            .map(|unread| (unread.reason.clone(), unread.whole.clone()));
+            .is_some_and(|fault| fault.unread.is_some());
         // A refused Part of write shows as the unread warning below the file line.
         if let Some(error) = &self.error
-            && !(self.group_error && unread_reason.is_some())
+            && !(self.group_error && has_unread)
         {
             ui.horizontal_wrapped(|ui| {
                 design::message(ui, Tone::Error, error);
@@ -2141,19 +2173,28 @@ impl Reader {
         design::reader::measure(ui, |ui| {
             // A draft whose note is gone, whatever note is open.
             self.lost_edits(ui, index);
-            if let Some((reason, whole)) = unread_reason
+            let fault = self.group_fault.as_ref().filter(|fault| fault.id == id);
+            if let Some(unread) = fault
+                .filter(|_| !editing)
+                .and_then(|fault| fault.unread.as_ref())
                 && let Some(campaign) = campaign
                 && (self.error.is_none() || self.group_error)
             {
                 if file_line {
                     // The file line just above has the one Edit in Obsidian link.
-                    unread_warning(ui, &reason, &whole);
+                    unread_warning(ui, &unread.reason, &unread.whole);
                 } else {
-                    unread_groups_message(ui, campaign, &item.entry.path, &reason, &whole);
+                    unread_groups_message(
+                        ui,
+                        campaign,
+                        &item.entry.path,
+                        &unread.reason,
+                        &unread.whole,
+                    );
                 }
             }
             // Every other value not read sits here too, not below the values.
-            if let Some(fault) = self.group_fault.as_ref().filter(|fault| fault.id == id) {
+            if let Some(fault) = fault {
                 for (notice, whole) in &fault.notices {
                     unread_warning(ui, notice, whole);
                 }

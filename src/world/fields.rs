@@ -72,8 +72,8 @@ pub(super) fn unread_groups(entry: &splat::content::Entry, file: &str) -> Option
             })
             .map(|_| Unread {
                 line: flag.line,
-                reason: flag.short_message().to_owned(),
-                whole: flag.message.clone(),
+                reason: super::copy_words(flag.short_message()),
+                whole: super::copy_words(&flag.message),
             })
     })
 }

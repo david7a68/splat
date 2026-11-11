@@ -2074,4 +2074,22 @@ fn unread_values_use_curly_quotes_on_one_line() {
     assert!(flag.message.contains(long), "{}", flag.message);
     let short = super::layout::Flag::unread(super::layout::Field::Status, 3, "Status", "[a]", "");
     assert_eq!(short.short_message(), short.message);
+    // The bound counts characters, not bytes: 40 two-byte (`é`) or four-byte (`🐉`) characters
+    // stay whole, and 41 are cut on character edges.
+    for wide in ["é", "🐉"] {
+        let forty = wide.repeat(40);
+        assert!(forty.len() > 40, "fixture: more bytes than characters");
+        assert_eq!(formats::quoted_short(&forty), None, "{wide}: 40 characters");
+        assert_eq!(
+            formats::quoted_short(&format!("{forty}z")),
+            Some(format!("“{}…{}z”", wide.repeat(12), wide.repeat(11))),
+            "{wide}: 41 characters"
+        );
+    }
+    // A control character reads as a space, as in `quoted`, and a space at a cut is trimmed.
+    let spaced = format!("{}\t{}", "a".repeat(11), "b".repeat(40));
+    assert_eq!(
+        formats::quoted_short(&spaced).as_deref(),
+        Some("“aaaaaaaaaaa…bbbbbbbbbbbb”")
+    );
 }
