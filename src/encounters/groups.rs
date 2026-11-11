@@ -1658,7 +1658,11 @@ pub(super) fn overrides_form(
         }
     }
     if !linked || !overrides.conditions.is_empty() {
-        conditions_row(ui, &mut overrides.conditions);
+        // The run's condition form width: the grid, the effects and Add stay within it.
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            conditions_row(ui, &mut overrides.conditions);
+        });
     }
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
     // A group of rows, as Starting conditions is.

@@ -146,13 +146,75 @@ pub(crate) fn link_label(link: &RollLink) -> &str {
     }
 }
 
+/// Words in a menu: a heading or a question. A menu's layout is justified, which would stretch
+/// the gaps of a wrapped line, so the words get a left-aligned layout of their own.
+pub(crate) fn menu_text(ui: &mut egui::Ui, text: &str, color: egui::Color32) -> egui::Response {
+    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(color)).wrap())
+    })
+    .inner
+}
+
 /// One line of a menu under a heading or a question: its words start at the heading's text.
+/// In a menu the keys opened, the first choice takes the focus.
 pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
-    Action::quiet(words)
+    let response = Action::quiet(words)
         .density(Density::Read)
         .line_start()
-        .show(ui)
-        .clicked()
+        .show(ui);
+    if ui
+        .ctx()
+        .data_mut(|data| data.remove_temp::<bool>(focus_first_choice_id()))
+        .unwrap_or(false)
+    {
+        response.request_focus();
+    }
+    response.clicked()
+}
+
+fn focus_first_choice_id() -> egui::Id {
+    egui::Id::new("roll_menu_focus_first_choice")
+}
+
+fn menu_keys_owner_id() -> egui::Id {
+    egui::Id::new("roll_menu_opened_by_keys")
+}
+
+/// Whether a right-click menu opens or closes this frame. A right-click opens it; so do
+/// Shift+F10 on the focused control and a screen reader's `show context menu`, which put the
+/// focus on its first choice and give it back to the control when the menu closes. A plain
+/// click or Enter on the control closes it.
+pub(crate) fn menu_open_command(response: &egui::Response) -> Option<egui::SetOpenCommand> {
+    use egui::accesskit::Action as Access;
+    let ctx = &response.ctx;
+    ctx.accesskit_node_builder(response.id, |node| node.add_action(Access::ShowContextMenu));
+    let by_keys = ctx
+        .input(|i| i.has_accesskit_action_request(response.id, Access::ShowContextMenu))
+        || (response.has_focus()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)));
+    if by_keys {
+        ctx.data_mut(|data| {
+            data.insert_temp(menu_keys_owner_id(), response.id);
+            data.insert_temp(focus_first_choice_id(), true);
+        });
+        return Some(egui::SetOpenCommand::Bool(true));
+    }
+    if ctx.data(|data| data.get_temp::<egui::Id>(menu_keys_owner_id())) == Some(response.id)
+        && !egui::Popup::is_id_open(ctx, egui::Popup::default_response_id(response))
+    {
+        ctx.data_mut(|data| {
+            data.remove::<egui::Id>(menu_keys_owner_id());
+            data.remove::<bool>(focus_first_choice_id());
+        });
+        response.request_focus();
+    }
+    if response.secondary_clicked() {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if response.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    }
 }
 
 /// The heading of a d20 roll's menu: the action's name, `Bite`, or what the number rolls,
@@ -179,13 +241,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .ctx
         .data(|data| data.get_temp::<bool>(inspired_id()))
         .unwrap_or(false);
-    let open = if response.secondary_clicked() {
-        Some(egui::SetOpenCommand::Bool(true))
-    } else if response.clicked() {
-        Some(egui::SetOpenCommand::Bool(false))
-    } else {
-        None
-    };
+    let open = menu_open_command(response);
     // As wide as its tile, and never past the pane's right edge, which `right` is: a menu
     // that ran past the window would be pushed left, over the panel's splitter.
     let margin = egui::Frame::popup(&response.ctx.style())
@@ -202,7 +258,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .show(|ui| {
             // The area keeps the size it had; the content sets it each frame.
             ui.set_width(width);
-            ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
+            menu_text(ui, &heading, colors().muted);
             for (words, mode, inspired) in mode_choices("Roll", inspired) {
                 if menu_choice(ui, &words) {
                     chosen = Some((mode, inspired));
@@ -215,7 +271,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
 
 /// What a press on this number does, in words, for hover.
 pub(crate) fn hint(link: &RollLink) -> String {
-    let keys = " Shift: advantage. Ctrl: disadvantage. Right-click for more.";
+    let keys = " Shift: advantage. Ctrl: disadvantage. Right-click or Shift+F10 for more.";
     match link {
         RollLink::D20 {
             what, bonus, label, ..

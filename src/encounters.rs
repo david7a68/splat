@@ -4637,14 +4637,15 @@ impl Encounters {
                                 if changed && !is_open {
                                     ui.spacing_mut().interact_size.y = 0.0;
                                     ui.horizontal(|ui| {
-                                        ui.spacing_mut().item_spacing.x = design::XS;
+                                        // The separator's own blanks are the gap, as between the other facts.
+                                        ui.spacing_mut().item_spacing.x = 0.0;
                                         let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
                                         let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
                                         let (fitted, fault_kept) = changed_detail_parts(ui, &detail, &word, ui.available_width(), hp_missing);
-                                        let detail_rect = ui.label(detail_text(ui, &stat_line(&fitted), fault_kept)).on_hover_text(&detail).rect;
-                                        let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
+                                        // The separator before the link is in the facts' own text, so its blanks are theirs.
+                                        let detail_rect = ui.label(detail_text(ui, &format!("{} · ", stat_line(&fitted)), fault_kept)).on_hover_text(&detail).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
+                                        let at = egui::pos2(detail_rect.right(), detail_rect.center().y - design::XL / 2.0);
                                         let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
                                         if design::small_link(&mut inline, &word).clicked() {
                                             groups::show_form_when_it_opens(ui);

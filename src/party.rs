@@ -633,6 +633,46 @@ impl Party {
     }
 
     /// The open combat sync panel, with a rule under it.
+    /// The Combat sync heading, which says the sync state while it is closed. Returns whether
+    /// it is open.
+    fn sync_heading(&mut self, ui: &mut egui::Ui) -> bool {
+        // Until the first read, `On` would say more than Splat knows: the heading says it waits,
+        // with the first-read icon and colour.
+        let state: egui::WidgetText = if !self.combat.enabled {
+            format!("{} Combat sync · Off", icons::SYNC_OFF).into()
+        } else if self.combat.state() == crate::combat_sync::SyncState::FirstRead {
+            let first_read = colors().sync.first_read;
+            let font = egui::TextStyle::Button.resolve(ui.style());
+            let mut job = egui::text::LayoutJob::default();
+            for (text, color) in [
+                (format!("{} ", icons::BUSY), first_read),
+                ("Combat sync · ".to_owned(), ui.visuals().text_color()),
+                ("Waiting for the first read".to_owned(), first_read),
+            ] {
+                job.append(
+                    &text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        color,
+                        ..Default::default()
+                    },
+                );
+            }
+            job.into()
+        } else {
+            format!("{} Combat sync · On", icons::ONLINE).into()
+        };
+        // One id for every state, so the panel stays open when the DM ticks its box.
+        egui::CollapsingHeader::new(state)
+            .id_salt("combat_sync_header")
+            .icon(design::section_icon)
+            .open(std::mem::take(&mut self.wants_combat_sync).then_some(true))
+            .show(ui, |_| ())
+            .body_returned
+            .is_some()
+    }
+
     fn sync_panel(&mut self, ui: &mut egui::Ui) {
         let was = self.combat.enabled;
         // The sheet's scroll bar floats over its right edge. Keep the panel clear of it.
@@ -684,26 +724,8 @@ impl Party {
             });
             ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
-        // The header is under the name, and it says its state while closed. Its body is at
-        // the top of the sheet's scroll area: the editable values make it tall, and one
-        // scroll for the whole column is easier at the table than a scroll inside a scroll.
-        let sync_open = session.is_some() && {
-            let state = if self.combat.enabled {
-                format!("{} Combat sync · On", icons::ONLINE)
-            } else {
-                format!("{} Combat sync · Off", icons::SYNC_OFF)
-            };
-            // One id for On and Off, so the panel stays open when the DM ticks its box.
-            egui::CollapsingHeader::new(state)
-                .id_salt("combat_sync_header")
-                .icon(design::section_icon)
-                .open(std::mem::take(&mut self.wants_combat_sync).then_some(true))
-                .show(ui, |_| ())
-                .body_returned
-                .is_some()
-        };
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-            if sync_open {
+            if session.is_some() && self.sync_heading(ui) {
                 self.sync_panel(ui);
             }
             if !self.reader.loading() {
@@ -757,7 +779,10 @@ impl Party {
             .id_salt((id, self.page))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                if sync_open {
+                // The heading and its body are one block, below the tabs: the tabs never sit
+                // between them. Both scroll with the sheet, as one scroll is easier at the table
+                // than a scroll inside a scroll.
+                if session.is_some() && self.sync_heading(ui) {
                     self.sync_panel(ui);
                 }
                 let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
