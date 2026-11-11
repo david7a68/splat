@@ -1335,6 +1335,49 @@ impl Run {
         p.name.clone()
     }
 
+    /// What the tie line, Move button, result and Undo call an arrival: the name its `joined
+    /// at` message uses. That is the group, or the creatures added by hand. When the roster
+    /// has another group of that name, the first member tells them apart:
+    /// `Rival Team (Rival Captain 2)`.
+    fn arrival_name(state: &State, first: usize, before: &str) -> String {
+        let p = &state.participants[first];
+        let Some(origin) = &p.added_from else {
+            return Self::roll_block_name(state, p);
+        };
+        if origin.group.is_empty() {
+            let names: Vec<_> = state
+                .participants
+                .iter()
+                .filter(|other| {
+                    other
+                        .added_from
+                        .as_ref()
+                        .is_some_and(|a| a.instance == origin.instance)
+                        && other.initiative == p.initiative
+                })
+                .map(|other| other.name.as_str())
+                .collect();
+            return match names.as_slice() {
+                [first @ .., last] if !first.is_empty() => {
+                    format!("{} and {last}", first.join(", "))
+                }
+                _ => p.name.clone(),
+            };
+        }
+        let twin = origin.group == before
+            || state.participants.iter().any(|other| {
+                other
+                    .added_from
+                    .as_ref()
+                    .is_some_and(|a| a.group == origin.group && a.instance != origin.instance)
+            });
+        if twin {
+            format!("{} ({})", origin.group, p.name)
+        } else {
+            origin.group.clone()
+        }
+    }
+
     /// A place for someone whose initiative was set during combat. The current turn stays
     /// current, and no one else moves relative to each other.
     /// Whether `a` acts before `b`: by total, then by roster when the campaign breaks ties
@@ -1875,7 +1918,7 @@ impl Run {
                 }
                 format!(
                     "{} moved before {target} at\u{a0}{}{}.",
-                    next.participants[first].name,
+                    Self::arrival_name(&next, first, &target),
                     display(next.participants[before].initiative),
                     if waits {
                         " ·\u{a0}acts next round"
@@ -2286,11 +2329,13 @@ impl Run {
             Command::Begin => "begin combat".into(),
             Command::Next => "next turn".into(),
             Command::Move(..) => "tie order".into(),
-            Command::MoveArrivalBefore(first, before) => format!(
-                "move {} before {}",
-                name(first),
-                Self::roll_block_name(&self.state, &self.state.participants[*before])
-            ),
+            Command::MoveArrivalBefore(first, before) => {
+                let target = Self::roll_block_name(&self.state, &self.state.participants[*before]);
+                format!(
+                    "move {} before {target}",
+                    Self::arrival_name(&self.state, *first, &target)
+                )
+            }
             Command::End(_) => "end encounter".into(),
             Command::Health(i, ..) => format!("HP correction on {}", name(i)),
             Command::TempHp(i, amount) => format!("{amount} temporary HP on {}", name(i)),
@@ -7531,25 +7576,65 @@ mod tests {
         let after = run.state.order.clone();
         let current = run.current();
         run.apply(Command::MoveArrivalBefore(3, 1)).unwrap();
+        // FH6: the move names the arrival as its `joined at` message does: the group.
         assert_eq!(
             run.undo_label(),
-            format!(
-                "Undo: move {} before {}",
-                run.state.participants[3].name, run.state.participants[1].name
-            )
+            format!("Undo: move Tied before {}", run.state.participants[1].name)
         );
         assert!(
             run.state
                 .log
                 .last()
                 .unwrap()
-                .starts_with(&format!("{} moved before ", run.state.participants[3].name))
+                .starts_with("Tied moved before "),
+            "iter-24-R-FH6: {:?}",
+            run.state.log.last()
         );
         assert_eq!(run.state.order, vec![0, 3, 4, 1, 2]);
         assert_eq!(run.current(), current);
         run.undo();
         assert_eq!(run.state.order, after);
         assert_eq!(run.current(), current);
+        // Two groups with one name: the first member tells them apart.
+        run.apply(Command::AddGroup(guard_group("Tied", 2), Some(15)))
+            .unwrap();
+        let fifth = run.state.participants[5].name.clone();
+        run.apply(Command::MoveArrivalBefore(5, 3)).unwrap();
+        let moved = run.state.log.last().unwrap().clone();
+        assert!(
+            moved.starts_with(&format!("Tied ({fifth}) moved before ")),
+            "iter-24-R-FH6-twin: {moved}"
+        );
+        assert!(
+            run.undo_label()
+                .starts_with(&format!("Undo: move Tied ({fifth}) before "))
+        );
+        run.undo();
+        run.undo();
+        // Creatures added by hand: the move names them all, as their message does.
+        let mut ghost = form("Ghost", "22");
+        ghost.total = "15".into();
+        ghost.count = "2".into();
+        add_from(&mut run, &ghost, &[]);
+        let first = run.state.participants.len() - 2;
+        run.apply(Command::MoveArrivalBefore(first, 1)).unwrap();
+        let moved = run.state.log.last().unwrap().clone();
+        assert!(
+            moved.starts_with("Ghost 1 and Ghost 2 moved before "),
+            "iter-24-R-FH6-by-hand: {moved}"
+        );
+        run.undo();
+        run.undo();
+        // A group with one joining member is still the group, not that member.
+        run.apply(Command::AddGroup(guard_group("Lone", 1), Some(15)))
+            .unwrap();
+        let first = run.state.participants.len() - 1;
+        run.apply(Command::MoveArrivalBefore(first, 1)).unwrap();
+        let moved = run.state.log.last().unwrap().clone();
+        assert!(
+            moved.starts_with("Lone moved before "),
+            "iter-24-R-FH6-one-member: {moved}"
+        );
     }
 
     #[test]
