@@ -2951,7 +2951,11 @@ pub mod encounter_build {
         d.expect(PARTY_NOW);
         // AD1: the help under Sync party and Keep in Ready wraps at the reader measure at 1920.
         let widths = d.at_size(LARGE, |d| {
-            ["The party starts with the HP", "Lists this encounter under Ready"].map(|words| {
+            [
+                "The party starts with the HP",
+                "Lists this encounter under Ready",
+            ]
+            .map(|words| {
                 let mut width = None;
                 d.each_painted_text(|text, _| {
                     if text.galley.job.text.starts_with(words) {

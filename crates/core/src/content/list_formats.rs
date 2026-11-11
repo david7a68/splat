@@ -329,9 +329,9 @@ pub fn group_member_lines(text: &str, flags: &[Flag]) -> Vec<usize> {
 /// the closing fence, so body text that looks like a member is never counted.
 fn front_matter_member_lines(text: &str) -> Vec<usize> {
     let mut lines = text.lines().enumerate();
-    if !lines
+    if lines
         .next()
-        .is_some_and(|(_, line)| line.trim_end() == "---")
+        .is_none_or(|(_, line)| line.trim_end() != "---")
     {
         return Vec::new();
     }
