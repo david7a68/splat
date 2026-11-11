@@ -319,7 +319,9 @@ which. A session is played when a fight is open, a recording is live, or the cur
 before today. The DM can hide or show the bar, and Splat remembers it. The Run page has no bar: its rows
 already show the party.
 
-**Done well:** T12.0 to T12.9, T14.1 to T14.5, T14.7 and T14.8.
+The plan also holds scenes, with a done mark. A creature's or an NPC's page starts a fight that nobody planned.
+
+**Done well:** T12.0 to T12.12, T14.1 to T14.5, T14.7 and T14.8.
 
 ## 3. Information architecture
 
@@ -622,6 +624,9 @@ reading the code, not from a test run.
 | T12.7 | Setup and Prep show the read-aloud text. Technical details are closed | session-plan | state | New |
 | T12.8 | A condition's rule opens from its word on the row, and is gone again, in 2 | session-plan | cost | New |
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
+| T12.10 | A task line is a scene with a box. A tick changes one character. A plain list line gets no row. The empty plan is as today | session-plan-scenes | cost, state | New |
+| T12.11 | A scene's link opens its entry in Lookup in 1, and `Back` returns to an earlier entry | session-plan-scenes | cost | New |
+| T12.12 | A reader starts a fight in 1, and a scene row's menu in 2. An NPC with no stat block opens the made-up form with its name and focus in HP. After `Close run`, also after a restart, a second `Start fight` starts the same encounter. `Remove…` and `Undo remove encounter` remove and restore an encounter with no saved run | session-plan-scenes, npc-in-lookup, encounter-build | cost, state | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
 | T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
 | T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |

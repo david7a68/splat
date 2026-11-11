@@ -880,6 +880,46 @@ mod iter_2_c_tests {
         assert_eq!(menu_aligns(near_left, menu, narrow), end);
     }
 
+    /// T12.12: Remove… is offered only for an encounter with no saved run: none unfinished,
+    /// none ended, and no unreadable run that names it.
+    #[test]
+    fn remove_is_offered_only_for_an_encounter_with_no_saved_run() {
+        use crate::encounter_run::Standing;
+        let template = |name: &str| Template {
+            path: format!("Encounters/{name}.md"),
+            id: Uuid::new_v4(),
+            name: name.into(),
+            summary: Some("1 × Wolf".into()),
+            repeatable: true,
+        };
+        let templates = ["Fresh", "Paused", "Ended", "Unreadable"].map(template);
+        let run = |at: usize, standing| SavedRunInfo {
+            path: PathBuf::from(format!("run-{at}.json")),
+            id: Some(Uuid::new_v4()),
+            source: Some(templates[at].id),
+            encounter: templates[at].name.clone(),
+            label: String::new(),
+            standing,
+            saved_at: None,
+            unsent: vec![],
+        };
+        let mut unreadable = run(3, Standing::Unreadable);
+        unreadable.source = None;
+        let runs = [
+            run(1, Standing::Unfinished),
+            run(2, Standing::Ended),
+            unreadable,
+        ];
+        let page = history::arrange(&templates, &runs, None, &[], &[]);
+        let offered: Vec<_> = page
+            .ready
+            .iter()
+            .filter(|row| !has_saved_run(&page, row))
+            .map(|row| row.template.name.as_str())
+            .collect();
+        assert_eq!(offered, ["Fresh"]);
+    }
+
     #[test]
     fn paused_duplicates_use_session_then_one_save_time() {
         let runs = [1, 2].map(|n| SavedRunInfo {

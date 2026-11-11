@@ -6121,6 +6121,11 @@ impl Sessions {
         fs::rename(&draft.path, new).expect("the note");
     }
 
+    /// The open note's file, for a scenario that reads what an act wrote.
+    pub fn selected_path(&self) -> Option<&std::path::Path> {
+        self.draft.as_ref().map(|draft| draft.path.as_path())
+    }
+
     /// The open note changes outside Splat, as when Obsidian edits the same file.
     pub fn simulate_disk_change(&mut self) {
         let draft = self.draft.as_ref().expect("an open note");
