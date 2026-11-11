@@ -382,7 +382,8 @@ warns about saved runs and offers **Move runs and save** or **Save without movin
 Close the open run before saving run settings.
 
 The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
-values. A blocked Undo shows **Nothing to undo**, or **Nothing to undo since reopening**.
+values. A blocked Undo shows **Nothing to undo**. A run file from before Splat saved Undo steps shows
+**Nothing to undo since reopening**.
 `Add to fight` opens the Arrivals panel for a creature or a prepared group; a blank initiative total rolls it.
 Search shows five creatures; **Show all** lists every match without more typing.
 Group Add buttons share a fixed slot, so all Initiative fields align.
@@ -928,7 +929,8 @@ are stat block text, so their changes stay on the card and on the row during com
 change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
-prior actions, including turn changes, initiative and table rolls, and manual endings in the current session.
+prior actions, including turn changes, initiative and table rolls, and manual endings. The run file keeps these
+steps, so **Undo** names and takes back the same step after **Close run** and **Resume**, and after the app starts again.
 **End encounter…** records a manual ending and your outcome. It shortens to **End…** before it moves into a menu, and stays visible while it fits. Runs save automatically
 after changes. **Close run** returns at once to the page the run began on when the run is saved and nothing is unsent. Otherwise it asks for a choice. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
@@ -940,6 +942,27 @@ The rail keeps a paused run in view and resumes it in one click. Its detail wrap
 History rows show **Open** or **Close**, with **Start fight** and **Edit** in their menu. An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
 write to templates or character copies.
 
+A fight that ended by mistake can go on. In the ended view, **Undo: end encounter** takes the ending away while
+the ending is the newest step. After a loot roll, or when the file has no steps, **Continue fight** is beside
+**Close run**. A closed, ended run has **Continue fight** under **Read-only** when you open it in History; the
+session plan's **Whole run** leads there. Continue fight is one named step: play returns to the turn the fight ended
+on, the run's loot results stay, and **Undo: continue fight** puts the ending back with its outcome. When you
+choose **End encounter…** again, the outcome field starts with that outcome, selected: Enter keeps it, and typing
+replaces it. The outcome comes from the run file, so it is the same after a close and a restart. Timeline, the
+session plan and the Encounters lists follow the run each way.
+
+Continue fight is for the fight that was played last. Splat offers it when it can read `Timeline.md`, and no
+fight and no long rest has a later place in the order of play than this fight's event. A long rest counts whatever
+it restored, because you can still change that ruling. For
+that fight, neither Continue fight nor its **Undo** changes which fight was played last, so the next fight still
+starts each player from the right HP, and Timeline has no order to put back. For any other ended run the control
+is not offered, and one sentence stands in its place: **A later fight or rest was played. Start a new run to play
+this one again.** While `Timeline.md` cannot be read, the sentence is **Splat cannot read Timeline.md. Fix that on
+the Timeline page first.** For a fight whose event was removed from Timeline, it is **This fight is not on the
+Timeline. Start a new run to play it again.** **Undo: end encounter** has no such rule. It takes the ending away
+for any open run while the ending is the newest step, as before.
+With another run open, Continue fight is blocked and says **Close the open run first.**
+
 ### Run storage and campaign initiative
 
 **Campaign → Rules and runs** sets the run folder. It defaults to `Encounter Runs`
@@ -950,8 +973,19 @@ edits. If the file changed, saving stops until you choose **Replace the file wit
 run**. Recovery copies keep the encounter name. Their detail starts with **Copy 1**, **Copy 2**, and so on.
 **Resume** is primary on the run closed last. Each saved row shows its last change. A file preserved after a disk
 conflict says **Changed on disk**, after its copy number if it has one. Other failed saves keep the current run
-in memory and show an error. Undo history
-is kept for the current session only. Changing the folder does not move old runs.
+in memory and show an error. Changing the folder does not move old runs.
+
+The run file also holds the Undo steps, in its `undo` field. Each step is saved as its differences from the state
+after it, so 100 steps add little to the file. When the steps would take more than 16 MiB of the file, or more
+than 256 MiB of memory when read, the oldest stay out and the newest are kept, with no message. A saved step
+changes what a participant has now and never what it is: its name, side, AC, stat block, starting values and
+changes come from the run, whatever a step in the file says. **Replace the file with this run** writes this run's steps, and
+**Save as a new run** gives the new file this run's steps and leaves the other file's steps as they are. A file
+from before this field loads with no steps. If Splat cannot read a file's steps, for example because a later
+version wrote them, the run still opens. It says once that Undo starts again from there, the Log keeps that
+line, and the next save leaves the unread steps out. Two things are not in the file: after a restart, Undo of a
+save's damage restores the HP and does not arm the save again, and **Use the saved HP** is offered only in the
+session that made the long rest's step.
 
 The same settings select how the campaign rolls NPC initiative: in groups of
 identical NPCs (the D&D default), individually, in one group per side, or in the
@@ -989,7 +1023,10 @@ idea. The note records `combat_sync: false`, and a note without it has sync on.
 
 **Sync party** in a run starts or stops sync for every linked player, and **Record** has the panel for
 one. A stop lasts for that run, and the run saves it. A run saved before this option does not start by
-itself. A finished run does not sync, so a resumed one keeps its results.
+itself. A finished run does not sync, so a run that you open to read keeps its results. **Continue fight** makes
+it a live fight again, as **Undo** of the ending does: sync starts again by itself if **Sync party** was on, and
+its first read follows the rule below. A value that the sheet changed after the fight ended replaces the run's
+value, the notice and the Log say so, and **Undo: continue fight** does not put the older value back.
 
 If D&D Beyond reports that this session cannot edit a character, the row says `Sync read-only`. Your
 changes for that character stay in the run and nothing is sent. Changes on the sheet still come in, and
@@ -1025,7 +1062,9 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Health or condition values taken from a sheet remove undo steps for that character. Other steps stay. If an atomic step makes older steps unsafe, the Log names the removed steps. In a small
+Health or condition values taken from a sheet remove undo steps for that character. Other steps stay. Steps
+read from the run file follow the same rule: a first read after a restart removes the saved steps of each character
+whose sheet changed, and Undo before that first read makes the older value yours, which is a conflict if the sheet differs. If an atomic step makes older steps unsafe, the Log names the removed steps. In a small
 window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. A change made on Party is still sent after you
@@ -1052,7 +1091,9 @@ Settings imports a D&D Beyond campaign directly below its row and suggests a new
 
 Library shows **Back** with **Alt+Left** whenever an earlier entry is available. **Alt+Right** goes forward again to an entry left by Back, until a new link starts a new trail. The mouse's Back and Forward buttons do the same. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
-The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
+The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `run-continue` covers Undo after a
+close and a restart, Continue fight and the sentence that stands in its place for a fight that was not played last,
+and unread Undo steps, each with Lookup closed and open. `share-to-package` checks the new references after **Copy both**, and Library navigation checks the dependency copy action and its Undo.
 
 On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
 

@@ -21,9 +21,11 @@ that goes on under a later session keeps its HP for the next fight; a fight can 
 the session being played survive a restart; the fight picker scrolls and has a search; half for a save is a mark on each
 target's row, so any number of targets stays in view; initiative can be corrected during combat; and Exhaustion is one level.
 
+Done since: **Undo after a restart.** The run file keeps the Undo steps, and a fight that ended by mistake goes on
+with **Continue fight** while it is the fight that was played last (`README.md`, Running an encounter as DM).
+
 Left for later, because each is a feature of its own:
 
-- **Undo after a restart.** A wrong number stays, and only Record can correct it. `docs/ux-intent.md` A8 keeps undo in memory.
 - **A note pinned to a creature**, with a reminder on its turn, for a recurring save.
 - **A way to choose several targets with one hand.** Ctrl+click needs both.
 
