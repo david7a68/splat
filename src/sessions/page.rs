@@ -4507,13 +4507,15 @@ impl Sessions {
                             // Members stay whole, so a long member list can take a third line
                             // before it shortens. A flagged group shows every fact.
                             plan_group_summary(ui, &summary, if group.warnings.is_empty() { 3 } else { usize::MAX });
-                            if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
-                            // Name each member left out, its base and its line, beside Edit group.
-                            else {
-                                for warning in &group.warnings {
-                                    ui.add_space(design::XS);
-                                    design::small_message(ui, Tone::Warning, warning);
-                                }
+                            // Name each member left out, its base and its line, beside Edit group, each
+                            // in its own fault's tone; then the group's own reason, as a warning.
+                            for warning in &group.warnings {
+                                ui.add_space(design::XS);
+                                design::small_message(ui, warning.tone(), warning);
+                            }
+                            for reason in group.own_problems() {
+                                ui.add_space(design::XS);
+                                design::small_message(ui, Tone::Warning, reason);
                             }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {

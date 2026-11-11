@@ -2395,25 +2395,62 @@ pub fn hanging_add_strip(
     chosen
 }
 
-/// A submenu with the same left inset, type and height as a quiet Read action.
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Only the test-built gallery calls it until encounter group menus adopt it."
-    )
-)]
+/// A submenu with the same left inset, type and height as a quiet Read action. It opens to the
+/// right of its menu when it fits there inside `inside` with `S` to spare, else to the left, else
+/// as far right as fits. `inside` is the usable area of the pane that opened the menu: without
+/// its splitter and scroll bar, so the submenu and its choices never lie over either.
 pub fn menu_submenu<R>(
     ui: &mut Ui,
     word: &str,
+    inside: Rect,
     contents: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<Option<R>> {
+    use egui::containers::menu::{MenuState, SubMenu, SubMenuButton};
     ui.scope(|ui| {
         ui.spacing_mut().button_padding = vec2(S, XS);
         ui.spacing_mut().interact_size.y = Density::Read.control();
-        ui.menu_button(Type::Strong.rich(ui, word), contents)
+        // The same button and open state as egui's submenu button.
+        let id = SubMenu::id_from_widget_id(ui.next_auto_id());
+        let open = MenuState::from_ui(ui, |state, _| state.open_item == Some(id));
+        let inactive = ui.style().visuals.widgets.inactive;
+        if open {
+            ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
+        }
+        let button = ui.add(
+            egui::Button::new(Type::Strong.rich(ui, word)).right_text(SubMenuButton::RIGHT_ARROW),
+        );
+        ui.style_mut().visuals.widgets.inactive = inactive;
+        // Its name is its word, without the arrow.
+        named(ui, &button, word);
+        // egui puts a submenu `gap` to the right of its button's interact rect, and keeps it
+        // inside the screen only. Moving that rect moves the submenu; the open and hover checks
+        // still use the button's own rect.
+        let gap = egui::Frame::menu(ui.style()).total_margin().sum().x / 2.0 + 2.0;
+        let mut anchor = button.clone();
+        if let Some(size) = egui::AreaState::load(ui.ctx(), id).and_then(|state| state.size) {
+            let left = submenu_left(button.interact_rect, size.x, gap, inside);
+            anchor.interact_rect = anchor
+                .interact_rect
+                .translate(vec2(left - (button.interact_rect.right() + gap), 0.0));
+        }
+        let inner = SubMenu::new().show(ui, &anchor, contents);
+        egui::InnerResponse::new(inner.map(|inner| inner.inner), button)
     })
     .inner
+}
+
+/// Where a submenu `width` wide starts: right of its button, else left of it, else as far right
+/// as fits. It stays `S` inside `inside` whenever `inside` is wide enough to hold it.
+fn submenu_left(button: Rect, width: f32, gap: f32, inside: Rect) -> f32 {
+    let right = button.right() + gap;
+    let left = button.left() - gap - width;
+    if right + width <= inside.right() - S {
+        right
+    } else if left >= inside.left() + S {
+        left
+    } else {
+        (inside.right() - S - width).max(inside.left() + S)
+    }
 }
 
 /// Sheet tabs keep one line. Less frequent pages move to a named menu when needed.
@@ -3046,6 +3083,32 @@ pub fn draft_comparison_labeled(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// iter-22-B SD2: a submenu opens right while it fits `S` inside the pane, else left, else
+    /// as far right as fits; each branch is reached.
+    #[test]
+    fn iter22_b_submenu_opens_right_then_left_then_inward() {
+        let button = Rect::from_min_max(pos2(500.0, 100.0), pos2(720.0, 128.0));
+        let (gap, width) = (8.0, 126.0);
+        let pane = |right: f32| Rect::from_min_max(pos2(150.0, 0.0), pos2(right, 800.0));
+        // Room on the right: unchanged.
+        assert_eq!(submenu_left(button, width, gap, pane(1200.0)), 728.0);
+        // Exactly `S` to spare still opens right; one point less opens left.
+        assert_eq!(
+            submenu_left(button, width, gap, pane(728.0 + width + S)),
+            728.0
+        );
+        assert_eq!(
+            submenu_left(button, width, gap, pane(727.0 + width + S)),
+            500.0 - gap - width
+        );
+        // The pane of the encounter editor at 1200: left of the menu, inside the pane.
+        let left = submenu_left(button, width, gap, pane(735.0));
+        assert!(left + width <= 735.0 - S && left >= 150.0 + S, "{left}");
+        // No room on either side: as far right as fits.
+        let narrow = Rect::from_min_max(pos2(400.0, 0.0), pos2(760.0, 800.0));
+        assert_eq!(submenu_left(button, width, gap, narrow), 760.0 - S - width);
+    }
 
     #[test]
     fn iter10_b_stepper_limit_reasons_are_optional_and_yield_to_a_lock() {

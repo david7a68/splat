@@ -191,6 +191,13 @@ pub fn run(d: &mut Driver<'_>) {
     // FD3 family: the file line starts at the warning's words.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let placed = d.at_size(size, |d| {
+            // FD5: the file line names the file, so the warning names its line only.
+            let named = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.contains("Combat initiative choice") && node.in_view())
+                .map(|node| node.name)
+                .collect::<Vec<_>>();
             super::file_links_at_message_words(
                 d,
                 "Line 23: Combat initiative",
@@ -198,16 +205,12 @@ pub fn run(d: &mut Driver<'_>) {
                 "Campaign.md",
             )
             .and_then(|()| {
-                // Round 22 FD5: the file line holds the path; the warning names the line only.
-                let named: Vec<_> = d
-                    .nodes()
-                    .into_iter()
-                    .filter(|node| node.name.contains("Combat initiative choice"))
-                    .map(|node| node.name)
-                    .collect();
-                (!named.is_empty() && named.iter().all(|name| !name.contains("Campaign.md")))
-                    .then_some(())
-                    .ok_or(format!("warnings {named:?} name the file"))
+                (!named.is_empty()
+                    && named
+                        .iter()
+                        .all(|name| name.starts_with("Line ") && !name.contains("Campaign.md")))
+                .then_some(())
+                .ok_or(format!("warnings {named:?}"))
             })
         });
         d.observe(
@@ -386,6 +389,31 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Display name");
     d.expect("For example: HP +5, AC +2, Speed 40 ft.");
     d.state("group-repair-changes-cell", Sizes::All);
+    // FD2: the unread value is a warning message, and its example starts at its words.
+    for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+        let (tones, words, example) = d.at_size(size, |d| {
+            let words = super::glyph_spans(d, "Changes “HP lots” not read.", "Changes");
+            let example = super::glyph_spans(d, "For example: HP +5", "For");
+            (
+                super::tones_beside(d, "Changes “HP lots” not read."),
+                words,
+                example,
+            )
+        });
+        let colour = d.painted_color(
+            "Changes “HP lots” not read. Set the changes below, then save the group.",
+        );
+        d.observe(
+            "iter-22-B-FD2",
+            tones == ["warning"]
+                && colour == Some(crate::design::colors().text)
+                && words
+                    .first()
+                    .zip(example.first())
+                    .is_some_and(|(words, example)| (words.0 - example.0).abs() <= 1.0),
+            format!("At {size:?}: tones {tones:?}, colour {colour:?}, words {words:?}, example {example:?}"),
+        );
+    }
     d.click("Maximum HP: how it changes");
     d.click("Maximum HP: Add");
     d.click("Maximum HP: amount");
@@ -450,17 +478,26 @@ pub fn run(d: &mut Driver<'_>) {
             let below = message
                 .zip(d.place_of("Save encounter"))
                 .is_some_and(|(message, save)| message.top() >= save.bottom());
+            // FD5: the warning names the row and its line; the file line below holds the path.
+            let named = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Ember Cultist · ") && node.in_view())
+                .map(|node| node.name)
+                .unwrap_or_default();
             let placed = super::file_links_at_message_words(
                 d,
-                "Ember Cultist · ",
+                "Ember Cultist · line 20: ",
                 &roster_path,
                 &encounter.entry.path,
             )
             .and_then(|()| {
-                (below && d.visible_text("Fix this roster row or remove it in Obsidian"))
+                (below
+                    && d.visible_text("Fix this roster row or remove it in Obsidian")
+                    && !named.contains(&encounter.entry.path))
                     .then_some(())
                     .ok_or(format!(
-                        "message {message:?} is above the header or has no instruction"
+                        "message {message:?} is above the header, has no instruction or names the path: {named:?}"
                     ))
             });
             (flagged, placed)

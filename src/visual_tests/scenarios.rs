@@ -348,7 +348,9 @@ pub(super) fn paragraph_row_tops(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<f32
 }
 
 /// A note under a menu choice (its blocked reason or its help) starts at the choice's words, after
-/// the padding and any icon. Requires the choice and at least one painted note below it.
+/// the padding and any icon, and ends at least the choice's padding `S` before the menu content's
+/// right edge (iter-22-B FT2), with the menu inside the window. Requires the choice and at least
+/// one painted note below it.
 fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Result<(), String> {
     let target = d
         .nodes()
@@ -367,13 +369,135 @@ fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Resu
     if notes.is_empty() {
         return Err(format!("{note} is not painted"));
     }
+    let window = d.window_size();
     notes
         .iter()
-        .all(|rect| (rect.left() - words).abs() <= 1.0 && rect.top() >= target.bottom() - 1.0)
+        .all(|rect| {
+            (rect.left() - words).abs() <= 1.0
+                && rect.top() >= target.bottom() - 1.0
+                && rect.right() <= target.right() - crate::design::S + 0.5
+        })
         .then_some(())
+        .filter(|()| target.right() <= window.0 && target.bottom() <= window.1)
         .ok_or(format!(
-            "{choice} words at {words}, {target:?}; {note} at {notes:?}"
+            "{choice} words at {words}, {target:?}; {note} at {notes:?}; window {window:?}"
         ))
+}
+
+/// The tones of the bars beside each visible painted paragraph that holds `words`, in paint
+/// order: "error", "warning" or "none". Empty when no such paragraph is visible.
+pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
+    tones_where(d, |text| text.contains(words))
+}
+
+/// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
+fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static str> {
+    let mut paragraphs = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if wanted(&text.galley.job.text) && clip.intersects(rect) {
+            paragraphs.push(rect);
+        }
+    });
+    let result = crate::design::colors().result;
+    paragraphs
+        .into_iter()
+        .map(|rect| {
+            match (
+                d.has_tone_bar(rect, result.error),
+                d.has_tone_bar(rect, result.warning),
+            ) {
+                (true, false) => "error",
+                (false, true) => "warning",
+                _ => "none",
+            }
+        })
+        .collect()
+}
+
+/// A group's `Move to…` submenu and its parent menu stay in the window. The submenu's frame and
+/// every choice keep `S` clear of each scroll bar and column splitter beside them; the parent
+/// menu's frame does not overlap one.
+/// Requires every choice of both menus. Returns the submenu's frame.
+fn submenu_clear_of_chrome(
+    d: &Driver<'_>,
+    choices: &[&str],
+    beside_a_lane: bool,
+) -> Result<egui::Rect, String> {
+    let nodes = d.nodes();
+    let opener = d
+        .place_of("Move to…")
+        .ok_or("Move to… is not in view".to_owned())?;
+    let margin = egui::Frame::menu(&d.app_style()).total_margin();
+    // A page can show the same words elsewhere: each choice is the one level with the opener's
+    // row or below it, nearest to it.
+    let targets_of = |names: &[&str]| -> Result<egui::Rect, String> {
+        let mut frame = egui::Rect::NOTHING;
+        for name in names {
+            frame = frame.union(
+                nodes
+                    .iter()
+                    .filter(|node| {
+                        node.name == *name
+                            && node.in_view()
+                            && node.rect.top() >= opener.top() - 1.0
+                    })
+                    .min_by(|a, b| {
+                        (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
+                    })
+                    .ok_or(format!("{name} is not in view beside Move to…"))?
+                    .rect,
+            );
+        }
+        Ok(frame)
+    };
+    let submenu = targets_of(choices)?;
+    let menu = targets_of(&[
+        "Move to…",
+        "Make available to any encounter",
+        "Delete group…",
+    ])?;
+    let window = d.window_size();
+    let lanes = d.chrome_lanes();
+    for (what, targets) in [("submenu", submenu), ("menu", menu)] {
+        let frame = targets + margin;
+        if frame.left() < 0.0
+            || frame.right() > window.0
+            || frame.top() < 0.0
+            || frame.bottom() > window.1
+        {
+            return Err(format!("{what} {frame:?} leaves the window {window:?}"));
+        }
+        let beside: Vec<_> = lanes
+            .iter()
+            .filter(|lane| lane.bottom() > frame.top() && lane.top() < frame.bottom())
+            .collect();
+        if beside_a_lane && beside.is_empty() {
+            return Err(format!(
+                "no scroll bar or splitter beside the {what} {frame:?}: {lanes:?}"
+            ));
+        }
+        for lane in beside {
+            let clear =
+                |rect: egui::Rect| (lane.left() - rect.right()).max(rect.left() - lane.right());
+            // The submenu's whole frame keeps `S`. A parent menu's frame may sit at its pane's
+            // content edge (the gallery's starts 7 px after the rail splitter, as all page
+            // content does); it must not overlap, and its choices keep `S`.
+            let frame_needs = if what == "submenu" {
+                crate::design::S - 0.5
+            } else {
+                0.0
+            };
+            if clear(frame) < frame_needs || clear(targets) < crate::design::S - 0.5 {
+                return Err(format!(
+                    "{what} frame {frame:?} is {} and choices {targets:?} are {} from {lane:?}; lanes {lanes:?}",
+                    clear(frame),
+                    clear(targets)
+                ));
+            }
+        }
+    }
+    Ok(submenu + margin)
 }
 
 /// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
@@ -4811,6 +4935,32 @@ pub mod gallery {
                 format!("The submenu and quiet menu action share a text edge: {edges:?}"),
             );
         });
+        // SD2/AD1, the other caller: with room on the right, the gallery's submenu still opens
+        // there, clear of any splitter.
+        d.press(Key::Escape);
+        d.click("Group actions");
+        d.click("Move to…");
+        d.expect("Bridge Ambush");
+        for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
+            let placed = d.at_size(size, |d| {
+                let parent = d.place_of("Make available to any encounter");
+                super::submenu_clear_of_chrome(d, &["Bridge Ambush"], false).and_then(|frame| {
+                    // Right beside its menu, where egui puts it: only the menus' frames
+                    // and egui's small gap lie between them.
+                    parent
+                        .is_some_and(|parent| {
+                            (0.0..=crate::design::XL).contains(&(frame.left() - parent.right()))
+                        })
+                        .then_some(frame)
+                        .ok_or(format!("submenu {frame:?} is not beside {parent:?}"))
+                })
+            });
+            d.observe(
+                "iter-22-B-SD2-gallery",
+                placed.is_ok(),
+                format!("At {size:?}, the gallery's Move to… submenu: {placed:?}"),
+            );
+        }
         d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
         d.click("More actions for Bridge Ambush");
@@ -10247,6 +10397,20 @@ pub mod encounter_groups {
         d.expect(LIST_HEADING);
         d.click_starting(LIST_HEADING);
         d.state("groups-in-the-list", Sizes::All);
+        // FT1: one fault, one tone, from its kind. The invalid maximum HP is an error here, as
+        // in the editor and Arrivals; the member that is not in the packages stays a warning.
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "not in this campaign's packages"),
+        );
+        d.observe(
+            "iter-22-B-FT1-list",
+            tones.0 == ["error"] && tones.1 == ["warning"],
+            format!(
+                "Encounters list: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
+        );
         d.check_tab_order("encounters, with groups");
 
         // An existing group: its changes are out in the open, with the values they replace.
@@ -10303,6 +10467,20 @@ pub mod encounter_groups {
             "T13.3",
             found && invalid && d.has("Replace Unknown creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
+        );
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "cannot find this creature"),
+        );
+        d.observe(
+            "iter-22-B-FT1-editor",
+            !tones.0.is_empty()
+                && tones.0.iter().all(|tone| *tone == "error")
+                && tones.1 == ["warning"],
+            format!(
+                "Group editor: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
         );
         d.expect("Replace Unknown creature");
         // The repair link is a notice action: its words start at the warning text, and its icon
@@ -10545,6 +10723,18 @@ pub mod encounter_groups {
                 && d.has_containing("not in this campaign's packages")
                 && d.has_containing("Member 2, Cinder Wolf:"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
+        );
+        let tones = (
+            tones_beside(d, "would become −28"),
+            tones_beside(d, "not in this campaign's packages"),
+        );
+        d.observe(
+            "iter-22-B-FT1-arrivals",
+            tones.0 == ["error"] && tones.1 == ["warning"],
+            format!(
+                "Arrivals: invalid maximum HP {:?}, missing member {:?}",
+                tones.0, tones.1
+            ),
         );
         d.begin_task();
         d.type_into(TOTAL_FOR_RIVALS, "-");
@@ -11005,7 +11195,52 @@ pub mod encounter_owned_groups {
         d.click_containing("Move to…");
         d.expect(RUN_ARENA);
         assert!(!d.has("Any encounter"));
-        d.state("move-encounter-group-menu", Sizes::All);
+        // SD2/AD1: in each capture, the submenu is clear of the roster's scroll bar and the
+        // splitter before Add participants.
+        let clear = |d: &mut Driver<'_>| {
+            let size = d.window_size();
+            let clear = super::submenu_clear_of_chrome(d, &[RUN_ARENA, RUN], true)
+                .map(|frame| (frame, d.place_of("Move to…")));
+            d.observe(
+                "iter-22-B-SD2",
+                clear.is_ok(),
+                format!("At {size:?}, the Move to… submenu and its menu: {clear:?}"),
+            );
+        };
+        d.state_prepared("move-encounter-group-menu", Sizes::All, clear);
+        // Astra review of PR 231: shrunk from 1920 with both menus open, the menu and its
+        // submenu stay inside the editor, clear of its scroll bar and splitter.
+        d.state_prepared(
+            "move-encounter-group-menu-after-shrink",
+            Sizes::Small,
+            clear,
+        );
+        // Astra re-check of PR 231: only a resize brings the menu's button back. With the menu
+        // open, the DM's wheel moves the editor, and the editor stays where the DM left it.
+        let opener = format!("More actions for {NEW_NAME}");
+        let editor = pos2(250.0, 200.0);
+        let before = d.place_of(&opener);
+        let mut notches = 0;
+        while d.in_view(&opener) && notches < 10 {
+            d.scroll_up_at(editor, 1);
+            notches += 1;
+        }
+        let left = d.place_of(&opener);
+        d.settle();
+        let after = d.place_of(&opener);
+        d.observe(
+            "iter-22-B-SD2-wheel",
+            !d.in_view(&opener)
+                && before
+                    .zip(left)
+                    .is_some_and(|(before, left)| left.top() > before.top())
+                && left == after
+                && d.has("Make available to any encounter"),
+            format!(
+                "After {notches} wheel notches with the menu open, its button went from {before:?} to {left:?} and then {after:?}"
+            ),
+        );
+        d.scroll_until(pos2(250.0, 400.0), &opener, 20);
         d.click("Make available to any encounter");
         d.expect("Undo move");
         let notice = format!("{NEW_NAME} moves to any encounter when you save.");
@@ -12044,6 +12279,76 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
+
+        // Astra review of PR 231: a plan group none of whose members can join keeps each member
+        // fault's own tone, then says so as a warning. In another group, a member named like
+        // that fault stays plain words.
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let wolf = splat::character::stable_id("visual:module:cinder_wolf");
+        for (name, member) in [
+            (
+                "Ash Remnant",
+                format!("  - creature: {{id: {wolf}}}\n    overrides: {{max_hp: {{add: -50}}}}\n"),
+            ),
+            (
+                "Mill Watch",
+                "  - creature: {key: 'dnd2024:creatures/goblin_warrior'}\n    overrides: {name: 'Maximum HP would become −28'}\n".to_owned(),
+            ),
+        ] {
+            let relative = format!("Encounter Groups/{name}.md");
+            let text = splat::content::formats::fixture(
+                &relative,
+                &format!(
+                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: {name}\nsplat_encounter_group:\n  side: enemies\n  members:\n{member}",
+                    splat::character::stable_id(&format!("visual:group:{name}"))
+                ),
+                "",
+            )
+            .unwrap();
+            crate::library::write_note(&campaign.path, &relative, None, &text).unwrap();
+        }
+        go_encounters(d);
+        d.click("Reload from disk");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 1: The Crossing ·");
+        show_plan(d);
+        for name in ["Ash Remnant", "Mill Watch"] {
+            d.click("Add a group");
+            d.click(&format!("Plan {name}"));
+        }
+        const FAULT: &str =
+            "Member 1, Cinder Wolf: Maximum HP would become −28. It must be 1 or more.";
+        d.expect(FAULT);
+        d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
+            show_plan(d);
+            // At 960 the plan scrolls to show both new groups.
+            if !d.in_view("Edit group Mill Watch") && !d.in_view_containing("Mill Watch to fight") {
+                d.scroll_until(pos2(650.0, 500.0), "Mill Watch", 10);
+                d.scroll_at(pos2(650.0, 500.0), 1);
+            }
+            let size = d.window_size();
+            let tones = (
+                tones_where(d, |text| text == FAULT),
+                tones_where(d, |text| text.starts_with("No members can join")),
+                // The summary joins a member's words with no-break spaces.
+                tones_where(d, |text| {
+                    text.replace('\u{a0}', " ")
+                        .contains("Maximum HP would become −28")
+                        && !text.starts_with("Member 1")
+                }),
+            );
+            d.observe(
+                "iter-22-B-FT1-plan",
+                tones.0 == ["error"]
+                    && tones.1 == ["warning"]
+                    && !tones.2.is_empty()
+                    && tones.2.iter().all(|tone| *tone == "none"),
+                format!(
+                    "At {size:?}: invalid maximum HP {:?}, group reason {:?}, lookalike name {:?}",
+                    tones.0, tones.1, tones.2
+                ),
+            );
+        });
     }
 }
 

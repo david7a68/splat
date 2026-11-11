@@ -242,6 +242,29 @@ fn fix_roster_rows(count: usize) -> &'static str {
     }
 }
 
+/// One warning for each unread line of an encounter file. When the file line follows (a roster
+/// row is among them), the warning names the row and the line, and the file line holds the path.
+/// Without a file line, the warning names the file.
+fn unread_notes(
+    path: &str,
+    flags: &[splat::content::layout::Flag],
+    faults: &[RosterFault],
+) -> Vec<String> {
+    flags
+        .iter()
+        .map(|flag| {
+            let row = faults.iter().find(|fault| fault.line == flag.line);
+            match row {
+                _ if faults.is_empty() => {
+                    format!("{path}, line {}: {}", flag.line, flag.message)
+                }
+                Some(fault) => format!("{} · line {}: {}", fault.name, flag.line, flag.message),
+                None => format!("Line {}: {}", flag.line, flag.message),
+            }
+        })
+        .collect()
+}
+
 /// A warning's file line: the path, whole, then `Edit in Obsidian` and `Show file`. A path too
 /// long to share the line with its links wraps on lines of its own above them; it is never cut.
 pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &str) {
@@ -3625,18 +3648,7 @@ impl Encounters {
             let faults = Entry::parse(&draft.path, &draft.source)
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
-            let notes: Vec<String> = draft
-                .flags
-                .iter()
-                .map(|flag| {
-                    let name = faults
-                        .iter()
-                        .find(|fault| fault.line == flag.line)
-                        .map(|fault| format!("{} · ", fault.name))
-                        .unwrap_or_default();
-                    format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message)
-                })
-                .collect();
+            let notes = unread_notes(&draft.path, &draft.flags, &faults);
             (notes, faults.len(), draft.path.clone())
         });
         let dirty = self.encounter_dirty();
@@ -5143,33 +5155,55 @@ mod tests {
     /// and two roster rows with a long path in a narrow column each end with the right sentence,
     /// and the file line starts at the last warning's words with its links whole. The path is
     /// painted whole inside the column: a long one wraps above its links, never cut.
+    /// iter-22-B FD5: the warnings come from `unread_notes`. With a file line below them they name
+    /// the row and the line, never the path; without one, the warning names the file.
     #[test]
     fn iter21_b_fd3_unread_roster_rows_end_with_one_file_line_at_the_last_words() {
         let long = "Encounters/The Emberfall Marches, Act Two/Shrine of Cinders beneath the Ashen Reaches.md";
-        for (notes, faults, path, sentence) in [
+        let flag = |line: usize, message: &str| splat::content::layout::Flag {
+            line,
+            message: message.to_owned(),
+        };
+        let row = |name: &str, line: usize| RosterFault {
+            name: name.to_owned(),
+            line,
+            problem: String::new(),
+        };
+        for (flags, rows, path, expected, sentence) in [
             (
-                vec!["Campaign.md, line 3: the date was not read."],
-                0,
-                "Campaign.md",
+                vec![flag(3, "the date was not read.")],
+                vec![],
+                "Encounters/Shrine.md",
+                vec!["Encounters/Shrine.md, line 3: the date was not read."],
                 None,
             ),
             (
-                vec!["Ember Cultist · Encounters/Shrine.md, line 20: the change was not read."],
-                1,
+                vec![flag(20, "the change was not read.")],
+                vec![row("Ember Cultist", 20)],
                 "Encounters/Shrine.md",
+                vec!["Ember Cultist · line 20: the change was not read."],
                 Some(fix_roster_rows(1)),
             ),
             (
+                // A flag that is not a roster row, beside two that are: it names its line only.
+                vec![
+                    flag(20, "the change “HP lots” was not read."),
+                    flag(21, "the creature cell is empty."),
+                    flag(4, "the date was not read."),
+                ],
+                vec![row("Ember Cultist", 20), row("Row on line 21", 21)],
+                long,
                 vec![
                     "Ember Cultist · line 20: the change “HP lots” was not read.",
                     "Row on line 21 · line 21: the creature cell is empty.",
+                    "Line 4: the date was not read.",
                 ],
-                2,
-                long,
                 Some(fix_roster_rows(2)),
             ),
         ] {
-            let notes: Vec<String> = notes.into_iter().map(str::to_owned).collect();
+            let notes = unread_notes(path, &flags, &rows);
+            assert_eq!(notes, expected);
+            let faults = rows.len();
             let ctx = egui::Context::default();
             design::theme::install(&ctx);
             let mut bounds = egui::Rect::NOTHING;
