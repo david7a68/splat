@@ -831,6 +831,20 @@ pub struct MissingDependency {
     creature: bool,
 }
 
+impl MissingDependency {
+    /// FJ6: the raw reference for Technical details, with a label that says what it is
+    /// (`Missing creature id: c5d429dd-…`), so the DM knows what to search for.
+    pub fn technical(&self) -> String {
+        let what = if self.creature { "creature" } else { "entry" };
+        let kind = match &self.target {
+            Some(Reference::Id(_)) => "id",
+            Some(Reference::Key(_)) => "key",
+            None => "reference",
+        };
+        format!("Missing {what} {kind}: {}", self.reference)
+    }
+}
+
 /// Read retained link text or a member's display name without exposing its reference.
 fn missing_reference_context(
     value: &Value,
@@ -3540,6 +3554,15 @@ mod tests {
                 )]
             );
             assert!(!closure.errors.join(" ").contains(&missing.to_string()));
+            // iter-24-B FJ6: Technical details labels the raw id with what it is.
+            assert_eq!(
+                closure
+                    .missing_dependencies
+                    .iter()
+                    .map(MissingDependency::technical)
+                    .collect::<Vec<_>>(),
+                [format!("Missing creature id: {missing}")]
+            );
         }
     }
 

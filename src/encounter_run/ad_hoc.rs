@@ -159,7 +159,7 @@ impl AdHoc {
             return Err("Find or name a creature first.".into());
         }
         if hp.is_none() {
-            return Err("Type its HP. A creature made up here has no stat block.".into());
+            return Err(NEEDS_HP.into());
         }
         Ok(Checked {
             entry: None,
@@ -218,15 +218,40 @@ pub(super) fn matches_for<'a>(
 }
 
 /// A short number field with its word before it. Returns whether Enter was pressed in it.
+/// The made-up form's own reason. Its line stays when the DM types the HP.
+const NEEDS_HP: &str = "Type its HP. A creature made up here has no stat block.";
+
+/// The made-up form's first fields, `Count` and `Initiative`, share an x: their words take
+/// one width, as Correct's label column does.
+const FIRST_FIELD_WIDTH: f32 = 56.0;
+
+/// A field with its word before it. A `label_width` gives the word a fixed column.
 fn short_field(
     ui: &mut egui::Ui,
     word: &str,
+    label_width: Option<f32>,
     name: &str,
     text: &mut String,
     hint: &str,
     width: f32,
 ) -> bool {
-    ui.label(Type::Small.rich(ui, word).color(colors().muted));
+    let words = Type::Small.rich(ui, word).color(colors().muted);
+    match label_width {
+        Some(label_width) => {
+            let size = egui::vec2(label_width, Density::Read.control());
+            ui.allocate_ui_with_layout(
+                size,
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_size(size);
+                    ui.label(words);
+                },
+            );
+        }
+        None => {
+            ui.label(words);
+        }
+    }
     ui.add_space(design::XS);
     let response = design::number_field(ui, name, text, hint, width, Density::Read.control());
     response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
@@ -255,7 +280,8 @@ impl Run {
         sides
     }
 
-    pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui) {
+    /// `block` is the width of Arrivals' group block, when it has groups.
+    pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui, block: Option<f32>) {
         let c = colors();
         let known = self.creatures.clone().unwrap_or_default();
         if let Some(picked) = self.ad_hoc.picked.clone() {
@@ -274,7 +300,9 @@ impl Run {
             });
             ui.add(egui::Label::new(Type::Small.rich(ui, &picked.detail).color(c.muted)).wrap());
         } else {
-            let width = ui.available_width() - design::M;
+            // As wide as the group block below, so the panel has one right edge.
+            let width = block
+                .unwrap_or_else(|| (ui.available_width() - design::M).min(design::LIST_MEASURE));
             design::search_field(
                 ui,
                 FIELD,
@@ -393,22 +421,45 @@ impl Run {
         let hp_hint = shown(base.as_ref().map(|base| base.max_hp), "Needed");
         let ac_hint = shown(base.as_ref().map(|base| base.armor_class), "None");
         let mut enter = false;
-        // Two fixed rows, so that a narrow panel never parts a word from its field.
+        // Two fixed rows, so that a narrow panel never parts a word from its field. Their
+        // first words share one column, so `Count` and `Initiative` fields start at one x and
+        // `Side` starts where `HP` does.
+        let first_words = ["Count", "Initiative"]
+            .iter()
+            .map(|word| design::number_width(ui, word, &Type::Small.font(ui)))
+            .fold(0.0, f32::max);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
             let form = &mut self.ad_hoc;
             enter |= short_field(
                 ui,
                 "Count",
+                Some(first_words),
                 "New creature count",
                 &mut form.count,
                 "1",
-                44.0,
+                FIRST_FIELD_WIDTH,
             );
             ui.add_space(design::M);
-            enter |= short_field(ui, "HP", "New creature HP", &mut form.hp, &hp_hint, 64.0);
+            enter |= short_field(
+                ui,
+                "HP",
+                None,
+                "New creature HP",
+                &mut form.hp,
+                &hp_hint,
+                64.0,
+            );
             ui.add_space(design::M);
-            enter |= short_field(ui, "AC", "New creature AC", &mut form.ac, &ac_hint, 52.0);
+            enter |= short_field(
+                ui,
+                "AC",
+                None,
+                "New creature AC",
+                &mut form.ac,
+                &ac_hint,
+                52.0,
+            );
         });
         let sides = self.sides_to_join();
         ui.horizontal(|ui| {
@@ -416,10 +467,11 @@ impl Run {
             enter |= short_field(
                 ui,
                 "Initiative",
+                Some(first_words),
                 "New creature initiative total",
                 &mut self.ad_hoc.total,
                 "Roll",
-                56.0,
+                FIRST_FIELD_WIDTH,
             );
             ui.add_space(design::M);
             ui.label(Type::Small.rich(ui, "Side").color(c.muted));
@@ -471,9 +523,28 @@ impl Run {
             Ok(_) if no_bonus => Some("It has no initiative bonus. Type a total.".to_owned()),
             Ok(_) => None,
         };
-        if let Some(why) = &blocked {
-            ui.add(egui::Label::new(Type::Small.rich(ui, why).color(c.muted)).wrap());
-        }
+        // A reason that comes and goes keeps its line, as tall as the made-up form's own
+        // reason, so Add and the groups below stay still when the DM types the HP.
+        let width = ui.available_width();
+        let reserved = egui::WidgetText::from(Type::Small.rich(ui, NEEDS_HP))
+            .into_galley(
+                ui,
+                Some(egui::TextWrapMode::Wrap),
+                width,
+                egui::TextStyle::Body,
+            )
+            .size()
+            .y;
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, reserved),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_size(egui::vec2(0.0, reserved));
+                if let Some(why) = &blocked {
+                    ui.add(egui::Label::new(Type::Small.rich(ui, why).color(c.muted)).wrap());
+                }
+            },
+        );
         let pressed = Action::secondary(&label)
             .icon(icons::ADD)
             .density(Density::Read)

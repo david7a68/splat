@@ -20,10 +20,7 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book, Kind,
-        page::{
-            SessionLink, long_rest_added_message, long_rest_status, problems, quick_add,
-            rest_ruling,
-        },
+        page::{SessionLink, added_message, long_rest_status, problems, quick_add, rest_ruling},
         removed_event_words,
     },
 };
@@ -234,6 +231,8 @@ struct Live {
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
+    /// The event's name that the links now say. It ends with this state.
+    title: String,
 }
 
 #[derive(Default)]
@@ -260,7 +259,10 @@ pub struct Sessions {
     reveal_event: bool,
     open_planned: Option<String>,
     show_fight_log: bool,
-    deleted_run: Option<crate::encounter_run::DeletedRun>,
+    /// A saved run the DM deleted from the plan, with the removal action it replaces in the
+    /// plan (the book's removal of that run's own event when the deletion happened). The
+    /// deletion's result owns it: its Undo, or the plan's next note or event edit, ends it.
+    deleted_run: Option<(crate::encounter_run::DeletedRun, Option<u64>)>,
     row_notice: Option<(Option<Uuid>, usize)>,
     updated_links: Option<Vec<(Draft, String)>>,
     link_undo_state: Option<LinkUndoState>,
@@ -1076,10 +1078,19 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
-/// Recording results follow the column with the same text inset as Write.
+/// The removal action a deletion of this run follows: the book's live removal, when its event
+/// is that same run's. A deletion in another fight or session replaces no removal.
+fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
+    book.removed_event()
+        .filter(|event| deleted_run.is_some() && event.run == deleted_run)
+        .and(book.removal_action())
+}
+
+/// Recording results follow the column with the same text inset as Write, and keep the reader
+/// measure: prose and its rules never fill a wide pane.
 fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.scope(|ui| {
-        ui.set_max_width(ui.available_width() - 2.0 * design::S);
+        ui.set_max_width((ui.available_width() - 2.0 * design::S).min(design::READER_MEASURE));
         add(ui)
     })
     .inner
@@ -1590,7 +1601,7 @@ impl Sessions {
         let primary_owner = self.banner_primary_owner(settings, run_open);
         let stalled = self.stalled_elsewhere().map(|live| {
             format!(
-                "The recording of “{}” is not saving audio after {}. What was saved is kept. Record again starts a new file.",
+                "The recording of “{}” stopped saving audio. The first {} are kept. Record again starts a new file.",
                 live.label,
                 spoken_length(live.recorder.seconds())
             )
@@ -2273,6 +2284,7 @@ impl Sessions {
             self.link_undo_state = Some(LinkUndoState {
                 notes: self.note_bodies(),
                 events: book.events.clone(),
+                title: current.title.clone(),
             });
         }
         if let Some(problem) = &self.link_problem {
@@ -2281,12 +2293,14 @@ impl Sessions {
     }
 
     pub fn event_link_undo(&mut self, ui: &mut egui::Ui) {
+        // The Library's words for the same action: the name the links now say.
         if self.updated_links.is_some()
+            && let Some(state) = &self.link_undo_state
             && design::undo_message(
                 ui,
                 Tone::Success,
-                "Links updated in notes.",
-                "Undo update links",
+                &format!("Links now say “{}”.", state.title),
+                "Undo link update",
             )
         {
             self.undo_event_link_notes();
@@ -2911,20 +2925,21 @@ impl Sessions {
         } else if let (Some(live), Some((icon, word, color))) =
             (&self.live, self.recording_status())
         {
-            let words = format!(
-                "{word} {} in {}",
-                clock(live.recorder.seconds()),
-                live.label
-            );
-            design::status(
-                ui,
-                Status {
-                    icon,
-                    word: &words,
-                    color,
-                },
-            )
-            .on_hover_text(&words);
+            // As on the recording row: the state's colour only on its icon and word, and the
+            // other session's time and title in muted `Small` text.
+            let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
+            let format = |color| egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                color,
+                ..Default::default()
+            };
+            let mut job = egui::text::LayoutJob::default();
+            job.append(icon, 0.0, format(color));
+            job.append(" ", 0.0, format(color));
+            job.append(word, 0.0, format(color));
+            job.append(&detail, 0.0, format(c.muted));
+            ui.add(egui::Label::new(job).truncate())
+                .on_hover_text(format!("{word}{detail}"));
         } else if settings.input_missing() {
             let mut open = false;
             ui.horizontal_wrapped(|ui| {
@@ -3003,8 +3018,8 @@ impl Sessions {
     fn note_save_status(draft: &Draft) -> Status<'static> {
         let c = colors();
         let (icon, word, color) = match &draft.state {
-            DraftState::Clean => (icons::OK, "Notes saved", c.document.clean),
-            DraftState::Saved => (icons::OK, "Notes saved", c.document.saved),
+            // A saved note is the calm, usual state: muted, never green, in every view.
+            DraftState::Clean | DraftState::Saved => (icons::OK, "Notes saved", c.document.clean),
             DraftState::Unsaved => (icons::BUSY, "Saving…", c.muted),
             DraftState::Conflict => (icons::WARN, "Changed on disk", c.document.external),
             DraftState::Missing => (icons::ERROR, "Notes not saved", c.document.invalid),
@@ -3922,7 +3937,7 @@ impl Sessions {
                                     .density(Density::Read)
                                     .show(ui)
                                     .clicked();
-                                start = Action::quiet("New session")
+                                start = Action::secondary("New session")
                                     .density(Density::Read)
                                     .show(ui)
                                     .clicked();
@@ -4298,17 +4313,7 @@ impl Sessions {
             return;
         }
         let c = colors();
-        if let Some((body, events)) = &self.plan_notice_state
-            && (self.draft.as_ref().is_none_or(|draft| draft.body != *body)
-                || book.events != *events)
-        {
-            self.deleted_run = None;
-            self.row_notice = None;
-            self.removed_group = None;
-            self.removed_fight = None;
-            self.removed_event_in_plan = false;
-            self.plan_notice_state = None;
-        }
+        self.end_plan_results_after_edits(book);
         if self
             .removed_group
             .as_ref()
@@ -4440,9 +4445,10 @@ impl Sessions {
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
+        let superseded = self.removal_superseded(book);
         let removed_row = book
             .removed_row()
-            .filter(|_| self.removed_event_in_plan)
+            .filter(|_| self.removed_event_in_plan && !superseded)
             .map(|(at, label)| {
                 let words = removed_event_words(book, session, &days, &label, &planned_results);
                 (at, words)
@@ -4772,8 +4778,7 @@ impl Sessions {
                             .map_or_else(String::new, |draft| draft.body.clone()),
                         book.events.clone(),
                     ));
-                    self.deleted_run = Some(deleted);
-                    self.wants_runs_refresh = true;
+                    self.record_deleted_run(book, deleted, saved.id);
                 }
                 Err(error) => self.rename_problem = Some(error),
             }
@@ -4835,8 +4840,58 @@ impl Sessions {
         }
     }
 
+    /// The plan's results end at the next edit of the note or the timeline events.
+    fn end_plan_results_after_edits(&mut self, book: &Book) {
+        if let Some((body, events)) = &self.plan_notice_state
+            && (self.draft.as_ref().is_none_or(|draft| draft.body != *body)
+                || book.events != *events)
+        {
+            self.deleted_run = None;
+            self.row_notice = None;
+            self.removed_group = None;
+            self.removed_fight = None;
+            self.removed_event_in_plan = false;
+            self.plan_notice_state = None;
+        }
+    }
+
+    /// The deletion's result. While it shows, it replaces the result of the removal action it
+    /// follows, when that removal is of this run's own event.
+    fn record_deleted_run(
+        &mut self,
+        book: &Book,
+        deleted: crate::encounter_run::DeletedRun,
+        run: Option<Uuid>,
+    ) {
+        self.deleted_run = Some((deleted, removal_replaced_by(book, run)));
+        self.wants_runs_refresh = true;
+    }
+
+    /// One step, one result: decided each draw from the two live results. The book's removal
+    /// result hides only while the deletion result that followed that same removal action
+    /// shows. A new removal, even of the same event, is another action and shows.
+    fn removal_superseded(&self, book: &Book) -> bool {
+        self.deleted_run
+            .as_ref()
+            .and_then(|(_, action)| *action)
+            .is_some_and(|action| book.removal_action() == Some(action))
+    }
+
+    /// Put the deleted run's file back. Its result ends; a removal result it replaced returns.
+    fn undo_deleted_run(&mut self) {
+        if let Some((deleted, _)) = &self.deleted_run {
+            match deleted.restore() {
+                Ok(()) => {
+                    self.deleted_run = None;
+                    self.wants_runs_refresh = true;
+                }
+                Err(error) => self.rename_problem = Some(error),
+            }
+        }
+    }
+
     fn deleted_run_message(&mut self, ui: &mut egui::Ui) {
-        if let Some(deleted) = &self.deleted_run {
+        if let Some((deleted, _)) = &self.deleted_run {
             let words = deleted.message();
             if design::undo_message(
                 ui,
@@ -4848,13 +4903,7 @@ impl Sessions {
                 &words,
                 crate::encounter_run::DeletedRun::UNDO_LABEL,
             ) {
-                match deleted.restore() {
-                    Ok(()) => {
-                        self.deleted_run = None;
-                        self.wants_runs_refresh = true;
-                    }
-                    Err(error) => self.rename_problem = Some(error),
-                }
+                self.undo_deleted_run();
             }
         }
     }
@@ -4893,26 +4942,22 @@ impl Sessions {
                 .notes
                 .iter()
                 .find(|note| Some(note.id) == session)
-                .map_or_else(String::new, |note| format!(" to Session {}", note.number));
+                .map(|note| format!("Session {}", note.number));
             let restores = book
                 .events
                 .iter()
-                .any(|event| event.id == just.id && event.restores);
+                .any(|event| event.id == just.id && event.restores)
+                .then(|| timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs));
             let (id, words) = (
                 just.id.clone(),
-                if restores {
-                    let names =
-                        timeline::fights_that_keep_hp(&book.events, session, plan.saved_runs);
-                    long_rest_added_message(names.into_iter())
-                } else {
-                    format!("{} added{to}.", just.label)
-                },
+                added_message(&just.label, to.as_deref(), restores),
             );
             if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.undo_add(&id);
                 self.added = None;
             }
         } else if !self.removed_event_in_plan
+            && !self.removal_superseded(book)
             && let Some(label) = book.removed().map(str::to_owned)
         {
             let words = removed_event_words(book, session, &days, &label, planned);
@@ -5692,86 +5737,97 @@ impl Sessions {
             .min(design::READER_MEASURE)
             .min((ui.available_width() - action - design::L).max(0.0));
         let widths = [text, action];
+        // The rows and their rules take the combined width. A row's result message uses the
+        // list measure, so its Undo follows the words on one line when they fit.
+        let message_width = ui.available_width().min(design::LIST_MEASURE);
         ui.scope(|ui| {
-            ui.set_width(text + design::L + action);
             for (index, (marker, title, key, added, facts, placement)) in rows.iter().enumerate() {
-                design::table_row(ui, &widths, design::L, |ui, cell| {
-                    ui.spacing_mut().item_spacing.x = design::S;
-                    if cell == 0 {
-                        ui.horizontal_top(|ui| {
-                            ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
-                            ui.vertical(|ui| {
-                                ui.add(
-                                    egui::Label::new(Type::Body.rich(ui, *title).color(c.text))
-                                        .wrap(),
-                                );
-                                ui.horizontal_wrapped(|ui| {
-                                    if !marker.at.is_empty()
-                                        && recording.marked
-                                        && design::link(ui, &marker.at)
-                                            .on_hover_text("Read the transcript here")
-                                            .clicked()
-                                    {
-                                        read_at = Some((
-                                            marker.at.clone(),
-                                            (*marker).clone(),
-                                            key.clone(),
-                                        ));
+                ui.scope(|ui| {
+                    ui.set_width(text + design::L + action);
+                    design::table_row(ui, &widths, design::L, |ui, cell| {
+                        ui.spacing_mut().item_spacing.x = design::S;
+                        if cell == 0 {
+                            ui.horizontal_top(|ui| {
+                                ui.label(Type::Body.rich(ui, marker.kind.icon()).color(c.muted));
+                                ui.vertical(|ui| {
+                                    ui.add(
+                                        egui::Label::new(Type::Body.rich(ui, *title).color(c.text))
+                                            .wrap(),
+                                    );
+                                    ui.horizontal_wrapped(|ui| {
+                                        if !marker.at.is_empty()
+                                            && recording.marked
+                                            && design::link(ui, &marker.at)
+                                                .on_hover_text("Read the transcript here")
+                                                .clicked()
+                                        {
+                                            read_at = Some((
+                                                marker.at.clone(),
+                                                (*marker).clone(),
+                                                key.clone(),
+                                            ));
+                                        }
+                                        ui.add(
+                                            egui::Label::new(
+                                                Type::Small.rich(ui, facts).color(c.muted),
+                                            )
+                                            .wrap(),
+                                        );
+                                    });
+                                    if !placement.is_empty() {
+                                        ui.add(
+                                            egui::Label::new(
+                                                Type::Small.rich(ui, placement).color(c.muted),
+                                            )
+                                            .wrap(),
+                                        );
                                     }
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, facts).color(c.muted),
-                                        )
-                                        .wrap(),
-                                    );
                                 });
-                                if !placement.is_empty() {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, placement).color(c.muted),
-                                        )
-                                        .wrap(),
-                                    );
+                            });
+                        } else {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                                if let Some(id) = &added {
+                                    if design::status_link(
+                                        ui,
+                                        Status {
+                                            icon: icons::OK,
+                                            word: "On the timeline",
+                                            color: c.result.success,
+                                        },
+                                    )
+                                    .clicked()
+                                    {
+                                        self.wants_event = Some(id.clone());
+                                    }
+                                } else if Action::secondary("Add")
+                                    .name(&format!("Add to timeline: {title} ({index})"))
+                                    .density(Density::Read)
+                                    .blocked_if(
+                                        book.unreadable.is_some(),
+                                        "The timeline file must be repaired first.",
+                                    )
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    let id = book.add_marker(marker, key, session);
+                                    book.save();
+                                    self.recording_added = Some(id);
                                 }
                             });
-                        });
-                    } else {
-                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                            if let Some(id) = &added {
-                                if design::status_link(
-                                    ui,
-                                    Status {
-                                        icon: icons::OK,
-                                        word: "On the timeline",
-                                        color: c.result.success,
-                                    },
-                                )
-                                .clicked()
-                                {
-                                    self.wants_event = Some(id.clone());
-                                }
-                            } else if Action::secondary("Add")
-                                .name(&format!("Add to timeline: {title} ({index})"))
-                                .density(Density::Read)
-                                .blocked_if(
-                                    book.unreadable.is_some(),
-                                    "The timeline file must be repaired first.",
-                                )
-                                .show(ui)
-                                .clicked()
-                            {
-                                let id = book.add_marker(marker, key, session);
-                                book.save();
-                                self.recording_added = Some(id);
-                            }
-                        });
-                    }
+                        }
+                    });
                 });
                 if added.as_ref() == self.recording_added.as_ref()
                     && let Some(id) = &added
                 {
                     let words = format!("{title} added to the timeline.");
-                    if design::undo_message(ui, Tone::Success, &words, "Undo add") {
+                    let undo = ui
+                        .scope(|ui| {
+                            ui.set_max_width(message_width);
+                            design::undo_message(ui, Tone::Success, &words, "Undo add")
+                        })
+                        .inner;
+                    if undo {
                         book.undo_add(id);
                         self.recording_added = None;
                     }
@@ -5809,7 +5865,23 @@ impl Sessions {
         let mut back = false;
         let mut add_to_notes = None;
         let in_notes = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
+        // Reserve each segment's full width before choosing the control. Its row never wraps.
+        let segments_width: f32 =
+            options
+                .iter()
+                .map(|(_, label)| {
+                    design::number_width(ui, label, &Type::Strong.font(ui))
+                        .max(design::number_width(ui, label, &Type::Body.font(ui)))
+                        + 2.0 * design::S
+                })
+                .sum();
+        // The viewer is one block: the reader measure, or the view choices when they are wider.
+        // Add to notes ends at its right edge, near the date, not at the far edge of the pane.
+        let block = ui
+            .available_width()
+            .min(design::READER_MEASURE.max(segments_width + design::XS));
         ui.horizontal(|ui| {
+            ui.set_max_width(block);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if reading.made == Made::Summary {
                     let summary = nested_in_note(reading.parts[0].1.trim());
@@ -5841,16 +5913,6 @@ impl Sessions {
                 });
             });
         });
-        // Reserve each segment's full width before choosing the control. Its row never wraps.
-        let segments_width: f32 =
-            options
-                .iter()
-                .map(|(_, label)| {
-                    design::number_width(ui, label, &Type::Strong.font(ui))
-                        .max(design::number_width(ui, label, &Type::Body.font(ui)))
-                        + 2.0 * design::S
-                })
-                .sum();
         let switched = if segments_width + design::XS <= ui.available_width() {
             design::segmented(ui, &mut made, &options)
         } else {
@@ -6535,7 +6597,7 @@ impl Sessions {
                 ui,
                 icons::SESSIONS,
                 "No session notes yet",
-                "Start a session from a template. Notes are Markdown files in the campaign folder.",
+                "Start a session from a template. It holds tonight’s plan and your notes.",
                 |ui| {
                     start = if self.open_run.is_some() {
                         Action::secondary("New session")
@@ -8174,6 +8236,7 @@ mod tests {
             sessions.link_undo_state = Some(LinkUndoState {
                 notes: sessions.note_bodies(),
                 events: book.events.clone(),
+                title: String::new(),
             });
             sessions.expire_event_link_undo(true, &book);
             assert!(sessions.updated_links.is_some());
@@ -8374,6 +8437,94 @@ mod tests {
                 source
             );
         }
+    }
+
+    #[test]
+    fn a_deleted_run_replaces_a_removal_result_until_the_book_removal_changes() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        let first = book.add(Kind::Day, None);
+        let second = book.add(Kind::Day, None);
+        let run = Uuid::from_u128(7);
+        book.events[0].run = Some(run);
+        book.remove(&first);
+        // The plan's Delete the saved run: the file goes, its result keeps the run's id, and
+        // the plan's edit witness is taken after the step.
+        let delete = |sessions: &mut Sessions, book: &Book, id: Option<Uuid>| {
+            let path = folder.path().join("run.json");
+            fs::write(&path, "{}").unwrap();
+            let info = crate::encounter_run::SavedRunInfo {
+                path,
+                id,
+                source: None,
+                encounter: "Bridge Ambush".into(),
+                label: String::new(),
+                standing: crate::encounter_run::Standing::Unfinished,
+                saved_at: None,
+                unsent: Vec::new(),
+            };
+            let deleted = crate::encounter_run::DeletedRun::delete(&info).unwrap();
+            sessions.record_deleted_run(book, deleted, id);
+            let body = sessions
+                .draft
+                .as_ref()
+                .map_or_else(String::new, |draft| draft.body.clone());
+            sessions.plan_notice_state = Some((body, book.events.clone()));
+        };
+        let mut sessions = Sessions::default();
+        assert!(!sessions.removal_superseded(&book));
+        // A deleted run of another fight, or a run with no id, leaves the removal's result.
+        for other in [Some(Uuid::from_u128(8)), None] {
+            delete(&mut sessions, &book, other);
+            assert!(!sessions.removal_superseded(&book));
+            sessions.undo_deleted_run();
+        }
+        // The removed event's own run replaces its result.
+        delete(&mut sessions, &book, Some(run));
+        assert!(sessions.removal_superseded(&book));
+        // Undo delete run ends only the deletion's result: the run file returns, and the
+        // removal's result shows again (review of PR 245, path 2).
+        sessions.undo_deleted_run();
+        assert!(folder.path().join("run.json").exists());
+        assert!(book.removed_event().is_some());
+        assert!(!sessions.removal_superseded(&book));
+        // Undo on Timeline ends the removal, and the plan sees the edit.
+        delete(&mut sessions, &book, Some(run));
+        book.undo_remove();
+        sessions.end_plan_results_after_edits(&book);
+        assert!(!sessions.removal_superseded(&book));
+        // Removing the same event again is a new step: its result shows (path 1).
+        book.remove(&first);
+        assert!(
+            !sessions.removal_superseded(&book),
+            "a new removal of the same event keeps its own result"
+        );
+        book.undo_remove();
+        book.remove(&second);
+        assert!(!sessions.removal_superseded(&book));
+        // Re-check of PR 245: with a note open, Timeline's Undo remove and a new removal of the
+        // same event both happen before the plan draws again. The note and the events then
+        // equal the plan's witness, so its cleanup keeps the deletion result; the new removal
+        // still shows its message and Undo remove, because it is a different action.
+        book.undo_remove();
+        let note = folder.path().join("note.md");
+        fs::write(&note, "## What happened\n\nThe bridge held.\n").unwrap();
+        sessions.draft = Some(Draft::open(&note).unwrap());
+        book.remove(&first);
+        delete(&mut sessions, &book, Some(run));
+        assert!(sessions.removal_superseded(&book));
+        book.undo_remove();
+        book.remove(&first);
+        sessions.end_plan_results_after_edits(&book);
+        assert!(
+            sessions.deleted_run.is_some(),
+            "the plan's cleanup sees no edit, so the deletion result stays"
+        );
+        assert!(book.removed().is_some());
+        assert!(
+            !sessions.removal_superseded(&book),
+            "the new removal of the same event shows its message and Undo remove"
+        );
     }
 
     #[test]

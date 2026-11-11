@@ -93,11 +93,36 @@ fn malformed_run_is_reported() {
         "{\n \"state\": [",
     )
     .unwrap();
+    // A saved entry copy keeps its flags' sentences: one an older Splat wrote, with its line at the
+    // end, and one Splat writes now, with its line first. Each is given with its entry and names its
+    // line once.
+    let old =
+        "Hit Points “about twenty” not read (line 19). Start with a number, such as 22 (4d8 + 4).";
+    let new = "Line 19: Hit Points “about twenty” was not read. Start with a number, such as 22 (4d8 + 4).";
+    let entry = serde_json::json!({
+        "path": "Wolf.md", "id": "00000000-0000-0000-0000-000000000002", "key": null,
+        "name": "Wolf", "kind": "world",
+        "fields": {"splat_schema": 2, "splat_world": {}}, "body": "",
+        "inventory": [], "inventory_containers": [],
+        "flags": [{"line": 19, "message": old}, {"line": 19, "message": new}],
+    });
+    fs::write(
+        dir.path().join("Encounter Runs/Flagged.json"),
+        serde_json::json!({"state": {"definitions": [entry]}, "version": 1}).to_string(),
+    )
+    .unwrap();
     let check = run(dir.path(), "check", &[]);
     assert_eq!(check.status.code(), Some(1));
-    assert!(
-        String::from_utf8(check.stdout)
-            .unwrap()
-            .contains("Broken.json:2:")
-    );
+    let output = String::from_utf8(check.stdout).unwrap();
+    assert!(output.contains("Broken.json:2:"), "{output}");
+    let flags: Vec<_> = output
+        .lines()
+        .filter(|line| line.contains("(entry Wolf.md"))
+        .collect();
+    assert_eq!(flags.len(), 2, "{output}");
+    for words in [old, new] {
+        let line = flags.iter().find(|line| line.contains(words));
+        assert!(line.is_some(), "{words} in {output}");
+        assert_eq!(line.unwrap().matches("19").count(), 1, "{output}");
+    }
 }
