@@ -2965,28 +2965,50 @@ pub(super) fn space_reaches(
     words: &str,
     undo: Option<&str>,
 ) -> [(bool, bool); 3] {
-    let shown = |d: &Driver<'_>| {
-        d.visible_text(words)
-            && undo.is_none_or(|undo| {
-                d.nodes()
-                    .iter()
-                    .any(|node| node.name == undo && node.fully_in_view())
-            })
+    // The message is drawn and its last line comes into view: a message longer than the space's
+    // two lines is never in view whole, so reaching its end is the proof that it can be read. Its
+    // Undo or action (when given) comes fully into view too; at 960 the two need not share a view.
+    let end_in_view = |d: &Driver<'_>| {
+        let mut end = false;
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains(words)
+                && let Some(row) = text.galley.rows.last()
+            {
+                let row = row.rect().translate(text.pos.to_vec2());
+                end |= row.is_positive() && clip.expand(1.0).contains_rect(row);
+            }
+        });
+        end
+    };
+    let undo_in_view = |d: &Driver<'_>| {
+        undo.is_none_or(|undo| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name == undo && node.fully_in_view())
+        })
     };
     let reach = |d: &mut Driver<'_>, step: &dyn Fn(&mut Driver<'_>)| {
+        let (mut end, mut action) = (false, false);
         for _ in 0..12 {
-            if shown(d) {
+            end |= end_in_view(d);
+            action |= undo_in_view(d);
+            if end && action {
                 return true;
             }
             step(d);
         }
-        shown(d)
+        end && action
     };
-    [SMALL, DEFAULT, LARGE].map(|size| {
+    // Tab takes focus to the space; the control that had it gets it back after, so the steps that
+    // follow type where they did.
+    let focused = d.focused_name();
+    let reached = [SMALL, DEFAULT, LARGE].map(|size| {
         d.act_at_size(size, |d| {
-            let Some(space) = d.nodes().into_iter().find(|node| {
-                node.role == Role::GenericContainer && node.name.contains(words)
-            }) else {
+            let Some(space) = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.role == Role::GenericContainer && node.name.contains(words))
+            else {
                 return (false, false);
             };
             let keyboard = d.tab_to(&space.name) && {
@@ -3001,7 +3023,13 @@ pub(super) fn space_reaches(
             d.scroll_up_at(space.rect.center(), 3);
             (keyboard, pointer)
         })
-    })
+    });
+    if let Some(name) = focused
+        && d.focused_name().as_deref() != Some(name.as_str())
+    {
+        d.click(&name);
+    }
+    reached
 }
 
 /// Round 24 FC4: the y of the Read tab, `Show file` on the file line and the reader's title, at
@@ -3794,7 +3822,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     let warning_tops = editor_frame_tops(d);
     // Astra review of round 25: the warning keeps its consequence, the value the fight uses, and
     // the wrapped warning and `Use 24` are drawn and reached in the message space at each size.
-    let stat_reached = space_reaches(d, "The fight uses 22.", Some("Use 24"))
+    let stat_reach = space_reaches(d, "The fight uses 22.", Some("Use 24"));
+    let stat_reached = stat_reach
         .iter()
         .all(|(keyboard, pointer)| *keyboard && *pointer);
     d.observe(
@@ -3802,7 +3831,9 @@ pub fn package_rename(d: &mut Driver<'_>) {
         d.has("Hit Points line says 24; stat block says 22. The fight uses 22.")
             && stat_reached
             && !d.has_containing("max_hp"),
-        "The stat warning names Hit Points and the stat block, not max_hp, and says the fight uses 22",
+        format!(
+            "The stat warning names Hit Points and the stat block, not max_hp, and says the fight uses 22; reached by (keyboard, pointer) at 960, 1200, 1920: {stat_reach:?}"
+        ),
     );
     assert!(!d.has_containing("The stat block now says"));
     // The warning wraps at 960, so `Use 24` is below the first two lines: the wheel over the
@@ -4562,9 +4593,13 @@ pub fn package_about(d: &mut Driver<'_>) {
     // Astra review: kept means drawn and reachable, by keyboard and by pointer, with its Undo, at
     // 960, 1200 and 1920; the space's accessible name alone does not count.
     let kept = |d: &mut Driver<'_>| {
-        space_reaches(d, "Module.md was written again.", Some("Undo write Module.md"))
-            .iter()
-            .all(|(keyboard, pointer)| *keyboard && *pointer)
+        space_reaches(
+            d,
+            "Module.md was written again.",
+            Some("Undo write Module.md"),
+        )
+        .iter()
+        .all(|(keyboard, pointer)| *keyboard && *pointer)
     };
     let refused = (kept(d), editor_below_read(d));
     d.click("Discard");
@@ -5720,47 +5755,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("Undo remove");
     d.state("deleted-draft-let-go", Sizes::All);
     let let_go_count = files_to_fix(d);
-    // Astra review of round 25: an unrelated choice B between Remove (A) and Undo remove. B
-    // writes the campaign file and refreshes the Library; A's Undo belongs to A's file and stays.
-    let (entries, _) = splat::content::read_directory(&package).unwrap();
-    let wraith = entries.iter().find(|e| e.name == "Ash Wraith").unwrap().id;
-    let wraith_chosen = |d: &mut Driver<'_>| {
-        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
-        crate::content_workspace::CampaignDocument::load(&campaign)
-            .unwrap()
-            .selections
-            .iter()
-            .any(|selection| match &selection.selection {
-                crate::content_workspace::Selection::Selected { entries } => {
-                    entries.iter().any(|entry| entry.id == Some(wraith))
-                }
-                _ => false,
-            })
-    };
-    let b_before = wraith_chosen(d);
-    go_encounters(d);
-    open_saved_encounter(d, "Bridge Ambush");
-    d.type_into(FIND_CREATURE, "Ash Wraith");
-    d.wait_for_text("Ash Wraith is in Ashen Marches, which this campaign does not use.");
-    d.click("Use it");
-    d.settle();
-    let b_after = wraith_chosen(d);
-    go_library(d);
-    d.wait_for_text("Undo remove");
     d.click("Undo remove");
     d.expect("Remove entry and lose draft");
     d.expect("A draft to let go.");
     // Round 23 FD1: Undo remove gives back the entry's campaign use and the header count with
     // the draft, as one step.
     let restored_count = files_to_fix(d);
-    let b_kept = wraith_chosen(d);
-    d.observe(
-        "iter-25-L-undo-remove-after-b",
-        !b_before && b_after && b_kept && d.has("Remove entry and lose draft"),
-        format!(
-            "B (Ash Wraith) chosen between Remove and Undo remove: before {b_before}, after {b_after}, after Undo {b_kept}; Undo remove still gives back A's draft"
-        ),
-    );
     d.observe(
         "iter-23-L-FD1",
         gone_used
@@ -5785,6 +5785,48 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect_same("The deleted entry stays absent after focus returns.");
     d.assert_state_matches("deleted-draft-after-focus", "deleted-draft-let-go");
+    // Astra review of round 25: an unrelated choice B between Remove (A) and Undo remove. B
+    // writes the campaign file and refreshes the Library; A's Undo belongs to A's file and stays.
+    let (entries, _) = splat::content::read_directory(&package).unwrap();
+    let wraith = entries.iter().find(|e| e.name == "Ash Wraith").unwrap().id;
+    let wraith_chosen = |d: &mut Driver<'_>| {
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        crate::content_workspace::CampaignDocument::load(&campaign)
+            .unwrap()
+            .selections
+            .iter()
+            .any(|selection| match &selection.selection {
+                crate::content_workspace::Selection::Selected { entries } => {
+                    entries.iter().any(|entry| entry.id == Some(wraith))
+                }
+                _ => false,
+            })
+    };
+    let b_before = wraith_chosen(d);
+    // B is the campaign choice that `Use it` in encounter search and `Choose for this campaign`
+    // both send, routed by the app to `use_in_campaign` and then `refresh_destination` for the
+    // campaign folder. The search cannot offer `Use it` for Ash Wraith here: the built-in Wraith
+    // matches as typed, and the offer shows only when nothing does. The Library cannot open Ash
+    // Wraith either: opening another entry is Remove's own end.
+    go_encounters(d);
+    let module = d.app_mut().campaigns.modules()[0].id;
+    d.app_mut().library.use_entry = Some((module, wraith));
+    d.settle();
+    let b_after = wraith_chosen(d);
+    go_library(d);
+    d.wait_for_text("Undo remove");
+    d.click("Undo remove");
+    d.expect("Remove entry and lose draft");
+    let a_back = d.has_containing("A draft to let go.")
+        && d.visible_text("Ashen Marches · Chosen for this campaign");
+    let b_kept = wraith_chosen(d);
+    d.observe(
+        "iter-25-L-undo-remove-after-b",
+        !b_before && b_after && b_kept && a_back,
+        format!(
+            "B (Ash Wraith) chosen between Remove and Undo remove: before {b_before}, after {b_after}, after Undo {b_kept}; A's draft and chosen state back: {a_back}"
+        ),
+    );
 }
 
 /// The copied wolf's heading warning in `package_duplicate_id`.

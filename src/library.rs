@@ -3754,8 +3754,7 @@ impl Library {
         // an unrelated entry, such as choosing a creature for the campaign, keeps them.
         let changed_here = |owner: &Owner, path: &str, expected: Option<&str>| {
             owner.root() == Some(root)
-                && read_disk(root, path)
-                    .map_or(true, |text| text.as_deref() != expected)
+                && read_disk(root, path).map_or(true, |text| text.as_deref() != expected)
         };
         let gone_changed = self
             .discarded_note
@@ -6860,11 +6859,14 @@ impl Library {
             let broken = match (&index, parsed) {
                 (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
                     let skip = missing_link.as_ref().map(|(at, _)| *at);
-                    let fresh = self.broken_lines.as_ref().is_some_and(|(seen, known, at, _)| {
-                        std::sync::Arc::ptr_eq(seen, &parsed_draft)
-                            && std::sync::Arc::ptr_eq(known, index)
-                            && *at == skip
-                    });
+                    let fresh = self
+                        .broken_lines
+                        .as_ref()
+                        .is_some_and(|(seen, known, at, _)| {
+                            std::sync::Arc::ptr_eq(seen, &parsed_draft)
+                                && std::sync::Arc::ptr_eq(known, index)
+                                && *at == skip
+                        });
                     if !fresh {
                         let warnings = broken_link_warnings(&self.draft, entry, index, skip);
                         self.broken_lines =
