@@ -4021,10 +4021,10 @@ pub fn state_words(round: u64, paused: bool, ended: bool) -> String {
     }
 }
 
-/// Recent saves use the same age words as sheets. Older saves use a short UTC date.
 /// The start of a paused run's last change in its list label.
 pub(crate) const LAST_CHANGE: &str = "Last: ";
 
+/// Recent saves use the same age words as sheets. Older saves use a short UTC date.
 pub(crate) fn saved_time(at: u64, now: u64) -> String {
     if now / 86_400 <= at / 86_400 + 1 {
         crate::party::fetch_age(now.saturating_sub(at))
