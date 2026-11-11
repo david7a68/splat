@@ -29,6 +29,9 @@ use std::{
 use uuid::Uuid;
 pub(crate) use view::{change_preview, change_rows};
 
+/// The words after a name in a sheet change's summary. The run header shortens them to `:`.
+pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
     pub key: String,
@@ -506,7 +509,7 @@ impl Participant {
         )?;
         let max = participant.max_hp.ok_or_else(|| {
             format!(
-                "{}: {} has no maximum HP. Set it in this member's overrides.",
+                "{}: {} has no maximum HP. Set it in this member’s overrides.",
                 group.name, member.entry.name
             )
         })?;
@@ -1128,7 +1131,7 @@ impl Run {
     /// The full HP stays in history, so the DM can return to it.
     fn use_saved_hp(&mut self) -> Result<(), String> {
         if !self.rest_filled_saved_hp() {
-            return Err("The long rest's HP is no longer the newest change.".into());
+            return Err("The long rest’s HP is no longer the newest change.".into());
         }
         let mut commands = Vec::new();
         for (index, hp, temp) in self.carried.iter().flat_map(|carried| &carried.sheets) {
@@ -1174,7 +1177,7 @@ impl Run {
         let carried = self.carried.as_ref()?;
         (!carried.missing.is_empty()).then(|| {
             format!(
-                "Could not read the run of {}, so that fight's HP did not carry over.",
+                "Could not read the run of {}, so that fight’s HP did not carry over.",
                 carried.missing.join(", ")
             )
         })
@@ -1739,7 +1742,7 @@ impl Run {
                 next.round = 1;
                 next.phase = Phase::Running;
                 format!(
-                    "Round 1: {}'s turn.",
+                    "Round 1: {}’s turn.",
                     next.participants[next.order[next.cursor]].name
                 )
             }
@@ -1752,7 +1755,7 @@ impl Run {
                 }
                 Self::end_turn(&mut next, self.initiative.roster_ties)?;
                 format!(
-                    "Round {}: {}'s turn.",
+                    "Round {}: {}’s turn.",
                     next.round, next.participants[next.order[next.cursor]].name
                 )
             }
@@ -2863,7 +2866,7 @@ impl Run {
             if linked != Some(campaign.as_str()) {
                 sync.stop();
                 sync.error = Some(
-                    "Link this campaign to the character's D&D Beyond campaign to sync.".into(),
+                    "Link this campaign to the character’s D&D Beyond campaign to sync.".into(),
                 );
                 continue;
             }
@@ -3118,7 +3121,7 @@ impl Run {
                 .find_map(|participant| {
                     first.strip_prefix(&participant.name).map(|rest| {
                         format!(
-                            "{}'s sheet changed:{}",
+                            "{}{SHEET_CHANGED}{}",
                             participant.name,
                             rest.trim_start_matches(':')
                         )
@@ -3161,7 +3164,7 @@ impl Run {
             .map(|p| p.name.as_str())
             .collect();
         self.undo_boundary = Some(match names.as_slice() {
-            [name] => format!("Nothing to undo since {name}'s sheet changed"),
+            [name] => format!("Nothing to undo since {name}’s sheet changed"),
             _ => "Nothing to undo since the sheets changed".to_owned(),
         });
     }
@@ -3737,7 +3740,7 @@ impl Run {
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
-            return Err(format!("Run folder not found: {}.", directory.display()));
+            return Err(crate::sessions::missing_folder("Run", directory));
         }
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
@@ -4368,7 +4371,14 @@ mod tests {
         let error = Run::list(&dir.path().join("gone"), Uuid::nil())
             .err()
             .unwrap();
-        assert!(error.contains("Run folder not found"));
+        // FB6: the run says what the session says for the same fault.
+        assert_eq!(
+            error,
+            format!(
+                "Run folder not found: {}. It may have been moved or renamed.",
+                dir.path().join("gone").display()
+            )
+        );
     }
 
     #[test]
@@ -7342,7 +7352,7 @@ mod tests {
         assert_eq!(
             run.notice_summary.as_deref(),
             Some(
-                format!("{first}'s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more sheet")
+                format!("{first}’s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more sheet")
                     .as_str()
             )
         );

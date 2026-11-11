@@ -68,11 +68,11 @@ fn creature(what: &str, value: &Value) -> Result<Reference, String> {
 /// By id alone, because an encounter a group can belong to is a note of its own campaign, and
 /// a package key names something a campaign can only use.
 fn encounter(value: &Value) -> Result<Uuid, String> {
-    const INVALID: &str = "This group's encounter needs one valid id.";
+    const INVALID: &str = "This group’s encounter needs one valid id.";
     let map = value.as_mapping().ok_or(INVALID)?;
-    only_fields(map, &["id", "link"], "This group's encounter")?;
+    only_fields(map, &["id", "link"], "This group’s encounter")?;
     if map.get("link").is_some_and(|link| !link.is_string()) {
-        return Err("This group's encounter: a link must be text.".into());
+        return Err("This group’s encounter: a link must be text.".into());
     }
     map.get("id")
         .and_then(Value::as_str)

@@ -1,1 +1,4 @@
 # path rule count. Shrink only. See src/design/lint.rs.
+# File content: the initiative rule note's YAML and the NPC generator's note text.
+src/encounter_settings.rs straight-apostrophe 1
+src/npc_generator.rs straight-apostrophe 3

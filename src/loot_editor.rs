@@ -93,7 +93,7 @@ impl Sources {
     /// Why a roll on this key cannot happen, or nothing.
     pub fn problem(&self, key: &str) -> Option<String> {
         match self.table(key) {
-            None => Some(format!("No roll table has the key {key}.")),
+            None => Some(format!("No roll table has the key “{key}”.")),
             Some(table) => table.problem.clone(),
         }
     }
@@ -707,7 +707,7 @@ mod tests {
             items: Vec::new(),
         };
         assert!(sources.roll("gems").unwrap_err().starts_with("B.md: "));
-        assert!(sources.roll("coins").unwrap_err().contains("key coins"));
+        assert!(sources.roll("coins").unwrap_err().contains("key “coins”."));
     }
 
     #[test]

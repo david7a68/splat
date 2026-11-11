@@ -574,10 +574,10 @@ mod tests {
             "fixture: Slate Wolf has a stat head and no source text to style"
         );
         let mut flagged = slate.clone();
-        flagged.flags = vec![splat::content::layout::Flag {
-            line: 19,
-            message: "Hit Points not read".into(),
-        }];
+        flagged.flags = vec![splat::content::layout::Flag::new(
+            19,
+            "Hit Points not read".into(),
+        )];
         let (styled_open, styled_close, styled_heading) = stat_block_rules(&styled, "Traits");
         let styled_gap = styled_heading - styled_close;
         for (name, entry) in [("Slate Wolf", &slate), ("flagged Slate Wolf", &flagged)] {
@@ -622,10 +622,10 @@ mod tests {
             "iter-18-E-FT2-flag: the flag takes back the reader's L before the prose ({with_gap} with the gap, {without_gap} without)"
         );
         // Must stay true: after a line warning, the prose keeps its gap with the flag set.
-        let warned = note(vec![splat::content::layout::Flag {
-            line: 3,
-            message: "Unknown field".into(),
-        }]);
+        let warned = note(vec![splat::content::layout::Flag::new(
+            3,
+            "Unknown field".into(),
+        )]);
         assert_eq!(
             prose_top(&warned, true),
             prose_top(&warned, false),

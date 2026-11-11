@@ -1,7 +1,7 @@
 //! Schema 2 campaign lists and encounter tables. Unknown text stays in the source.
 use super::{
     Entry, Mapping, Value, formats,
-    layout::{Document, Flag},
+    layout::{Document, Flag, FlagKind},
     patch_fields,
 };
 use uuid::Uuid;
@@ -100,7 +100,7 @@ pub fn changes(text: &str, name: &str, note: &str) -> Result<Mapping, String> {
             return Err("Changes: Loot needs what the creature carries".into());
         }
         if term.to_ascii_lowercase().starts_with("start hp ") {
-            return Err("Start HP is set on an encounter's roster".into());
+            return Err("Start HP is set on an encounter’s roster".into());
         }
         if let Some((stat, rest)) = term.split_once(' ') {
             if stat.eq_ignore_ascii_case("side") {
@@ -375,15 +375,12 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                     .and_then(|s| s.strip_prefix("Only:"))
             {
                 if !last_task {
-                    flags.push(Flag {
-                        line: line + 1,
-                        message: "Only: needs a package task first.".into(),
-                    });
+                    flags.push(Flag::new(
+                        line + 1,
+                        "Only: needs a package task first.".into(),
+                    ));
                 } else if !last_enabled && let Err(message) = only_references(only.trim()) {
-                    flags.push(Flag {
-                        line: line + 1,
-                        message,
-                    });
+                    flags.push(Flag::new(line + 1, message));
                 }
                 if last_enabled && let Some(last) = packages.last_mut() {
                     *last = set_selection(
@@ -404,10 +401,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                                 ]),
                             )
                         }
-                        Err(message) => flags.push(Flag {
-                            line: line + 1,
-                            message,
-                        }),
+                        Err(message) => flags.push(Flag::new(line + 1, message)),
                     }
                 }
                 continue;
@@ -460,10 +454,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             match parsed {
                 Ok((true, value)) => packages.push(value),
                 Ok((false, _)) => {}
-                Err(message) => flags.push(Flag {
-                    line: line + 1,
-                    message,
-                }),
+                Err(message) => flags.push(Flag::new(line + 1, message)),
             }
         }
         fields.insert("splat_packages".into(), Value::Sequence(packages));
@@ -493,10 +484,7 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                     Ok::<_, String>(())
                 })();
                 if let Err(message) = parsed {
-                    flags.push(Flag {
-                        line: row.first().map_or(1, |c| c.line),
-                        message,
-                    });
+                    flags.push(Flag::new(row.first().map_or(1, |c| c.line), message));
                 }
             }
         }
@@ -736,17 +724,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             })();
             match parsed {
                 Ok(value) => rows.push(value),
-                Err(message) => flags.push(Flag {
-                    line: row.first().map_or(1, |c| c.line),
-                    message,
-                }),
+                Err(message) => flags.push(Flag::new(row.first().map_or(1, |c| c.line), message)),
             }
         }
     } else {
-        flags.push(Flag {
-            line: 1,
-            message: "Member table not found".into(),
-        });
+        flags.push(Flag::new(1, "Member table not found".into()));
     }
     model.remove("slots");
     model.remove("members_data");
@@ -1811,18 +1793,16 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                     && formats::resolve_readable(raw, entries.iter()).is_err()
                     && !entry.flags.iter().any(|flag| flag.line == cell.line)
                 {
-                    entry.flags.push(Flag {
-                        line: cell.line,
-                        message: format!("Creature {raw} not found or ambiguous"),
-                    });
+                    entry.flags.push(Flag::new(
+                        cell.line,
+                        format!("Creature {raw} not found or ambiguous"),
+                    ));
                 }
             }
         }
     }
     if entry.kind == "campaign" {
-        entry.flags.retain(|flag| {
-            !flag.message.starts_with("Choice ") && !flag.message.contains(" choice \"")
-        });
+        entry.flags.retain(|flag| flag.kind != FlagKind::RuleChoice);
         if let Some(table) = table(&entry.body, "Rule choices", RULES) {
             let rules: Vec<_> = entries.iter().filter(|e| e.kind == "rule").collect();
             let mut seen = std::collections::BTreeSet::new();
@@ -1870,12 +1850,12 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                                 .count();
                             let message = if same_name > 1 {
                                 format!(
-                                    "{} choice \"{visible}\" matches {same_name} rules. Use a link to one of them.",
+                                    "{} choice “{visible}” matches {same_name} rules. Use a link to one of them.",
                                     row[0].value
                                 )
                             } else {
                                 format!(
-                                    "{} choice \"{visible}\" is not a rule. {}",
+                                    "{} choice “{visible}” is not a rule. {}",
                                     row[0].value,
                                     if slot == "dnd2024:rules/combat_initiative" {
                                         "Splat uses the D&D default (groups of identical NPCs) until you fix it."
@@ -1884,7 +1864,10 @@ pub fn resolve(entry: &mut Entry, entries: &[Entry], source: &str) {
                                     }
                                 )
                             };
-                            entry.flags.push(Flag { line, message });
+                            entry.flags.push(Flag {
+                                kind: FlagKind::RuleChoice,
+                                ..Flag::new(line, message)
+                            });
                         }
                     }
                 }

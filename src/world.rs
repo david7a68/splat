@@ -988,7 +988,7 @@ fn create_at(
 
 /// What giving a note a type gives the DM, in the DM's words. It does not repeat the section
 /// heading.
-pub(crate) const TYPE_HELP: &str = "A type adds the fields for that kind of note, such as an NPC's place and stat block. Its text stays the same.";
+pub(crate) const TYPE_HELP: &str = "A type adds the fields for that kind of note, such as an NPC’s place and stat block. Its text stays the same.";
 /// How Splat stores the type, for Technical details only.
 pub(crate) const TYPE_STORAGE: &str = "Splat adds fields that start with splat_ (the type, name and an ID) to the front matter \
      at the top of the file.";

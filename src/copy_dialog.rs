@@ -221,7 +221,7 @@ impl CopyDialog {
                     crate::library::use_checkbox(
                         ui,
                         &mut self.not_used,
-                        "Adds the copy to this campaign's package choices.",
+                        "Adds the copy to this campaign’s package choices.",
                     );
                 }
             }
