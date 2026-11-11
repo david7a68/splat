@@ -668,14 +668,16 @@ pub fn run(d: &mut Driver<'_>) {
             ),
         );
     }
-    // FC3: the row that blocks Start fight marks itself, once, in the warning tone; no other
-    // row does.
-    let marked: Vec<String> = d
+    // FC3: the row that blocks Start fight shows in its place, after the last row that reads,
+    // and marks itself once, in the warning tone; no other row does.
+    // One label can give two nodes with one rect; a row is one place.
+    let mut marked: Vec<(String, egui::Rect)> = d
         .nodes()
         .into_iter()
         .filter(|node| node.name.contains("not read") && node.name.contains("Line 20"))
-        .map(|node| node.name)
+        .map(|node| (node.name, node.rect))
         .collect();
+    marked.dedup_by(|a, b| a.0 == b.0 && a.1.min.distance(b.1.min) < 1.0);
     let mut tones = Vec::new();
     d.each_painted_text(|text, _| {
         if text.galley.job.text.contains("Line 20 not read") {
@@ -685,19 +687,28 @@ pub fn run(d: &mut Driver<'_>) {
                     .sections
                     .iter()
                     .filter(|section| {
-                        &text.galley.job.text[section.byte_range.clone()]
+                        text.galley.job.text[section.byte_range.clone()].trim()
                             == crate::design::icons::WARN
                     })
                     .map(|section| section.format.color),
             );
         }
     });
+    let mark = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.ends_with("Line 20 not read"))
+        .map(|node| node.rect);
+    let last_read = d.place_of("6. Ember Cultist");
     d.observe(
         "iter-25-B-FC3",
         marked.len() == 1
-            && marked[0].contains(&format!("{} Line 20 not read", crate::design::icons::WARN))
-            && tones == [crate::design::colors().result.warning],
-        format!("Marked roster rows {marked:?}, icon colours {tones:?}"),
+            && marked[0].0 == format!("{} Line 20 not read", crate::design::icons::WARN)
+            && tones == [crate::design::colors().result.warning]
+            && mark
+                .zip(last_read)
+                .is_some_and(|(mark, row)| mark.top() > row.bottom()),
+        format!("Marked roster rows {marked:?}, icon colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
     );
     d.state("flagged-roster-at-start-fight", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);

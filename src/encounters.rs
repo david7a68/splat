@@ -172,9 +172,8 @@ pub(crate) struct RosterFault {
     pub name: String,
     pub line: usize,
     pub problem: String,
-    /// The roster slot this row reads as, so the row itself can carry the mark (FC3): the key
-    /// its Note cell names, or the one the reader gives a row without one.
-    pub slot: String,
+    /// How many read rows come before this one, so the roster shows it in its place (FC3).
+    pub before: usize,
 }
 
 impl RosterFault {
@@ -185,7 +184,7 @@ impl RosterFault {
     }
 }
 
-/// Where the editor leaves the roster rows that have an unread row fault, by slot and line.
+/// Where the editor leaves the roster's unread rows, for the roster to show in their places.
 fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
 }
@@ -193,6 +192,40 @@ fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
 /// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
 fn roster_row_fault_words(line: usize) -> String {
     format!("Line {line} not read")
+}
+
+/// FC3: an unread roster row in its place, with no number (it is not in the roster Splat reads)
+/// and its warning mark. The message above names its cause, and its file line the repair.
+fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
+    ui.push_id(("unread_roster_row", fault.line), |ui| {
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Glance.row());
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add(
+                    egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
+                        .truncate(),
+                );
+                let mut job = egui::text::LayoutJob::default();
+                for (text, color) in [
+                    (format!("{} ", icons::WARN), colors().result.warning),
+                    (roster_row_fault_words(fault.line), colors().muted),
+                ] {
+                    job.append(
+                        &text,
+                        0.0,
+                        egui::TextFormat {
+                            font_id: Type::Small.font(ui),
+                            color,
+                            ..Default::default()
+                        },
+                    );
+                }
+                ui.add(egui::Label::new(job).wrap());
+            });
+        });
+        design::rule(ui);
+    });
 }
 
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
@@ -206,46 +239,50 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
     else {
         return Vec::new();
     };
-    table
-        .rows
-        .iter()
-        .filter_map(|row| {
-            let line = row.first()?.line + entry.body_line.saturating_sub(1);
-            let flag = entry.flags.iter().find(|flag| flag.line == line)?;
-            // A row with missing cells is a fault too; never index past its end.
-            let label = row.get(1).map_or("", |cell| cell.value.as_str());
-            let target = label
-                .split("%%")
-                .next()
-                .unwrap_or(label)
-                .trim()
-                .trim_start_matches("[[")
-                .trim_end_matches("]]");
-            let named = row.get(2).map_or("", |cell| cell.value.as_str());
-            let name = if !named.is_empty() {
-                named.to_owned()
-            } else if target.is_empty() {
-                format!("Row on line {line}")
-            } else {
-                known
-                    .get(target)
-                    .cloned()
-                    .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
-            };
-            let slot = row
-                .get(4)
-                .and_then(|cell| splat::content::list_formats::machine(&cell.value, "slot"))
-                .unwrap_or_else(|| format!("actor_line_{line}"));
-            Some(RosterFault {
-                name,
-                line,
-                slot,
-                // A row fault names its line itself, so it needs the words without it. Rows are read
-                // from the file, never from a saved copy; `unread_notes` shows any other flag.
-                problem: flag.words()?,
-            })
-        })
-        .collect()
+    let mut read = 0;
+    let mut faults = Vec::new();
+    for row in &table.rows {
+        let Some(first) = row.first() else {
+            continue;
+        };
+        let line = first.line + entry.body_line.saturating_sub(1);
+        let Some(flag) = entry.flags.iter().find(|flag| flag.line == line) else {
+            read += 1;
+            continue;
+        };
+        // A row with missing cells is a fault too; never index past its end.
+        let label = row.get(1).map_or("", |cell| cell.value.as_str());
+        let target = label
+            .split("%%")
+            .next()
+            .unwrap_or(label)
+            .trim()
+            .trim_start_matches("[[")
+            .trim_end_matches("]]");
+        let named = row.get(2).map_or("", |cell| cell.value.as_str());
+        let name = if !named.is_empty() {
+            named.to_owned()
+        } else if target.is_empty() {
+            format!("Row on line {line}")
+        } else {
+            known
+                .get(target)
+                .cloned()
+                .unwrap_or_else(|| target.rsplit('|').next().unwrap_or(target).to_owned())
+        };
+        // A row fault names its line itself, so it needs the words without it. Rows are read
+        // from the file, never from a saved copy; `unread_notes` shows any other flag.
+        let Some(problem) = flag.words() else {
+            continue;
+        };
+        faults.push(RosterFault {
+            name,
+            line,
+            problem,
+            before: read,
+        });
+    }
+    faults
 }
 
 /// What the DM does about unread roster rows before a fight.
@@ -1723,6 +1760,9 @@ struct Snapshot {
     /// AB1: the run list could not be read, and an issue says why. In progress and History then
     /// say they cannot be read instead of their empty states. It ends when a read succeeds.
     runs_unread: bool,
+    /// The run folder is not there and nothing names a run, so it may never have been made. The
+    /// page turns this into `runs_unread` when it has seen this campaign's folder hold runs.
+    runs_missing: Option<String>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
@@ -1924,6 +1964,7 @@ impl Snapshot {
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
         let directory = options.directory(campaign)?;
+        let mut runs_missing = None;
         let (runs, runs_unread) = match crate::encounter_run::Run::list(&directory, campaign.id) {
             Ok(runs) => (runs, false),
             Err(error) => {
@@ -1939,6 +1980,8 @@ impl Snapshot {
                 let unread = timeline_names_runs || directory.exists();
                 if unread {
                     issues.push(error);
+                } else {
+                    runs_missing = Some(error);
                 }
                 (Vec::new(), unread)
             }
@@ -1984,6 +2027,7 @@ impl Snapshot {
             campaign_text: document.text,
             runs,
             runs_unread,
+            runs_missing,
             catalogue,
             creatures,
             templates,
@@ -2006,6 +2050,8 @@ pub struct Encounters {
     refreshing: bool,
     draft: Option<Draft>,
     search: String,
+    /// The campaign whose run folder this page has seen hold runs, or fail to read (AB1).
+    runs_known: Option<Uuid>,
     error: Option<String>,
     /// The last failed check of the open draft, with its tone. It sets the message's tone only
     /// while `error` shows its words.
@@ -2786,6 +2832,7 @@ impl Encounters {
                             {
                                 s.keep_edited_settings(old);
                             }
+                            self.note_run_folder(&mut s);
                             self.snapshot = Some(s);
                         }
                         Err(e) => self.error = Some(e),
@@ -3323,6 +3370,22 @@ impl Encounters {
         self.run = None;
         self.read_runs_again(active);
         true
+    }
+    /// AB1: a folder that held this campaign's runs and is now gone is a read failure, not an
+    /// empty list, also after a reload. The page remembers that the folder held runs until the
+    /// campaign changes.
+    fn note_run_folder(&mut self, snapshot: &mut Snapshot) {
+        let campaign = self.active.as_ref().map(|campaign| campaign.id);
+        if let Some(error) = snapshot.runs_missing.take()
+            && campaign.is_some()
+            && self.runs_known == campaign
+        {
+            snapshot.runs_unread = true;
+            snapshot.issues.push(error);
+        }
+        if !snapshot.runs.is_empty() || snapshot.runs_unread {
+            self.runs_known = campaign;
+        }
     }
     pub fn read_runs_again(&mut self, active: &Campaign) {
         if let Some(s) = &mut self.snapshot {
@@ -3934,13 +3997,8 @@ impl Encounters {
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
             let notes = unread_notes(&draft.path, &draft.flags, &faults);
-            // FC3: the roster marks each row that blocks Start fight, by its slot.
-            let rows: Arc<Vec<(String, usize)>> = Arc::new(
-                faults
-                    .iter()
-                    .map(|fault| (fault.slot.clone(), fault.line))
-                    .collect(),
-            );
+            // FC3: the roster shows each row that blocks Start fight in its place.
+            let rows: Arc<Vec<RosterFault>> = Arc::new(faults.clone());
             ui.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
             (notes, faults.len(), draft.path.clone())
         });
@@ -4820,7 +4878,7 @@ impl Encounters {
             })
             .collect();
         let fault_rows = ui
-            .data(|data| data.get_temp::<Arc<Vec<(String, usize)>>>(roster_fault_rows_id(draft.id)))
+            .data(|data| data.get_temp::<Arc<Vec<RosterFault>>>(roster_fault_rows_id(draft.id)))
             .unwrap_or_default();
         let undo_key = ui.id().with(("replacement_undo", draft.id));
         let undo = ui
@@ -4839,6 +4897,9 @@ impl Encounters {
             }
         }
         for (i, slot) in draft.setup.roster.iter_mut().enumerate() {
+            for fault in fault_rows.iter().filter(|fault| fault.before == i) {
+                unread_roster_row(ui, fault);
+            }
             ui.push_id(slot.key.clone(), |ui| {
                 let resolved = slot
                     .creature
@@ -4896,16 +4957,7 @@ impl Encounters {
                     || slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some()));
                 let side = design::reader::human_label(&slot.side);
                 // The row states the fault in the tone of the message above the roster.
-                let row_fault = fault_rows
-                    .iter()
-                    .find(|(key, _)| *key == slot.key)
-                    .map(|(_, line)| *line)
-                    .filter(|_| !missing);
-                let (fault_icon, fault_color) = if row_fault.is_some() {
-                    (icons::WARN, colors().result.warning)
-                } else {
-                    missing_creature_mark(unreadable)
-                };
+                let (fault_icon, fault_color) = missing_creature_mark(unreadable);
                 // Two files of one identity: the row says the short cause, and the message above
                 // the roster and the row's hover name the files once.
                 let fault_words = unreadable.map_or(MISSING_CREATURE, |note| {
@@ -4920,14 +4972,6 @@ impl Encounters {
                 });
                 let detail = if missing {
                     format!("{side_icon} {side} · {fault_icon} {fault_words}")
-                } else if let Some(line) = row_fault {
-                    // FC3: the row that blocks Start fight says so itself, before its stats.
-                    let words = roster_row_fault_words(line);
-                    if detail.is_empty() {
-                        format!("{side_icon} {side} · {fault_icon} {words}{identity}")
-                    } else {
-                        format!("{side_icon} {side} · {fault_icon} {words} · {detail}{identity}")
-                    }
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -4978,7 +5022,7 @@ impl Encounters {
                                 )
                                 .truncate(),
                             );
-                            if missing || row_fault.is_some() {
+                            if missing {
                                 let split = detail.find(fault_icon).unwrap_or(0);
                                 let mut job = egui::text::LayoutJob::default();
                                 for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + fault_icon.len()], fault_color), (&detail[split + fault_icon.len()..], colors().muted)] {
@@ -5110,6 +5154,9 @@ impl Encounters {
                 }
                 design::rule(ui);
             });
+        }
+        for fault in fault_rows.iter().filter(|fault| fault.before >= count) {
+            unread_roster_row(ui, fault);
         }
         if let Some((selected, creature, all)) = replacement {
             let before = draft.setup.roster.clone();
@@ -5546,7 +5593,7 @@ mod tests {
             name: name.to_owned(),
             line,
             problem: String::new(),
-            slot: String::new(),
+            before: 0,
         };
         // A flag read back from a saved copy has only its sentence: it follows the file or the
         // row, and no line is added, so each names its line once.
@@ -7369,6 +7416,14 @@ mod tests {
         read_only.set_readonly(true);
         fs::set_permissions(dir.path().join(&path), read_only).unwrap();
         let draft = Draft::open(dir.path(), &path).unwrap();
+        // FC3: the reader leaves the unread row out of the roster; its fault says where it
+        // stands, after the one row that reads, so the roster shows it in its place.
+        let faults = roster_faults(&Entry::parse(&path, &flagged).unwrap(), &BTreeMap::new());
+        assert_eq!(draft.setup.roster.len(), 1);
+        assert_eq!(
+            faults.iter().map(|fault| fault.before).collect::<Vec<_>>(),
+            [1]
+        );
         let mut editor = Encounters {
             draft: Some(draft),
             ..Default::default()

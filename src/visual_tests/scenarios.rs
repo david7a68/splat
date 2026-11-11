@@ -12172,29 +12172,20 @@ pub mod encounter_groups {
             ),
         );
         d.expect("Replace Unknown creature");
-        // The repair link is a notice action: its words start at the warning text, and its icon
-        // hangs in the gutter before them.
+        // The repair is a notice action. FB5 (round 25): it is a bordered secondary button, and
+        // its frame starts at the warning text, below it.
         for size in [SMALL, DEFAULT, LARGE] {
             let (aligned, detail) = d.at_size(size, |d| {
                 let text = d.painted_rect_in(
                     "This campaign cannot find this creature",
                     egui::Rect::EVERYTHING,
                 );
-                let mut words = None;
-                d.each_painted_text(|shape, _| {
-                    let job = &shape.galley.job.text;
-                    if let Some(at) = job.find("Campaign → Packages")
-                        && let Some(row) = shape.galley.rows.first()
-                        && let Some(glyph) = row.glyphs.get(job[..at].chars().count())
-                    {
-                        words = Some(shape.pos.x + row.pos.x + glyph.pos.x);
-                    }
-                });
+                let words = d.painted_rect_in("Campaign → Packages", egui::Rect::EVERYTHING);
                 let link = d.place_of("Campaign → Packages");
                 let aligned = match (text, words, link) {
                     (Some(text), Some(words), Some(link)) => {
-                        (words - text.left()).abs() < 1.0
-                            && link.left() < text.left() - 1.0
+                        (link.left() - text.left()).abs() < 1.0
+                            && words.left() > link.left() + 1.0
                             && link.top() >= text.bottom() - 0.5
                     }
                     _ => false,
@@ -12276,7 +12267,7 @@ pub mod encounter_groups {
         // keeps its x either way.
         // A proof aside: the search is empty again after it.
         let lanes = d.aside(|d| {
-            d.type_into(FIND, "o");
+            d.type_into(FIND, "adult");
             let lanes = [(DEFAULT.0, 2000.0), (DEFAULT.0, SMALL.1)].map(|size| {
                 d.at_size(size, |d| {
                     let adds = right_edges(d, ADD);
@@ -12288,7 +12279,7 @@ pub mod encounter_groups {
                     (adds, bar)
                 })
             });
-            d.press(Key::Backspace);
+            d.clear_text_in(FIND);
             lanes
         });
         d.observe(
@@ -12474,9 +12465,9 @@ pub mod encounter_groups {
                 ),
             );
             let painted = d.painted_size(discarded, "Lost Patrol draft discarded.");
-            let icon = |text: egui::Rect| {
+            let icon = |text: egui::Rect, icon: &str| {
                 d.painted_rect_in(
-                    crate::design::icons::INFO,
+                    icon,
                     egui::Rect::from_min_max(
                         pos2(text.left() - crate::design::XXL, text.top() - 2.0),
                         pos2(text.left(), text.bottom() + 2.0),
@@ -12485,10 +12476,14 @@ pub mod encounter_groups {
                 .is_some()
             };
             let colour = d.painted_color("Lost Patrol draft discarded.");
+            // Round 25 (FH5's family): the removal is a finished change, so it has the success
+            // icon; the discard wrote nothing, so it keeps the info icon.
+            let info = crate::design::icons::INFO;
+            let success = crate::design::icons::SUCCESS;
             d.observe(
                 "iter11-B-FT4",
-                icon(discarded) && icon(removed) && colour == Some(text),
-                format!("At {size:?}, both notices have the info icon, and the discard words use the text colour: {colour:?}"),
+                icon(discarded, info) && icon(removed, success) && colour == Some(text),
+                format!("At {size:?}, the discard has the info icon, the removal the success icon, and the discard words use the text colour: {colour:?}"),
             );
             d.observe(
                 "iter11-B-FT4",
@@ -14441,17 +14436,22 @@ pub mod session_plan_groups {
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
             let sizes = [SMALL, DEFAULT, LARGE];
-            let clean =
-                sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+            // The first member's menu: in the members column, or on the Members tab at 960.
+            let member = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("More actions for ") && node.in_view())
+                    .map(|node| node.rect.top())
+            };
+            let clean = sizes.map(|size| d.at_size(size, member));
             d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
-            let changed =
-                sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
+            let changed = sizes.map(|size| d.at_size(size, member));
             d.observe(
                 "iter-25-B-FK1",
                 d.has_containing("Save or discard to switch campaign.")
                     && clean.iter().all(Option::is_some)
                     && clean == changed,
-                format!("Find a creature top, clean {clean:?}, changed {changed:?}"),
+                format!("First member menu top, clean {clean:?}, changed {changed:?}"),
             );
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
@@ -16327,8 +16327,16 @@ pub mod session_plan {
         d.state("make-it-yours", Sizes::All);
         // AK2, FK3: the Name field and Save creature end at one edge, at every size.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (name, save) =
-                d.at_size(size, |d| (d.place_of("Name"), d.place_of("Save creature")));
+            let (name, save) = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.name == "Name" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect);
+                (field, d.place_of("Save creature"))
+            });
             d.observe(
                 "iter-25-B-AK2",
                 name.zip(save)
