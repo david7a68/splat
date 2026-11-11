@@ -54,8 +54,11 @@ fn fault_here(fault: &FileFault) -> String {
     }
 }
 
-fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
-    let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
+/// The recovery steps of a read fault. They are prose: they keep the reader measure inside the
+/// message's list measure, as World's do (round 25 FB3, SB1).
+fn recovery_paragraph(ui: &mut egui::Ui, fault: &FileFault) {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
         ui.add(
             egui::Label::new(
                 Type::Body
@@ -64,6 +67,12 @@ fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
             )
             .wrap(),
         );
+    });
+}
+
+fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
+    let again = design::message_with_actions(ui, Tone::Error, &fault_here(fault), |ui| {
+        recovery_paragraph(ui, fault);
         Action::quiet("Try again").line_start().show(ui).clicked()
     });
     ui.add_space(design::S);
@@ -106,6 +115,58 @@ fn draft_repair_problem(
         None if parse_fault() => (None, line),
         None => (Some(error.clone()), line),
     }
+}
+
+/// A manifest's recovery in Edit Markdown: the bordered action at the message text edge, then
+/// its consequence. It sits directly below the message space, which holds the error: the action
+/// depends on the saved file only, so it stays while the DM edits and moves nothing (round 25).
+fn recovery_action(
+    ui: &mut egui::Ui,
+    (_, path, exists): &(Module, String, bool),
+    blocked: Option<&str>,
+) -> bool {
+    let inset = design::S
+        + design::HAIRLINE_WIDTH
+        + design::number_width(ui, icons::ERROR, &Type::Body.font(ui))
+        + ui.spacing().item_spacing.x * 2.0
+        - design::XS;
+    let label = if *exists {
+        format!("Replace with a basic {path}")
+    } else {
+        "Write the manifest again".into()
+    };
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
+        let pressed = ui
+            .horizontal(|ui| {
+                ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
+                design::locked(ui, blocked, |ui| {
+                    Action::secondary(&label)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                })
+            })
+            .inner;
+        if *exists {
+            ui.horizontal(|ui| {
+                ui.add_space((inset - ui.spacing().item_spacing.x).max(0.0));
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(
+                                ui,
+                                crate::content_workspace::manifest_replace_consequence(path),
+                            )
+                            .color(colors().muted),
+                    )
+                    .wrap(),
+                );
+            });
+        }
+        pressed
+    })
+    .inner
 }
 
 /// Keep the error with its repair and consequence in both reader and source views.
@@ -654,7 +715,14 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
     let (head, name) = label
         .split_once("About ")
         .map_or(("", label), |(icon, name)| (icon, name));
-    let head = format!("{head}About ");
+    // Round 25 FF4: when the whole name does not fit after `About` (a fault's mark takes its
+    // room), the row drops `About` before it cuts the name: the row is the package's own row.
+    let about = format!("{head}About ");
+    let head = if design::number_width(ui, &format!("{about}{name}"), &font.font(ui)) <= room {
+        about
+    } else {
+        head.to_owned()
+    };
     let name_room = room - design::number_width(ui, &head, &font.font(ui));
     let shown = format!(
         "{head}{}",
@@ -1466,18 +1534,25 @@ impl Loaded {
                     },
                     presentation::subtitle,
                 );
-                let line = if note
+                // Round 25 AC2: each known repair cause is named on its own, after one mark,
+                // so a duplicate that also has a heading fault says both.
+                let mut causes = Vec::new();
+                if note
                     .entry
                     .as_ref()
                     .is_some_and(|entry| self.duplicate_ids().contains(&entry.id))
                 {
-                    format!("{} {SAME_ENTRY} · {line}", icons::WARN)
-                } else if note
+                    causes.push(SAME_ENTRY);
+                }
+                if note
                     .entry
                     .as_ref()
                     .is_some_and(|entry| presentation::heading_fix(&note.text, entry).is_some())
                 {
-                    format!("{} {HEADING_DIFFERS} · {line}", icons::WARN)
+                    causes.push(HEADING_DIFFERS);
+                }
+                let line = if !causes.is_empty() {
+                    format!("{} {} · {line}", icons::WARN, causes.join(" · "))
                 } else if note.entry.as_ref().is_some_and(|entry| {
                     // A table fault marks its row where the row is drawn.
                     crate::roll_table::fault_count(&entry.body) == 0
@@ -1668,7 +1743,7 @@ mod draft_view {
     }
 }
 
-/// A draft that `Let it go` dropped after its file left the disk, for one step of undo, and
+/// A draft that `Remove entry and lose draft` dropped after its file left the disk, for one step of undo, and
 /// whether this campaign used its entry then.
 struct LetGo {
     note: Note,
@@ -1762,6 +1837,10 @@ struct PageResults {
     use_copy: Option<Option<&'static str>>,
     /// The source change's Undo shows, with why it waits.
     rosters: Option<Option<&'static str>>,
+    /// A package unregister's result.
+    unregistered: Option<String>,
+    /// Why the scope changed to show an entry.
+    scope_notice: Option<String>,
 }
 
 impl PageResults {
@@ -1770,6 +1849,8 @@ impl PageResults {
             || self.links.is_some()
             || self.registration.is_some()
             || self.rosters.is_some()
+            || self.unregistered.is_some()
+            || self.scope_notice.is_some()
     }
 }
 
@@ -1781,6 +1862,7 @@ struct PagePress {
     registration: bool,
     use_copy: bool,
     rosters: bool,
+    unregistered: bool,
 }
 
 /// How many text lines each part of Edit Markdown's space below the save row holds.
@@ -1873,7 +1955,7 @@ fn fixed_part<R>(
 struct ReaderResults {
     /// The page's results, first.
     page: PageResults,
-    /// Every entry in this package is now used here.
+    /// Every entry in this package is now chosen for this campaign.
     package_use: bool,
     /// A manifest write's result and its Undo's words.
     manifest: Option<(String, String)>,
@@ -1902,13 +1984,14 @@ impl ReaderResults {
     /// Every result's words, in the order they show, for the part's accessible name.
     fn words(&self) -> String {
         let page = &self.page;
-        page.link_offer
-            .as_ref()
-            .map(|(words, _)| words.clone())
+        page.scope_notice
+            .clone()
             .into_iter()
+            .chain(page.link_offer.as_ref().map(|(words, _)| words.clone()))
             .chain(page.links.clone())
             .chain(page.registration.as_ref().map(|(words, _)| words.clone()))
             .chain(page.rosters.map(|_| USE_COPY_RESULT.to_owned()))
+            .chain(page.unregistered.clone())
             .chain(self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()))
             .chain(self.manifest.as_ref().map(|(words, _)| words.clone()))
             .chain(self.identities.clone())
@@ -1920,6 +2003,20 @@ impl ReaderResults {
             )
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    /// Whether a shown result carries an Undo: it then leads the message space, before a reason.
+    fn has_undo(&self) -> bool {
+        let page = &self.page;
+        page.links.is_some()
+            || page.registration.is_some()
+            || page.rosters.is_some()
+            || page.unregistered.is_some()
+            || self.package_use
+            || self.manifest.is_some()
+            || self.identities.is_some()
+            || self.identity.is_some()
+            || self.discarded.is_some()
     }
 
     fn any(&self) -> bool {
@@ -1935,6 +2032,10 @@ impl ReaderResults {
 fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
     let mut pressed = ResultPress::default();
     let page = &results.page;
+    if let Some(words) = &page.scope_notice {
+        // It wrote nothing: the scope only widened to show the entry.
+        design::message(ui, Tone::Info, words);
+    }
     if let Some((words, action)) = &page.link_offer {
         // The offer names both names, so the DM can check the words before the write.
         pressed.page.link_offer = design::message_with_action(ui, Tone::Info, words, action);
@@ -1977,9 +2078,14 @@ fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
             true,
         );
     }
+    if let Some(words) = &page.unregistered {
+        // A finished change: the package left this campaign's lists.
+        pressed.page.unregistered =
+            design::undo_message(ui, Tone::Success, words, "Undo unregister");
+    }
     if results.package_use {
         pressed.package_use =
-            design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package use");
+            design::undo_message(ui, Tone::Success, PACKAGE_USE_RESULT, "Undo package choice");
     }
     if let Some((words, action)) = &results.manifest {
         pressed.manifest =
@@ -2011,8 +2117,9 @@ fn show_results(ui: &mut egui::Ui, results: &ReaderResults) -> ResultPress {
     pressed
 }
 
-/// The result of `Use every entry`.
-pub(crate) const PACKAGE_USE_RESULT: &str = "Every entry in this package is now used here.";
+/// The result of `Choose every entry`.
+pub(crate) const PACKAGE_USE_RESULT: &str =
+    "Every entry in this package is now chosen for this campaign.";
 
 /// A kept result and its Undo, as `design::undo_message` draws them. When Undo is blocked, only
 /// Undo greys: the result's words keep the text colour, because the change still happened. With
@@ -2093,12 +2200,23 @@ const NEEDS_FIXING: &str = "Needs fixing";
 /// states that fault in its own warning, so its kind line does not. The rest of the line stays,
 /// with the folder that tells two packages of one name apart.
 fn row_line_without_fault(line: &str) -> String {
-    for cause in [SAME_ENTRY, HEADING_DIFFERS, NEEDS_FIXING] {
-        if let Some(rest) = line.strip_prefix(&format!("{} {cause} · ", icons::WARN)) {
-            return rest.to_owned();
-        }
+    let Some(mut rest) = line.strip_prefix(&format!("{} ", icons::WARN)) else {
+        return line.to_owned();
+    };
+    // One mark, then one or more causes, each followed by ` · `.
+    let mut stripped = false;
+    while let Some(after) = [SAME_ENTRY, HEADING_DIFFERS, NEEDS_FIXING]
+        .into_iter()
+        .find_map(|cause| rest.strip_prefix(&format!("{cause} · ")))
+    {
+        rest = after;
+        stripped = true;
     }
-    line.to_owned()
+    if stripped {
+        rest.to_owned()
+    } else {
+        line.to_owned()
+    }
 }
 
 /// One line of row words in which each warning or error mark has its own tone, as a status
@@ -2152,16 +2270,21 @@ fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> e
     let width = ui.available_width() - design::S * 2.0;
     let font = if selected { Type::Strong } else { Type::Body };
     let title = design::words_that_fit(ui, name, &font.font(ui), width);
-    let visible_subtitle = subtitle
+    // Round 25 FF5: the folder that tells two same-named packages apart comes last, as on the
+    // reader's kind line. When the line does not fit, the words before it shorten (the package
+    // name, which both rows share), never the folder.
+    let small = Type::Small.font(ui);
+    let detail = match subtitle
         .rsplit_once(" · ")
         .filter(|(_, folder)| folder.ends_with('/'))
-        .map(|(detail, folder)| format!("{folder} · {detail}"));
-    let detail = design::words_that_fit(
-        ui,
-        visible_subtitle.as_deref().unwrap_or(subtitle),
-        &Type::Small.font(ui),
-        width,
-    );
+    {
+        Some((head, folder)) if design::number_width(ui, subtitle, &small) > width => {
+            let tail = format!(" · {folder}");
+            let room = width - design::number_width(ui, &tail, &small);
+            format!("{}{tail}", design::words_that_fit(ui, head, &small, room))
+        }
+        _ => design::words_that_fit(ui, subtitle, &small, width),
+    };
     // `design::two_line_row`, with the row's warning mark in its own tone.
     let response = design::row(
         ui,
@@ -2384,7 +2507,7 @@ pub(crate) fn folder_field(
         None,
         |ui| {
             form_control(ui, |ui| {
-                egui::Frame::new()
+                let frame = egui::Frame::new()
                     .fill(colors().well)
                     .stroke(egui::Stroke::new(
                         design::HAIRLINE_WIDTH,
@@ -2406,6 +2529,7 @@ pub(crate) fn folder_field(
                                     .min_size(egui::vec2(width, design::XL)),
                             );
                             design::named(ui, &response, label);
+                            let typing = response.has_focus();
                             if value.is_empty() {
                                 ui.painter().text(
                                     response.rect.left_center(),
@@ -2451,8 +2575,15 @@ pub(crate) fn folder_field(
                                     }
                                 }
                             });
-                        });
+                            typing
+                        })
+                        .inner
                     });
+                // Round 25 FE1: the caret in the field shows the focus ring round the whole
+                // field, as `text_field` does. The suggestions button keeps its own ring.
+                if frame.inner {
+                    design::focus_ring(ui, frame.response.rect);
+                }
             });
         },
     );
@@ -2460,7 +2591,7 @@ pub(crate) fn folder_field(
 
 pub(crate) fn use_checkbox(ui: &mut egui::Ui, not_used: &mut bool, help: &str) {
     let mut enabled = !*not_used;
-    ui.checkbox(&mut enabled, "Use in this campaign");
+    ui.checkbox(&mut enabled, "Choose for this campaign");
     *not_used = !enabled;
     ui.label(Type::Small.rich(ui, help).color(colors().muted));
 }
@@ -2854,6 +2985,8 @@ struct DependencyUndo {
     after: String,
     copied_path: String,
     copied_text: String,
+    /// The result's words: `<entry> copied to <package> and linked.`
+    result: String,
 }
 
 struct IdentityUndo {
@@ -2887,6 +3020,58 @@ fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize
     REPAIR_LOOKUPS.with(|count| count.set(count.get() + 1));
     splat::content::list_formats::row_linking(entry, target)
 }
+
+#[cfg(test)]
+thread_local! {
+    static BROKEN_LINE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The file lines of a draft that hold a link to no entry, as the row's `N broken links` counts
+/// them: one line number per broken link, outside the front matter and code fences. Every scan
+/// goes through here, and the test count is kept here.
+fn broken_link_lines(
+    draft: &str,
+    entry: &Entry,
+    index: &crate::lookup::ContentIndex,
+) -> Vec<usize> {
+    #[cfg(test)]
+    BROKEN_LINE_SCANS.with(|count| count.set(count.get() + 1));
+    let mut lines = Vec::new();
+    let mut front = false;
+    let mut fence = false;
+    for (at, line) in draft.lines().enumerate() {
+        let trimmed = line.trim();
+        if at == 0 && trimmed == "---" {
+            front = true;
+            continue;
+        }
+        if front {
+            front = trimmed != "---";
+            continue;
+        }
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            fence = !fence;
+            continue;
+        }
+        if fence || presentation::hidden_provenance_line(line) {
+            continue;
+        }
+        for target in crate::world::links_in(line) {
+            if index.link_is_missing(&target, entry.id) {
+                lines.push(at + 1);
+            }
+        }
+    }
+    lines
+}
+
+/// The broken-link lines of one parsed draft against one link index. A new draft (a new parse)
+/// or a new index finds them again; an unchanged frame does not.
+type BrokenLines = (
+    ParsedDraft,
+    std::sync::Arc<crate::lookup::ContentIndex>,
+    Vec<usize>,
+);
 
 #[derive(Default)]
 pub struct Library {
@@ -2972,6 +3157,8 @@ pub struct Library {
     /// A missing link that Campaign's repair opened this file for. Edit Markdown names it at its
     /// line while the draft still holds it; it ends when another note opens or a Save writes.
     repair_link: Option<RepairLink>,
+    /// The open draft's broken-link lines, for Edit Markdown's warnings (round 25 FH6).
+    broken_lines: Option<BrokenLines>,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -3048,7 +3235,7 @@ fn obsidian_for(root: &Path, owner: &Owner) -> bool {
 }
 
 /// The reader's owner and file line is one Read row for every owner, whatever it holds
-/// (status, `Show file`, a quiet `Use every entry`), so the title below it does not move
+/// (status, `Show file`, a quiet `Choose every entry`), so the title below it does not move
 /// between a built-in entry, a campaign entry and a package About.
 fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui)) {
     let height = Density::Read.control();
@@ -3358,7 +3545,7 @@ impl Library {
         let Some(change) = self.disk_change.take() else {
             return;
         };
-        // Whether this campaign uses the entry now, for Undo let go to give back.
+        // Whether this campaign uses the entry now, for Undo remove to give back.
         let used = self.loaded.as_ref().is_some_and(|loaded| {
             loaded
                 .notes
@@ -3546,6 +3733,11 @@ impl Library {
     #[cfg(test)]
     pub(crate) fn repair_lookups(&self) -> usize {
         REPAIR_LOOKUPS.with(std::cell::Cell::get)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn broken_line_scans(&self) -> usize {
+        BROKEN_LINE_SCANS.with(std::cell::Cell::get)
     }
     pub fn repair_file_link(
         &mut self,
@@ -3965,9 +4157,6 @@ impl Library {
             self.focus_new_name = true;
             self.form = false;
         }
-        if let Some(words) = &self.scope_notice {
-            design::message(ui, Tone::Info, words);
-        }
         if reload {
             self.start_load(ui.ctx(), campaigns);
         }
@@ -4011,28 +4200,6 @@ impl Library {
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
         }
-        if let Some(module) = self.unregistered.clone() {
-            let message = format!(
-                "{} is unregistered. Its files stay in {}.",
-                module.name,
-                module.path.display()
-            );
-            if design::undo_message(ui, Tone::Info, &message, "Undo unregister") {
-                let result = local_module(&module.path).and_then(|found| {
-                    if found.id != module.id {
-                        return Err("That folder now holds a different package.".into());
-                    }
-                    campaigns.restore_module(module)
-                });
-                match result {
-                    Ok(()) => {
-                        self.unregistered = None;
-                        self.stale = true;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-        }
         // The page's results take the reader's result place (after the title, in Edit Markdown's
         // reserved slot, or above the empty reader), so they never move the columns, the tabs,
         // the file line or the title. Their presses are applied after the reader is drawn.
@@ -4071,6 +4238,16 @@ impl Library {
             rosters: self.copied_rosters.as_ref().map(|_| {
                 self.rosters_changed
                     .then_some(crate::content_workspace::UNDO_ENDED)
+            }),
+            // Round 25 FG4: the unregister result takes the reader's result place, so the scope,
+            // the search and the list never move when it comes or goes.
+            scope_notice: self.scope_notice.clone(),
+            unregistered: self.unregistered.as_ref().map(|module| {
+                format!(
+                    "{} is unregistered. Its files stay in {}.",
+                    module.name,
+                    module.path.display()
+                )
             }),
         };
         if self.pending.is_some() {
@@ -4676,6 +4853,23 @@ impl Library {
     /// The page results' presses from the reader: the link update and its Undo, and the
     /// registration's Undo, its source change and that change's Undo.
     fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
+        if pressed.unregistered
+            && let Some(module) = self.unregistered.clone()
+        {
+            let result = local_module(&module.path).and_then(|found| {
+                if found.id != module.id {
+                    return Err("That folder now holds a different package.".into());
+                }
+                campaigns.restore_module(module)
+            });
+            match result {
+                Ok(()) => {
+                    self.unregistered = None;
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
         let open = self.open_entry_id();
         if pressed.link_offer
             && let Some(at) = self
@@ -5111,7 +5305,7 @@ impl Library {
                             );
                             if campaigns.active_campaign().is_some() {
                                 let mut enabled = !self.copy_not_used;
-                                ui.checkbox(&mut enabled, "Use in this campaign");
+                                ui.checkbox(&mut enabled, "Choose for this campaign");
                                 self.copy_not_used = !enabled;
                                 let help = if enabled {
                                     "Uses every entry in this package, including future entries."
@@ -5831,7 +6025,7 @@ impl Library {
         }
     }
 
-    /// Undo package use and Undo write: the results that this pane keeps for its package. The
+    /// Undo package choice and Undo write: the results that this pane keeps for its package. The
     /// page results' presses wait until the reader is drawn.
     fn apply_package_results(&mut self, pressed: &ResultPress) {
         self.page_pressed = pressed.page;
@@ -5914,10 +6108,10 @@ impl Library {
                 .map(|loaded| loaded.dependents(note))
                 .unwrap_or_default();
             if names.is_empty() {
-                format!("{} let go.", note.name())
+                format!("{} removed. Its draft was discarded.", note.name())
             } else {
                 format!(
-                    "{} let go. {} now needs a missing entry.",
+                    "{} removed. Its draft was discarded. {} now needs a missing entry.",
                     note.name(),
                     name_list(&names)
                 )
@@ -5929,13 +6123,13 @@ impl Library {
                 ui,
                 Tone::Info,
                 gone_notice.as_deref().unwrap(),
-                "Undo let go",
+                "Undo remove",
             )
             && let Some((_, _, draft)) = self.discarded.take()
             && let Some(LetGo { note, used }) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
         {
-            // The reload after Let it go left the entry out of what this campaign uses and
+            // The reload after Remove entry and lose draft left the entry out of what this campaign uses and
             // counted the entries that need it. Undo gives back both with the draft.
             if used && let (Some(uses), Some(entry)) = (loaded.uses.as_mut(), note.entry.as_ref()) {
                 uses.insert(entry.id);
@@ -6096,9 +6290,9 @@ impl Library {
                     .filter(|n| loaded.in_scope(n, Scope::Uses))
                     .count();
                 if used == entries.len() {
-                    "All entries used here".into()
+                    "All entries chosen".into()
                 } else {
-                    format!("Used here · {used} of {} entries", entries.len())
+                    format!("{used} of {} entries chosen", entries.len())
                 }
             }
             Owner::Package(module)
@@ -6113,9 +6307,9 @@ impl Library {
                 "{} · {}",
                 module.name,
                 if self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) {
-                    "Used here"
+                    "Chosen for this campaign"
                 } else {
-                    "Not used here"
+                    "Not chosen"
                 }
             ),
             _ => String::new(),
@@ -6250,8 +6444,28 @@ impl Library {
         let copy_reason = draft_reason.or_else(|| copy_destination_reason(campaigns));
         let can_make = matches!(note.owner, Owner::Campaign(_))
             && note.entry.as_ref().is_some_and(|e| e.kind == "creature");
+        // Round 25 FF3: the campaign choice is a toolbar action, so it never sends the file line's
+        // path to a second row: the title keeps one place for chosen and not-chosen entries.
+        let choose = match &note.owner {
+            Owner::Package(_)
+                if about
+                    && campaigns.active_campaign().is_some()
+                    && package_word != "All entries chosen" =>
+            {
+                Some("Choose every entry")
+            }
+            Owner::Package(_)
+                if !about
+                    && note.entry.is_some()
+                    && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses) =>
+            {
+                Some("Choose for this campaign")
+            }
+            _ => None,
+        };
         let mut copy_clicked = false;
         let mut make_clicked = false;
+        let mut choose_clicked = false;
         let back = Action::quiet("Back")
             .icon(icons::BACK)
             .density(Density::Read);
@@ -6286,7 +6500,12 @@ impl Library {
                 + design::S
         } else {
             0.0
-        };
+        } + choose.map_or(0.0, |label| {
+            Action::quiet(label)
+                .density(Density::Read)
+                .natural_width(ui)
+                + design::S
+        });
         let with_key = base_width
             + extras
             + design::number_width(ui, "Alt+Left", &Type::Small.font(ui))
@@ -6318,6 +6537,13 @@ impl Library {
                 }
                 if can_make {
                     make_clicked = Action::quiet("Make NPC note")
+                        .density(Density::Read)
+                        .blocked(draft_reason)
+                        .show(ui)
+                        .clicked();
+                }
+                if let Some(label) = choose {
+                    choose_clicked = Action::quiet(label)
                         .density(Density::Read)
                         .blocked(draft_reason)
                         .show(ui)
@@ -6357,13 +6583,27 @@ impl Library {
                                 .show(ui)
                                 .clicked();
                         }
-                        if copy_clicked || make_clicked {
+                        if let Some(label) = choose {
+                            choose_clicked = Action::quiet(label)
+                                .density(Density::Read)
+                                .blocked(draft_reason)
+                                .show(ui)
+                                .clicked();
+                        }
+                        if copy_clicked || make_clicked || choose_clicked {
                             ui.close();
                         }
                     });
                 });
             }
         });
+        if choose_clicked && let Owner::Package(module) = &note.owner {
+            if about {
+                use_every = Some(module.clone());
+            } else if let Some(entry) = &note.entry {
+                self.use_entry = Some((module.id, entry.id));
+            }
+        }
         if copy_clicked {
             self.copy = Some(crate::content_workspace::CopySource {
                 entry: note.entry.as_ref().unwrap().clone(),
@@ -6495,6 +6735,20 @@ impl Library {
             };
             let mut path_below = false;
             let owner_line = |ui: &mut egui::Ui| {
+                // In a narrow reader (Lookup open beside it at 960), the campaign choice keeps
+                // its first word rather than a cut: `Ashen Marches · Chosen`.
+                let short_word;
+                let owner_word = match owner_word.strip_suffix(" for this campaign") {
+                    Some(short)
+                        if design::number_width(ui, owner_word, &Type::Small.font(ui))
+                            + design::XL
+                            > ui.available_width() =>
+                    {
+                        short_word = short.to_owned();
+                        short_word.as_str()
+                    }
+                    _ => owner_word,
+                };
                 design::status(
                     ui,
                     if read_only {
@@ -6511,30 +6765,6 @@ impl Library {
                         }
                     },
                 );
-                if let Owner::Package(module) = &note.owner
-                    && about
-                    && campaigns.active_campaign().is_some()
-                    && package_word != "All entries used here"
-                    && Action::quiet("Use every entry")
-                        .density(Density::Read)
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked()
-                {
-                    use_every = Some(module.clone());
-                }
-                if let Owner::Package(module) = &note.owner
-                    && !about
-                    && !self.loaded.as_ref().unwrap().in_scope(note, Scope::Uses)
-                    && let Some(entry) = &note.entry
-                    && Action::quiet("Use in this campaign")
-                        .density(Density::Read)
-                        .blocked(draft_reason)
-                        .show(ui)
-                        .clicked()
-                {
-                    self.use_entry = Some((module.id, entry.id));
-                }
                 if !file_below {
                     if ui.available_width() >= path_room {
                         file_line(ui);
@@ -6592,6 +6822,18 @@ impl Library {
         }
         let mut repair_pressed = false;
         let mut read_again = false;
+        // The heading warning and its Undo. The reader draws them after the title, directly above
+        // the duplicate warning, so one file's warnings share one place and the title never moves.
+        // Edit Markdown draws them in the message space below the save row.
+        let heading = HeadingChoice::new(
+            (editable && !conflict)
+                .then(|| parsed.as_ref().ok())
+                .flatten(),
+            &self.draft,
+            self.heading_undo.as_ref(),
+            &note.path,
+        );
+        let mut heading_pressed = (false, false);
         // Save and Discard are one row, as far apart as the pane allows.
         if slot_row {
             ui.horizontal(|ui| {
@@ -6627,85 +6869,206 @@ impl Library {
                     });
                 });
             });
-            // The missing link Campaign sent here stays in view on its own line, above the
-            // reserved slot that holds Save's reason or the discard result.
-            let link_words = missing_link.as_ref().map(|(_, words)| words);
-            // A readable entry's refused draft and a failed Save name their reason in the reserved
-            // slot below Save, so neither the first refusal nor Discard moves the editor.
-            let slot_problem = repair_problem
+            // One message space below the save row, two text lines high whatever it holds:
+            // longer words wrap and scroll inside it, so nothing in it moves the editor.
+            // A result that carries a live Undo comes first (Discard's, the heading and stat
+            // fixes', the reader's results with Undo): a broken file's reason never clears after
+            // Discard or Reload, so a reason first would hide the only way back. Then Save's
+            // reason (a repair draft's parse error with its recovery, a refusal before the write,
+            // the disk's failure), then the missing link Campaign sent here. With no reason, the
+            // warnings follow: the other broken links, the first-heading and stat warnings, and
+            // results with no Undo. A reason hides those; they come back when it clears, while
+            // their owner lives. With none of these, the space says why other actions wait.
+            let discard_shown =
+                discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
+            let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
+            let vital_result = self
+                .vital_undo
                 .as_ref()
-                .filter(|_| note.error.is_none())
-                .or(failed.as_ref());
-            // A repair draft's error stays above the slot; the slot below it holds the discard
-            // result as it does for a readable entry, so Discard does not move the editor.
-            if let Some(problem) = repair_problem.as_ref().filter(|_| note.error.is_some()) {
-                repair_pressed = repair_notice(ui, problem, recovery.as_ref(), draft_reason, true);
+                .filter(|(path, _, after, _)| path == &note.path && after == &self.draft)
+                .map(|(_, _, _, result)| result.as_str());
+            let vitals = match (editable, &parsed) {
+                (true, Ok(entry)) => creature::vital_checks(entry),
+                _ => Vec::new(),
+            };
+            // Round 25 FH6: each broken link the row counts has its own line here, so the DM
+            // knows where every one is. The link Campaign sent here has its own words.
+            let index = ui.ctx().data(|data| {
+                data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                    "reader_link_index",
+                ))
+            });
+            let broken = match (&index, parsed) {
+                (Some(index), Ok(entry)) if note.owner.editable() && !note.is_manifest() => {
+                    let fresh = self.broken_lines.as_ref().is_some_and(|(seen, known, _)| {
+                        std::sync::Arc::ptr_eq(seen, &parsed_draft)
+                            && std::sync::Arc::ptr_eq(known, index)
+                    });
+                    if !fresh {
+                        let lines = broken_link_lines(&self.draft, entry, index);
+                        self.broken_lines = Some((parsed_draft.clone(), index.clone(), lines));
+                    }
+                    self.broken_lines
+                        .as_ref()
+                        .map_or_else(Vec::new, |(_, _, lines)| {
+                            lines
+                                .iter()
+                                .filter(|&&line| {
+                                    missing_link.as_ref().map(|(at, _)| *at) != Some(line)
+                                })
+                                .map(|line| format!("Line {line}: this link names no entry."))
+                                .collect()
+                        })
+                }
+                _ => Vec::new(),
+            };
+            let results_shown = !choices_in_reader && results.any();
+            let results_first = results_shown && results.has_undo();
+            let undo_first =
+                discard_shown || heading.undo.is_some() || vital_result.is_some() || results_first;
+            let reason = repair_problem.is_some() || failed.is_some();
+            let warned = !reason
+                && (!broken.is_empty()
+                    || heading.fix.is_some()
+                    || !vitals.is_empty()
+                    || (results_shown && !results_first));
+            let guidance = !undo_first && !reason && !warned && link_words.is_none();
+            let mut name = Vec::new();
+            if discard_shown {
+                name.push(format!("{} draft discarded.", note.name()));
             }
-            {
-                // One space below the save row holds the reader's results and, below them, the
-                // reason slot: the discard result, Save's reason, the guidance or the draft's
-                // reason. Each part is two text lines high whatever it holds; longer words wrap
-                // and scroll inside their part. So no result, reason or Discard moves the editor.
-                // The guidance comes first in the result part when the slot holds Save's reason
-                // or the discard result.
-                let discard_shown =
-                    discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
-                let slot_busy = discard_shown || slot_problem.is_some();
-                let slot_link = link_words.filter(|_| !slot_busy);
-                let link_above = link_words.filter(|_| slot_busy);
-                let part = SLOT_LINES * Type::Body.line();
-                let top = ui.cursor().min;
-                ui.allocate_exact_size(egui::vec2(editor_width, part * 2.0), egui::Sense::hover());
-                let results_shown = !choices_in_reader && results.any();
-                if results_shown || link_above.is_some() {
-                    let upper = egui::Rect::from_min_size(top, egui::vec2(editor_width, part));
-                    let name = link_above
-                        .map(String::as_str)
-                        .into_iter()
-                        .chain(results_shown.then(|| results.words()).as_deref())
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    if let Some(press) = fixed_part(ui, upper, "library_result_part", &name, |ui| {
-                        if let Some(words) = link_above {
+            name.extend(heading.undo.clone());
+            name.extend(vital_result.map(str::to_owned));
+            if results_first {
+                name.push(results.words());
+            }
+            name.extend(repair_problem.iter().cloned());
+            name.extend(failed.iter().cloned());
+            name.extend(link_words.map(str::to_owned));
+            if warned {
+                name.extend(broken.iter().cloned());
+                name.extend(heading.fix.as_ref().map(|(words, _, _)| words.clone()));
+                name.extend(vitals.iter().map(|(_, _, _, words)| words.clone()));
+                if results_shown && !results_first {
+                    name.push(results.words());
+                }
+            }
+            if guidance {
+                name.extend(draft_reason.map(str::to_owned));
+            }
+            let part = egui::Rect::from_min_size(
+                ui.cursor().min,
+                egui::vec2(editor_width, SLOT_LINES * Type::Body.line()),
+            );
+            ui.allocate_exact_size(part.size(), egui::Sense::hover());
+            let mut discard_undo = false;
+            let mut vital_use = None;
+            let mut vital_undo = false;
+            if !name.is_empty() {
+                fixed_part(ui, part, "library_message_space", &name.join(" "), |ui| {
+                    // Results with a live Undo first.
+                    if discard_shown {
+                        discard_undo = design::draft_discarded(ui, note.name());
+                    }
+                    // The fixes' results are messages, so each Undo keeps its icon on the line.
+                    if let Some(result) = &heading.undo {
+                        heading_pressed.1 =
+                            design::undo_message(ui, Tone::Success, result, "Undo heading change");
+                    }
+                    if let Some(result) = vital_result {
+                        vital_undo =
+                            design::undo_message(ui, Tone::Success, result, "Undo stat change");
+                    }
+                    if results_first {
+                        pressed = show_results(ui, &results);
+                    }
+                    // Then Save's reason: a repair draft's fault in its tone (a deleted manifest is
+                    // a warning), or Save's refusal before the write, a YAML fault in its own words.
+                    if let Some(problem) = &repair_problem {
+                        let tone = recovery
+                            .as_ref()
+                            .filter(|_| note.error.is_some())
+                            .map_or(Tone::Error, |(_, _, exists)| {
+                                crate::content_workspace::manifest_fault_tone(*exists)
+                            });
+                        design::message(ui, tone, problem);
+                    }
+                    if let Some(failure) = &failed {
+                        // The disk's failure of the last Save of this draft.
+                        design::message(ui, Tone::Error, failure);
+                    }
+                    // The repair this note was opened for.
+                    if let Some(words) = link_words {
+                        design::message(ui, Tone::Warning, words);
+                    }
+                    if warned {
+                        for words in &broken {
                             design::message(ui, Tone::Warning, words);
                         }
-                        results_shown.then(|| show_results(ui, &results))
-                    }) {
-                        pressed = press;
+                        if let Some((words, action, _)) = &heading.fix {
+                            heading_pressed.0 =
+                                design::message_with_action(ui, Tone::Warning, words, action);
+                        }
+                        for (key, label, value, message) in &vitals {
+                            if design::message_with_action(
+                                ui,
+                                Tone::Warning,
+                                message,
+                                &format!("Use {value}"),
+                            ) {
+                                vital_use = Some((*key, *label, *value));
+                            }
+                        }
+                        if results_shown && !results_first {
+                            pressed = show_results(ui, &results);
+                        }
                     }
-                }
-                let slot = egui::Rect::from_min_size(
-                    top + egui::vec2(0.0, part),
-                    egui::vec2(editor_width, part),
-                );
-                if discard_shown {
-                    let name = format!("{} draft discarded.", note.name());
-                    if fixed_part(ui, slot, "library_reason_part", &name, |ui| {
-                        design::draft_discarded(ui, note.name())
-                    }) && let Some((_, _, text)) = self.discarded.take()
-                    {
-                        self.draft = text;
-                        // The draft changed: a failed Save of the old words no longer owns it.
-                        self.draft_revision += 1;
-                    }
-                } else if let Some(problem) = slot_problem {
-                    // Save's reason: its refusal before the write, or the disk's failure.
-                    fixed_part(ui, slot, "library_reason_part", problem, |ui| {
-                        design::message(ui, Tone::Error, problem);
-                    });
-                } else if let Some(words) = slot_link {
-                    // The repair this note was opened for, in the reason line.
-                    fixed_part(ui, slot, "library_reason_part", words, |ui| {
-                        design::message(ui, Tone::Warning, words);
-                    });
-                } else if let Some(reason) = draft_reason {
-                    fixed_part(ui, slot, "library_reason_part", reason, |ui| {
+                    if guidance && let Some(reason) = draft_reason {
                         ui.add(
                             egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                                 .wrap(),
                         );
-                    });
+                    }
+                });
+            }
+            if let Some(recovery) = recovery.as_ref().filter(|_| note.error.is_some()) {
+                repair_pressed = recovery_action(ui, recovery, draft_reason);
+            }
+            if discard_undo && let Some((_, _, text)) = self.discarded.take() {
+                self.draft = text;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
+            }
+            // Applied now, before the editor shows the draft.
+            if heading_pressed.0 || heading_pressed.1 {
+                self.draft_revision += 1;
+            }
+            save |= heading.apply(
+                std::mem::take(&mut heading_pressed),
+                &note.path,
+                &mut self.draft,
+                &mut self.heading_undo,
+            );
+            if let (Some((key, label, value)), Ok(entry)) = (vital_use, &parsed) {
+                match creature::use_vital(&self.draft, entry, key, value) {
+                    Ok(after) => {
+                        self.vital_undo = Some((
+                            note.path.clone(),
+                            self.draft.clone(),
+                            after.clone(),
+                            format!("The stat block now says {label} {value}."),
+                        ));
+                        self.draft = after;
+                        // The draft changed: a failed Save of the old words no longer owns it.
+                        self.draft_revision += 1;
+                    }
+                    Err(error) => self.error = Some(error),
                 }
+            }
+            if vital_undo && let Some((_, before, _, _)) = self.vital_undo.take() {
+                self.draft = before;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
             }
         }
         // Live, because Discard in this same frame changed the draft.
@@ -6741,14 +7104,7 @@ impl Library {
                     fault_here(&fault)
                 ),
                 |ui| {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Body
-                                .rich(ui, fault.recovery_with_try_again())
-                                .color(colors().text),
-                        )
-                        .wrap(),
-                    );
+                    recovery_paragraph(ui, &fault);
                     ui.horizontal_wrapped(|ui| {
                         let again = Action::secondary("Try again")
                             .density(Density::Read)
@@ -6779,7 +7135,7 @@ impl Library {
             } else if change.text.is_some() {
                 "This entry changed on disk. Your draft is safe until you choose."
             } else {
-                "This entry’s file has gone from disk. Your draft is safe here until you choose."
+                "This entry’s file was deleted on disk. Your draft is safe until you choose."
             };
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)
@@ -6813,7 +7169,7 @@ impl Library {
                     // The layout adds its own item gap after each control; together they make `L`.
                     ui.add_space(design::L - ui.spacing().item_spacing.x);
                     let reload = Action::destructive(if change.text.is_none() {
-                        "Let it go"
+                        "Remove entry and lose draft"
                     } else {
                         "Reload and lose my draft"
                     })
@@ -6826,64 +7182,6 @@ impl Library {
             });
             self.overwrite_disk |= overwrite;
             reload_from_disk = reload;
-        }
-        // The heading warning and its Undo. The reader draws them after the title, directly above
-        // the duplicate warning, so one file's warnings share one place and the title never moves.
-        // Source mode draws them above the editor.
-        let heading = HeadingChoice::new(
-            (editable && !conflict)
-                .then(|| parsed.as_ref().ok())
-                .flatten(),
-            &self.draft,
-            self.heading_undo.as_ref(),
-            &note.path,
-        );
-        let mut heading_pressed = (false, false);
-        if !choices_in_reader {
-            // Applied now, before the editor shows the draft.
-            let pressed = heading.show(ui);
-            if pressed.0 || pressed.1 {
-                self.draft_revision += 1;
-            }
-            save |= heading.apply(pressed, &note.path, &mut self.draft, &mut self.heading_undo);
-        }
-        if self.source && !conflict {
-            if editable && let Ok(entry) = &parsed {
-                for (key, label, value, message) in creature::vital_checks(entry) {
-                    if design::message_with_action(
-                        ui,
-                        Tone::Warning,
-                        &message,
-                        &format!("Use {value}"),
-                    ) {
-                        match creature::use_vital(&self.draft, entry, key, value) {
-                            Ok(after) => {
-                                self.vital_undo = Some((
-                                    note.path.clone(),
-                                    self.draft.clone(),
-                                    after.clone(),
-                                    format!("The stat block now says {label} {value}."),
-                                ));
-                                self.draft = after;
-                                // The draft changed: a failed Save of the old words no longer owns it.
-                                self.draft_revision += 1;
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                }
-            }
-            // The result is a message, so its Undo keeps its icon on the message line.
-            if let Some((path, before, after, result)) = &self.vital_undo
-                && path == &note.path
-                && after == &self.draft
-                && design::undo_message(ui, Tone::Success, result, "Undo stat change")
-            {
-                self.draft = before.clone();
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-                self.vital_undo = None;
-            }
         }
         let mut open_link = None;
         let mut pressed_link = None;
@@ -7131,16 +7429,18 @@ impl Library {
                                                         }
                                                     }
                                                 }
-                                                if self
+                                                if let Some(change) = self
                                                     .dependency_undo
                                                     .as_ref()
-                                                    .is_some_and(|change| change.path == note.path)
+                                                    .filter(|change| change.path == note.path)
                                                 {
+                                                    // Round 25 FF8: the result names the entry
+                                                    // and the package, in the button's words.
                                                     undo_dependency = design::undo_message(
                                                         ui,
                                                         Tone::Success,
-                                                        "Dependency copied and linked.",
-                                                        "Undo dependency copy",
+                                                        &change.result,
+                                                        "Undo copy",
                                                     );
                                                 }
                                                 None
@@ -7195,6 +7495,7 @@ impl Library {
                     after,
                     copied_path,
                     copied_text,
+                    ..
                 }) = &self.dependency_undo
             {
                 let copied = note_path(root, copied_path)?;
@@ -7202,7 +7503,10 @@ impl Library {
                     .map_err(|e| FileFault::read(copied_path, &e).message())?
                     != *copied_text
                 {
-                    return Err("The dependency copy changed on disk. Keep it and reconnect the reference in Markdown.".into());
+                    return Err(
+                        "The copy changed on disk. Keep it, and change the link in Markdown."
+                            .into(),
+                    );
                 }
                 write_note(root, path, Some(after), before)?;
                 if let Err(error) = fs::remove_file(copied) {
@@ -7259,6 +7563,10 @@ impl Library {
                     after,
                     copied_path: plan.relative.clone(),
                     copied_text: plan.text.clone(),
+                    result: format!(
+                        "{} copied to {} and linked.",
+                        source.entry.name, package.name
+                    ),
                 });
                 self.content_changed = Some(package.path.clone());
                 self.stale = true;
@@ -8528,7 +8836,7 @@ mod tests {
         let loaded = load_all(&[module], Some(&campaign)).unwrap();
         assert!(
             loaded.uses.unwrap().contains(&id),
-            "the repaired note is Used here"
+            "the repaired note is Chosen for this campaign"
         );
     }
 
@@ -8850,6 +9158,17 @@ mod tests {
                 &package,
                 &row_line_without_fault(&format!(
                     "{} {SAME_ENTRY} · Creature · CR 1 · Ashen Marches · ashen/",
+                    icons::WARN
+                ))
+            ),
+            "Creature · CR 1 · ashen/"
+        );
+        // Round 25 AC2: a row with two causes names both, and the reader leaves both out.
+        assert_eq!(
+            reader_kind_line(
+                &package,
+                &row_line_without_fault(&format!(
+                    "{} {SAME_ENTRY} · {HEADING_DIFFERS} · Creature · CR 1 · Ashen Marches · ashen/",
                     icons::WARN
                 ))
             ),
@@ -10086,7 +10405,7 @@ mod tests {
         change_outside(&mut library);
         assert!(library.identity_undo.is_none());
 
-        // `Undo dependency copy`: the changed file is the copy.
+        // `Undo copy`: the changed file is the copy.
         library.dependency_undo = Some(DependencyUndo {
             root: root.clone(),
             path: paths[0].clone(),
@@ -10094,6 +10413,7 @@ mod tests {
             after: fs::read_to_string(root.join(&paths[0])).unwrap(),
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
+            result: String::new(),
         });
         library.forget_changed_undos();
         assert!(library.dependency_undo.is_some());
@@ -10123,7 +10443,7 @@ mod tests {
         assert!(!library.rosters_changed && !library.registration_changed);
         library.copied_rosters = None;
 
-        // `Undo package use`: only the package choices count.
+        // `Undo package choice`: only the package choices count.
         let mut document = CampaignDocument::load(&campaign).unwrap();
         library.selection_undo = Some(SelectionUndo {
             campaign: campaign.clone(),
@@ -11327,7 +11647,7 @@ mod tests {
         for words in [
             "Save my draft again",
             "Overwrite with my draft",
-            "has gone from disk",
+            "was deleted on disk",
             "Edit in Obsidian",
         ] {
             assert!(

@@ -966,7 +966,7 @@ pub mod creature_filter {
 /// W8: edit a note in a local package, then manage packages and add an entry.
 pub mod library_author {
     use super::*;
-    const LOCAL_PACKAGE: &str = "Ashen Marches · Used here";
+    const LOCAL_PACKAGE: &str = "Ashen Marches · Chosen for this campaign";
     const NOTE: &str = "Ash Exposure";
     const NOTE_ROW: &str = "Ash Exposure · ";
     const OTHER_NOTE: &str = "Ashfall";
@@ -1407,7 +1407,7 @@ pub mod library_navigation {
             "The header count's menu opens the entry with the broken link, and closes",
         );
         d.click("Copy Captain Varra to Ashen Marches");
-        d.wait_for_text("Dependency copied and linked.");
+        d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
         d.observe(
             "W1",
             !d.visible_text("Captain Varra is in this campaign only."),
@@ -1415,9 +1415,9 @@ pub mod library_navigation {
         );
         for size in [SMALL, DEFAULT, LARGE] {
             let quiet_undo = d.at_size(size, |d| {
-                d.expect("Undo dependency copy");
-                let rect = d.place_of("Undo dependency copy").unwrap();
-                d.control_frame("Undo dependency copy")
+                d.expect("Undo copy");
+                let rect = d.place_of("Undo copy").unwrap();
+                d.control_frame("Undo copy")
                     .is_some_and(|frame| frame.stroke == egui::Stroke::NONE)
                     && d.painted_in(rect).contains(crate::design::icons::UNDO)
             });
@@ -1428,7 +1428,7 @@ pub mod library_navigation {
             );
         }
         d.state("dependency-copy-reconnected", Sizes::All);
-        d.click("Undo dependency copy");
+        d.click("Undo copy");
         d.wait_for_text("Captain Varra is in this campaign only.");
         // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
         d.click("Wiki watch spell (opens Ashfall)");
@@ -7264,12 +7264,13 @@ pub mod library_scope {
         d.click(MODULE);
         d.click("About Ashen Marches");
         d.wait_for_text(PACKAGE_OWNER);
-        d.expect("Use every entry");
+        d.expect("Choose every entry");
         let about = title_offsets(d, MODULE);
         file_line_centred(
             d,
             &[PACKAGE_OWNER],
-            &["Use every entry", "Show file"],
+            // Round 25 FF3: `Choose every entry` is a toolbar action now.
+            &["Show file"],
             "package About",
         );
         d.state("package-about-title", Sizes::All);
@@ -7306,7 +7307,7 @@ pub mod library_scope {
 
     const BUILT_IN: &str = "Built-in · Read only";
     const CAMPAIGN_OWNER: &str = "Campaign · Editable";
-    const PACKAGE_OWNER: &str = "Used here · 5 of 6 entries";
+    const PACKAGE_OWNER: &str = "5 of 6 entries chosen";
 
     /// The reader title's distance below the Read tab, at each captured size.
     fn title_offsets(d: &mut Driver<'_>, title: &str) -> Vec<Option<f32>> {
@@ -14411,6 +14412,11 @@ pub mod session_plan_groups {
             reached: d.passes(),
             work: d.app().library.repair_lookups(),
         });
+        // Round 25 FH6: the broken-link scan is counted inside `broken_link_lines`.
+        let broken_work = CachedWork::start("Broken link lines", d, |d: &mut Driver<'_>| Counts {
+            reached: d.passes(),
+            work: d.app().library.broken_line_scans(),
+        });
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
         d.observe(
@@ -14462,6 +14468,41 @@ pub mod session_plan_groups {
         let named = row
             .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
         let caret = d.editor_caret_line();
+        // Round 25 FH6: the row counts two broken links; the editor names both lines. The
+        // member row has the repair's words, and the example row its own warning.
+        let example = named_ids
+            .iter()
+            .filter(|(_, member)| !*member)
+            .map(|(at, _)| *at)
+            .next_back();
+        let example_words = example.map(|line| format!("Line {line}: this link names no entry."));
+        let each_named = |d: &Driver<'_>| {
+            example_words
+                .as_deref()
+                .is_some_and(|words| d.has_containing(words))
+                && named
+                    .as_deref()
+                    .is_some_and(|named| d.has_containing(named))
+        };
+        d.observe(
+            "iter-25-L-FH6",
+            each_named(d)
+                && row.is_some_and(|row| {
+                    !d.has_containing(&format!("Line {row}: this link names no entry."))
+                }),
+            format!("Both broken links are named, each once: example {example_words:?}, member {named:?}"),
+        );
+        let broken_warm = broken_work.warm(d, each_named(d), 1);
+        let broken_steady = broken_work.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            each_named(d)
+        });
+        d.observe(
+            "iter-25-L-FH6-cached",
+            broken_warm.is_ok() && broken_steady.is_ok(),
+            format!("Scans once, then not on unchanged frames: {broken_warm:?}, {broken_steady:?}"),
+        );
         d.observe(
             "iter-23-B-FK1",
             named_ids.len() == 3
@@ -14550,37 +14591,38 @@ pub mod session_plan_groups {
                 .find(|node| node.name == "Markdown editor")
                 .map(|node| node.shown)
         };
-        // Save's reason needs the slot: the guidance comes first, then the reason, then the
-        // editor, each at the message gap.
-        // Save's reason in the slot: the painted line that starts below the guidance.
-        let guidance_bottom = d
-            .painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)
-            .map_or(f32::INFINITY, |rect| rect.bottom());
+        // Round 25 (one message space): Save's reason comes first in the space below the save
+        // row, above the editor; the guidance follows it in the same space (it scrolls there).
+        // The old two parts showed the guidance first, then the reason.
         let mut reason = None;
         d.each_painted_text(|text, clip| {
             let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
             if text.galley.job.text.contains("This file is read only.")
                 && clip.intersects(rect)
-                && rect.top() >= guidance_bottom - 0.5
                 && reason.is_none_or(|found: egui::Rect| rect.top() < found.top())
             {
                 reason = Some(rect);
             }
         });
-        let busy_gap = gap_below(d, LINK_WORDS, reason);
+        let guidance = d
+            .painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)
+            .filter(|rect| reason.is_some_and(|reason| rect.top() < reason.top()));
         d.observe(
-            "iter-23-B-FK1-slot-busy",
-            busy_gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))
+            "iter-25-L-FK1-reason-first",
+            guidance.is_none()
                 && reason
                     .zip(editor_shown(d))
                     .is_some_and(|(reason, editor)| reason.bottom() <= editor.top()),
             format!(
-                "Guidance first, then Save's reason ({reason:?}) above the editor ({:?}): gap {busy_gap:?}",
+                "Save's reason ({reason:?}) comes first, above the editor ({:?}); guidance above it: {guidance:?}",
                 editor_shown(d)
             ),
         );
         let failed = (
-            named.as_deref().is_some_and(|named| d.visible_text(named)),
+            // The guidance stays in the message space, after the reason.
+            named
+                .as_deref()
+                .is_some_and(|named| d.has_containing(named)),
             d.editor_text()
                 .is_some_and(|text| text.contains("Arrive at dusk.")),
             std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
@@ -14619,12 +14661,15 @@ pub mod session_plan_groups {
         let replaced = lines(d);
         let gone = replaced.len() == 2
             && replaced.iter().all(|(_, member)| !member)
-            && !d.visible_text("needs a creature that cannot be found. Replace the link");
+            && !d.has_containing("needs a creature that cannot be found. Replace the link");
         d.click("Discard");
         d.expect("Markdown editor");
+        // Round 25 lead ruling: Discard's result carries a live Undo, so it leads the one
+        // message space and the guidance follows it there (reachable by scroll at 960). Presence
+        // in the space is the owner's check; `visible_text` would test the order instead.
         d.observe(
             "iter-23-B-FK1-lifetime",
-            gone && named.as_deref().is_some_and(|named| d.visible_text(named)),
+            gone && named.as_deref().is_some_and(|named| d.has_containing(named)),
             format!(
                 "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
             ),
@@ -14640,10 +14685,10 @@ pub mod session_plan_groups {
             (
                 d.editor_text()
                     .is_some_and(|text| text.contains(&missing_id)),
-                d.visible_text(GUIDANCE),
+                d.has_containing(GUIDANCE),
             )
         };
-        let shown_before_back = d.visible_text(GUIDANCE);
+        let shown_before_back = d.has_containing(GUIDANCE);
         // A link opens another entry and records Lost Patrol on the trail; Back returns to it.
         d.click("Read");
         d.click("Rival Team (opens Rival Team)");
@@ -14654,7 +14699,7 @@ pub mod session_plan_groups {
         d.expect("Repair Lost Patrol");
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
-        let shown_before_list = d.visible_text(GUIDANCE);
+        let shown_before_list = d.has_containing(GUIDANCE);
         d.click_starting("Rival Team ·");
         d.click_starting("Lost Patrol ·");
         let after_list = open_with_editor(d);
@@ -16262,12 +16307,12 @@ pub mod package_to_table {
         d.click("Manage packages…");
         d.begin_task();
         d.type_text("Copper Coast");
-        d.expect("Use in this campaign");
+        d.expect("Choose for this campaign");
         d.state("create-package-location", Sizes::All);
         d.click("Create package");
         d.expect("Copper Coast");
         d.type_text("Copper Drake");
-        d.expect("Use in this campaign");
+        d.expect("Choose for this campaign");
         d.state("new-entry-used-by-default", Sizes::All);
         d.click("Create entry");
         d.expect("Copper Drake");
@@ -16532,6 +16577,20 @@ pub mod remove_package_in_use {
             },
         );
         d.state("package-in-use-warning", Sizes::All);
+        // Round 25 FG4: the scope, the search and the list keep their place when the result
+        // comes and when Undo takes it away, at every size: the result sits in the reader's place.
+        let places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let scope = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with("What the Library shows:"))?;
+                    Some((d.place_of(SEARCH_LIBRARY)?.top(), scope.rect.top()))
+                })
+            })
+        };
+        let before = places(d);
         d.click("Unregister");
         d.observe(
             "W18c",
@@ -16539,7 +16598,41 @@ pub mod remove_package_in_use {
             "Unregistering keeps the package files",
         );
         d.expect("Undo unregister");
+        let with_result = places(d);
+        // Round 25 FG2: a finished change is a success message.
+        let words = d.painted_rect_in("Ashen Marches is unregistered.", egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-25-L-FG2",
+            words
+                .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
+            format!("The unregister result has the success bar: {words:?}"),
+        );
         d.state("package-unregistered-with-undo", Sizes::All);
+        d.click("Undo unregister");
+        d.expect(&format!("More actions for {MODULE}"));
+        let registered = d
+            .app_mut()
+            .campaigns
+            .modules()
+            .iter()
+            .any(|module| module.id == package);
+        let undone = places(d);
+        d.observe(
+            "iter-25-L-FG4",
+            before.iter().all(Option::is_some)
+                && with_result == before
+                && undone == before
+                && registered
+                && !d.has_containing("is unregistered."),
+            format!(
+                "Search and list tops before {before:?}, with the result {with_result:?}, after Undo {undone:?}; registered again: {registered}"
+            ),
+        );
+        // Unregister again, for the Campaign steps below.
+        d.click(&format!("More actions for {MODULE}"));
+        d.click(&format!("Unregister {MODULE}"));
+        d.click("Unregister");
+        d.expect("Undo unregister");
         go_campaign(d);
         d.click("Reload from disk");
         d.expect("Ashen Marches is not registered.");

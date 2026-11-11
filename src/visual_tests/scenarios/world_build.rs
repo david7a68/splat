@@ -2898,7 +2898,11 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     let wheel_scrolled = match (back, part) {
         (Some(back), Some(part)) => {
             d.scroll_at(part.center(), 1);
-            top(d).is_some_and(|after| after < back - 1.0)
+            // A short first message can scroll out of the part entirely.
+            match top(d) {
+                Some(after) => after < back - 1.0,
+                None => d.has(message),
+            }
         }
         _ => false,
     };
@@ -3683,17 +3687,18 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Cinder Wolf · ");
     d.click(EDIT_MARKDOWN);
     let draft = d.editor_text().unwrap();
+    // Round 25 AC3, FC1, SC2: the editor's place with nothing in the message space.
+    let clean_tops = editor_frame_tops(d);
     // AD3: a stat fix's result is a message, and its Undo follows it with its icon.
     // The DM types a Hit Points line that disagrees with the stat block (22). The warning and
     // the result use the DM's words, not the schema key.
     let typed = format!("{draft}\nHit Points 24 (4d8 + 4)\n");
     d.replace_text_in("Markdown editor", &typed);
     d.wait_for_text("Use 24");
+    let warning_tops = editor_frame_tops(d);
     d.observe(
         "iter-19-E-AD3-stat-words",
-        d.has(
-            "Hit Points line says 24, but the stat block says 22. The fight uses the stat block.",
-        ) && !d.has_containing("max_hp"),
+        d.has("Hit Points line says 24; stat block says 22.") && !d.has_containing("max_hp"),
         "The stat warning names Hit Points and the stat block, not max_hp",
     );
     assert!(!d.has_containing("The stat block now says"));
@@ -3708,6 +3713,44 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "Undo stat change",
     );
     d.state("stat-fix-undo-message", Sizes::All);
+    // Round 25 AC3, FC1, SC2 and the message-space contract: the stat warning, its result, a
+    // reason that hides the result, Discard, Undo discard and the result again all keep the
+    // editor still. The hidden result comes back while its owner (this draft) lives.
+    let result_tops = editor_frame_tops(d);
+    let invalid = fixed.replacen("splat_name: Cinder Wolf", "splat_name: [", 1);
+    assert_ne!(invalid, fixed);
+    d.replace_editor_text(&invalid);
+    d.wait_for_text("Invalid");
+    let reason_hides = !d.has("Undo stat change");
+    let reason_tops = editor_frame_tops(d);
+    d.click("Discard");
+    d.expect("Undo discard of Cinder Wolf");
+    let discard_tops = editor_frame_tops(d);
+    d.click("Undo discard of Cinder Wolf");
+    assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
+    let undo_discard_tops = editor_frame_tops(d);
+    let still_hidden = !d.has("Undo stat change");
+    d.replace_editor_text(&fixed);
+    d.wait_for_text("Undo stat change");
+    let back_tops = editor_frame_tops(d);
+    let all = [
+        warning_tops,
+        result_tops,
+        reason_tops,
+        discard_tops,
+        undo_discard_tops,
+        back_tops,
+    ];
+    d.observe(
+        "iter-25-L-AC3-editor-still",
+        clean_tops.iter().all(Option::is_some) && all.iter().all(|tops| *tops == clean_tops),
+        format!("The editor top is {clean_tops:?} with no message and in every state: {all:?}"),
+    );
+    d.observe(
+        "iter-25-L-message-space-result-returns",
+        reason_hides && still_hidden && d.has("Undo stat change"),
+        "A reason hides the stat result; the result comes back with its own draft",
+    );
     d.click("Undo stat change");
     d.wait_for_text("Use 24");
     let restored = d.editor_text().unwrap();
@@ -4256,10 +4299,10 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
     d.click(MODULE);
     d.click("About Ashen Marches");
-    d.wait_for_text("Used here · 5 of 6 entries");
+    d.wait_for_text("5 of 6 entries chosen");
     d.observe(
         "W2 fixture",
-        d.visible_text("Used here · 5 of 6 entries")
+        d.visible_text("5 of 6 entries chosen")
             && !d.visible_text("Engine support")
             && !d.visible_text("Library / Other entries"),
         "Four selected entries and one required entry count as package use",
@@ -4270,12 +4313,12 @@ pub fn package_about(d: &mut Driver<'_>) {
         [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, |d| d.place_of("Read")))
     };
     let read_before = read_tabs(d);
-    d.click("Use every entry");
-    d.wait_for_text("All entries used here");
+    d.click("Choose every entry");
+    d.wait_for_text("All entries chosen");
     let title_after = reader_title_tops(d, MODULE);
     let read_after = read_tabs(d);
     d.state_prepared("package-every-entry-used", Sizes::All, |d| {
-        check_undo_icon(d, "Undo package use", "iter-8-E-FD3-use");
+        check_undo_icon(d, "Undo package choice", "iter-8-E-FD3-use");
         // Round 23 FD4: one result place per reader. The result sits after the title, where
         // the warnings sit, so the tabs, the file line and the title never move.
         let read = d.place_of("Read").expect("Read tab is visible");
@@ -4296,9 +4339,9 @@ pub fn package_about(d: &mut Driver<'_>) {
             ),
         );
     });
-    d.click("Undo package use");
-    d.wait_for_text("Used here · 5 of 6 entries");
-    d.expect_same("Undo package use restores the original package selection and About reader.");
+    d.click("Undo package choice");
+    d.wait_for_text("5 of 6 entries chosen");
+    d.expect_same("Undo package choice restores the original package selection and About reader.");
     d.assert_state_matches("package-use-undone", "package-about");
     d.click(EDIT_MARKDOWN);
     // Round 24 FB3: the manifest's editor below Read with no result, at each size.
@@ -4334,12 +4377,13 @@ pub fn package_about(d: &mut Driver<'_>) {
             "The About row warns for the manifest problem the header counts",
         );
         // Round 23 FD8: the About row's warning icon has the warning colour too.
+        // Round 25 FF4: where the marked name would be cut, the row drops `About` first.
         let about = format!("{} About Emberfall Watch", crate::icons::WARN);
+        let short = format!("{} Emberfall Watch", crate::icons::WARN);
         let mut marks = Vec::new();
         d.each_painted_text(|text, clip| {
             let job = &text.galley.job;
-            // At 1200 the package name shortens by whole words.
-            if job.text.starts_with(&about[..about.len() - " Watch".len()])
+            if (job.text == about || job.text == short)
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(job));
@@ -4406,7 +4450,9 @@ pub fn package_about(d: &mut Driver<'_>) {
     assert_ne!(invalid, written, "fixture: the manifest names its kind");
     d.replace_editor_text(&invalid);
     d.wait_for_text("Invalid");
-    let kept = |d: &Driver<'_>| d.visible_text("Module.md was written again.");
+    // Round 25 lead ruling: two results with a live Undo (Discard's and the write's) share the
+    // one two-line space, newest first; the older one stays in it, reachable by scroll.
+    let kept = |d: &Driver<'_>| d.has_containing("Module.md was written again.");
     let refused = (kept(d), editor_below_read(d));
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
@@ -4442,8 +4488,21 @@ pub fn package_about(d: &mut Driver<'_>) {
     let reason = d
         .nodes()
         .into_iter()
-        .find(|node| node.name.contains("ember gate beyond the long ash road"))
+        .find(|node| {
+            node.name.contains("ember gate beyond the long ash road")
+                && node.role != egui::accesskit::Role::GenericContainer
+        })
         .map(|node| node.name);
+    // The one message space is named with all it holds: the write result, then the reason.
+    let space = d
+        .nodes()
+        .into_iter()
+        .find(|node| {
+            node.name.contains("ember gate beyond the long ash road")
+                && node.role == egui::accesskit::Role::GenericContainer
+        })
+        .map(|node| node.name)
+        .unwrap_or_default();
     let failed = (kept(d), editor_below_read(d));
     // Astra re-check 2: the long reason scrolls by keyboard and by wheel, and its words keep
     // clear of every scroll bar and splitter at 960, 1200 and 1920.
@@ -4454,7 +4513,7 @@ pub fn package_about(d: &mut Driver<'_>) {
             sizes.push((text.pos, text.galley.size(), clip));
         }
     });
-    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &message);
+    let (tabbed, keyed, wheeled, ring) = fixed_part_scrolls(d, &space);
     let clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
@@ -4492,7 +4551,9 @@ pub fn package_about(d: &mut Driver<'_>) {
     );
     assert!(!folder.join("Package.md").exists());
     d.click("Undo write Module.md");
-    d.wait_for_text("Line 4 opens a list");
+    // Round 25 lead ruling: Discard's live Undo leads the message space; the reason follows it.
+    d.settle();
+    d.expect("Line 4 opens a list");
     assert_eq!(fs::read_to_string(&path).unwrap(), broken);
 }
 
@@ -4525,8 +4586,21 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         d.observe(
             "iter-12-E-FD5-icon",
             d.painted_in(about)
-                .starts_with(&format!("{} About Ashen", design::icons::ERROR)),
+                .starts_with(&format!("{} ", design::icons::ERROR)),
             format!("The About row still shows its mark at {size:?}"),
+        );
+        // Round 25 FF4: a marked row whose name would be cut drops `About` first, so the whole
+        // name shows with its mark: no `…`.
+        let painted = d.painted_in(about);
+        d.observe(
+            "iter-25-L-FF4",
+            [
+                format!("{} About Ashen Marches", design::icons::ERROR),
+                format!("{} Ashen Marches", design::icons::ERROR),
+            ]
+            .iter()
+            .any(|whole| painted.trim() == whole.as_str()),
+            format!("The marked About row shows the whole name at {size:?}: {painted:?}"),
         );
         // Round 24 FC2: the mark is the error icon in the error colour.
         let mut marks = Vec::new();
@@ -4535,7 +4609,8 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .galley
                 .job
                 .text
-                .starts_with(&format!("{} About Ashen", design::icons::ERROR))
+                .starts_with(&format!("{} ", design::icons::ERROR))
+                && text.galley.job.text.contains("Ashen Marches")
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(&text.galley.job));
@@ -4556,7 +4631,10 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         // At 1200x800 the name does not fit beside the icon, so it shortens and hover gives it whole.
         if size == DEFAULT {
             let shortened = !d.visible_text(&warned_about);
-            let hover = d.painted_tooltip_shows("About Ashen", &warned_about);
+            let hover = d.painted_tooltip_shows(
+                &format!("{} Ashen Marches", design::icons::ERROR),
+                &warned_about,
+            );
             d.observe(
                 "iter-12-E-FD5-hover",
                 shortened && hover,
@@ -5035,7 +5113,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     // The attribute table's rows are pointer targets, so the actions can start lower.
     d.scroll_at(super::READER, 3);
     d.wait_for_text("Ash Bite");
-    d.expect("Ashen Marches · Used here");
+    d.expect("Ashen Marches · Chosen for this campaign");
     d.state("package-yaml-repaired", Sizes::All);
 
     // Keep the original repair proof at step 08; repeat the break for its consumers.
@@ -5079,7 +5157,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.replace_editor_text(&valid);
     d.click("Save");
     d.click("Read");
-    d.wait_for_text("Ashen Marches · Used here");
+    d.wait_for_text("Ashen Marches · Chosen for this campaign");
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
@@ -5151,8 +5229,12 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         );
     }
     const UNREADABLE: &str = "Ashen Marches · Cannot be read";
+    // Round 25 AC1, SC1: the parse error is in the one message space below the save row, so
+    // the editor keeps its top when the error clears, comes back, or Discard and its Undo run.
+    let mut repair_tops = vec![editor_frame_tops(d)];
     d.replace_editor_text(&valid);
     sd1(d, "valid", None, "Unsaved", UNREADABLE, &stored);
+    repair_tops.push(editor_frame_tops(d));
     d.state("repair-draft-parses", Sizes::All);
     d.replace_editor_text(&other_fault);
     sd1(
@@ -5163,6 +5245,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         UNREADABLE,
         &stored,
     );
+    repair_tops.push(editor_frame_tops(d));
     d.press_ctrl(Key::Z);
     assert_eq!(d.editor_text().as_deref(), Some(valid.as_str()));
     sd1(d, "editor-undo", None, "Unsaved", UNREADABLE, &stored);
@@ -5176,9 +5259,19 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         UNREADABLE,
         &stored,
     );
+    repair_tops.push(editor_frame_tops(d));
     d.click("Undo discard of Creatures/Cinder Wolf.md");
     assert_eq!(d.editor_text().as_deref(), Some(valid.as_str()));
     sd1(d, "undo-discard", None, "Unsaved", UNREADABLE, &stored);
+    repair_tops.push(editor_frame_tops(d));
+    d.observe(
+        "iter-25-L-AC1-editor-still",
+        repair_tops[0].iter().all(Option::is_some)
+            && repair_tops.iter().all(|tops| *tops == repair_tops[0]),
+        format!(
+            "The editor top stays with the error, without it, after Discard and Undo discard: {repair_tops:?}"
+        ),
+    );
     // An outside change under the valid draft: Reload takes the file's own fault.
     fs::write(&path, &other_fault).unwrap();
     d.focus_window(false);
@@ -5198,13 +5291,13 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, &valid).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("Ashen Marches · Used here");
+    d.wait_for_text("Ashen Marches · Chosen for this campaign");
     sd1(
         d,
         "outside-repair",
         None,
         "No changes",
-        "Ashen Marches · Used here",
+        "Ashen Marches · Chosen for this campaign",
         &stored,
     );
 }
@@ -5448,21 +5541,19 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     fs::remove_file(&rules).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text(
-        "This entry’s file has gone from disk. Your draft is safe here until you choose.",
-    );
+    d.wait_for_text("This entry’s file was deleted on disk. Your draft is safe until you choose.");
     d.expect("Ember Cultist needs this entry.");
     d.state_prepared("draft-file-deleted-on-disk", Sizes::All, |d| {
         choices_at_text(
             d,
             "iter-15-E-AD3-library-gone",
-            "This entry’s file has gone from disk",
+            "This entry’s file was deleted on disk",
             "Save my draft again",
-            "Let it go",
+            "Remove entry and lose draft",
             None,
         );
         // The note about who needs the entry sits with the message, at its text edge.
-        let text = d.painted_rect_in("This entry’s file has gone", egui::Rect::EVERYTHING);
+        let text = d.painted_rect_in("This entry’s file was deleted", egui::Rect::EVERYTHING);
         let needs = d.painted_rect_in("Ember Cultist needs this entry.", egui::Rect::EVERYTHING);
         d.observe(
             "iter-15-E-AD3-library-gone-needs",
@@ -5504,39 +5595,41 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     fs::remove_file(&rules).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("Let it go");
+    d.wait_for_text("Remove entry and lose draft");
     let gone_count = files_to_fix(d);
-    let gone_used = d.visible_text("Ashen Marches · Used here");
-    d.click("Let it go");
+    let gone_used = d.visible_text("Ashen Marches · Chosen for this campaign");
+    d.click("Remove entry and lose draft");
     d.wait_for_text("No entry open");
-    d.expect("Ash Exposure let go. Ember Cultist now needs a missing entry.");
+    d.expect(
+        "Ash Exposure removed. Its draft was discarded. Ember Cultist now needs a missing entry.",
+    );
     assert!(!d.has_containing("Ash Exposure · "));
-    d.expect("Undo let go");
+    d.expect("Undo remove");
     d.state("deleted-draft-let-go", Sizes::All);
     let let_go_count = files_to_fix(d);
-    d.click("Undo let go");
-    d.expect("Let it go");
+    d.click("Undo remove");
+    d.expect("Remove entry and lose draft");
     d.expect("A draft to let go.");
-    // Round 23 FD1: Undo let go gives back the entry's campaign use and the header count with
+    // Round 23 FD1: Undo remove gives back the entry's campaign use and the header count with
     // the draft, as one step.
     let restored_count = files_to_fix(d);
     d.observe(
         "iter-23-L-FD1",
         gone_used
-            && d.visible_text("Ashen Marches · Used here")
-            && !d.visible_text("Ashen Marches · Not used here")
-            && !d.has("Use in this campaign")
+            && d.visible_text("Ashen Marches · Chosen for this campaign")
+            && !d.visible_text("Ashen Marches · Not chosen")
+            && !d.has("Choose for this campaign")
             && gone_count.is_some()
             && restored_count == gone_count,
         format!(
-            "Undo let go restores Used here and the count {gone_count:?} (after Let it go {let_go_count:?}, after Undo {restored_count:?})"
+            "Undo remove restores Chosen for this campaign and the count {gone_count:?} (after Remove entry and lose draft {let_go_count:?}, after Undo {restored_count:?})"
         ),
     );
     d.expect_same(
-        "Undo let go gives back the deleted-draft state of the first deletion: only the draft's words differ.",
+        "Undo remove gives back the deleted-draft state of the first deletion: only the draft's words differ.",
     );
     d.state("deleted-draft-restored", Sizes::All);
-    d.click("Let it go");
+    d.click("Remove entry and lose draft");
     d.wait_for_text("No entry open");
     d.focus_window(false);
     d.focus_window(true);
@@ -5575,6 +5668,17 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
         .into_iter()
         .map(|size| d.at_size(size, |d| reader_title(d, title).map(|rect| rect.top())))
         .collect()
+}
+
+/// The Markdown editor frame's top at 960, 1200 and 1920. Round 25: the one message space below
+/// the save row keeps it still whatever the space holds.
+fn editor_frame_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
+    // From Save's row, as `editor_below_read` measures: the page can scroll to the caret.
+    [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            Some(d.input_frame("Markdown editor")?.0.top() - d.place_of("Save")?.bottom())
+        })
+    })
 }
 
 /// A copied file keeps its own save target until the DM repairs its identity.
@@ -5699,6 +5803,39 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
         Some("Cinder Wolf copy")
     );
     d.click("Read");
+    // Round 25 AC2: the copy's row names both causes its reader reports, the duplicate and the
+    // first heading; the original's row names only the duplicate.
+    // At 960 the row is cut inside the second cause, so its first words are the proof.
+    let causes = format!(
+        "{} {} · First heading",
+        crate::icons::WARN,
+        crate::library::SAME_ENTRY
+    );
+    let mut lines = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let words = &text.galley.job.text;
+        if words.contains(crate::library::SAME_ENTRY)
+            && words.contains(" · ")
+            && clip.intersects(text.visual_bounding_rect())
+        {
+            lines.push(words.clone());
+        }
+    });
+    d.observe(
+        "iter-25-L-AC2",
+        lines.len() == 2
+            && lines
+                .iter()
+                .filter(|line| line.starts_with(&causes))
+                .count()
+                == 1
+            && lines
+                .iter()
+                .filter(|line| !line.contains("First heading"))
+                .count()
+                == 1,
+        format!("One row names both causes, the other only the duplicate: {lines:?}"),
+    );
     d.state_prepared("duplicate-copy-reader", Sizes::All, |d| {
         let text = d
             .painted_rect_in(crate::world::DUPLICATE_ENTRY, egui::Rect::EVERYTHING)
@@ -5805,8 +5942,7 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.state("duplicate-copy-new-identity", Sizes::All);
     // Round 23 FD4, FE6: the result takes the warnings' place after the title, so the title
     // stays where it was with the warning.
-    // `Use in this campaign` joins the owner line here, which can send the path to its own row
-    // (FD5), so the title is measured from the file line.
+    // The title is measured from the file line (FD5).
     let title_after = title_below_file_line(d, "Cinder Wolf copy");
     let below = d.at_size(DEFAULT, |d| {
         let title = reader_title(d, "Cinder Wolf copy")?;
@@ -5867,8 +6003,23 @@ pub fn package_duplicate_id(d: &mut Driver<'_>) {
     d.click("Make Cinder Wolf copy.md a separate entry");
     d.wait_for_text("Undo separate entry");
     d.expect("Cinder Wolf copy.md is now a separate entry.");
-    d.click("Use in this campaign");
-    d.wait_for_text("Ashen Marches · Used here");
+    // Round 25 FF3: `Choose for this campaign` is a toolbar action, so the title of an entry that
+    // is not chosen sits where a chosen entry's does, at every size.
+    let not_chosen = reader_title_tops(d, "Cinder Wolf copy");
+    // At 960 the toolbar folds Copy to… and the choice into More.
+    if !d.has("Choose for this campaign") {
+        d.click("More");
+    }
+    d.click("Choose for this campaign");
+    d.wait_for_text("Ashen Marches · Chosen for this campaign");
+    let chosen = reader_title_tops(d, "Cinder Wolf copy");
+    d.observe(
+        "iter-25-L-FF3",
+        !d.has("Choose for this campaign")
+            && not_chosen.iter().all(Option::is_some)
+            && not_chosen == chosen,
+        format!("The title keeps its top when the entry is chosen: {not_chosen:?} → {chosen:?}"),
+    );
     go_encounters(d);
     d.expect("Bridge Ambush");
     d.observe_both(
@@ -5894,6 +6045,29 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.replace_text_in("Copy name", "Watch Aboleth");
     d.type_into("Folder", "Creatures");
     d.wait_for_text("Creatures/Watch Aboleth.md");
+    // Round 25 FE1: with the caret in Folder, the focus ring goes round the whole field, its
+    // suggestions button included, as every text field's does.
+    for size in [SMALL, DEFAULT] {
+        let (focused, field, rings) = d.at_size(size, |d| {
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
+                .map(|node| node.rect);
+            (d.focused_name(), field, d.focus_rings())
+        });
+        d.observe(
+            "iter-25-L-FE1",
+            focused.as_deref() == Some("Folder")
+                && field.is_some_and(|field| {
+                    rings.iter().any(|(ring, _)| {
+                        ring.expand(0.5).contains_rect(field)
+                            && ring.width() >= field.width() + design::XL
+                    })
+                }),
+            format!("At {size:?} the focused Folder field ({focused:?}, {field:?}) has a ring round the whole field: {rings:?}"),
+        );
+    }
     d.state("book-copy-to-package", Sizes::All);
     d.click(CREATE_COPY);
     d.expect("Copied to Ashen Marches as Watch Aboleth.");
@@ -6960,7 +7134,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         format!("The ready registration form's commit is the one primary: {primary:?}"),
     );
     d.state("copied-package-new-name", Sizes::All);
-    d.click("Use in this campaign");
+    d.click("Choose for this campaign");
     d.expect("Uses every entry in this package, including future entries.");
     assert!(!d.has("This campaign keeps the original. The copy is registered but not used."));
     d.state("copied-package-use-enabled", Sizes::All);
@@ -6976,7 +7150,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click("Register as a new package");
     d.expect("Register Ashen Reaches");
     d.expect("Uses every entry in this package, including future entries.");
-    d.click("Use in this campaign");
+    d.click("Choose for this campaign");
     d.expect("This campaign keeps the original. The copy is registered but not used.");
     // Round 24 FC4: the search field's place below the page header, before any result.
     let columns_top = |d: &mut Driver<'_>| {
@@ -8519,7 +8693,7 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
             && draft_count == unread_count
             && draft_count != readable_count
             && d.visible_text("Ashen Marches · Cannot be read")
-            && !d.visible_text("Ashen Marches · Used here"),
+            && !d.visible_text("Ashen Marches · Chosen for this campaign"),
         format!(
             "The header counts the unread file with a draft ({draft_count:?}) as without one ({unread_count:?}), not as when it read ({readable_count:?}), and the owner line says Cannot be read"
         ),
@@ -8538,7 +8712,7 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
             !d.has("Save my draft again")
                 && !d.has("Overwrite with my draft")
                 && !d.has("Save")
-                && !d.has_containing("has gone from disk")
+                && !d.has_containing("was deleted on disk")
                 && d.has("Technical details"),
             "The draft's choices never save over the unreadable file",
         );
