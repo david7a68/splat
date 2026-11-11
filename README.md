@@ -143,7 +143,16 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   worktrees. The default is one per five cores, and at most one per 4 GiB of RAM.
 - Each scenario's ids and run dice come from a hash of its name. Adding, removing or
   moving another scenario, or running a scenario alone, changes nothing in it. Renaming
-  a scenario gives it new ids and new dice.
+  a scenario gives it new ids and new dice. Scenario code, and app code that makes a new
+  identity on the screen thread (a copy, a separate entry), takes each new id from
+  `crate::hermetic::new_uuid`, which follows that seed. The release app still makes random
+  ids. A unit test fails on a direct random id anywhere in `src/visual_tests/`.
+- To prove that a cache keeps input-sized work (a parse, a lookup, a read of the whole draft)
+  off unchanged frames, use `CachedWork` in `src/test_support.rs`. Count the work inside the
+  function that does it. `warm` checks that the view shows the state and reached the work,
+  `steady` that unchanged frames and a resize reach the guard but do no work, and `refresh`
+  that an edit does the work again. Then move the work outside its guard once: `steady` must
+  fail.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.

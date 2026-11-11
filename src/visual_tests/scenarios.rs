@@ -13173,6 +13173,7 @@ pub mod run_add_creature {
 /// W13 and W14: a group assembled in the session's plan is first in the run's panel.
 pub mod session_plan_groups {
     use super::*;
+    use crate::test_support::{CachedWork, Counts};
 
     pub fn run(d: &mut Driver<'_>) {
         // The Library has been read before the group exists, so it must read again after.
@@ -13468,6 +13469,11 @@ pub mod session_plan_groups {
         );
         assert_ne!(with_note, lost_text);
         std::fs::write(&lost, &with_note).unwrap();
+        // The row lookup is counted inside `repair_row`; frames stand in for its guard.
+        let repair_work = CachedWork::start("Repair row lookup", d, |d: &mut Driver<'_>| Counts {
+            reached: d.passes(),
+            work: d.app().library.repair_lookups(),
+        });
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
         d.observe(
@@ -13532,20 +13538,40 @@ pub mod session_plan_groups {
                 .all(|gap| gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))),
             format!("Guidance to editor at 960 and 1200: {gaps:?}"),
         );
-        // Unchanged frames do not look the row up again.
-        let lookups = d.app_mut().library.repair_lookups();
-        d.settle();
-        d.at_size(LARGE, |_| ());
-        let again = d.app_mut().library.repair_lookups();
+        // This repair looked the row up, and unchanged frames and a resize do not look it up
+        // again.
+        let shown = |d: &Driver<'_>| named.as_deref().is_some_and(|named| d.visible_text(named));
+        let warm = repair_work.warm(d, shown(d), 1);
+        d.observe(
+            "iter-24-T-repair-warm",
+            warm.is_ok(),
+            format!("Repair lookups since the repair opened: {warm:?}"),
+        );
+        let steady = repair_work.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            shown(d)
+        });
         d.observe(
             "iter-23-B-FK1-cached",
-            lookups >= 1 && again == lookups,
-            format!("Repair lookups: {lookups} at open, {again} after unchanged frames"),
+            steady.is_ok(),
+            format!("Unchanged frames and a resize: {steady:?}"),
         );
         // Repair A stays through an unrelated edit B and a Save that fails on the disk: the
-        // guidance, the draft and the file stay as they were.
-        d.press_ctrl(Key::End);
-        d.type_text("Arrive at dusk.");
+        // guidance, the draft and the file stay as they were. Edit B is new text, so the row is
+        // looked up again, and the same row is named.
+        let refresh = repair_work.refresh(d, 1, |d| {
+            d.press_ctrl(Key::End);
+            d.type_text("Arrive at dusk.");
+            shown(d)
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("Arrive at dusk."))
+        });
+        d.observe(
+            "iter-24-T-repair-refresh",
+            refresh.is_ok(),
+            format!("An edit looks the row up again: {refresh:?}"),
+        );
         let original = std::fs::metadata(&lost).unwrap().permissions();
         let mut read_only = original.clone();
         read_only.set_readonly(true);
@@ -15108,7 +15134,7 @@ pub mod npc_in_encounter {
             .unwrap()
             .entry
             .id;
-        let text = splat::content::formats::fixture("Rook.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n", uuid::Uuid::new_v4()), "").unwrap();
+        let text = splat::content::formats::fixture("Rook.md", &format!("splat_id: {}\nsplat_kind: world\nsplat_name: Rook Ambry\nsplat_world:\n  type: npc\n  creature: {{id: {guard}}}\n", crate::hermetic::new_uuid()), "").unwrap();
         std::fs::create_dir_all(campaign.path.join("NPCs")).unwrap();
         crate::library::write_note(&campaign.path, "NPCs/Rook Ambry.md", None, &text).unwrap();
         go_encounters(d);
