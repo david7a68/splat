@@ -903,6 +903,17 @@ impl<'a> Driver<'a> {
         nodes
     }
 
+    /// The accessible description of every node on screen that has one.
+    pub fn descriptions(&self) -> Vec<String> {
+        let mut found = Vec::new();
+        ergonomics::visit_nodes(&self.harness, |node, _| {
+            if let Some(description) = node.accesskit_node().description() {
+                found.push(description.to_owned());
+            }
+        });
+        found
+    }
+
     /// Lines for a failure message: everything on screen with a role or name.
     pub fn describe(&self) -> String {
         self.nodes()
