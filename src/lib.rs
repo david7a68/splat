@@ -2360,9 +2360,17 @@ impl eframe::App for Splat {
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
-            if let Some(fact) = &fact {
-                self.timeline
-                    .record_change(self.run_fact.as_ref(), fact, self.sessions.current());
+            match &fact {
+                Some(fact) => {
+                    self.timeline.record_change(
+                        self.run_fact.as_ref(),
+                        fact,
+                        self.sessions.current(),
+                    );
+                }
+                // The run closed. An open run records itself again after a crash, and a closed
+                // one cannot, so its last result goes to the file now and not after the pause.
+                None => self.timeline.save(),
             }
             self.run_fact = fact;
         }

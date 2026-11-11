@@ -277,6 +277,14 @@
       "add a creature made up at the table to a running fight": 11,
       "add two of a campaign's creatures to a running fight": 7
     },
+    "run-continue": {
+      "T15.1: come back from Close run": 1,
+      "T15.1: come back from another page": 1,
+      "T15.2: go on with an ended fight": 1,
+      "T15.2: take back an ending": 1,
+      "T15.3: go on with a closed, ended fight from History": 2,
+      "T15.3: go on with a closed, ended fight from the plan": 3
+    },
     "run-edge-states": {
       "record a long effect": 6,
       "see everyone absent": 16,

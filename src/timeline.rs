@@ -333,7 +333,8 @@ pub struct RunFact {
     pub name: String,
     pub round: u64,
     pub state: RunState,
-    /// How many steps the DM has taken since this run opened. It only grows while it stays open.
+    /// How many steps the DM has taken since this run opened and not taken back. Zero means
+    /// the run is as it opened.
     pub steps: usize,
 }
 
@@ -607,6 +608,9 @@ pub struct Book {
     pub events: Vec<Event>,
     pub flags: Vec<splat::content::layout::Flag>,
     run_write: bool,
+    /// The open run's fight as it stood before this opening played it: the run, its place in
+    /// the order of play, and the session it continued in. Never saved.
+    before_play: Option<(Uuid, u64, Option<Uuid>)>,
     pub run_open: bool,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
@@ -1197,13 +1201,37 @@ impl Book {
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
+    #[cfg(test)]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
+        self.record(fact, session, played, false);
+    }
+
+    fn record(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool, taken_back: bool) {
         // It stays in place for this, because what comes next must follow its order.
         let removed = self.removed.clone();
         let dm_edit = self.dirty && !self.run_write;
         self.apply_run(fact, session, played);
+        if taken_back {
+            self.unplay(fact.id);
+        }
         self.run_write = !dm_edit;
         self.removed = removed;
+    }
+
+    /// Every step since the run opened is taken back, so it was opened and not played. Its
+    /// fight goes back to its place in the order of play, and to its own session.
+    fn unplay(&mut self, run: Uuid) {
+        let Some((played, order, continued_in)) = self.before_play.take() else {
+            return;
+        };
+        if played == run
+            && let Some(event) = self.events.iter_mut().find(|e| e.run == Some(run))
+            && (event.played_order != order || event.continued_in != continued_in)
+        {
+            event.played_order = order;
+            event.continued_in = continued_in;
+            self.touch();
+        }
     }
 
     /// The order for what is played or ruled on next.
@@ -1233,8 +1261,14 @@ impl Book {
         if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
             return;
         }
+        // Another opening, or another run: what the last one remembered is over.
+        if before.is_none_or(|old| old.id != fact.id) {
+            self.before_play = None;
+        }
         let played = before.is_some_and(|old| fact.played_since(old));
-        self.record_run(fact, session, played);
+        let taken_back =
+            before.is_some_and(|old| old.id == fact.id && old.steps > 0 && fact.steps == 0);
+        self.record(fact, session, played, taken_back);
     }
 
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
@@ -1290,6 +1324,9 @@ impl Book {
                 if played {
                     let next = self.next_order();
                     let event = &mut self.events[index];
+                    if self.before_play.is_none() {
+                        self.before_play = Some((fact.id, event.played_order, event.continued_in));
+                    }
                     let moved = session.is_some()
                         && event.session != session
                         && event.continued_in != session;
@@ -2101,6 +2138,65 @@ mod tests {
         book.record_run(&bridge, session, true);
         let fights = party_state(&book.events, session).fights;
         assert_eq!(fights.last().map(|fight| fight.0), Some(bridge.id));
+
+        // The shrine is played and ended. Then the bridge is opened again by mistake: one
+        // step, such as Continue fight, and Undo of it. The shrine is still the latest word.
+        let later = Some(Uuid::new_v4());
+        let played = RunFact {
+            steps: 1,
+            ..shrine.clone()
+        };
+        book.record_change(None, &shrine_opened(&shrine), session);
+        book.record_change(Some(&shrine_opened(&shrine)), &played, session);
+        let latest = |book: &Book| {
+            party_state(&book.events, session)
+                .fights
+                .last()
+                .map(|fight| fight.0)
+        };
+        assert_eq!(latest(&book), Some(shrine.id));
+        let opened = RunFact {
+            steps: 0,
+            state: RunState::Ended("Won".into()),
+            ..bridge.clone()
+        };
+        let stepped = RunFact {
+            steps: 1,
+            state: RunState::Running,
+            ..bridge.clone()
+        };
+        book.record_change(None, &opened, later);
+        book.record_change(Some(&opened), &stepped, later);
+        assert_eq!(latest(&book), Some(bridge.id), "a step played it");
+        let event = |book: &Book| {
+            book.events
+                .iter()
+                .find(|event| event.run == Some(bridge.id))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(event(&book).continued_in, later);
+        assert_eq!(event(&book).result, "Round 3");
+        book.record_change(Some(&stepped), &opened, later);
+        assert_eq!(latest(&book), Some(shrine.id), "Undo of it did not");
+        assert_eq!(event(&book).continued_in, None);
+        assert_eq!(event(&book).result, "Won, round 3");
+        // A fight that is played on, and ends a second time, is the latest word again.
+        let ended_again = RunFact {
+            steps: 2,
+            state: RunState::Ended("Lost".into()),
+            ..bridge.clone()
+        };
+        book.record_change(Some(&opened), &stepped, later);
+        book.record_change(Some(&stepped), &ended_again, later);
+        assert_eq!(latest(&book), Some(bridge.id));
+        assert_eq!(event(&book).result, "Lost, round 3");
+    }
+    fn shrine_opened(shrine: &RunFact) -> RunFact {
+        RunFact {
+            steps: 0,
+            ..shrine.clone()
+        }
     }
 
     #[test]

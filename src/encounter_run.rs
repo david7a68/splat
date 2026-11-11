@@ -2,6 +2,7 @@
 mod ad_hoc;
 mod loot;
 mod rolling;
+mod undo;
 pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
@@ -37,6 +38,11 @@ pub(crate) struct Participant {
     pub initiative_mode: i8,
     pub name: String,
     pub side: String,
+    /// Only a row of a saved Undo step may leave this out: `undo::same_definition`.
+    #[serde(
+        default = "undo::same_definition",
+        skip_serializing_if = "undo::is_same_definition"
+    )]
     pub definition: Arc<Entry>,
     pub initial: Mapping,
     pub max_hp: Option<i64>,
@@ -576,9 +582,12 @@ pub(crate) struct Run {
     also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
     halved: BTreeSet<usize>,
-    /// How many steps the DM has taken or taken back since this opened. A sheet's change is
-    /// not one, and neither is opening a run to read it. Never saved.
+    /// How many steps the DM has taken since this opened and not taken back. Zero means the
+    /// run is as it opened. A sheet's change is not a step, and neither is opening a run to
+    /// read it. Undo of a step from before this opening is one. Never saved.
     dm_steps: usize,
+    /// How many of the newest Undo steps the DM took since this opened. Never saved.
+    own_steps: usize,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -635,8 +644,12 @@ pub(crate) struct Run {
     pub account_status: Option<crate::design::Status<'static>>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
-    /// Opened from a save, so there is no undo history to go back through.
+    /// Opened from a save.
     reopened: bool,
+    /// Why a run opened from a save has no Undo steps from before, when its file gave none.
+    no_saved_undo: Option<&'static str>,
+    /// The file's Undo steps could not be read. The run says so until the DM dismisses it.
+    undo_unread: bool,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
@@ -703,6 +716,18 @@ const MAX_FROM_SHEET: &str =
 const REST_STEP: &str = "full HP after long rest";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use the saved HP";
+/// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
+const END_STEP: &str = "end encounter";
+/// The one name for the action that takes an ending away, wherever it shows.
+pub(crate) const CONTINUE_FIGHT: &str = "Continue fight";
+/// The Undo step that takes an ending away.
+const CONTINUE_STEP: &str = "continue fight";
+/// The reason for an empty Undo in a run whose file is from before Splat kept Undo steps.
+const UNDO_NOT_KEPT: &str = "Nothing to undo since reopening";
+/// The reason for an empty Undo after the file's steps could not be read.
+const UNDO_UNREAD_REASON: &str = "Nothing to undo. Splat could not read the saved Undo steps";
+/// What the run and its log say, once, when the file's Undo steps could not be read.
+pub(crate) const UNDO_UNREAD: &str = "Splat could not read this run's saved Undo steps, so Undo starts again from here. The run itself is complete.";
 /// The result of `Use the saved HP`, until the next step.
 pub(crate) const SAVED_HP_USED: &str = "Party HP set to the saved values.";
 pub(crate) const NOBODY_PRESENT: &str =
@@ -741,6 +766,8 @@ enum Command {
     Move(usize, usize),
     MoveArrivalBefore(usize, usize),
     End(String),
+    /// Take the ending away, so that play goes on from the turn the fight ended on.
+    Continue,
     Health(usize, Option<i64>, Option<i64>),
     TempHp(usize, i64),
     Damage(usize, i64),
@@ -909,6 +936,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            own_steps: 0,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -950,6 +978,8 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             reopened: false,
+            no_saved_undo: None,
+            undo_unread: false,
             content: None,
             lookup_request: None,
             close_lookup: false,
@@ -1505,6 +1535,16 @@ impl Run {
             self.error = Some(error);
         }
     }
+    /// True while the ending is the newest Undo step. Undo then takes the ending away, so the
+    /// run shows no second control for that.
+    fn undo_continues(&self) -> bool {
+        self.last_step() == Some(END_STEP)
+    }
+    /// Take the ending away, as one named step that Undo puts back. Play goes on from the turn
+    /// the fight ended on, and sync starts again by the rule for a resumed run.
+    pub(crate) fn continue_fight(&mut self) {
+        self.run_command(Command::Continue);
+    }
     /// This run's own id, the same in every frame and every save.
     pub(crate) fn id(&self) -> Uuid {
         self.id
@@ -1555,8 +1595,10 @@ impl Run {
                 return Err(reason.into());
             }
         }
-        if matches!(self.state.phase, Phase::Ended { .. }) && !matches!(command, Command::Loot(_)) {
-            return Err("This encounter has ended. Undo the ending to continue.".into());
+        if matches!(self.state.phase, Phase::Ended { .. })
+            && !matches!(command, Command::Loot(_) | Command::Continue)
+        {
+            return Err("This encounter has ended. Continue the fight to change it.".into());
         }
         // The sheet decides the maximum while sync reads it, and sync cannot write one. A value
         // that could not stay is refused here, with the reason, not replaced at the next tick.
@@ -1583,7 +1625,7 @@ impl Run {
         let cast = self.finished_cast(&roll_results);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let began = matches!(command, Command::Begin);
-        let follow_turn = matches!(command, Command::Begin | Command::Next);
+        let follow_turn = matches!(command, Command::Begin | Command::Next | Command::Continue);
         let roster_ties = self.initiative.roster_ties;
         // Who it was, and whether its turn this round had come, before the change.
         let live_initiative = match &command {
@@ -1778,6 +1820,16 @@ impl Run {
                     next.round
                 )
             }
+            Command::Continue => {
+                if !matches!(next.phase, Phase::Ended { .. }) {
+                    return Err("This fight has not ended.".into());
+                }
+                next.phase = Phase::Running;
+                format!(
+                    "Fight continued. Round {}: {}'s turn.",
+                    next.round, next.participants[next.order[next.cursor]].name
+                )
+            }
             Command::AddGroup(group, total) => {
                 let first = next.participants.len();
                 let (added, initiative) =
@@ -1827,12 +1879,13 @@ impl Run {
         next.roll_results.extend(roll_results);
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
-        if self.history.len() == 100 {
+        if self.history.len() == undo::LIMIT {
             self.history.remove(0);
             self.history_labels.remove(0);
             self.history_from_sheet.remove(0);
         }
         self.dm_steps += 1;
+        self.own_steps = (self.own_steps + 1).min(undo::LIMIT);
         self.notice = None;
         // The step keeps the save as it stood, and the save is finished: its tile disarms.
         let finished = cast.is_some();
@@ -2080,7 +2133,13 @@ impl Run {
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.notice = None;
-            self.dm_steps += 1;
+            // A step from this opening is taken back. An older step that goes is a change.
+            if self.own_steps > 0 {
+                self.own_steps -= 1;
+                self.dm_steps -= 1;
+            } else {
+                self.dm_steps += 1;
+            }
             self.history_labels.pop();
             self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
@@ -2155,7 +2214,8 @@ impl Run {
                 name(first),
                 Self::roll_block_name(&self.state, &self.state.participants[*before])
             ),
-            Command::End(_) => "end encounter".into(),
+            Command::End(_) => END_STEP.into(),
+            Command::Continue => CONTINUE_STEP.into(),
             Command::Health(i, ..) => format!("HP correction on {}", name(i)),
             Command::TempHp(i, amount) => format!("{amount} temporary HP on {}", name(i)),
             Command::Damage(i, amount) => format!("{amount} damage to {}", name(i)),
@@ -3009,7 +3069,10 @@ impl Run {
             self.history_labels.push(label);
             self.history_from_sheet.push(true);
             self.dm_steps += 1;
+            self.own_steps += 1;
         }
+        // A step that a sheet removed is no longer there to take back.
+        self.own_steps = self.own_steps.min(self.history.len());
     }
 
     /// The log keeps the complete change; the notice names each character's undo boundary.
@@ -3164,6 +3227,49 @@ struct SavedRun {
     /// Participants whose spent inspiration their sheet does not show yet.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     spent_inspiration: BTreeSet<String>,
+    /// The Undo steps, in the form `undo` writes and reads. Saves from before this have none.
+    /// It stays as text here, so that a list of runs does not read steps it will not use, and
+    /// so that steps this version cannot read do not stop the run from loading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    undo: Option<Box<serde_json::value::RawValue>>,
+}
+impl SavedRun {
+    /// A run file's text as a run of this campaign.
+    fn parse(bytes: &[u8], campaign: Uuid) -> Result<Self, String> {
+        let saved: Self =
+            serde_json::from_slice(bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
+        if saved.version != 1 || saved.campaign != campaign {
+            return Err("Unsupported run version or wrong campaign.".into());
+        }
+        // Only a row of an Undo step may leave its definition out.
+        if saved
+            .state
+            .participants
+            .iter()
+            .any(|p| undo::is_same_definition(&p.definition))
+        {
+            return Err("Invalid saved run: a participant has no definition.".into());
+        }
+        Ok(saved)
+    }
+}
+/// What `Run::open` requires of a saved state, and of each state an Undo step gives back.
+fn valid_state(state: &State) -> bool {
+    let count = state.participants.len();
+    let order: BTreeSet<_> = state.order.iter().copied().collect();
+    count > 0
+        && count <= MAX_PARTICIPANTS
+        && state.order.len() == count
+        && order == (0..count).collect()
+        && state.cursor < count
+        && state.participants.iter().all(|p| {
+            p.temporary_hp >= 0
+                && p.successes <= 3
+                && p.failures <= 3
+                && (-1..=1).contains(&p.initiative_mode)
+        })
+        && (state.phase == Phase::Setup
+            || (state.participants.iter().all(Participant::health_known) && state.round > 0))
 }
 struct Storage {
     path: PathBuf,
@@ -3371,6 +3477,12 @@ impl Run {
             keep_party_synced: self.keep_party_synced,
             stopped_players,
             spent_inspiration: self.spent_inspiration.clone(),
+            undo: Some(undo::save(
+                &self.history,
+                &self.history_labels,
+                &self.history_from_sheet,
+                &self.state,
+            )?),
         };
         let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| e.to_string())?;
         let parent = storage.path.parent().ok_or("Invalid run location")?;
@@ -3518,7 +3630,31 @@ impl Run {
             PartySync::Start(off)
         }
     }
+    /// A saved run with its Undo steps, to go on with it.
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
+        let (mut run, saved_undo) = Self::load(path, campaign)?;
+        match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
+            Some(Some((history, labels, from_sheet))) => {
+                run.history = history;
+                run.history_labels = labels;
+                run.history_from_sheet = from_sheet;
+            }
+            None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
+            // The run is whole without them. It says so, and the next save leaves them out.
+            Some(None) => {
+                run.no_saved_undo = Some(UNDO_UNREAD_REASON);
+                run.undo_unread = true;
+                run.state.log.push(UNDO_UNREAD.into());
+                run.dirty = true;
+            }
+        }
+        Ok(run)
+    }
+    /// A saved run without its Undo steps, which stay as the file's text.
+    fn load(
+        path: &Path,
+        campaign: Uuid,
+    ) -> Result<(Self, Option<Box<serde_json::value::RawValue>>), String> {
         if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
             return Err("Saved run exceeds the size limit.".into());
         }
@@ -3526,30 +3662,14 @@ impl Run {
         if bytes.len() > 64 * 1024 * 1024 {
             return Err("Saved run exceeds the size limit.".into());
         }
-        let saved: SavedRun =
-            serde_json::from_slice(&bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
-        if saved.version != 1 || saved.campaign != campaign || saved.id.is_nil() {
+        let mut saved = SavedRun::parse(&bytes, campaign)?;
+        if saved.id.is_nil() {
             return Err("Unsupported run version or wrong campaign.".into());
         }
-        let state = &saved.state;
-        let count = state.participants.len();
-        let order: std::collections::BTreeSet<_> = state.order.iter().copied().collect();
-        if count == 0
-            || count > MAX_PARTICIPANTS
-            || state.order.len() != count
-            || order != (0..count).collect()
-            || state.cursor >= count
-            || state.participants.iter().any(|p| {
-                p.temporary_hp < 0
-                    || p.successes > 3
-                    || p.failures > 3
-                    || !(-1..=1).contains(&p.initiative_mode)
-            })
-            || (state.phase != Phase::Setup
-                && (!state.participants.iter().all(Participant::health_known) || state.round == 0))
-        {
+        if !valid_state(&saved.state) {
             return Err("Saved run state is invalid; its file has not been changed.".into());
         }
+        let saved_undo = saved.undo.take();
         let panel = if saved.state.phase == Phase::Setup {
             Panel::Encounter
         } else {
@@ -3563,7 +3683,7 @@ impl Run {
             .filter(|(_, p)| saved.stopped_players.contains(&p.key))
             .map(|(index, _)| (index, crate::combat_sync::CombatSync::default()))
             .collect();
-        Ok(Self {
+        let run = Self {
             id: saved.id,
             name: saved.name,
             source: saved.source,
@@ -3601,6 +3721,7 @@ impl Run {
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
+            own_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -3641,6 +3762,8 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             reopened: true,
+            no_saved_undo: None,
+            undo_unread: false,
             content: None,
             lookup_request: None,
             close_lookup: false,
@@ -3664,7 +3787,8 @@ impl Run {
             planned: Vec::new(),
             ad_hoc: ad_hoc::AdHoc::default(),
             group_totals: BTreeMap::new(),
-        })
+        };
+        Ok((run, saved_undo))
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
@@ -3678,8 +3802,9 @@ impl Run {
             let path = file.map_err(|e| e.to_string())?.path();
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
-                match Self::open(&path, campaign) {
-                    Ok(run) => {
+                // A row needs no Undo steps, so the list does not rebuild them.
+                match Self::load(&path, campaign) {
+                    Ok((run, _)) => {
                         close_order.insert(path.clone(), run.recovery.closed_order);
                         copy_numbers.insert(path.clone(), run.recovery.number(&run.name));
                         if let Some(original) = run.recovery.copied_from {
@@ -4008,12 +4133,7 @@ fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
         return Err("Saved run exceeds the size limit.".into());
     }
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
-    let saved: SavedRun =
-        serde_json::from_slice(&bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
-    if saved.version != 1 || saved.campaign != campaign {
-        return Err("Unsupported run version or wrong campaign.".into());
-    }
-    Ok(saved)
+    SavedRun::parse(&bytes, campaign)
 }
 
 /// How the players stood when this run was last saved.
@@ -4126,6 +4246,7 @@ impl Run {
         self.history_labels.clear();
         self.history_from_sheet.clear();
         self.reopened = false;
+        self.no_saved_undo = None;
         self.undo_stopped = false;
     }
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
@@ -4466,6 +4587,22 @@ mod tests {
         }
         run.apply(Command::Begin).unwrap();
     }
+    /// A run read from its file has the Undo steps the run in memory has: each one's name,
+    /// and the whole state before it.
+    fn assert_same_undo(run: &Run, reopened: &Run) {
+        assert!(!run.history.is_empty(), "the run has steps to compare");
+        assert_eq!(reopened.history_labels, run.history_labels);
+        assert_eq!(reopened.history_from_sheet, run.history_from_sheet);
+        assert_eq!(reopened.history.len(), run.history.len());
+        for (at, (kept, read)) in run.history.iter().zip(&reopened.history).enumerate() {
+            assert_eq!(
+                serde_json::to_value(read).unwrap(),
+                serde_json::to_value(kept).unwrap(),
+                "the state before step {at}, {}",
+                run.history_labels[at]
+            );
+        }
+    }
 
     #[test]
     fn remote_choice_undo_names_one_or_many_characters() {
@@ -4648,6 +4785,10 @@ mod tests {
         assert!(run.state.participants[0].notes.contains("spell slot"));
         run.apply(Command::RemoveCondition(0, 1)).unwrap();
         assert_eq!(run.state.participants[0].conditions, vec!["Poisoned"]);
+        assert!(
+            run.apply(Command::Continue).is_err(),
+            "a live fight has no ending to take away"
+        );
         run.apply(Command::End("Enemies fled".into())).unwrap();
         assert!(matches!(run.state.phase, Phase::Ended { .. }));
         assert!(run.state.log.last().unwrap().contains("Ended manually"));
@@ -4724,14 +4865,202 @@ mod tests {
         );
         assert_eq!(reopened.state.log, run.state.log);
         assert!(!reopened.needs_save());
+        // Undo is in the file: the same steps by name, with the same state before each.
+        assert_same_undo(&run, &reopened);
+        assert_eq!(reopened.undo_label(), "Undo: next turn");
+        assert_eq!(reopened.empty_undo_reason(), "Nothing to undo");
         reopened.apply(Command::Next).unwrap();
         reopened.save().unwrap();
-        assert_eq!(Run::open(&path, campaign).unwrap().current(), Some(2));
+        let mut again = Run::open(&path, campaign).unwrap();
+        assert_eq!(again.current(), Some(2));
+        // After a second close, Undo goes back through steps from before the first one.
+        again.undo();
+        again.undo();
+        let guard = again.state.participants[0].name.clone();
+        assert_eq!(again.undo_label(), format!("Undo: 5 damage to {guard}"));
+        again.undo();
+        let whole = &again.state.participants[0];
+        assert_eq!((whole.hp, whole.temporary_hp), (Some(17), 3));
+        assert_eq!(again.undo_label(), "Undo: begin combat");
         let external = fs::read(&path).unwrap();
         run.apply(Command::Next).unwrap();
         assert!(run.save().is_err());
         assert_eq!(fs::read(&path).unwrap(), external);
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
+    }
+    /// 20 participants with a printed stat block each, and a full Undo of 100 steps of play:
+    /// damage, conditions, a group that arrives, standalone rolls and turns.
+    fn long_fight(dir: &Path) -> (Run, PathBuf, Uuid) {
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let aboleth = Entry::parse("Aboleth.md", source).unwrap();
+        let participants = (0..18)
+            .map(|i| {
+                Participant::new(
+                    format!("slot{i}"),
+                    if i < 5 { "party" } else { "enemies" }.into(),
+                    aboleth.clone(),
+                    &Mapping::new(),
+                    true,
+                )
+                .unwrap()
+            })
+            .collect();
+        let mut run = Run::new("Long fight".into(), participants, "DM notes".into()).unwrap();
+        for index in 0..18 {
+            run.apply(Command::Initiative(index, Some(20 - index as i64)))
+                .unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.apply(Command::AddGroup(guard_group("Reserve", 2), Some(1)))
+            .unwrap();
+        assert_eq!(run.state.participants.len(), 20);
+        for turn in 0..60 {
+            let target = (turn * 7) % 20;
+            run.apply(Command::Damage(target, 1)).unwrap();
+            if turn % 5 == 0 {
+                run.apply(Command::Condition(target, format!("Marked {turn}")))
+                    .unwrap();
+                run.roll_dice("2d6 + 3").unwrap();
+            }
+            run.apply(Command::Next).unwrap();
+        }
+        assert_eq!(run.history.len(), undo::LIMIT);
+        let campaign = Uuid::new_v4();
+        run.configure_storage(campaign, dir, Initiative::default())
+            .unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        (run, path, campaign)
+    }
+    /// The run saves after every change, so 100 steps must not make the file many times
+    /// larger. Run with `--nocapture` for the size and the save time.
+    #[test]
+    fn a_full_undo_adds_less_to_the_run_file_than_the_run_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, path, campaign) = long_fight(dir.path());
+        let with_steps = fs::read(&path).unwrap().len();
+        let time = |run: &mut Run| {
+            let start = Instant::now();
+            for _ in 0..20 {
+                run.dirty = true;
+                run.save().unwrap();
+            }
+            start.elapsed() / 20
+        };
+        let save_with = time(&mut run);
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert_same_undo(&run, &reopened);
+        // The same run as it was saved before this change: its state, and no steps.
+        run.history.clear();
+        run.history_labels.clear();
+        run.history_from_sheet.clear();
+        let save_without = time(&mut run);
+        let without = fs::read(&path).unwrap().len();
+        eprintln!(
+            "20 participants, 100 steps: {without} bytes and {save_without:?} a save with no \
+             steps; {with_steps} bytes and {save_with:?} a save with them"
+        );
+        assert!(
+            with_steps - without < without / 4,
+            "100 steps add {} bytes to a run of {without} bytes",
+            with_steps - without
+        );
+    }
+    /// Rewrite the saved run's `undo` field, as another version of Splat would leave it.
+    fn with_undo_field(path: &Path, change: impl FnOnce(&mut serde_json::Value)) {
+        let mut saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert!(saved.get("undo").is_some(), "this version saves its steps");
+        change(&mut saved);
+        fs::write(path, serde_json::to_vec_pretty(&saved).unwrap()).unwrap();
+    }
+    fn saved_fight(dir: &Path) -> (Run, PathBuf, Uuid) {
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Damage(0, 5)).unwrap();
+        run.configure_storage(campaign, dir, Initiative::default())
+            .unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        (run, path, campaign)
+    }
+    #[test]
+    fn a_run_saved_before_undo_was_kept_still_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let (run, path, campaign) = saved_fight(dir.path());
+        with_undo_field(&path, |saved| {
+            saved.as_object_mut().unwrap().remove("undo");
+        });
+        let before = fs::read(&path).unwrap();
+        let mut old = Run::open(&path, campaign).unwrap();
+        assert_eq!(old.state.participants[0].hp, run.state.participants[0].hp);
+        assert_eq!(old.state.log, run.state.log, "no line is added");
+        assert!(old.history.is_empty());
+        assert_eq!(old.empty_undo_reason(), UNDO_NOT_KEPT);
+        assert!(!old.undo_unread && !old.needs_save());
+        old.autosave();
+        assert_eq!(fs::read(&path).unwrap(), before, "opening changes nothing");
+        // Its first step is kept from then on.
+        old.apply(Command::Next).unwrap();
+        old.save().unwrap();
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert_same_undo(&old, &reopened);
+        // Only a row of an Undo step may leave its definition out. A run's own row may not.
+        with_undo_field(&path, |saved| {
+            let row = saved["state"]["participants"][0].as_object_mut().unwrap();
+            assert!(row.remove("definition").is_some());
+        });
+        assert!(Run::open(&path, campaign).is_err());
+        assert!(fight_summary(&path, campaign).is_err());
+    }
+    #[test]
+    fn undo_steps_this_version_cannot_read_are_dropped_and_the_run_says_so_once() {
+        type Break = fn(&mut serde_json::Value);
+        let breaks: [(&str, Break); 5] = [
+            ("another version", |saved| {
+                saved["undo"]["version"] = 2.into()
+            }),
+            ("not steps at all", |saved| saved["undo"] = "later".into()),
+            ("a row the state does not have", |saved| {
+                let step = &mut saved["undo"]["steps"][0];
+                let row = step["rows"]["0"].clone();
+                step["rows"]["7"] = row;
+            }),
+            ("a log that does not fit", |saved| {
+                saved["undo"]["steps"][0]["log"]["tail"] = 1000.into();
+            }),
+            ("a state that could not be saved", |saved| {
+                saved["undo"]["steps"][0]["cursor"] = 9.into();
+            }),
+        ];
+        for (what, change) in breaks {
+            let dir = tempfile::tempdir().unwrap();
+            let (run, path, campaign) = saved_fight(dir.path());
+            with_undo_field(&path, change);
+            let mut opened = Run::open(&path, campaign).unwrap_or_else(|e| panic!("{what}: {e}"));
+            // The run itself is whole.
+            assert_eq!(
+                opened.state.participants[0].hp, run.state.participants[0].hp,
+                "{what}"
+            );
+            assert_eq!(opened.current(), run.current(), "{what}");
+            // Only the steps are gone, and the run says so: on screen, and in its log.
+            assert!(opened.history.is_empty(), "{what}");
+            assert!(opened.undo_unread, "{what}");
+            assert_eq!(opened.empty_undo_reason(), UNDO_UNREAD_REASON, "{what}");
+            let said = |run: &Run| run.state.log.iter().filter(|l| *l == UNDO_UNREAD).count();
+            assert_eq!(said(&opened), 1, "{what}");
+            // The next save leaves the unread steps out, so it is said once.
+            opened.autosave();
+            let mut again = Run::open(&path, campaign).unwrap();
+            assert!(!again.undo_unread, "{what}");
+            assert_eq!(said(&again), 1, "{what}");
+            assert_eq!(again.empty_undo_reason(), "Nothing to undo", "{what}");
+            // Undo starts again from here.
+            again.apply(Command::Next).unwrap();
+            again.save().unwrap();
+            assert_same_undo(&again, &Run::open(&path, campaign).unwrap());
+        }
     }
     #[test]
     fn a_run_with_a_schema_one_copy_does_not_open_and_is_kept() {
@@ -4809,10 +5138,11 @@ mod tests {
         assert!(!run.has_disk_conflict());
         assert!(!run.needs_save());
         assert!(!run.strip().not_saved);
-        assert_eq!(
-            Run::open(&path, campaign).unwrap().state.participants[0].hp,
-            hp
-        );
+        let replaced = Run::open(&path, campaign).unwrap();
+        assert_eq!(replaced.state.participants[0].hp, hp);
+        // The file now has this run's steps, and none of the run it replaced.
+        assert_same_undo(&run, &replaced);
+        assert!(!replaced.history_labels.contains(&"next turn".to_owned()));
         // A later change saves by itself, as it did before the conflict.
         run.apply(Command::Damage(0, 1)).unwrap();
         run.autosave();
@@ -4838,9 +5168,17 @@ mod tests {
         let new_path = run.path().unwrap().to_path_buf();
         assert_ne!(new_path, path);
         assert_eq!(new_path.parent(), Some(dir.path()));
-        let copy = Run::open(&new_path, campaign).unwrap();
+        let mut copy = Run::open(&new_path, campaign).unwrap();
         assert_eq!(copy.state.participants[0].hp, hp);
-        assert_ne!(copy.id, Run::open(&path, campaign).unwrap().id);
+        // Each file keeps the steps of its own run.
+        assert_same_undo(&run, &copy);
+        let guard = copy.state.participants[0].name.clone();
+        assert_eq!(copy.undo_label(), format!("Undo: 5 damage to {guard}"));
+        copy.undo();
+        assert_eq!(copy.state.participants[0].hp, Some(17));
+        let other = Run::open(&path, campaign).unwrap();
+        assert_eq!(other.undo_label(), "Undo: next turn");
+        assert_ne!(copy.id, other.id);
         assert_eq!(copy.name, "Ambush");
         assert!(copy.live_info().unwrap().label.starts_with("Copy 1 · "));
     }
@@ -5062,6 +5400,18 @@ mod tests {
         run.undo();
         run.tick_sync(&ctx, test_session(), 1, Some(&remote));
         assert!(run.syncs[&0].enabled);
+
+        // Continue fight is the same for sync as Undo of the ending.
+        run.apply(Command::End("Won".into())).unwrap();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs.is_empty());
+        run.continue_fight();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs[&0].enabled, "sync starts again by itself");
+        assert!(
+            run.syncs[&0].conflict_keys().is_empty() && !run.pending_sync(),
+            "and sends nothing before its first read"
+        );
     }
     #[test]
     fn a_read_only_sheet_leaves_the_runs_value_alone_at_a_first_read() {
@@ -5457,6 +5807,70 @@ mod tests {
         first_sync(&mut reopened, max, 8);
         assert_eq!(reopened.state.participants[0].hp, Some(max - 8));
         assert!(reopened.syncs[&0].conflict_keys().is_empty());
+    }
+    /// A fight whose sheet confirmed the DM's 4 damage to the linked guard, with one more
+    /// step for another guard, closed and opened again. Its saved steps are in the file.
+    fn reopened_with_steps(dir: &Path) -> (Run, String, i64) {
+        let (mut run, name, max) = matched_with_sheet(5);
+        let campaign = stored(&mut run, dir);
+        run.apply(Command::Damage(0, 4)).unwrap();
+        connected_tick(&mut run);
+        read_sheet(&mut run, max, 9);
+        assert!(!run.pending_sync(), "the sheet has the 4 damage");
+        run.apply(Command::Damage(1, 2)).unwrap();
+        let reopened = close_and_reopen(&mut run, campaign);
+        assert_same_undo(&run, &reopened);
+        (reopened, name, max)
+    }
+    #[test]
+    fn a_sheet_change_while_the_run_was_closed_removes_that_characters_saved_steps() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut reopened, name, max) = reopened_with_steps(dir.path());
+        let other = reopened.state.participants[1].name.clone();
+        let own = format!("4 damage to {name}");
+        assert!(reopened.history_labels.contains(&own));
+        // The player took 3 more on the sheet while the run was closed.
+        first_sync(&mut reopened, max, 12);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
+        assert!(
+            !reopened.history_labels.contains(&own),
+            "no saved step can put back a value the sheet replaced"
+        );
+        assert!(
+            reopened
+                .state
+                .log
+                .iter()
+                .any(|line| line.contains("removed undo steps") && line.contains(&own))
+        );
+        // The other guard's step stays, and Undo of it leaves the sheet's value alone.
+        assert_eq!(reopened.undo_label(), format!("Undo: 2 damage to {other}"));
+        assert_eq!(reopened.state.participants[1].temporary_hp, 1);
+        reopened.undo();
+        assert_eq!(reopened.state.participants[1].temporary_hp, 3);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
+        while !reopened.history.is_empty() {
+            reopened.undo();
+        }
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
+    }
+    #[test]
+    fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut reopened, name, max) = reopened_with_steps(dir.path());
+        reopened.undo();
+        assert_eq!(reopened.undo_label(), format!("Undo: 4 damage to {name}"));
+        reopened.undo();
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 5));
+        // The sheet moved on to 12 damage. The run's older value is the DM's change now: it
+        // stays in the run, nothing is sent, and the DM chooses.
+        first_sync(&mut reopened, max, 12);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 5));
+        assert_eq!(reopened.syncs[&0].conflict_keys(), vec!["hp"]);
+        assert_eq!(
+            reopened.state.participants[0].combat_values["hp"]["removedHitPoints"], 12,
+            "what the sheet confirmed is its own value"
+        );
     }
     /// A save from before starting values were kept. New fields are optional.
     fn as_older_save(path: &Path, combat_values: Option<serde_json::Value>) {
@@ -6459,7 +6873,7 @@ mod tests {
         let expected = Run::change_with_result(&run.state, run.history_labels.last().unwrap());
         let campaign = stored(&mut run, dir.path());
         let reopened = close_and_reopen(&mut run, campaign);
-        assert!(reopened.history_labels.is_empty());
+        assert_same_undo(&run, &reopened);
         let info = reopened.info(PathBuf::new(), None, true);
         assert!(
             info.label.contains(&format!(" · Last: {expected}")),
@@ -6508,8 +6922,25 @@ mod tests {
         run.apply(Command::Damage(0, 1)).unwrap();
         let hit = run.timeline_fact();
         assert!(hit.played_since(&fact));
+        // Undo of that step leaves the run as it was. The Timeline hears of it, and not as play.
         run.undo();
-        assert!(run.timeline_fact().played_since(&hit));
+        let back = run.timeline_fact();
+        assert_ne!(back, hit);
+        assert_eq!(back, fact);
+        assert!(!back.played_since(&hit));
+        // Undo of a step from before the run opened is a change the DM makes now.
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        let opened = reopened.timeline_fact();
+        assert_eq!(opened.steps, 0);
+        reopened.undo();
+        assert!(reopened.timeline_fact().played_since(&opened));
+        // A step and its Undo there leave that change standing.
+        reopened.apply(Command::Next).unwrap();
+        reopened.undo();
+        assert_eq!(reopened.timeline_fact().steps, 1);
     }
 
     #[test]
@@ -6577,9 +7008,14 @@ mod tests {
         begin(&mut reopened);
         reopened.state.participants[0].hp = Some(4);
         let mut combat = close_and_reopen(&mut reopened, campaign);
+        let steps = combat.history.len();
+        assert_eq!(
+            steps, 5,
+            "the rest, and the four steps that began the fight"
+        );
         combat.rest_saved_setup(3);
         assert_eq!(combat.state.participants[0].hp, Some(4));
-        assert!(combat.history.is_empty());
+        assert_eq!(combat.history.len(), steps, "a rest is no step in combat");
         let mut setup = run();
         linked(&mut setup, 0, "42");
         setup.state.participants[0].hp = Some(3);
@@ -6955,6 +7391,62 @@ mod tests {
         assert!(run.state.loot.is_empty());
         assert_eq!(run.state.log.len(), before);
         assert!(run.ended());
+
+        // The ending is the newest step again, so Undo is the one way on, also after a close.
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        assert_same_undo(&run, &reopened);
+        assert!(reopened.undo_continues());
+        assert_eq!(reopened.undo_label(), "Undo: end encounter");
+        // After a loot roll, Undo names the roll, and Continue fight takes the ending away.
+        let rolled = loot::place("encounter", 1);
+        reopened
+            .apply(Command::Loot(vec![roll(&rolled, 2)]))
+            .unwrap();
+        assert!(!reopened.undo_continues());
+        let ended = serde_json::to_value(&reopened.state).unwrap();
+        let turn = (reopened.state.cursor, reopened.state.round);
+        reopened.selected = 0;
+        reopened.continue_fight();
+        assert!(reopened.error.is_none(), "{:?}", reopened.error);
+        assert_eq!(reopened.state.phase, Phase::Running);
+        assert_eq!((reopened.state.cursor, reopened.state.round), turn);
+        assert_eq!(Some(reopened.selected), reopened.current());
+        assert_eq!(reopened.undo_label(), "Undo: continue fight");
+        assert_eq!(reopened.state.loot[&rolled].len(), 2, "its loot stays");
+        // The Encounters lists sort a run by this: unfinished again, so its encounter leaves
+        // Ready, and ended again after Undo.
+        let standing = |run: &Run| run.info(PathBuf::new(), None, true).standing;
+        assert_eq!(standing(&reopened), Standing::Unfinished);
+        assert!(
+            reopened
+                .state
+                .log
+                .last()
+                .unwrap()
+                .starts_with("Fight continued.")
+        );
+        // Play goes on, and a second ending is an ending like the first.
+        reopened.apply(Command::Next).unwrap();
+        reopened.undo();
+        // Undo of Continue fight gives the ended fight back whole, also after a close.
+        let mut closed = close_and_reopen(&mut reopened, campaign);
+        assert_same_undo(&reopened, &closed);
+        closed.undo();
+        assert_eq!(standing(&closed), Standing::Ended);
+        assert_eq!(serde_json::to_value(&closed.state).unwrap(), ended);
+        assert_eq!(closed.undo_label(), "Undo: 2 loot rolls on gems");
+        closed.continue_fight();
+        closed.apply(Command::End("Lost".into())).unwrap();
+        assert_eq!(
+            closed.state.phase,
+            Phase::Ended {
+                outcome: "Lost".into()
+            }
+        );
+        assert!(closed.undo_continues());
+        assert_eq!(closed.state.loot[&rolled].len(), 2);
     }
 
     #[test]
@@ -6978,7 +7470,8 @@ mod tests {
         assert!(run.arrivals_in_run().contains_key(&id));
         let dir = tempfile::tempdir().unwrap();
         let campaign = stored(&mut run, dir.path());
-        let reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        let mut reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        assert_same_undo(&run, &reopened);
         assert_eq!(run.arrivals_in_run(), reopened.arrivals_in_run());
         assert_eq!(
             reopened
@@ -6994,6 +7487,19 @@ mod tests {
         );
         run.undo();
         assert!(!run.arrivals_in_run().contains_key(&id));
+        // The same Undo after a restart, and a group added again is a new one.
+        reopened.undo();
+        assert!(!reopened.arrivals_in_run().contains_key(&id));
+        assert_eq!(reopened.state.participants.len(), 3);
+        reopened
+            .apply(Command::AddGroup(guard_group("Reserve", 2), None))
+            .unwrap();
+        reopened.dirty = true;
+        reopened.save().unwrap();
+        assert_same_undo(
+            &reopened,
+            &Run::open(reopened.path().unwrap(), campaign).unwrap(),
+        );
     }
 
     #[test]
@@ -7561,11 +8067,17 @@ mod tests {
         assert_eq!(run.state.participants.len(), before);
         add_from(&mut run, &ghost, &[]);
         let campaign = stored(&mut run, dir.path());
-        let reopened = close_and_reopen(&mut run, campaign);
+        let mut reopened = close_and_reopen(&mut run, campaign);
         let p = &reopened.state.participants[before + 1];
         assert_eq!(p.name, "Ghost of the Mill 2");
         assert_eq!(p.max_hp, Some(22));
         assert_eq!(p.definition.name, "Ghost of the Mill");
+        // After a restart, Undo still takes both of them out of the fight.
+        assert_same_undo(&run, &reopened);
+        assert_eq!(reopened.undo_label(), "Undo: add Ghost of the Mill");
+        reopened.undo();
+        assert_eq!(reopened.state.participants.len(), before);
+        assert_eq!(reopened.state.order.len(), before);
     }
 
     #[test]

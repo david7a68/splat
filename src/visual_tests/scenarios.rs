@@ -18,6 +18,7 @@ pub mod file_formats;
 pub mod integrity;
 pub mod list_formats;
 pub mod markdown_links;
+pub mod run_continue;
 pub mod stat_formats;
 pub mod world_build;
 

@@ -626,7 +626,11 @@ pub(super) fn history_list(
                     if let Some((path, summary)) = read
                         && *path == run.path
                     {
-                        history_summary(ui, summary);
+                        // The open run is this fight, so nothing stands in its way.
+                        let here = live.is_some_and(|live| live.id == run.id);
+                        if history_summary(ui, summary, blocked.filter(|_| !here)) {
+                            *action = Some(ListAction::ContinueFight(run.path.clone()));
+                        }
                     }
                 }
             }
@@ -640,7 +644,9 @@ pub(super) fn history_list(
     );
 }
 
-fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
+/// An ended fight, read in place. Returns true when the DM chooses to go on with it.
+fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&str>) -> bool {
+    let mut go_on = false;
     ui.indent("history_summary", |ui| {
         ui.horizontal_wrapped(|ui| {
             design::status(
@@ -656,6 +662,15 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
                     .rich(ui, &summary.end_reason)
                     .color(colors().muted),
             );
+        });
+        // The one way on from a fight that ended by mistake. Undo puts the ending back.
+        ui.horizontal(|ui| {
+            go_on = Action::secondary(crate::encounter_run::CONTINUE_FIGHT)
+                .icon(icons::RUN)
+                .density(Density::Read)
+                .blocked(blocked)
+                .show(ui)
+                .clicked();
         });
         design::group_label(ui, "Final state");
         for row in &summary.rows {
@@ -690,6 +705,7 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary) {
             blocked_reason(ui, Some(line));
         }
     });
+    go_on
 }
 
 #[cfg(test)]

@@ -374,7 +374,7 @@ entry, sync conflicts (the table must not stop), lookup, errors, confirmation me
 | State | Across navigation | Across restart | Today |
 |---|---|---|---|
 | Current page and sub-view | Yes | Yes | Lost on workspace click; lost on restart |
-| Open run: selection, amount, scroll, undo | Yes | Run yes, selection = current turn, undo if feasible (A8) | Navigation yes. Restart loses undo, sync, selection |
+| Open run: selection, amount, scroll, undo | Yes | Run yes, selection = current turn, undo yes (A8) | Navigation yes. Restart keeps the run, its turn and its Undo steps |
 | Sync enabled per participant | Yes | Yes, with a fresh read first | Lost on resume |
 | Library: scope, section, search, entry, scroll | Yes | Scope and section | Navigation yes, expected for scroll; verify |
 | Lookup: last query and entry | Yes | No | Does not exist |
@@ -512,7 +512,7 @@ Nothing below has direct evidence. Please check A1, A3, A4, A5, and A9 first.
 | A5 | Rosters are usually 5 to 12, and up to 20 | Party of 3 in the docs. Code limit of 2,000 is only a guard | Design for 12, test 20 |
 | A6 | Players roll real dice and tell the DM their initiative | Run text and `README.md:210` allow both | Typed totals are the fast path. `Roll` remains |
 | A7 | The DM reads monster actions on most monster turns | `README.md:221` lists details as "reference" only | The current stat block is visible or 1 interaction away |
-| A8 | Drafts stay in memory. Undo is not saved | `README.md:144`, `:238` | Keep this, warn on close. Revisit undo on resume if a run closes by mistake. Remove the close mis-click first |
+| A8 | Drafts stay in memory. A run's Undo steps are saved in its file | `README.md`, Run storage | Warn on close for drafts. A run that closes or ends by mistake comes back with its Undo |
 | A9 | Unifying Library and campaign entries is acceptable. Removing `Creatures` and `Simulations` is acceptable | `README.md:115` keeps Library separate from the campaign. Tabs exist as placeholders | One catalogue with a scope switch. Simulation returns as an encounter action |
 | A10 | D&D Beyond sync is used live. Live writes are still unverified | `README.md:271-273` | Show sync state in full, but the run works fully without it. Do not show it for unlinked participants |
 | A11 | Bloodied is worth showing as a state. Splat does not compute it today | 61 built-in notes mention it, and the SRD defines it (`grep builtin/`) | Show the label. Add no automation |
@@ -628,6 +628,12 @@ reading the code, not from a test run.
 | T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel. With a fight open, its row goes to that panel in 1 | session-plan-groups | cost, state | New |
 | T14.8 | A creature at 0 HP with loot says Loot on its row, and its card lists the loot. The ended view lists the encounter's loot and each downed creature's, and a loot roll is one step of undo | run-loot | state | New |
 | T14.1 | An interrupted run says Resume, and can be deleted with one step of undo. Ended runs are in the history | session-plan | state | New |
+| T15.1 | After Close run and Resume, after a restart and after another page, Undo names and takes back the same step on the same turn, in ≤ 1 | run-continue | cost, state | New |
+| T15.2 | An ended fight has one control that takes the ending away: Undo while the ending is the newest step, otherwise Continue fight. Play returns to the turn the fight ended on in 1, and Undo puts the ending back with its loot | run-continue | cost, state | New |
+| T15.3 | A closed, ended fight goes on in ≤ 2 from History and in ≤ 3 from the plan's played row | run-continue | cost, state | New |
+| T15.4 | After Continue fight, Timeline, the plan row and the Encounters lists show a live fight. After Undo, and after a second ending, they show an ended one | run-continue | state | New |
+| T15.5 | A run whose saved Undo steps cannot be read opens on its turn, says so once, and Undo starts again | run-continue | state | New |
+| T15.6 | The ended view, the History row and the unread-steps message are whole with Lookup open and closed at 960x640, and none of their actions closes or changes Lookup | run-continue | view, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

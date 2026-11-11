@@ -1837,6 +1837,7 @@ pub struct Story<'a> {
 enum ListAction {
     Resume(std::path::PathBuf),
     ReadHistory(std::path::PathBuf),
+    ContinueFight(std::path::PathBuf),
     BackToRun,
     Delete(std::path::PathBuf),
     Edit(String),
@@ -1851,6 +1852,8 @@ enum EditorPane {
     Add,
 }
 const START_FIGHT: &str = "Start fight";
+const RELOAD: &str = "Reload from disk";
+const RELOAD_HINT: &str = "Read encounters and runs from disk again";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
@@ -2117,6 +2120,38 @@ impl Encounters {
             },
             Err(error) => self.error = Some(error),
         }
+    }
+    /// Go on with a fight that ended: open its run, and take the ending away as one step that
+    /// Undo puts back.
+    pub fn continue_saved_run(&mut self, path: &std::path::Path, active: &Campaign) {
+        let open_here = self
+            .run
+            .as_ref()
+            .is_some_and(|run| run.path() == Some(path));
+        if !open_here {
+            if self.has_run() {
+                self.error = Some(BLOCKED_BY_RUN.to_owned());
+                return;
+            }
+            match crate::encounter_run::Run::open(path, active.id) {
+                Ok(mut run) => {
+                    run.guard_campaign(&active.path);
+                    self.run = Some(run);
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    return;
+                }
+            }
+        }
+        if let Some(run) = &mut self.run
+            && run.ended()
+        {
+            run.continue_fight();
+        }
+        self.history_read = None;
+        self.go_to_run = true;
+        self.error = None;
     }
     /// The newest unfinished save is one click away from any page.
     pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
@@ -3168,7 +3203,30 @@ impl Encounters {
                 counts.join(" · ")
             })
             .unwrap_or_else(|| "Reading encounters…".into());
-        design::page_header(ui, "Encounters", Some(&context), |ui| {
+        // Beside Lookup in a small window, the header cannot hold every word. The counts go
+        // first. Then Reload keeps its icon, with its name and its reason on hover.
+        let reload_blocked = group_blocked
+            .or(loading.then_some("Still reading this campaign."))
+            .or(settings_changed
+                .then_some("Save or discard the changes in Campaign, Rules and runs first."));
+        let gap = ui.spacing().item_spacing.x;
+        let mut words = Action::quiet(RELOAD).icon(icons::REFRESH).natural_width(ui) + gap;
+        if !empty {
+            words += Action::secondary("New encounter")
+                .icon(icons::ADD)
+                .natural_width(ui)
+                + Action::quiet("New group")
+                    .icon(icons::ADD)
+                    .natural_width(ui)
+                + 2.0 * gap;
+        }
+        let room = ui.available_width()
+            - design::number_width(ui, "Encounters", &Type::Title.font(ui))
+            - words;
+        let counts_fit =
+            room >= design::XS + gap + design::number_width(ui, &context, &Type::Small.font(ui));
+        let context = counts_fit.then_some(context.as_str());
+        design::page_header(ui, "Encounters", context, |ui| {
             if !empty {
                 new = Action::secondary("New encounter")
                     .icon(icons::ADD)
@@ -3183,18 +3241,20 @@ impl Encounters {
                     .clicked();
             }
             // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
-            reload = Action::quiet("Reload from disk")
-                .icon(icons::REFRESH)
-                .blocked(
-                    group_blocked
-                        .or(loading.then_some("Still reading this campaign."))
-                        .or(settings_changed.then_some(
-                            "Save or discard the changes in Campaign, Rules and runs first.",
-                        )),
-                )
-                .hint("Read encounters and runs from disk again")
-                .show(ui)
-                .clicked();
+            reload = if room >= 0.0 {
+                Action::quiet(RELOAD)
+                    .icon(icons::REFRESH)
+                    .blocked(reload_blocked)
+                    .hint(RELOAD_HINT)
+                    .show(ui)
+                    .clicked()
+            } else {
+                design::locked(ui, reload_blocked, |ui| {
+                    design::icon_button(ui, icons::REFRESH, RELOAD)
+                        .on_hover_text(RELOAD_HINT)
+                        .clicked()
+                })
+            };
         });
         if new {
             self.start_new_draft();
@@ -3370,6 +3430,7 @@ impl Encounters {
                 Err(error) => self.error = Some(error),
             },
             ListAction::Resume(path) => self.open_saved_run(&path, active),
+            ListAction::ContinueFight(path) => self.continue_saved_run(&path, active),
             ListAction::ReadHistory(path) => {
                 if self
                     .history_read
@@ -6501,6 +6562,29 @@ mod tests {
             editor.draft.is_some(),
             "a refused start must keep the editor"
         );
+
+        // Continue fight is refused while another run is open, and changes nothing.
+        editor.error = None;
+        editor.continue_saved_run(&path, &campaign);
+        assert_eq!(editor.error.as_deref(), Some(BLOCKED_BY_RUN));
+        assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        // With the slot free, it opens that run as a live fight, on the round it ended in.
+        editor.run = None;
+        editor.go_to_run = false;
+        editor.continue_saved_run(&path, &campaign);
+        assert!(editor.error.is_none() && editor.go_to_run && editor.history_read.is_none());
+        let run = editor.run().unwrap();
+        assert_eq!(run.path(), Some(path.as_path()));
+        assert_eq!(run.state_words(false), "Round 3");
+        assert_eq!(
+            run.timeline_fact().steps,
+            1,
+            "one step, which Undo takes back"
+        );
+        // The same action on the open run does nothing more to a fight that is live.
+        editor.continue_saved_run(&path, &campaign);
+        assert_eq!(editor.run().unwrap().timeline_fact().steps, 1);
     }
 
     #[test]
