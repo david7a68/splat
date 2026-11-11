@@ -307,7 +307,11 @@ link only, and Enter or Space follows it. Its accessible name is its words and w
 words are narrower than 24 px gets 24 px of layout width. Inside a line, its words sit in the middle of that
 space, so the spare width is split before and after them and its target is centred on them. A link that starts
 a line (at the start of the paragraph, after a line break, or where it wraps) keeps its words at the text edge,
-with all the space after them. A link right after another short link gets as much space after it as before it,
+with all the space after them. Punctuation that follows a short link (`,` `.` `;` `:` `!` `?`, closing brackets
+and quotes) sits directly after its words, so `Deception +2, Religion +2` has no space before the comma. The
+words stay where the text puts them, the spare width goes after the punctuation (the punctuation and a blank
+after it count toward it), and the target grows right from the words. A short link that ends its line does the same, so a row of skills keeps one gap between each
+name and its bonus. A link right after another short link gets as much space after it as before it,
 so the pair reads evenly. The text after a link starts after its space, and the line wraps if it must. Two links
 side by side have a blank between them, so each keeps its own underline. Where the body line is shorter than
 24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, the first line
@@ -340,7 +344,10 @@ plain text.
 A stat block has a heavy rule, identity, labelled AC, HP and initiative, then a tight attribute table with
 physical and mental abilities side by side and right-aligned numbers. Detail rows follow. Each detail row's
 label sits on the baseline of its value's first line, also when the value has dice links and a taller line
-(`Skills`): the label reads where the value's words are painted. No card surrounds
+(`Skills`): the label reads where the value's words are painted. Every line of every detail row has the link
+pitch (24 px), whether or not the row holds a link, so no row looks grouped with another; the extra height
+goes below the words. A skill and its bonus wrap as one unit (`Sleight of Hand +5` never splits), and the
+bonus keeps its own link target. No card surrounds
 it. Serif section headings sit over hairlines. Vitals come once from the schema-2 Stat block table. New
 creatures store identity, CR, speed and ability scores there; printed source text stays separate. An absent
 saving throw leaves an empty cell. Bad cells warn with their file line; valid values still lead in the reader

@@ -1345,16 +1345,22 @@ fn place_short_links(
         }
         previous = Some((range.end, space));
         if punctuation > 0 {
-            // The punctuation's own width is part of the link's spare width.
+            // The punctuation's own width, and a blank after it, are part of the link's spare
+            // width: the target only has to end before the next word.
             let font = job
                 .sections
                 .iter()
                 .find(|section| section.byte_range.contains(&range.end))
                 .map(|section| section.format.font_id.clone());
+            let blank = job.text[end..]
+                .chars()
+                .next()
+                .filter(|next| next.is_whitespace() && *next != '\n');
             let width: f32 = font.map_or(0.0, |font| {
                 ui.fonts_mut(|fonts| {
                     job.text[range.end..end]
                         .chars()
+                        .chain(blank)
                         .map(|character| fonts.glyph_width(&font, character))
                         .sum()
                 })
@@ -2970,8 +2976,10 @@ mod tests {
     fn iter20_s_fd3_punctuation_sits_directly_after_a_short_link() {
         let markdown =
             "Ask [Jo](splat-note:Jo), [Li](splat-note:Li); then [Io](splat-note:Io)!) or row.";
+        let plain = "Ask Jo, Li; then Io!) or row.";
         for (width, dense) in [(480.0, false), (360.0, false), (480.0, true)] {
             let harness = reader_at(markdown, width, dense);
+            let plain_harness = reader_at(plain, width, dense);
             let at = format!("at {width} (dense {dense})");
             for (words, name, punctuation, before, after) in [
                 ("Jo", "Jo (opens Jo)", ",", "Ask", "Li"),
@@ -2981,6 +2989,7 @@ mod tests {
                 let (left, right, _) = spans_of(&harness, words)[0];
                 let (mark, _, _) = spans_of(&harness, punctuation)[0];
                 let (_, before, _) = spans_of(&harness, before)[0];
+                let after_words = after;
                 let (after, _, _) = spans_of(&harness, after)[0];
                 let target = target_of(&harness, name);
                 assert!(
@@ -2996,6 +3005,15 @@ mod tests {
                 assert!(
                     before <= target.left() + 0.5 && after >= target.right() - 0.5,
                     "FD3-apart: {at}: {words} target {target:?}, before ends {before}, after starts {after}"
+                );
+                // Must stay true: the punctuation and the blank after it count toward the spare
+                // width, so the next word starts where the target ends, or where the plain text
+                // puts it when the punctuation is wider than the spare width.
+                let natural = spans_of(&plain_harness, after_words)[0].0
+                    - spans_of(&plain_harness, words)[0].0;
+                assert!(
+                    after - left <= (target.width() + 2.0).max(natural + 0.5),
+                    "FD3-no-extra-gap: {at}: {words} at {left}, target {target:?}, next word at {after}, plain gap {natural}"
                 );
             }
         }
