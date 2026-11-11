@@ -1391,10 +1391,10 @@ impl Catalogue {
                         )
                         .is_err()
                     {
-                        indexed.entry.flags.push(content::layout::Flag {
-                            line: line.line,
-                            message: "Package name not found or ambiguous".into(),
-                        });
+                        indexed.entry.flags.push(content::layout::Flag::new(
+                            line.line,
+                            "Package name not found or ambiguous".into(),
+                        ));
                     }
                 }
             }
@@ -1442,7 +1442,7 @@ impl Catalogue {
                     indexed
                         .entry
                         .flags
-                        .push(content::layout::Flag { line, message });
+                        .push(content::layout::Flag::new(line, message));
                 }
             }
         }

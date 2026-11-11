@@ -1135,7 +1135,7 @@ impl CombatSync {
                         if let (Some(name), Some(taken)) = (action, taken) {
                             self.action_notice = Some(match taken {
                                 Ok(()) => ActionNotice::Taken(format!(
-                                    "D&D Beyond took the {name}. The values below are the sheet's new values."
+                                    "D&D Beyond took the {name}. The values below are the sheet’s new values."
                                 )),
                                 Err(e) => ActionNotice::Failed(e),
                             });

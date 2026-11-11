@@ -3976,20 +3976,20 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text(
-        "This entry's file has gone from disk. Your draft is safe here until you choose.",
+        "This entry’s file has gone from disk. Your draft is safe here until you choose.",
     );
     d.expect("Ember Cultist needs this entry.");
     d.state_prepared("draft-file-deleted-on-disk", Sizes::All, |d| {
         choices_at_text(
             d,
             "iter-15-E-AD3-library-gone",
-            "This entry's file has gone from disk",
+            "This entry’s file has gone from disk",
             "Save my draft again",
             "Let it go",
             None,
         );
         // The note about who needs the entry sits with the message, at its text edge.
-        let text = d.painted_rect_in("This entry's file has gone", egui::Rect::EVERYTHING);
+        let text = d.painted_rect_in("This entry’s file has gone", egui::Rect::EVERYTHING);
         let needs = d.painted_rect_in("Ember Cultist needs this entry.", egui::Rect::EVERYTHING);
         d.observe(
             "iter-15-E-AD3-library-gone-needs",

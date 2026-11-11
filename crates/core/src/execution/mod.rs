@@ -422,7 +422,7 @@ impl Engine {
             for target in targets {
                 let target_actor = self.actors.get(target).ok_or("Unknown target")?;
                 if target_actor.hp == 0 {
-                    return Err("Dead targets are outside this proof's legal target set".into());
+                    return Err("Dead targets are outside this proof’s legal target set".into());
                 }
                 if target == &request.actor && !selector.allow_self {
                     return Err("Self target disallowed".into());

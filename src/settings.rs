@@ -528,7 +528,7 @@ impl Settings {
         ) {
             small(
                 ui,
-                "Disconnect removes Splat's saved D&D Beyond sign-in and clears local credentials. It does not sign your browser out of D&D Beyond.",
+                "Disconnect removes Splat’s saved D&D Beyond sign-in and clears local credentials. It does not sign your browser out of D&D Beyond.",
             );
         }
         // Only when there is something to forget. It follows the trust text.

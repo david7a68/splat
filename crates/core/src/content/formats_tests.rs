@@ -1190,7 +1190,32 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
             .is_empty()
     );
     assert_eq!(entry.flags.len(), 1);
-    assert!(entry.flags[0].message.contains("Imaginary initiative"));
+    // AA3/FA5/SA2: UI words name the choice in curly quotation marks, and the flag says
+    // by its kind, not its words, that Rules and runs repairs it.
+    assert!(
+        entry.flags[0]
+            .message
+            .starts_with("Combat initiative choice “Imaginary initiative” is not a rule."),
+        "{}",
+        entry.flags[0].message
+    );
+    assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
+    // A plain flag with the same words is not a rule choice: a second resolve keeps it and
+    // replaces only its own rule-choice flag.
+    let lookalike = super::layout::Flag::new(1, entry.flags[0].message.clone());
+    entry.flags.push(lookalike.clone());
+    super::list_formats::resolve(&mut entry, &[], &source);
+    assert_eq!(entry.flags.len(), 2, "{:?}", entry.flags);
+    assert!(entry.flags.contains(&lookalike));
+    assert_eq!(
+        entry
+            .flags
+            .iter()
+            .filter(|flag| flag.kind == super::layout::FlagKind::RuleChoice)
+            .count(),
+        1
+    );
+    entry.flags.retain(|flag| *flag != lookalike);
     assert_eq!(
         source
             .lines()
@@ -1199,6 +1224,25 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
             .chars()
             .next(),
         Some('|')
+    );
+    // Astra review of PR 235: a lowercase heading and a row without an id. The reader takes
+    // the heading in any case, so the flag is a rule choice by its kind whatever the words
+    // say, and the id-less row's own flag gives way to it.
+    let lowercase = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| combat initiative | Imaginary initiative |\n").text();
+    let mut entry = Entry::parse("Campaign.md", &lowercase).unwrap();
+    assert_eq!(
+        entry.flags.iter().map(|flag| flag.kind).collect::<Vec<_>>(),
+        [super::layout::FlagKind::RuleChoiceId]
+    );
+    super::list_formats::resolve(&mut entry, &[], &lowercase);
+    assert_eq!(entry.flags.len(), 1, "{:?}", entry.flags);
+    assert_eq!(entry.flags[0].kind, super::layout::FlagKind::RuleChoice);
+    assert!(
+        entry.flags[0]
+            .message
+            .starts_with("combat initiative choice “Imaginary initiative”"),
+        "{}",
+        entry.flags[0].message
     );
 }
 
@@ -1696,7 +1740,7 @@ fn i20_x30_changes_accept_speed_units_and_explain_group_start_hp() {
     }
     assert_eq!(
         super::list_formats::changes("Start HP 12", "", "").unwrap_err(),
-        "Start HP is set on an encounter's roster"
+        "Start HP is set on an encounter’s roster"
     );
 }
 

@@ -1192,7 +1192,7 @@ impl Run {
                             .split(", ")
                             .next()
                             .unwrap_or(summary)
-                            .replace("'s sheet changed: ", ": ");
+                            .replace(&format!("{} ", super::SHEET_CHANGED), ": ");
                         (sheet_width(&compact) <= sheet_room).then_some(compact)
                     });
                 let sheet_width = sheet.as_ref().map_or(0.0, |summary| sheet_width(summary));
@@ -2176,7 +2176,7 @@ impl Run {
                         .rich(
                             ui,
                             format!(
-                                "{} targets. Press a row's mark for half, rounded down.",
+                                "{} targets. Press a row’s mark for half, rounded down.",
                                 self.targets().len()
                             ),
                         )
@@ -2879,7 +2879,7 @@ impl Run {
             } else {
                 "Sync party"
             })
-            .hint("Read every linked character's sheet. A value you changed stays, and you choose.")
+            .hint("Read every linked character’s sheet. A value you changed stays, and you choose.")
             .blocked_if(
                 !self.connected && !self.simulate_connection,
                 "Connect to D&D Beyond in Settings to sync.",
@@ -3326,7 +3326,7 @@ impl Run {
                     Type::Body
                         .rich(
                             ui,
-                            "This campaign's groups have not loaded yet. If this stays, the Encounters page says why.",
+                            "This campaign’s groups have not loaded yet. If this stays, the Encounters page says why.",
                         )
                         .color(c.muted),
                 )
@@ -3377,7 +3377,7 @@ impl Run {
         let mut add = None;
         for (heading, list) in [
             ("For this encounter", offered.own.as_slice()),
-            ("In tonight's plan", planned.as_slice()),
+            ("In tonight’s plan", planned.as_slice()),
             ("For any encounter", any.as_slice()),
             ("For one encounter", offered.other.as_slice()),
         ] {
@@ -4568,7 +4568,7 @@ impl Run {
                 ui,
                 Tone::Info,
                 &format!("Party HP carries over from {from}."),
-                "Use the sheets' HP",
+                "Use the sheets’ HP",
             )
         {
             command = Some(back);
@@ -6142,7 +6142,7 @@ fn presence_action(present: bool) -> (&'static str, &'static str) {
     if present {
         (
             "Absent",
-            "Skip this participant's turns until marked present",
+            "Skip this participant’s turns until marked present",
         )
     } else {
         ("Absent", "Give this participant turns again")
@@ -7703,7 +7703,7 @@ mod tests {
                 run.apply(Command::Initiative(index, Some(total))).unwrap();
             }
             run.apply(Command::Begin).unwrap();
-            run.notice = Some("Guard 1's sheet changed: HP 17 → 15. Undo stops here.".into());
+            run.notice = Some("Guard 1’s sheet changed: HP 17 → 15. Undo stops here.".into());
             run.notice_summary = Some("Guard 1: HP 17 → 15".into());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 800.0))
@@ -7982,7 +7982,7 @@ mod tests {
 
     #[test]
     fn iter6_b_sheet_notice_keeps_text_colour_and_warning_bar() {
-        let words = "Brannoch Vale's sheet changed: HP 58 → 54, temp HP 5 → 0";
+        let words = "Brannoch Vale’s sheet changed: HP 58 → 54, temp HP 5 → 0";
         let mut harness = egui_kittest::Harness::new(|ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 design::small_message(ui, Tone::Warning, words);
@@ -8988,8 +8988,8 @@ mod tests {
             }
             run.apply(Command::Begin).unwrap();
             run.notice =
-                Some("Guard 1's sheet changed: HP 17 → 15. Undo for Guard 1 stops here.".into());
-            run.notice_summary = Some("Guard 1's sheet changed: HP 17 → 15".into());
+                Some("Guard 1’s sheet changed: HP 17 → 15. Undo for Guard 1 stops here.".into());
+            run.notice_summary = Some("Guard 1’s sheet changed: HP 17 → 15".into());
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width, 640.0))
                 .build(move |ctx| {
@@ -9001,7 +9001,7 @@ mod tests {
             harness.run_steps(2);
             assert_eq!(
                 harness
-                    .query_all_by_label_contains("Guard 1's sheet changed: HP 17 → 15")
+                    .query_all_by_label_contains("Guard 1’s sheet changed: HP 17 → 15")
                     .count()
                     > 0,
                 in_header,

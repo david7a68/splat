@@ -1192,7 +1192,7 @@ impl CampaignContent {
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                     let words = format!("Line {}: {}", flag.line, flag.message);
-                    let choice = flag.message.contains(" choice \"");
+                    let choice = flag.kind == splat::content::layout::FlagKind::RuleChoice;
                     if !choice && !last {
                         design::message(ui, Tone::Warning, &words);
                         return;
@@ -1275,25 +1275,33 @@ impl CampaignContent {
                             }
                             for issue in &closure.missing_dependencies {
                                 ui.push_id(&issue.reference, |ui| {
-                                    ui.add(
-                                        egui::Label::new(
-                                            Type::Small.rich(ui, &issue.message).color(c.muted),
-                                        )
-                                        .wrap(),
+                                    // FA6: a dependency issue is a warning like the flags above
+                                    // it, and its repair links start at its words.
+                                    let repair = design::message_with_actions(
+                                        ui,
+                                        Tone::Warning,
+                                        &issue.message,
+                                        |ui| {
+                                            let mut repair = None;
+                                            for id in &issue.owners {
+                                                let owner = &catalogue.entries[id];
+                                                let action = format!("Repair {}", owner.entry.name);
+                                                if let Some(path) = catalogue.file_path_of(*id)
+                                                    && design::link(ui, &action).clicked()
+                                                {
+                                                    repair = Some(path.to_path_buf());
+                                                }
+                                            }
+                                            repair
+                                        },
                                     );
-                                    for id in &issue.owners {
-                                        let owner = &catalogue.entries[id];
-                                        let action = format!("Repair {}", owner.entry.name);
-                                        if let Some(path) = catalogue.file_path_of(*id)
-                                            && design::link(ui, &action).clicked()
-                                        {
-                                            ui.ctx().data_mut(|data| {
-                                                data.insert_temp(
-                                                    egui::Id::new("open_library_repair"),
-                                                    path.to_path_buf(),
-                                                )
-                                            });
-                                        }
+                                    if let Some(path) = repair {
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(
+                                                egui::Id::new("open_library_repair"),
+                                                path,
+                                            )
+                                        });
                                     }
                                     design::quiet_section(ui, "Technical details", |ui| {
                                         ui.label(
