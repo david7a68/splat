@@ -158,7 +158,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("“Bridge Ambush” is in tonight’s plan.");
     d.goal_within("T11.10", "plan a result as a fight", 1);
     let parts = [
-        d.has("In the plan"),
+        d.has_containing("In the plan"),
         !d.has(PLAN_AMBUSH),
         // The fixture's Bridge Ambush has a paused run, so its row resumes it.
         d.has("Start fight: Bridge Ambush") || d.has("Resume: Bridge Ambush"),
