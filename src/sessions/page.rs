@@ -1079,6 +1079,14 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     changed
 }
 
+/// The removed event whose plan result a deleted saved run replaces: only the event of that same
+/// run, so a deletion in another fight or session leaves an unrelated removal's result alone.
+fn superseded_by_deleted_run(book: &Book, run: Option<Uuid>) -> Option<String> {
+    book.removed_event()
+        .filter(|event| run.is_some() && event.run == run)
+        .map(|event| event.id.clone())
+}
+
 /// Recording results follow the column with the same text inset as Write, and keep the reader
 /// measure: prose and its rules never fill a wide pane.
 fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
@@ -4783,9 +4791,9 @@ impl Sessions {
                     ));
                     self.deleted_run = Some(deleted);
                     self.wants_runs_refresh = true;
-                    // One step, one result: the deleted run's message replaces an earlier
-                    // removal's in the plan.
-                    self.superseded_removal = book.removed_event().map(|event| event.id.clone());
+                    // One step, one result: the deleted run's message replaces the earlier
+                    // removal's in the plan when both name the same fight.
+                    self.superseded_removal = superseded_by_deleted_run(book, saved.id);
                 }
                 Err(error) => self.rename_problem = Some(error),
             }
@@ -8413,11 +8421,18 @@ mod tests {
         let mut book = Book::default();
         let first = book.add(Kind::Day, None);
         let second = book.add(Kind::Day, None);
+        let run = Uuid::from_u128(7);
+        book.events[0].run = Some(run);
         book.remove(&first);
         let mut sessions = Sessions::default();
         assert!(!sessions.removal_superseded(&book));
-        // What the plan's Delete the saved run records.
-        sessions.superseded_removal = book.removed_event().map(|event| event.id.clone());
+        // A deleted run of another fight, or a run with no id, leaves the removal's result.
+        for other in [Some(Uuid::from_u128(8)), None] {
+            sessions.superseded_removal = superseded_by_deleted_run(&book, other);
+            assert!(!sessions.removal_superseded(&book));
+        }
+        // The removed event's own run replaces its result.
+        sessions.superseded_removal = superseded_by_deleted_run(&book, Some(run));
         assert!(sessions.removal_superseded(&book));
         // Undo on Timeline ends the removal, and a later removal has its own result.
         book.undo_remove();
