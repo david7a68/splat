@@ -9916,6 +9916,21 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
+        // is clearly apart from the members column's.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| group_field_edges(d, GROUP_RIVALS));
+            d.observe(
+                "iter-19-B-FD3-wide",
+                edges.is_some_and(|(name, belongs, notes)| {
+                    (name - belongs).abs() <= 0.5
+                        && ((name - notes).abs() <= 0.5 || notes - name >= crate::design::XL)
+                }),
+                format!(
+                    "At {size:?}, the group's field edges are one edge or clearly apart: {edges:?}"
+                ),
+            );
+        }
         d.observe(
             "T13.3",
             d.has_containing("Changed · 3 to add by hand")
@@ -10473,6 +10488,39 @@ pub mod encounter_history {
     }
 }
 
+/// iter-19-B FD3, FT9: the right edges of a group editor's name field, `Belongs to` and
+/// `Group notes`, which ends at the members column's right edge.
+fn group_field_edges(d: &Driver<'_>, group: &str) -> Option<(f32, f32, f32)> {
+    let name = d.place_of(&format!("Group name: {group}"))?.right();
+    let belongs = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with("Belongs to: "))?
+        .rect
+        .right();
+    let notes = d.place_of(&format!("Group notes for {group}"))?.right();
+    Some((name, belongs, notes))
+}
+
+/// The name field and `Belongs to` share one right edge, and it is the column's edge.
+fn group_fields_end_at_column(edges: Option<(f32, f32, f32)>) -> bool {
+    edges.is_some_and(|(name, belongs, notes)| {
+        (name - belongs).abs() <= 0.5 && (name - notes).abs() <= 0.5
+    })
+}
+
+/// iter-19-B FD4: from a notes field's frame to the start of its words (text or placeholder).
+/// A field's label has the field's name too; the field is the wider node.
+fn notes_inset(d: &Driver<'_>, field: &str, words: &str) -> Option<f32> {
+    let frame = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == field)
+        .map(|node| node.rect)
+        .max_by(|a, b| a.width().total_cmp(&b.width()))?;
+    Some(d.painted_rect_in(words, frame)?.left() - frame.left())
+}
+
 /// W13: groups for one encounter beside groups for any encounter.
 pub mod encounter_owned_groups {
     use super::*;
@@ -10512,14 +10560,60 @@ pub mod encounter_owned_groups {
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
         d.expect("Deleted encounter");
-        d.state("group-whose-encounter-is-gone", Sizes::Default);
+        d.state_prepared("group-whose-encounter-is-gone", Sizes::Default, |d| {
+            let edges = group_field_edges(d, GROUP_ORPHAN);
+            d.observe(
+                "iter-19-B-FD3",
+                group_fields_end_at_column(edges),
+                format!(
+                    "The group name field and Belongs to end at the notes field's right edge: {edges:?}"
+                ),
+            );
+            // Must stay true: the shorter choice still shows its whole value.
+            d.observe(
+                "iter-19-B-FD3-value",
+                d.visible_text("Deleted encounter"),
+                "Belongs to still shows Deleted encounter",
+            );
+        });
+        let inset = notes_inset(
+            d,
+            &format!("Group notes for {GROUP_ORPHAN}"),
+            "When they arrive, what they want.",
+        );
+        d.observe(
+            "iter-19-B-FD4",
+            inset.is_some_and(|inset| (inset - crate::design::S).abs() <= 0.5),
+            format!("Group notes starts its words S inside its frame: {inset:?}"),
+        );
         d.click("Back to encounters");
 
         // An encounter's editor has a section for each of its own, with what is in it.
         open_saved_encounter(d, SHRINE);
         d.expect("GROUPS FOR THIS ENCOUNTER 1");
         d.expect("Adding to the roster");
-        d.state("encounter-with-its-groups", Sizes::All);
+        d.state_prepared("encounter-with-its-groups", Sizes::All, |d| {
+            // FD3 family: a group's name in the encounter's frame starts at the frame's left edge,
+            // where its notes start, at every width.
+            let lefts = d
+                .place_of(&format!("Group name: {GROUP_SHRINE}"))
+                .zip(d.place_of(&format!("Group notes for {GROUP_SHRINE}")))
+                .map(|(name, notes)| (name.left(), notes.left()));
+            d.observe(
+                "iter-19-B-FD3-frame",
+                lefts.is_some_and(|(name, notes)| (name - notes).abs() <= 0.5),
+                format!("The frame's name field starts where its notes start: {lefts:?}"),
+            );
+        });
+        // The notes are below the roster; at the large size they are on screen.
+        let inset = d.at_size(LARGE, |d| {
+            notes_inset(d, "Read-aloud and notes", "The cultists retreat")
+        });
+        d.observe(
+            "iter-19-B-FD4-encounter",
+            inset.is_some_and(|inset| (inset - crate::design::S).abs() <= 0.5),
+            format!("Read-aloud and notes starts its words S inside its frame: {inset:?}"),
+        );
         d.check_tab_order("encounter editor, with its groups");
         d.observe(
             "T13.6",
@@ -11373,6 +11467,31 @@ pub mod session_plan_groups {
         d.click_beside_exact("Wolf", ADD);
         d.click_beside_exact("Wolf", ADD);
         d.state("plan-group-assembled", Sizes::All);
+        for size in [DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| group_field_edges(d, "Ash Pack"));
+            d.observe(
+                "iter-19-B-FT9",
+                group_fields_end_at_column(edges),
+                format!(
+                    "At {size:?}, the plan group's name and Belongs to end at its notes' right edge: {edges:?}"
+                ),
+            );
+        }
+        // Must stay true: when the compact editor shows only Add creatures, the name keeps no
+        // column edge from the wider layout; it runs on to the room Save group leaves.
+        let gap = d.at_size(SMALL, |d| {
+            let compact = d.has("Back to the plan") && !d.has("Group notes for Ash Pack");
+            let gap = d
+                .place_of("Group name: Ash Pack")
+                .zip(d.place_of("Save group"))
+                .map(|(name, save)| save.left() - name.right());
+            (compact, gap)
+        });
+        d.observe(
+            "iter-19-B-FT9-compact",
+            gap.0 && gap.1.is_some_and(|gap| gap <= crate::design::XL),
+            format!("The compact name field ends just before Save group: {gap:?}"),
+        );
         let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
         d.observe(
             "iter-18-B-PX3",

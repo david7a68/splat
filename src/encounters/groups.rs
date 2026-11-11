@@ -1056,6 +1056,7 @@ pub(super) fn of_encounter(
                 .corner_radius(design::RADIUS_CONTROL)
                 .inner_margin(design::S)
                 .show(ui, |ui| {
+                    let mut name_right = f32::INFINITY;
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
@@ -1091,21 +1092,33 @@ pub(super) fn of_encounter(
                                     go_to_search = true;
                                 }
                             }
-                            let response = ui.add(
-                                egui::TextEdit::singleline(&mut group.name)
-                                    .desired_width(
-                                        (ui.available_width() - 2.0 * design::S)
-                                            .min(design::FORM_WIDTH),
-                                    )
-                                    .margin(egui::vec2(design::S, 4.0))
-                                    .font(Type::Heading.font(ui)),
+                            // The name starts at the frame's left edge, as the fields below do,
+                            // and ends at FORM_WIDTH or before the actions.
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let response = ui.add(
+                                        egui::TextEdit::singleline(&mut group.name)
+                                            .desired_width(
+                                                (ui.available_width() - 2.0 * design::S)
+                                                    .min(design::FORM_WIDTH),
+                                            )
+                                            .margin(egui::vec2(design::S, 4.0))
+                                            .font(Type::Heading.font(ui)),
+                                    );
+                                    design::named(
+                                        ui,
+                                        &response,
+                                        &format!("Group name: {}", group.name),
+                                    );
+                                    name_right = response.rect.right();
+                                    if focus_group.as_deref() == Some(path.as_str()) {
+                                        *focus_group = None;
+                                        design::focus_and_select(ui, response.id, &group.name);
+                                        response.scroll_to_me(Some(egui::Align::Center));
+                                    }
+                                },
                             );
-                            design::named(ui, &response, &format!("Group name: {}", group.name));
-                            if focus_group.as_deref() == Some(path.as_str()) {
-                                *focus_group = None;
-                                design::focus_and_select(ui, response.id, &group.name);
-                                response.scroll_to_me(Some(egui::Align::Center));
-                            }
                         });
                     });
                     group_fields(
@@ -1115,6 +1128,7 @@ pub(super) fn of_encounter(
                         expanded,
                         Some((this.0, &this.1)),
                         false,
+                        name_right,
                     );
                 });
             if adding && reveal {
@@ -1179,6 +1193,7 @@ fn belongs_to(
     draft: &mut GroupDraft,
     snapshot: &Snapshot,
     open: Option<(Uuid, &str)>,
+    name_right: f32,
 ) {
     let mut choices: Vec<(Uuid, &str)> = snapshot
         .encounter_choices()
@@ -1198,9 +1213,11 @@ fn belongs_to(
     });
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, BELONGS_TO).color(colors().muted));
+        // The choice ends where the name field ends, inside the column.
+        let right = name_right.min(ui.max_rect().right());
         let combo = egui::ComboBox::from_id_salt("group_encounter")
             .icon(design::combo_icon)
-            .width(240.0)
+            .width((right - ui.cursor().left()).max(Density::Scan.control()))
             .truncate()
             .selected_text(shown)
             .show_ui(ui, |ui| {
@@ -1876,7 +1893,9 @@ impl Encounters {
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
+        let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
         let (mut back, mut save, mut discard) = (false, false, false);
+        let mut name_right = f32::INFINITY;
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
                 .name(back_name)
@@ -1893,15 +1912,19 @@ impl Encounters {
                     0.0
                 })
             .max(Density::Scan.control());
+            let column = column_right.map_or(f32::INFINITY, |right| {
+                right - ui.cursor().left() - 2.0 * design::S
+            });
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
                     .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width.min(design::FORM_WIDTH))
+                    .desired_width(width.min(name_width(column)))
                     .min_size(egui::vec2(0.0, Density::Scan.control()))
                     .margin(egui::vec2(design::S, design::XS))
                     .font(Type::Heading.font(ui)),
             );
             design::named(ui, &response, &format!("Group name: {}", draft.name));
+            name_right = response.rect.right();
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
@@ -2023,8 +2046,15 @@ impl Encounters {
         let expanded = &mut self.expanded;
         if compact {
             match pane {
-                EditorPane::Roster => members_pane(ui, draft, snapshot, expanded, true),
-                EditorPane::Add => add_pane(ui, draft, snapshot, search, focus_search, peek, true),
+                EditorPane::Roster => members_pane(ui, draft, snapshot, expanded, true, name_right),
+                EditorPane::Add => {
+                    // No members column is drawn, so the name keeps no edge from an older one.
+                    let id = column_right_id(&draft.path);
+                    if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
+                        ui.ctx().request_discard("The members column is not shown");
+                    }
+                    add_pane(ui, draft, snapshot, search, focus_search, peek, true)
+                }
             }
             return;
         }
@@ -2052,7 +2082,7 @@ impl Encounters {
             }))
             .show_inside(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                members_pane(ui, draft, snapshot, expanded, false);
+                members_pane(ui, draft, snapshot, expanded, false, name_right);
             });
     }
 }
@@ -2128,12 +2158,29 @@ fn add_pane(
     }
 }
 
+/// How wide a group's name may be, given the room to the members column's right edge. It ends at
+/// FORM_WIDTH or at the column, whichever comes first. Within `XL` of the column it ends at the
+/// column, so the two edges are the same or clearly apart.
+fn name_width(column: f32) -> f32 {
+    if column - design::FORM_WIDTH < design::XL {
+        column
+    } else {
+        design::FORM_WIDTH
+    }
+}
+
+/// Where a group editor's members column ended in the last pass, for the name field above it.
+fn column_right_id(path: &str) -> egui::Id {
+    egui::Id::new(("group_column_right", path))
+}
+
 fn members_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
     tabbed: bool,
+    name_right: f32,
 ) {
     let top = ui.cursor().top();
     egui::ScrollArea::vertical()
@@ -2143,10 +2190,19 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            ui.scope(|ui| {
+            let column = ui.scope(|ui| {
                 ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-                group_fields(ui, draft, snapshot, expanded, None, tabbed);
+                group_fields(ui, draft, snapshot, expanded, None, tabbed, name_right);
             });
+            // The name field is drawn before this column; when the column moves (a resize, a
+            // scroll bar), draw the pass again so that both end at the same edge.
+            let right = column.response.rect.right();
+            let id = column_right_id(&draft.path);
+            if ui.data(|data| data.get_temp::<f32>(id)) != Some(right) {
+                ui.data_mut(|data| data.insert_temp(id, right));
+                ui.ctx()
+                    .request_discard("The group name field ends at the members column");
+            }
         });
 }
 
@@ -2159,6 +2215,7 @@ fn group_fields(
     expanded: &mut Option<String>,
     open: Option<(Uuid, &str)>,
     _tabbed: bool,
+    name_right: f32,
 ) {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
     ui.horizontal(|ui| {
@@ -2175,7 +2232,7 @@ fn group_fields(
         ui.add_space(design::S);
     }
     if open.is_none_or(|(id, _)| !draft.belongs_to(id)) {
-        belongs_to(ui, draft, snapshot, open);
+        belongs_to(ui, draft, snapshot, open, name_right);
     }
     ui.add_space(design::S);
     let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
@@ -2208,14 +2265,9 @@ fn group_fields(
     ui.add_space(if open.is_some() { design::S } else { design::M });
     design::field(ui, NOTES_FIELD, None, None, |ui| {
         let response = ui.add(
-            egui::TextEdit::multiline(&mut draft.notes)
-                .desired_rows(if open.is_some() { 2 } else { 4 })
-                // The width holds the margins, so the field ends at the members' right edge.
-                .desired_width(ui.available_width())
-                .hint_text(design::placeholder(
-                    ui,
-                    "When they arrive, what they want. Markdown is fine.",
-                )),
+            super::notes_field(&mut draft.notes, if open.is_some() { 2 } else { 4 }).hint_text(
+                design::placeholder(ui, "When they arrive, what they want. Markdown is fine."),
+            ),
         );
         design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
     });
@@ -3468,6 +3520,29 @@ mod tests {
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         assert_eq!(snapshot.groups[0].encounter, None);
         assert_eq!(snapshot.groups[0].encounter_name, None);
+    }
+
+    #[test]
+    fn a_group_name_ends_at_its_column_or_clearly_before_it() {
+        // iter-19-B-FD3: a column just past FORM_WIDTH would give a near miss.
+        let near = design::FORM_WIDTH + design::XL - 1.0;
+        assert_eq!(
+            name_width(near),
+            near,
+            "within XL, the name ends at the column"
+        );
+        let far = design::FORM_WIDTH + design::XL;
+        assert_eq!(
+            name_width(far),
+            design::FORM_WIDTH,
+            "past XL, it ends at FORM_WIDTH"
+        );
+        assert_eq!(name_width(300.0), 300.0, "a narrow column bounds the name");
+        assert_eq!(
+            name_width(f32::INFINITY),
+            design::FORM_WIDTH,
+            "no column yet"
+        );
     }
 
     #[test]
