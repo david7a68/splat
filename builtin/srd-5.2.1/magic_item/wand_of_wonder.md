@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3db663e0-a692-5513-b408-10d4d8db07b6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_wonder"
-splat_name: "Wand of Wonder"
+splat_id: 3db663e0-a692-5513-b408-10d4d8db07b6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_wonder
+splat_name: Wand of Wonder
 splat_pages:
 - 251
 - 252

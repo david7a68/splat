@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e916d962-b311-5377-a2e0-215604a0848a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_thunder_and_lightning"
-splat_name: "Staff of Thunder and Lightning"
+splat_id: e916d962-b311-5377-a2e0-215604a0848a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_thunder_and_lightning
+splat_name: Staff of Thunder and Lightning
 splat_pages:
 - 247
 - 248

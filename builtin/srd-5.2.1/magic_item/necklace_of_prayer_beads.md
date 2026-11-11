@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "66bd9d0d-59af-5338-9a35-846ec27f101a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/necklace_of_prayer_beads"
-splat_name: "Necklace of Prayer Beads"
+splat_id: 66bd9d0d-59af-5338-9a35-846ec27f101a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/necklace_of_prayer_beads
+splat_name: Necklace of Prayer Beads
 splat_pages:
 - 233
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6bc4d62a-5974-55dd-a2fc-7f60537062ca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ensnaring_strike"
-splat_name: "Ensnaring Strike"
+splat_id: 6bc4d62a-5974-55dd-a2fc-7f60537062ca
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ensnaring_strike
+splat_name: Ensnaring Strike
 splat_pages:
 - 128
 ---

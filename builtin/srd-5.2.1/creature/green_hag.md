@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ef320b02-936d-529e-82fb-8553c21fd5b2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/green_hag"
-splat_name: "Green Hag"
+splat_id: ef320b02-936d-529e-82fb-8553c21fd5b2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/green_hag
+splat_name: Green Hag
 splat_pages:
 - 295
 ---

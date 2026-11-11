@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eae2dc31-6fa2-594a-9061-a2be1dd551fd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/darkvision"
-splat_name: "Darkvision"
+splat_id: eae2dc31-6fa2-594a-9061-a2be1dd551fd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/darkvision
+splat_name: Darkvision
 splat_pages:
 - 122
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5f8cf736-5a92-5cb6-b940-5a0c6910b31f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_flying"
-splat_name: "Potion of Flying"
+splat_id: 5f8cf736-5a92-5cb6-b940-5a0c6910b31f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_flying
+splat_name: Potion of Flying
 splat_pages:
 - 235
 ---

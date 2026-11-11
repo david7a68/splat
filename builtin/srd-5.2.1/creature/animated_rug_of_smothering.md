@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2e019bb3-a04d-59ef-b99d-a80ffb61776a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/animated_rug_of_smothering"
-splat_name: "Animated Rug of Smothering"
+splat_id: 2e019bb3-a04d-59ef-b99d-a80ffb61776a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/animated_rug_of_smothering
+splat_name: Animated Rug of Smothering
 splat_pages:
 - 259
 ---

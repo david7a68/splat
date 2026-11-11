@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "68190a46-8427-5dde-9151-e309b147c188"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/phantom_steed"
-splat_name: "Phantom Steed"
+splat_id: 68190a46-8427-5dde-9151-e309b147c188
+splat_kind: reference
+splat_key: dnd2024:reference/spell/phantom_steed
+splat_name: Phantom Steed
 splat_pages:
 - 152
 ---

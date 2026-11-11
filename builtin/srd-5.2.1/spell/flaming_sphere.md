@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5022e781-2384-5a10-a437-563550b79d84"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/flaming_sphere"
-splat_name: "Flaming Sphere"
+splat_id: 5022e781-2384-5a10-a437-563550b79d84
+splat_kind: reference
+splat_key: dnd2024:reference/spell/flaming_sphere
+splat_name: Flaming Sphere
 splat_pages:
 - 132
 ---

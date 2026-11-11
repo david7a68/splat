@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c6ffab34-93e7-53c0-a685-d56664677992"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/stone_giant"
-splat_name: "Stone Giant"
+splat_id: c6ffab34-93e7-53c0-a685-d56664677992
+splat_kind: reference
+splat_key: dnd2024:reference/creature/stone_giant
+splat_name: Stone Giant
 splat_pages:
 - 330
 ---

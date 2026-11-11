@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "96186b55-0a72-50a7-9150-99c590c875fe"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/homunculus"
-splat_name: "Homunculus"
+splat_id: 96186b55-0a72-50a7-9150-99c590c875fe
+splat_kind: reference
+splat_key: dnd2024:reference/creature/homunculus
+splat_name: Homunculus
 splat_pages:
 - 299
 ---

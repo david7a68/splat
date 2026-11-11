@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a5f2b9e3-d264-53c2-a6e7-dc0c20140a2a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_crab"
-splat_name: "Giant Crab"
+splat_id: a5f2b9e3-d264-53c2-a6e7-dc0c20140a2a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_crab
+splat_name: Giant Crab
 splat_pages:
 - 350
 ---

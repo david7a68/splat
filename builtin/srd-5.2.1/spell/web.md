@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cdbfb4f8-61f3-59c9-974e-183bd3a4b076"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/web"
-splat_name: "Web"
+splat_id: cdbfb4f8-61f3-59c9-974e-183bd3a4b076
+splat_kind: reference
+splat_key: dnd2024:reference/spell/web
+splat_name: Web
 splat_pages:
 - 174
 ---

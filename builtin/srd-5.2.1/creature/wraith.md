@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b207ac5c-ae3c-59ac-9c9e-5d9471e2e3c5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wraith"
-splat_name: "Wraith"
+splat_id: b207ac5c-ae3c-59ac-9c9e-5d9471e2e3c5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wraith
+splat_name: Wraith
 splat_pages:
 - 342
 - 343

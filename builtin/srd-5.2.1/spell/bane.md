@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7273391c-4074-5dc2-9273-0496fd6bb08a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/bane"
-splat_name: "Bane"
+splat_id: 7273391c-4074-5dc2-9273-0496fd6bb08a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/bane
+splat_name: Bane
 splat_pages:
 - 112
 ---

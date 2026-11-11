@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "35e2ebf9-8e46-536d-b717-7cfd77f7ccc0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/boots_of_striding_and_springing"
-splat_name: "Boots of Striding and Springing"
+splat_id: 35e2ebf9-8e46-536d-b717-7cfd77f7ccc0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/boots_of_striding_and_springing
+splat_name: Boots of Striding and Springing
 splat_pages:
 - 214
 ---

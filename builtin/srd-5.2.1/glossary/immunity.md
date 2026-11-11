@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d15dec68-2898-5feb-ab90-d419e79e46b1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/immunity"
-splat_name: "Immunity"
+splat_id: d15dec68-2898-5feb-ab90-d419e79e46b1
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/immunity
+splat_name: Immunity
 splat_pages:
 - 183
 ---

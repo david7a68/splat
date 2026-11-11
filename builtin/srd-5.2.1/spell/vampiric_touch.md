@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "58eeafe2-2041-55d2-b2e7-d10506e893dc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/vampiric_touch"
-splat_name: "Vampiric Touch"
+splat_id: 58eeafe2-2041-55d2-b2e7-d10506e893dc
+splat_kind: reference
+splat_key: dnd2024:reference/spell/vampiric_touch
+splat_name: Vampiric Touch
 splat_pages:
 - 171
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "011cded1-4d4c-5ac3-93b2-46a1c4f0f83d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ice_devil"
-splat_name: "Ice Devil"
+splat_id: 011cded1-4d4c-5ac3-93b2-46a1c4f0f83d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ice_devil
+splat_name: Ice Devil
 splat_pages:
 - 300
 ---

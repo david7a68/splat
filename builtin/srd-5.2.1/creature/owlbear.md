@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8d4284a7-d5f6-5d85-9e9a-4e8ffb3024ad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/owlbear"
-splat_name: "Owlbear"
+splat_id: 8d4284a7-d5f6-5d85-9e9a-4e8ffb3024ad
+splat_kind: reference
+splat_key: dnd2024:reference/creature/owlbear
+splat_name: Owlbear
 splat_pages:
 - 313
 ---

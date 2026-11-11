@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8c4c7590-50a0-5eed-a20d-c744cbd837d5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/draconic_spirit"
-splat_name: "Draconic Spirit"
+splat_id: 8c4c7590-50a0-5eed-a20d-c744cbd837d5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/draconic_spirit
+splat_name: Draconic Spirit
 splat_pages:
 - 166
 ---

@@ -15,7 +15,6 @@ mod campaigns;
 mod combat_sync;
 mod commands;
 mod content_workspace;
-mod conversion;
 mod copy_dialog;
 mod creature_filter;
 mod credentials;
@@ -25,7 +24,7 @@ mod encounter_run;
 mod encounter_settings;
 mod encounters;
 mod file_batch;
-mod formats_ui;
+mod folder_check;
 mod hermetic;
 mod history;
 mod library;
@@ -109,7 +108,6 @@ struct Splat {
     discard_on_close: bool,
     library: library::Library,
     campaign_content: campaign_content::CampaignContent,
-    file_conversion: formats_ui::State,
     copy_dialog: Option<copy_dialog::CopyDialog>,
     settings: settings::Settings,
     campaigns: campaigns::Campaigns,
@@ -152,7 +150,6 @@ impl Default for Splat {
             discard_on_close: false,
             library: Default::default(),
             campaign_content: Default::default(),
-            file_conversion: Default::default(),
             copy_dialog: None,
             settings: Default::default(),
             campaigns: Default::default(),
@@ -2353,12 +2350,6 @@ impl eframe::App for Splat {
         self.sessions.run_open = self.encounters.has_run();
         self.library.run_open = self.encounters.has_run();
         self.campaign_content.run_open = self.encounters.has_run();
-        ctx.data_mut(|data| {
-            data.insert_temp(
-                egui::Id::new("conversion_run_open"),
-                self.encounters.has_run(),
-            )
-        });
         self.processing.poll(ctx);
         self.processing.recording_now = self.sessions.recording();
         let open = self.campaigns.active_campaign();
@@ -2494,43 +2485,6 @@ impl eframe::App for Splat {
                     return;
                 }
                 self.page(ui);
-                if let Some(paths) = ctx.data_mut(|data| {
-                    data.remove_temp::<Vec<std::path::PathBuf>>(egui::Id::new("convert_old_files"))
-                }) {
-                    let paths: Vec<_> = paths
-                        .into_iter()
-                        .map(|path| {
-                            if path.is_relative() {
-                                self.campaigns
-                                    .active_campaign()
-                                    .map_or(path.clone(), |campaign| campaign.path.join(&path))
-                            } else {
-                                path
-                            }
-                        })
-                        .collect();
-                    self.file_conversion.scan_paths(&self.campaigns, &paths);
-                }
-                let blocked = if self.encounters.has_run() {
-                    Some("Close the run before converting files.")
-                } else if self.timeline.not_saved()
-                    || self.library.dirty()
-                    || self.world_page.dirty()
-                    || self.campaign_content.dirty()
-                    || self.encounters.dirty()
-                {
-                    Some("Save or discard changes before converting files.")
-                } else {
-                    None
-                };
-                if self
-                    .file_conversion
-                    .show_conversion(ui, blocked, &self.campaigns)
-                {
-                    self.lookup.refresh();
-                    self.lookup.files_changed = true;
-                    self.timeline.reload();
-                }
             });
         design::reserve_primary(ctx, false);
         self.route(ctx);
@@ -2556,7 +2510,6 @@ impl eframe::App for Splat {
         }
         // Coming back to a page beside the open note, the keyboard goes back to the note.
         if self.page != self.shown_page {
-            self.library.clear_notice();
             self.campaign_content.clear_notice();
             self.encounters.clear_notice();
             self.sessions.clear_notice();

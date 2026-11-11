@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a79b78cc-571a-573f-bb74-8e50411bedad"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/scimitar_of_speed"
-splat_name: "Scimitar of Speed"
+splat_id: a79b78cc-571a-573f-bb74-8e50411bedad
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/scimitar_of_speed
+splat_name: Scimitar of Speed
 splat_pages:
 - 243
 ---

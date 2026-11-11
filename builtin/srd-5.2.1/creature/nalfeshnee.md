@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60bd284b-4ae1-5657-86ea-e4ce0ab13481"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/nalfeshnee"
-splat_name: "Nalfeshnee"
+splat_id: 60bd284b-4ae1-5657-86ea-e4ce0ab13481
+splat_kind: reference
+splat_key: dnd2024:reference/creature/nalfeshnee
+splat_name: Nalfeshnee
 splat_pages:
 - 310
 - 311

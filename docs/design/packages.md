@@ -122,18 +122,18 @@ Package folders can be registered from any chosen location. Their paths stay
 in app settings; campaigns select packages by UUID. A campaign manifest note
 keeps its package selections and rule choices with the campaign folder.
 All top-level Splat frontmatter fields use the `splat_` prefix, separately from
-ordinary Obsidian metadata. Common fields are flat; complex properties use
-nested YAML where required. Package and campaign note placement uses the same
+ordinary Obsidian metadata. Common fields are flat; structured fields are in
+the note body. Package and campaign note placement uses the same
 configurable conventions, preserving existing folders when defaults change.
 
-- YAML frontmatter is authoritative for stats and executable rules. Inventory
-  is an explicit exception: marked Markdown tables hold the inventory list
-  and item references without a duplicate YAML inventory list.
-- The Markdown body contains descriptions, notes, examples, inline controls,
-  and authoritative marked inventory tables. Referenced item mechanics stay
-  in YAML.
-- Nested YAML is acceptable. Obsidian's Properties UI cannot edit nested
-  properties; use Source mode or Splat's editor for those structures.
+- Readable tables in the body are authoritative for stats. Marked YAML blocks
+  in the body are authoritative for executable rules. Marked Markdown tables
+  hold the inventory list and item references without a duplicate YAML
+  inventory list.
+- The Markdown body also contains descriptions, notes, examples and inline
+  controls. Referenced item mechanics stay in YAML.
+- Splat keeps its properties flat, so that Obsidian's Properties UI can edit
+  them. This replaces the earlier decision to keep nested YAML in the properties.
 - Source prose is not interpreted as executable behavior.
 
 Files use readable names, such as `Goblin.md`, with stable UUIDs in frontmatter.

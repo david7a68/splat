@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0b8e3bc0-208a-5cdf-8d60-82f71c7cc9c5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_the_magi"
-splat_name: "Staff of the Magi"
+splat_id: 0b8e3bc0-208a-5cdf-8d60-82f71c7cc9c5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_the_magi
+splat_name: Staff of the Magi
 splat_pages:
 - 246
 - 247

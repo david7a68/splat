@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4c1d6904-661f-57b3-b2f0-46f015a94ecc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/suffocation_hazard"
-splat_name: "Suffocation [Hazard]"
+splat_id: 4c1d6904-661f-57b3-b2f0-46f015a94ecc
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/suffocation_hazard
+splat_name: Suffocation [Hazard]
 splat_pages:
 - 189
 ---

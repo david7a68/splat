@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fcb8f518-6f9c-5aee-a4f9-8bacffbc6436"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shapechange"
-splat_name: "Shapechange"
+splat_id: fcb8f518-6f9c-5aee-a4f9-8bacffbc6436
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shapechange
+splat_name: Shapechange
 splat_pages:
 - 161
 ---

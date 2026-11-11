@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c0cf560e-cf20-5666-91ef-336f11bca09c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/divine_smite"
-splat_name: "Divine Smite"
+splat_id: c0cf560e-cf20-5666-91ef-336f11bca09c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/divine_smite
+splat_name: Divine Smite
 splat_pages:
 - 125
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "438fb903-2780-5740-ba19-bb1c00d72980"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/programmed_illusion"
-splat_name: "Programmed Illusion"
+splat_id: 438fb903-2780-5740-ba19-bb1c00d72980
+splat_kind: reference
+splat_key: dnd2024:reference/spell/programmed_illusion
+splat_name: Programmed Illusion
 splat_pages:
 - 156
 ---

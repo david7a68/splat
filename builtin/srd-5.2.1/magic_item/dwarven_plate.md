@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "003e6d5e-b706-5451-bcfb-f7f2cecf8ec8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dwarven_plate"
-splat_name: "Dwarven Plate"
+splat_id: 003e6d5e-b706-5451-bcfb-f7f2cecf8ec8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dwarven_plate
+splat_name: Dwarven Plate
 splat_pages:
 - 219
 ---

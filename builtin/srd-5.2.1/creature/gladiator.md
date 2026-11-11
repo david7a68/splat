@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "22c3f426-9bca-5a6f-a16c-b404d9d68eed"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gladiator"
-splat_name: "Gladiator"
+splat_id: 22c3f426-9bca-5a6f-a16c-b404d9d68eed
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gladiator
+splat_name: Gladiator
 splat_pages:
 - 289
 ---

@@ -18,7 +18,7 @@ fn entry(d: &Driver<'_>, path: &str, name: &str, kind: &str, fields: &str) -> Uu
     let id = splat::character::stable_id(path);
     let path = root(d).join(path);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, splat::content::formats::convert("World.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n{fields}---\n\n# {name}\n\nA note for tonight.\n")).unwrap()).unwrap();
+    fs::write(path, splat::content::formats::fixture("World.md", &format!("splat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n  type: {kind}\n{fields}"), &format!("\n# {name}\n\nA note for tonight.\n")).unwrap()).unwrap();
     id
 }
 

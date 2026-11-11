@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0ba47497-feb1-5961-a0e9-8a72ae41cf31"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/color_spray"
-splat_name: "Color Spray"
+splat_id: 0ba47497-feb1-5961-a0e9-8a72ae41cf31
+splat_kind: reference
+splat_key: dnd2024:reference/spell/color_spray
+splat_name: Color Spray
 splat_pages:
 - 116
 ---

@@ -506,11 +506,7 @@ impl WorldPage {
                                     ui,
                                     open,
                                     path,
-                                    if crate::formats_ui::is_old(problem) {
-                                        "Old layout"
-                                    } else {
-                                        detail.map_or(problem.as_str(), |detail| &detail.cause)
-                                    },
+                                    detail.map_or(problem.as_str(), |detail| &detail.cause),
                                 )
                                 .on_hover_text(detail.map_or(problem.as_str(), |detail| &detail.hover));
                                 if response.clicked() {

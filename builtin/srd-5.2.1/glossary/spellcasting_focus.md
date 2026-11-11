@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eab85a85-7b37-5104-9015-26ee3b366902"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/spellcasting_focus"
-splat_name: "Spellcasting Focus"
+splat_id: eab85a85-7b37-5104-9015-26ee3b366902
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/spellcasting_focus
+splat_name: Spellcasting Focus
 splat_pages:
 - 188
 ---

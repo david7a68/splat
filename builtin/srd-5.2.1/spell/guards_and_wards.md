@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0f96b593-3fdf-57cd-b463-d4c1e1ce035e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/guards_and_wards"
-splat_name: "Guards and Wards"
+splat_id: 0f96b593-3fdf-57cd-b463-d4c1e1ce035e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/guards_and_wards
+splat_name: Guards and Wards
 splat_pages:
 - 137
 - 138

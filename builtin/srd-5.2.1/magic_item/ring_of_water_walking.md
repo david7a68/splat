@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e8ca7008-a937-530c-85d1-aa84eb074b29"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_water_walking"
-splat_name: "Ring of Water Walking"
+splat_id: e8ca7008-a937-530c-85d1-aa84eb074b29
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_water_walking
+splat_name: Ring of Water Walking
 splat_pages:
 - 239
 ---

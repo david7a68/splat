@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d08679f3-b3a0-58cb-a0ab-905de7b049a4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/frost_brand"
-splat_name: "Frost Brand"
+splat_id: d08679f3-b3a0-58cb-a0ab-905de7b049a4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/frost_brand
+splat_name: Frost Brand
 splat_pages:
 - 223
 ---

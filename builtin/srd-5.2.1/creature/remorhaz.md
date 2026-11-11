@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ff515c3-e894-5d67-a93d-c35723700598"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/remorhaz"
-splat_name: "Remorhaz"
+splat_id: 2ff515c3-e894-5d67-a93d-c35723700598
+splat_kind: reference
+splat_key: dnd2024:reference/creature/remorhaz
+splat_name: Remorhaz
 splat_pages:
 - 319
 - 320

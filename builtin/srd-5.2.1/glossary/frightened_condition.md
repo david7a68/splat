@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "51c88987-21db-5036-9e89-8176d9159f2b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/frightened_condition"
-splat_name: "Frightened [Condition]"
+splat_id: 51c88987-21db-5036-9e89-8176d9159f2b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/frightened_condition
+splat_name: Frightened [Condition]
 splat_pages:
 - 182
 ---

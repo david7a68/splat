@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ee42e176-ab2d-551a-8b5e-2b71cbda633e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/unicorn"
-splat_name: "Unicorn"
+splat_id: ee42e176-ab2d-551a-8b5e-2b71cbda633e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/unicorn
+splat_name: Unicorn
 splat_pages:
 - 334
 ---

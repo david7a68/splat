@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eeb5b28a-5409-5bc9-9782-d0f5e1d64896"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_healing"
-splat_name: "Staff of Healing"
+splat_id: eeb5b28a-5409-5bc9-9782-d0f5e1d64896
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_healing
+splat_name: Staff of Healing
 splat_pages:
 - 245
 ---

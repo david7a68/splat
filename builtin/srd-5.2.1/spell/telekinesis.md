@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f7a4769c-8cd3-5d71-9b00-09517bcaca6b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/telekinesis"
-splat_name: "Telekinesis"
+splat_id: f7a4769c-8cd3-5d71-9b00-09517bcaca6b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/telekinesis
+splat_name: Telekinesis
 splat_pages:
 - 167
 - 168

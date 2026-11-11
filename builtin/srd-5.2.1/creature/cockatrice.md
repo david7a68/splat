@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a31046ff-5654-57c6-81a7-07efda21f7b1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cockatrice"
-splat_name: "Cockatrice"
+splat_id: a31046ff-5654-57c6-81a7-07efda21f7b1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cockatrice
+splat_name: Cockatrice
 splat_pages:
 - 275
 ---

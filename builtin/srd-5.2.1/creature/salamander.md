@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3fe63e0a-ba68-5d27-8777-16fe1e3e8442"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/salamander"
-splat_name: "Salamander"
+splat_id: 3fe63e0a-ba68-5d27-8777-16fe1e3e8442
+splat_kind: reference
+splat_key: dnd2024:reference/creature/salamander
+splat_name: Salamander
 splat_pages:
 - 321
 ---

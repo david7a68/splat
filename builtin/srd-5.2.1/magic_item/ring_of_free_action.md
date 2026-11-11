@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "04080c4a-51f3-5920-b880-40442a800980"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_free_action"
-splat_name: "Ring of Free Action"
+splat_id: 04080c4a-51f3-5920-b880-40442a800980
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_free_action
+splat_name: Ring of Free Action
 splat_pages:
 - 238
 ---

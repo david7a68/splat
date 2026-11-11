@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "222538a0-90d6-571d-a504-85c02a152494"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/piranha"
-splat_name: "Piranha"
+splat_id: 222538a0-90d6-571d-a504-85c02a152494
+splat_kind: reference
+splat_key: dnd2024:reference/creature/piranha
+splat_name: Piranha
 splat_pages:
 - 358
 ---

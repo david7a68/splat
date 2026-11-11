@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6cb89bef-7a82-5074-9085-817f1e9eefc3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/phase_spider"
-splat_name: "Phase Spider"
+splat_id: 6cb89bef-7a82-5074-9085-817f1e9eefc3
+splat_kind: reference
+splat_key: dnd2024:reference/creature/phase_spider
+splat_name: Phase Spider
 splat_pages:
 - 313
 - 314

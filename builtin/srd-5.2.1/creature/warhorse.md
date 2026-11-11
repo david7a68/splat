@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9d2a18aa-f882-5528-8818-9e0008a63e2a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/warhorse"
-splat_name: "Warhorse"
+splat_id: 9d2a18aa-f882-5528-8818-9e0008a63e2a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/warhorse
+splat_name: Warhorse
 splat_pages:
 - 364
 ---

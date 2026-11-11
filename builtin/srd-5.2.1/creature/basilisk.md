@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "50ede794-8efa-5626-ab42-9ee2a55adf5b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/basilisk"
-splat_name: "Basilisk"
+splat_id: 50ede794-8efa-5626-ab42-9ee2a55adf5b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/basilisk
+splat_name: Basilisk
 splat_pages:
 - 262
 ---

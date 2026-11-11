@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b8332986-4c2a-532f-a883-14610de28305"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/grimlock"
-splat_name: "Grimlock"
+splat_id: b8332986-4c2a-532f-a883-14610de28305
+splat_kind: reference
+splat_key: dnd2024:reference/creature/grimlock
+splat_name: Grimlock
 splat_pages:
 - 296
 ---

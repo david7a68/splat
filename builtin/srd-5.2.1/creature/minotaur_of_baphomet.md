@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1dda8904-87ee-5a3e-8cc4-48dc68c40519"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/minotaur_of_baphomet"
-splat_name: "Minotaur of Baphomet"
+splat_id: 1dda8904-87ee-5a3e-8cc4-48dc68c40519
+splat_kind: reference
+splat_key: dnd2024:reference/creature/minotaur_of_baphomet
+splat_name: Minotaur of Baphomet
 splat_pages:
 - 309
 ---

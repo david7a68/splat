@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2e0c2563-4b28-5222-a1a4-6f6e53f56264"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/death_saving_throw"
-splat_name: "Death Saving Throw"
+splat_id: 2e0c2563-4b28-5222-a1a4-6f6e53f56264
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/death_saving_throw
+splat_name: Death Saving Throw
 splat_pages:
 - 181
 ---

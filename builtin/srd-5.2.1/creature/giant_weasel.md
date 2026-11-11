@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "01682664-0a41-553f-9d37-96ef42ccc545"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_weasel"
-splat_name: "Giant Weasel"
+splat_id: 01682664-0a41-553f-9d37-96ef42ccc545
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_weasel
+splat_name: Giant Weasel
 splat_pages:
 - 355
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "465894c3-999d-5cdd-9870-5154fe0fca0b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/dim_light"
-splat_name: "Dim Light"
+splat_id: 465894c3-999d-5cdd-9870-5154fe0fca0b
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/dim_light
+splat_name: Dim Light
 splat_pages:
 - 181
 ---

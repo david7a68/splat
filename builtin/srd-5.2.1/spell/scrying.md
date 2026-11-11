@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eba306c6-f7b2-59dc-b5dc-1a12651fefa2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/scrying"
-splat_name: "Scrying"
+splat_id: eba306c6-f7b2-59dc-b5dc-1a12651fefa2
+splat_kind: reference
+splat_key: dnd2024:reference/spell/scrying
+splat_name: Scrying
 splat_pages:
 - 160
 ---

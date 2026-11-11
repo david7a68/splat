@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f7a0228c-39e0-52c7-9bff-b3a546258f29"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/geas"
-splat_name: "Geas"
+splat_id: f7a0228c-39e0-52c7-9bff-b3a546258f29
+splat_kind: reference
+splat_key: dnd2024:reference/spell/geas
+splat_name: Geas
 splat_pages:
 - 135
 ---

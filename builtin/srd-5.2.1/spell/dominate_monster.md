@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "87f6d09b-291f-530d-a8da-9fe6f77ab3b8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dominate_monster"
-splat_name: "Dominate Monster"
+splat_id: 87f6d09b-291f-530d-a8da-9fe6f77ab3b8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dominate_monster
+splat_name: Dominate Monster
 splat_pages:
 - 125
 - 126

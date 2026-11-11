@@ -26,7 +26,8 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
-pub const VERSION: u32 = 1;
+/// The version of a cached record. Version 1 also held a note schema number in its definition.
+pub const VERSION: u32 = 2;
 pub const ABILITIES: [&str; 6] = [
     "strength",
     "dexterity",
@@ -39,7 +40,6 @@ pub const ABILITIES: [&str; 6] = [
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreatureDefinition {
-    pub splat_schema: u32,
     pub splat_id: Uuid,
     pub splat_kind: String,
     pub splat_name: String,
@@ -503,7 +503,6 @@ impl EntitySnapshot {
         let record = Self {
             version: VERSION,
             definition: CreatureDefinition {
-                splat_schema: 1,
                 splat_id: entity_id,
                 splat_kind: "creature".into(),
                 splat_name: name.into(),
@@ -569,7 +568,6 @@ impl EntitySnapshot {
     }
     pub fn validate(&self) -> Result<(), String> {
         if self.version != VERSION
-            || self.definition.splat_schema != 1
             || self.definition.splat_kind != "creature"
             || self.source.provider != "dndbeyond"
         {

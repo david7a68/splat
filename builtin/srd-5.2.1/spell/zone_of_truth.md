@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0e6e5257-0ee3-5716-bbf4-e98727738d6f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/zone_of_truth"
-splat_name: "Zone of Truth"
+splat_id: 0e6e5257-0ee3-5716-bbf4-e98727738d6f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/zone_of_truth
+splat_name: Zone of Truth
 splat_pages:
 - 175
 ---

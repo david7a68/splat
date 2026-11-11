@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "11a4bfbf-4a8a-5fdc-8dc9-2e5b9e8e7970"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/dust_mephit"
-splat_name: "Dust Mephit"
+splat_id: 11a4bfbf-4a8a-5fdc-8dc9-2e5b9e8e7970
+splat_kind: reference
+splat_key: dnd2024:reference/creature/dust_mephit
+splat_name: Dust Mephit
 splat_pages:
 - 307
 ---

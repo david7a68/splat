@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5223544c-486a-5f86-8438-a2fd6a32ee31"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_seahorse"
-splat_name: "Giant Seahorse"
+splat_id: 5223544c-486a-5f86-8438-a2fd6a32ee31
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_seahorse
+splat_name: Giant Seahorse
 splat_pages:
 - 353
 ---

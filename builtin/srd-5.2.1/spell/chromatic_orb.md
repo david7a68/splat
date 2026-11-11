@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2d6302fa-b3e3-594e-b97c-4e27df61f7e6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/chromatic_orb"
-splat_name: "Chromatic Orb"
+splat_id: 2d6302fa-b3e3-594e-b97c-4e27df61f7e6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/chromatic_orb
+splat_name: Chromatic Orb
 splat_pages:
 - 115
 ---

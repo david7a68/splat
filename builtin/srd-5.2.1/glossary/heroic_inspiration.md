@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0f55cd9b-1511-5037-b5a0-a9267d384008"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/heroic_inspiration"
-splat_name: "Heroic Inspiration"
+splat_id: 0f55cd9b-1511-5037-b5a0-a9267d384008
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/heroic_inspiration
+splat_name: Heroic Inspiration
 splat_pages:
 - 183
 ---

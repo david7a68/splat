@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "09f8abdd-7730-559b-9dc5-7290aa73ac35"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/amulet_of_proof_against_detection_and_location"
-splat_name: "Amulet of Proof against Detection and Location"
+splat_id: 09f8abdd-7730-559b-9dc5-7290aa73ac35
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/amulet_of_proof_against_detection_and_location
+splat_name: Amulet of Proof against Detection and Location
 splat_pages:
 - 209
 ---

@@ -53,13 +53,7 @@ pub(super) fn spell_identity(definition: &Value) -> String {
     format!("spell:{source}")
 }
 fn note(fields: Value, body: &str) -> Result<String, String> {
-    crate::content::formats::convert(
-        "Import.md",
-        &format!(
-            "---\n{}---\n\n{body}\n",
-            serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
-        ),
-    )
+    super::rules::written("Import.md", &fields, body)
 }
 
 pub(super) fn character_filename(name: &str) -> String {
@@ -101,7 +95,8 @@ fn import(gaps: Vec<Gap>) -> Value {
 
 impl EntitySnapshot {
     /// The final note is the creature; preceding notes are its campaign-owned dependencies.
-    /// Used by both fresh reads and version-1 caches, so migration requires no network request.
+    /// Used by both fresh reads and cached records, so publishing from the cache requires no
+    /// network request.
     ///
     /// The notes depend only on the snapshot and the built-in rules. One load and save asks
     /// for them several times (validate, route, save), so the last few are remembered.
@@ -451,7 +446,7 @@ impl EntitySnapshot {
             if shared.is_some() {
                 continue;
             }
-            let mut item_fields = json!({"splat_schema":1,"splat_id":def_id,"splat_kind":"item","splat_name":item.name,"splat_item":{"category":if d["isConsumable"]==true {"consumable".into()}else{key(string(&d["filterType"]))},"stackable":d["stackable"]==true,"equipment":{"allowed":["carried","stored","worn","wielded"],"attunement":if d["canAttune"]==true {"required"}else{"none"}}}});
+            let mut item_fields = json!({"splat_id":def_id,"splat_kind":"item","splat_name":item.name,"splat_item":{"category":if d["isConsumable"]==true {"consumable".into()}else{key(string(&d["filterType"]))},"stackable":d["stackable"]==true,"equipment":{"allowed":["carried","stored","worn","wielded"],"attunement":if d["canAttune"]==true {"required"}else{"none"}}}});
             if let Some(weight) = d["weight"].as_f64() {
                 item_fields["splat_item"]["mass"] = json!({"value":weight,"unit":"lb"});
             }
@@ -542,7 +537,7 @@ impl EntitySnapshot {
                     _ => "unknown",
                 })
                 .collect::<Vec<_>>();
-            let spell_fields = json!({"splat_schema":1,"splat_id":def_id,"splat_kind":"spell","splat_name":name,"splat_spell":{"level":d["level"],"school":key(string(&d["school"])),"components":components,"material":string(&d["componentsDescription"]),"concentration":d["concentration"]==true,"ritual":d["ritual"]==true,"duration":duration(&d["duration"]),"casting_time":{"amount":d["activation"]["activationTime"].as_u64(),"unit":activation(&d["activation"])},"range":{"feet":d["range"]["rangeValue"],"origin":string(&d["range"]["origin"])}},"splat_import":import(vec![Gap{path:"splat_spell".into(),reason:format!("{name}: casting facts and description imported; spell resolution requires conversion.")}])});
+            let spell_fields = json!({"splat_id":def_id,"splat_kind":"spell","splat_name":name,"splat_spell":{"level":d["level"],"school":key(string(&d["school"])),"components":components,"material":string(&d["componentsDescription"]),"concentration":d["concentration"]==true,"ritual":d["ritual"]==true,"duration":duration(&d["duration"]),"casting_time":{"amount":d["activation"]["activationTime"].as_u64(),"unit":activation(&d["activation"])},"range":{"feet":d["range"]["rangeValue"],"origin":string(&d["range"]["origin"])}},"splat_import":import(vec![Gap{path:"splat_spell".into(),reason:format!("{name}: casting facts and description imported; spell resolution requires conversion.")}])});
             let markdown = note(
                 spell_fields,
                 &format!("# {name}\n\n{}", prose(&d["description"])),

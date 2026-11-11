@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6ac9ff2c-e5c9-5e3b-be0c-9165062baf58"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/harm"
-splat_name: "Harm"
+splat_id: 6ac9ff2c-e5c9-5e3b-be0c-9165062baf58
+splat_kind: reference
+splat_key: dnd2024:reference/spell/harm
+splat_name: Harm
 splat_pages:
 - 139
 ---

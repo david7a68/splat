@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0480e332-4e7d-5e6e-97db-70b932bda82e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_venomous_snakes"
-splat_name: "Swarm of Venomous Snakes"
+splat_id: 0480e332-4e7d-5e6e-97db-70b932bda82e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_venomous_snakes
+splat_name: Swarm of Venomous Snakes
 splat_pages:
 - 362
 - 363

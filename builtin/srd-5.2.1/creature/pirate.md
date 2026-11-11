@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "368ce3c6-213f-5d02-80e1-5c4f21244764"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pirate"
-splat_name: "Pirate"
+splat_id: 368ce3c6-213f-5d02-80e1-5c4f21244764
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pirate
+splat_name: Pirate
 splat_pages:
 - 314
 ---

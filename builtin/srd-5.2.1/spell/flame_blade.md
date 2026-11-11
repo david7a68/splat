@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4f6b3626-bf53-5c6b-80c4-9f981d3c85c6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/flame_blade"
-splat_name: "Flame Blade"
+splat_id: 4f6b3626-bf53-5c6b-80c4-9f981d3c85c6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/flame_blade
+splat_name: Flame Blade
 splat_pages:
 - 132
 ---

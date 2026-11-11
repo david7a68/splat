@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d71d3a55-f127-5a02-83cb-946f4e81742e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/concentration"
-splat_name: "Concentration"
+splat_id: d71d3a55-f127-5a02-83cb-946f4e81742e
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/concentration
+splat_name: Concentration
 splat_pages:
 - 179
 ---

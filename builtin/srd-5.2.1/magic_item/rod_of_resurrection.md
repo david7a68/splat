@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cf920082-8d62-507f-9941-61135f7dcf46"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_resurrection"
-splat_name: "Rod of Resurrection"
+splat_id: cf920082-8d62-507f-9941-61135f7dcf46
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_resurrection
+splat_name: Rod of Resurrection
 splat_pages:
 - 242
 ---

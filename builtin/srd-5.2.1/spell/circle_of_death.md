@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2c26a508-6f86-5a12-b9a2-2fc8d5c2e0f5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/circle_of_death"
-splat_name: "Circle of Death"
+splat_id: 2c26a508-6f86-5a12-b9a2-2fc8d5c2e0f5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/circle_of_death
+splat_name: Circle of Death
 splat_pages:
 - 115
 ---

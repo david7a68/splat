@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "84e06d00-c92f-51ee-adea-d3cb3b0f202b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/alarm"
-splat_name: "Alarm"
+splat_id: 84e06d00-c92f-51ee-adea-d3cb3b0f202b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/alarm
+splat_name: Alarm
 splat_pages:
 - 107
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "52e7f3f7-f10f-5d52-bcb5-ed5d8b817183"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_constrictor_snake"
-splat_name: "Giant Constrictor Snake"
+splat_id: 52e7f3f7-f10f-5d52-bcb5-ed5d8b817183
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_constrictor_snake
+splat_name: Giant Constrictor Snake
 splat_pages:
 - 350
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6fab51cd-7532-59af-ba6e-e3bd1eb17b56"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/true_strike"
-splat_name: "True Strike"
+splat_id: 6fab51cd-7532-59af-ba6e-e3bd1eb17b56
+splat_kind: reference
+splat_key: dnd2024:reference/spell/true_strike
+splat_name: True Strike
 splat_pages:
 - 171
 ---

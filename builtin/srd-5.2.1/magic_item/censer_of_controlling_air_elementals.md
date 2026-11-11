@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f170914d-2ae1-5bc5-acf9-c2bf0957dab8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/censer_of_controlling_air_elementals"
-splat_name: "Censer of Controlling Air Elementals"
+splat_id: f170914d-2ae1-5bc5-acf9-c2bf0957dab8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/censer_of_controlling_air_elementals
+splat_name: Censer of Controlling Air Elementals
 splat_pages:
 - 215
 ---

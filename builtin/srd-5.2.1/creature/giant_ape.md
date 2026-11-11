@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "621b4ac5-b77a-5479-b72a-2f9371ead7b0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_ape"
-splat_name: "Giant Ape"
+splat_id: 621b4ac5-b77a-5479-b72a-2f9371ead7b0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_ape
+splat_name: Giant Ape
 splat_pages:
 - 349
 ---

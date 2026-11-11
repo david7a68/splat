@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "856ac15d-ce6c-57a2-aec7-a82b90982847"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/noble"
-splat_name: "Noble"
+splat_id: 856ac15d-ce6c-57a2-aec7-a82b90982847
+splat_kind: reference
+splat_key: dnd2024:reference/creature/noble
+splat_name: Noble
 splat_pages:
 - 312
 ---

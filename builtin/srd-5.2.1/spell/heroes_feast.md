@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4f99e20b-3309-57c0-93db-4c29797781f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/heroes_feast"
-splat_name: "Heroes’ Feast"
+splat_id: 4f99e20b-3309-57c0-93db-4c29797781f0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/heroes_feast
+splat_name: Heroes’ Feast
 splat_pages:
 - 140
 ---

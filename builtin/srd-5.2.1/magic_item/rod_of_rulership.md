@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3a3f2984-a7cb-57b0-b8b0-f262d972a5a9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_rulership"
-splat_name: "Rod of Rulership"
+splat_id: 3a3f2984-a7cb-57b0-b8b0-f262d972a5a9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_rulership
+splat_name: Rod of Rulership
 splat_pages:
 - 242
 ---

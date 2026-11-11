@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8b3c29b8-4b97-5adb-84e9-cc25db11fe50"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/befuddlement"
-splat_name: "Befuddlement"
+splat_id: 8b3c29b8-4b97-5adb-84e9-cc25db11fe50
+splat_kind: reference
+splat_key: dnd2024:reference/spell/befuddlement
+splat_name: Befuddlement
 splat_pages:
 - 112
 ---

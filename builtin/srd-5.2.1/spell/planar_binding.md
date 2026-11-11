@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f586e11d-2508-5769-836a-387b8e4409c2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/planar_binding"
-splat_name: "Planar Binding"
+splat_id: f586e11d-2508-5769-836a-387b8e4409c2
+splat_kind: reference
+splat_key: dnd2024:reference/spell/planar_binding
+splat_name: Planar Binding
 splat_pages:
 - 152
 - 153

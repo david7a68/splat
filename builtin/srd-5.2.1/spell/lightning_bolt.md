@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f89af94f-b729-590c-959d-e21031af7168"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/lightning_bolt"
-splat_name: "Lightning Bolt"
+splat_id: f89af94f-b729-590c-959d-e21031af7168
+splat_kind: reference
+splat_key: dnd2024:reference/spell/lightning_bolt
+splat_name: Lightning Bolt
 splat_pages:
 - 144
 ---

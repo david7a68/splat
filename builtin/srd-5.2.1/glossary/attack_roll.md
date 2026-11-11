@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "347ca15e-11b0-5546-9e78-c09f43fd1cf8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/attack_roll"
-splat_name: "Attack Roll"
+splat_id: 347ca15e-11b0-5546-9e78-c09f43fd1cf8
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/attack_roll
+splat_name: Attack Roll
 splat_pages:
 - 177
 ---

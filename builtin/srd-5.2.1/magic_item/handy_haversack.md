@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "524f784c-11d1-507f-b8d0-e3818c20b02b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/handy_haversack"
-splat_name: "Handy Haversack"
+splat_id: 524f784c-11d1-507f-b8d0-e3818c20b02b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/handy_haversack
+splat_name: Handy Haversack
 splat_pages:
 - 224
 ---

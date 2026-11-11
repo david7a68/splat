@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1cb80abf-9ab7-5ca3-a238-4a728130a76a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/incapacitated_condition"
-splat_name: "Incapacitated [Condition]"
+splat_id: 1cb80abf-9ab7-5ca3-a238-4a728130a76a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/incapacitated_condition
+splat_name: Incapacitated [Condition]
 splat_pages:
 - 184
 ---

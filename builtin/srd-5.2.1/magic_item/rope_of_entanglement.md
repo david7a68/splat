@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e64f6ff0-2c12-5ee7-90d6-d783b7c90df1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rope_of_entanglement"
-splat_name: "Rope of Entanglement"
+splat_id: e64f6ff0-2c12-5ee7-90d6-d783b7c90df1
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rope_of_entanglement
+splat_name: Rope of Entanglement
 splat_pages:
 - 242
 - 243

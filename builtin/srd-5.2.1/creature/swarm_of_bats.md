@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fb1251d7-09f9-594f-b1d9-bb2e7ec3079f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_bats"
-splat_name: "Swarm of Bats"
+splat_id: fb1251d7-09f9-594f-b1d9-bb2e7ec3079f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_bats
+splat_name: Swarm of Bats
 splat_pages:
 - 361
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6f8bb22f-706c-5645-80c4-063ab3c76b7c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/black_dragon_wyrmling"
-splat_name: "Black Dragon Wyrmling"
+splat_id: 6f8bb22f-706c-5645-80c4-063ab3c76b7c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/black_dragon_wyrmling
+splat_name: Black Dragon Wyrmling
 splat_pages:
 - 263
 - 264

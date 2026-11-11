@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "71cff4a0-abb8-5244-af04-9c86cc27d036"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/heavily_obscured"
-splat_name: "Heavily Obscured"
+splat_id: 71cff4a0-abb8-5244-af04-9c86cc27d036
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/heavily_obscured
+splat_name: Heavily Obscured
 splat_pages:
 - 182
 ---

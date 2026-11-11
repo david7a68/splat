@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ba0a2ef6-5567-5e22-b8c3-7084663ec5a4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/spider_climb"
-splat_name: "Spider Climb"
+splat_id: ba0a2ef6-5567-5e22-b8c3-7084663ec5a4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/spider_climb
+splat_name: Spider Climb
 splat_pages:
 - 164
 ---

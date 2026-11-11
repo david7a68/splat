@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4279cb4a-ab6c-5572-bffe-dd4ee899dd93"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/search_action"
-splat_name: "Search [Action]"
+splat_id: 4279cb4a-ab6c-5572-bffe-dd4ee899dd93
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/search_action
+splat_name: Search [Action]
 splat_pages:
 - 187
 ---

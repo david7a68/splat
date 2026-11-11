@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c8e39728-1ceb-54c8-a970-a58f823aed94"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/holy_aura"
-splat_name: "Holy Aura"
+splat_id: c8e39728-1ceb-54c8-a970-a58f823aed94
+splat_kind: reference
+splat_key: dnd2024:reference/spell/holy_aura
+splat_name: Holy Aura
 splat_pages:
 - 141
 ---

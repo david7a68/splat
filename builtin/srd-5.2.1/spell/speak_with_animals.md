@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "757d8b56-8d30-5c9e-ad61-b46acd157352"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/speak_with_animals"
-splat_name: "Speak with Animals"
+splat_id: 757d8b56-8d30-5c9e-ad61-b46acd157352
+splat_kind: reference
+splat_key: dnd2024:reference/spell/speak_with_animals
+splat_name: Speak with Animals
 splat_pages:
 - 164
 ---

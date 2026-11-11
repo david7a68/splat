@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cd0bdbea-955b-5a5e-bfe2-7574819e3a80"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/bright_light"
-splat_name: "Bright Light"
+splat_id: cd0bdbea-955b-5a5e-bfe2-7574819e3a80
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/bright_light
+splat_name: Bright Light
 splat_pages:
 - 178
 ---

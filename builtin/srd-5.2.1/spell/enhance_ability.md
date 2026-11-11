@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2af27ed0-b1f1-5883-b578-7b877415ef43"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/enhance_ability"
-splat_name: "Enhance Ability"
+splat_id: 2af27ed0-b1f1-5883-b578-7b877415ef43
+splat_kind: reference
+splat_key: dnd2024:reference/spell/enhance_ability
+splat_name: Enhance Ability
 splat_pages:
 - 127
 ---

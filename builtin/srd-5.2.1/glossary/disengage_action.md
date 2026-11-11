@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fb357331-dc41-583f-8186-46e8c4b2eae5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/disengage_action"
-splat_name: "Disengage [Action]"
+splat_id: fb357331-dc41-583f-8186-46e8c4b2eae5
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/disengage_action
+splat_name: Disengage [Action]
 splat_pages:
 - 181
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4bf03eaf-ace9-55af-add5-f99efd5bd042"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/animated_shield"
-splat_name: "Animated Shield"
+splat_id: 4bf03eaf-ace9-55af-add5-f99efd5bd042
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/animated_shield
+splat_name: Animated Shield
 splat_pages:
 - 209
 ---

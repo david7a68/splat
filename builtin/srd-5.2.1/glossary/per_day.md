@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6c8d6297-f1bd-509e-a611-3822b3cf1f9d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/per_day"
-splat_name: "Per Day"
+splat_id: 6c8d6297-f1bd-509e-a611-3822b3cf1f9d
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/per_day
+splat_name: Per Day
 splat_pages:
 - 186
 ---

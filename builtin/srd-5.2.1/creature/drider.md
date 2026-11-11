@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0daa2b5e-6047-5597-b586-7961e5bdd07b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/drider"
-splat_name: "Drider"
+splat_id: 0daa2b5e-6047-5597-b586-7961e5bdd07b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/drider
+splat_name: Drider
 splat_pages:
 - 281
 ---

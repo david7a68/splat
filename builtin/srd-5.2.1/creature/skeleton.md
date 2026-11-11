@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a42d1acd-7767-5e82-ab03-663ab89ccc0e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/skeleton"
-splat_name: "Skeleton"
+splat_id: a42d1acd-7767-5e82-ab03-663ab89ccc0e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/skeleton
+splat_name: Skeleton
 splat_pages:
 - 325
 - 326

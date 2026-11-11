@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5bfcb6e4-9305-50b1-909e-a6306e814858"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sequester"
-splat_name: "Sequester"
+splat_id: 5bfcb6e4-9305-50b1-909e-a6306e814858
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sequester
+splat_name: Sequester
 splat_pages:
 - 161
 ---

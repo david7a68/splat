@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "41c51c5f-93fa-5475-be6d-a8d13407ccb1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/prayer_of_healing"
-splat_name: "Prayer of Healing"
+splat_id: 41c51c5f-93fa-5475-be6d-a8d13407ccb1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/prayer_of_healing
+splat_name: Prayer of Healing
 splat_pages:
 - 154
 ---

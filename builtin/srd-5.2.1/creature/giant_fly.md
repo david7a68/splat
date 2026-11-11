@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a18d3ef3-a588-58bd-a1c9-f4655b486afd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_fly"
-splat_name: "Giant Fly"
+splat_id: a18d3ef3-a588-58bd-a1c9-f4655b486afd
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_fly
+splat_name: Giant Fly
 splat_pages:
 - 222
 ---

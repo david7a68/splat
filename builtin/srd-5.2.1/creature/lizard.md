@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c22e0808-0139-55d7-b4ff-fe643594edb3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/lizard"
-splat_name: "Lizard"
+splat_id: c22e0808-0139-55d7-b4ff-fe643594edb3
+splat_kind: reference
+splat_key: dnd2024:reference/creature/lizard
+splat_name: Lizard
 splat_pages:
 - 357
 ---

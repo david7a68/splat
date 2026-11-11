@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4398d204-0929-5b75-8966-41408466ed1a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/detect_poison_and_disease"
-splat_name: "Detect Poison and Disease"
+splat_id: 4398d204-0929-5b75-8966-41408466ed1a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/detect_poison_and_disease
+splat_name: Detect Poison and Disease
 splat_pages:
 - 123
 ---

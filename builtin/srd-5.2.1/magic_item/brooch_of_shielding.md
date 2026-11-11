@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2b3e1c65-6817-5533-a0cc-b824d3093466"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/brooch_of_shielding"
-splat_name: "Brooch of Shielding"
+splat_id: 2b3e1c65-6817-5533-a0cc-b824d3093466
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/brooch_of_shielding
+splat_name: Brooch of Shielding
 splat_pages:
 - 214
 ---

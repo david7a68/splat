@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b52163a-d5c4-5446-921e-76437e403e7c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/quarterstaff_of_the_acrobat"
-splat_name: "Quarterstaff of the Acrobat"
+splat_id: 9b52163a-d5c4-5446-921e-76437e403e7c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/quarterstaff_of_the_acrobat
+splat_name: Quarterstaff of the Acrobat
 splat_pages:
 - 237
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0108d6dd-f138-5ab7-9d24-d10543b3706b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_piranhas"
-splat_name: "Swarm of Piranhas"
+splat_id: 0108d6dd-f138-5ab7-9d24-d10543b3706b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_piranhas
+splat_name: Swarm of Piranhas
 splat_pages:
 - 362
 ---

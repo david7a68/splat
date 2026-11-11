@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5160a144-0ce9-550e-9707-3ecb9761ae23"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/armor_training"
-splat_name: "Armor Training"
+splat_id: 5160a144-0ce9-550e-9707-3ecb9761ae23
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/armor_training
+splat_name: Armor Training
 splat_pages:
 - 177
 ---

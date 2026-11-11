@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "62f16505-c731-5e40-82bc-06f586cf889a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/maze"
-splat_name: "Maze"
+splat_id: 62f16505-c731-5e40-82bc-06f586cf889a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/maze
+splat_name: Maze
 splat_pages:
 - 148
 ---

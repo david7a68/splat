@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0d5affe1-2bd7-5947-8a60-7592eeaa446d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/planar_ally"
-splat_name: "Planar Ally"
+splat_id: 0d5affe1-2bd7-5947-8a60-7592eeaa446d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/planar_ally
+splat_name: Planar Ally
 splat_pages:
 - 152
 ---

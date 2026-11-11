@@ -1,32 +1,41 @@
 # Markdown content layout
 
-Schema 1 accepts data in frontmatter or explicitly marked body sections. The
-reader combines them before shape, reference and execution checks. Older notes
-remain valid. The body is preserved exactly; reading does not rewrite a file.
+A note holds its data in flat properties, in the readable sections of its kind,
+and in explicitly marked body sections. The reader combines them into one note
+model before shape, reference and execution checks. The body is preserved
+exactly; reading does not rewrite a file.
 
 Keep identity, namespaced key, kind, name, schema version, origin, source
-citations and tags in frontmatter. Put readable descriptions in ordinary
-Markdown. Game fields belong in marked tables or local YAML blocks. Headings
-have no parsing role: users can rename, move and fold them in Obsidian.
+citations and tags in properties. Put readable descriptions in ordinary
+Markdown. A creature's stats are in its `Stat block` tables. A spell's or item's
+fields are in its `Spell` or `Item` table. Other game fields belong in marked
+tables or local YAML blocks. Splat writes a field that has no readable form as
+a YAML block in a folded **Splat data** callout at the end of the note. The
+headings above marked tables and blocks have no parsing role: users can rename,
+move and fold them in Obsidian.
 
 ## Optional reading summaries
 
-`splat_reading` holds edited reading text in frontmatter. It does not change an
+`splat_reading` holds edited reading text. Splat writes it as a marked YAML
+block in the Splat data callout. It does not change an
 entry's identity, mechanical specification, execution status, or required
 references. The library uses it when present and otherwise keeps the ordinary
 reader. Published wording remains under **Source text**.
 
-```yaml
-splat_reading:
-  title: Bard Subclass
-  summary: |-
-    Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+````markdown
+<!-- splat:yaml path=splat_reading -->
 
-    You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
-  related_heading: Available in this package
-  related:
-    dnd2024:subclasses/bard_college_of_lore: College of Lore
+```yaml
+title: Bard Subclass
+summary: |-
+  Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+
+  You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
+related_heading: Available in this package
+related:
+  dnd2024:subclasses/bard_college_of_lore: College of Lore
 ```
+````
 
 Title and summary are required nonempty strings. `related` is an optional map
 from resource keys or UUIDs to display labels; `related_heading` defaults to
@@ -132,32 +141,39 @@ Generated Details columns link to Obsidian block anchors. Their link titles use
 `section:<row_key>` to keep navigation tied to a stable row. Section links do not
 supply rules; the marked YAML blocks do.
 
-The converter selects tables from record shapes. Variants, pack contents,
+The SRD definition generator (`scripts/convert_srd_definitions.py`) selects
+tables from record shapes. Variants, pack contents,
 spell lists and simple roll results share this mechanism. Branching action
 sequences and wide records retain YAML or the existing table layout. Checked
 source-specific presentation boundaries remove duplicated source tables while
 retaining descriptive prose and citations; the original pinned source remains.
 
-## Legacy marked tables
+## Field-name marked tables
 
-Each marker must immediately precede its table, with optional blank lines.
+The reader also accepts four simpler table markers. The built-in SRD notes use
+the values and rows forms. Each marker must immediately precede its table, with
+optional blank lines.
 Paths address schema fields inside this note, not files or entry IDs. Separate
 path components with `/`. Local map keys use the existing lowercase key grammar.
 
-A values table fills a mapping. Column labels in the legacy formats are exact schema syntax:
+These markers do not supply a creature's `splat_stats`, a spell's `splat_spell`
+or an item's `splat_item`. The `Stat block`, `Spell` and `Item` tables supply
+those fields. The reader ignores a marker that addresses them and flags it:
+`Unused data ignored`.
+
+A values table fills a mapping. Column labels in these formats are exact field names:
 
 ```markdown
-<!-- splat:values path=splat_spell -->
+<!-- splat:values path=splat_rule/parameters/feature_grant_policy -->
 
 | Field | Value |
 | --- | --- |
-| level | 3 |
-| school | evocation |
-| concentration | false |
-| classes | [sorcerer, wizard] |
+| class_level_at_least_feature_level | true |
+| events | ["subclass.selected", "character.level_gained"] |
+| persistent | true |
 ```
 
-A map table fills keyed records. This works for stats, resource pools, charges,
+A map table fills keyed records. This works for resource pools, charges,
 and other maps with simple columns. Empty cells omit optional fields.
 
 ```markdown
@@ -171,7 +187,8 @@ and other maps with simple columns. Empty cells omit optional fields.
 
 An abilities table supplies scores and optional total save overrides. A blank
 save leaves it absent; it does not set zero. Supplied saves replace the normal
-calculation before external modifiers.
+calculation before external modifiers. Use it in a note that is not a creature;
+a creature's scores and saves are in its `Stat block` tables.
 
 ```markdown
 <!-- splat:abilities path=splat_stats -->
@@ -256,5 +273,5 @@ embedded catalogue's strict report, provenance and fingerprint checks.
 The source excerpt appears once in the body under Source text. It is reference
 material, not a second editable mechanics store. The old `splat_clauses.text`
 copy is omitted. Source excerpts and the pinned PDF remain available separately
-for source review. Research input files remain the converter's authored inputs;
+for source review. Research input files remain the generator's authored inputs;
 manual changes to generated notes are protected against silent overwrite.

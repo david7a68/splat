@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d2aa3387-0033-5d7a-b308-7eff736b1cff"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_secrets"
-splat_name: "Wand of Secrets"
+splat_id: d2aa3387-0033-5d7a-b308-7eff736b1cff
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_secrets
+splat_name: Wand of Secrets
 splat_pages:
 - 251
 ---

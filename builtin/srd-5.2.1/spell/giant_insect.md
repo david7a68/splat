@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "66cccf5c-57f5-557a-9414-1a038e928d4c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/giant_insect"
-splat_name: "Giant Insect"
+splat_id: 66cccf5c-57f5-557a-9414-1a038e928d4c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/giant_insect
+splat_name: Giant Insect
 splat_pages:
 - 135
 - 136

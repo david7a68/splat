@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5732163a-d768-5639-a78f-86adf25dc235"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/amulet_of_the_planes"
-splat_name: "Amulet of the Planes"
+splat_id: 5732163a-d768-5639-a78f-86adf25dc235
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/amulet_of_the_planes
+splat_name: Amulet of the Planes
 splat_pages:
 - 209
 ---

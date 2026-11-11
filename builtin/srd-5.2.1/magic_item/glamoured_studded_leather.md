@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f2705340-19f4-5183-94e3-cf9d1519842b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/glamoured_studded_leather"
-splat_name: "Glamoured Studded Leather"
+splat_id: f2705340-19f4-5183-94e3-cf9d1519842b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/glamoured_studded_leather
+splat_name: Glamoured Studded Leather
 splat_pages:
 - 223
 - 224

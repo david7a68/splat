@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cc47f163-2bc9-5a68-a171-cbfd80ddd978"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/troll_limb"
-splat_name: "Troll Limb"
+splat_id: cc47f163-2bc9-5a68-a171-cbfd80ddd978
+splat_kind: reference
+splat_key: dnd2024:reference/creature/troll_limb
+splat_name: Troll Limb
 splat_pages:
 - 333
 ---

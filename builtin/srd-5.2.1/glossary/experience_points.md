@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0f31f092-570d-5b7e-b563-90ab64685d41"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/experience_points"
-splat_name: "Experience Points"
+splat_id: 0f31f092-570d-5b7e-b563-90ab64685d41
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/experience_points
+splat_name: Experience Points
 splat_pages:
 - 182
 ---

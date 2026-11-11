@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6fcdbc6d-b73e-5efe-a7c4-64b8cae256ef"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_climbing"
-splat_name: "Potion of Climbing"
+splat_id: 6fcdbc6d-b73e-5efe-a7c4-64b8cae256ef
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_climbing
+splat_name: Potion of Climbing
 splat_pages:
 - 235
 ---

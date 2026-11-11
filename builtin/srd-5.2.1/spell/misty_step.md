@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eaf408f5-0865-5672-b0ba-f0f44bdb3a4e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/misty_step"
-splat_name: "Misty Step"
+splat_id: eaf408f5-0865-5672-b0ba-f0f44bdb3a4e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/misty_step
+splat_name: Misty Step
 splat_pages:
 - 150
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e186b1c2-88cc-5c27-b4ce-a66adcae1ab2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/malnutrition_hazard"
-splat_name: "Malnutrition [Hazard]"
+splat_id: e186b1c2-88cc-5c27-b4ce-a66adcae1ab2
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/malnutrition_hazard
+splat_name: Malnutrition [Hazard]
 splat_pages:
 - 185
 ---

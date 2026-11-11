@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60f325f6-957d-5ad0-8903-4dcbf14b9049"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magic_missile"
-splat_name: "Magic Missile"
+splat_id: 60f325f6-957d-5ad0-8903-4dcbf14b9049
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magic_missile
+splat_name: Magic Missile
 splat_pages:
 - 146
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ae0f1d6a-03cf-56e4-8934-968b235fb692"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/gust_of_wind"
-splat_name: "Gust of Wind"
+splat_id: ae0f1d6a-03cf-56e4-8934-968b235fb692
+splat_kind: reference
+splat_key: dnd2024:reference/spell/gust_of_wind
+splat_name: Gust of Wind
 splat_pages:
 - 138
 ---

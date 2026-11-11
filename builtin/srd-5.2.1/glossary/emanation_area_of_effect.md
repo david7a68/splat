@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "24b6af9c-f156-5fa1-aad4-495f6c504545"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/emanation_area_of_effect"
-splat_name: "Emanation [Area of Effect]"
+splat_id: 24b6af9c-f156-5fa1-aad4-495f6c504545
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/emanation_area_of_effect
+splat_name: Emanation [Area of Effect]
 splat_pages:
 - 181
 ---

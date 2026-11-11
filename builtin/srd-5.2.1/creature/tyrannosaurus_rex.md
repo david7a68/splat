@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "472a50a8-e92b-59ca-9d24-606b7af0344a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/tyrannosaurus_rex"
-splat_name: "Tyrannosaurus Rex"
+splat_id: 472a50a8-e92b-59ca-9d24-606b7af0344a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/tyrannosaurus_rex
+splat_name: Tyrannosaurus Rex
 splat_pages:
 - 363
 ---

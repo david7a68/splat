@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e2c4abae-2408-56dc-8a3a-1838f7019b82"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/deer"
-splat_name: "Deer"
+splat_id: e2c4abae-2408-56dc-8a3a-1838f7019b82
+splat_kind: reference
+splat_key: dnd2024:reference/creature/deer
+splat_name: Deer
 splat_pages:
 - 347
 ---

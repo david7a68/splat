@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6e99fcf7-d0d1-59e2-b898-4d0fd8e90ebe"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/instant_summons"
-splat_name: "Instant Summons"
+splat_id: 6e99fcf7-d0d1-59e2-b898-4d0fd8e90ebe
+splat_kind: reference
+splat_key: dnd2024:reference/spell/instant_summons
+splat_name: Instant Summons
 splat_pages:
 - 143
 ---

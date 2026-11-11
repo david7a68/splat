@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "21edecfa-298c-58a6-92ba-0901d143dd87"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/unarmed_strike"
-splat_name: "Unarmed Strike"
+splat_id: 21edecfa-298c-58a6-92ba-0901d143dd87
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/unarmed_strike
+splat_name: Unarmed Strike
 splat_pages:
 - 190
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ff978c05-487c-5185-884e-4ba01aa909c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potions_of_healing"
-splat_name: "Potions of Healing"
+splat_id: ff978c05-487c-5185-884e-4ba01aa909c9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potions_of_healing
+splat_name: Potions of Healing
 splat_pages:
 - 236
 ---

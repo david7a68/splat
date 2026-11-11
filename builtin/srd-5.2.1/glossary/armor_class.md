@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "541fdf1e-88a0-5b66-acc8-0c97a2b2935f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/armor_class"
-splat_name: "Armor Class"
+splat_id: 541fdf1e-88a0-5b66-acc8-0c97a2b2935f
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/armor_class
+splat_name: Armor Class
 splat_pages:
 - 177
 ---

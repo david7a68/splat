@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "31979834-2a58-5cc6-a7cf-0373df91e306"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/deafened_condition"
-splat_name: "Deafened [Condition]"
+splat_id: 31979834-2a58-5cc6-a7cf-0373df91e306
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/deafened_condition
+splat_name: Deafened [Condition]
 splat_pages:
 - 181
 ---

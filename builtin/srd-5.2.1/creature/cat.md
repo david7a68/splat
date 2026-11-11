@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c2acc409-204b-5a69-8804-47de5b53a83e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cat"
-splat_name: "Cat"
+splat_id: c2acc409-204b-5a69-8804-47de5b53a83e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cat
+splat_name: Cat
 splat_pages:
 - 346
 ---

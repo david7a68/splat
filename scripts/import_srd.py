@@ -11,7 +11,7 @@ import tempfile
 import urllib.request
 import uuid
 from pathlib import Path
-from schema2_notes import convert
+from schema2_notes import write
 
 URL = 'https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf'
 PDF_SHA256 = '8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87'
@@ -57,10 +57,9 @@ def slug(name):
 
 
 def yaml_note(key, name, kind, fields, body):
-    data = {'splat_schema': 1, 'splat_id': str(uuid.uuid5(PACKAGE_ID,key)),
+    data = {'splat_id': str(uuid.uuid5(PACKAGE_ID,key)),
             'splat_kind': kind, 'splat_key': 'dnd2024:'+key, 'splat_name':name, **fields}
-    # JSON flow values are a strict YAML subset, avoiding custom YAML escaping.
-    return convert('---\n'+''.join(k+': '+json.dumps(v,ensure_ascii=False)+'\n' for k,v in data.items())+'---\n\n'+body.rstrip()+'\n', key+'.md')
+    return write(data, '\n'+body.rstrip()+'\n', key+'.md')
 
 
 MIDDLE_FLOOR = 40

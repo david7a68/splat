@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7c0e2624-0852-5ff6-ac9d-12bf81a26e61"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/riding_horse"
-splat_name: "Riding Horse"
+splat_id: 7c0e2624-0852-5ff6-ac9d-12bf81a26e61
+splat_kind: reference
+splat_key: dnd2024:reference/creature/riding_horse
+splat_name: Riding Horse
 splat_pages:
 - 360
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b8bd16da-e932-5f99-9e48-c4932ade9b5f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/prestidigitation"
-splat_name: "Prestidigitation"
+splat_id: b8bd16da-e932-5f99-9e48-c4932ade9b5f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/prestidigitation
+splat_name: Prestidigitation
 splat_pages:
 - 154
 ---

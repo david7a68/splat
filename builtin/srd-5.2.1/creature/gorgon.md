@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "65a22f2e-6e24-56f2-a08c-c9b719037c87"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gorgon"
-splat_name: "Gorgon"
+splat_id: 65a22f2e-6e24-56f2-a08c-c9b719037c87
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gorgon
+splat_name: Gorgon
 splat_pages:
 - 292
 - 293

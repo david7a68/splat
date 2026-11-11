@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "170c77bd-58ba-5e07-81b3-79db4886c73a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/magma_mephit"
-splat_name: "Magma Mephit"
+splat_id: 170c77bd-58ba-5e07-81b3-79db4886c73a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/magma_mephit
+splat_name: Magma Mephit
 splat_pages:
 - 307
 ---

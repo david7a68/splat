@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b4afb859-0be5-5514-ba63-6242294e3260"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/continual_flame"
-splat_name: "Continual Flame"
+splat_id: b4afb859-0be5-5514-ba63-6242294e3260
+splat_kind: reference
+splat_key: dnd2024:reference/spell/continual_flame
+splat_name: Continual Flame
 splat_pages:
 - 119
 ---

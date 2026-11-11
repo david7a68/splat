@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e7f1713b-966c-571e-bf1c-e09534ba1116"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/well_of_many_worlds"
-splat_name: "Well of Many Worlds"
+splat_id: e7f1713b-966c-571e-bf1c-e09534ba1116
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/well_of_many_worlds
+splat_name: Well of Many Worlds
 splat_pages:
 - 253
 ---

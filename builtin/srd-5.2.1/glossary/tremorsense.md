@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fc41e27a-20e2-550c-9e49-8bc194f2f798"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/tremorsense"
-splat_name: "Tremorsense"
+splat_id: fc41e27a-20e2-550c-9e49-8bc194f2f798
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/tremorsense
+splat_name: Tremorsense
 splat_pages:
 - 190
 ---

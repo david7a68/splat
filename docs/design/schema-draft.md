@@ -1,8 +1,9 @@
 # Content schema draft
 
 Status: reviewable design with a partial [read-only verifier](../srd-import.md).
-The user authorized this draft and delegated routine field choices. `splat_schema: 1` below is the proposed
-content version, separate from the app's existing settings schema.
+The user authorized this draft and delegated routine field choices. The fields below are the note model.
+`splat_schema` is the content version of a note on disk, separate from the app's existing settings schema.
+Splat reads version 2 only; the example notes show that layout.
 
 The remaining field contracts are now complete for the agreed scope:
 [Mechanics](mechanics-schema.md), [State](state-schema.md), and

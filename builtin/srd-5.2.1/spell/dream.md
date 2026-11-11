@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "24c5420d-3574-51d5-9944-a7db2c9d94bf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dream"
-splat_name: "Dream"
+splat_id: 24c5420d-3574-51d5-9944-a7db2c9d94bf
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dream
+splat_name: Dream
 splat_pages:
 - 126
 ---

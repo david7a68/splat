@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "320bff06-a3cf-5d0b-9431-4072b321f87b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/black_tentacles"
-splat_name: "Black Tentacles"
+splat_id: 320bff06-a3cf-5d0b-9431-4072b321f87b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/black_tentacles
+splat_name: Black Tentacles
 splat_pages:
 - 113
 ---

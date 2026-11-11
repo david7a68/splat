@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "88a54901-e2bc-5bf3-aa76-224ea36b7a40"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/roc"
-splat_name: "Roc"
+splat_id: 88a54901-e2bc-5bf3-aa76-224ea36b7a40
+splat_kind: reference
+splat_key: dnd2024:reference/creature/roc
+splat_name: Roc
 splat_pages:
 - 320
 ---

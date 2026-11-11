@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5b8ade4f-e11e-5be3-990e-15c9420502af"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sphinx_of_lore"
-splat_name: "Sphinx of Lore"
+splat_id: 5b8ade4f-e11e-5be3-990e-15c9420502af
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sphinx_of_lore
+splat_name: Sphinx of Lore
 splat_pages:
 - 327
 - 328

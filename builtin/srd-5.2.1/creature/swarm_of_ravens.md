@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2b3d45d6-3978-514d-aca7-61e458e06f02"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_ravens"
-splat_name: "Swarm of Ravens"
+splat_id: 2b3d45d6-3978-514d-aca7-61e458e06f02
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_ravens
+splat_name: Swarm of Ravens
 splat_pages:
 - 362
 ---

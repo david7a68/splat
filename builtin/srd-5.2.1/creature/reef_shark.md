@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "27b75349-9824-5258-9847-0dff6cb2729a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/reef_shark"
-splat_name: "Reef Shark"
+splat_id: 27b75349-9824-5258-9847-0dff6cb2729a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/reef_shark
+splat_name: Reef Shark
 splat_pages:
 - 360
 ---

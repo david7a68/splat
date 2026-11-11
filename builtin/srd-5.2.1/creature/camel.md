@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "abd632a9-10b4-5cdf-80c6-2833e37b4bc5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/camel"
-splat_name: "Camel"
+splat_id: abd632a9-10b4-5cdf-80c6-2833e37b4bc5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/camel
+splat_name: Camel
 splat_pages:
 - 346
 ---

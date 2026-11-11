@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4c15e848-f73b-5e71-8d50-c05ec31a1b7e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_power"
-splat_name: "Staff of Power"
+splat_id: 4c15e848-f73b-5e71-8d50-c05ec31a1b7e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_power
+splat_name: Staff of Power
 splat_pages:
 - 245
 - 246

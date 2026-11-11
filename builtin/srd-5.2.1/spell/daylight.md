@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "325e0ffe-c480-5f99-b067-85c16e479a03"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/daylight"
-splat_name: "Daylight"
+splat_id: 325e0ffe-c480-5f99-b067-85c16e479a03
+splat_kind: reference
+splat_key: dnd2024:reference/spell/daylight
+splat_name: Daylight
 splat_pages:
 - 122
 ---

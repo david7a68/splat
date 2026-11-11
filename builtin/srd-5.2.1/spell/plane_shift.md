@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1adec51f-8931-5328-b2f0-be8398541438"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/plane_shift"
-splat_name: "Plane Shift"
+splat_id: 1adec51f-8931-5328-b2f0-be8398541438
+splat_kind: reference
+splat_key: dnd2024:reference/spell/plane_shift
+splat_name: Plane Shift
 splat_pages:
 - 153
 ---

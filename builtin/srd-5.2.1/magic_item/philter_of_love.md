@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "739d0865-34e7-545b-924f-8ef7ea5840db"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/philter_of_love"
-splat_name: "Philter of Love"
+splat_id: 739d0865-34e7-545b-924f-8ef7ea5840db
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/philter_of_love
+splat_name: Philter of Love
 splat_pages:
 - 234
 ---

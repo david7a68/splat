@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "66b27f5b-b95e-5b00-8a2d-41d9ed1bde97"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/merrow"
-splat_name: "Merrow"
+splat_id: 66b27f5b-b95e-5b00-8a2d-41d9ed1bde97
+splat_kind: reference
+splat_key: dnd2024:reference/creature/merrow
+splat_name: Merrow
 splat_pages:
 - 308
 ---

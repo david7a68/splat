@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cdd1382d-837c-578f-ac3e-c7289582a42e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/identify"
-splat_name: "Identify"
+splat_id: cdd1382d-837c-578f-ac3e-c7289582a42e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/identify
+splat_name: Identify
 splat_pages:
 - 142
 ---

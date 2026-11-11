@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f01f0bb4-fcdd-55dd-8642-f99f5fa287a4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mage_armor"
-splat_name: "Mage Armor"
+splat_id: f01f0bb4-fcdd-55dd-8642-f99f5fa287a4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mage_armor
+splat_name: Mage Armor
 splat_pages:
 - 145
 ---

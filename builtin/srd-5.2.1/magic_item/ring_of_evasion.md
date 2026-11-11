@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2d81e8ba-63d2-59dd-9a16-ed6174353556"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_evasion"
-splat_name: "Ring of Evasion"
+splat_id: 2d81e8ba-63d2-59dd-9a16-ed6174353556
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_evasion
+splat_name: Ring of Evasion
 splat_pages:
 - 238
 ---

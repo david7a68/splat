@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5309ea78-7f51-58c2-9127-2e012fb737fc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/acid_splash"
-splat_name: "Acid Splash"
+splat_id: 5309ea78-7f51-58c2-9127-2e012fb737fc
+splat_kind: reference
+splat_key: dnd2024:reference/spell/acid_splash
+splat_name: Acid Splash
 splat_pages:
 - 107
 ---

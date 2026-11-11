@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "079e43d7-9909-5365-b8db-3c8aceb12516"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dominate_beast"
-splat_name: "Dominate Beast"
+splat_id: 079e43d7-9909-5365-b8db-3c8aceb12516
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dominate_beast
+splat_name: Dominate Beast
 splat_pages:
 - 125
 ---

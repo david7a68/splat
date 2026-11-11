@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "12b4af58-7c05-5227-93c0-da001909a48a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ammunition_1_2_or_3"
-splat_name: "Ammunition, +1, +2, or +3"
+splat_id: 12b4af58-7c05-5227-93c0-da001909a48a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ammunition_1_2_or_3
+splat_name: Ammunition, +1, +2, or +3
 splat_pages:
 - 209
 ---

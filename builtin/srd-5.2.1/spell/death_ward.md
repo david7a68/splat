@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ac21531-9e4b-5916-987f-b9f071cbc002"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/death_ward"
-splat_name: "Death Ward"
+splat_id: 1ac21531-9e4b-5916-987f-b9f071cbc002
+splat_kind: reference
+splat_key: dnd2024:reference/spell/death_ward
+splat_name: Death Ward
 splat_pages:
 - 122
 ---

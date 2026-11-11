@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "da9d148c-d2a8-5755-84af-1158b0c87989"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/magic_action"
-splat_name: "Magic [Action]"
+splat_id: da9d148c-d2a8-5755-84af-1158b0c87989
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/magic_action
+splat_name: Magic [Action]
 splat_pages:
 - 185
 ---

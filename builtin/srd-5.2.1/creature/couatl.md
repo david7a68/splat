@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "01d1c3ac-89e5-576e-bc0a-6217e35bba71"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/couatl"
-splat_name: "Couatl"
+splat_id: 01d1c3ac-89e5-576e-bc0a-6217e35bba71
+splat_kind: reference
+splat_key: dnd2024:reference/creature/couatl
+splat_name: Couatl
 splat_pages:
 - 277
 - 278

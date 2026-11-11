@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fdf6d64b-9423-5d37-93ee-28f6f724d385"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_protection"
-splat_name: "Ring of Protection"
+splat_id: fdf6d64b-9423-5d37-93ee-28f6f724d385
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_protection
+splat_name: Ring of Protection
 splat_pages:
 - 238
 ---

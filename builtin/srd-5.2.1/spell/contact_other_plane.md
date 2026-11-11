@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4700178e-fc01-5e4b-848c-f9ba80e83513"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/contact_other_plane"
-splat_name: "Contact Other Plane"
+splat_id: 4700178e-fc01-5e4b-848c-f9ba80e83513
+splat_kind: reference
+splat_key: dnd2024:reference/spell/contact_other_plane
+splat_name: Contact Other Plane
 splat_pages:
 - 119
 ---

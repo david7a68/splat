@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "374bf13f-73c4-5dd7-8424-0f8dffee4286"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_fire"
-splat_name: "Staff of Fire"
+splat_id: 374bf13f-73c4-5dd7-8424-0f8dffee4286
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_fire
+splat_name: Staff of Fire
 splat_pages:
 - 245
 ---

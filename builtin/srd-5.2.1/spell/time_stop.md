@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "207ca642-cbdd-5bc4-8500-e631bc4d1036"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/time_stop"
-splat_name: "Time Stop"
+splat_id: 207ca642-cbdd-5bc4-8500-e631bc4d1036
+splat_kind: reference
+splat_key: dnd2024:reference/spell/time_stop
+splat_name: Time Stop
 splat_pages:
 - 169
 ---

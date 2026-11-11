@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0fd2a30f-ac7e-5209-b3e3-ff9287b86463"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_web"
-splat_name: "Wand of Web"
+splat_id: 0fd2a30f-ac7e-5209-b3e3-ff9287b86463
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_web
+splat_name: Wand of Web
 splat_pages:
 - 251
 ---

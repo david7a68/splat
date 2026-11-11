@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "57494c7d-1685-5d2a-a0f5-9d15f5bc2c47"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/spirit_guardians"
-splat_name: "Spirit Guardians"
+splat_id: 57494c7d-1685-5d2a-a0f5-9d15f5bc2c47
+splat_kind: reference
+splat_key: dnd2024:reference/spell/spirit_guardians
+splat_name: Spirit Guardians
 splat_pages:
 - 164
 - 165

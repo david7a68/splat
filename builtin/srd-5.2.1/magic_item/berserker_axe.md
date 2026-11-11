@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a4c856b0-6bfc-5602-a9c3-9d08dc378550"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/berserker_axe"
-splat_name: "Berserker Axe"
+splat_id: a4c856b0-6bfc-5602-a9c3-9d08dc378550
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/berserker_axe
+splat_name: Berserker Axe
 splat_pages:
 - 213
 ---

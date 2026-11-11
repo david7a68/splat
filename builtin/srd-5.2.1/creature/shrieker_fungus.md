@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "530d1324-4c5e-54b5-ba93-414dbd7efd91"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/shrieker_fungus"
-splat_name: "Shrieker Fungus"
+splat_id: 530d1324-4c5e-54b5-ba93-414dbd7efd91
+splat_kind: reference
+splat_key: dnd2024:reference/creature/shrieker_fungus
+splat_name: Shrieker Fungus
 splat_pages:
 - 286
 ---

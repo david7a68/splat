@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "648f9639-04c3-5f5a-86b6-2939799fc93c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/banishment"
-splat_name: "Banishment"
+splat_id: 648f9639-04c3-5f5a-86b6-2939799fc93c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/banishment
+splat_name: Banishment
 splat_pages:
 - 112
 ---

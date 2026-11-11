@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d1587bfe-d5d4-5fec-a4f1-ac37a92b1848"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/rust_monster"
-splat_name: "Rust Monster"
+splat_id: d1587bfe-d5d4-5fec-a4f1-ac37a92b1848
+splat_kind: reference
+splat_key: dnd2024:reference/creature/rust_monster
+splat_name: Rust Monster
 splat_pages:
 - 320
 - 321

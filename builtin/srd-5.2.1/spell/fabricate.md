@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7d322225-a4d8-5f4e-8602-641143e4daa9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fabricate"
-splat_name: "Fabricate"
+splat_id: 7d322225-a4d8-5f4e-8602-641143e4daa9
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fabricate
+splat_name: Fabricate
 splat_pages:
 - 129
 ---

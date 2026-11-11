@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8864d0f5-5005-511b-961b-a2ed9035bb2a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dwarven_thrower"
-splat_name: "Dwarven Thrower"
+splat_id: 8864d0f5-5005-511b-961b-a2ed9035bb2a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dwarven_thrower
+splat_name: Dwarven Thrower
 splat_pages:
 - 219
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0987492c-0aae-5b4b-8fff-254846dbf02b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/spellguard_shield"
-splat_name: "Spellguard Shield"
+splat_id: 0987492c-0aae-5b4b-8fff-254846dbf02b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/spellguard_shield
+splat_name: Spellguard Shield
 splat_pages:
 - 244
 ---

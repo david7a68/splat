@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ad3914f0-348c-5f56-aef5-ee1fc96fd241"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mace_of_smiting"
-splat_name: "Mace of Smiting"
+splat_id: ad3914f0-348c-5f56-aef5-ee1fc96fd241
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mace_of_smiting
+splat_name: Mace of Smiting
 splat_pages:
 - 229
 ---

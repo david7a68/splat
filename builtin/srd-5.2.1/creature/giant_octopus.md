@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6d336c48-9df1-5f37-8a19-43416979c5c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_octopus"
-splat_name: "Giant Octopus"
+splat_id: 6d336c48-9df1-5f37-8a19-43416979c5c9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_octopus
+splat_name: Giant Octopus
 splat_pages:
 - 352
 ---

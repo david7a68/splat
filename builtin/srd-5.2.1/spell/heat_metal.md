@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "139f6da6-774d-5745-b6f5-16055ec2a66d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/heat_metal"
-splat_name: "Heat Metal"
+splat_id: 139f6da6-774d-5745-b6f5-16055ec2a66d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/heat_metal
+splat_name: Heat Metal
 splat_pages:
 - 139
 - 140

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ad7b42e1-48f5-5e7b-b960-1f2a1ae14613"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/protection_from_poison"
-splat_name: "Protection from Poison"
+splat_id: ad7b42e1-48f5-5e7b-b960-1f2a1ae14613
+splat_kind: reference
+splat_key: dnd2024:reference/spell/protection_from_poison
+splat_name: Protection from Poison
 splat_pages:
 - 157
 ---

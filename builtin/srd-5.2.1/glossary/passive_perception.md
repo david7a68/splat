@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5c8e381e-0a41-5a26-a28b-4bb0551de4fc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/passive_perception"
-splat_name: "Passive Perception"
+splat_id: 5c8e381e-0a41-5a26-a28b-4bb0551de4fc
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/passive_perception
+splat_name: Passive Perception
 splat_pages:
 - 186
 ---

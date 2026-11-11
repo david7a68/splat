@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b19c601f-6109-599c-8b61-9a941594ff92"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/illusory_script"
-splat_name: "Illusory Script"
+splat_id: b19c601f-6109-599c-8b61-9a941594ff92
+splat_kind: reference
+splat_key: dnd2024:reference/spell/illusory_script
+splat_name: Illusory Script
 splat_pages:
 - 142
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1abc4bef-d0a5-55be-9959-2dc9c8bf1801"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/stunned_condition"
-splat_name: "Stunned [Condition]"
+splat_id: 1abc4bef-d0a5-55be-9959-2dc9c8bf1801
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/stunned_condition
+splat_name: Stunned [Condition]
 splat_pages:
 - 189
 ---

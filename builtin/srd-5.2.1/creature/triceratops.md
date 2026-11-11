@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "23b99eac-da61-520f-8f98-6030cd4863f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/triceratops"
-splat_name: "Triceratops"
+splat_id: 23b99eac-da61-520f-8f98-6030cd4863f0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/triceratops
+splat_name: Triceratops
 splat_pages:
 - 363
 ---

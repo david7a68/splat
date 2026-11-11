@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b27a4598-a4b0-5553-ab00-6b33370e2be8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_bronze_dragon"
-splat_name: "Young Bronze Dragon"
+splat_id: b27a4598-a4b0-5553-ab00-6b33370e2be8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_bronze_dragon
+splat_name: Young Bronze Dragon
 splat_pages:
 - 270
 ---

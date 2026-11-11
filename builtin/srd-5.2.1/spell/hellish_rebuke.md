@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "75c7aac4-83e6-5de4-ad6f-39bb78cd9192"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hellish_rebuke"
-splat_name: "Hellish Rebuke"
+splat_id: 75c7aac4-83e6-5de4-ad6f-39bb78cd9192
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hellish_rebuke
+splat_name: Hellish Rebuke
 splat_pages:
 - 140
 ---

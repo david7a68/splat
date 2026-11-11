@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ed50781-ccc2-5817-a33d-42d44bf040fe"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ogre_zombie"
-splat_name: "Ogre Zombie"
+splat_id: 2ed50781-ccc2-5817-a33d-42d44bf040fe
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ogre_zombie
+splat_name: Ogre Zombie
 splat_pages:
 - 344
 ---

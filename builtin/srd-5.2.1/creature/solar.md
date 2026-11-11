@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a330df1a-8652-543d-8f56-b97ae8d97385"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/solar"
-splat_name: "Solar"
+splat_id: a330df1a-8652-543d-8f56-b97ae8d97385
+splat_kind: reference
+splat_key: dnd2024:reference/creature/solar
+splat_name: Solar
 splat_pages:
 - 326
 - 327

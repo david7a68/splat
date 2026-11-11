@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eb9dbd5b-e6c8-5494-b671-4b140a81c446"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_badger"
-splat_name: "Giant Badger"
+splat_id: eb9dbd5b-e6c8-5494-b671-4b140a81c446
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_badger
+splat_name: Giant Badger
 splat_pages:
 - 349
 ---

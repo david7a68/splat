@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ce9d2b38-e709-5b9f-bf2f-365238ba97e9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_eagle"
-splat_name: "Giant Eagle"
+splat_id: ce9d2b38-e709-5b9f-bf2f-365238ba97e9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_eagle
+splat_name: Giant Eagle
 splat_pages:
 - 350
 - 351

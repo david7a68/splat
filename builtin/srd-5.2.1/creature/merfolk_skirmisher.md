@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "10c47a49-7509-54d7-9477-bc1037dcc77c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/merfolk_skirmisher"
-splat_name: "Merfolk Skirmisher"
+splat_id: 10c47a49-7509-54d7-9477-bc1037dcc77c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/merfolk_skirmisher
+splat_name: Merfolk Skirmisher
 splat_pages:
 - 308
 ---

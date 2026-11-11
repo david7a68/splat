@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a658988d-abae-5b7a-8863-d30a04236962"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/grappling"
-splat_name: "Grappling"
+splat_id: a658988d-abae-5b7a-8863-d30a04236962
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/grappling
+splat_name: Grappling
 splat_pages:
 - 182
 ---

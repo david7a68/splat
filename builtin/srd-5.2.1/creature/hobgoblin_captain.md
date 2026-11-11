@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1fa7af9a-5ac2-546c-9a5f-3022afb76bf8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hobgoblin_captain"
-splat_name: "Hobgoblin Captain"
+splat_id: 1fa7af9a-5ac2-546c-9a5f-3022afb76bf8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hobgoblin_captain
+splat_name: Hobgoblin Captain
 splat_pages:
 - 299
 ---
