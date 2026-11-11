@@ -866,7 +866,10 @@ mod iter_2_c_tests {
         let (plain, rated) = (lines(None), lines(Some(&rating)));
         let word = format!("{detail} · Above High");
         for (plain, rated) in plain.iter().zip(&rated) {
-            assert!(rated == plain || (plain == detail && *rated == word), "{plain:?} → {rated:?}");
+            assert!(
+                rated == plain || (plain == detail && *rated == word),
+                "{plain:?} → {rated:?}"
+            );
         }
         // The word shows where it fits, and gives way where it would cut the detail.
         assert!(

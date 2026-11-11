@@ -396,30 +396,32 @@ fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::diff
 /// The opened planned fight's link to its encounter. With its difficulty known, the line ends
 /// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole.
 fn read_encounter(ui: &mut egui::Ui, rating: Option<&crate::difficulty::Rating>) -> egui::Response {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        let link = design::link(ui, "Read encounter");
-        if let Some(rating) = rating {
-            let c = colors();
-            let mut job = egui::text::LayoutJob::default();
-            crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
-            crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
-            crate::difficulty::append(
-                &mut job,
-                ui,
-                Type::Body,
-                &format!(" · {}", rating.numbers()),
-                c.muted,
+    // The link keeps its place; the words take the room to its right on the same line.
+    let link = design::link(ui, "Read encounter");
+    if let Some(rating) = rating {
+        let c = colors();
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
+        crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
+        crate::difficulty::append(
+            &mut job,
+            ui,
+            Type::Body,
+            &format!(" · {}", rating.numbers()),
+            c.muted,
+        );
+        let width = ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x);
+        let room = ui.max_rect().right() - link.rect.right();
+        if width <= room {
+            let rect = egui::Rect::from_min_size(
+                link.rect.right_top(),
+                egui::vec2(width, link.rect.height()),
             );
-            let width = ui.fonts_mut(|fonts| fonts.layout_job(job.clone()).size().x);
-            if width <= ui.available_width() {
-                let response = ui.add(egui::Label::new(job).extend());
-                crate::difficulty::describe(ui, response, rating);
-            }
+            let response = ui.put(rect, egui::Label::new(job).extend());
+            crate::difficulty::describe(ui, response, rating);
         }
-        link
-    })
-    .inner
+    }
+    link
 }
 
 fn plan_rule(ui: &mut egui::Ui) {
