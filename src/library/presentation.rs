@@ -745,7 +745,7 @@ mod reading_tests {
             let sections = reading_sections(&entry.body, &entry.name);
             let output = ctx.run(Default::default(), |ctx| {
                 eframe::egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::library::reader::show(ui, Some(entry), &sections, true, false);
+                    crate::library::reader::show(ui, Some(entry), &sections, true, false, true);
                 });
             });
             let update = output.platform_output.accesskit_update.unwrap();
@@ -827,6 +827,7 @@ mod reading_tests {
                                 std::slice::from_ref(source),
                                 true,
                                 false,
+                                true,
                             );
                         } else {
                             ui.add_space(design::L);
