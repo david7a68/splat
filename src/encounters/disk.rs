@@ -19,12 +19,24 @@ pub(super) struct Change {
     pub copies: Vec<String>,
 }
 
+/// The one sentence for a draft whose file changed on disk. It names what changed, never the file.
+/// The result after `Remove <noun> and lose draft`, as Library says it (FF7).
+pub(super) fn removed_with_draft(name: &str) -> String {
+    format!("{name} removed. Its draft was discarded.")
+}
+
+pub(super) fn changed_on_disk(what: &str) -> String {
+    format!("This {what} changed on disk. Your draft is safe until you choose.")
+}
+
 impl Recovery {
+    /// `what` names the draft's kind in the DM's words: `encounter`, `group` or `creature`.
     pub fn check(
         &mut self,
         root: &Path,
         path: &mut String,
         baseline: Option<&str>,
+        what: &str,
     ) -> Result<(), String> {
         let Some(baseline) = baseline else {
             return Ok(());
@@ -57,13 +69,18 @@ impl Recovery {
                 text: current,
                 copies: peers.into_iter().map(|(path, _)| path).collect(),
             });
-            return Err(
-                "This entry changed on disk. Your draft is safe. Choose which version to keep."
-                    .into(),
-            );
+            return Err(changed_on_disk(what));
         }
         self.change = None;
         Ok(())
+    }
+
+    /// The draft's file is gone from the disk: the destructive choice removes the draft's
+    /// object and loses the draft (FF7's words), and its result offers `Undo remove`.
+    pub fn file_gone(&self) -> bool {
+        self.change
+            .as_ref()
+            .is_some_and(|change| change.text.is_none())
     }
 
     pub fn accept(&mut self) -> Option<Change> {
@@ -71,12 +88,9 @@ impl Recovery {
         self.change.take()
     }
 
-    pub fn show(&self, ui: &mut egui::Ui, draft: &str) -> Option<bool> {
+    pub fn show(&self, ui: &mut egui::Ui, draft: &str, what: &str) -> Option<bool> {
         let change = self.change.as_ref()?;
-        let mut messages = vec![format!(
-            "{} changed on disk. Your draft is safe until you choose.",
-            change.path
-        )];
+        let mut messages = vec![changed_on_disk(what)];
         messages.extend(
             change
                 .copies
@@ -102,14 +116,16 @@ impl Recovery {
                 }
                 // egui adds its item spacing too, so the whole gap is exactly `L`.
                 ui.add_space(design::L - ui.spacing().item_spacing.x);
-                if Action::destructive(if change.text.is_some() {
-                    "Reload and lose my draft"
+                // FF7: the file is gone, so the choice says what it removes and loses.
+                let lose = if change.text.is_some() {
+                    "Reload and lose my draft".to_owned()
                 } else {
-                    "Let it go"
-                })
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
+                    format!("Remove {what} and lose draft")
+                };
+                if Action::destructive(&lose)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
                 {
                     choice = Some(false);
                 }
@@ -385,14 +401,26 @@ impl super::Encounters {
             return false;
         };
         if draft.recovery.change.is_none() {
-            if let Some(group) = draft
+            if let Some(index) = draft
                 .groups
-                .iter_mut()
-                .find(|group| group.has_disk_change())
+                .iter()
+                .position(|group| group.has_disk_change())
             {
-                match group.disk_choice(ui, &campaign.path, snapshot) {
+                let gone = draft.groups[index].file_gone();
+                match draft.groups[index].disk_choice(ui, &campaign.path, snapshot) {
                     Ok(Some(true)) => self.save_draft(ui.ctx(), campaign, modules),
-                    Ok(Some(false)) => self.error = None,
+                    Ok(Some(false)) => {
+                        // FF7: the group's file is gone. It leaves this encounter's draft, and
+                        // Undo remove puts it back at its place with its draft.
+                        if gone {
+                            let group = draft.groups.remove(index);
+                            if draft.add_to.as_deref() == Some(group.path()) {
+                                draft.add_to = None;
+                            }
+                            draft.removed_group = Some((index, group, false));
+                        }
+                        self.error = None;
+                    }
                     Err(error) => self.error = Some(error),
                     _ => {}
                 }
@@ -400,9 +428,11 @@ impl super::Encounters {
             }
             return false;
         }
-        let choice = draft
-            .recovery
-            .show(ui, &draft.comparison_text(snapshot).unwrap_or_default());
+        let choice = draft.recovery.show(
+            ui,
+            &draft.comparison_text(snapshot).unwrap_or_default(),
+            "encounter",
+        );
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = draft.recovery.accept() {

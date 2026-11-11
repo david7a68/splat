@@ -637,6 +637,39 @@ impl<'a> Driver<'a> {
             .any(|shape| contains(&shape.shape, words, color))
     }
 
+    /// The painted menu or popup frame around `inside`: the smallest rectangle filled with the
+    /// window fill that holds it. A menu's real frame, not one estimated from its choices.
+    pub fn painted_frame_around(&self, inside: egui::Rect) -> Option<egui::Rect> {
+        fn visit(
+            shape: &egui::Shape,
+            fill: egui::Color32,
+            inside: egui::Rect,
+            best: &mut Option<egui::Rect>,
+        ) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        visit(shape, fill, inside, best);
+                    }
+                }
+                egui::Shape::Rect(frame)
+                    if frame.fill == fill
+                        && frame.rect.expand(0.5).contains_rect(inside)
+                        && best.is_none_or(|best| frame.rect.area() < best.area()) =>
+                {
+                    *best = Some(frame.rect);
+                }
+                _ => {}
+            }
+        }
+        let fill = self.harness.ctx.style().visuals.window_fill;
+        let mut best = None;
+        for shape in &self.harness.output().shapes {
+            visit(&shape.shape, fill, inside, &mut best);
+        }
+        best
+    }
+
     pub fn painted_right(&self, words: &str) -> Option<f32> {
         let mut right = None;
         self.each_painted_text(|text, clip| {

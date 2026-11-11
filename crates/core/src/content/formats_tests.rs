@@ -860,6 +860,22 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
     );
     let renamed = formats::patch_model(&bad, &[("splat_name", Some("New name".into()))]).unwrap();
     assert!(renamed.contains("HP lots | Keep this"));
+    // FA1: each member that reads has its own line; the unread row is not one of them, and a
+    // flow-style front matter gives none.
+    assert_eq!(
+        super::list_formats::group_member_lines(&bad, &entry.flags),
+        [15]
+    );
+    assert!(super::list_formats::group_member_lines(&old.text(), &[]).is_empty());
+    // Block-style front matter: each item of `members`, and nothing after the fence, though the
+    // body has a line that looks like an item.
+    let block = format!(
+        "---\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: '{key}'}}\n    count: 2\n  - creature: {{key: '{key}'}}\nsplat_name: Rook\n---\nsplat_encounter_group:\n  members:\n  - creature: x\n",
+        "00000000-0000-0000-0000-000000000002"
+    );
+    assert_eq!(super::list_formats::group_member_lines(&block, &[]), [7, 9]);
+    let last = block.replace("splat_name: Rook\n", "");
+    assert_eq!(super::list_formats::group_member_lines(&last, &[]), [7, 9]);
 }
 
 #[test]
