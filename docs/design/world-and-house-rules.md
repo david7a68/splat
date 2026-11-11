@@ -10,8 +10,8 @@ this design takes their shape and not their numbers.
 Session page, plan, rail and saved Undo. It keeps the data model and changes these things, which this
 document now states. Trackers is a view of the Lookup panel, and Ctrl+T goes there and back. The rail says
 `Due N` only while a notice is due. A tracker action is never a step of a run's Undo: the ledger is one
-ordered list of acts, and Undo steps back through it. A mark can be raised by each new round of a
-fight (`every: round`). A mark's table can name its rolls. Each Due row ends with `Done`, which applies its
+ordered list of acts, and Undo steps back through it. Trackers are built for use between fights first; what a
+fight shows of them is held for the owner ([The session cycle](session-cycle.md), section 7). A mark's table can name its rolls. Each Due row ends with `Done`, which applies its
 proposed changes. A tracker with instances has one line for each instance.
 
 Three rounds of review shaped this version. The third round showed that each fix was adding rules for
@@ -261,7 +261,7 @@ A **mark** raises a notice when a value rises past it. Marks never act.
 
 | Field | Meaning |
 |---|---|
-| `at` or `every` | A value, or a repeating step. `every: round` is raised by each new round of the open run. Its notice names the round (`Round 2 · Fight minute`), stays until **Done** or **Dismiss**, and is worked out from the run's round, so Splat writes nothing when a round begins |
+| `at` or `every` | A value, or a repeating step |
 | `say` | The text of the notice |
 | `tables` | Tables to roll, with a **Roll** button on the notice. A table can name its rolls, `{table: rival_track, for: [Old Guard, Keyring, Convicts]}`: each press rolls for the next name, and the result starts with it |
 | `changes` | Proposed changes, shown on the notice |
@@ -502,44 +502,41 @@ boundary does not reverse its income. An overdue item uses today's values, and a
 and entries, grouped by world `type` and then by folder, and the Reader.
 
 **Trackers** answers: "What is due, and what are the numbers?" It is a view of the Lookup panel, and **Ctrl+T** opens it
-beside any page. It works in run setup, in live play, on the ended view and with no run open. This matters because most of
-a race happens between fights, when no run exists. An earlier version made it a third panel beside Lookup and Notes. The
+beside any page. It is built for use between fights, when no run exists: most of a race happens then. An earlier version made it a third panel beside Lookup and Notes. The
 app now has one rule for that space (one panel beside the page, and the run's own panel gives way when the roster needs
-the width), and a third panel would need a second rule and would hide the stat block more often. Trackers is a place in
-Lookup's history: Ctrl+T goes to it, and from it back to the place that was in view, or closes Lookup when Lookup was
-closed before.
+the width), and a third panel would need a second rule and would hide the stat block more often. Ctrl+T shows Trackers in
+Lookup's panel, and Ctrl+T again shows what Lookup showed before, or closes Lookup when Lookup was closed before.
+Lookup's history is as today.
 
 ```text
-Trackers
+Trackers · Due 1
+DUE 1
+Bell. The Cistern floods.
+  [Roll Rival Track] [Roll Wandering, 0:40 to 1:19]
+  Old Guard: 4 · Takes a seal.                 Done ⋯
 PINNED
-Elapsed race time 42 / 120   [Enter room] [Fight minute] ...
+Elapsed race time 42 / 120   [Enter room] ...
 Crowd Favor            3   [Crowd loves it] [Throw a gift]
 Seals
   Party        1   [Take seal] [Lose seal]
   Old Guard    2   [Take seal] [Lose seal]   Coming for the party
-DUE 1
-Bell. The Cistern floods.
-  [Roll Rival Track] [Roll Wandering, 0:40 to 1:19]   Done ⋯
-  Old Guard: 4 · Takes a seal.
 > MORE TRACKERS 1
 ──────────────────────────────────────────────
 ✓ Throw a gift: Favor −1.   Undo: Throw a gift   Add to Timeline
 ```
 
-The view is one scroll area, as Lookup's reader is: the pinned trackers in the note's order, then the Due rows, then
-**More trackers**. So a new notice moves no pinned quick action. The view's heading holds the Due count, which opens the
-Due rows, and the result line keeps a fixed place at the panel's bottom edge. A tracker with instances has one line for
+The view is one scroll area, as Lookup's reader is: the Due rows, then the pinned trackers in the note's order, then
+**More trackers**. So what is due is in view when the view opens. The view's heading holds the Due count, and the result
+line keeps a fixed place at the panel's bottom edge. A tracker with instances has one line for
 each instance, with its value and the quick actions. A typed amount holds focus until Enter or Escape. The rail's status slot says `Due 2`
-with a bell while a notice is due, on every page, and nothing about trackers at other times; a click opens the view. In a
-run, the header's notice line ends with the bell and the count while a notice is due, and shows a new notice for one
-turn with its one action (**Done**, or **Add to fight** for a group); [The session cycle](session-cycle.md), section 1.4, has
-the one order for that line. The Session page has no tracker surface of its own: the rail is on that page too. Splat is
+with a bell while a notice is due, on every page, and nothing about trackers at other times; a click opens the view. In a run
+the rail's count is the only tracker sign: what else a fight shows of a tracker is held for the owner
+([The session cycle](session-cycle.md), section 7). The Session page has no tracker surface of its own: the rail is on that page too. Splat is
 one DM's tool, so it has no visibility model. A secret number is secret because it is not pinned.
 
-The Practice Ring is the layout test: a full roster, Trackers open, at 960x640. The roster keeps 454 px and the current
-stat block's tile line, as beside any Lookup view. Each phase adds a visual-test scenario and a test ID in
+Each phase adds a visual-test scenario and a test ID in
 `docs/ux-intent.md`. [The session cycle](session-cycle.md) has the wireframe, the exact words, the states and the build
-plan (P9 to P11).
+plan (P9; P10 and P11 are held).
 
 ## Coverage against Heralds
 
@@ -584,9 +581,10 @@ unplanned, so part 5 may come sooner than its number.
    the DM finds "Reliability" and reads it beside a run in two interactions.
 2. **Roll tables.** *Built.* Small, and useful in the first session. *Changes:* `content/markdown.rs`, Reader, `encounter_run.rs`.
 3. **Trackers.** *Not built, and deprioritized.* Members, in play, the ledger, quick actions, marks, the Due list and the Trackers view. This is still the largest part. It
-   splits as [The session cycle](session-cycle.md) plans it: the ledger, quick actions and the view (P9), then marks and the Due list (P10), then day marks (P11). *Changes:* new ledger, validator and view modules, `lookup.rs`, `lib.rs` (Ctrl+T and the rail's status),
-   the run's notice line, `KNOWN_FIELDS` (`splat_members`, `splat_in_play`). The run's commands and its Undo do not change. *Done when:* a whole race runs from
-   [the example](world-examples/heralds-tournament.md), with no paper tracking except the map, the final sum and player levels.
+   splits as [The session cycle](session-cycle.md) plans it: the slice between fights first (P9: the ledger, quick actions, marks at a value, the Due
+   list, the view); marks that a fight or a day raises wait for the owner's answer (P10, P11). *Changes:* new ledger, validator and view modules, `lookup.rs`, `lib.rs` (Ctrl+T and the rail's status),
+   `KNOWN_FIELDS` (`splat_members`, `splat_in_play`). The run's commands and its Undo do not change. *Done when:* a whole race runs between fights from
+   [the example](world-examples/heralds-tournament.md), with no paper tracking there except the map, the final sum and player levels.
 4. **Event types.** *Not built, and deprioritized.* *Changes:* `timeline.rs`, `timeline/page.rs`, `processing.rs`. A test covers an unknown type's round trip.
 5. **NPCs and locations.** *Built.* *Changes:* `content/mod.rs` (`splat_world`), `presentation.rs`, `lookup.rs`, `encounter_run.rs`.
    *Done when:* a typed name becomes a participant in the fight, and the run stays on screen.
