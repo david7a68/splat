@@ -6457,7 +6457,7 @@ pub mod signed_in {
                     .iter()
                     .all(|label| label.is_some_and(|label| (cancel - label).abs() <= 1.0))
             }),
-            format!("Cancel's words start at {cancel:?}; the field labels at {labels:?}"),
+            format!("Cancel’s words start at {cancel:?}; the field labels at {labels:?}"),
         );
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(

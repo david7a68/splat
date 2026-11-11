@@ -3220,7 +3220,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.observe(
         "iter-23-C-AE3",
         !d.has_containing("Keeps the id") && !d.has_containing("Drops the rest"),
-        "Library states the replacement in Campaign's words, without field names",
+        "Library states the replacement in Campaign’s words, without field names",
     );
     d.state_prepared("manifest-opened-for-repair", Sizes::All, |d| {
         let tone = manifest_fault_tone(d, "Line 4 opens a list");
