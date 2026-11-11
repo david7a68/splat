@@ -305,8 +305,10 @@ a line (at the start of the paragraph, after a line break, or where it wraps) ke
 with all the space after them. A link right after another short link gets as much space after it as before it,
 so the pair reads evenly. The text after a link starts after its space, and the line wraps if it must. Two links
 side by side have a blank between them, so each keeps its own underline. Where the body line is shorter than
-24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, so the paragraph
-keeps one line pitch and its baselines; a paragraph without a link keeps its own line height. A link's underline
+24 px (compact prose and compact rows), every line of a paragraph that holds a link is 24 px, the first line
+too. Each line keeps its words where an unlinked line has them and adds the extra height below them. So every
+line has the same baseline offset, the baselines are 24 px apart, and the first line starts as an unlinked
+paragraph's first line does. A paragraph without a link keeps its own line height. A link's underline
 sits 2 px below its words' baseline and covers only its words, never at the bottom of a taller line. So every
 link target is at least 24 × 24 px, stays on its own line, and never overlaps another link's target. Links 24 px
 or wider keep their layout, and the paragraph's words do not change. The focus ring sits `XS / 2` outside the
