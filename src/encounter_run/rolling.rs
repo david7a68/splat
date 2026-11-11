@@ -1097,7 +1097,9 @@ impl Run {
             if let Some(armed) = self.armed.as_mut() {
                 armed.damage = None;
             }
+            // A result applied to these rows before no longer says what this roll does.
             for row in self.save_targets() {
+                self.state.roll_results.remove(&row);
                 self.badges
                     .insert(row, "No damage · see the text".to_owned());
             }
@@ -1234,7 +1236,18 @@ impl Run {
     /// What a row shows while an action is armed or after it: the chance to hit, or the
     /// result against it.
     pub(super) fn row_badge(&self, row: usize) -> Option<String> {
-        // A save's applied result first: it lives in the run's state, so Undo takes it back.
+        // A save's rolled damage that waits for Enter comes first for its targets: the row
+        // says what Enter gives it now, from Amount, not a result applied before.
+        if self
+            .armed
+            .as_ref()
+            .is_some_and(|armed| armed.damage.is_some())
+            && self.save_targets().contains(&row)
+        {
+            let amount = self.amount.parse::<i64>().ok()?;
+            return self.save_result(row, &self.amount_command(amount, Command::Damage));
+        }
+        // Then a save's applied result: it lives in the run's state, so Undo takes it back.
         if let Some(words) = self
             .state
             .roll_results
@@ -1244,11 +1257,6 @@ impl Run {
             return Some(words.clone());
         }
         let armed = self.armed.as_ref()?;
-        if armed.damage.is_some() {
-            // A save's rolled damage: what Enter gives this target, from Amount.
-            let amount = self.amount.parse::<i64>().ok()?;
-            return self.save_result(row, &self.amount_command(amount, Command::Damage));
-        }
         let RollLink::D20 {
             what: D20::Attack,
             bonus,
@@ -2396,6 +2404,139 @@ mod tests {
         run.row_choice(asking.row, RowChoice::Damage(0));
         assert_eq!(run.amount, "3");
         assert!(run.asking.is_none());
+    }
+
+    // The next three tests are the reviewer's own probes of the merge with main's save results.
+
+    #[test]
+    fn a_target_added_after_the_roll_shows_what_enter_gives_it_not_an_older_result() {
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let (_, others) = armed_save(&mut run, actor);
+        for row in &others {
+            run.saves.insert(*row, 1);
+        }
+        run.state.random = Random::controlled([1, 2, 3]);
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.amount, "6");
+        run.apply(run.amount_command(6, Command::Damage)).unwrap();
+        run.amount.clear();
+        run.also.clear();
+        run.halved.clear();
+        let later = *others.iter().find(|row| **row != run.selected).unwrap();
+        assert_eq!(run.row_badge(later).as_deref(), Some("Failed · 6 damage"));
+        run.state.random = Random::controlled([4, 4, 4]);
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.amount, "12");
+        assert_eq!(
+            run.row_badge(run.selected).as_deref(),
+            Some("Failed · 12 damage")
+        );
+        run.state.random = Random::controlled([1]);
+        run.target(later, None);
+        assert_eq!(run.amount, "12");
+        assert!(
+            run.save_results(&run.amount_command(12, Command::Damage))
+                .contains(&(later, "Failed · 12 damage".into()))
+        );
+        assert_eq!(
+            run.row_badge(later).as_deref(),
+            Some("Failed · 12 damage"),
+            "the added target must show what Enter will apply"
+        );
+    }
+
+    #[test]
+    fn no_damage_takes_the_place_of_a_result_applied_before() {
+        let glare = "Death Glare. Wisdom Saving Throw: DC 11, one Frightened creature. Failure: If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage.";
+        let link = dice_text::find(glare, "Death Glare")
+            .into_iter()
+            .find_map(|span| matches!(span.link, RollLink::SaveDc { .. }).then_some(span.link))
+            .unwrap();
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let (_, others) = armed_save(&mut run, actor);
+        run.roll_link(ask(link, actor));
+        let target = others[0];
+        run.state.participants[target].hp = Some(25);
+        run.target(target, None);
+        run.state.random = Random::controlled([2, 3, 4]);
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.amount, "9");
+        run.apply(run.amount_command(9, Command::Damage)).unwrap();
+        run.amount.clear();
+        run.also.clear();
+        run.halved.clear();
+        assert!(run.state.participants[target].hp.unwrap() <= 20);
+        assert!(run.row_badge(target).unwrap().contains("9 damage"));
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.amount, "");
+        assert_eq!(run.armed.as_ref().unwrap().damage, None);
+        assert_eq!(
+            run.badges.get(&target).map(String::as_str),
+            Some("No damage · see the text")
+        );
+        assert_eq!(
+            run.row_badge(target).as_deref(),
+            Some("No damage · see the text"),
+            "the row must show the condition's new result"
+        );
+    }
+
+    #[test]
+    fn a_second_roll_and_a_reroll_keep_the_current_damage_and_the_half_marks() {
+        let mut run = live();
+        run.inspiration = Some(Inspiration::Reroll);
+        let actor = run.current().unwrap();
+        inspired_player(&mut run, actor);
+        let (armed, others) = armed_save(&mut run, actor);
+        run.saves.insert(others[0], 15);
+        run.saves.insert(others[1], 1);
+        run.half_made(&armed);
+        run.state.random = Random::controlled([1, 2, 3, 4, 4, 4, 6]);
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.armed.as_ref().unwrap().damage, Some(6));
+        run.armed_action(ArmedAction::RollDamage);
+        assert_eq!(run.armed.as_ref().unwrap().damage, Some(12));
+        let kept = run.reroll.as_ref().unwrap();
+        assert_eq!(
+            kept.save.as_ref().unwrap().0.damage,
+            Some(6),
+            "snapshot has old damage, intentionally not identity"
+        );
+        assert!(run.reroll_stands(kept));
+        let die = kept.outcome.dice()[0].1;
+        run.row_choice(others[0], RowChoice::Reroll(die));
+        assert_eq!(run.armed.as_ref().unwrap().damage, Some(14));
+        assert_eq!(run.amount, "14");
+        assert_eq!(
+            run.row_badge(others[0]).as_deref(),
+            Some("Saved · 7 damage (half)")
+        );
+        assert_eq!(
+            run.row_badge(others[1]).as_deref(),
+            Some("Failed · 14 damage")
+        );
+        assert!(!run.has_inspiration(actor));
+        let before: Vec<_> = others
+            .iter()
+            .map(|row| run.state.participants[*row].hp)
+            .collect();
+        run.apply(run.amount_command(14, Command::Damage)).unwrap();
+        run.amount.clear();
+        run.also.clear();
+        run.halved.clear();
+        assert_eq!(run.armed.as_ref().unwrap().damage, None);
+        run.undo();
+        assert_eq!(
+            others
+                .iter()
+                .map(|row| run.state.participants[*row].hp)
+                .collect::<Vec<_>>(),
+            before
+        );
+        assert!(others.iter().all(|row| run.row_badge(*row).is_none()));
+        assert!(run.reroll.is_none());
     }
 
     #[test]
