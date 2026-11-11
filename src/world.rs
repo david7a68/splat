@@ -1963,8 +1963,11 @@ impl Reader {
         }) {
             design::message(ui, Tone::Warning, warning);
         }
-        // The gap to take back before the prose, when the value block draws no row.
-        let mut lift = 0.0;
+        // A value block that draws no row adds no gap. In World, the prose then starts where a
+        // plain note's starts, below the file line. Lookup's compact reader has no file line:
+        // there the prose keeps the reader's gap below the kind line, as an entry with no value
+        // block (a spell) has.
+        let mut empty_value_block = false;
         if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
             let top = ui.cursor().top();
             let block = ui.scope(|ui| {
@@ -1973,12 +1976,11 @@ impl Reader {
                 self.entry_controls(ui, item, index, campaign)
             });
             go = block.inner;
-            // A value block that draws no row adds no gap, so the prose starts where a plain
-            // note's does. Its own item gap goes now, and the reader's `L` before the prose,
-            // which separates the prose from the rows, goes below.
+            // An empty block still takes its own item gap. That gap goes now; the reader's
+            // gap before the prose goes through `empty_value_block`.
             if block.response.rect.height() <= 0.0 {
                 ui.add_space(top - ui.cursor().top());
-                lift = design::L;
+                empty_value_block = !self.compact;
             }
         }
         if item.entry.kind == "world" && index.duplicate_world.contains_key(&item.entry.path) {
@@ -2002,19 +2004,24 @@ impl Reader {
                 }
             }
         }
-        if (item.entry.kind == "world" || item.is_world_note())
-            && crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
-                .is_empty()
-        {
+        let has_prose =
+            !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
+                .is_empty();
+        if (item.entry.kind == "world" || item.is_world_note()) && !has_prose {
             ui.label(
                 Type::Small
                     .rich(ui, "Nothing written yet.")
                     .color(colors().muted),
             );
             // The reader's gap now follows these words, not an empty value block.
-            lift = 0.0;
+            empty_value_block = false;
         }
         if item.is_note() {
+            // In Lookup, a plain note's prose has the reader's gap below the kind line, as every
+            // entry's has. World's plain note follows its file line directly.
+            if self.compact && has_prose {
+                ui.add_space(design::L);
+            }
             let followed = style::measure(ui, |ui| {
                 style::markdown(ui, &item.entry.body);
                 related(ui, item, index)
@@ -2030,11 +2037,6 @@ impl Reader {
                 .filter(|fault| fault.id == item.entry.id)
                 .and_then(|fault| fault.entry.as_ref())
                 .unwrap_or(&item.entry);
-            // The reader adds its `L` after the entry's line warnings. With no warning, it
-            // would follow the empty value block at once.
-            if entry.flags.is_empty() {
-                ui.add_space(-lift);
-            }
             let followed = view::show_with_related(
                 ui,
                 &item.entry.name,
@@ -2046,6 +2048,7 @@ impl Reader {
                     builtin: item.is_builtin(),
                 },
                 index,
+                empty_value_block,
                 |ui| {
                     related(ui, item, index).and_then(|go| {
                         if let Go::Item(at, _) = go {
@@ -2892,31 +2895,34 @@ impl Reader {
         let campaign = campaign.filter(|_| item.is_private())?;
         let mut go = None;
         if self.compact {
-            ui.horizontal_wrapped(|ui| {
-                let mut targets = vec![
-                    ("Stat block", index.world_target(&item.entry, "creature")),
-                    ("In", index.place_of(item.entry.id)),
-                ];
-                targets.extend(
-                    index
-                        .groups_of(&item.entry)
-                        .iter()
-                        .map(|(_, group)| ("Part of", *group)),
-                );
-                let mut first = true;
-                for (label, target) in targets {
-                    if let Some(at) = target {
-                        if !first {
+            let mut targets = vec![
+                ("Stat block", index.world_target(&item.entry, "creature")),
+                ("In", index.place_of(item.entry.id)),
+            ];
+            targets.extend(
+                index
+                    .groups_of(&item.entry)
+                    .iter()
+                    .map(|(_, group)| ("Part of", *group)),
+            );
+            let targets: Vec<_> = targets
+                .into_iter()
+                .filter_map(|(label, target)| target.map(|at| (label, at)))
+                .collect();
+            // With no target, the line draws no row, so it adds no gap.
+            if !targets.is_empty() {
+                ui.horizontal_wrapped(|ui| {
+                    for (n, (label, at)) in targets.into_iter().enumerate() {
+                        if n > 0 {
                             ui.label(Type::Small.rich(ui, "·").color(colors().muted));
                         }
-                        first = false;
                         ui.label(Type::Small.rich(ui, label).color(colors().muted));
                         if design::link(ui, &index.items[at].entry.name).clicked() {
                             go = Some(Go::Item(at, None));
                         }
                     }
-                }
-            });
+                });
+            }
             if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
                 design::status(
                     ui,

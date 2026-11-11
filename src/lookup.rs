@@ -2237,6 +2237,9 @@ impl Lookup {
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                // The results list above sets its own row spacing. The reader keeps the app's,
+                // so an entry reads the same whether a search or a link opened it.
+                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
                 let read = reader.read(ui, current, &index, campaign);
                 nav = nav.take().or(read);
             });
