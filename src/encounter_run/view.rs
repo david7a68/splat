@@ -2757,7 +2757,7 @@ impl Run {
                     ui.label(format!("and {} more", changes.len() - 3));
                 }
             } else if conflict.is_some() {
-                ui.label("Choose which HP to keep, or close and choose next time.");
+                ui.add(egui::Label::new(conflict_close_words(block.is_some())).wrap());
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
@@ -2782,6 +2782,11 @@ impl Run {
             if chosen.connect {
                 self.wants_sign_in = true;
                 keep = true;
+            }
+            // Every close action here waits for the same cause, so it shows once, above them.
+            if block.is_some() {
+                ui.add_space(design::S);
+                design::blocked_reason(ui, block);
             }
             let (lose, ()) = design::dialog_actions(
                 ui,
@@ -5914,6 +5919,15 @@ pub(crate) fn close_recovery_actions(
         }
     });
     chosen
+}
+
+/// The close dialog's words for a sync conflict. They offer a close only when a close can happen.
+fn conflict_close_words(blocked: bool) -> &'static str {
+    if blocked {
+        "Choose which HP to keep before you close."
+    } else {
+        "Choose which HP to keep, or close and choose next time."
+    }
 }
 
 fn close_saved_words(undo: bool, sync: bool) -> String {
@@ -9832,6 +9846,19 @@ mod tests {
             assert_eq!(arrival_total(&number.to_string()), Ok(Some(number)));
         }
         assert!(arrival_total("1.5").is_err());
+    }
+
+    #[test]
+    fn iter23_s_am1_conflict_words_offer_a_close_only_when_it_can_happen() {
+        assert_eq!(
+            conflict_close_words(true),
+            "Choose which HP to keep before you close."
+        );
+        // Lookalike outside the rule: a conflict with nothing blocking keeps the close offer.
+        assert_eq!(
+            conflict_close_words(false),
+            "Choose which HP to keep, or close and choose next time."
+        );
     }
 
     #[test]

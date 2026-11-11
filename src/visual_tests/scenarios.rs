@@ -6960,6 +6960,19 @@ pub mod signed_in {
                 format!("At {size:?}, Connect to sync starts the line and Review conflict follows it, apart: {pair:?}"),
             );
         }
+        // iter-23-S AM1: the close is blocked, so the words do not offer it, and the dialog
+        // shows why in view, not only on hover.
+        let blocked_words = |d: &Driver<'_>| {
+            d.is_disabled("Close now")
+                && d.visible_text("Choose which HP to keep before you close.")
+                && d.visible_text(crate::encounter_run::CLOSE_BLOCKED)
+                && !d.visible_text("or close and choose next time")
+        };
+        d.observe(
+            "iter-23-S-AM1-signed-out",
+            blocked_words(d),
+            "Signed out, a blocked Close now is not offered in the words, and its reason shows",
+        );
         d.state("close-with-conflict-signed-out", Sizes::Default);
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
@@ -6976,6 +6989,11 @@ pub mod signed_in {
             CHOOSE,
             &[SMALL, DEFAULT, LARGE],
             Some(&CLOSE_DIALOG),
+        );
+        d.observe(
+            "iter-23-S-AM1-signed-in",
+            blocked_words(d),
+            "Signed in, a blocked Close now is not offered in the words, and its reason shows",
         );
         d.state("close-with-conflict-signed-in", Sizes::Default);
         d.press(Key::Escape);
@@ -7832,6 +7850,12 @@ pub mod session_notes {
                     "A wide Timeline exposes every action without More"
                 );
             }
+            // iter-23-S FK7: with no day yet, the header names no clock.
+            d.observe(
+                "iter-23-S-FK7",
+                d.visible_text("events") && !d.visible_text("Now:"),
+                "A timeline with no day yet has no Now in its header",
+            );
         });
         d.check_tab_order("timeline");
         d.click_add_event(ADD_DAY);
@@ -7851,6 +7875,32 @@ pub mod session_notes {
         d.expect("Copied");
         d.expect("Mentioned in");
         d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            // iter-23-S FK5: the list row draws the rest ruling as the plan row and the detail
+            // do: its icon and word in the ruling's colour.
+            let mut rulings = Vec::new();
+            let mut in_row = false;
+            d.each_painted_text(|text, _| {
+                let job = &text.galley.job;
+                if job.text.contains("Everyone at full") {
+                    // The list row's second line puts its other facts before the ruling.
+                    in_row |= job.text.contains(" · ");
+                    rulings.extend(job.sections.iter().filter_map(|section| {
+                        let words = &job.text[section.byte_range.clone()];
+                        words
+                            .contains("Everyone at full")
+                            .then_some(section.format.color)
+                    }));
+                }
+            });
+            d.observe(
+                "iter-23-S-FK5",
+                in_row
+                    && !rulings.is_empty()
+                    && rulings
+                        .iter()
+                        .all(|color| *color == crate::design::colors().document.saved),
+                format!("The list row's ruling uses the ruling's colour: {rulings:?}"),
+            );
             let label_visible = d.visible_text("TITLE") || d.visible_text("Title");
             d.observe(
                 "iter-2-C-FT12",
@@ -8118,6 +8168,13 @@ pub mod session_notes {
         // as Move runs and save is on Rules and runs.
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
             super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+            // iter-23-S FK8: the warning names which choice hides the files.
+            d.observe(
+                "iter-23-S-FK8",
+                d.visible_text("If you save without moving, Splat no longer shows these files.")
+                    && !d.visible_text("will not show these files from the new folder"),
+                "The folder warning says Save without moving hides the files",
+            );
         });
         // Must stay true: the open details form owns its own save, so the move is not primary.
         d.click("Edit details");
@@ -8807,6 +8864,34 @@ pub mod session_notes {
         d.app_mut().timeline.save();
         d.settle();
         d.expect("Timeline.md also changed outside Splat. Both changes are kept.");
+        // iter-23-S FK6: the outside change is a result like the others in the list column, with
+        // the info icon on its line and words in the text colour, not muted help text.
+        let mut words = None;
+        let mut icons = Vec::new();
+        let icon = crate::design::icons::INFO;
+        d.each_painted_text(|text, _| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text
+                .galley
+                .job
+                .text
+                .starts_with("Timeline.md also changed outside Splat.")
+            {
+                words = Some((rect, text.galley.job.sections[0].format.color));
+            } else if text.galley.job.text == icon {
+                icons.push(rect);
+            }
+        });
+        d.observe(
+            "iter-23-S-FK6",
+            words.is_some_and(|(words, color)| {
+                color == crate::design::colors().text
+                    && icons.iter().any(|icon| {
+                        icon.right() <= words.left() && (icon.top() - words.top()).abs() <= 1.0
+                    })
+            }),
+            format!("The outside change reads as an info message: {words:?}"),
+        );
         d.observe_both(
             "i20-S1",
             "Separate Timeline edits save without a conflict or a rail error",
@@ -9165,6 +9250,13 @@ pub mod session_recording {
                     .any(|node| node.in_view() && node.name.starts_with("Process:"))
             );
             check_one_primary(d, "Continue processing", "iter-8-C-banner-failed-primary");
+            // iter-23-S FE1 lookalike: with the audio there, the advice stays and no reason shows.
+            d.observe(
+                "iter-23-S-FE1-audio-there",
+                d.visible_text("Wait, then select Continue processing.")
+                    && !d.visible_text("Audio removed. Restore the WAV file"),
+                "A retry that can run keeps its advice",
+            );
             let size = d.window_size();
             check_choices_at_text(
                 d,
@@ -9228,6 +9320,32 @@ pub mod session_recording {
                 "iter-9-C-ST1-blocked-availability",
                 d.is_disabled("Continue processing"),
                 "A banner retry with removed audio is blocked",
+            );
+            // iter-23-S FE1: the reason stands beside the blocked action, and the words no
+            // longer tell the DM to select it.
+            const GONE: &str = "Audio removed. Restore the WAV file to process it.";
+            // A wrapped label in a wrapped row starts its first line after the controls before
+            // it; measure that line.
+            let mut reason = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text == GONE
+                    && let Some(row) = text.galley.rows.first()
+                {
+                    let left = row.glyphs.first().map_or(0.0, |glyph| glyph.pos.x);
+                    let min = text.pos + row.pos.to_vec2() + egui::vec2(left, 0.0);
+                    reason = Some(egui::Rect::from_min_size(min, row.size));
+                }
+            });
+            let button = d.place_of("Continue processing");
+            d.observe(
+                "iter-23-S-FE1",
+                !d.visible_text("Wait, then select Continue processing")
+                    && d.visible_text("The transcript and summary service is busy.")
+                    && reason.zip(button).is_some_and(|(reason, button)| {
+                        reason.left() >= button.right() && reason.center().y > button.top()
+                            && reason.center().y < button.bottom()
+                    }),
+                format!("The blocked reason follows Continue processing on its line: {reason:?}, {button:?}"),
             );
             let process = d
                 .nodes()
@@ -9394,8 +9512,8 @@ pub mod session_recording {
             let file = note.path.file_name().unwrap().to_string_lossy();
             d.observe(
                 "iter-9-C-ST3-FT11",
-                rows.iter().any(|row| row.name.contains(file.as_ref()))
-                    && d.visible_text(&file.replace(' ', "\u{a0}")),
+                // iter-23-S FA11: a file name keeps its word spaces, so it wraps at one.
+                rows.iter().any(|row| row.name.contains(file.as_ref())) && d.visible_text(&file),
                 format!("Equal session row shows {file} and names it accessibly"),
             );
         }
@@ -10124,7 +10242,26 @@ pub mod session_recording {
         d.expect("Continue processing sends the raw transcript");
         d.expect("The audio is not sent again.");
         d.state_prepared("processing-failed", Sizes::All, |d| {
-            check_processing_action(d, "Continue processing:", true)
+            check_processing_action(d, "Continue processing:", true);
+            // iter-23-S FL4: the failure's sentence wraps at the reader's line length, as the
+            // destination below it does.
+            let mut widths = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("your limit is reached") {
+                    widths.push(text.galley.size().x);
+                }
+            });
+            d.observe(
+                "iter-23-S-FL4",
+                !widths.is_empty()
+                    && widths
+                        .iter()
+                        .all(|width| *width <= crate::design::READER_MEASURE + 1.0),
+                format!(
+                    "At {:?}, the failure reason is no wider than the reader measure: {widths:?}",
+                    d.window_size()
+                ),
+            );
         });
 
         // The open recording row owns the retry and clears the old failure.
@@ -10519,10 +10656,18 @@ pub mod session_recording {
             });
             d.observe("iter-7-C-FT3", separated, format!("Missing-note safe choices share a line when they fit; Discard has an L or M gap at {size:?}"));
         }
+        // iter-23-S FL2: the warning says Splat found the note under its new name, so the first
+        // choice is explained.
+        d.observe(
+            "iter-23-S-FL2",
+            d.visible_text("This note was moved or renamed. It is now Renamed in Obsidian.md.")
+                && !d.visible_text("This file is gone from the folder."),
+            "A renamed note's warning names where it went",
+        );
         check_choices_at_text(
             d,
             "iter-15-C-FT1-gone",
-            "This file is gone from the folder.",
+            "This note was moved or renamed.",
             &[
                 "Save my draft to Renamed in Obsidian.md",
                 "Save my draft as a new file",
@@ -13149,7 +13294,8 @@ pub mod session_plan {
                 link.and_then(|link| d.painted_word_rect(name, link.expand(crate::design::XS)))
             })
             .collect();
-        let edge = d.painted_left("Kestrel 7/41");
+        // The grid's first cell, in the party bar's order (iter-23-S FK4).
+        let edge = d.painted_left("Brannoch 58/62");
         let log = words[0];
         d.observe(
             "iter-14-C-FT4",
@@ -13179,6 +13325,44 @@ pub mod session_plan {
 
     /// FT1: the party bar says where its numbers come from whenever the room after the players
     /// holds it. Its words are the last fact of each player's accessible name.
+    /// iter-23-S FK4: the plan's final HP grid reads in the party bar's order.
+    fn hp_grid_follows_the_bar(d: &mut Driver<'_>) {
+        let nodes = d.nodes();
+        let mut bar: Vec<_> = nodes
+            .iter()
+            .filter(|node| {
+                node.role == egui::accesskit::Role::Button
+                    && node.name.contains(" · HP ")
+                    && node.in_view()
+            })
+            .filter_map(|node| {
+                let first = node.name.split_whitespace().next()?;
+                Some((node.rect.left(), first.to_owned()))
+            })
+            .collect();
+        bar.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let bar: Vec<_> = bar.into_iter().map(|(_, name)| name).collect();
+        let mut grid: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.in_view() && node.role != egui::accesskit::Role::Button)
+            .filter_map(|node| {
+                let (first, hp) = node.name.split_once(' ')?;
+                (bar.iter().any(|name| name == first)
+                    && hp.split_whitespace().next()?.contains('/'))
+                .then(|| (node.rect.top().round(), node.rect.left(), first.to_owned()))
+            })
+            .collect();
+        grid.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        // A label can show twice in the tree at one place; one place is one cell.
+        grid.dedup();
+        let grid: Vec<_> = grid.into_iter().map(|(.., name)| name).collect();
+        d.observe(
+            "iter-23-S-FK4",
+            grid.len() >= 2 && grid == bar,
+            format!("The final HP grid reads as the party bar does: grid {grid:?}, bar {bar:?}"),
+        );
+    }
+
     fn party_bar_names_its_source(d: &mut Driver<'_>) {
         use egui::accesskit::Role;
         let size = d.window_size();
@@ -13343,6 +13527,31 @@ pub mod session_plan {
         d.click("Delete the saved run");
         d.expect(&format!("Start fight: {FIRST}"));
         assert!(!d.has(&format!("Resume: {FIRST}")));
+        // AT2: the notice says which Bridge Ambush went, and that the planned one stays.
+        let notice = format!("Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” stays.");
+        d.observe(
+            "iter-10-C-AT2",
+            d.visible_text(&notice),
+            format!("The removal notice names the removed fight by its state: {notice}"),
+        );
+        d.observe(
+            "iter-10-C-AT2-undo",
+            d.in_view("Undo remove")
+                && d.place_of("Undo remove")
+                    .zip(d.place_of(FIRST))
+                    .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
+            "Undo remove stays with the notice, above the remaining row",
+        );
+        // FT4: Timeline names the removed fight as the plan does.
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "iter-12-C-FT4",
+            d.visible_text(&format!("Removed “{FIRST}” (Round 2 · Paused)."))
+                && d.in_view("Undo remove"),
+            "Timeline's removal notice names the removed fight, with its Undo",
+        );
+        d.click(NAV_SESSIONS);
+        show_plan(d);
         write_note(d);
         d.observe(
             "T12.1",
@@ -13745,23 +13954,16 @@ pub mod session_plan {
 
         // T12.5: how a fight ended, in place.
         show_plan(d);
+        // iter-23-S FK2: a run that starts ends the removal's result and its Undo, so no notice
+        // sits above rows it no longer names.
+        let removal_gone = |d: &Driver<'_>| {
+            !d.has_containing(&format!("Removed “{FIRST}”")) && !d.has("Undo remove")
+        };
         d.state_prepared("plan-after-a-fight", Sizes::All, |d| {
-            // AT2: the notice says which Bridge Ambush went, and that the played one stays.
-            let notice = format!(
-                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
-            );
             d.observe(
-                "iter-10-C-AT2",
-                d.visible_text(&notice),
-                format!("The removal notice names the removed fight by its state: {notice}"),
-            );
-            d.observe(
-                "iter-10-C-AT2-undo",
-                d.in_view("Undo remove")
-                    && d.place_of("Undo remove")
-                        .zip(d.place_of(FIRST))
-                        .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
-                "Undo remove stays with the notice, above the remaining row",
+                "iter-23-S-FK2-plan",
+                removal_gone(d),
+                "After the fight ran, the plan shows no removal notice",
             );
         });
         d.begin_task();
@@ -13777,6 +13979,9 @@ pub mod session_plan {
         d.state_prepared("fight-in-place", Sizes::All, |d| {
             played_fight_links_at_the_text_edge(d);
             party_bar_names_its_source(d);
+            if d.window_size() == DEFAULT {
+                hp_grid_follows_the_bar(d);
+            }
         });
         d.observe(
             "T12.5",
@@ -13788,19 +13993,10 @@ pub mod session_plan {
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
         d.state_prepared("timeline-after-fight", Sizes::All, |d| {
-            // FT4: Timeline names the removed fight as the plan does, so the row below reads true.
-            let notice = format!(
-                "Removed “{FIRST}” (Round 2 · Paused). The other “{FIRST}” and its result stay."
-            );
             d.observe(
-                "iter-12-C-FT4",
-                d.visible_text(&notice),
-                format!("Timeline's removal notice names the removed fight: {notice}"),
-            );
-            d.observe(
-                "iter-12-C-FT4-row",
-                d.in_view("Undo remove") && d.has_containing("Held the bridge · Ended · Round 1"),
-                "Undo remove stays with the notice, and the played fight's row stays",
+                "iter-23-S-FK2-timeline",
+                removal_gone(d) && d.has_containing("Held the bridge · Ended · Round 1"),
+                "After the fight ran, Timeline shows no removal notice, and the played fight's row stays",
             );
         });
         d.click(NAV_SESSIONS);
@@ -13813,6 +14009,11 @@ pub mod session_plan {
             "T14.4",
             d.has(&format!("Start fight: {FIRST}")),
             "A fight planned a second time can start a second time",
+        );
+        d.observe(
+            "iter-23-S-FK2-again",
+            removal_gone(d),
+            "Planning the fight again shows no old removal notice",
         );
         d.state("plan-the-same-fight-again", Sizes::Default);
 
@@ -13889,6 +14090,13 @@ pub mod session_plan {
         d.click("Long rest");
         d.click("Mark not at full");
         d.expect("Undo ruling");
+        // iter-23-S FL1: the result names the new ruling and its effect.
+        d.observe(
+            "iter-23-S-FL1-plan-off",
+            d.visible_text("The next fight starts from the HP the party has now.")
+                && !d.visible_text("Long rest ruling changed."),
+            "Mark not at full says what the next fight starts from",
+        );
         let session = d.app_mut().sessions.current();
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.state("plan-rest-ruling-off", Sizes::All);
@@ -13930,7 +14138,15 @@ pub mod session_plan {
             before.iter().zip(after).all(|(a, b)| (a - b).abs() < 1.0),
             "The open rest ruling stays at the same height at both sizes",
         );
-        d.expect_same("The ruling changes words and colour; the open row stays in place.");
+        d.observe(
+            "iter-23-S-FL1-plan-on",
+            d.visible_text("Everyone starts the next fight at full.")
+                && !d.visible_text("The next fight starts from the HP the party has now."),
+            "Mark everyone at full says the next fight starts at full",
+        );
+        d.expect_same(
+            "The ruling and its message change words and colour; the open row stays in place.",
+        );
         d.state("plan-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -14062,7 +14278,12 @@ pub mod session_plan {
         });
         d.click("Mark everyone at full");
         assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
-        d.expect_same("Only the long-rest status and action change; the wide page stays in place.");
+        d.observe(
+            "iter-23-S-FL1-timeline-on",
+            d.visible_text("Everyone starts the next fight at full."),
+            "On Timeline, Mark everyone at full says the next fight starts at full",
+        );
+        d.expect_same("Only the long-rest status, its action and its message change; the wide page stays in place.");
         d.state("timeline-rest-ruling-on", Sizes::All);
         d.click("Undo ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
@@ -14182,6 +14403,15 @@ pub mod session_plan {
                 !duplicates.is_empty()
                     && duplicates.iter().all(|node| !node.name.contains("Saved "))
             },
+        );
+        // iter-23-S FL3: a run that began after a restoring rest names the rest's step, in the
+        // same lower-case words as every other `Last:` value.
+        d.observe(
+            "iter-23-S-FL3",
+            d.has_containing("Last: full HP after long rest")
+                && !d.has_containing("carried over from the long rest")
+                && !d.has_containing("Last: Party"),
+            "Last: after a long rest says full HP, in lower case",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
