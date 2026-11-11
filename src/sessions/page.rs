@@ -268,9 +268,9 @@ pub struct Sessions {
     removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
-    /// The removed event, and the open note's file and words when it was first seen. A later
-    /// edit of that note ends the removal's result and Undo.
-    removal_note: Option<(String, Option<(PathBuf, String)>)>,
+    /// The removed event, and its session's note words when that note was first seen open.
+    /// A later edit of that note ends the removal's result and Undo.
+    removal_note: Option<(String, Option<String>)>,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
@@ -1333,29 +1333,35 @@ fn megabytes(bytes: u64) -> String {
 }
 
 impl Sessions {
-    /// A removed event's result and Undo end at the next edit of the note, from any page.
-    /// Book edits and a run that starts end them in the book itself.
+    /// A removed event's result and Undo belong to the event's session. An edit of that
+    /// session's note ends them, from any page; another note's edit does not. Book edits and
+    /// combat that begins in that session end them in the book itself.
     fn end_removal_on_note_edit(&mut self, book: &mut Book) {
-        let Some(removed) = book.removed_event().map(|event| event.id.clone()) else {
+        let Some((removed, owner)) = book
+            .removed_event()
+            .map(|event| (event.id.clone(), event.session))
+        else {
             self.removal_note = None;
             return;
         };
-        let note = self
-            .draft
-            .as_ref()
-            .map(|draft| (draft.path.clone(), draft.body.clone()));
+        // The owner's words, while its note is the one open.
+        let words = self.draft.as_ref().and_then(|draft| {
+            let session = self
+                .notes
+                .iter()
+                .find(|note| note.path == draft.path)
+                .map(|note| note.id)?;
+            (Some(session) == owner).then(|| draft.body.clone())
+        });
         match &self.removal_note {
-            Some((id, Some((path, body)))) if *id == removed => {
-                if note
-                    .as_ref()
-                    .is_some_and(|(now, words)| now == path && words != body)
-                {
+            Some((id, Some(seen))) if *id == removed => {
+                if words.as_ref().is_some_and(|words| words != seen) {
                     book.forget_removed();
                     self.removal_note = None;
                 }
             }
-            Some((id, None)) if *id == removed && note.is_none() => {}
-            _ => self.removal_note = Some((removed, note)),
+            Some((id, None)) if *id == removed && words.is_none() => {}
+            _ => self.removal_note = Some((removed, words)),
         }
     }
 
@@ -7434,39 +7440,69 @@ mod tests {
             ),
             "Removed “Bridge Ambush” (Round 2 · Paused). The other “Bridge Ambush” and its result stay."
         );
-        // iter-23-S FK2: the removal's result and Undo end at the next edit of the note. Opening
-        // another note is not an edit of this one.
+        // iter-23-S FK2: the removal's result and Undo belong to the removed event's session.
+        // With B's note open, A's event goes from Timeline: an edit to B keeps A's Undo, and
+        // Undo brings back A's event and its words together. An edit to A's note ends it.
         let dir = tempfile::tempdir().unwrap();
-        let (one, two) = (dir.path().join("One.md"), dir.path().join("Two.md"));
-        fs::write(&one, "# One\n").unwrap();
-        fs::write(&two, "# Two\n").unwrap();
-        book.events.insert(0, fight("a", "Round 2"));
-        book.remove("a");
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let note = |id: Uuid, name: &str| {
+            let path = dir.path().join(format!("{name}.md"));
+            fs::write(&path, format!("# {name}\n")).unwrap();
+            Note {
+                id,
+                number: 1,
+                title: name.to_owned(),
+                date: "2026-01-01".into(),
+                path,
+                also: Vec::new(),
+            }
+        };
+        let (note_a, note_b) = (note(a, "A"), note(b, "B"));
+        let mut book = Book::default();
+        book.events = vec![
+            timeline::Event {
+                session: Some(a),
+                ..fight("a", "Round 2")
+            },
+            timeline::Event {
+                session: Some(b),
+                ..fight("b", "")
+            },
+        ];
         let mut sessions = Sessions {
-            draft: Some(Draft::open(&one).unwrap()),
+            draft: Some(Draft::open(&note_b.path).unwrap()),
+            notes: vec![note_a.clone(), note_b],
             ..Default::default()
         };
-        sessions.end_removal_on_note_edit(&mut book);
-        sessions.draft = Some(Draft::open(&two).unwrap());
+        book.remove("a");
+        let days = timeline::day_numbers(&book.events);
+        let words = removed_event_words(&book, Some(a), &days, "Bridge Ambush", &[]);
+        assert_eq!(words, "Removed “Bridge Ambush” (Round 2 · Paused).");
         sessions.end_removal_on_note_edit(&mut book);
         sessions
             .draft
             .as_mut()
             .unwrap()
             .body
-            .push_str("Another note's words.\n");
+            .push_str("B’s words.\n");
         sessions.end_removal_on_note_edit(&mut book);
         assert_eq!(
             book.removed(),
             Some("Bridge Ambush"),
-            "only that note's edit ends it"
+            "an edit to B keeps A’s Undo"
         );
-        sessions.draft = Some(Draft::open(&one).unwrap());
+        assert_eq!(book.undo_remove().as_deref(), Some("a"));
+        assert_eq!(book.events[0].id, "a");
+        assert_eq!(book.events[0].session, Some(a));
+        assert!(book.removed().is_none(), "the words go with the Undo");
+        book.remove("a");
+        sessions.end_removal_on_note_edit(&mut book);
+        sessions.draft = Some(Draft::open(&note_a.path).unwrap());
         sessions.end_removal_on_note_edit(&mut book);
         assert_eq!(
             book.removed(),
             Some("Bridge Ambush"),
-            "coming back is not an edit"
+            "opening A is not an edit"
         );
         sessions
             .draft
@@ -7475,7 +7511,7 @@ mod tests {
             .body
             .push_str("[[Bridge Ambush]]\n");
         sessions.end_removal_on_note_edit(&mut book);
-        assert!(book.removed().is_none());
+        assert!(book.removed().is_none(), "an edit to A ends it");
         assert!(book.undo_remove().is_none());
     }
 

@@ -1201,9 +1201,11 @@ Remove from tonight removes one fight or group link, retaining surrounding words
 row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
 next note or plan edit. Removing a timeline event names it by its state or result, `Removed “Bridge Ambush”
 (Round 2 · Paused).`, and, when another row of that name stays in the session, says so: `The other “Bridge
-Ambush” and its result stay.` The book owns that message and its Undo remove, on the plan and on Timeline;
-both end at the next note, plan or Timeline edit, and when a run starts (combat begins, so its event reaches
-Timeline). Opening another note is not an edit. Plan additions offer Undo add. A recording count stays muted inside its tab and
+Ambush” and its result stay.` The book owns that message and its Undo remove, on the plan and on Timeline,
+and they belong to the removed event's session. They end at an edit of that session's note, plan or Timeline
+events, and when combat begins in that session (its event reaches Timeline; opening Setup does not). Another
+session's edit, opening a note, a run's new round and a reload that leaves that session alone keep them. A
+newer removal replaces them. Undo puts the event back after the event that was before it. Plan additions offer Undo add. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
 once. When the second line is too long, its `Last:` part gives up whole words first (`Last: 1 damage to
