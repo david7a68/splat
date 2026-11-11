@@ -3183,11 +3183,25 @@ impl Run {
             status.as_str()
         };
         // A status that cannot fit the member slot whole takes a full-width line above the
-        // members and controls, where it wraps at its spaces. FB1: the row decides by its
-        // widest join status too (`Added before combat`), so a join, or a second join that
-        // changes the words, never changes the row's shape: the line stays, blank before one.
+        // members and controls, where it wraps at its spaces. FB1: a group that has joined
+        // decides by its widest join status too (`Added before combat`), so a second join that
+        // changes the words never changes the row's shape.
+        // The rounds this group joined in, from the run itself.
+        let rounds: Vec<u64> = self
+            .state
+            .participants
+            .iter()
+            .filter_map(|p| p.added_from.as_ref())
+            .filter(|from| from.group_id == Some(group.id))
+            .map(|from| from.round)
+            .collect();
         let widest = format!(
-            "Added before combat{}",
+            "{}{}",
+            if rounds.contains(&0) {
+                "Added before combat".to_owned()
+            } else {
+                format!("Added in round {}", self.state.round.max(10))
+            },
             if changed {
                 format!(" · {} Changed", icons::CHANGED)
             } else {
@@ -3203,8 +3217,14 @@ impl Run {
                     &Type::Small.font(ui),
                 )
                 <= grip.rect.width();
+        // Only a group that has joined can change its join words, so only its row keeps the
+        // room of the widest words it can show again: `Added before combat` once it joined
+        // then, else `Added in round NN`. A group that never joined has no blank line.
+        let joined = !rounds.is_empty();
         let status_above = arrival_summary(ui, status_shown, &members, width).is_none()
-            || (!widest_in_heading && arrival_summary(ui, &widest, &members, width).is_none());
+            || (joined
+                && !widest_in_heading
+                && arrival_summary(ui, &widest, &members, width).is_none());
         if status_above {
             let words = if status_shown.is_empty() {
                 " "
