@@ -1474,23 +1474,41 @@ impl SaveFailure {
     }
 }
 
-/// The open draft's words, as the failed-Save check may see them. In tests, every read of the
-/// words adds one to the check's read count.
-struct DraftView<'a> {
-    text: &'a str,
-    #[cfg(test)]
-    checks: &'a std::cell::Cell<(usize, usize)>,
-}
+use draft_view::DraftView;
 
-impl std::ops::Deref for DraftView<'_> {
-    type Target = str;
-    fn deref(&self) -> &str {
+/// The open draft's words, as the failed-Save check may see them. The field is private to this
+/// module, so the only way to the words is `Deref`, and in tests every read adds one to the
+/// check's read count.
+mod draft_view {
+    pub(super) struct DraftView<'a> {
+        text: &'a str,
         #[cfg(test)]
-        {
-            let (checks, reads) = self.checks.get();
-            self.checks.set((checks, reads + 1));
+        checks: &'a std::cell::Cell<(usize, usize)>,
+    }
+
+    impl<'a> DraftView<'a> {
+        pub(super) fn new(
+            text: &'a str,
+            #[cfg(test)] checks: &'a std::cell::Cell<(usize, usize)>,
+        ) -> Self {
+            Self {
+                text,
+                #[cfg(test)]
+                checks,
+            }
         }
-        self.text
+    }
+
+    impl std::ops::Deref for DraftView<'_> {
+        type Target = str;
+        fn deref(&self) -> &str {
+            #[cfg(test)]
+            {
+                let (checks, reads) = self.checks.get();
+                self.checks.set((checks, reads + 1));
+            }
+            self.text
+        }
     }
 }
 
@@ -5579,11 +5597,11 @@ impl Library {
                 let (checks, reads) = self.failure_checks.get();
                 self.failure_checks.set((checks + 1, reads));
             }
-            let draft = DraftView {
-                text: &self.draft,
+            let draft = DraftView::new(
+                &self.draft,
                 #[cfg(test)]
-                checks: &self.failure_checks,
-            };
+                &self.failure_checks,
+            );
             if !failure.owns(note, self.draft_revision, draft) {
                 self.save_failure = None;
             }
