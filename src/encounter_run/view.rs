@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
-    SAVED_HP_USED, SHEET_SOURCE, display, mode_label,
+    SAVED_HP_USED, SHEET_SOURCE, Unend, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -5444,13 +5444,13 @@ impl Run {
         } else {
             "Close run"
         }));
-        if !self.undo_continues() {
+        if !self.undo_continues() || self.undo_blocked().is_some() {
             actions += match self.continue_blocked {
                 Some(reason) => continue_reason_width(ui, reason) + gap,
                 None => glance(continue_action()),
             };
         }
-        if !self.history.is_empty() {
+        if !self.history.is_empty() && self.undo_blocked().is_none() {
             actions += glance(self.undo_action("Undo"));
         }
         let one_line = title_width + actions <= ui.available_width();
@@ -5709,11 +5709,11 @@ impl Run {
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
     fn ended_continue(&mut self, ui: &mut egui::Ui) {
-        if self.undo_continues() {
+        if self.undo_continues() && self.undo_blocked().is_none() {
             return;
         }
-        // Continue fight is for the fight that was played last. For another fight, the
-        // reason stands where the control would be.
+        // Continue fight, and Undo of an ending from the run file, are for the fight that was
+        // played last. For another fight, the reason stands where the control would be.
         if let Some(reason) = self.continue_blocked {
             let width = continue_reason_width(ui, reason);
             ui.allocate_ui_with_layout(
@@ -5730,14 +5730,15 @@ impl Run {
             .show(ui)
             .clicked()
         {
-            self.continue_fight();
+            // The app has the Timeline, so it answers this by the rule before the next frame.
+            self.wants_unend = Some(Unend::Continue);
         }
     }
 
     /// Undo in the ended header. It gives up its target before a word beside it is cut, and
     /// keeps the target in hover and in its accessible name.
     fn ended_undo(&mut self, ui: &mut egui::Ui, room: f32) {
-        if self.history.is_empty() {
+        if self.history.is_empty() || self.undo_blocked().is_some() {
             return;
         }
         let full = self.undo_label();

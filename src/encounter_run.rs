@@ -695,6 +695,9 @@ pub(crate) struct Run {
     /// Beside each label: true when a sheet made the step, not the DM. Only such a step may
     /// give up its source when Undo is tight.
     history_from_sheet: Vec<bool>,
+    /// How many of the oldest steps came from the run file. Undo of an ending among them makes
+    /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
+    saved_steps: usize,
     selected: usize,
     /// More targets for one amount, beside the selected row. Never saved.
     also: BTreeSet<usize>,
@@ -758,8 +761,11 @@ pub(crate) struct Run {
     /// The account's one status function supplies the offline colour too.
     pub account_status: Option<crate::design::Status<'static>>,
     /// Why this ended fight cannot go on, when it is not the fight that was played last. The
-    /// app says so while the run is ended. Never saved.
+    /// app works it out when the Timeline or the run changes, for the view to show. The acts
+    /// work it out again (`unend`). Never saved.
     pub continue_blocked: Option<&'static str>,
+    /// An act that makes this ended fight live again waits for the app, which has the Timeline.
+    pub wants_unend: Option<Unend>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
     /// Opened from a save.
@@ -879,6 +885,13 @@ pub(crate) fn continue_blocked(
         .max_by_key(|(at, event)| (event.played_order, *at))
         .and_then(|(_, event)| event.run);
     (last != Some(run)).then_some(CONTINUE_LATER)
+}
+/// An act that makes an ended fight live again. Both go by `continue_blocked`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Unend {
+    Continue,
+    /// Undo of an ending that came from the run file.
+    Undo,
 }
 /// The outcome of an ending whose outcome field was left empty.
 const NO_OUTCOME: &str = "Undecided";
@@ -1094,6 +1107,7 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
+            saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -1139,6 +1153,7 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
+            wants_unend: None,
             reopened: false,
             no_saved_undo: None,
             undo_unread: false,
@@ -1240,6 +1255,7 @@ impl Run {
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
     fn keep_step(&mut self, before: State, label: String, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
+        self.saved_steps = self.saved_steps.saturating_sub(extra);
         self.history.drain(..extra);
         self.history_labels.drain(..extra);
         self.history_from_sheet.drain(..extra);
@@ -1724,14 +1740,35 @@ impl Run {
     fn undo_continues(&self) -> bool {
         self.last_step() == Some(END_STEP)
     }
-    /// Take the ending away, as one named step that Undo puts back. Play goes on from the turn
-    /// the fight ended on, and sync starts again by the rule for a resumed run.
-    pub(crate) fn continue_fight(&mut self) {
+    /// True while Undo would take away an ending that came from the run file.
+    fn undo_unends_saved(&self) -> bool {
+        self.undo_continues() && self.history.len() <= self.saved_steps
+    }
+    /// Why Undo cannot take the ending away, as far as the app last worked it out.
+    pub(super) fn undo_blocked(&self) -> Option<&'static str> {
+        self.continue_blocked.filter(|_| self.undo_unends_saved())
+    }
+    /// Make this ended fight live again, if `continue_blocked` allows it now, with the
+    /// Timeline read first if it changed on disk. Continue fight takes the ending away as one
+    /// named step that Undo puts back; Undo takes back an ending from the run file. Play goes
+    /// on from the turn the fight ended on, and sync starts again by the rule for a resumed
+    /// run. Otherwise the run says why and stays ended.
+    pub(crate) fn unend(&mut self, act: Unend, timeline: &mut crate::timeline::Book) {
+        if !self.ended() {
+            return;
+        }
+        timeline.read_if_changed();
+        self.continue_blocked =
+            continue_blocked(&timeline.events, timeline.unreadable.is_none(), self.id);
         if let Some(reason) = self.continue_blocked {
             self.error = Some(reason.into());
             return;
         }
-        self.run_command(Command::Continue);
+        match act {
+            Unend::Continue => self.run_command(Command::Continue),
+            Unend::Undo if self.undo_unends_saved() => self.take_back(),
+            Unend::Undo => {}
+        }
     }
     /// The outcome of the ending that the newest Continue fight took away, for the next
     /// ending to start from. It is read from the Undo steps, which the run file keeps, so it
@@ -2324,7 +2361,17 @@ impl Run {
         Ok(label)
     }
     fn undo(&mut self) {
+        // An ending from the run file can belong to a fight played before another one, so the
+        // app decides it by the Timeline.
+        if self.undo_unends_saved() {
+            self.wants_unend = Some(Unend::Undo);
+            return;
+        }
+        self.take_back();
+    }
+    fn take_back(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.saved_steps = self.saved_steps.min(self.history.len());
             self.notice = None;
             self.dm_steps += 1;
             self.history_labels.pop();
@@ -3202,6 +3249,7 @@ impl Run {
             }
         }
         let indices: Vec<_> = affected.into_iter().collect();
+        let mut saved = self.saved_steps.min(self.history.len());
         for (at, previous) in self.history.iter().enumerate() {
             let next = self.history.get(at + 1).unwrap_or(before);
             let touches = indices.iter().any(|index| {
@@ -3215,6 +3263,7 @@ impl Run {
             });
             if touches {
                 dropped.push(self.history_labels[at].clone());
+                saved -= usize::from(at < self.saved_steps);
                 continue;
             }
             let mut previous = previous.clone();
@@ -3228,6 +3277,7 @@ impl Run {
         self.history = kept;
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
+        self.saved_steps = saved;
         if !dropped.is_empty() {
             let line = format!("Sheet update removed undo steps: {}.", dropped.join("; "));
             self.state.log.push(line.clone());
@@ -3828,6 +3878,7 @@ impl Run {
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
             Some(Some(steps)) => {
                 (run.history, run.history_labels, run.history_from_sheet) = steps;
+                run.saved_steps = run.history.len();
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
             // The run is whole without them. It says so, and the next save leaves them out.
@@ -3908,6 +3959,7 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
+            saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
             dm_steps: 0,
@@ -3951,6 +4003,7 @@ impl Run {
             hide_panel: false,
             lookup_open: false,
             continue_blocked: None,
+            wants_unend: None,
             reopened: true,
             no_saved_undo: None,
             undo_unread: false,
@@ -5892,6 +5945,10 @@ mod tests {
         assert!(run.syncs.is_empty(), "no read can change the result");
 
         run.undo();
+        assert!(
+            !run.ended(),
+            "an ending made in this opening goes at once, as on main"
+        );
         run.tick_sync(&ctx, test_session(), 1, Some(&remote));
         assert!(run.syncs[&0].enabled);
 
@@ -5899,7 +5956,7 @@ mod tests {
         run.apply(Command::End("Won".into())).unwrap();
         run.tick_sync(&ctx, test_session(), 1, Some(&remote));
         assert!(run.syncs.is_empty());
-        run.continue_fight();
+        run.run_command(Command::Continue);
         run.tick_sync(&ctx, test_session(), 1, Some(&remote));
         assert!(run.syncs[&0].enabled, "sync starts again by itself");
         assert!(
@@ -5916,7 +5973,7 @@ mod tests {
         run.apply(Command::End("Won".into())).unwrap();
         let campaign = stored(&mut run, dir.path());
         let mut reopened = close_and_reopen(&mut run, campaign);
-        reopened.continue_fight();
+        reopened.run_command(Command::Continue);
         first_sync(&mut reopened, max, 9);
         assert_eq!(reopened.state.participants[0].hp, Some(max - 9));
         assert_eq!(reopened.undo_label(), "Undo: continue fight");
@@ -7960,6 +8017,24 @@ mod tests {
             continue_blocked(&book.events, true, Uuid::new_v4()),
             Some(CONTINUE_NO_EVENT)
         );
+        // The app starts again with A open, as A was when the app closed. A's ending comes
+        // from its file, so Undo of it goes by the rule, as Continue fight does, though no
+        // answer was worked out before: A stays ended, and the next fight still starts from B.
+        let mut older = Run::open(a.path().unwrap(), campaign).unwrap();
+        assert!(older.undo_continues());
+        older.undo();
+        assert_eq!(older.wants_unend, Some(Unend::Undo), "the app answers it");
+        for act in [Unend::Undo, Unend::Continue] {
+            older.unend(act, &mut book);
+            assert!(older.ended(), "{act:?} of an older fight");
+            assert_eq!(older.error.as_deref(), Some(CONTINUE_LATER));
+        }
+        assert_eq!(
+            older.undo_blocked(),
+            Some(CONTINUE_LATER),
+            "the view says why"
+        );
+        b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", false);
         // A long rest is later than B, whatever it restored: the DM can change that ruling.
         let rest = book.add_long_rest(session);
         assert_eq!(
@@ -7971,19 +8046,19 @@ mod tests {
             continue_blocked(&book.events, true, b.id),
             Some(CONTINUE_LATER)
         );
-        book.reload();
-        assert_eq!(continue_blocked(&book.events, true, b.id), None);
-        // A run that is told the reason does not go on.
+        // B's ending from its file is not taken back either, while the rest is later.
         let mut refused = Run::open(b.path().unwrap(), campaign).unwrap();
-        refused.continue_blocked = Some(CONTINUE_LATER);
-        refused.continue_fight();
+        refused.undo();
+        refused.unend(Unend::Undo, &mut book);
         assert!(refused.ended());
         assert_eq!(refused.error.as_deref(), Some(CONTINUE_LATER));
+        book.reload();
+        assert_eq!(continue_blocked(&book.events, true, b.id), None);
 
         // From History or the plan's played row: B opens from its file and goes on.
         let mut b = Run::open(b.path().unwrap(), campaign).unwrap();
         let mut said = None;
-        b.continue_fight();
+        b.unend(Unend::Continue, &mut book);
         assert!(b.error.is_none(), "{:?}", b.error);
         tell(&mut book, &mut said, Some(&mut b), session);
         assert_eq!(standing(&b), Standing::Unfinished);
@@ -8045,7 +8120,7 @@ mod tests {
         b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", true);
         // Close run, and the file has it.
         tell(&mut book, &mut said, None, session);
-        let book = {
+        let mut book = {
             let mut book = Book::default();
             book.open(Some(temp.path()));
             book
@@ -8055,6 +8130,16 @@ mod tests {
             continue_blocked(&book.events, true, a.id),
             Some(CONTINUE_LATER)
         );
+        // Another copy of Splat rules a long rest after B, and this one has not looked at the
+        // disk since. The act reads the Timeline first, so B stays ended.
+        let mut other = Book::default();
+        other.open(Some(temp.path()));
+        other.add_long_rest(session);
+        other.save();
+        let mut again = Run::open(b.path().unwrap(), campaign).unwrap();
+        again.unend(Unend::Continue, &mut book);
+        assert!(again.ended(), "the act must read the disk first");
+        assert_eq!(again.error.as_deref(), Some(CONTINUE_LATER));
     }
     #[test]
     fn loot_rolls_after_the_end_and_keeps_each_lines_results_apart() {
@@ -8152,7 +8237,7 @@ mod tests {
         // Another row is selected, as after a look at the final state.
         reopened.selected = 2;
         assert_ne!(reopened.state.order[reopened.state.cursor], 2);
-        reopened.continue_fight();
+        reopened.run_command(Command::Continue);
         assert!(reopened.error.is_none(), "{:?}", reopened.error);
         assert_eq!(reopened.state.phase, Phase::Running);
         assert_eq!((reopened.state.cursor, reopened.state.round), turn);
@@ -8181,7 +8266,7 @@ mod tests {
         assert_eq!(standing(&closed), Standing::Ended);
         assert_eq!(serde_json::to_value(&closed.state).unwrap(), ended);
         assert_eq!(closed.undo_label(), "Undo: 2 loot rolls on gems");
-        closed.continue_fight();
+        closed.run_command(Command::Continue);
         // The next ending starts from the outcome of the ending that went, also after the
         // continued fight is closed and opened again.
         assert_eq!(closed.outcome_before_continue(), Some("Won"));
@@ -8199,7 +8284,7 @@ mod tests {
         // An ending with no outcome given leaves the field empty for the next one.
         closed.undo();
         closed.apply(Command::End(NO_OUTCOME.into())).unwrap();
-        closed.continue_fight();
+        closed.run_command(Command::Continue);
         assert_eq!(closed.outcome_before_continue(), None);
 
         // The same with the Timeline, the plan row and the next fight's HP.

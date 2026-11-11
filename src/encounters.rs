@@ -1972,8 +1972,11 @@ pub struct Encounters {
     run: Option<crate::encounter_run::Run>,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
-    /// The Timeline cannot be read now, so it cannot say which fight was played last.
-    pub timeline_unreadable: bool,
+    /// Why the fight read in History cannot go on (`continue_blocked`), when it cannot.
+    history_blocked: Option<&'static str>,
+    /// What the rule's answers were worked out from: the Timeline's count of changes, the
+    /// open run if it is ended, and the fight read in History.
+    continue_key: Option<(u64, Option<uuid::Uuid>, Option<std::path::PathBuf>)>,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -2333,14 +2336,53 @@ impl Encounters {
                 }
             }
         }
+        // The app has the Timeline, so it answers this by the rule before the next frame.
         if let Some(run) = &mut self.run
             && run.ended()
         {
-            run.continue_fight();
+            run.wants_unend = Some(crate::encounter_run::Unend::Continue);
         }
         self.history_read = None;
         self.go_to_run = true;
         self.error = None;
+    }
+    /// Work out again, by `continue_blocked`, whether the ended fights on screen can go on: the
+    /// open run, and the fight read in History. The rule reads every event, so only when the
+    /// Timeline or those fights changed.
+    pub fn follow_continue_rule(&mut self, timeline: &crate::timeline::Book) {
+        let ended = self
+            .run
+            .as_ref()
+            .filter(|run| run.ended())
+            .map(|run| run.id());
+        let read = self.history_read.as_ref().map(|(path, _)| path.as_path());
+        if self
+            .continue_key
+            .as_ref()
+            .is_some_and(|(changes, run, path)| {
+                *changes == timeline.changes() && *run == ended && path.as_deref() == read
+            })
+        {
+            return;
+        }
+        let rule = |id| {
+            crate::encounter_run::continue_blocked(
+                &timeline.events,
+                timeline.unreadable.is_none(),
+                id,
+            )
+        };
+        if let Some(run) = self.run.as_mut().filter(|run| run.ended()) {
+            run.continue_blocked = rule(run.id());
+        }
+        let runs = self
+            .snapshot
+            .as_ref()
+            .map_or(&[][..], |snapshot| &snapshot.runs);
+        self.history_blocked = read
+            .and_then(|read| runs.iter().find(|run| run.path == read)?.id)
+            .and_then(rule);
+        self.continue_key = Some((timeline.changes(), ended, read.map(Into::into)));
     }
     /// The newest unfinished save is one click away from any page.
     pub fn paused_run(&self) -> Option<&crate::encounter_run::SavedRunInfo> {
@@ -3575,7 +3617,7 @@ impl Encounters {
                     start_blocked,
                     live.as_ref(),
                     self.history_read.as_ref(),
-                    (story.events, !self.timeline_unreadable),
+                    self.history_blocked,
                     &mut action,
                 );
             });
@@ -6984,12 +7026,38 @@ mod tests {
         assert_eq!(editor.error.as_deref(), Some(BLOCKED_BY_RUN));
         assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);
         assert_eq!(fs::read(&path).unwrap(), bytes);
-        // With the slot free, it opens that run as a live fight, on the round it ended in.
+        // With the slot free, it opens that run, and the app answers by the rule with the
+        // Timeline. A run opened this way has no answer yet, and that is not a yes: with no
+        // event for this fight, the run says why and stays ended.
         editor.run = None;
         editor.go_to_run = false;
         editor.continue_saved_run(&path, &campaign);
         assert!(editor.error.is_none() && editor.go_to_run && editor.history_read.is_none());
+        let mut timeline = crate::timeline::Book::default();
+        timeline.open(Some(dir.path()));
+        let answer = |editor: &mut Encounters, timeline: &mut crate::timeline::Book| {
+            let run = editor.run_mut().unwrap();
+            let act = run
+                .wants_unend
+                .take()
+                .expect("Continue fight waits for the rule");
+            run.unend(act, timeline);
+        };
+        answer(&mut editor, &mut timeline);
         let run = editor.run().unwrap();
+        assert!(run.ended());
+        assert!(
+            run.continue_blocked
+                .is_some_and(|reason| reason.starts_with("This fight is not on the Timeline"))
+        );
+        // On the Timeline as the fight that was played last, it goes on, on the round it
+        // ended in.
+        let fact = editor.run().unwrap().timeline_fact();
+        timeline.record_run(&fact, None, true);
+        editor.continue_saved_run(&path, &campaign);
+        answer(&mut editor, &mut timeline);
+        let run = editor.run().unwrap();
+        assert_eq!(run.continue_blocked, None);
         assert_eq!(run.path(), Some(path.as_path()));
         assert_eq!(run.state_words(false), "Round 3");
         let steps = |editor: &mut Encounters| {

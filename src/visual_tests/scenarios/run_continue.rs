@@ -164,6 +164,44 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-undo-is-the-way-on", Sizes::All);
+    // A long rest is ruled, and the app starts again. The ending now comes from the run file,
+    // so its Undo goes by the rule, as Continue fight does: no Undo of the ending, and the
+    // reason in its place. An Undo that reaches the run anyway leaves the fight ended.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click("Add Long rest");
+    d.click(BACK_TO_RUN);
+    d.app_mut().timeline.save();
+    d.restart();
+    let ended = |d: &mut Driver<'_>| d.app_mut().encounters.run().is_some_and(|run| run.ended());
+    let shown = ended(d) && !d.has(END_STEP) && d.visible_passage(LATER) && d.in_view(CLOSE_RUN);
+    d.observe(
+        "T17.8",
+        shown,
+        "After a later rest and a restart, the saved ending has no Undo and says why",
+    );
+    d.app_mut().encounters.run_mut().unwrap().wants_unend = Some(crate::encounter_run::Unend::Undo);
+    d.settle();
+    let still = ended(d);
+    d.observe(
+        "T17.8",
+        still,
+        "No restart bypass: an Undo of the saved ending leaves the fight ended after a later rest",
+    );
+    if d.has("Dismiss this message") {
+        d.click("Dismiss this message");
+    }
+    // The DM takes the rest away. The fight is the last again, and Undo of its ending is back.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click("More actions for Long rest");
+    d.click("Remove this event");
+    d.click(BACK_TO_RUN);
+    d.observe(
+        "T17.8",
+        undo_step(d) == END_STEP && !d.visible_passage(LATER),
+        "With the rest gone, Undo takes back the saved ending",
+    );
     open_lookup(d);
     whole_at_every_size(
         d,
@@ -265,6 +303,14 @@ pub fn run(d: &mut Driver<'_>) {
         "A rest that restored nobody is still later: no Continue fight",
     );
     // The DM takes the rest away. The fight is the last again.
+    let rest = d
+        .app_mut()
+        .timeline
+        .events
+        .iter()
+        .find(|event| event.kind == crate::timeline::Kind::LongRest)
+        .cloned()
+        .unwrap();
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.click("More actions for Long rest");
@@ -275,6 +321,24 @@ pub fn run(d: &mut Driver<'_>) {
         d.has(CONTINUE) && !d.visible_passage(LATER),
         "With no later fight or rest, Continue fight is offered again",
     );
+    // The rule reads every event, so it is worked out when the Timeline changes, and not on
+    // each frame. An event put back with no word of a change is not seen until there is one.
+    d.app_mut().timeline.events.push(rest.clone());
+    d.settle();
+    let kept = d.has(CONTINUE) && !d.visible_passage(LATER);
+    d.app_mut().timeline.touch();
+    d.settle();
+    d.observe(
+        "T17.8",
+        kept && !d.has(CONTINUE) && d.visible_passage(LATER),
+        format!("The rule is worked out when the Timeline changes, not on a quiet frame: {kept}"),
+    );
+    d.app_mut()
+        .timeline
+        .events
+        .retain(|event| event.id != rest.id);
+    d.app_mut().timeline.touch();
+    d.settle();
     // An outside edit makes Timeline.md unreadable. Splat cannot tell which fight was played
     // last, so the ended view says that. When the file can be read again, the control is back.
     let campaign = d.app_mut().campaigns.active_campaign().unwrap();

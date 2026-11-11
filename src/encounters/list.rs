@@ -625,7 +625,7 @@ pub(super) fn history_list(
     blocked: Option<&'static str>,
     live: Option<&SavedRunInfo>,
     read: Option<&(PathBuf, FightSummary)>,
-    (events, timeline_readable): (&[crate::timeline::Event], bool),
+    not_last: Option<&'static str>,
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
@@ -710,9 +710,6 @@ pub(super) fn history_list(
                         // The open run is this fight, so nothing stands in its way.
                         let here = live.is_some_and(|live| live.id == run.id);
                         // Continue fight is for the fight that was played last.
-                        let not_last = run.id.and_then(|id| {
-                            crate::encounter_run::continue_blocked(events, timeline_readable, id)
-                        });
                         if history_summary(ui, summary, blocked.filter(|_| !here), not_last) {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }
