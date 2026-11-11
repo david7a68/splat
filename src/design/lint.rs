@@ -1,5 +1,6 @@
-//! No raw colours or text sizes outside the design system. The allowlist can only
-//! shrink: a count above it fails, and a count below it asks you to lower it.
+//! No raw colours or text sizes outside the design system, and no straight apostrophe in UI
+//! words. The allowlist can only shrink: a count above it fails, and a count below it asks
+//! you to lower it.
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -35,10 +36,46 @@ fn followed_by_number(text: &str) -> bool {
         .is_some_and(|c| c.is_ascii_digit() || c == '-')
 }
 
+/// The words inside each string literal that opens and closes on this line of code.
+fn string_literals(code: &str) -> Vec<&str> {
+    // A `'"'` character literal would turn the line inside out, so such a line has none.
+    if code.contains("'\"'") {
+        return Vec::new();
+    }
+    let mut literals = Vec::new();
+    let mut start = None;
+    let mut escaped = false;
+    for (at, c) in code.char_indices() {
+        match (start, c) {
+            (Some(_), '\\') if !escaped => escaped = true,
+            (Some(from), '"') if !escaped => {
+                literals.push(&code[from..at]);
+                start = None;
+            }
+            (None, '"') => start = Some(at + 1),
+            _ => escaped = false,
+        }
+    }
+    literals
+}
+
+/// A straight apostrophe inside a word (`campaign's`, `{name}'s`). UI words use `’`.
+fn straight_apostrophe(words: &str) -> bool {
+    let chars: Vec<char> = words.chars().collect();
+    chars
+        .windows(3)
+        .any(|w| w[1] == '\'' && (w[0].is_alphanumeric() || w[0] == '}') && w[2].is_alphabetic())
+}
+
 /// Every raw visual value on one line of code, by the rule it breaks.
 fn violations(line: &str) -> Vec<&'static str> {
     let mut found = Vec::new();
     let code = line.split("//").next().unwrap_or("");
+    // UI words use curly marks (docs/design-system.md, Widgets). File content, such as YAML or
+    // a prompt for a model, keeps straight ones and is counted in the allowlist.
+    if string_literals(code).into_iter().any(straight_apostrophe) {
+        found.push("straight-apostrophe");
+    }
     for constant in COLOUR_CONSTANTS {
         let pattern = format!("Color32::{constant}");
         if code.match_indices(&pattern).any(|(at, _)| {
@@ -85,16 +122,19 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             if !relative.ends_with("src/design") && !relative.ends_with("src/visual_tests") {
                 scan(&path, counts);
             }
-        } else if path.extension().is_some_and(|e| e == "rs") {
+        } else if path.extension().is_some_and(|e| e == "rs")
+            // A file of unit tests, such as `formats_tests.rs`, does not ship either.
+            && !relative.ends_with("tests.rs")
+        {
             let text = fs::read_to_string(&path).expect("read source file");
             // Unit tests may name colours and sizes. They do not ship.
-            let code = text.split("#[cfg(test)]\nmod tests").next().unwrap_or("");
+            // `mod tests;` near the top names a file of its own, so only an inline module ends it.
+            let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
             for line in code.lines() {
                 for rule in violations(line) {
-                    let start = relative.find("src/").unwrap_or(0);
-                    *counts
-                        .entry(format!("{} {rule}", &relative[start..]))
-                        .or_default() += 1;
+                    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
+                    let key = relative.strip_prefix(root).unwrap_or(&relative);
+                    *counts.entry(format!("{key} {rule}")).or_default() += 1;
                 }
             }
         }
@@ -104,10 +144,13 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
 #[test]
 fn raw_colours_and_sizes_stay_inside_the_design_system() {
     let mut counts = BTreeMap::new();
-    scan(
-        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
-        &mut counts,
-    );
+    // The core crate writes many UI words too, such as a note's warnings.
+    for folder in ["/src", "/crates/core/src"] {
+        scan(
+            Path::new(&format!("{}{folder}", env!("CARGO_MANIFEST_DIR"))),
+            &mut counts,
+        );
+    }
     let allowed: BTreeMap<String, usize> = ALLOWLIST
         .lines()
         .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
@@ -120,9 +163,12 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
     for (key, count) in &counts {
         let limit = allowed.get(key).copied().unwrap_or(0);
         if *count > limit {
-            problems.push(format!(
-                "{key}: {count} found, {limit} allowed. Use design tokens."
-            ));
+            let fix = if key.ends_with("straight-apostrophe") {
+                "Use ’ in UI words"
+            } else {
+                "Use design tokens"
+            };
+            problems.push(format!("{key}: {count} found, {limit} allowed. {fix}."));
         }
     }
     for (key, limit) in &allowed {
@@ -152,4 +198,19 @@ fn the_lint_finds_what_it_should() {
     assert!(violations("// Color32::RED in a comment").is_empty());
     assert!(violations("Color32::TRANSPARENT").is_empty());
     assert!(violations("font_id.size = prose.size();").is_empty());
+    assert_eq!(
+        violations("format!(\"Not in this campaign's packages.\")"),
+        ["straight-apostrophe"]
+    );
+    assert_eq!(
+        violations("format!(\"{name}'s sheet changed\")"),
+        ["straight-apostrophe"]
+    );
+    assert!(violations("format!(\"Not in this campaign’s packages.\")").is_empty());
+    // A lifetime, a character literal and a comment are not UI words.
+    assert!(violations("fn read<'a>(text: &'a str) -> &'a str {").is_empty());
+    assert!(violations("if c == '\"' && b == b'd' { \"x\" }").is_empty());
+    assert!(violations("let s = \"a\"; // the campaign's rule").is_empty());
+    // YAML's quoted scalars are file content: no letter on both sides of the mark.
+    assert!(violations("\"splat_in: '[[Undercroft]]'\"").is_empty());
 }

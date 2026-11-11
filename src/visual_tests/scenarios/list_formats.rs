@@ -229,6 +229,39 @@ pub fn run(d: &mut Driver<'_>) {
         |d| !d.has_containing("Imaginary initiative") && d.visible_text("Individually"),
     );
     d.state("rules-and-runs-choice-repaired", Sizes::All);
+    // Astra review of PR 235: the reader takes the heading in any case, so a lowercase
+    // `combat initiative` row is a rule choice too. Campaign's repair link opens Rules and
+    // runs, and the warning is there.
+    let saved = fs::read_to_string(&manifest).unwrap();
+    let lowercase = saved.replacen(
+        "| --- | --- |\n",
+        "| --- | --- |\n| combat initiative | Lost initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000003 %% |\n",
+        1,
+    );
+    assert_ne!(lowercase, saved);
+    fs::write(&manifest, &lowercase).unwrap();
+    d.click("Packages");
+    d.focus_window(false);
+    d.focus_window(true);
+    d.click("Reload from disk");
+    d.settle();
+    d.expect("Lost initiative");
+    d.click("Choose in Rules and runs");
+    d.settle();
+    d.observe_both(
+        "iter-23-Q-lowercase-rule-choice",
+        "A lowercase rule heading keeps its warning on the page its repair link opens",
+        |d| {
+            d.visible_text("Roll NPC initiative")
+                && d.has_containing("combat initiative choice “Lost initiative” is not a rule.")
+        },
+    );
+    fs::write(&manifest, &saved).unwrap();
+    d.click("Packages");
+    d.focus_window(false);
+    d.focus_window(true);
+    d.click("Reload from disk");
+    d.settle();
     fs::write(&manifest, &after).unwrap();
 
     d.click(NAV_ENCOUNTERS);

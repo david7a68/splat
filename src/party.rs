@@ -471,7 +471,7 @@ impl Party {
             let mut parts = Vec::new();
             if carry.full || !carry.values.is_empty() {
                 parts.push(format!(
-                    "HP here is from tonight's fights, as of {}.",
+                    "HP here is from tonight’s fights, as of {}.",
                     carry.from
                 ));
             }
@@ -556,7 +556,7 @@ impl Party {
                 .map(|id| self.reader.member_name(id))
                 .unwrap_or("This character");
             let words =
-                format!("{name}'s sheet now matches D&D Beyond. Your edited version is kept.");
+                format!("{name}’s sheet now matches D&D Beyond. Your edited version is kept.");
             storage_notice(ui, Tone::Success, &words, &["Show file", "Dismiss"], |ui| {
                 show_file(ui, path);
                 dismiss |= Action::quiet("Dismiss")
@@ -578,7 +578,7 @@ impl Party {
                 "Connect, then replace it. Replacing keeps your version as a copy."
             };
             let words = format!(
-                "{name}'s sheet file has your own edits, so Splat stopped updating it.\n{next}"
+                "{name}’s sheet file has your own edits, so Splat stopped updating it.\n{next}"
             );
             let waiting = self.reader.force_waiting();
             let action = if !connected {
@@ -2518,7 +2518,7 @@ mod sheet_now_tests {
         use eframe::egui;
         use egui_kittest::kittest::Queryable;
         for width in [440.0, 960.0, 1920.0] {
-            let words = "Sable's sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy.";
+            let words = "Sable’s sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy.";
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(egui::vec2(width, 640.0))
                 .build(|ctx| {

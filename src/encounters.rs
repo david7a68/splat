@@ -32,7 +32,7 @@ const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.
 /// Where an encounter that this editor cannot change is repaired.
 const REPAIR_IN_ENTRIES: &str = "Repair this encounter in Campaign → Campaign entries.";
 /// An encounter whose party rows the campaign fills, which this editor and the run cannot change.
-const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campaign's party. Edit those rows in Campaign → Campaign entries. This editor adds party members from the sheets Splat saved last.";
+const PARTY_FROM_CAMPAIGN: &str = "This encounter fills some rows from the campaign’s party. Edit those rows in Campaign → Campaign entries. This editor adds party members from the sheets Splat saved last.";
 
 /// Why an encounter cannot be saved or run, with the tone that its kind of fault takes. The tone is
 /// set where the fault is found, never read back from the words.
@@ -1815,7 +1815,7 @@ impl Snapshot {
                     .as_deref()
                     .map(crate::sessions::plain_links)
                     .filter(|name| !name.is_empty())
-                    .unwrap_or_else(|| "This NPC's".into());
+                    .unwrap_or_else(|| "This NPC’s".into());
                 let unavailable = stat
                     .is_none()
                     .then(|| format!("{missing_name} stat block not found"));
@@ -2033,7 +2033,7 @@ const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
 const LOOT_FIELD: &str = "Loot";
 const ENCOUNTER_LOOT_HELP: &str =
-    "What the party finds when this fight ends. A creature's own loot is in its Changes.";
+    "What the party finds when this fight ends. A creature’s own loot is in its Changes.";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -2701,7 +2701,7 @@ impl Encounters {
             let text = snapshot
                 .catalogue
                 .text_of(id)
-                .ok_or("This creature's text is not available.")?;
+                .ok_or("This creature’s text is not available.")?;
             let source = crate::content_workspace::CopySource {
                 entry: indexed.entry.clone(),
                 text,
@@ -2803,7 +2803,7 @@ impl Encounters {
         let (mut save, mut close) = (false, false);
         ui.label(
             Type::Heading
-                .rich(ui, "This campaign's creature")
+                .rich(ui, "This campaign’s creature")
                 .color(colors().text),
         );
         ui.horizontal(|ui| {
@@ -3161,7 +3161,7 @@ impl Encounters {
             design::message(
                 ui,
                 Tone::Warning,
-                "Save or discard the previous campaign's encounter first.",
+                "Save or discard the previous campaign’s encounter first.",
             );
             return;
         }
@@ -4734,9 +4734,9 @@ impl Encounters {
                             .rich(
                                 ui,
                                 if synced {
-                                    "D&D Beyond decides this player's HP while this encounter syncs."
+                                    "D&D Beyond decides this player’s HP while this encounter syncs."
                                 } else {
-                                    "With a value off, the creature's own starting state applies."
+                                    "With a value off, the creature’s own starting state applies."
                                 },
                             )
                             .color(colors().muted),
@@ -4831,7 +4831,8 @@ impl Encounters {
             .get(&active.id)
             .into_iter()
             .flat_map(|item| &item.entry.flags)
-            .filter(|flag| flag.message.starts_with("Combat initiative choice "))
+            // Every flag Campaign sends here with its repair link, by its kind, never its words.
+            .filter(|flag| flag.kind == splat::content::layout::FlagKind::RuleChoice)
             .collect();
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
@@ -4906,7 +4907,7 @@ impl Encounters {
                 if snapshot.options.inspiration().is_none() {
                     ui.label(
                         Type::Small
-                            .rich(ui, "This campaign's packages have more than one inspiration rule. Runs offer inspiration once you choose one.")
+                            .rich(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.")
                             .color(colors().muted),
                     );
                 }
@@ -5161,9 +5162,8 @@ mod tests {
     #[test]
     fn iter21_b_fd3_unread_roster_rows_end_with_one_file_line_at_the_last_words() {
         let long = "Encounters/The Emberfall Marches, Act Two/Shrine of Cinders beneath the Ashen Reaches.md";
-        let flag = |line: usize, message: &str| splat::content::layout::Flag {
-            line,
-            message: message.to_owned(),
+        let flag = |line: usize, message: &str| {
+            splat::content::layout::Flag::new(line, message.to_owned())
         };
         let row = |name: &str, line: usize| RosterFault {
             name: name.to_owned(),

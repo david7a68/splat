@@ -442,7 +442,7 @@ impl GroupDraft {
                 && (e.owner != campaign.id
                     || (self.baseline.is_none() && e.entry.path != self.path))
         }) {
-            return Err("Another note uses this group's identity.".into());
+            return Err("Another note uses this group’s identity.".into());
         }
         Ok(text)
     }
@@ -627,7 +627,7 @@ fn resolve_group(
             let fault_name = &name;
             warnings.push(MemberFault::new(
                 FaultKind::NotInPackages,
-                format!("{what}, {fault_name}: not in this campaign's packages."),
+                format!("{what}, {fault_name}: not in this campaign’s packages."),
             ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
@@ -1954,8 +1954,10 @@ impl Encounters {
             ui.set_min_height(design::Density::Read.control());
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if let Some(note) = saved_note.as_deref() {
-                (icons::OK, note, colors().document.saved)
+            } else if saved_note.is_some() {
+                // FC1: the save row says the shared `Saved`, as the encounter editor does. The
+                // list keeps the full sentence for after Back.
+                (icons::OK, "Saved", colors().document.saved)
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
@@ -3403,7 +3405,7 @@ mod tests {
         assert!(problem.contains("Member 1, Unknown creature"), "{problem}");
         assert_eq!(snapshot.groups[0].member_summary(), "Will add: none");
         assert!(
-            problem.contains("not in this campaign's packages"),
+            problem.contains("not in this campaign’s packages"),
             "{problem}"
         );
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));

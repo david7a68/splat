@@ -133,7 +133,7 @@ fn existing(campaign: &Path) -> Result<Option<Holder>, String> {
     match fs::read_to_string(path(campaign)) {
         Ok(text) if text.lines().any(|line| line.trim_end() == KEY) => Ok(parse(&text)),
         Ok(_) => Err(format!(
-            "{FILE} is not Splat's sheet writer note, so Splat does not save sheets \
+            "{FILE} is not Splat’s sheet writer note, so Splat does not save sheets \
              automatically. Move or rename that note."
         )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),

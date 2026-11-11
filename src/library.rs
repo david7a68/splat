@@ -952,10 +952,10 @@ impl Loaded {
         let note = &self.notes[index];
         if let Some(old) = &note.entry {
             if entry.id != old.id || entry.kind != old.kind {
-                return Some("Keep this entry's UUID and kind unchanged.".into());
+                return Some("Keep this entry’s UUID and kind unchanged.".into());
             }
             if matches!(note.owner, Owner::Campaign(_)) && entry.key != old.key {
-                return Some("Keep the entry's UUID, kind and key unchanged.".into());
+                return Some("Keep the entry’s UUID, kind and key unchanged.".into());
             }
             if old.kind == "package"
                 && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
@@ -2285,7 +2285,7 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
         if crate::content_workspace::note_id(&text) == Some(id) {
             if found.is_some() {
                 return Err(
-                    "Several files have this entry's ID. Keep one file, then try again.".into(),
+                    "Several files have this entry’s ID. Keep one file, then try again.".into(),
                 );
             }
             found = Some((path, text));
@@ -3889,7 +3889,7 @@ impl Library {
         design::dialog(ctx, "unregister_package", &title, |ui| {
             ui.add(
                 egui::Label::new(format!(
-                    "{} leave Splat's lists, and any campaign that selects them can no longer use them.", design::count(count, "entry", "entries")
+                    "{} leave Splat’s lists, and any campaign that selects them can no longer use them.", design::count(count, "entry", "entries")
                 ))
                 .wrap(),
             );
@@ -4495,7 +4495,7 @@ impl Library {
                     use_checkbox(
                         ui,
                         &mut self.new_not_used,
-                        "Adds this entry to the campaign's package choices.",
+                        "Adds this entry to the campaign’s package choices.",
                     );
                 }
                 let blocked = if dirty {
@@ -4686,7 +4686,7 @@ impl Library {
                         if let Some((path, text)) = moved_note(owner.root().unwrap(), id, old)? {
                             if found.is_some() {
                                 return Err(
-                                    "Several files have this entry's ID. Choose one in Library."
+                                    "Several files have this entry’s ID. Choose one in Library."
                                         .to_owned(),
                                 );
                             }
@@ -5555,7 +5555,7 @@ impl Library {
             } else if change.text.is_some() {
                 "This entry changed on disk. Your draft is safe until you choose."
             } else {
-                "This entry's file has gone from disk. Your draft is safe here until you choose."
+                "This entry’s file has gone from disk. Your draft is safe here until you choose."
             };
             let names = if change.text.is_none() {
                 self.loaded.as_ref().unwrap().dependents(note)

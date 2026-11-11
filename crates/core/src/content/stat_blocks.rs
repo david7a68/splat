@@ -131,13 +131,13 @@ fn checked<T>(
                         .trim_end_matches('.')
                 ),
             };
-            flags.push(Flag {
+            flags.push(Flag::new(
                 line,
-                message: format!(
+                format!(
                     "{name} {} not read (line {line}). {fix}",
                     super::formats::quoted(&raw)
                 ),
-            });
+            ));
             None
         }
     }
@@ -317,10 +317,7 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
                 .lines()
                 .position(|l| l.contains(root))
                 .map_or(1, |i| i + 1);
-            flags.push(Flag {
-                line,
-                message: "Unused data ignored".into(),
-            });
+            flags.push(Flag::new(line, "Unused data ignored".into()));
         }
         parsed.insert((*root).into(), Value::Mapping(Mapping::new()));
     }
@@ -331,13 +328,13 @@ pub fn read_tables(kind: &str, source: &str, fields: &mut Mapping, flags: &mut V
             _ => item(table, &mut parsed, flags),
         }
     } else {
-        flags.push(Flag {
-            line: source
+        flags.push(Flag::new(
+            source
                 .lines()
                 .position(|l| l.eq_ignore_ascii_case(&format!("## {}", section(kind))))
                 .map_or(1, |i| i + 1),
-            message: format!("{} table not found; values not set", section(kind)),
-        });
+            format!("{} table not found; values not set", section(kind)),
+        ));
     }
     for shape in metadata(source, kind, "shape") {
         if shape.split(',').any(|s| s == "size_literal")
@@ -695,10 +692,10 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
                         Value::Mapping([("derive".into(), expression)].into_iter().collect()),
                     );
                 }
-                _ => flags.push(Flag {
-                    line: table.row(names[0]).map_or(1, |row| row[0].line),
-                    message: format!("{} formula not read", names[0]),
-                }),
+                _ => flags.push(Flag::new(
+                    table.row(names[0]).map_or(1, |row| row[0].line),
+                    format!("{} formula not read", names[0]),
+                )),
             }
             continue;
         }
@@ -794,18 +791,18 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
                 // CR 0 can award either 0 or 10 XP in the books.
                 && !(cr == "0" && printed == 0)
             {
-                flags.push(Flag {
+                flags.push(Flag::new(
                     line,
-                    message: format!("CR {cr} is XP {xp}; XP {printed} is used"),
-                });
+                    format!("CR {cr} is XP {xp}; XP {printed} is used"),
+                ));
             }
             if let Some(printed) = printed_pb(&raw)
                 && printed != pb
             {
-                flags.push(Flag {
+                flags.push(Flag::new(
                     line,
-                    message: format!("CR {cr} is PB {pb:+}; PB {printed:+} is used"),
-                });
+                    format!("CR {cr} is PB {pb:+}; PB {printed:+} is used"),
+                ));
             }
         }
         creature.insert("cr_text".into(), complete_challenge(&raw).into());
@@ -846,10 +843,10 @@ fn creature(table: &Table, source: &str, fields: &mut Mapping, flags: &mut Vec<F
                         Ok(n) if row[3].value.split_whitespace().count() == 1 => {
                             stat(&mut stats, &format!("save_{key}"), n)
                         }
-                        _ => flags.push(Flag {
-                            line: row[3].line,
-                            message: format!("{short} Save needs a signed number"),
-                        }),
+                        _ => flags.push(Flag::new(
+                            row[3].line,
+                            format!("{short} Save needs a signed number"),
+                        )),
                     }
                 }
             }
@@ -1602,20 +1599,17 @@ fn reject_owned(extra: &mut Mapping, root: &str, flags: &mut Vec<Flag>) {
         {
             for part in nested {
                 if !map.get(*part).is_some_and(empty_value) && map.remove(*part).is_some() {
-                    flags.push(Flag {
-                        line: 1,
-                        message: format!("Unused data ignored: {root}/{key}/{part}"),
-                    });
+                    flags.push(Flag::new(
+                        1,
+                        format!("Unused data ignored: {root}/{key}/{part}"),
+                    ));
                 }
             }
             if map.is_empty() {
                 extra.remove(key);
             }
         } else if extra.remove(key).is_some() {
-            flags.push(Flag {
-                line: 1,
-                message: format!("Unused data ignored: {root}/{key}"),
-            });
+            flags.push(Flag::new(1, format!("Unused data ignored: {root}/{key}")));
         }
     }
 }

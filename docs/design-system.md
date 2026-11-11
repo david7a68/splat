@@ -221,7 +221,9 @@ wrapping row, the first action uses it, and a later one uses it only when it wra
 `Show all N`, `Show N results`, `New NPC “<name>”`, `New location “<name>”` and `Generate NPC`, Arrivals' `Show all`, and
 World's type choices, `Make <type>`, picker actions (`Remove <group>`, `Clear value`, `Cancel`) and message choices
 (`Copy text`, `Cancel`) start at the text edge above them. UI text that names a thing uses curly quotation marks
-(`New NPC “Miller”`); file content, such as YAML and shell lines, keeps straight quotes.
+(`New NPC “Miller”`, `Processing “Session 1: Ambush” failed.`), and an apostrophe in UI text is curly too
+(`campaign’s`); file content, such as YAML, shell lines and a prompt for a model, keeps straight marks. The design
+lint (`src/design/lint.rs`) fails on a straight apostrophe inside a word in a UI string.
 A file line that follows a warning (the path, `Edit in Obsidian` and `Show file`) is that warning's action. Draw it
 in `message_with_actions`, so the path and both links start at the warning's words, and wrap a long path whole
 instead of cutting it. When several warnings name one file, the file line follows the last one. The warning names
@@ -847,7 +849,8 @@ saving.
 Arrivals reserves one Add slot as wide as the widest Add label in the panel. Arrivals shares one group block, at
 the pane's left edge: as wide as the widest group heading, or member summary with its Initiative and Add, and no
 wider than `LIST_MEASURE`. Each group's Initiative and Add block ends at that block's right edge, so every
-Initiative field shares one left edge and every Add one right edge; the member summary takes the rest. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
+Initiative field shares one left edge and every Add one right edge; the member summary takes the rest. A group's
+faults and their repair links may use the list's width (`LIST_MEASURE`), so a link stays on its fault's line. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
 Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
@@ -1461,8 +1464,8 @@ tooltips.
 ## Tests
 
 - `design::tokens::tests` checks WCAG contrast over token pairs.
-- `design::lint` rejects raw colours or type sizes outside `src/design/`, with the shrink-only allowlist in
-  `src/design/lint_allowlist.txt`.
+- `design::lint` rejects raw colours or type sizes outside `src/design/`, and a straight apostrophe inside a word
+  in a string of `src/` or `crates/core/src/`, with the shrink-only allowlist in `src/design/lint_allowlist.txt`.
 - The gallery visual scenario shows tokens and shared choices as PNGs. Run rows, dialogs and other
   whole-screen parts appear in their own scenarios. The gallery includes clean, dirty and discarded save rows
   and the hanging Add strip.
