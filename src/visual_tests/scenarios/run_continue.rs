@@ -253,6 +253,28 @@ pub fn run(d: &mut Driver<'_>) {
         &[CONTINUE, CLOSE_RUN],
         "Ended · Round 2",
     );
+    // iter-25-R SI1: Final state comes before loot, so every row of it is in view beside
+    // Lookup, at every size, after two loot rolls.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let rows = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.contains(", HP ") && node.name.contains(", AC "))
+                .collect();
+            let hidden: Vec<_> = rows
+                .iter()
+                .filter(|row| !row.fully_in_view())
+                .map(|row| row.name.clone())
+                .collect();
+            (rows.len(), hidden)
+        });
+        d.observe(
+            "iter-25-R-SI1",
+            rows.0 >= 6 && rows.1.is_empty(),
+            format!("At {size:?} every Final state row is in view above the loot: {rows:?}"),
+        );
+    }
     d.state("ended-with-loot-beside-lookup", Sizes::All);
     close_lookup(d);
     whole_at_every_size(

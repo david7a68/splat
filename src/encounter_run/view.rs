@@ -904,8 +904,10 @@ impl Run {
                         - DOCK_HEIGHT
                         - self.strip_height()
                         - self.footer_height();
+                    // FJ4: the error takes one notice line, as a sheet-change warning does, and
+                    // its band is exactly that high, so the dock keeps one place.
                     let error_room = if stat_error.is_some() && !self.has_disk_conflict() {
-                        Density::Read.control() + design::XS
+                        MESSAGE_LINE
                     } else {
                         0.0
                     };
@@ -1084,37 +1086,46 @@ impl Run {
                             .map_or(error.as_str(), |(first, _)| first);
                         // As the sheet-change notice: the fault in an error message, then its
                         // place to repair it as the action.
-                        ui.horizontal(|ui| {
-                            let detail = format!(
-                                "{first} Its row still works. Repair in Campaign → Packages."
-                            );
-                            let font = Type::Small.font(ui);
-                            let action = "Campaign → Packages";
-                            let lead = design::S
-                                + design::HAIRLINE_WIDTH
-                                + design::number_width(ui, icons::ERROR, &font)
-                                - design::XS;
-                            let room = ui.available_width()
-                                - Density::Read.control()
-                                - design::number_width(ui, action, &font)
-                                - design::L
-                                - design::S * 2.0
-                                - lead;
-                            let fitted = design::words_that_fit(ui, first, &font, room.max(0.0));
-                            let message = design::small_message(ui, Tone::Error, &fitted);
-                            design::named(ui, &message, &detail);
-                            message.on_hover_text(&detail);
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            let response = design::small_link(ui, action);
-                            design::named(ui, &response, "Repair in Campaign → Packages");
-                            if response.clicked() {
-                                self.wants_packages = true;
-                            }
-                            if design::icon_button(ui, icons::CLOSE, "Dismiss this error").clicked()
-                            {
-                                self.error = None;
-                            }
-                        });
+                        let band = vec2(ui.available_width(), error_room);
+                        ui.allocate_ui_with_layout(
+                            band,
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.set_min_height(error_room);
+                                ui.set_max_height(error_room);
+                                let detail = format!(
+                                    "{first} Its row still works. Repair in Campaign → Packages."
+                                );
+                                let font = Type::Small.font(ui);
+                                let action = "Campaign → Packages";
+                                let lead = design::S
+                                    + design::HAIRLINE_WIDTH
+                                    + design::number_width(ui, icons::ERROR, &font)
+                                    - design::XS;
+                                let room = ui.available_width()
+                                    - Density::Read.control()
+                                    - design::number_width(ui, action, &font)
+                                    - design::L
+                                    - design::S * 2.0
+                                    - lead;
+                                let fitted =
+                                    design::words_that_fit(ui, first, &font, room.max(0.0));
+                                let message = design::small_message(ui, Tone::Error, &fitted);
+                                design::named(ui, &message, &detail);
+                                message.on_hover_text(&detail);
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                let response = design::small_link(ui, action);
+                                design::named(ui, &response, "Repair in Campaign → Packages");
+                                if response.clicked() {
+                                    self.wants_packages = true;
+                                }
+                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
+                                    .clicked()
+                                {
+                                    self.error = None;
+                                }
+                            },
+                        );
                     }
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
@@ -5128,6 +5139,15 @@ impl Run {
         } else {
             format!("{} Absent · ", icons::ABSENT)
         };
+        // FF1: a row from an unread roster line marks its own fault first, in the warning tone,
+        // so the DM need not match the notice's name by reading. The notice keeps the cause.
+        let fault = self
+            .roster_fault_line(&p.key)
+            .map(|line| format!("{} Line {line} not read", icons::WARN));
+        let absent = match &fault {
+            Some(fault) => format!("{fault} · {absent}"),
+            None => absent,
+        };
         if p.temporary_hp > 0 {
             numbers.push_str(&format!(" {} +{}", icons::TEMP_HP, p.temporary_hp));
         }
@@ -5208,8 +5228,12 @@ impl Run {
                 .map(|part| part.replace(' ', "\u{a0}"))
                 .collect::<Vec<_>>()
                 .join(" ·\u{a0}");
-            let status =
-                hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color));
+            let status = match &fault {
+                Some(fault) => Some((fault.replace(' ', "\u{a0}"), colors().result.warning)),
+                None => {
+                    hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color))
+                }
+            };
             let detail = design::status_in_text(
                 ui,
                 &detail,
@@ -5715,9 +5739,10 @@ impl Run {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.set_max_width(ui.available_width().min(scale.max_width));
-                        // What the party takes comes first, then how everyone ended.
-                        self.loot_section(ui);
+                        // SI1: how everyone ended comes first, so the whole party's HP is in
+                        // view; what the party takes follows.
                         design::group_label(ui, "Final state");
+                        let spacing = ui.spacing().item_spacing.y;
                         ui.spacing_mut().item_spacing.y = 0.0;
                         roster_right = ui.available_rect_before_wrap().right();
                         for index in &self.state.order {
@@ -5752,6 +5777,9 @@ impl Run {
                                 response.on_hover_text(&p.name);
                             }
                         }
+                        ui.spacing_mut().item_spacing.y = spacing;
+                        ui.add_space(design::L);
+                        self.loot_section(ui);
                     });
             });
         let mut header_ui = ui.new_child(
@@ -6840,8 +6868,18 @@ impl RowLayout {
     fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
         if let Some(badge) = badge {
-            let (_, _, room) = badge_place(&self, 0.0);
-            self.badge_below = badge_words(ui, badge, &Type::Small.font(ui), room).is_none();
+            let font = Type::Small.font(ui);
+            let (_, _, beside) = badge_place(&self, 0.0);
+            // SJ1: the result itself (its last two parts) stays whole. When it cannot fit after
+            // the conditions but fits on a line of its own, it takes that line, even where a
+            // cut form would fit beside them: `Saved · 1 damage (half)` keeps its `(half)`.
+            let parts: Vec<&str> = badge.split(" · ").collect();
+            let result = parts[parts.len().saturating_sub(2)..].join(" · ");
+            let whole = design::number_width(ui, &result, &font);
+            self.badge_below = true;
+            let (_, _, below) = badge_place(&self, 0.0);
+            self.badge_below = badge_words(ui, badge, &font, beside).is_none()
+                || (whole > beside && whole <= below);
         }
         self
     }
@@ -7522,18 +7560,18 @@ fn paint_row(
     );
     let name_left = x + layout.name_left;
     // A compressed row can be shorter than the picture's column is wide.
+    let picture = layout.picture.min(rect.height() - 4.0);
+    // FJ3: the picture centres on the first name line, as the initiative number does, on every
+    // row with or without a second line; it only stays inside its row.
+    let picture_y = line_y.clamp(
+        rect.top() + 2.0 + picture / 2.0,
+        (rect.bottom() - 2.0 - picture / 2.0).max(rect.top() + 2.0 + picture / 2.0),
+    );
     crate::art::portrait(
         ui,
         Rect::from_center_size(
-            pos2(
-                name_left - PICTURE_GAP - layout.picture / 2.0,
-                if layout.name.rows.len() > 1 || layout.second_left < layout.name_left {
-                    line_y
-                } else {
-                    rect.center().y
-                },
-            ),
-            egui::Vec2::splat(layout.picture.min(rect.height() - 4.0)),
+            pos2(name_left - PICTURE_GAP - layout.picture / 2.0, picture_y),
+            egui::Vec2::splat(picture),
         ),
         layout.art.as_deref(),
         &p.name,

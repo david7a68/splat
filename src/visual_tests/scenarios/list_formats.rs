@@ -751,6 +751,27 @@ pub fn run(d: &mut Driver<'_>) {
             format!("The whole final setup row and the long party names fit at {size:?}"),
         );
     }
+    // iter-25-R FF1: a row from the unread line marks its own fault; a clean row does not.
+    let rows: Vec<String> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == egui::accesskit::Role::Button && node.name.contains(" · HP "))
+        .map(|node| node.name)
+        .collect();
+    let marked: Vec<_> = rows
+        .iter()
+        .filter(|row| row.contains("Line 20 not read"))
+        .collect();
+    d.observe(
+        "iter-25-R-FF1",
+        !marked.is_empty()
+            && marked.iter().all(|row| row.starts_with("Ember Cultist"))
+            && rows
+                .iter()
+                .any(|row| row.starts_with("Kestrel Dunmoor") && !row.contains("not read"))
+            && d.visible_text("Line\u{a0}20\u{a0}not\u{a0}read"),
+        format!("Rows from line 20 say so, others do not: {marked:?} of {rows:?}"),
+    );
     d.state("unread-roster-kept-in-setup", Sizes::All);
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     // Two unread rows name one file: its name and actions show once.

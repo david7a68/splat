@@ -670,6 +670,9 @@ pub(crate) struct Run {
     roster_source: Option<PathBuf>,
     roster_stamp: Option<(Option<std::time::SystemTime>, u64)>,
     roster_faults: Vec<crate::encounters::RosterFault>,
+    /// The roster slot of each unread row, by its participant key, with the row's line, so a
+    /// setup row marks its own fault (FF1). It changes with `roster_faults` and nowhere else.
+    roster_fault_keys: BTreeMap<String, usize>,
     roster_names: BTreeMap<String, String>,
     roster_names_revision: Option<Uuid>,
     initiative: Initiative,
@@ -748,6 +751,9 @@ pub(crate) struct Run {
     /// What sync changed. The next run action or sync event clears it.
     notice: Option<String>,
     notice_changes: usize,
+    /// How many Undo steps the last sheet update removed: set by `reconcile_sync_history`,
+    /// taken by `note_sync_changes` for its notice (FJ1).
+    removed_steps: usize,
     notice_summary: Option<String>,
     live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
@@ -878,6 +884,36 @@ const CONTINUE_NEEDS_TIMELINE: &str =
 /// the Timeline's next change works the rule out again.
 const CONTINUE_DISK_CHANGED: &str =
     "Timeline.md changed on disk. Settle that on the Timeline page first.";
+
+/// Each unread roster row's slot key, the key its participant has, with the row's line. The key
+/// is the row's own (`slot=` in its note) or its file line's, as `list_formats` gives a slot.
+fn roster_fault_keys(
+    entry: &Entry,
+    faults: &[crate::encounters::RosterFault],
+) -> BTreeMap<String, usize> {
+    let lines: BTreeSet<usize> = faults.iter().map(|fault| fault.line).collect();
+    let Some(table) = splat::content::layout::Document::new(&entry.body)
+        .table(splat::content::list_formats::ROSTER)
+    else {
+        return BTreeMap::new();
+    };
+    table
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let first = row.first()?;
+            let line = first.line + entry.body_line.saturating_sub(1);
+            lines.contains(&line).then(|| {
+                let key = row
+                    .get(4)
+                    .and_then(|note| splat::content::list_formats::machine(&note.value, "slot"))
+                    // `list_formats` reads the whole file, so its slot names the file's line.
+                    .unwrap_or_else(|| format!("actor_line_{line}"));
+                (key, line)
+            })
+        })
+        .collect()
+}
 
 /// Why Continue fight is not offered for this ended fight, if it is not.
 ///
@@ -1099,6 +1135,7 @@ impl Run {
             roster_source: None,
             roster_stamp: None,
             roster_faults: Vec::new(),
+            roster_fault_keys: BTreeMap::new(),
             roster_names: BTreeMap::new(),
             roster_names_revision: None,
             initiative: Initiative::default(),
@@ -1162,6 +1199,7 @@ impl Run {
             scroll_to_selected: false,
             notice: None,
             notice_changes: 0,
+            removed_steps: 0,
             notice_summary: None,
             live_initiative: None,
             recording_notice: None,
@@ -3392,6 +3430,7 @@ impl Run {
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
         self.saved_steps = saved;
+        self.removed_steps = dropped.len();
         if !dropped.is_empty() {
             let line = format!("Sheet update removed Undo steps: {}.", dropped.join("; "));
             self.state.log.push(line.clone());
@@ -3455,6 +3494,15 @@ impl Run {
             }
         }
         self.notice_changes = changes.len();
+        // FJ1: the notice says when the update took Undo steps away, so the header's Undo
+        // label does not change with no cause in view. The Log names each step.
+        let removed = std::mem::take(&mut self.removed_steps);
+        let removed = (removed > 0).then(|| {
+            format!(
+                " · {} removed",
+                crate::design::count(removed, "Undo step", "Undo steps")
+            )
+        });
         self.notice_summary = changes.first().map(|first| {
             let more = self.notice_changes.saturating_sub(1);
             let first = self
@@ -3471,14 +3519,15 @@ impl Run {
                     })
                 })
                 .unwrap_or_else(|| first.clone());
-            if more == 0 {
+            let summary = if more == 0 {
                 first
             } else {
                 format!(
                     "{first} and {}",
                     crate::design::count(more, "more sheet", "more sheets")
                 )
-            }
+            };
+            format!("{summary}{}", removed.as_deref().unwrap_or(""))
         });
         self.state.log.push(what.clone());
         for previous in &mut self.history {
@@ -3828,6 +3877,7 @@ impl Run {
         // must not block Begin. The run's own participants are complete.
         let Ok(metadata) = fs::metadata(path) else {
             self.roster_faults.clear();
+            self.roster_fault_keys.clear();
             self.roster_stamp = None;
             return;
         };
@@ -3839,8 +3889,13 @@ impl Run {
             && let Ok(entry) = Entry::parse(&path.to_string_lossy(), &text)
         {
             self.roster_faults = crate::encounters::roster_faults(&entry, &self.roster_names);
+            self.roster_fault_keys = roster_fault_keys(&entry, &self.roster_faults);
             self.roster_stamp = Some(stamp);
         }
+    }
+    /// The line of the unread roster row this participant came from, if it did.
+    pub(super) fn roster_fault_line(&self, key: &str) -> Option<usize> {
+        self.roster_fault_keys.get(key).copied()
     }
     fn roster_blocked(&self) -> Option<&'static str> {
         (!self.roster_faults.is_empty()).then_some("Fix the unread row first.")
@@ -4080,6 +4135,7 @@ impl Run {
             roster_source: None,
             roster_stamp: None,
             roster_faults: Vec::new(),
+            roster_fault_keys: BTreeMap::new(),
             roster_names: BTreeMap::new(),
             roster_names_revision: None,
             recovery: saved.recovery,
@@ -4139,6 +4195,7 @@ impl Run {
             scroll_to_selected: true,
             notice: None,
             notice_changes: 0,
+            removed_steps: 0,
             notice_summary: None,
             live_initiative: None,
             recording_notice: None,
@@ -4927,7 +4984,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let id = Uuid::new_v4();
         let text = format!(
-            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: Ambush\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| Enemies | [[Guard]] | Scout | HP lots | Keep this row |\n| Enemies | [[Guard]] | Captain | AC lots | Second fault |\n"
+            "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: Ambush\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| Enemies | [[Guard]] | Scout | HP lots | Keep this row %% splat slot=slot0 %% |\n| Enemies | [[Guard]] | Captain | AC lots | Second fault %% splat slot=slot1 %% |\n"
         );
         fs::write(dir.path().join("Ambush.md"), &text).unwrap();
         let mut run = run();
@@ -4941,6 +4998,14 @@ mod tests {
         assert_eq!(restored.roster_faults.len(), 2);
         assert_eq!(restored.roster_faults[0].name, "Scout");
         assert_eq!(restored.roster_faults[1].name, "Captain");
+        // FF1: each unread row's participant knows its own fault; a clean one has none.
+        let marked =
+            |run: &Run| ["slot0", "slot1", "slot2"].map(|key| run.roster_fault_line(key).is_some());
+        assert_eq!(marked(&restored), [true, true, false]);
+        assert_eq!(
+            restored.roster_fault_line("slot0"),
+            Some(restored.roster_faults[0].line)
+        );
         for (index, total) in [20, 15, 10].into_iter().enumerate() {
             restored
                 .apply(Command::Initiative(index, Some(total)))
@@ -4962,6 +5027,7 @@ mod tests {
             restored.roster_faults.is_empty(),
             "a moved source clears stale faults"
         );
+        assert_eq!(marked(&restored), [false; 3], "and their row marks");
         assert_eq!(serde_json::to_value(&restored.state).unwrap(), state);
         fs::rename(&moved, &source).unwrap();
         restored.refresh_roster_faults();
@@ -4981,6 +5047,11 @@ mod tests {
         fs::write(dir.path().join("Ambush.md"), &partial).unwrap();
         assert!(restored.apply(Command::Begin).is_err());
         assert_eq!(restored.roster_faults.len(), 1);
+        assert_eq!(
+            marked(&restored),
+            [false, true, false],
+            "the repaired row is clean"
+        );
         let repaired = format!(
             "{}\nOutside note stays.\n",
             partial.replace("AC lots", "AC +2")
@@ -6602,6 +6673,16 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("removed Undo steps") && line.contains(&own))
         );
+        // FJ1: the notice says the update took Undo steps away, not only the Log.
+        let summary = reopened.notice_summary.clone().unwrap_or_default();
+        assert!(
+            summary.starts_with(&name)
+                && summary.contains(" · ")
+                && summary.contains(" Undo step")
+                && summary.ends_with(" removed"),
+            "{summary}"
+        );
+        assert_eq!(reopened.removed_steps, 0, "the notice took the count");
         // The other guard's step stays, and Undo of it leaves the sheet's value alone.
         assert_eq!(reopened.undo_label(), format!("Undo: 2 damage to {other}"));
         assert_eq!(reopened.state.participants[1].temporary_hp, 1);
@@ -6612,6 +6693,10 @@ mod tests {
             reopened.undo();
         }
         assert_eq!(reopened.state.participants[0].hp, Some(max - 12));
+        // Must stay true: a later notice that removed nothing says nothing of Undo.
+        reopened.note_sync_changes(&[format!("{name}: HP 1 → 2")], &[]);
+        let later = reopened.notice_summary.clone().unwrap_or_default();
+        assert!(later.starts_with(&name) && !later.contains("removed"), "{later}");
     }
     #[test]
     fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {

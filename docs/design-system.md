@@ -1066,7 +1066,8 @@ refuses `;`, with the reason beside the field. Its Changes link stays one word, 
 table. In a run, a standing creature's card has one muted `Loot · …` line, and the list opens at 0 HP. A result
 replaces its Roll button: the found thing first, then muted `<key> · <values> on <dice>`. A count of rolls on screen
 uses the roster's form, `2 × gems`, with a blank on each side of `×`; the saved line keeps `Roll 2× gems`. The ended view puts
-`LOOT`, a muted `N to roll`, secondary `Roll all N` and quiet `Copy loot` on one line above Final state.
+Final state first, so the whole party's HP is in view, then `L`, then `LOOT`, a muted `N to roll`, secondary `Roll all N`
+and quiet `Copy loot` on one line, with the lists below.
 
 Run settings put Roll NPC initiative help directly below its dropdown, before the tie checkbox: `Run setup
 starts with this choice. You can change it there for one roll. Groups that arrive later use it too.`
@@ -1123,7 +1124,9 @@ Setup has a `Label` column heading INITIATIVE above empty, labelled number field
 An off Absent toggle in setup uses muted text and no fill. Setup rows stay in place. Once all present rows
 have initiative, a muted ordinal follows each field, also while the last field has focus. It updates with
 totals or tie rulings, and the ready line
-names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
+names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place.
+Each setup row that came from an unread line marks it first on its detail line, in the warning tone: `⚠ Line 20 not
+read`. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
 row menu opens Correct. A setup row's menu says what each choice does: `Correct…` and `Change NPC and roll mode`
 (`Hide NPC and roll mode` while they show). Unread-row notices use compact message type and the unused ready-line space
 so the roster keeps its height. Overflow uses the live list's band and counts hidden missing initiatives and ties.
@@ -1160,7 +1163,8 @@ full `Sync off for the party` beside recording silence. If the Undo target canno
 its full target in hover and accessibility. An empty Undo can omit its adjacent reason when it cannot fit;
 the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
-possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
+possible; shorten to character name and first changed value, with full text in hover and Log. When the update removed
+Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`); the Log names each. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
 text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
@@ -1245,10 +1249,11 @@ at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at 
 name, after its conditions (and after its state word where the row has no state column), never in the state column.
 They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
-form that fits whole, dropping words before the result first; the result's last two parts (the comparison and the
-damage) never drop, and are cut by whole words only where the line has no room. The row's accessible name holds them
-whole. Roll words never move a row's columns. When the conditions leave no room for one word, the words take a line
-of their own under them, at the name's edge, and that row grows by the line. A save's creature targets show their roll in the AC
+form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
+outcome, and the damage with its `(half)`) never drop. When they do not fit whole after the conditions but fit on a line
+of their own, the words take that line, under the conditions at the name's edge, and that row grows by the line; they
+are cut by whole words only where even that line has no room. The row's accessible name holds them whole. Roll words
+never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
 damage` go, the rows show their AC again, and the panel and the dock go back to the caster. Undo of that step arms the

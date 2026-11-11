@@ -5077,6 +5077,50 @@ pub mod run_large_roster {
         close_run(d);
         d.begin_task();
         resume_run(d, RUN_20);
+        // iter-25-R FJ3: on every row, two-line or not, the picture centres on the first name
+        // line. Rows with no art paint their initial at the picture's centre.
+        let off_line = d.at_size(DEFAULT, |d| {
+            let rows = roster_places(d);
+            let mut texts = Vec::new();
+            d.each_painted_text(|text, _| {
+                let first = text
+                    .galley
+                    .rows
+                    .first()
+                    .map(|row| row.rect().translate(text.pos.to_vec2()));
+                let centre = text.pos + text.galley.rect.center().to_vec2();
+                texts.push((text.galley.job.text.clone(), centre, first));
+            });
+            let mut checked = 0;
+            let mut off = Vec::new();
+            for (name, rect) in &rows {
+                let name_line = texts.iter().find_map(|(words, _, first)| {
+                    first.filter(|first| {
+                        words.starts_with(name.split(' ').next().unwrap_or(name))
+                            && rect.contains(first.center())
+                    })
+                });
+                let initial: String = name.chars().take(1).flat_map(char::to_uppercase).collect();
+                let picture = name_line.and_then(|line| {
+                    texts.iter().find_map(|(words, centre, _)| {
+                        (*words == initial && rect.contains(*centre) && centre.x < line.left())
+                            .then_some(*centre)
+                    })
+                });
+                if let (Some(line), Some(picture)) = (name_line, picture) {
+                    checked += 1;
+                    if (picture.y - line.center().y).abs() > 1.0 {
+                        off.push((name.clone(), picture.y, line.center().y));
+                    }
+                }
+            }
+            (rows.len(), checked, off)
+        });
+        d.observe(
+            "iter-25-R-FJ3",
+            off_line.1 >= 3 && off_line.2.is_empty(),
+            format!("Pictures centre on the first name line (rows, checked, off): {off_line:?}"),
+        );
         d.state("roster-of-20", Sizes::All);
         d.goal("open a run with 20 participants");
 
@@ -7119,6 +7163,12 @@ pub mod run_roster_conflict {
             );
         }
         d.state("message-on-one-line", Sizes::Default);
+        // iter-25-R FJ4: the dock's place with a warning notice, to compare with an error.
+        let amount_at = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE]
+                .map(|size| d.at_size(size, |d| d.place_of("Amount").map(|rect| rect.top())))
+        };
+        let with_warning = amount_at(d);
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
@@ -7148,6 +7198,14 @@ pub mod run_roster_conflict {
             "Ember Cultist's stat block could not be read. Its row still works. Repair it in",
         );
         d.settle();
+        let with_error = amount_at(d);
+        d.observe(
+            "iter-25-R-FJ4",
+            d.has_containing("stat block could not be read")
+                && with_warning.iter().all(Option::is_some)
+                && with_error == with_warning,
+            format!("Amount keeps its y with an error notice {with_error:?} as with a warning {with_warning:?}"),
+        );
         d.state("loaded-roster-of-12", Sizes::All);
         let fault = "Ember Cultist's stat block could not be read.";
         let words = d.place_of(fault);
@@ -17338,6 +17396,18 @@ pub mod run_rolls {
                 "At 960 the save's Undo says `Undo: 3 damage to 2` (compact, whole): {shown:?}"
             ),
         );
+        // iter-25-R SJ1: a save's result keeps its `(half)` at every size; a row whose
+        // conditions leave no room for it gives it a line of its own.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let whole = d.at_size(size, |d| {
+                (d.visible_text("damage (half)"), d.visible_text("damage…"))
+            });
+            d.observe(
+                "iter-25-R-SJ1-half",
+                whole == (true, false),
+                format!("At {size:?} the saved result shows whole, `(half)` included: {whole:?}"),
+            );
+        }
         d.state("save-applied", Sizes::Default);
         // Undo gives each target back its own HP.
         d.press(Key::U);
