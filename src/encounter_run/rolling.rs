@@ -558,19 +558,13 @@ impl Run {
     /// The right-click menu of a run row, and the question that waits on it. Shows nothing
     /// when the row has nothing to offer.
     pub(super) fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
+        // Before any early return: a row whose last choice went away still owns its menu.
+        rolls::keep_menu_owner(response);
         let mut chosen = None;
         if let Some(asking) = self.asking.as_ref().filter(|asking| asking.row == row) {
             let shown = egui::Popup::menu(response).open(true).show(|ui| {
                 ui.set_width(320.0);
-                let c = crate::design::colors();
-                ui.add(
-                    egui::Label::new(
-                        crate::design::Type::Small
-                            .rich(ui, &asking.question)
-                            .color(c.text),
-                    )
-                    .wrap(),
-                );
+                rolls::menu_text(ui, &asking.question, crate::design::colors().text);
                 // The choices start at the question's words.
                 for (index, (words, _)) in asking.choices.iter().enumerate() {
                     if rolls::menu_choice(ui, words) {
@@ -590,21 +584,12 @@ impl Run {
         if sections.is_empty() {
             return None;
         }
-        // Under the row, so the row it is about stays in view.
-        let open = if response.secondary_clicked() {
-            Some(egui::SetOpenCommand::Bool(true))
-        } else if response.clicked() {
-            Some(egui::SetOpenCommand::Bool(false))
-        } else {
-            None
-        };
+        // Under the row, so the row it is about stays in view. Shift+F10 on the focused row
+        // opens it too.
+        let open = rolls::menu_open_command(response);
         egui::Popup::menu(response).open_memory(open).show(|ui| {
             for (heading, items) in &sections {
-                ui.label(
-                    crate::design::Type::Small
-                        .rich(ui, heading)
-                        .color(crate::design::colors().muted),
-                );
+                rolls::menu_text(ui, heading, crate::design::colors().muted);
                 for (words, choice) in items {
                     // Under a heading, the choices start at its words.
                     if rolls::menu_choice(ui, words) {
@@ -745,9 +730,15 @@ impl Run {
         if unknown.is_empty() {
             return Ok(settle(None));
         }
-        // One condition is a yes or no; several are lettered in the question.
+        // One condition is a yes or no; several are lettered in the question. The rule's `if`
+        // goes: the condition is said as a statement, and the choices answer it.
         let sentence = |when: &When| {
-            let mut words = when.text.clone();
+            let text = when.text.trim();
+            let mut words = text
+                .get(..3)
+                .filter(|start| start.eq_ignore_ascii_case("if "))
+                .map_or(text, |_| &text[3..])
+                .to_owned();
             if let Some(first) = words.get_mut(..1) {
                 first.make_ascii_uppercase();
             }
@@ -757,7 +748,7 @@ impl Run {
         if let [when] = unknown.as_slice() {
             let with = settle(Some(when));
             return Err((
-                format!("{}?", sentence(when)),
+                format!("{}:", sentence(when)),
                 vec![
                     (format!("Yes · {}", parts_words(&with)), with),
                     (format!("No · {}", parts_words(&without)), without),
@@ -2168,7 +2159,7 @@ mod tests {
         let asking = run.asking.clone().unwrap();
         assert_eq!(
             asking.question,
-            "If the goat moved 20+ feet straight toward the target immediately before the hit?"
+            "The goat moved 20+ feet straight toward the target immediately before the hit:"
         );
         assert_eq!(asking.choices[0].0, "Yes · 2d8+2 bludgeoning");
         assert_eq!(asking.choices[1].0, "No · 2d6+2 bludgeoning");
@@ -2830,10 +2821,7 @@ mod tests {
         run.target(others[1], None);
         run.save_damage(&armed).unwrap();
         let asking = run.asking.clone().unwrap();
-        assert_eq!(
-            asking.question,
-            "If the target has more than 20 Hit Points?"
-        );
+        assert_eq!(asking.question, "The target has more than 20 Hit Points:");
         assert_eq!(asking.choices[0].0, "Yes · 3d8 psychic");
         assert_eq!(asking.choices[1].0, "No · no dice");
         run.state.random = Random::controlled([1, 1, 1]);

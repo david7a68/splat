@@ -914,9 +914,11 @@ any encounter when you save.`, with Undo move until save. Move to… lists named
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
-Arrivals reserves one Add slot as wide as the widest Add label in the panel. Each group's Initiative and Add
-block ends at the panel's inner right edge, so every Initiative field shares one left edge and every Add one
-right edge; the member summary takes the rest. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
+Arrivals reserves one Add slot as wide as the widest Add label in the panel. Arrivals shares one group block, at
+the pane's left edge: as wide as the widest group heading, or member summary with its Initiative and Add, and no
+wider than `LIST_MEASURE`. Each group's Initiative and Add block ends at that block's right edge, so every
+Initiative field shares one left edge and every Add one right edge; the member summary takes the rest. A group's
+faults and their repair links may use the list's width (`LIST_MEASURE`), so a link stays on its fault's line. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
 Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
 aligned with other actions. Show Count once, in the action row; retain `Count not read` in a faulty stat summary. Put each repair link at the end of its own member fault, without repeating the link words in the sentence. Edit opens the normal change form with readable values, unread text, reason and
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
@@ -927,7 +929,9 @@ still join. Changed summaries also name the base creature. Wrap between members,
 Every change field shows printed value and result, including changes added by hand. Editors, run cards and
 fault details share that preview. An invalid stat names only the limit crossed: `Maximum HP would become -28.
 It must be 1 or more.` Give an upper limit only when exceeded. Done closes the form and returns to its row.
-Change forms use the run's condition grid. Attack and damage changes sit below the affected action, with `XS`
+Change forms use the run's condition grid. The grid, its Other effect field and Add stay within `FORM_WIDTH` at
+the pane's left edge, in the run and in Starting conditions. Each column is as wide as its longest choice, and
+columns are `S` apart, so they sit near each other in a wide pane. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
 ### Loot lists
@@ -998,7 +1002,8 @@ An off Absent toggle in setup uses muted text and no fill. Setup rows stay in pl
 have initiative, a muted ordinal follows each field, also while the last field has focus. It updates with
 totals or tie rulings, and the ready line
 names who goes first. Setup names its Undo action. Unread-row warnings sit below the setup header, in the notice place. Their file actions follow on the same line when they fit. Begin combat says `Fix the unread row first.` below its blocked button; the
-row menu opens Correct. Unread-row notices use compact message type and the unused ready-line space
+row menu opens Correct. A setup row's menu says what each choice does: `Correct…` and `Change NPC and roll mode`
+(`Hide NPC and roll mode` while they show). Unread-row notices use compact message type and the unused ready-line space
 so the roster keeps its height. Overflow uses the live list's band and counts hidden missing initiatives and ties.
 
 A made-up creature shows current and maximum HP and typed initiative as a total, without printed values. A
@@ -1016,7 +1021,9 @@ remainder less `L`. Undo always keeps the word `Undo`: shorten the target first,
 (the roster still marks NEXT). A state notice stays whole. Beside one, Undo keeps a shortened target while
 one fits, such as `Undo: 3 damage to Brannoch…`: a sheet's step drops `D&D Beyond` before its name
 (`Undo: HP for Brannoch…`), then Undo drops its `U` key letter. A sheet-change notice that leaves no room
-for that target goes below the roster. Undo shows `Undo` alone only when no shortened target fits. A name
+for that target goes below the roster. When no shortened target fits, Undo shows its step without the target:
+`Undo: 8 damage to 3` for a step on several rows (its count stays, `participants` and the half count go),
+`Undo: exhaustion 0 → 3` or `Undo: initiative` for one row. Undo shows `Undo` alone only when not even that fits. A name
 is never cut to only `…` and its copy number; retain copy numbers, action words, amounts and condition
 directions. Hover and accessibility keep the full action. Empty history says Nothing to undo or
 Nothing to undo since reopening, to the left of blocked Undo on setup and live screens. A narrow slot uses
@@ -1031,10 +1038,12 @@ the control keeps that reason in hover and accessibility. Keep the
 next participant visible when Undo is empty. Sheet notices fit after conflict with Log and Dismiss when
 possible; shorten to character name and first changed value, with full text in hover and Log. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
-text-colour words. Centre compact notices with their Log and Dismiss controls, in the header and below
+text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
+`small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
 the roster. Wrapped notices keep top alignment. Keep an `XS` gap after the icon and an `S` gap before
-the bar. Include those gaps in the header measure. Stat-block errors use the notice icon and one fitted line, with
-full error on hover.
+the bar. Include those gaps in the header measure. Stat-block errors use `small_message` in the error tone: the fault in
+text colour, fitted to one line, with the full error on hover, then the link `Campaign → Packages` as its action
+after an `L` gap.
 
 Long local effects show four words and more; Undo keeps four when they fit. Narrow Undo keeps Undo add or Undo
 remove, two effect words and target. Concentration Undo says start concentration or stop concentration before
@@ -1048,18 +1057,22 @@ full names.
 
 Overflow clips above a separate page-filled band and hairline. Count rows above and below, including rows cut
 by the edge, and their Conflict, 0 HP and Bloodied states. Each turn scrolls current and next rows into view.
-Other pages keep the strip's turn, conflict, secondary Back to run and primary Next turn.
+Other pages keep the strip's turn, conflict, secondary Back to run and primary Next turn. The strip's conflict
+follows the header's rule: one link, `Sync conflict: <name>` when it fits, else `Conflict: <name>`, which opens
+the conflict in the run.
 
 The panel has participant tabs Stat block or Sheet, Conditions, Correct, then `L`, then fight tabs Log and
 Prep. Arrivals has no tab: a secondary Add to fight button opens it, selected while Arrivals is open. In live
 play it is `S` left of Next turn, at the same height, as the strip pairs Back to run with Next turn. Below the
-dock's all-words width it keeps the plus icon and the word Add. The full accessible name stays Add to fight. In setup it is `S` left of Undo, at Undo's height, and Undo shortens first. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
+dock's all-words width it keeps the plus icon and the word Add. The full accessible name stays Add to fight. In setup it has a fixed place at the roster's left edge, on the Undo line, at Undo's height; Undo and its
+reason take the rest of that line from the right, so no Undo label moves it. Ctrl+G also opens it. Fight-tab titles name only that tab in setup and live play. Titles stay on one line and retain copy
 numbers when shortened. When tight, fight tabs share a Fight caret menu with tab underline. Never wrap the tab
 row. At zero HP, party-side participants show death-save counts and actions on one line below the tabs.
 Other participants show them only if a success or failure is already recorded, so no existing count is hidden.
 Clicking a count edits it. Sheet
-shows live death saves once, with correct singular and plural words. Correct has no duplicate fields; HP owns
-its help. Correct initiative says This row moves. The current turn stays. Labels share one column; blocked
+shows live death saves once, with correct singular and plural words. A character's sheet panel starts with its sync status and facts on one line, one blank before each `·`
+(`Not connected · Fetched 3 h ago · HP from this run`). Correct has no duplicate fields; HP owns
+its help. Correct initiative says This row moves. The current turn stays. Labels share one column, as wide as the widest label (`Initiative bonus`) and an `S` gap; blocked
 initiative and DM-note commits have a short adjacent reason. Correct HP has an `L` gap after death saves.
 Empty Prep offers Edit encounter if its encounter exists.
 
@@ -1074,7 +1087,9 @@ as `in Splat’s rolls`, the tiles show the numbers rolled, and nothing tells th
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
 Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
 the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
-was deleted, cannot be read or is not in the campaign), then `Read the new version`. Under that notice a character's
+was deleted, cannot be read or is not in the campaign), then `Read the new version`, whose words start at the
+sentence's. The sentence is the changed-on-disk state: the warning icon in `document.external`, then words in the
+text colour, so it is not read as part of the stat block. Under that notice a character's
 card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
 current values.`
 
@@ -1123,7 +1138,14 @@ and stays inside its pane: a tile's menu is the tile's width, so it never crosse
 Each of its sections has a heading in muted Small with what it rolls: `Bite` or `Dexterity save` for a tile or a
 number, `Bite against Cinder Wolf 2` for a row, then `Inspiration: reroll one die` with a line for each die (`4 on the
 d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small, wrapped at
-320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
+320 px and left aligned (never justified), said as a statement without the rule's `if` and ending in a colon (`The
+cultist moved 10+ feet straight toward the target immediately before the hit:`), then `Yes · …`, `No · …` and
+`Cancel`, starting at the condition's words. Headings in these menus are left aligned too.
+
+Every such menu opens from the keyboard as well: Shift+F10 on the focused tile, number or row, or a screen reader's
+`show context menu`, opens it with the focus on its first choice, and the focus goes back to its owner when it
+closes. The Menu key does the same where the toolkit passes it on (egui 0.33 does not). Hover on a roll says
+`Right-click or Shift+F10 for more`.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
 save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.
@@ -1138,7 +1160,10 @@ groups. Empty sections use group headings and one muted line. New group opens En
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
 say Added before combat. Names include count when adding more than one creature. No confirmation is needed;
-Undo names the addition.
+Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
+group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
+Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` The Log keeps `Added by hand` and `entered by the
+DM`.
 
 Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1 × Goblin Warrior` and
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
@@ -1170,7 +1195,8 @@ A disconnected run has Connect to sync on its header only; blocked footer Sync p
 End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
-between character sync blocks. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
+between character sync blocks. Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
+edge. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
 uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery.
 
 Footer and strip Close run close at once only when saved with nothing unsent; otherwise ask for a choice. List
@@ -1386,6 +1412,11 @@ edges, in two or three columns; skills sort A to Z and fill columns top to botto
 taller height. Use a true minus for negative modifiers. Rows without detail use one Read row. At eight entries
 or fewer, omit filters and separate count lines; count in the group heading. Death-save counts use words.
 Compact rows omit a missing spell save DC; wide tables keep the empty cell. Spell help says: “Spell text shows the printed numbers. Splat does not work out upcasting or this character’s own bonuses.”
+
+The Combat sync heading and its body are one block: the heading is the first row of the sheet's scroll area,
+below the sheet tabs, and its body opens under it. While closed it says the sync state: `Combat sync · Off`,
+`Combat sync · Waiting for the first read` with the first-read icon and colour until Splat has read the sheet,
+then `Combat sync · On`.
 
 A stopped-sync notice sits below the Party header, across the page. Its bar starts at the pane edge;
 Dismiss sits at the right end of its first line. Sheet pages use Small tabs on one line, with later pages in More.

@@ -1440,23 +1440,33 @@ impl Splat {
                             );
                         }
                         if let Some(name) = &strip.conflict {
-                            if Action::quiet("Review")
-                                .name("Review sync conflict")
-                                .show(ui)
-                                .clicked()
+                            // As the run header says it: one link, the long name when it fits.
+                            let full = format!("Sync conflict: {name}");
+                            let fits = design::number_width(
+                                ui,
+                                &format!("{} {full}", icons::WARN),
+                                &Type::Small.font(ui),
+                            ) + design::L
+                                <= ui.available_width();
+                            let word = if fits {
+                                full.clone()
+                            } else {
+                                format!("Conflict: {name}")
+                            };
+                            let review = design::status_link(
+                                ui,
+                                Status {
+                                    icon: icons::WARN,
+                                    word: &word,
+                                    color: c.sync.conflict,
+                                },
+                            );
+                            if review.on_hover_text(&full).clicked()
                                 && let Some(run) = self.encounters.run_mut()
                             {
                                 run.review_conflict();
                                 self.page = Page::Run;
                             }
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: icons::WARN,
-                                    word: &format!("Conflict: {name}"),
-                                    color: c.sync.conflict,
-                                },
-                            );
                         }
                     });
                 });
@@ -2525,6 +2535,8 @@ impl eframe::App for Splat {
                 self.sessions.return_focus_to_note();
             }
         }
+        // A roll menu the keys opened gives the focus back when it closes, however it closed.
+        rolls::end_menu_frame(ctx);
         self.skip_unnamed_focus(ctx);
         self.remember(ctx);
     }
