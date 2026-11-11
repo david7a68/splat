@@ -11,29 +11,109 @@ pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
 
 pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui::Ui)) {
     let name = format!("More actions for {name}");
+    // The pane the menu opens from: the menu stays inside it, as its submenus do.
+    let inside = ui.clip_rect();
     let button = Action::quiet(icons::EXPAND)
         .density(Density::Read)
         .name(&name)
         .hint(&name)
         .show(ui);
-    egui::Popup::menu(&button)
-        .align(egui::RectAlign::BOTTOM_END)
+    let popup = egui::Popup::menu(&button);
+    // When the pane changes size under an open menu (the window shrinks), the pane brings the
+    // menu's button back into view, so the menu does not hang from a button the DM cannot see.
+    // Only a resize does this: the DM's own scrolling stays where the DM leaves it.
+    let pane = popup.get_id().with("pane size");
+    if egui::Popup::is_id_open(ui.ctx(), popup.get_id()) {
+        let last = ui.data_mut(|data| data.get_temp::<egui::Vec2>(pane));
+        let resized = last.is_some_and(|last| last != inside.size());
+        let pending = pane.with("bring back");
+        let wheel = ui.input(|input| input.raw_scroll_delta != egui::Vec2::ZERO);
+        let bring_back = !wheel
+            && (resized
+                || ui
+                    .data_mut(|data| data.get_temp::<bool>(pending))
+                    .unwrap_or(false));
+        if bring_back && !inside.contains_rect(button.rect) {
+            // The layout can settle a frame after the resize: keep asking until the button shows.
+            ui.data_mut(|data| data.insert_temp(pending, true));
+            ui.scroll_to_rect(button.rect, None);
+        } else {
+            ui.data_mut(|data| data.remove::<bool>(pending));
+        }
+        ui.data_mut(|data| data.insert_temp(pane, inside.size()));
+    } else {
+        ui.data_mut(|data| data.remove::<egui::Vec2>(pane));
+    }
+    let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
+    let aligns = menu_aligns(button.interact_rect, size, inside);
+    popup
+        .align(aligns[0])
+        .align_alternatives(&aligns[1..])
         .show(add);
 }
 
+/// Where a row menu may open: below or above its button, ending at the button's right edge, or
+/// starting at its left edge when only that keeps the menu `S` inside the pane. egui picks the
+/// first of these that fits the window, and the first one when none does, so the menu never
+/// opens beside its button, over a splitter or scroll bar.
+fn menu_aligns(
+    button: egui::Rect,
+    size: Option<egui::Vec2>,
+    inside: egui::Rect,
+) -> [egui::RectAlign; 2] {
+    use egui::RectAlign;
+    let start_only = size.is_some_and(|size| {
+        button.right() - size.x < inside.left() + design::S
+            && button.left() + size.x <= inside.right() - design::S
+    });
+    if start_only {
+        [RectAlign::BOTTOM_START, RectAlign::TOP_START]
+    } else {
+        [RectAlign::BOTTOM_END, RectAlign::TOP_END]
+    }
+}
+
+fn menu_icon(word: &str) -> Option<&'static str> {
+    match word {
+        "Move up" => Some(icons::MOVE_UP),
+        "Move down" => Some(icons::MOVE_DOWN),
+        "Remove" | "Delete the saved run" => Some(icons::REMOVE),
+        _ => None,
+    }
+}
+
+/// A line under a menu choice: why it is blocked, or what it does. It starts at the choice's
+/// words, after the quiet action's padding and any icon, and it ends the quiet action's padding
+/// before the menu's edge. The menu asks for its width with both, so the note keeps the menu's
+/// right margin and wraps before it.
+pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
+    if note.is_none() {
+        return;
+    }
+    let inset = design::S + menu_icon(word).map_or(0.0, |_| design::ICON_SLOT);
+    ui.horizontal(|ui| {
+        ui.add_space(inset);
+        let gap = ui.spacing().item_spacing.x;
+        ui.scope(|ui| {
+            ui.set_max_width(ui.available_width() - design::S);
+            blocked_reason(ui, note);
+        });
+        // The layout adds its item gap after the note; together they make the padding `S`.
+        ui.add_space(design::S - gap);
+    });
+}
+
 pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) -> bool {
-    let action = match word {
-        "Move up" => Action::quiet(word).icon(icons::MOVE_UP),
-        "Move down" => Action::quiet(word).icon(icons::MOVE_DOWN),
-        "Remove" | "Delete the saved run" => Action::quiet(word).icon(icons::REMOVE),
-        _ => Action::quiet(word),
+    let action = match menu_icon(word) {
+        Some(icon) => Action::quiet(word).icon(icon),
+        None => Action::quiet(word),
     };
     let pressed = action
         .density(Density::Read)
         .blocked(blocked)
         .show(ui)
         .clicked();
-    blocked_reason(ui, blocked);
+    choice_note(ui, word, blocked);
     if pressed {
         ui.close();
     }
@@ -709,6 +789,29 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&s
 mod iter_2_c_tests {
     use super::*;
     use crate::timeline::{Book, Kind, page::SessionLink};
+
+    /// Astra review of PR 231: a row menu opens below or above its button, never beside it, and
+    /// starts at the button's left edge only when ending at its right edge would cross the pane.
+    #[test]
+    fn iter22_b_row_menu_opens_below_or_above_inside_its_pane() {
+        use egui::{RectAlign, pos2, vec2};
+        let pane = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(590.0, 632.0));
+        let button = egui::Rect::from_min_max(pos2(561.0, 600.0), pos2(585.0, 628.0));
+        let menu = Some(vec2(236.0, 110.0));
+        let end = [RectAlign::BOTTOM_END, RectAlign::TOP_END];
+        // Unknown size (the first frame) and the usual case: end at the button's right edge.
+        assert_eq!(menu_aligns(button, None, pane), end);
+        assert_eq!(menu_aligns(button, menu, pane), end);
+        // A button near the pane's left edge: ending at it would cross the pane, so start at it.
+        let near_left = button.translate(vec2(160.0 - button.left(), 0.0));
+        assert_eq!(
+            menu_aligns(near_left, menu, pane),
+            [RectAlign::BOTTOM_START, RectAlign::TOP_START]
+        );
+        // A pane too narrow for either: still end at the button, never beside it.
+        let narrow = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(330.0, 632.0));
+        assert_eq!(menu_aligns(near_left, menu, narrow), end);
+    }
 
     #[test]
     fn paused_duplicates_use_session_then_one_save_time() {

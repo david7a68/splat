@@ -108,8 +108,10 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `no-overlap/app-vs-chrome` counts an app control or text that overlaps a scroll bar or a
   column splitter. There, egui can give the press to the bar or splitter, so it is an app
   fault. No baseline may allow it: a baseline that allows it does not load, and the full
-  writer and the chrome refresh refuse it. Fix the clearance. A menu item over its own
-  popup background stays an egui chrome count, because the item takes every press.
+  writer and the chrome refresh refuse it. Fix the clearance. A menu or other popup lies
+  over the pane below it: its choices and text over that pane's splitter or scroll bar
+  count here too. A menu item over its own popup background stays an egui chrome count,
+  because the item takes every press.
   `KNOWN_APP_VS_CHROME` in `src/visual_tests/ergonomics.rs` is empty and may only stay
   empty, so any pair fails the run.
 - After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
@@ -139,6 +141,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   cores are free, and use more memory: about 1.6 GiB at eight.
 - `SPLAT_VISUAL_SLOTS` sets how many suites may run at once on this computer, across
   worktrees. The default is one per five cores, and at most one per 4 GiB of RAM.
+- Each scenario's ids and run dice come from a hash of its name. Adding, removing or
+  moving another scenario, or running a scenario alone, changes nothing in it. Renaming
+  a scenario gives it new ids and new dice.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
@@ -621,7 +626,10 @@ A result takes the place of its button, the saved run keeps it, and Undo takes i
 end, because that is when the party searches. **Copy loot** copies the list, with the results, as Markdown for the
 session note. Loot on creatures still standing is under **more creatures carry loot**.
 
-**New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
+**New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. The name keeps
+the letters you typed. When you typed no capital, only its first letter becomes one: `toll at the old mill` gives
+`Toll at the old mill`, and `McTavish` stays `McTavish`. The note's saved name and its file name keep the same letters.
+**Make world
 entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a
 word of your own), and can have `aliases`, `status`, `in` (the place it is in) and `creature` (a stat block):
 

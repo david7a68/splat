@@ -80,6 +80,9 @@ pub struct CampaignContent {
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
     discarded_repair: Option<(String, String)>,
+    /// The repair the DM edited or focused last. It owns the primary Save while it is open and
+    /// changed; other changed repairs keep their drafts with a secondary Save.
+    active_repair: Option<String>,
 }
 struct RemovedPackage {
     campaign: Uuid,
@@ -664,6 +667,28 @@ impl CampaignContent {
         active: &Campaign,
     ) {
         let mut repaired = false;
+        // One primary Save on the screen: the active repair's, else the last open changed one.
+        let changed: Vec<&str> = self
+            .repairs
+            .iter()
+            .filter(|(path, baseline, draft)| {
+                draft != baseline
+                    && ui.data(|data| {
+                        data.get_temp::<bool>(egui::Id::new(("repair_open", path.as_str())))
+                            .unwrap_or(false)
+                    })
+            })
+            .map(|(path, _, _)| path.as_str())
+            .collect();
+        let owner = (!self.run_open)
+            .then(|| {
+                self.active_repair
+                    .as_deref()
+                    .filter(|path| changed.contains(path))
+                    .or(changed.last().copied())
+                    .map(str::to_owned)
+            })
+            .flatten();
         for (path, baseline, draft) in &mut self.repairs {
             let (problem, error_line) = repair_problem(path, draft);
             let problem = problem
@@ -694,7 +719,9 @@ impl CampaignContent {
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
-                    crate::world::repair::editor(ui, path, draft, error_line);
+                    if crate::world::repair::editor(ui, path, draft, error_line) {
+                        self.active_repair = Some(path.clone());
+                    }
 
                     ui.horizontal(|ui| {
                         let dirty = draft != baseline;
@@ -743,7 +770,15 @@ impl CampaignContent {
                             );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let pressed = Action::secondary("Save repaired note")
+                            // One weight for a save row: primary while the draft has
+                            // changes, unless an open run owns `Next turn` or another
+                            // repair is the active one.
+                            let pressed =
+                                (if draft != baseline && owner.as_deref() == Some(path.as_str()) {
+                                    Action::primary("Save repaired note")
+                                } else {
+                                    Action::secondary("Save repaired note")
+                                })
                                 .density(Density::Read)
                                 .blocked_if(draft == baseline, "No changes to save.")
                                 .show(ui)
@@ -1138,22 +1173,28 @@ impl CampaignContent {
                 .as_ref()
                 .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
-            for flag in campaign_flags {
+            for (at, flag) in campaign_flags.iter().enumerate() {
+                // Every flag is about Campaign.md, so one file line follows the last of them.
+                let last = at + 1 == campaign_flags.len();
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
                     let words = format!("Line {}: {}", flag.line, flag.message);
-                    if flag.message.contains(" choice \"") {
-                        *open_run_settings |= design::message_with_action(
-                            ui,
-                            Tone::Warning,
-                            &words,
-                            "Choose in Rules and runs",
-                        );
-                    } else {
+                    let choice = flag.message.contains(" choice \"");
+                    if !choice && !last {
                         design::message(ui, Tone::Warning, &words);
+                        return;
                     }
-                    ui.horizontal_wrapped(|ui| {
-                        crate::world::entry_file_parts(ui, &active.path, &document.path, true);
+                    // The repair choice and the file line start at the warning's words.
+                    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                        if choice {
+                            *open_run_settings |= Action::secondary("Choose in Rules and runs")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked();
+                        }
+                        if last {
+                            crate::encounters::file_line(ui, &active.path, &document.path);
+                        }
                     });
                 });
             }
@@ -1163,7 +1204,7 @@ impl CampaignContent {
             flag_lines(ui, &mut self.open_run_settings);
         }
         if (!errors.is_empty() || !campaign_flags.is_empty()) && issues_shown {
-            egui::CollapsingHeader::new(if affected.is_empty() {
+            let heading = if affected.is_empty() {
                 design::count(
                     errors.len() + campaign_flags.len(),
                     "content issue to repair",
@@ -1186,74 +1227,90 @@ impl CampaignContent {
                         )
                     )
                 }
-            })
-            .icon(design::section_icon)
-            .default_open(!campaign_flags.is_empty())
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(design::FORM_WIDTH / 2.0)
-                    .id_salt("campaign_issues")
-                    .show(ui, |ui| {
-                        flag_lines(ui, &mut self.open_run_settings);
-                        for e in errors.iter().filter(|error| {
-                            !closure
-                                .missing_dependencies
-                                .iter()
-                                .any(|issue| issue.message.as_str() == error.as_str())
-                        }) {
-                            ui.add(
-                                egui::Label::new(Type::Small.rich(ui, e.as_str()).color(c.muted))
-                                    .wrap(),
-                            );
-                        }
-                        for issue in &closure.missing_dependencies {
-                            ui.push_id(&issue.reference, |ui| {
+            };
+            // A fault count is a status: the warning icon and colour, then the count.
+            let format = egui::TextFormat {
+                font_id: egui::TextStyle::Button.resolve(ui.style()),
+                color: c.result.warning,
+                ..Default::default()
+            };
+            let mut job = egui::text::LayoutJob::default();
+            job.append(icons::WARN, 0.0, format.clone());
+            job.append(" ", 0.0, format.clone());
+            job.append(&heading, 0.0, format);
+            let issues = egui::CollapsingHeader::new(job)
+                .icon(design::section_icon)
+                .default_open(!campaign_flags.is_empty())
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(design::FORM_WIDTH / 2.0)
+                        .id_salt("campaign_issues")
+                        .show(ui, |ui| {
+                            flag_lines(ui, &mut self.open_run_settings);
+                            for e in errors.iter().filter(|error| {
+                                !closure
+                                    .missing_dependencies
+                                    .iter()
+                                    .any(|issue| issue.message.as_str() == error.as_str())
+                            }) {
                                 ui.add(
                                     egui::Label::new(
-                                        Type::Small.rich(ui, &issue.message).color(c.muted),
+                                        Type::Small.rich(ui, e.as_str()).color(c.muted),
                                     )
                                     .wrap(),
                                 );
-                                for id in &issue.owners {
-                                    let owner = &catalogue.entries[id];
-                                    let action = format!("Repair {}", owner.entry.name);
-                                    if let Some(path) = catalogue.file_path_of(*id)
-                                        && design::link(ui, &action).clicked()
-                                    {
-                                        ui.ctx().data_mut(|data| {
-                                            data.insert_temp(
-                                                egui::Id::new("open_library_repair"),
-                                                path.to_path_buf(),
-                                            )
-                                        });
-                                    }
-                                }
-                                design::quiet_section(ui, "Technical details", |ui| {
-                                    ui.label(Type::Small.rich(ui, &issue.reference).color(c.muted));
-                                });
-                            });
-                        }
-                        for entry in catalogue.entries.values().filter(|entry| {
-                            entry.private
-                                && !closure
-                                    .missing_dependencies
-                                    .iter()
-                                    .any(|issue| issue.owners.contains(&entry.entry.id))
-                        }) {
-                            if splat::content::required_references(&entry.entry).is_ok_and(
-                                |references| {
-                                    references
-                                        .iter()
-                                        .any(|reference| catalogue.resolve(reference).is_err())
-                                },
-                            ) && design::link(ui, &format!("Open {}", entry.entry.name))
-                                .clicked()
-                            {
-                                self.open_lookup = Some(entry.entry.id);
                             }
-                        }
-                    });
-            });
+                            for issue in &closure.missing_dependencies {
+                                ui.push_id(&issue.reference, |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, &issue.message).color(c.muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                    for id in &issue.owners {
+                                        let owner = &catalogue.entries[id];
+                                        let action = format!("Repair {}", owner.entry.name);
+                                        if let Some(path) = catalogue.file_path_of(*id)
+                                            && design::link(ui, &action).clicked()
+                                        {
+                                            ui.ctx().data_mut(|data| {
+                                                data.insert_temp(
+                                                    egui::Id::new("open_library_repair"),
+                                                    path.to_path_buf(),
+                                                )
+                                            });
+                                        }
+                                    }
+                                    design::quiet_section(ui, "Technical details", |ui| {
+                                        ui.label(
+                                            Type::Small.rich(ui, &issue.reference).color(c.muted),
+                                        );
+                                    });
+                                });
+                            }
+                            for entry in catalogue.entries.values().filter(|entry| {
+                                entry.private
+                                    && !closure
+                                        .missing_dependencies
+                                        .iter()
+                                        .any(|issue| issue.owners.contains(&entry.entry.id))
+                            }) {
+                                if splat::content::required_references(&entry.entry).is_ok_and(
+                                    |references| {
+                                        references
+                                            .iter()
+                                            .any(|reference| catalogue.resolve(reference).is_err())
+                                    },
+                                ) && design::link(ui, &format!("Open {}", entry.entry.name))
+                                    .clicked()
+                                {
+                                    self.open_lookup = Some(entry.entry.id);
+                                }
+                            }
+                        });
+                });
+            design::named(ui, &issues.header_response, &heading);
         }
         // Unavailable registrations and references remain explicit and editable.
         let unavailable: Vec<_> = document

@@ -60,6 +60,36 @@ fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     again
 }
 
+/// What is wrong with a repair draft now, and the line to mark. Any reason Save would refuse the
+/// draft (`refusal`, from `Loaded::draft_refusal`) is the notice, a YAML fault in its own words. A
+/// saved file whose own text does not parse has a parse fault: a draft Save would write has no
+/// notice. Another fault (a read fault, a deleted manifest, a manifest with another identity) is
+/// not in the draft's text, so its stored words stay until the file changes.
+fn draft_repair_problem(
+    note: &Note,
+    draft: &str,
+    refusal: Option<String>,
+    recovery: Option<&(Module, String, bool)>,
+) -> (Option<String>, Option<usize>) {
+    let (problem, line) = crate::campaign_content::repair_problem(&note.path, draft);
+    let Some(error) = note.error.as_ref().filter(|_| note.fault.is_none()) else {
+        return (None, line);
+    };
+    if recovery.is_some_and(|(_, _, exists)| !exists) {
+        return (Some(error.clone()), line);
+    }
+    let parse_fault = || {
+        crate::campaign_content::repair_problem(&note.path, &note.text)
+            .0
+            .is_some()
+    };
+    match problem.or(refusal) {
+        Some(problem) => (Some(problem), line),
+        None if parse_fault() => (None, line),
+        None => (Some(error.clone()), line),
+    }
+}
+
 /// Keep the error with its repair and consequence in both reader and source views.
 fn repair_notice(
     ui: &mut egui::Ui,
@@ -911,6 +941,40 @@ impl Loaded {
             index
         })
     }
+    /// Why Save would refuse this parse of note `index`'s draft, without writing anything. Save
+    /// asks this before it writes, and a repair draft shows the same reason as its notice. It
+    /// reads the identity index, which `invalidate` clears.
+    fn draft_refusal(&self, index: usize, draft: &Result<Entry, String>) -> Option<String> {
+        let entry = match draft {
+            Ok(entry) => entry,
+            Err(error) => return Some(error.clone()),
+        };
+        let note = &self.notes[index];
+        if let Some(old) = &note.entry {
+            if entry.id != old.id || entry.kind != old.kind {
+                return Some("Keep this entry's UUID and kind unchanged.".into());
+            }
+            if matches!(note.owner, Owner::Campaign(_)) && entry.key != old.key {
+                return Some("Keep the entry's UUID, kind and key unchanged.".into());
+            }
+            if old.kind == "package"
+                && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
+            {
+                return Some("Keep the package namespace unchanged.".into());
+            }
+        }
+        let lookup = self.duplicate_index();
+        let other = |at: &Vec<usize>| at.iter().any(|&at| at != index);
+        let id_taken = note.entry.as_ref().is_none_or(|old| old.id != entry.id)
+            && lookup.ids.get(&entry.id).is_some_and(other);
+        let key_taken = entry.key.as_ref().is_some_and(|key| {
+            note.entry
+                .as_ref()
+                .is_none_or(|old| old.key.as_ref() != Some(key))
+                && lookup.keys.get(key).is_some_and(other)
+        });
+        (id_taken || key_taken).then(|| "Another entry already uses this UUID or key.".into())
+    }
     fn duplicates(&self, index: usize) -> Vec<usize> {
         let Some(target) = self.notes[index].entry.as_ref() else {
             return Vec::new();
@@ -1188,6 +1252,11 @@ impl Loaded {
                 };
                 let line = note.entry.as_ref().map_or_else(
                     || {
+                        // A file the system will not read names its short cause, as World's
+                        // row does. Its owner line in the reader keeps `Cannot be read`.
+                        if let Some(fault) = &note.fault {
+                            return fault.cause().to_owned();
+                        }
                         let (_, line) =
                             crate::campaign_content::repair_problem(&note.path, &note.text);
                         line.map_or_else(
@@ -1310,6 +1379,15 @@ impl view::Links for Loaded {
             .map(|(index, note)| (index, note.name().to_owned()))
             .collect()
     }
+}
+
+/// The result after a copied package is registered: two sentences, the second says whether the
+/// open campaign uses it.
+fn package_registered(name: &str, used: bool) -> String {
+    format!(
+        "{name} is registered. This campaign {} it.",
+        if used { "uses" } else { "does not use" }
+    )
 }
 
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
@@ -3103,15 +3181,7 @@ impl Library {
             }
         }
         let (undo_copy, use_copy) = if let Some(copy) = &self.package_copy {
-            let words = format!(
-                "{} is registered · {}",
-                copy.module.name,
-                if self.copy_campaign_before.is_some() {
-                    "Used here"
-                } else {
-                    "Not used here"
-                }
-            );
+            let words = package_registered(&copy.module.name, self.copy_campaign_before.is_some());
             // The Undo sits on the message line, as every Undo after a message does. After an
             // outside change it stays there, blocked, and says why.
             let undo = design::locked(
@@ -3597,9 +3667,9 @@ impl Library {
                         let mut create = false;
                         if self.new_form {
                             ui.label(Type::Title.rich(ui, icons::LIBRARY).color(colors().muted));
-                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet.")).color(colors().text));
+                            ui.label(Type::Title.rich(ui, format!("No entries in {name} yet")).color(colors().text));
                         } else {
-                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet."), "Create the first entry.", |ui| {
+                            design::empty_state(ui, icons::LIBRARY, &format!("No entries in {name} yet"), "Create the first entry.", |ui| {
                                 create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
                             });
                         }
@@ -4650,47 +4720,18 @@ impl Library {
                 _ => {}
             }
         }
-        let note = &self.loaded.as_ref().unwrap().notes[i];
+        // The write check reads the identity index from the notes as they are now.
+        self.loaded.as_mut().unwrap().duplicates.take();
+        let loaded = self.loaded.as_ref().unwrap();
+        let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
-        let result = Entry::parse(&note.path, &self.draft).and_then(|entry| {
-            if let Some(old) = &note.entry {
-                if entry.id != old.id || entry.kind != old.kind {
-                    return Err("Keep this entry's UUID and kind unchanged.".into());
-                }
-                if owner_is_campaign && entry.key != old.key {
-                    return Err("Keep the entry's UUID, kind and key unchanged.".into());
-                }
-                if old.kind == "package"
-                    && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
-                {
-                    return Err("Keep the package namespace unchanged.".into());
-                }
+        let result = match loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft)) {
+            Some(error) => Err(error),
+            None => {
+                let baseline = (!file_gone).then_some(note.text.as_str());
+                write_note(&root, &note.path, baseline, &self.draft)
             }
-            if self
-                .loaded
-                .as_ref()
-                .unwrap()
-                .notes
-                .iter()
-                .enumerate()
-                .any(|(other, n)| {
-                    other != i
-                        && n.entry.as_ref().is_some_and(|e| {
-                            (e.id == entry.id
-                                && note.entry.as_ref().is_none_or(|old| old.id != entry.id))
-                                || (entry.key.is_some()
-                                    && e.key == entry.key
-                                    && note.entry.as_ref().is_none_or(|old| old.key != entry.key))
-                        })
-                })
-            {
-                return Err("Another entry already uses this UUID or key.".into());
-            }
-            let baseline = (!file_gone).then_some(note.text.as_str());
-            let entry = write_note(&root, &note.path, baseline, &self.draft)?;
-            Ok(entry)
-        });
+        };
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
@@ -5005,7 +5046,16 @@ impl Library {
             ),
             _ => String::new(),
         };
-        let state = if note.error.is_some() {
+        // Only a repair draft asks why Save would refuse it; the parse is already cached.
+        let refusal = note
+            .error
+            .as_ref()
+            .and_then(|_| self.loaded.as_ref().unwrap().draft_refusal(i, parsed));
+        let (repair_problem, repair_line) =
+            draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
+        // A parse fault ends with the draft that parses: the saved file stays unreadable on the
+        // owner line until Save, but the draft is not Invalid.
+        let state = if fault.is_some() || repair_problem.is_some() {
             Status {
                 icon: icons::ERROR,
                 word: "Invalid",
@@ -5355,19 +5405,6 @@ impl Library {
                 );
             });
         }
-        let (repair_problem, repair_line) =
-            crate::campaign_content::repair_problem(&note.path, &self.draft);
-        let repair_problem = note
-            .error
-            .as_ref()
-            .filter(|_| fault.is_none())
-            .map(|error| {
-                if recovery.as_ref().is_some_and(|(_, _, exists)| !exists) {
-                    error.clone()
-                } else {
-                    repair_problem.unwrap_or_else(|| error.clone())
-                }
-            });
         let mut repair_pressed = false;
         let mut read_again = false;
         // Save and Discard are one row, as far apart as the pane allows.
@@ -8736,6 +8773,15 @@ mod tests {
             ..Default::default()
         };
         library.register_copy(&mut app.campaigns).unwrap();
+        // FD6: the result is two sentences, and says that this campaign uses the copy.
+        assert_eq!(
+            package_registered(
+                &library.package_copy.as_ref().unwrap().module.name,
+                library.copy_campaign_before.is_some()
+            ),
+            "Reaches is registered. This campaign uses it.",
+            "iter21-E-FD6-uses"
+        );
         library.forget_changed_undos();
         assert!(!library.registration_changed);
         let manifest = copied.join("Module.md");
@@ -9184,6 +9230,17 @@ mod tests {
                 "SD1-plain-cause: {path}"
             );
             assert!(bad.text.is_empty() && bad.entry.is_none());
+            // FD2 (round 21): the row's second line names the short cause, as World's row does.
+            let at = loaded
+                .notes
+                .iter()
+                .position(|n| std::ptr::eq(n, bad))
+                .unwrap();
+            assert!(
+                loaded.subtitles()[at].starts_with("Text format cannot be read"),
+                "iter21-E-FD2-row: {path}: {}",
+                loaded.subtitles()[at]
+            );
             // The list's problem text is the plain cause, never the system's words.
             assert!(
                 !loaded
@@ -9197,6 +9254,17 @@ mod tests {
         for (owner, path) in [(module.id, "Yaml.md"), (campaign.id, "Notes/Yaml.md")] {
             let broken = note(owner, path);
             assert!(broken.fault.is_none(), "a YAML fault is not a read fault");
+            // Must stay true: a YAML fault's row still names its line.
+            let at = loaded
+                .notes
+                .iter()
+                .position(|n| std::ptr::eq(n, broken))
+                .unwrap();
+            assert!(
+                loaded.subtitles()[at].starts_with("Line "),
+                "iter21-E-FD2-yaml-line: {path}: {}",
+                loaded.subtitles()[at]
+            );
             assert_eq!(broken.text, yaml, "a YAML fault keeps its text for repair");
             assert!(
                 broken
@@ -9252,6 +9320,9 @@ mod tests {
         fs::write(campaign.path.join("Notes/Bad.md"), NOT_TEXT).unwrap();
         let yaml = note_text("Yaml", "rule", None).replace("splat_kind: rule", "splat_kind: [");
         fs::write(campaign.path.join("Notes/Yaml.md"), &yaml).unwrap();
+        // Another loaded note, whose UUID a repair draft can take.
+        let other = note_text("Other", "rule", None);
+        fs::write(campaign.path.join("Notes/Other.md"), &other).unwrap();
 
         let loaded = load_all(&[], Some(&campaign)).unwrap();
         let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Yaml.md");
@@ -9262,6 +9333,139 @@ mod tests {
                 "control: {words}\n{yaml_painted}"
             );
         }
+
+        // iter-22-E-SD1: a repair draft's notice and state come from its current parse. The saved
+        // file stays unreadable on the owner line until Save.
+        library.source = true;
+        let painted = sd1_painted(&mut library);
+        for words in [
+            "Line 4 opens a list",
+            "Invalid",
+            "Campaign · Cannot be read",
+        ] {
+            assert!(
+                painted.contains(words),
+                "SD1-saved-fault: {words}\n{painted}"
+            );
+        }
+        // The stored error has its own words: the old code fell back to them.
+        let stored = library.loaded.as_ref().unwrap().notes[library.selected.unwrap()]
+            .error
+            .clone()
+            .unwrap();
+        let stored = stored.split(" at line").next().unwrap().to_owned();
+        assert!(!stored.contains("opens a list"), "{stored}");
+        let valid = yaml.replace("splat_kind: [", "splat_kind: rule");
+        library.draft = valid.clone();
+        let painted = sd1_painted(&mut library);
+        for words in ["opens a list", stored.as_str()] {
+            assert!(
+                !painted.contains(words),
+                "SD1-valid-notice: {words}\n{painted}"
+            );
+        }
+        assert!(!painted.contains("Invalid"), "SD1-valid-state\n{painted}");
+        assert!(painted.contains("Unsaved"), "SD1-valid-unsaved\n{painted}");
+        assert!(
+            painted.contains("Campaign · Cannot be read"),
+            "SD1-owner-line-stays\n{painted}"
+        );
+        // The reader shows the same draft: it has no notice either.
+        library.source = false;
+        let painted = sd1_painted(&mut library);
+        for words in ["opens a list", stored.as_str()] {
+            assert!(
+                !painted.contains(words),
+                "SD1-reader-notice: {words}\n{painted}"
+            );
+        }
+        assert!(
+            !painted.contains("Fix in Edit Markdown"),
+            "SD1-reader-fix\n{painted}"
+        );
+        // Edited back to a new fault: the notice names the draft's line, not the saved one.
+        library.source = true;
+        library.draft = valid.replace("splat_name: Yaml", "splat_name: [");
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Line 5 opens a list"),
+            "SD1-new-fault\n{painted}"
+        );
+        assert!(!painted.contains("Line 4"), "SD1-old-fault-gone\n{painted}");
+        assert!(painted.contains("Invalid"), "SD1-invalid-again\n{painted}");
+        // Discard goes back to the saved text and its fault.
+        library.draft = yaml.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("Line 4 opens a list"),
+            "SD1-discard\n{painted}"
+        );
+        assert!(painted.contains("Invalid"), "SD1-discard-state\n{painted}");
+        // A draft that parses but takes another note's UUID: Save would refuse it, so the notice
+        // names that cause and the state is Invalid. Save leaves the file as it was.
+        let id_line = |text: &str| {
+            text.lines()
+                .find(|line| line.starts_with("splat_id: "))
+                .unwrap()
+                .to_owned()
+        };
+        let taken = valid.replace(&id_line(&valid), &id_line(&other));
+        assert_ne!(taken, valid);
+        assert!(Entry::parse("Notes/Yaml.md", &taken).is_ok());
+        library.draft = taken.clone();
+        let painted = sd1_painted(&mut library);
+        let cause = "Another entry already uses this UUID or key.";
+        assert!(painted.contains(cause), "SD1-taken-notice\n{painted}");
+        assert!(painted.contains("Invalid"), "SD1-taken-state\n{painted}");
+        assert!(
+            !painted.contains("Unsaved"),
+            "SD1-taken-not-unsaved\n{painted}"
+        );
+        library.save_selected(false);
+        assert_eq!(
+            fs::read(campaign.path.join("Notes/Yaml.md")).unwrap(),
+            yaml.as_bytes(),
+            "SD1-taken-not-written"
+        );
+        assert_eq!(library.draft, taken, "SD1-taken-draft-kept");
+        let painted = sd1_painted(&mut library);
+        assert!(painted.contains(cause), "SD1-taken-after-save\n{painted}");
+        // Must stay true: a draft Save accepts has no notice, and Save writes it.
+        library.draft = valid.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(!painted.contains(cause), "SD1-valid-again\n{painted}");
+        library.save_selected(false);
+        assert_eq!(
+            fs::read_to_string(campaign.path.join("Notes/Yaml.md")).unwrap(),
+            valid,
+            "SD1-valid-written"
+        );
+
+        // Lookalike outside the rule: another identity is not in the draft's parse, so a draft
+        // that parses keeps the stored fault and Invalid until the file changes.
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        let manifest = module.path.join("Package.md");
+        let text = fs::read_to_string(&manifest).unwrap();
+        let other = text.replace(&module.id.to_string(), &Uuid::new_v4().to_string());
+        assert_ne!(other, text);
+        fs::write(&manifest, &other).unwrap();
+        let mut library = sd1_select(load(Some(&module)).unwrap(), Some(module.id), "Package.md");
+        library.source = true;
+        library.draft = format!("{other}\nA description.\n");
+        assert!(
+            crate::campaign_content::repair_problem("Package.md", &library.draft)
+                .0
+                .is_none()
+        );
+        let painted = sd1_painted(&mut library);
+        assert!(
+            painted.contains("another identity"),
+            "SD1-lookalike-notice\n{painted}"
+        );
+        assert!(
+            painted.contains("Invalid"),
+            "SD1-lookalike-state\n{painted}"
+        );
 
         let loaded = load_all(&[], Some(&campaign)).unwrap();
         let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Bad.md");

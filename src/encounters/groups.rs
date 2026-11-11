@@ -8,7 +8,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
-    encounter_run::{GroupMember, RunGroup, change_rows},
+    encounter_run::{FaultKind, GroupMember, MemberFault, RunGroup, change_rows},
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
@@ -625,8 +625,9 @@ fn resolve_group(
                 .and_then(Value::as_str);
             let name = missing_member_name(member.overrides.name.as_deref(), link);
             let fault_name = &name;
-            warnings.push(format!(
-                "{what}, {fault_name}: not in this campaign's packages."
+            warnings.push(MemberFault::new(
+                FaultKind::NotInPackages,
+                format!("{what}, {fault_name}: not in this campaign's packages."),
             ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
@@ -640,18 +641,24 @@ fn resolve_group(
         } else {
             format!("{shown} (as {})", entry.name)
         };
+        // The kind is decided here, where the fault is found; every view takes its tone.
         let issue = if creature.linked {
-            Some(format!("{what}: {member_name} has a D&D Beyond sheet."))
+            Some(MemberFault::new(
+                FaultKind::CannotJoin,
+                format!("{what}: {member_name} has a D&D Beyond sheet."),
+            ))
         } else {
             match &resolved {
-                Err(error) => Some(format!(
-                    "{what}, {}: {}",
-                    member_name,
-                    override_error(error)
+                Err(error) => Some(MemberFault::new(
+                    FaultKind::InvalidChange,
+                    format!("{what}, {}: {}", member_name, override_error(error)),
                 )),
-                Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
-                    "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
-                    member_name
+                Ok(resolved) if resolved.max_hp.is_none() => Some(MemberFault::new(
+                    FaultKind::CannotJoin,
+                    format!(
+                        "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
+                        member_name
+                    ),
                 )),
                 Ok(_) => None,
             }
@@ -693,16 +700,16 @@ fn resolve_group(
         } else {
             format!("{shown} (as {name})")
         };
-        warnings.push(format!(
-            "{fault_name} needs fixing (line {})",
-            member.flag.line
+        warnings.push(MemberFault::new(
+            FaultKind::CannotJoin,
+            format!("{fault_name} needs fixing (line {})", member.flag.line),
         ));
         let count = member.count.unwrap_or(1);
         unavailable = unavailable.saturating_add(count);
         unavailable_members.push((member.before, count, format!("{shown} (not read)")));
     }
     let problem = members.is_empty().then(|| {
-        let mut problems = warnings.clone();
+        let mut problems: Vec<String> = warnings.iter().map(|fault| fault.text.clone()).collect();
         problems.push(
             if warnings.is_empty() {
                 "No members can join."
@@ -781,28 +788,17 @@ fn list_row(
     }
     for warning in &group.warnings {
         if crate::encounter_run::view::group_fault(ui, warning) {
-            if warning.contains("not in this campaign's packages") {
+            if warning.kind == FaultKind::NotInPackages {
                 ui.data_mut(|data| data.insert_temp(egui::Id::new("open_campaign_packages"), true));
             } else {
                 *action = Some(super::ListAction::OpenGroup(group.path.clone()));
             }
         }
     }
-    // A group with no member that can join says so after its member faults.
-    if let Some(none) = group
-        .problem
-        .as_deref()
-        .and_then(|problem| problem.lines().last())
-        .filter(|line| line.starts_with("No members can join"))
-    {
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, format!("{} {none}", icons::WARN))
-                    .color(colors().result.warning),
-            )
-            .wrap(),
-        );
+    // A group with no member that can join says so after its member faults, as a message in
+    // the same form as the faults above it.
+    for reason in group.own_problems() {
+        design::message(ui, Tone::Warning, reason);
     }
 }
 
@@ -1019,6 +1015,9 @@ pub(super) fn of_encounter(
         }
         let path = group.path.clone();
         let adding = add_to.as_deref() == Some(path.as_str());
+        // The editor's usable area: `Move to…` opens inside it, clear of the scroll bar and the
+        // splitter beside it.
+        let inside = ui.max_rect().intersect(ui.clip_rect());
         ui.push_id(&path, |ui| {
             let stroke = if adding {
                 egui::Stroke::new(design::FOCUS_WIDTH, colors().accent)
@@ -1034,7 +1033,7 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
-                                design::menu_submenu(ui, "Move to…", |ui| {
+                                design::menu_submenu(ui, "Move to…", inside, |ui| {
                                     for (id, name) in
                                         snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
@@ -1236,20 +1235,39 @@ fn belongs_to(
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
+fn shown_changes(
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+) -> Option<splat::content::overrides::Resolved> {
+    Overrides::parse(block)
+        .ok()
+        .filter(|overrides| !overrides.is_empty())
+        .and_then(|overrides| overrides.resolve_for(entry, side).ok())
+}
+
 pub(super) fn shown_detail(
     block: &Mapping,
     entry: &Entry,
     side: &str,
     creature: &Creature,
 ) -> String {
-    Overrides::parse(block)
-        .ok()
-        .filter(|overrides| !overrides.is_empty())
-        .and_then(|overrides| overrides.resolve_for(entry, side).ok())
-        .map_or_else(
-            || creature.detail.clone(),
-            |resolved| super::creature_detail(entry, creature.party, Some(&resolved)),
-        )
+    shown_changes(block, entry, side).map_or_else(
+        || creature.detail.clone(),
+        |resolved| super::creature_detail(entry, creature.party, Some(&resolved)),
+    )
+}
+
+/// The member has no hit points after its changes, so `shown_detail` shows the HP fault.
+pub(super) fn shown_hp_missing(
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+    creature: &Creature,
+) -> bool {
+    shown_changes(block, entry, side).map_or(creature.hp_missing, |resolved| {
+        super::max_hp(entry, Some(&resolved)).is_none()
+    })
 }
 
 /// One presentation for validation errors in the editor and Arrivals.
@@ -1337,14 +1355,14 @@ pub(super) fn changes_link(
             let word = change_words(&overrides, entry, side, &missing);
             let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
-                design::message(ui, Tone::Error, &override_error(&error));
+                design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
                 // The failed change stays visible beside its fault.
                 change_rows(ui, &rows);
             }
             clicked
         }
         Err(error) => {
-            design::message(ui, Tone::Error, &override_error(&error));
+            design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
             false
         }
     }
@@ -1536,7 +1554,7 @@ pub(super) fn overrides_form(
         ui.scroll_to_rect(rect, Some(egui::Align::Min));
     }
     if let Err(error) = overrides.resolve_for(entry, side) {
-        design::message(ui, Tone::Error, &override_error(&error));
+        design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
     }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
     // Only a name just typed: opening the form must not edit what a note holds.
@@ -2342,19 +2360,19 @@ fn members(
             } else {
                 name
             };
-            let detail = entry
+            let (detail, hp_missing) = entry
                 .and_then(|entry| {
                     let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
                     let mut detail = shown_detail(&member.overrides, entry, &side, creature);
                     if member.overrides.contains_key("name") { detail.push_str(&format!(" · as {}", entry.name)); }
-                    Some(detail)
+                    Some((detail, shown_hp_missing(&member.overrides, entry, &side, creature)))
                 })
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
             let member_row = ui.label(Type::Strong.rich(ui, format!("{number}. {name}")).color(colors().text)).on_hover_text(&name).rect;
             if !detail.is_empty() {
-                let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
+                let response = ui.add(egui::Label::new(super::detail_text(ui, &super::stat_line(&detail), hp_missing)).wrap());
                 design::named(ui, &response, &detail);
             }
             ui.horizontal(|ui| {
@@ -2504,9 +2522,10 @@ fn unread_member(
     let count = member
         .count
         .map_or_else(|| "Count not read".into(), |count| format!("Count {count}"));
-    let mut detail = entry
-        .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id))
-        .map_or_else(String::new, |creature| creature.detail.clone());
+    let creature =
+        entry.and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.entry.id));
+    let hp_missing = creature.is_some_and(|creature| creature.hp_missing);
+    let mut detail = creature.map_or_else(String::new, |creature| creature.detail.clone());
     if member.count.is_none() {
         detail = if detail.is_empty() {
             count.clone()
@@ -2518,15 +2537,21 @@ fn unread_member(
         detail.push_str(&format!(" · as {base_name}"));
     }
     let summary = ui.add(
-        egui::Label::new(
-            Type::Small
-                .rich(ui, super::stat_line(&detail))
-                .color(colors().muted),
-        )
+        egui::Label::new(super::detail_text(
+            ui,
+            &super::stat_line(&detail),
+            hp_missing,
+        ))
         .wrap(),
     );
     design::named(ui, &summary, &detail);
-    design::message(
+    let blocked = if splat::content::list_formats::changes(&raw, "", "").is_err() {
+        "This member cannot join a fight until its Changes cell is fixed. Other members can join."
+    } else {
+        "This member cannot join a fight until this row is fixed. Other members can join."
+    };
+    // What the fault blocks, the file's path and its links start at the message words.
+    design::message_with_actions(
         ui,
         Tone::Warning,
         &format!(
@@ -2534,14 +2559,11 @@ fn unread_member(
             member.flag.line,
             member.flag.message.trim_end_matches('.').to_owned() + "."
         ),
+        |ui| {
+            ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
+            super::file_line(ui, &snapshot.campaign_root, &draft.path);
+        },
     );
-    let blocked = if splat::content::list_formats::changes(&raw, "", "").is_err() {
-        "This member cannot join a fight until its Changes cell is fixed. Other members can join."
-    } else {
-        "This member cannot join a fight until this row is fixed. Other members can join."
-    };
-    ui.add(egui::Label::new(Type::Small.rich(ui, blocked).color(colors().muted)).wrap());
-    crate::world::entry_file_actions(ui, &snapshot.campaign_root, &draft.path, true);
     let line = member.flag.line;
     let mut remove = false;
     ui.horizontal(|ui| {
@@ -2596,15 +2618,9 @@ fn unread_member(
     if let Some((repair_line, block)) = &mut draft.repair
         && *repair_line == line
     {
-        // A warning has its icon, as the group's other faults do.
-        let unread = ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(ui, format!("{} {}", icons::WARN, unread_changes(&raw)))
-                    .color(colors().result.warning),
-            )
-            .wrap(),
-        );
+        // An unread value is a message, as every other unread value is: a warning mark and bar,
+        // and words in text colour.
+        let unread = design::small_message(ui, Tone::Warning, &unread_changes(&raw));
         if ui
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(("unread_form_opened", line))))
             .is_some()
@@ -2613,11 +2629,16 @@ fn unread_member(
             rect.min.y -= design::L;
             ui.scroll_to_rect(rect, Some(egui::Align::Min));
         }
-        ui.label(
-            Type::Small
-                .rich(ui, "For example: HP +5, AC +2, Speed 40 ft.")
-                .color(colors().muted),
-        );
+        // The example belongs to the message, so it starts at the message words.
+        let inset = unread.rect.left() - ui.cursor().left();
+        ui.horizontal(|ui| {
+            ui.add_space(inset);
+            ui.label(
+                Type::Small
+                    .rich(ui, "For example: HP +5, AC +2, Speed 40 ft.")
+                    .color(colors().muted),
+            );
+        });
         if let Some(entry) = entry {
             let id = format!("{repair_id}:{line}");
             if overrides_form(ui, &id, block, &entry.entry, &draft.setup.side, None) {
@@ -3324,6 +3345,21 @@ mod tests {
                 .warnings
                 .iter()
                 .any(|warning| warning.contains("Weak scout"))
+        );
+        // iter-22-B FT1: the check that finds each fault decides its kind, and so its tone.
+        let kinds: Vec<_> = group
+            .warnings
+            .iter()
+            .map(|warning| (warning.kind, warning.tone() == design::Tone::Error))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                (FaultKind::NotInPackages, false),
+                (FaultKind::InvalidChange, true)
+            ],
+            "{:?}",
+            group.warnings
         );
     }
 

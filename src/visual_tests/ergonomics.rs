@@ -155,6 +155,8 @@ pub struct Control {
     pub chrome: bool,
     /// The popup background (egui chrome) that this control or text is drawn in.
     pub popup: Option<u64>,
+    /// An open modal dialog lies over this control's layer and takes its presses.
+    pub blocked: bool,
 }
 
 fn rect_of(node: &AccessKitNode<'_>) -> Option<egui::Rect> {
@@ -411,6 +413,21 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
         }
         None
     };
+    // A modal dialog blocks every layer below its own. AccessKit ids are egui's ids.
+    let layers: HashMap<u64, egui::LayerId> = harness.ctx.viewport(|viewport| {
+        [&viewport.prev_pass, &viewport.this_pass]
+            .into_iter()
+            .flat_map(|pass| pass.widgets.layers())
+            .flat_map(|(layer, widgets)| widgets.iter().map(|widget| (widget.id.value(), *layer)))
+            .collect()
+    });
+    let blocked = |node: &AccessKitNode<'_>| {
+        layers.get(&node.id().0).is_some_and(|layer| {
+            !harness
+                .ctx
+                .memory(|memory| memory.allows_interaction(*layer))
+        })
+    };
     walk(&root, id, None, 0, &mut |node, scope, clip, _, surfaces| {
         let access = node.accesskit_node();
         if access.role() == Role::Label
@@ -438,6 +455,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 clip,
                 chrome: false,
                 popup: popup_of(node),
+                blocked: false,
             });
             return;
         }
@@ -464,6 +482,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 || column_handle(&access, rect)
                 || popups.contains(&access.id().0),
             popup: popup_of(node),
+            blocked: blocked(&access),
         });
     });
     out
@@ -741,6 +760,22 @@ fn overlap_check(first: &Control, second: &Control) -> String {
     }
 }
 
+/// A popup is a top-level scope of its own, drawn over the panes below it, so the pair
+/// check does not usually compare it with them. Its content (a choice or its text) over
+/// a column splitter or a scroll bar of another scope is still an app fault: the content
+/// hides the handle, or the handle shows at the edge of a choice. A handle that an open
+/// modal dialog blocks is not a handle there: the dialog lies over it, and it takes no
+/// press. Other pairs across scopes, the popup's own background among them, stay out of
+/// the check.
+fn popup_content_over_handle(first: &Control, second: &Control) -> bool {
+    let content = |control: &Control| !control.chrome && control.popup.is_some();
+    // Chrome is a scroll bar (thin), a column splitter or a popup background (never thin).
+    let handle = |control: &Control| {
+        control.chrome && !control.blocked && (control.role == Role::Splitter || thin(control.rect))
+    };
+    (content(first) && handle(second)) || (content(second) && handle(first))
+}
+
 /// Run the per-state checks over the controls in the tree.
 pub fn inspect(
     controls: &[Control],
@@ -834,7 +869,9 @@ pub fn inspect(
             continue;
         }
         for second in &controls[index + 1..] {
-            if first.scope != second.scope || (first.is_label() && second.is_label()) {
+            if (first.scope != second.scope && !popup_content_over_handle(first, second))
+                || (first.is_label() && second.is_label())
+            {
                 continue;
             }
             let overlap = first_shown.intersect(shown(second));
@@ -1292,6 +1329,7 @@ mod tests {
             clip: None,
             chrome: false,
             popup: None,
+            blocked: false,
         }
     }
 
@@ -1410,22 +1448,27 @@ mod tests {
     }
 
     /// A popup's own background is behind its items, so they stay egui's count. Another
-    /// popup's background is not.
+    /// popup's background is not. The popup is a scope of its own, over the page's scope:
+    /// its content over a splitter or a scroll bar of the page is an app fault.
     #[test]
     fn an_item_over_its_own_popup_background_stays_egui_chrome() {
+        const POPUP: u64 = 2;
         let mut background = control("", at(0.0, 0.0, 200.0, 120.0));
         background.role = Role::Unknown;
         background.chrome = true;
+        background.scope = POPUP;
         let mut item = control("Delete", at(7.0, 7.0, 186.0, 28.0));
         item.popup = Some(background.id);
+        item.scope = POPUP;
         let mut text = control("Danger", at(9.0, 40.0, 186.0, 16.0));
         text.role = Role::Label;
         text.popup = Some(background.id);
+        text.scope = POPUP;
         for pair in [
             [background.clone(), item.clone()],
             [item.clone(), background.clone()],
             [background.clone(), text.clone()],
-            [text, background.clone()],
+            [text.clone(), background.clone()],
         ] {
             assert_eq!(
                 overlap_checks(&pair),
@@ -1433,8 +1476,189 @@ mod tests {
                 "{pair:?}"
             );
         }
+        // The page's splitter and scroll bar, under the popup.
+        let mut splitter = control("Resize creature search column", at(150.0, 0.0, 10.0, 300.0));
+        splitter.role = Role::Splitter;
+        splitter.chrome = true;
+        let mut bar = control("", at(0.0, 44.0, 300.0, 8.0));
+        bar.id = 99;
+        bar.role = Role::Unknown;
+        bar.chrome = true;
+        assert_ne!(splitter.scope, POPUP);
+        for (content, handle) in [(&item, &splitter), (&text, &splitter), (&text, &bar)] {
+            for pair in [
+                [content.clone(), handle.clone()],
+                [handle.clone(), content.clone()],
+            ] {
+                assert_eq!(overlap_checks(&pair), [APP_VS_CHROME], "{pair:?}");
+            }
+        }
+        // Clear of the handles, nothing; the background over them stays out of the check,
+        // and so does page content in another scope.
+        let mut clear = item.clone();
+        clear.rect = at(7.0, 7.0, 130.0, 28.0);
+        let mut page = item.clone();
+        page.popup = None;
+        // A modal dialog over the page blocks its splitter.
+        let mut blocked = splitter.clone();
+        blocked.blocked = true;
+        // A submenu is a popup of its own, over its parent menu's background.
+        let mut submenu = item.clone();
+        submenu.scope = POPUP + 1;
+        submenu.popup = Some(background.id + 1);
+        for pair in [
+            [clear, splitter.clone()],
+            [background.clone(), splitter.clone()],
+            [background.clone(), bar],
+            [page, splitter],
+            [item.clone(), blocked.clone()],
+            [blocked, item.clone()],
+            [submenu.clone(), background.clone()],
+            [background.clone(), submenu],
+        ] {
+            assert!(overlap_checks(&pair).is_empty(), "{pair:?}");
+        }
         item.popup = Some(background.id + 1);
         assert_eq!(overlap_checks(&[background, item]), [APP_VS_CHROME]);
+    }
+
+    /// The real tree: a menu opened in a column, wider than the column, lies over the
+    /// column's splitter in another scope. Each choice and text over the splitter is an
+    /// app fault; the menu's own background stays egui's count; a narrow menu is clear.
+    /// The same menu in a modal dialog over the column is clear too: the dialog blocks
+    /// the splitter.
+    #[test]
+    fn a_menu_over_a_column_splitter_is_an_app_fault() {
+        // In a modal dialog over the column, the menu crosses a splitter the dialog blocks.
+        let checks = |choice: &'static str, note: &'static str, modal: bool| {
+            let mut harness =
+                Harness::builder()
+                    .with_size(egui::vec2(600.0, 400.0))
+                    .build_state(
+                        move |ctx, _: &mut crate::Splat| {
+                            let menu = |ui: &mut egui::Ui| {
+                                ui.menu_button("Open", |ui| {
+                                    let _ = ui.button(choice);
+                                    ui.label(note);
+                                });
+                            };
+                            crate::design::Column::left("encounter_add", 200.0, 150.0..=300.0)
+                                .show(ctx, |ui| {
+                                    if !modal {
+                                        menu(ui);
+                                    }
+                                });
+                            egui::CentralPanel::default().show(ctx, |_| {});
+                            if modal {
+                                egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
+                                    ui.set_min_width(300.0);
+                                    menu(ui);
+                                });
+                            }
+                        },
+                        crate::Splat::default(),
+                    );
+            harness.run();
+            harness.get_by_label("Open").click();
+            harness.run();
+            let found = controls(&harness);
+            let splitter = found
+                .iter()
+                .find(|control| control.name == "Resize creature search column")
+                .expect("the column's splitter is in the tree");
+            assert!(splitter.chrome && splitter.role == Role::Splitter);
+            let item = found
+                .iter()
+                .find(|control| control.name == choice)
+                .expect("the menu choice is in the tree");
+            assert!(item.popup.is_some() && item.scope != splitter.scope);
+            // The menu's text, which has no accessible name of its own here.
+            let text = found
+                .iter()
+                .find(|control| control.is_label() && control.popup == item.popup)
+                .expect("the menu's text is in the tree");
+            assert_eq!(text.scope, item.scope);
+            let overlaps = [
+                item.rect.intersects(splitter.rect),
+                text.rect.intersects(splitter.rect),
+            ];
+            let checks: Vec<_> = inspect(
+                &found,
+                &[],
+                harness.ctx.content_rect(),
+                "seeded",
+                "menu",
+                "600x400",
+            )
+            .into_iter()
+            .filter(|violation| violation.check.starts_with("no-overlap"))
+            .map(|violation| (violation.check, violation.node, violation.detail))
+            .collect();
+            (overlaps, checks, splitter.blocked)
+        };
+        let wide = "Move this group to Arena Final";
+        let note = "Danger: its creatures move with it";
+        let (overlaps, found, blocked) = checks(wide, note, false);
+        assert_eq!(overlaps, [true; 2], "the wide menu crosses the splitter");
+        assert!(!blocked);
+        let against_splitter: Vec<_> = found
+            .iter()
+            .filter(|(.., detail)| detail.contains("Resize creature search column"))
+            .chain(
+                found
+                    .iter()
+                    .filter(|(_, node, _)| node == "Resize creature search column"),
+            )
+            .collect();
+        let names: Vec<_> = against_splitter
+            .iter()
+            .map(|(check, node, detail)| {
+                assert_eq!(check, APP_VS_CHROME, "{node}: {detail}");
+                if node.starts_with("Resize") {
+                    detail.clone()
+                } else {
+                    node.clone()
+                }
+            })
+            .collect();
+        assert!(
+            names.iter().any(|name| name.contains(wide)),
+            "the choice: {found:?}"
+        );
+        assert!(
+            names.iter().any(|name| name.contains("(unnamed Label)")),
+            "its text: {found:?}"
+        );
+        let background: Vec<_> = found
+            .iter()
+            .filter(|(_, node, _)| node == "(egui handle at edge)")
+            .collect();
+        assert_eq!(background.len(), 2, "the menu's own background: {found:?}");
+        assert!(
+            background
+                .iter()
+                .all(|(check, ..)| check == "no-overlap/egui-chrome"),
+            "the menu's own background: {found:?}"
+        );
+        let (overlaps, found, blocked) = checks(wide, note, true);
+        assert_eq!(
+            overlaps, [true; 2],
+            "the menu in the dialog crosses the splitter"
+        );
+        assert!(blocked, "the dialog blocks the splitter");
+        assert!(
+            found.iter().all(|(check, ..)| check != APP_VS_CHROME),
+            "{found:?}"
+        );
+        let (overlaps, found, _) = checks("Move", "Danger", false);
+        assert_eq!(
+            overlaps, [false; 2],
+            "the narrow menu is clear of the splitter"
+        );
+        assert!(
+            found.iter().all(|(check, ..)| check != APP_VS_CHROME),
+            "{found:?}"
+        );
     }
 
     /// A click as the visual driver makes one: hover, then press and release.
