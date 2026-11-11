@@ -201,6 +201,14 @@ impl RunGroup {
     }
     /// How many, on which side, and what they are worth, in one line.
     pub(crate) fn summary(&self) -> String {
+        // When nobody can join, the count says it all: no XP, no `Will add: none`.
+        if self.joinable_count() == 0 && self.unavailable > 0 {
+            return format!(
+                "{} · {}",
+                crate::design::reader::human_label(&self.side),
+                self.count_label()
+            );
+        }
         let mut summary = format!(
             "{} · {} · {}",
             crate::design::reader::human_label(&self.side),
@@ -282,12 +290,27 @@ impl RunGroup {
         }
     }
 
-    pub(crate) fn member_summary_wrapped(&self) -> String {
-        self.member_summary()
+    /// The member summary for a line `width` wide in `font`: it wraps between members, never
+    /// inside one. A member wider than the line breaks at its own spaces, first before its
+    /// `(as …)`, and never inside a word.
+    pub(crate) fn member_summary_wrapped(
+        &self,
+        ui: &egui::Ui,
+        font: &egui::FontId,
+        width: f32,
+    ) -> String {
+        let summary = self.member_summary();
+        // `Will add:` may end a line of its own, so the member after it stays whole.
+        let (lead, members) = match summary.strip_prefix("Will add: ") {
+            Some(members) => ("Will\u{a0}add: ", members),
+            None => ("", summary.as_str()),
+        };
+        let members = members
             .split(", ")
-            .map(|member| member.replace(' ', "\u{a0}"))
+            .map(|member| keep_whole(ui, font, member, width))
             .collect::<Vec<_>>()
-            .join(", ")
+            .join(", ");
+        format!("{lead}{members}")
     }
 
     /// Every creature the note names, whether or not it can be found now.
@@ -296,6 +319,27 @@ impl RunGroup {
             .iter()
             .map(|member| member.count)
             .fold(self.unavailable, u64::saturating_add)
+    }
+}
+/// `words` with no-break spaces when they fit one line `width` wide. Too wide, they break
+/// first before `(as …)`, each part whole when it fits; a part that still does not fit breaks
+/// at its own spaces.
+pub(crate) fn keep_whole(ui: &egui::Ui, font: &egui::FontId, words: &str, width: f32) -> String {
+    let whole = |part: &str| {
+        let joined = part.replace(' ', "\u{a0}");
+        if crate::design::number_width(ui, &joined, font) <= width {
+            joined
+        } else {
+            part.to_owned()
+        }
+    };
+    let joined = whole(words);
+    if joined != words || !words.contains(' ') {
+        return joined;
+    }
+    match words.split_once(" (as ") {
+        Some((name, base)) => format!("{} {}", whole(name), whole(&format!("(as {base}"))),
+        None => words.to_owned(),
     }
 }
 pub(crate) fn grouped_number(number: impl ToString) -> String {

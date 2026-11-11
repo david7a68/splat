@@ -4109,6 +4109,69 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Choosing a replacement edits the draft; it does not save it",
     );
     d.state("deleted-package-entry-replaced", Sizes::All);
+    // iter-23 FD10: on a replaced row, the separator before the change link has the same gap on
+    // each side as the separators between the stats.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let gaps = d.at_size(size, |d| {
+            let mut line = None;
+            d.each_painted_text(|text, clip| {
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if line.is_none()
+                    && words.ends_with("as Guard")
+                    && words.contains('·')
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    line = Some(text.visual_bounding_rect());
+                }
+            });
+            let line = line?;
+            let mut glyphs = Vec::new();
+            d.each_painted_text(|text, clip| {
+                if !clip.intersects(text.visual_bounding_rect()) {
+                    return;
+                }
+                for row in &text.galley.rows {
+                    for glyph in &row.glyphs {
+                        let x = text.pos.x + row.pos.x + glyph.pos.x;
+                        let y = text.pos.y + row.pos.y + glyph.pos.y;
+                        if x >= line.left() - 0.5 && (y - line.bottom()).abs() <= line.height() {
+                            glyphs.push((x, x + glyph.advance_width, glyph.chr));
+                        }
+                    }
+                }
+            });
+            glyphs.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let solid: Vec<_> = glyphs
+                .into_iter()
+                .filter(|(_, _, chr)| !chr.is_whitespace())
+                .collect();
+            Some(
+                solid
+                    .windows(3)
+                    .filter(|three| three[1].2 == '·')
+                    .map(|three| (three[1].0 - three[0].1, three[2].0 - three[1].1))
+                    .collect::<Vec<_>>(),
+            )
+        });
+        // The last separator is the link's; it matches the mean of the stats' separators on
+        // each side within 1 px (glyph bearings differ by a little from digit to letter).
+        let even = gaps.as_ref().is_some_and(|gaps| {
+            let Some(((left, right), text)) = gaps.split_last() else {
+                return false;
+            };
+            let mean = |side: fn(&(f32, f32)) -> f32| {
+                text.iter().map(side).sum::<f32>() / text.len() as f32
+            };
+            text.len() >= 2
+                && (left - mean(|gap| gap.0)).abs() <= 1.0
+                && (right - mean(|gap| gap.1)).abs() <= 1.0
+        });
+        d.observe(
+            "iter-23-B-FD10",
+            even,
+            format!("At {size:?}, the gaps around each separator of the replaced row: {gaps:?}"),
+        );
+    }
     // iter-18-B: the replacement's result is a short message, so its Undo keeps the undo icon as
     // every other Undo does, and its press area stays clear of the splitter.
     d.observe_both(

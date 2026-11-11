@@ -200,9 +200,16 @@ state. An on toggle uses `selected`, its word and an icon or check, without acce
 action that loses something. Keep Delete and Remove in row menus.
 
 A save row keeps its state and quiet `Discard` at the left and `Save` at the right. Clean rows say `No
-changes`. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
+changes`, unless Save is enabled to repair something the file holds: then the state names the write with the warning
+icon (`Save replaces the unread choice on line 23 with these settings`), and `Ctrl+S` saves exactly when the button
+can. `No changes to save.` belongs only to blocked Save's hover text and accessible description. A save row
 has one weight: its Save is primary while the draft has changes that it can save and no open run owns `Next turn`,
-and secondary otherwise. `Save changes` in World and `Save repaired note` in World and Campaign follow this. When
+and secondary otherwise. An unsaved draft owns the primary over its own page's other actions: while an encounter
+draft has changes, `Save encounter` is primary and `Resume` or `Start fight` is secondary until the draft is saved or
+discarded. While a run is open, its strip's `Next turn` stays the only primary, whatever the draft holds (round 22).
+A draft that Save refused does not own the primary until its fault is fixed. A repair that a note was opened for
+stays through a failed Save, until a Save writes. `Save changes` in World and `Save repaired note` in World and
+Campaign follow this. When
 several Campaign repairs have changes that Save would write, only the active one (edited or focused last; else the last changed one) has
 the primary Save; the others keep their drafts with a secondary Save. Unsaved,
 Saved and errors keep that left slot. When one cause blocks several controls, state it once at the cause: the
@@ -233,7 +240,8 @@ A file line that follows a warning (the path, `Edit in Obsidian` and `Show file`
 in `message_with_actions`, so the path and both links start at the warning's words, and wrap a long path whole
 instead of cutting it. When several warnings name one file, the file line follows the last one. The warning names
 the row and the line, never the file (`Ember Cultist · line 20: …`, `Line 9: “Day 5” is day 1 in order. …`); the
-file line holds the path once. Encounters, Rules and runs, Campaign, Timeline and run setup follow this. In the run
+file line holds the path once. The encounter editor, the run setup and Save's blocked reason build an unread roster
+row's words with one function, in the first form. Encounters, Rules and runs, Campaign, Timeline and run setup follow this. In the run
 setup, a file line that fits beside the last compact warning sits on its line after an `L` gap; otherwise it wraps
 below, at the warning's words. A reader's
 file line below its title is not a message action and keeps its place.
@@ -288,6 +296,10 @@ editor without a write. World Reload keeps the replaced draft for one `Undo relo
 the next edit. If the note changes again on disk before that edit, the held draft comes back as unsaved work and
 the choices show again: Overwrite writes only the DM's own changes over the newest file, with Undo, and Reload
 holds the draft again for `Undo reload`. A deleted note does not bring the held draft back. A run offers `Save as a new run`, then an `L` gap (16 px in all, egui's item spacing included) and red `Replace the file with this run`, in `message_with_actions`: both start at the message text. An encounter, group or encounter creature draft (`src/encounters/disk.rs`) draws `Overwrite with my draft`, an `L` gap and red `Reload and lose my draft` (or `Let it go` when the file is gone) the same way, under the last of its messages: a note that another file uses the same identity comes before the choices.
+Below the choices, as World's lines do, one `Small` line for each part that differs says it in the DM's words, with a
+muted label: `Name: your draft says “…”; the file says “…”.`, `Notes: your draft adds “Ash on the water.”; the file adds
+“Written outside Splat.”`, and for a table by its heading, `Roster: the file names the same 8 rows in another form.` A
+row that holds an id is the same row whatever form its link takes. The comparison stays below.
 
 Session conflicts call the item a note in the warning. Keep Record available because audio uses its own file.
 Show draft and disk text side by side in Write's styled source face. Hide the plan and use the whole session
@@ -496,7 +508,12 @@ campaign saves the missing choice. Empty campaign entries offer one New entry ac
 `entry you can use`.
 
 Missing dependencies lead with the owner and retained member name: `Lost Patrol needs Scout, which was
-deleted.` Without a known name, say `Lost Patrol needs a creature that cannot be found.` Link repair to the
+deleted.` Without a known name, say `Lost Patrol needs a creature that cannot be found.` The repair opens Edit
+Markdown with the caret on the missing link's line and names it in the reserved reason line (`Line 14: Lost Patrol
+needs a creature that cannot be found. Replace the link on this line with another creature, or remove its row.`)
+while the draft holds that link. When Save's reason or the discard result needs that line, the guidance comes first,
+directly above it. The guidance belongs to its entry: when another entry is selected, by any path, it ends. The link is found as the reader reads the member's Creature cell, never by
+matching its id in the text, so notes that mention the id are not the repair. Link repair to the
 referring file; keep raw references in Technical details. A removed package is named without claiming its file
 was deleted.
 
@@ -568,7 +585,8 @@ change; results explaining which entry an encounter will use are Small muted tex
 ## Campaign
 
 Campaign's header counts chosen entries only. Flags appear once in the content issue count. The count is a status:
-the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Each flag's
+the warning icon and colour before its words (`⚠ 1 content issue to repair`), and it keeps its collapse. Encounters'
+count uses the same helper, words and size. Each flag's
 repair choice and file line start at its words. Packages keeps its save row directly below the tabs, before notices.
 The save row, package list and entry search stop at LIST_MEASURE from the tab’s left edge.
 An open repair keeps the same right edge as the save row.
@@ -859,7 +877,9 @@ An unreadable file is an error (the error icon and colour in the row), and a del
 check that finds the fault records its kind, and the message takes its tone from that kind, never from its
 words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
 stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
-on and retains names and starting values, with one Undo.
+on and retains names and starting values, with one Undo. In a group's editor, Use says `Replaced Unknown creature
+with Ember Cultist.` with `Undo replacement` on the member result line that Remove uses; the newest member result owns
+that line. Undo puts back only the creature, so later edits stay; a move or a removal ends it.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
 Menus hold ordering, duplication, Make it yours and Remove; missing rows keep Edit and Remove there. A menu choice's
@@ -871,7 +891,8 @@ keeps its button in view, also after the window shrinks. Side
 pickers offer Party, Enemies and Other…; only Other opens a name field and replaces the value. Changed stays
 at the end of the second line as one collapsed link. Shorten muted detail first; keep `as <base creature>` and
 the full change link, removing source before base creature. Remove a source whole without an ellipsis;
-hover keeps the full detail.
+hover keeps the full detail. The ` · ` before the link has the same blank on each side as the separators between
+the stats: no item spacing is added around it.
 
 An unread roster row stays visible by participant name and line, with its file line (path, Edit in Obsidian and Show file). The warning sits below the editor header and its save row, so a fault does not move the name field, Save encounter or Start fight. The last warning ends with what to do, and its file line starts at its words. Start fight is blocked until the DM repairs or explicitly removes that row. Plan starts use the same check. A resumed setup keeps the warning and blocks Begin combat while its source has unread rows. Saved run participants stay intact.
 
@@ -885,9 +906,11 @@ The editor header keeps Save and Start on line one; the name field gives up widt
 offers Resume, moves Start another fight into its menu and keeps run state in the save row. Blocked Start
 fight says Close the open run first beside it. Sync and repeat options follow the roster. Use group_heading
 for groups of controls and sentence-case field labels over single inputs; tabbed Add participants has no repeated heading. Group frames choose where Add goes;
-search says `Adding to <name>` as read-only text. Each encounter group has a frame below the roster with name,
+search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
+check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
 side, members and notes. The target frame has an accent outline. The Encounters page keeps groups in one
-closed section. Frames use Move to… for ownership; full editors use Belongs to.
+closed section. Frames use Move to… for ownership; full editors use Belongs to. A group that no fight can offer
+says so below Belongs to as a warning `small_message`, not as muted field help.
 
 ### Groups and changes
 
@@ -924,14 +947,23 @@ aligned with other actions. Show Count once, in the action row; retain `Count no
 example. Done keeps name and note; Remove has Undo. Groups, Arrivals and plan state how many can join and name
 each creature needing repair: shown name, base creature when different, and source line. In the plan, each
 such member is a warning `small_message` below the row's summary, with Edit group in the row's action column. Readable members can
-still join. Changed summaries also name the base creature. Wrap between members, never inside names.
+still join. While a fight is open, a group that some members can join keeps `Add to fight…` in its action column and
+puts `Edit group` in its row menu; a group none of whose members can join keeps `Edit group` there, because Arrivals
+could add nothing. Changed summaries also name the base creature. Wrap between members, never inside names; a member
+wider than its line breaks first before its `(as …)`, then at its own spaces, never inside a word, and `(line 15)`
+stays whole. When no member can join, the summary ends at the count (`Enemies · 0 of 1 can join`): no XP and no
+`Will add: none`. The editor's members heading says how many can join when not all can (`MEMBERS 3 · 2 can join ·
+XP 100`).
 
 Every change field shows printed value and result, including changes added by hand. Editors, run cards and
 fault details share that preview. An invalid stat names only the limit crossed: `Maximum HP would become -28.
-It must be 1 or more.` Give an upper limit only when exceeded. Done closes the form and returns to its row.
-Change forms use the run's condition grid. The grid, its Other effect field and Add stay within `FORM_WIDTH` at
-the pane's left edge, in the run and in Starting conditions. Each column is as wide as its longest choice, and
-columns are `S` apart, so they sit near each other in a wide pane. Attack and damage changes sit below the affected action, with `XS`
+It must be 1 or more.` Give an upper limit only when exceeded. In a change form, that error is a `small_message`
+directly below its own field, at the field's left edge, and the preview beside the field takes the error icon and
+colour; only a fault that no field explains (a value a linked sheet decides) stays at the top of the form. Done closes
+the form and returns to its row. Change forms use the run's condition grid. The grid, its Other effect field and Add
+stay within `FORM_WIDTH` at the pane's left edge, in the run and in Starting conditions. Each column is as wide as its
+longest choice, and columns are `S` apart, so they sit near each other in a wide pane. Other effects use the run's
+function: the `OTHER EFFECTS` label, each effect in Body text with its row menu, and the `Other effect…` field. Attack and damage changes sit below the affected action, with `XS`
 above and `L` below. Changed Speed uses stat-table label and value columns.
 
 ### Loot lists
@@ -1159,7 +1191,8 @@ picker says Side and uses roster words. List encounter groups, tonight's plan gr
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
-say Added before combat. Names include count when adding more than one creature. No confirmation is needed;
+say Added before combat. A status that cannot fit the member slot whole takes a full-width line above the members
+and controls, and wraps there at its spaces, never inside a word. Names include count when adding more than one creature. No confirmation is needed;
 Undo names the addition with the same count, `Undo: add 2 × Wolf`. The result names who joined, in one form for a
 group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mill joined at 9. Tied with Ember
 Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` The Log keeps `Added by hand` and `entered by the
@@ -1185,7 +1218,8 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 ### Saving and closing
 
 Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
-The last closed run owns primary Resume. `Closed last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
+encounter` is primary). `Closed last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run

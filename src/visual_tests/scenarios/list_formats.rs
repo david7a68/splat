@@ -188,6 +188,13 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Combat initiative choice");
     d.expect("Roll NPC initiative");
     d.state("rules-and-runs-flagged-choice", Sizes::All);
+    // An unchanged form with an unread rule choice says what its enabled Save writes.
+    const REPAIR_STATE: &str = "Save replaces the unread choice on line 23 with these settings";
+    d.observe(
+        "iter-23-B-AA1",
+        d.visible_text(REPAIR_STATE) && !d.visible_text("No changes"),
+        "The save row names the write instead of No changes",
+    );
     // FD3 family: the file line starts at the warning's words.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let placed = d.at_size(size, |d| {
@@ -219,6 +226,27 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Rules and runs warning's file line: {placed:?}"),
         );
     }
+    // The Ctrl+S that Save shows saves exactly when Save can.
+    d.press_ctrl(Key::S);
+    d.expect("No changes");
+    d.observe(
+        "iter-23-B-AA2",
+        !d.has_containing("Imaginary initiative") && !d.visible_text(REPAIR_STATE),
+        "Ctrl+S writes the shown settings over the unread choice, as Save does",
+    );
+    // Put the unread choice back for the pointer's repair below. The changed file makes a run
+    // settings draft; discard it, then read the file again.
+    fs::write(&manifest, &flagged).unwrap();
+    d.settle();
+    if d.has("Discard") {
+        d.click("Discard");
+    }
+    d.click(NAV_ENCOUNTERS);
+    d.click("Reload from disk");
+    d.settle();
+    d.click(NAV_CAMPAIGN);
+    d.click("Rules and runs");
+    d.expect(REPAIR_STATE);
     d.click("Roll NPC initiative");
     d.click("Individually");
     d.click("Save run settings");
@@ -280,7 +308,7 @@ pub fn run(d: &mut Driver<'_>) {
         let nodes = d.nodes();
         let warning = nodes
             .iter()
-            .find(|node| node.name.starts_with("Scout (as Goblin Warrior) needs fixing (line "))
+            .find(|node| node.name.starts_with("Scout (as Goblin Warrior) needs fixing (line"))
             .map(|node| node.rect);
         let link = d.place_of("Bridge guards");
         let edit = d.place_of("Edit group Bridge guards");
@@ -291,11 +319,27 @@ pub fn run(d: &mut Driver<'_>) {
                     warning.top() >= link.bottom()
                         && warning.left() >= link.left() - 0.5
                         && (edit.center().y - link.center().y).abs() <= crate::design::Density::Read.control()
-                        && d.visible_text("Scout (as Goblin Warrior) needs fixing (line ")
+                        && d.visible_text("Scout (as Goblin Warrior) needs fixing (line")
                 }
                 _ => false,
             },
             format!("The plan row names Scout, its base and line below the row: {warning:?} {link:?} {edit:?}"),
+        );
+        // `(line 15)` wraps whole: no painted row of the warning starts inside it.
+        let mut rows = Vec::new();
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text.contains("needs fixing (line") {
+                rows.extend(text.galley.rows.iter().map(|row| {
+                    row.glyphs.iter().map(|glyph| glyph.chr).collect::<String>()
+                }));
+            }
+        });
+        d.observe(
+            "iter-23-B-FA12",
+            !rows.is_empty()
+                && rows.iter().any(|row| row.contains("(line\u{a0}15)"))
+                && rows.iter().all(|row| !row.trim_start().starts_with("15)")),
+            format!("The plan warning's rows: {rows:?}"),
         );
         d.observe(
             "iter-10-C-AD2-summary",
@@ -364,6 +408,12 @@ pub fn run(d: &mut Driver<'_>) {
         },
     );
     d.expect("XP 100");
+    // Scout cannot join, so the heading's XP is for the two who can, and it says so.
+    d.observe(
+        "iter-23-B-FC3",
+        d.has_containing("2 can join · XP 100"),
+        "The members heading says how many can join before its XP",
+    );
     d.expect("Edit in Obsidian");
     d.expect("Show file");
     d.expect("Changes for Scout");
@@ -588,7 +638,7 @@ pub fn run(d: &mut Driver<'_>) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
                     super::file_links_at_message_words(
                         d,
-                        "Ember Cultist: the change “HP lots”",
+                        "Ember Cultist · line 20: the change “HP lots”",
                         &roster_path,
                         "Shrine of Cinders.md",
                     )
@@ -616,7 +666,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.expect(
-        "Ember Cultist: the change “HP lots” was not read (line 20). Use a number, such as HP +5.",
+        "Ember Cultist · line 20: the change “HP lots” was not read. Use a number, such as HP +5.",
     );
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let fits = d.at_size(size, |d| {

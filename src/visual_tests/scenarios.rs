@@ -2827,6 +2827,15 @@ pub mod encounter_build {
         }
         d.state_prepared("encounter-changed-on-disk", Sizes::All, |d| {
             conflict_choices_read_height(d, "iter-15-B2-density", OVERWRITE, RELOAD);
+            // Each part that differs has a line in the DM's words, above the raw lines.
+            let size = d.window_size();
+            d.observe(
+                "iter-23-B-FB1",
+                d.visible_text("your draft adds “Ash on the water.”")
+                    && d.visible_text("the file adds “Written outside Splat.”")
+                    && d.visible_text("the file names the same 8 rows in another form."),
+                format!("At {size:?}, the conflict names what differs"),
+            );
         });
         d.click(OVERWRITE);
         d.expect(SAVED_NOTE);
@@ -11328,6 +11337,22 @@ pub mod encounter_groups {
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
+        // The change form lists other effects as the run's Conditions tab does: one label, Body
+        // text in the text colour, and one placeholder.
+        let (label, color, placeholder) = d.at_size(LARGE, |d| {
+            (
+                d.visible_text("OTHER EFFECTS"),
+                d.painted_color("Blessed"),
+                d.visible_text("Other effect…"),
+            )
+        });
+        d.observe(
+            "iter-23-B-FI2",
+            label && color == Some(crate::design::colors().text) && placeholder,
+            format!(
+                "Other effects: label {label}, Blessed colour {color:?}, placeholder {placeholder}"
+            ),
+        );
         // AI1: Starting conditions uses the run's grid: aligned columns at most `L` apart.
         let columns = d.at_size(LARGE, |d| {
             d.place_of("STARTING CONDITIONS")
@@ -11429,6 +11454,43 @@ pub mod encounter_groups {
             "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
+        // The fault sits under the Maximum HP field at its left edge, once, and the preview
+        // beside the field takes the error colour.
+        for size in [SMALL, DEFAULT] {
+            let (placed, detail) = d.at_size(size, |d| {
+                let field = d.place_of("Maximum HP: how it changes");
+                let mut faults = Vec::new();
+                let mut preview = None;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = &text.galley.job.text;
+                    if !clip.intersects(rect) {
+                        return;
+                    }
+                    if words.contains("Maximum HP would become −28") {
+                        faults.push(rect);
+                    }
+                    if words.contains("22 → −28") {
+                        preview = text.galley.job.sections.last().map(|s| s.format.color);
+                    }
+                });
+                let placed = field.is_some_and(|field| {
+                    faults.len() == 1
+                        && faults[0].top() >= field.bottom() - 0.5
+                        && faults[0].top() < field.bottom() + crate::design::XL
+                        && faults[0].left() >= field.left() - 0.5
+                }) && preview == Some(crate::design::colors().result.error);
+                (
+                    placed,
+                    format!("field {field:?}, faults {faults:?}, preview {preview:?}"),
+                )
+            });
+            d.observe(
+                "iter-23-B-FI3",
+                placed,
+                format!("At {size:?}, the HP fault is under its field: {detail}"),
+            );
+        }
         d.click("Back to encounters");
 
         // A new group cannot be saved empty, and it says so.
@@ -11503,7 +11565,29 @@ pub mod encounter_groups {
         d.state("group-member-replacement-search", Sizes::Default);
         d.click("Use Ember Cultist");
         d.expect("Changes for Ember Cultist");
+        // Use gives a result and its Undo on the member result line, as Remove does.
+        const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
+        d.observe(
+            "iter-23-B-FI1",
+            d.visible_text(REPLACED) && d.has("Undo replacement"),
+            "Use names the replacement and offers Undo replacement",
+        );
         d.state("group-member-replaced", Sizes::Default);
+        // An unrelated edit keeps the result; Undo puts back only the creature, and its words
+        // go with it.
+        d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
+        let typed = d.visible_text("Arrive at dusk.");
+        d.click("Undo replacement");
+        d.expect("Replace Unknown creature");
+        d.observe(
+            "iter-23-B-FI1-undo",
+            typed
+                && d.visible_text("Arrive at dusk.")
+                && !d.has("Changes for Ember Cultist")
+                && !d.visible_text(REPLACED)
+                && !d.has("Undo replacement"),
+            "Undo replacement keeps the notes typed after it and clears its own result",
+        );
         d.click("Discard");
         d.click("Back to encounters");
 
@@ -11621,7 +11705,7 @@ pub mod encounter_groups {
             "T13.1",
             d.visible_text("XP 50")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign’s packages")
-                && d.visible_text("Will\u{a0}add:\u{a0}1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
+                && d.visible_text("Will\u{a0}add: 1\u{a0}×\u{a0}Goblin\u{a0}Warrior"),
             "The summary names the joining member; excluded members stay under Cannot join",
         );
         d.observe(
@@ -12024,6 +12108,15 @@ pub mod encounter_owned_groups {
             d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
             "Opened, the section says who each group is for",
         );
+        // One look and one wording for a page's content issue count, as Campaign's.
+        d.observe(
+            "iter-23-B-FA7",
+            d.has(&format!(
+                "{} 2 content issues to repair",
+                crate::design::icons::WARN
+            )),
+            "Encounters counts its content issues in Campaign's words",
+        );
 
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
@@ -12042,6 +12135,13 @@ pub mod encounter_owned_groups {
                 "iter-19-B-FD3-value",
                 d.visible_text("Deleted encounter"),
                 "Belongs to still shows Deleted encounter",
+            );
+            // A group no fight can offer says so as a warning, not as field help.
+            let tones = tones_beside(d, "No fight offers this group now.");
+            d.observe(
+                "iter-23-B-FB2",
+                tones == ["warning"],
+                format!("The line under Belongs to is a warning: {tones:?}"),
             );
         });
         let inset = notes_inset(
@@ -12106,6 +12206,21 @@ pub mod encounter_owned_groups {
             "A new group belongs to this encounter, and takes what the search adds",
         );
         d.state("new-group-in-the-encounter", Sizes::All);
+        // Two frames, one adding and one not: both name fields end at one edge at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                d.place_of(&format!("Group name: {GROUP_SHRINE}"))
+                    .zip(d.place_of(&format!("Group name: {NEW_NAME}")))
+                    .map(|(shrine, new)| (shrine.right(), new.right()))
+            });
+            d.observe(
+                "iter-23-B-FB4",
+                d.has(&format!("Add creatures to {GROUP_SHRINE}"))
+                    && d.has(&format!("Add creatures to {NEW_NAME}"))
+                    && edges.is_some_and(|(shrine, new)| (shrine - new).abs() <= 0.5),
+                format!("At {size:?}, the name fields end at one x: {edges:?}"),
+            );
+        }
         let roster_before = d.has_containing("ROSTER 7");
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
@@ -12425,6 +12540,13 @@ pub mod run_overrides {
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
+        // Must stay true (iter-23 FJ1): with no changes, Resume keeps the primary.
+        let primary = super::session_recording::accent_filled(d);
+        d.observe(
+            "iter-23-B-FJ1-clean",
+            d.visible_text("No changes") && primary == ["Resume"],
+            format!("A clean editor's primary is Resume: {primary:?}"),
+        );
         d.observe_both(
             "FT-10",
             "A changed roster slot keeps its base creature",
@@ -12533,6 +12655,13 @@ pub mod run_loot {
         d.type_into(ADD, "roll");
         d.expect("gems · 1d4 · Treasure.md");
         d.state("loot-table-suggestion", Sizes::Default);
+        // The DM has just typed loot into a paused fight's encounter: Save is the one primary.
+        let primary = super::session_recording::accent_filled(d);
+        d.observe(
+            "iter-23-B-FJ1",
+            d.has("Resume") && primary == ["Save encounter"],
+            format!("An unsaved draft owns the primary over Resume: {primary:?}"),
+        );
         d.observe(
             "T14.8",
             d.has_containing("the encounter loot line 1"),
@@ -12583,6 +12712,53 @@ pub mod run_loot {
             "A roll names its table and count, a key with no table says so before play, and a Library item is a line of its own",
         );
         d.goal("add loot and a roll on a campaign table");
+
+        // iter-23 FJ1 beside round 22 FD3: while a run is open, its `Next turn` is the only
+        // primary, even with unsaved changes here. Closed, the draft's Save owns it; after Save,
+        // and after Discard, Resume does. A draft that Save refused does not own it.
+        let primaries = |d: &Driver<'_>| super::session_recording::accent_filled(d);
+        let dirty = d.has("Discard");
+        d.click_starting("Paused run ·");
+        d.expect(NEXT_TURN);
+        d.click(NAV_ENCOUNTERS);
+        let open = primaries(d);
+        d.click("Back to run");
+        close_run(d);
+        if !d.has("Save encounter") {
+            d.click(NAV_ENCOUNTERS);
+        }
+        d.expect("Save encounter");
+        let closed = primaries(d);
+        d.observe(
+            "iter-23-B-FJ1-run",
+            dirty && open == [NEXT_TURN] && closed == ["Save encounter"],
+            format!("Unsaved draft: run open {open:?}, run closed {closed:?}"),
+        );
+        d.click("Save encounter");
+        d.settle();
+        let saved = primaries(d);
+        d.type_into(ADD, "A rope ladder");
+        d.press(Key::Enter);
+        d.expect("Discard");
+        d.click("Discard");
+        d.settle();
+        let discarded = (primaries(d), d.has("Discard"));
+        d.observe(
+            "iter-23-B-FJ1-resume",
+            saved == ["Resume"] && discarded == (vec!["Resume".to_owned()], false),
+            format!("Resume after Save {saved:?}, after Discard {discarded:?}"),
+        );
+        d.type_into(&format!("Encounter name: {RUN}"), " ");
+        d.press_ctrl(Key::A);
+        d.press(Key::Delete);
+        d.click("Save encounter");
+        d.expect("Enter an encounter name.");
+        let refused = primaries(d);
+        d.observe(
+            "iter-23-B-FJ1-refused",
+            !refused.iter().any(|name| name == "Save encounter"),
+            format!("A draft that Save refused: primaries {refused:?}"),
+        );
     }
 }
 
@@ -13257,6 +13433,25 @@ pub mod session_plan_groups {
         d.click("Technical details");
         d.expect(&missing_id);
         d.state("missing-member-technical-details", Sizes::All);
+        // Lookalikes before the member row: the notes mention the missing id in words, and an
+        // example table links it in another section.
+        let lost = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join("Encounter Groups/Lost Patrol.md");
+        let lost_text = std::fs::read_to_string(&lost).unwrap();
+        let with_note = lost_text.replacen(
+            "\n## Members",
+            &format!(
+                "\nScouts last saw {missing_id} at the ford. They report to [[Rival Team]].\n\n## Example\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [[{missing_id}]] |  |  |  |\n\n## Members"
+            ),
+            1,
+        );
+        assert_ne!(with_note, lost_text);
+        std::fs::write(&lost, &with_note).unwrap();
         d.click("Repair Lost Patrol");
         d.expect("Markdown editor");
         d.observe(
@@ -13266,6 +13461,213 @@ pub mod session_plan_groups {
             "Repair opens the referring member's file without changing it",
         );
         d.state("missing-member-repair", Sizes::All);
+        // Lines that name the id: the notes' words, the example row, and the member row, which
+        // is the one after `## Members`.
+        let lines = |d: &Driver<'_>| -> Vec<(usize, bool)> {
+            let text = d.editor_text().unwrap_or_default();
+            let members = text.lines().position(|line| line.trim() == "## Members");
+            text.lines()
+                .enumerate()
+                .filter(|(_, line)| line.contains(&missing_id))
+                .map(|(at, line)| {
+                    (
+                        at + 1,
+                        line.trim_start().starts_with('|') && members.is_some_and(|m| at > m),
+                    )
+                })
+                .collect()
+        };
+        let named_ids = lines(d);
+        let row = named_ids
+            .iter()
+            .find(|(_, member)| *member)
+            .map(|(at, _)| *at);
+        let named = row
+            .map(|line| format!("Line {line}: Lost Patrol needs a creature that cannot be found."));
+        let caret = d.editor_caret_line();
+        d.observe(
+            "iter-23-B-FK1",
+            named_ids.len() == 3
+                && named_ids[..2].iter().all(|(_, member)| !member)
+                && named.as_deref().is_some_and(|named| d.visible_text(named))
+                && caret == row,
+            format!(
+                "The repair names the member row {named:?}; caret {caret:?}; lines naming the id {named_ids:?}"
+            ),
+        );
+        // The guidance is in the reason line under Save: no empty slot between it and the editor,
+        // at 960 and 1200. The normal gap there is the design system's `S` before the editor
+        // with item spacing and the label's line padding (15 px), so the bound is `L`; an
+        // empty reserved slot (about 44 px) fails it.
+        const LINK_WORDS: &str = "needs a creature that cannot be found. Replace the link";
+        let gap_below = |d: &Driver<'_>, words: &str, next: Option<egui::Rect>| {
+            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING)?;
+            Some(next?.top() - text.bottom())
+        };
+        let mut gaps = Vec::new();
+        for size in [SMALL, DEFAULT] {
+            gaps.push(d.at_size(size, |d| {
+                gap_below(d, LINK_WORDS, d.place_of("Markdown editor"))
+            }));
+        }
+        d.observe(
+            "iter-23-B-FK1-slot",
+            gaps.iter()
+                .all(|gap| gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))),
+            format!("Guidance to editor at 960 and 1200: {gaps:?}"),
+        );
+        // Unchanged frames do not look the row up again.
+        let lookups = d.app_mut().library.repair_lookups();
+        d.settle();
+        d.at_size(LARGE, |_| ());
+        let again = d.app_mut().library.repair_lookups();
+        d.observe(
+            "iter-23-B-FK1-cached",
+            lookups >= 1 && again == lookups,
+            format!("Repair lookups: {lookups} at open, {again} after unchanged frames"),
+        );
+        // Repair A stays through an unrelated edit B and a Save that fails on the disk: the
+        // guidance, the draft and the file stay as they were.
+        d.press_ctrl(Key::End);
+        d.type_text("Arrive at dusk.");
+        let original = std::fs::metadata(&lost).unwrap().permissions();
+        let mut read_only = original.clone();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&lost, read_only).unwrap();
+        d.press_ctrl(Key::S);
+        d.state("missing-member-save-failed", Sizes::Default);
+        // The editor's visible part: its accessible rect is its scrolled text.
+        let editor_shown = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Markdown editor")
+                .map(|node| node.shown)
+        };
+        // Save's reason needs the slot: the guidance comes first, then the reason, then the
+        // editor, each at the message gap.
+        // Save's reason in the slot: the painted line that starts below the guidance.
+        let guidance_bottom = d
+            .painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)
+            .map_or(f32::INFINITY, |rect| rect.bottom());
+        let mut reason = None;
+        d.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text.galley.job.text.contains("This file is read only.")
+                && clip.intersects(rect)
+                && rect.top() >= guidance_bottom - 0.5
+                && reason.is_none_or(|found: egui::Rect| rect.top() < found.top())
+            {
+                reason = Some(rect);
+            }
+        });
+        let busy_gap = gap_below(d, LINK_WORDS, reason);
+        d.observe(
+            "iter-23-B-FK1-slot-busy",
+            busy_gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))
+                && reason
+                    .zip(editor_shown(d))
+                    .is_some_and(|(reason, editor)| reason.bottom() <= editor.top()),
+            format!(
+                "Guidance first, then Save's reason ({reason:?}) above the editor ({:?}): gap {busy_gap:?}",
+                editor_shown(d)
+            ),
+        );
+        let failed = (
+            named.as_deref().is_some_and(|named| d.visible_text(named)),
+            d.editor_text()
+                .is_some_and(|text| text.contains("Arrive at dusk.")),
+            std::fs::read_to_string(&lost).is_ok_and(|text| text == with_note),
+        );
+        std::fs::set_permissions(&lost, original).unwrap();
+        d.observe(
+            "iter-23-B-FK1-save-failed",
+            failed == (true, true, true),
+            format!("After a failed Save (guidance kept, B kept, file unchanged): {failed:?}"),
+        );
+        // Replace only the member link: the notice ends though the notes and the example still
+        // name the id.
+        d.press_ctrl(Key::Home);
+        for _ in 0..60 {
+            if d.editor_caret_line() >= row {
+                break;
+            }
+            d.press(Key::ArrowDown);
+        }
+        d.press(Key::Home);
+        d.press_shift(Key::End);
+        d.type_text("| 1 | [[Goblin Warrior]] |  |  |  |");
+        let replaced = lines(d);
+        let gone = replaced.len() == 2
+            && replaced.iter().all(|(_, member)| !member)
+            && !d.visible_text("needs a creature that cannot be found. Replace the link");
+        d.click("Discard");
+        d.expect("Markdown editor");
+        d.observe(
+            "iter-23-B-FK1-lifetime",
+            gone && named.as_deref().is_some_and(|named| d.visible_text(named)),
+            format!(
+                "The notice goes with the member link, not the notes' or example's mention, and comes back with Discard: {replaced:?}"
+            ),
+        );
+        // The guidance belongs to Lost Patrol while it stays open. Opening another entry ends it,
+        // by a link and Back, and by the list: coming back to Lost Patrol does not bring it back.
+        const GUIDANCE: &str = "needs a creature that cannot be found. Replace the link";
+        let open_with_editor = |d: &mut Driver<'_>| {
+            if !d.has("Markdown editor") {
+                d.click("Edit Markdown");
+            }
+            d.expect("Markdown editor");
+            (
+                d.editor_text()
+                    .is_some_and(|text| text.contains(&missing_id)),
+                d.visible_text(GUIDANCE),
+            )
+        };
+        let shown_before_back = d.visible_text(GUIDANCE);
+        // A link opens another entry and records Lost Patrol on the trail; Back returns to it.
+        d.click("Read");
+        d.click("Rival Team (opens Rival Team)");
+        d.wait_for_text("Rival Captain");
+        d.click("Back");
+        let after_back = open_with_editor(d);
+        d.click(NAV_CAMPAIGN);
+        d.expect("Repair Lost Patrol");
+        d.click("Repair Lost Patrol");
+        d.expect("Markdown editor");
+        let shown_before_list = d.visible_text(GUIDANCE);
+        d.click_starting("Rival Team ·");
+        d.click_starting("Lost Patrol ·");
+        let after_list = open_with_editor(d);
+        d.observe(
+            "iter-23-B-FK1-owner",
+            shown_before_back
+                && after_back == (true, false)
+                && shown_before_list
+                && after_list == (true, false),
+            format!(
+                "Guidance before Back {shown_before_back}, Lost Patrol again after Back (open, guidance) {after_back:?}; before the list {shown_before_list}, after the list {after_list:?}"
+            ),
+        );
+        // A repair whose file is gone opens nothing; its guidance must not wait for the file.
+        let away = lost.with_extension("md.away");
+        std::fs::rename(&lost, &away).unwrap();
+        d.click(NAV_CAMPAIGN);
+        d.expect("Repair Lost Patrol");
+        d.click("Repair Lost Patrol");
+        d.settle();
+        d.click_starting("Rival Team ·");
+        std::fs::rename(&away, &lost).unwrap();
+        d.click("Packages");
+        d.click("Reload from disk");
+        d.settle();
+        d.click_starting("Lost Patrol ·");
+        let after_missing = open_with_editor(d);
+        d.observe(
+            "iter-23-B-FK1-owner-missing",
+            after_missing == (true, false),
+            format!("After a repair on a missing file, Lost Patrol opened normally (open, guidance): {after_missing:?}"),
+        );
+        std::fs::write(&lost, &lost_text).unwrap();
 
         // Astra review of PR 231: a plan group none of whose members can join keeps each member
         // fault's own tone, then says so as a warning. In another group, a member named like
@@ -13280,6 +13682,11 @@ pub mod session_plan_groups {
             (
                 "Mill Watch",
                 "  - creature: {key: 'dnd2024:creatures/goblin_warrior'}\n    overrides: {name: 'Maximum HP would become −28'}\n".to_owned(),
+            ),
+            // iter-23 FH1: some members can join and one cannot.
+            (
+                "Split Watch",
+                format!("  - creature: {{id: {wolf}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    overrides: {{armor_class: {{add: -50}}}}\n"),
             ),
         ] {
             let relative = format!("Encounter Groups/{name}.md");
@@ -13299,7 +13706,7 @@ pub mod session_plan_groups {
         d.click(NAV_SESSIONS);
         d.click_starting("Session 1: The Crossing ·");
         show_plan(d);
-        for name in ["Ash Remnant", "Mill Watch"] {
+        for name in ["Ash Remnant", "Mill Watch", "Split Watch"] {
             d.click("Add a group");
             d.click(&format!("Plan {name}"));
         }
@@ -13335,7 +13742,64 @@ pub mod session_plan_groups {
                     tones.0, tones.1, tones.2
                 ),
             );
+            // A group none of whose members can join offers its repair, not Add to fight; a
+            // group that can join keeps Add to fight.
+            d.observe(
+                "iter-23-B-FH1",
+                d.has("Edit group Ash Remnant")
+                    && !d.has("Add Ash Remnant to fight")
+                    && d.has("Add Mill Watch to fight"),
+                format!("At {size:?}: Ash Remnant offers Edit group, Mill Watch Add to fight"),
+            );
+            // Nobody can join, so the summary ends at the count.
+            let summary = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("0 of 1 can join"))
+                .map(|node| node.name);
+            d.observe(
+                "iter-23-B-FH3",
+                summary
+                    .as_deref()
+                    .is_some_and(|name| !name.contains("XP") && !name.contains("Will add")),
+                format!("At {size:?}: Ash Remnant's summary {summary:?}"),
+            );
+            // A member wider than the plan column breaks at its own spaces, never inside a word
+            // or after an opening bracket.
+            let mut rows = Vec::new();
+            d.each_painted_text(|text, _| {
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if words.contains("× Maximum HP would become −28 (as Goblin Warrior)") {
+                    rows = text
+                        .galley
+                        .rows
+                        .iter()
+                        .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect::<String>())
+                        .collect();
+                }
+            });
+            let whole = "Maximum HP would become −28 (as Goblin Warrior)"
+                .split(' ')
+                .all(|word| {
+                    rows.iter()
+                        .any(|row| row.split([' ', '\u{a0}']).any(|part| part == word))
+                });
+            d.observe(
+                "iter-23-B-FH4",
+                !rows.is_empty() && whole && rows.iter().all(|row| !row.trim_end().ends_with('(')),
+                format!("At {size:?}: Mill Watch's summary rows {rows:?}"),
+            );
         });
+        // Some members can join: Add to fight keeps its place, and the row menu holds the
+        // repair its fault names.
+        d.click("More actions for Split Watch");
+        d.observe(
+            "iter-23-B-FH1-menu",
+            d.has("Add Split Watch to fight") && d.in_view("Edit group Split Watch"),
+            "A group that can partly join keeps Add to fight and offers Edit group in its menu",
+        );
+        d.click("Edit group Split Watch");
+        d.expect("Group name: Split Watch");
     }
 }
 
