@@ -13221,6 +13221,74 @@ pub mod package_to_table {
         d.expect("Describe the spell.");
         d.state("new-spell-table-reader", Sizes::All);
         go_encounters(d);
+        // FD1: the fault is the creature's data, never its words. Copper Drake now has hit points;
+        // with its package named like the fault, nothing on screen takes the warning colour.
+        let package = d
+            .app_mut()
+            .campaigns
+            .modules()
+            .iter()
+            .find(|module| module.name == "Copper Coast")
+            .map(|module| module.path.clone())
+            .expect("the new package");
+        let (entries, _) = splat::content::read_directory(&package).unwrap();
+        let manifest = package.join(
+            &entries
+                .iter()
+                .find(|entry| entry.kind == "package")
+                .expect("the package manifest")
+                .path,
+        );
+        let original = std::fs::read_to_string(&manifest).unwrap();
+        let rename = |d: &mut Driver<'_>, text: &str| {
+            std::fs::write(&manifest, text).unwrap();
+            let app = d.app_mut();
+            app.library.content_changed =
+                Some(app.campaigns.active_campaign().unwrap().path.clone());
+            go_library(d);
+            go_encounters(d);
+        };
+        let fault = format!("{} HP not set", crate::design::icons::WARN);
+        rename(
+            d,
+            &crate::content_workspace::patch_fields(
+                &original,
+                &[("splat_name", Some(fault.clone().into()))],
+            )
+            .unwrap(),
+        );
+        // The search result paints the package with plain spaces once the reload arrives.
+        d.wait_for_text(&fault);
+        let mut coast = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.contains("Coast")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                coast.push((text.galley.job.text.clone(), text.pos));
+            }
+        });
+        assert!(
+            coast.is_empty(),
+            "the roster and search show the renamed package: {coast:?}"
+        );
+        for size in [SMALL, DEFAULT, LARGE] {
+            let colours = d.at_size(size, hp_not_set_colours);
+            d.observe(
+                "iter-21-B-FD1-data",
+                !colours.is_empty()
+                    && colours.iter().all(|colours| {
+                        !colours.is_empty()
+                            && colours
+                                .iter()
+                                .all(|colour| *colour == crate::design::colors().muted)
+                    }),
+                format!(
+                    "At {size:?}, a healthy creature from a package named {fault:?} paints it in {colours:?}"
+                ),
+            );
+        }
+        rename(d, &original);
+        d.wait_for_text("Copper Coast");
         d.replace_text_in("Encounter name", "Copper Coast patrol");
         d.click("Start fight");
         d.click_starting("Copper Drake · ");
