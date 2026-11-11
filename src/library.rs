@@ -9790,7 +9790,7 @@ mod tests {
             fs::write(module.path.join(filename), "---\nsplat_kind: [\n---\n").unwrap();
             let write = crate::content_workspace::ManifestWrite::write(&module).unwrap();
             assert_eq!(write.path(), filename);
-            assert_eq!(write.message(), format!("{filename} was replaced."));
+            assert_eq!(write.message(), format!("{filename} was written again."));
             write.undo().unwrap();
         }
     }

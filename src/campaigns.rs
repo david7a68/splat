@@ -775,20 +775,18 @@ impl Campaigns {
         };
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut remove = false;
-        egui::Modal::new(egui::Id::new("remove_campaign"))
-            .frame(egui::Frame::new().fill(colors().raised)
-                .stroke(egui::Stroke::new(design::HAIRLINE_WIDTH, colors().rule))
-                .inner_margin(egui::Margin::same(design::L as i8)))
-            .show(ctx, |ui| {
-                ui.set_width(design::FORM_WIDTH.min(ctx.content_rect().width() - design::XXL * 2.0));
-                ui.label(Type::Section.rich(ui, format!("Remove {}?", campaign.name)));
-                ui.add_space(design::XS);
+        // Round 24 FC5: the shared dialog, anchored at the top like every other dialog.
+        design::dialog(
+            ctx,
+            "remove_campaign",
+            &format!("Remove {}?", campaign.name),
+            |ui| {
                 ui.add(
-                egui::Label::new(
-                    "Splat forgets this campaign. Its encounters, runs and D&D Beyond link stay in its folder. To use it again, add the folder back.",
-                )
-                .wrap(),
-            );
+                    egui::Label::new(
+                        "Splat forgets this campaign. Its encounters, runs and D&D Beyond link stay in its folder. To use it again, add the folder back.",
+                    )
+                    .wrap(),
+                );
                 ui.add(
                     egui::Label::new(
                         Type::Small
@@ -798,12 +796,17 @@ impl Campaigns {
                     .wrap(),
                 );
                 ui.add_space(design::S);
-                design::dialog_actions(ui, |ui| {
-                    remove = Action::destructive("Remove from Splat").show(ui).clicked();
-                }, |ui| {
-                    keep |= Action::secondary("Keep the campaign").show(ui).clicked();
-                });
-            });
+                design::dialog_actions(
+                    ui,
+                    |ui| {
+                        remove = Action::destructive("Remove from Splat").show(ui).clicked();
+                    },
+                    |ui| {
+                        keep |= Action::secondary("Keep the campaign").show(ui).clicked();
+                    },
+                );
+            },
+        );
         if keep {
             self.confirm_remove = None;
         }
