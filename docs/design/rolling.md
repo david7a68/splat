@@ -92,8 +92,27 @@ anything else, such as `if the goat moved 20+ feet straight toward the target`,
 the click on the target opens a question under the row before anything rolls:
 the condition, then `Yes · 2d8+2 bludgeoning`, `No · 2d6+2 bludgeoning` and
 `Cancel`. In the built-in creatures, 16 attacks have such damage; 3 need the
-question. A save's damage, rolled once for every target, rolls without its
-conditions.
+question.
+
+### A save's damage
+
+A save's damage is what a failure takes at once: the damage in the first
+sentence after `Failure:`. Damage in a later sentence is another effect at
+another time (`takes 10 (3d6) Acid damage at the start of each of its turns`),
+so it is not rolled with the save; it stays in the tile's hover. Before this,
+26 of the 143 built-in saves with damage rolled something else, such as 6d6 for
+the gelatinous cube's 3d6 Engulf; 124 saves have damage now. Older text without
+the label uses the damage after the DC in its sentence, and never the damage
+before it, which is the hit's.
+
+One later form is read as a condition: `If the target has 20 Hit Points or
+fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic
+damage` rolls only for a target with more than 20 HP. `Roll damage` settles a
+condition when every target gives the same answer. When they differ, or the
+run cannot tell, the question opens under the first target's row, because one
+roll of damage cannot be both. When the answer gives no damage, the rows say
+`No damage · see the text` and Amount is cleared, so Enter cannot apply an
+amount from before.
 
 ### Inspiration
 
@@ -109,29 +128,61 @@ packages and notes (`splat::content::inspiration`):
   [attack_roll, saving_throw, ability_check]}`.
 
 With one such rule, the campaign uses it. With several, campaign settings shows
-`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`.
+`Inspiration rule`, saved in `splat_rule_choices` under `splat:inspiration`. A
+chosen rule that is gone, such as a deleted note, is no choice; the other
+settings still load.
 With none, a run offers no inspiration. A run keeps the rule it started with.
 
 Only a player character with inspiration is offered it: by the synced D&D Beyond
-sheet, or else by the sheet's last read. Expending it sends `No inspiration` to
-a synced sheet; without sync, the run remembers it and the Log says so.
+sheet, or else by the last read of their sheet. The run remembers each spend, by
+participant, in the run file, until D&D Beyond confirms that the sheet shows no
+inspiration. A value that waits to be sent, or that a read-only sheet cannot
+take, is not a confirmation. A synced sheet is sent `No inspiration` at once, or
+when its sync next can take it (a sync that starts later, or reconnects). A read
+that still shows inspiration is older than the spend and does not give it back;
+after the sheet has shown none, a new grant counts again. A grant the DM made
+in the panel that still waits to be sent is spent with it.
 
-- **Reroll rule.** After the run rolls a d20 for a player (`Roll for them`, or a
-  check, save or skill from the sheet), a right-click on the row with the result
-  offers `Reroll the d20 with inspiration`. The new die takes the place of the
-  one that counted, the keep is made again, and the Log says `3 becomes 17`. On
-  an attack, the damage rolls again only when a critical hit begins or ends.
+- **Reroll rule.** After the run rolls for a player (`Roll for them`, or a
+  check, save, skill or dice from the sheet), a right-click on the row with the
+  result shows `Inspiration: reroll one die` and each die of that roll: `4 on
+  the d20`, `8 on 1d8+4 slashing`. Equal faces of one roll are one line, lowest
+  first, at most 8. The new die stands, its keep and totals are made again
+  (`Dice::reroll`), Amount takes the new damage, and the Log says `1 becomes 6`
+  and only the roll that changed. On an attack, the damage rolls again only when
+  the d20 begins or ends a critical hit. A save's damage rolled for a player is
+  one roll for all of its targets: each target's row offers its dice, and the
+  targets and half marks stay. That roll stands only while the same save is
+  armed against the same targets; `Stop`, a change of targets or a selection by
+  the keys ends it for good. The next step of the run that succeeds (an applied
+  amount, Next turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
+  It pays for one roll: the armed action's next roll has no advantage from it.
 
 ### A save
 
 1. Click `Ember Burst`. Click each target's row: a creature rolls its save at
-   once, shown where its AC is, `DEX 14`.
-2. `Half for those at or above DC` marks them to take half. `Roll damage` rolls
-   the damage once, for every target, into Amount; each target's row then says
-   what Enter gives it, `Saved · 1 damage (half)` or `Failed · 3 damage`. Enter
-   applies it, halving where marked, and each row keeps its own result.
+   once, shown where its AC is, `DEX 14`. A click on a target takes it away
+   again, with its save; the last target stays. The row's right-click menu rolls
+   that target's save again, with advantage or disadvantage, and never takes a
+   target away.
+2. `Half for those at or above DC` marks them to take half, and takes the mark
+   from a target whose save is now under the DC. `Roll damage` rolls the damage
+   once, for every target, into Amount; each target's row then says what Enter
+   gives it, `Saved · 1 damage (half)` or `Failed · 3 damage`. Enter applies it,
+   halving where marked, and each row keeps its own result.
+3. The armed action keeps that rolled damage until the step that applies it, or
+   until the action ends; another step, such as a note, leaves it. When a
+   target is added or taken away, a save is rolled again, or the marks change,
+   Amount is made again from it: Enter applies Amount as it is to one target, so
+   one target that made its save has half in Amount. A save rolled again loses
+   the half mark of the save before it. An Amount that the DM edited since the
+   roll stays, the same digits typed again too; a new roll of the damage takes
+   its place. Damage that a condition settled for the targets before is not
+   kept for new targets: Amount is cleared, and `Roll damage` rolls it again. A
+   selection made outside the targeting, such as by the arrow keys, ends the
+   rolled damage; coming back to the same targets does not bring it back.
 
 ### A player's attack
 
@@ -157,8 +208,14 @@ the tiles, and nothing is saved.
   repeats the dice.
 - The run keeps the armed action (`Armed`), each row's result (`badges`) and each
   save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
+- While an action is armed, the panel and its D&D Beyond sheet stay on the actor,
+  so a player's tiles and `Roll for them` stay when the dock moves to the target.
 - `dice_text` marks a damage part's condition (`When`: its words, and whether it
   replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
+- `rolls::actions` is the one list of an entry's actions, remembered by its text,
+  so a frame that draws the same text parses nothing. A tile's number is its
+  place in the whole entry's list, in every section and in a searched sheet, and
+  Ctrl+number arms from the same list. Spellcasting is not in it.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
   run-in title, skipping printed quotes, tables and headings. A test checks every
   built-in creature: each `Attack Roll:` and each damage group is found.
@@ -179,6 +236,7 @@ The `run-rolls` visual scenario measures these:
 | T16.8 | Arm an attack with advantage from its menu | 2 |
 | T16.9 | Roll against one target with disadvantage from its menu | 2 |
 | T16.10 | Attack when its damage depends on a condition | 3 |
+| T16.11 | Reroll one die of a player's roll with inspiration | 3 |
 
 ## History
 
@@ -206,7 +264,8 @@ The `run-rolls` visual scenario measures these:
 
 - Keyboard: a key to step through target rows while an action is armed.
 - A situational bonus, such as Bless.
-- Heroic Inspiration on a damage die, and gaining or giving inspiration.
+- Gaining or giving inspiration.
+- Damage at a later time, such as at the start of each turn, as its own roll.
 - Recharge: `(Recharge 5–6)` rolls a d6 against the range.
 - Multiattack: one press for all of its attacks. Its structured data has at
   least three shapes.

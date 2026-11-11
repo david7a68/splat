@@ -6,6 +6,8 @@ use crate::design::{self, Action, Density, Type, colors};
 use eframe::egui::{self, Id, text::LayoutJob};
 use splat::content::dice_text::{self, D20, DamagePart, RollLink};
 use splat::execution::dice::{Dice, Random, Roll};
+use splat::memo::Memo;
+use std::sync::Arc;
 
 /// How a d20 or a damage roll is made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,10 +239,12 @@ fn part_text(part: &DamagePart) -> String {
 pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
     parts
         .iter()
-        .map(|part| match &part.when {
-            None => part_text(part),
-            Some(when) if when.instead => format!("or {}", part_text(part)),
-            Some(_) => format!("plus {}", part_text(part)),
+        .enumerate()
+        .map(|(at, part)| match &part.when {
+            // With nothing before it, a part has nothing to replace or to add to.
+            Some(when) if at > 0 && when.instead => format!("or {}", part_text(part)),
+            Some(_) if at > 0 => format!("plus {}", part_text(part)),
+            _ => part_text(part),
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -313,6 +317,16 @@ fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
 pub(crate) struct Piece {
     pub label: String,
     pub faces: Vec<(i64, bool)>,
+    /// The dice rolled, such as `2d20kh1` or `2d6+2`, so that one die can roll again.
+    pub dice: String,
+}
+
+/// One die of an outcome: in its damage or its first roll, in which piece, at which place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Die {
+    pub damage: bool,
+    pub piece: usize,
+    pub face: usize,
 }
 
 /// A made roll, with what the action line and the Log say about it.
@@ -500,6 +514,7 @@ pub(crate) fn roll(
             pieces.push(Piece {
                 label: "d20".into(),
                 faces,
+                dice: dice.to_owned(),
             });
             let flat = bonus + change;
             let natural = kept.filter(|_| matches!(what, D20::Attack | D20::DeathSave));
@@ -520,6 +535,7 @@ pub(crate) fn roll(
                 pieces.push(Piece {
                     label: part_text(part),
                     faces: rolled.dice.iter().map(|face| (*face, false)).collect(),
+                    dice: part.dice.clone(),
                 });
             }
             let mut expression = parts_text(parts);
@@ -536,6 +552,7 @@ pub(crate) fn roll(
             pieces.push(Piece {
                 label: dice.clone(),
                 faces: faces(&rolled),
+                dice: dice.clone(),
             });
             (dice.clone(), 0, rolled.total, None, None)
         }
@@ -593,6 +610,7 @@ pub(crate) fn roll_with(
             rolled.pieces.push(Piece {
                 label: format!("{extra} bonus"),
                 faces: faces(&bonus),
+                dice: extra.to_owned(),
             });
         }
     }
@@ -627,11 +645,24 @@ impl Chip {
 }
 
 /// A creature's actions, from its rules text: each named paragraph with an attack, a save
-/// DC, or damage, in the order printed. Quotes, tables and headings are not rules.
+/// DC, or damage, in the order printed. Quotes, tables and headings are not rules. This list
+/// is the one order of an entry's actions: a tile's Ctrl number is its place here.
 pub(crate) fn chips(text: &str) -> Vec<Chip> {
-    let mut chips: Vec<Chip> = Vec::new();
-    for paragraph in text.split("\n\n").map(str::trim) {
-        if paragraph.starts_with(['>', '|', '#', '<']) {
+    actions(text).iter().map(|(_, chip)| chip.clone()).collect()
+}
+
+/// The actions in `text`, each with the place of its paragraph among the blank-line
+/// paragraphs. Remembered by the text, so a frame that draws the same text parses nothing.
+pub(crate) fn actions(text: &str) -> Arc<Vec<(usize, Chip)>> {
+    static ACTIONS: Memo<Arc<Vec<(usize, Chip)>>> = Memo::new(128);
+    ACTIONS.get_or(&[text.as_bytes()], || Arc::new(parse_actions(text)))
+}
+
+fn parse_actions(text: &str) -> Vec<(usize, Chip)> {
+    let mut chips: Vec<(usize, Chip)> = Vec::new();
+    for (at, paragraph) in text.split("\n\n").map(str::trim).enumerate() {
+        // Spellcasting stays prose: it lists spells, with links to them.
+        if paragraph.starts_with(['>', '|', '#', '<']) || paragraph.starts_with("Spellcasting") {
             continue;
         }
         let Some(title) = design::reader::run_in_title(paragraph) else {
@@ -654,12 +685,18 @@ pub(crate) fn chips(text: &str) -> Vec<Chip> {
         if let Some(chip) = link
             .cloned()
             .and_then(|link| Chip::new(link, paragraph.replace(['*', '_'], "")))
-            && !chips.iter().any(|known| known.label == chip.label)
+            && !chips.iter().any(|(_, known)| known.label == chip.label)
         {
-            chips.push(chip);
+            chips.push((at, chip));
         }
     }
     chips
+}
+
+/// The place of an action in an entry's whole list, by which Ctrl+number arms it.
+pub(crate) fn place_in(all: &[(usize, Chip)], chip: &Chip) -> Option<usize> {
+    all.iter()
+        .position(|(_, known)| known.label == chip.label && known.link == chip.link)
 }
 
 /// One press of an action and what it rolled: an attack and its damage, a save's damage,
@@ -774,70 +811,107 @@ fn damage_roll(
     roll(who, &link, mode, change, random).map(Some)
 }
 
-/// Reroll an outcome's d20 with inspiration. A new die takes the place of the one that
-/// counted, and the keep is made again; the new roll stands. On an attack the damage rolls
-/// again only when a critical hit begins or ends. Returns the outcome, the old die and the new.
-pub(crate) fn reroll_d20(
+impl Outcome {
+    /// The dice that inspiration can roll again, with words for each: `3 on the d20`,
+    /// `1 on 2d6+2 slashing`. Equal faces of one piece are one choice, lowest first.
+    pub fn dice(&self) -> Vec<(String, Die)> {
+        let mut all = Vec::new();
+        for (damage, rolled) in [(false, &self.first), (true, &self.damage)] {
+            for (piece, part) in rolled
+                .iter()
+                .flat_map(|rolled| rolled.pieces.iter().enumerate())
+            {
+                let mut faces: Vec<(i64, usize)> = part
+                    .faces
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (face, _))| (face.abs(), at))
+                    .collect();
+                faces.sort();
+                faces.dedup_by_key(|(face, _)| *face);
+                let name = if part.label == "d20" {
+                    "the d20"
+                } else {
+                    part.label.as_str()
+                };
+                all.extend(faces.into_iter().map(|(value, face)| {
+                    (
+                        format!("{value} on {name}"),
+                        Die {
+                            damage,
+                            piece,
+                            face,
+                        },
+                    )
+                }));
+            }
+        }
+        all
+    }
+}
+
+/// Roll one die of an outcome again; the new die stands, and its keeps and totals are made
+/// again. When an attack's d20 begins or ends a critical hit, its damage rolls again too.
+/// Returns the outcome, the old face and the new.
+pub(crate) fn reroll(
     who: &str,
     outcome: &Outcome,
+    die: Die,
     changes: (i64, i64),
     random: &mut Random,
 ) -> Result<(Outcome, i64, i64), String> {
-    let mut first = outcome.first.clone().ok_or("There is no d20 to reroll.")?;
-    let piece = first
-        .pieces
-        .iter_mut()
-        .find(|piece| piece.label == "d20")
-        .ok_or("There is no d20 to reroll.")?;
-    let kept = piece
-        .faces
-        .iter()
-        .position(|(_, dropped)| !dropped)
-        .ok_or("There is no d20 to reroll.")?;
-    let old = piece.faces[kept].0;
-    let new = Dice::parse("1d20")?.roll(random, false)?.total;
-    piece.faces[kept].0 = new;
-    let faces: Vec<i64> = piece.faces.iter().map(|(face, _)| *face).collect();
-    let pick = match first.mode {
-        Mode::Disadvantage => faces.iter().enumerate().min_by_key(|(_, face)| **face),
-        _ => faces.iter().enumerate().max_by_key(|(_, face)| **face),
+    const NONE: &str = "There is no such die to reroll.";
+    let mut outcome = outcome.clone();
+    let rolled = if die.damage {
+        outcome.damage.as_mut()
+    } else {
+        outcome.first.as_mut()
     }
-    .map_or(kept, |(at, _)| at);
-    for (at, face) in piece.faces.iter_mut().enumerate() {
-        face.1 = at != pick;
+    .ok_or(NONE)?;
+    let critical = rolled.mode == Mode::Critical && matches!(rolled.link, RollLink::Damage { .. });
+    let piece = rolled.pieces.get_mut(die.piece).ok_or(NONE)?;
+    let before: Vec<i64> = piece.faces.iter().map(|(face, _)| *face).collect();
+    let dice = Dice::parse(&piece.dice)?;
+    let old = dice.settle(&before, critical)?;
+    let new = dice.reroll(&before, die.face, random, critical)?;
+    piece.faces = faces(&new);
+    let change = new.total - old.total;
+    rolled.total += change;
+    if let Some(kind) = rolled.by_kind.get_mut(die.piece) {
+        kind.0 += change;
     }
-    let counted = faces[pick];
-    first.total = counted + first.flat;
-    let was_critical = first.natural == Some(20);
-    if first.natural.is_some() {
-        first.natural = Some(counted);
-    }
-    let critical = first.natural == Some(20);
-    let damage = match &outcome.link {
+    let (was, now) = (old.dice[die.face].abs(), new.dice[die.face].abs());
+    // The d20 that counts can be another one now.
+    let flips = if !die.damage && rolled.natural.is_some() {
+        let counted = piece
+            .faces
+            .iter()
+            .find(|(_, dropped)| !dropped)
+            .map(|(face, _)| *face);
+        let flips = (rolled.natural == Some(20)) != (counted == Some(20));
+        rolled.natural = counted;
+        flips.then_some(counted == Some(20))
+    } else {
+        None
+    };
+    if let (
+        Some(critical),
         RollLink::D20 {
             what: D20::Attack,
             label,
             damage,
             ..
-        } if was_critical != critical => {
-            let mode = if critical {
-                Mode::Critical
-            } else {
-                Mode::Normal
-            };
-            damage_roll(who, label, damage, mode, changes.1, random)?
-        }
-        _ => outcome.damage.clone(),
-    };
-    Ok((
-        Outcome {
-            link: outcome.link.clone(),
-            first: Some(first),
-            damage,
         },
-        old,
-        new,
-    ))
+    ) = (flips, &outcome.link)
+    {
+        let mode = if critical {
+            Mode::Critical
+        } else {
+            Mode::Normal
+        };
+        outcome.damage = damage_roll(who, label, damage, mode, changes.1, random)?;
+    }
+    Ok((outcome, was, now))
 }
 
 /// A preview outside a run, on its own stream, kept for the entry's action line. Tests use a
@@ -1347,7 +1421,10 @@ fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Opti
 
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
 /// tiles says how to use it; outside a run a tile previews, and the line shows the result.
-pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
+///
+/// Each tile comes with its place in the entry's whole list of actions, if it has one: the
+/// number it shows is the number that arms it.
+pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
     if chips.is_empty() {
         return;
     }
@@ -1355,29 +1432,33 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
     let in_run = roller(&ctx).is_some();
     let armed = ctx
         .data(|data| data.get_temp::<ArmedView>(armed_id()))
-        .filter(|view| in_run && chips.iter().any(|chip| chip.link == view.link));
+        .filter(|view| in_run && chips.iter().any(|(_, chip)| chip.link == view.link));
     let changes = if in_run { roller_changes(&ctx) } else { (0, 0) };
+    // A tile's number is its place in the entry's whole list, which Ctrl+number arms from.
+    let number = |place: &Option<usize>| {
+        place
+            .filter(|place| in_run && *place < 9)
+            .map(|place| place + 1)
+    };
     set_entry(&ctx, entry);
     ui.add_space(design::XS);
     let width = tile_width(ui.available_width());
     let shown: Vec<RollLink> = chips
         .iter()
-        .map(|chip| with_changes(&chip.link, changes))
+        .map(|(_, chip)| with_changes(&chip.link, changes))
         .collect();
     // One height for every tile, so a line of tiles keeps one edge.
     let height = chips
         .iter()
         .zip(&shown)
-        .enumerate()
-        .map(|(at, (chip, link))| {
-            let number = (in_run && at < 9).then_some(at + 1);
-            TileText::new(ui, chip, link, width, number, false).height()
+        .map(|((place, chip), link)| {
+            TileText::new(ui, chip, link, width, number(place), false).height()
         })
         .fold(0.0, f32::max);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
-        for (at, (chip, link)) in chips.iter().zip(&shown).enumerate() {
-            let number = (in_run && at < 9).then_some(at + 1);
+        for ((place, chip), link) in chips.iter().zip(&shown) {
+            let number = number(place);
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let response = tile(ui, chip, link, egui::vec2(width, height), number, lit);
             press(ui, &response, &chip.link);
@@ -1402,7 +1483,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[Chip]) {
         }
     } else if !in_run
         && let Some(outcome) =
-            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|c| c.link == o.link))
+            preview_outcome(&ctx, entry).filter(|o| chips.iter().any(|(_, c)| c.link == o.link))
     {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = design::S;
@@ -1444,20 +1525,32 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
         ui.set_height(BAR_BUTTONS);
         ui.spacing_mut().item_spacing.x = design::XS;
         ui.add_space(design::S);
-        for chip in chips {
-            if ui.available_width() < 80.0 {
-                break;
-            }
+        for (at, chip) in chips.iter().enumerate() {
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let shown = with_changes(&chip.link, changes);
             let label = Chip::new(shown.clone(), chip.text.clone())
                 .map_or_else(|| chip.label.clone(), |shown| shown.label);
             let words = format!("{} {label}", icon(&chip.link));
-            let response = Action::secondary(&words)
+            let action = Action::secondary(&words)
                 .name(&label)
                 .density(Density::Read)
-                .selected(lit)
-                .show(ui);
+                .selected(lit);
+            // A button shows whole or not at all. The actions with no room are counted, and
+            // Ctrl+number still arms them.
+            let left = chips.len() - at;
+            let more = format!("+{left}");
+            let more_width = design::number_width(ui, &more, &Type::Small.font(ui)) + design::S;
+            let room = ui.available_width() - if left > 1 { more_width } else { 0.0 };
+            if action.natural_width(ui) > room {
+                let hint = format!(
+                    "{}. Close Lookup to see them, or press Ctrl and an action's number.",
+                    design::count(left, "more action", "more actions")
+                );
+                ui.label(Type::Small.rich(ui, more).color(colors().muted))
+                    .on_hover_text(hint);
+                break;
+            }
+            let response = action.show(ui);
             let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
             press(ui, &response, &chip.link);
         }
@@ -1467,6 +1560,48 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The text's actions, each with its place in that list.
+    fn placed(text: &str) -> Vec<(Option<usize>, Chip)> {
+        chips(text)
+            .into_iter()
+            .enumerate()
+            .map(|(at, chip)| (Some(at), chip))
+            .collect()
+    }
+
+    #[test]
+    fn a_tiles_number_is_its_place_in_the_whole_list_of_actions() {
+        // A part of the body, as the reader draws one section, keeps the whole body's numbers.
+        let source =
+            splat::content::definitions::source_file("definitions/creatures/aboleth.md").unwrap();
+        let entry = splat::content::Entry::parse("Aboleth.md", source).unwrap();
+        let all = actions(&entry.body);
+        let labels: Vec<&str> = all.iter().map(|(_, chip)| chip.label.as_str()).collect();
+        let tentacle = labels
+            .iter()
+            .position(|label| label.starts_with("Tentacle"))
+            .expect("a Tentacle action");
+        assert!(tentacle > 0, "a trait with a save comes first: {labels:?}");
+        let section = &entry.body[entry.body.find("Tentacle.").unwrap()..];
+        let here = actions(section);
+        assert!(here[0].1.label.starts_with("Tentacle"));
+        assert_eq!(place_in(&all, &here[0].1), Some(tentacle));
+        assert_eq!(
+            chips(&entry.body)[tentacle],
+            here[0].1,
+            "Ctrl+number arms that tile"
+        );
+        // Spellcasting is prose in the reader, so it takes no number.
+        let caster = "Dagger. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage.\n\nSpellcasting. The mage casts one of the following spells, using Intelligence as the spellcasting ability (spell save DC 14, +6 to hit with spell attacks).\n\nArcane Burst. Ranged Attack Roll: +6, range 120 ft. Hit: 14 (3d8 + 1) Force damage.";
+        let labels: Vec<String> = chips(caster).into_iter().map(|chip| chip.label).collect();
+        assert_eq!(labels, ["Dagger +4", "Arcane Burst +6"]);
+        // A rider that is no longer prose is in its tile's hover text.
+        let claw = "Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature that isn't an Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.";
+        assert!(chips(claw)[0].text.contains("Paralyzed condition"));
+        // The same text again is not parsed again.
+        assert!(Arc::ptr_eq(&actions(caster), &actions(caster)));
+    }
 
     fn attack() -> RollLink {
         RollLink::D20 {
@@ -1719,7 +1854,7 @@ mod tests {
             .with_size(egui::vec2(600.0, 300.0))
             .build_ui(move |ui| {
                 design::theme::install(ui.ctx());
-                tiles(ui, "Wolf", &chips(text));
+                tiles(ui, "Wolf", &placed(text));
             });
         let tile = harness.get_by_label_contains("Bite · +4");
         assert_eq!(
@@ -1748,7 +1883,7 @@ mod tests {
                     if bar {
                         compact_tiles(ui, &chips(text));
                     } else {
-                        tiles(ui, "Wolf", &chips(text));
+                        tiles(ui, "Wolf", &placed(text));
                     }
                 });
             let rules_shown = |harness: &Harness<'_>| {
