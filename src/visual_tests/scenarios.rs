@@ -332,6 +332,115 @@ pub(super) fn paragraph_row_tops(d: &Driver<'_>, paragraph: &str) -> Vec<Vec<f32
     found
 }
 
+/// A note under a menu choice (its blocked reason or its help) starts at the choice's words, after
+/// the padding and any icon. Requires the choice and at least one painted note below it.
+fn note_starts_at_choice_words(d: &Driver<'_>, choice: &str, note: &str) -> Result<(), String> {
+    let target = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == choice && node.in_view())
+        .ok_or(format!("{choice} is not in view"))?
+        .rect;
+    let words = words_left_in(d, target).ok_or(format!("{choice} paints no words"))?;
+    let mut notes = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if text.galley.job.text == note && clip.intersects(rect) {
+            notes.push(rect);
+        }
+    });
+    if notes.is_empty() {
+        return Err(format!("{note} is not painted"));
+    }
+    notes
+        .iter()
+        .all(|rect| (rect.left() - words).abs() <= 1.0 && rect.top() >= target.bottom() - 1.0)
+        .then_some(())
+        .ok_or(format!(
+            "{choice} words at {words}, {target:?}; {note} at {notes:?}"
+        ))
+}
+
+/// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
+/// and `Show file`. A link that wraps starts its row at the message words too.
+fn file_links_at_message_words(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+) -> Result<(), String> {
+    let nodes = d.nodes();
+    let words = nodes
+        .iter()
+        .find(|node| node.name.starts_with(message) && node.in_view())
+        .ok_or(format!("{message}… is not in view"))?
+        .rect;
+    let shown = nodes
+        .iter()
+        .find(|node| node.name == path.display().to_string() && node.in_view())
+        .ok_or(format!("{} is not in view", path.display()))?
+        .rect;
+    let painted = d.painted_in(shown);
+    let path_left = words_left_in(d, shown);
+    if !painted.contains(relative)
+        || painted.contains('…')
+        || shown.top() < words.bottom() - 1.0
+        || path_left.is_none_or(|left| (left - words.left()).abs() > 1.0)
+    {
+        return Err(format!(
+            "message words {words:?}; path {shown:?} paints {painted:?} from {path_left:?}"
+        ));
+    }
+    for link in ["Edit in Obsidian", "Show file"] {
+        let target = nodes
+            .iter()
+            .filter(|node| {
+                node.name == link && node.in_view() && node.rect.center().y >= shown.top()
+            })
+            .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
+            .ok_or(format!("{link} is not in view below the message"))?
+            .rect;
+        let left = words_left_in(d, target).ok_or(format!("{link} paints no words"))?;
+        let wrapped = target.center().y > shown.bottom();
+        if left < words.left() - 1.0 || (wrapped && (left - words.left()).abs() > 1.0) {
+            return Err(format!(
+                "{link} words at {left}, message words at {}",
+                words.left()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The colours of `⚠ HP not set` in each visible painted paragraph that holds it, icon and words.
+fn hp_not_set_colours(d: &Driver<'_>) -> Vec<Vec<egui::Color32>> {
+    let fault = format!("{} HP not set", crate::design::icons::WARN);
+    let kept = fault.replace(' ', "\u{a0}");
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if !clip.intersects(text.visual_bounding_rect()) {
+            return;
+        }
+        let Some(range) = [&fault, &kept]
+            .into_iter()
+            .find_map(|words| job.text.find(words.as_str()).map(|at| at..at + words.len()))
+        else {
+            return;
+        };
+        found.push(
+            job.sections
+                .iter()
+                .filter(|section| {
+                    section.byte_range.start < range.end && range.start < section.byte_range.end
+                })
+                .map(|section| section.format.color)
+                .collect(),
+        );
+    });
+    found
+}
+
 fn words_left(d: &Driver<'_>, name: &str) -> Option<f32> {
     let area = d
         .nodes()
@@ -12893,6 +13002,21 @@ pub mod session_plan {
         d.begin_task();
         d.click_first("More actions for Werewolf");
         d.state("roster-row-menu", Sizes::Standard);
+        // FT2: a menu choice's reason and help start at its words, also after an icon.
+        for size in [SMALL, DEFAULT] {
+            let notes = d.at_size(size, |d| {
+                [
+                    ("Move down", "Already last."),
+                    ("Make it yours", "Edit a copy in this campaign."),
+                ]
+                .map(|(choice, note)| note_starts_at_choice_words(d, choice, note))
+            });
+            d.observe(
+                "iter-21-B-FT2",
+                notes.iter().all(Result::is_ok),
+                format!("At {size:?}, the roster row menu's notes: {notes:?}"),
+            );
+        }
         d.click("Make it yours");
         d.expect("6. Werewolf copy");
         d.state("make-it-yours", Sizes::All);
@@ -13059,6 +13183,22 @@ pub mod package_to_table {
             8,
         );
         d.state("new-package-at-the-table", Sizes::All);
+        // FD1: one fault, one tone. The search result and the roster row paint `HP not set`,
+        // icon and words, in the warning colour and nothing else.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let colours = d.at_size(size, hp_not_set_colours);
+            d.observe(
+                "iter-21-B-FD1",
+                colours.len() >= 2
+                    && colours.iter().all(|colours| {
+                        !colours.is_empty()
+                            && colours
+                                .iter()
+                                .all(|colour| *colour == crate::design::colors().result.warning)
+                    }),
+                format!("At {size:?}, HP not set is painted in {colours:?}"),
+            );
+        }
         go_library(d);
         let text = d.editor_text().expect("new creature editor");
         let edited = text

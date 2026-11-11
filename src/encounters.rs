@@ -233,10 +233,46 @@ pub(crate) fn roster_faults(entry: &Entry, known: &BTreeMap<String, String>) -> 
         .collect()
 }
 
+/// What the DM does about unread roster rows before a fight.
+fn fix_roster_rows(count: usize) -> &'static str {
+    if count == 1 {
+        "Fix this roster row or remove it in Obsidian before starting the fight."
+    } else {
+        "Fix these roster rows or remove them in Obsidian before starting the fight."
+    }
+}
+
+/// The encounter file's unread rows, one warning each. The last warning says what to do, and the
+/// file's path and links start at its words, as every message's actions do.
+fn unread_roster_rows(
+    ui: &mut egui::Ui,
+    root: &std::path::Path,
+    path: &str,
+    notes: &[String],
+    faults: usize,
+) {
+    let Some((last, before)) = notes.split_last() else {
+        return;
+    };
+    for note in before {
+        design::message(ui, Tone::Warning, note);
+    }
+    if faults == 0 {
+        design::message(ui, Tone::Warning, last);
+        return;
+    }
+    design::message_with_actions(
+        ui,
+        Tone::Warning,
+        &format!("{last} {}", fix_roster_rows(faults)),
+        |ui| crate::world::entry_file_actions(ui, root, path, true),
+    );
+}
+
 fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
     (!faults.is_empty()).then(|| {
         format!(
-            "{}: {}. Fix these roster rows or remove them in Obsidian before starting the fight.",
+            "{}: {}. {}",
             path,
             faults
                 .iter()
@@ -249,7 +285,8 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
                     )
                 })
                 .collect::<Vec<_>>()
-                .join("; ")
+                .join("; "),
+            fix_roster_rows(faults.len())
         )
     })
 }
@@ -899,21 +936,10 @@ const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
-    if detail.contains("HP not set") {
+    if detail.contains(HP_NOT_SET) {
         ui.horizontal_wrapped(|ui| {
             for part in detail.split(" · ") {
-                if part.contains("HP not set") {
-                    design::status(
-                        ui,
-                        design::Status {
-                            icon: design::icons::WARN,
-                            word: "HP not set",
-                            color: colors().result.warning,
-                        },
-                    );
-                } else {
-                    ui.label(Type::Small.rich(ui, part).color(colors().muted));
-                }
+                ui.label(detail_text(ui, part));
             }
         });
         return;
@@ -1042,7 +1068,7 @@ fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> St
     if let Some(hp) = changed.map_or_else(|| stat("max_hp"), |changed| changed.max_hp) {
         parts.push(format!("HP {hp}"));
     } else {
-        parts.push(format!("{} HP not set", design::icons::WARN));
+        parts.push(format!("{} {HP_NOT_SET}", design::icons::WARN));
     }
     if let Some(ac) = changed.map_or_else(|| stat("armor_class"), |changed| changed.armor_class) {
         parts.push(format!("AC {ac}"));
@@ -1152,6 +1178,41 @@ fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String
         }
     }
     String::new()
+}
+
+/// The detail part of a creature without hit points.
+const HP_NOT_SET: &str = "HP not set";
+
+/// A creature's detail in the muted tone. `HP not set` is a fault, so its icon and words have the
+/// warning status colour in every row that shows them: a search result, a roster row and a group
+/// member. Text without the fault is drawn as before.
+pub(crate) fn detail_text(ui: &egui::Ui, text: &str) -> egui::WidgetText {
+    let fault = format!("{} {HP_NOT_SET}", design::icons::WARN);
+    let kept = stat_line(&fault);
+    let Some((at, length)) = text
+        .find(&fault)
+        .map(|at| (at, fault.len()))
+        .or_else(|| text.find(&kept).map(|at| (at, kept.len())))
+    else {
+        return Type::Small.rich(ui, text).color(colors().muted).into();
+    };
+    let mut job = egui::text::LayoutJob::default();
+    for (part, color) in [
+        (&text[..at], colors().muted),
+        (&text[at..at + length], colors().result.warning),
+        (&text[at + length..], colors().muted),
+    ] {
+        job.append(
+            part,
+            0.0,
+            egui::TextFormat {
+                font_id: Type::Small.font(ui),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    job.into()
 }
 
 fn stat_line(text: &str) -> String {
@@ -3468,27 +3529,25 @@ impl Encounters {
             .as_ref()
             .map(|snapshot| &snapshot.known_creature_names)
             .unwrap_or(&no_names);
-        if let Some(draft) = &self.draft {
+        // Drawn below the header, so a fault does not move the name field or its actions.
+        let unread_rows = self.draft.as_ref().map(|draft| {
             let faults = Entry::parse(&draft.path, &draft.source)
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
-            for flag in &draft.flags {
-                let name = faults
-                    .iter()
-                    .find(|fault| fault.line == flag.line)
-                    .map(|fault| format!("{} · ", fault.name))
-                    .unwrap_or_default();
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    &format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message),
-                );
-            }
-            if !faults.is_empty() {
-                crate::world::entry_file_actions(ui, &active.path, &draft.path, true);
-                ui.label(Type::Small.rich(ui, "Fix these roster rows or remove them in Obsidian before starting the fight.").color(colors().muted));
-            }
-        }
+            let notes: Vec<String> = draft
+                .flags
+                .iter()
+                .map(|flag| {
+                    let name = faults
+                        .iter()
+                        .find(|fault| fault.line == flag.line)
+                        .map(|fault| format!("{} · ", fault.name))
+                        .unwrap_or_default();
+                    format!("{name}{}, line {}: {}", draft.path, flag.line, flag.message)
+                })
+                .collect();
+            (notes, faults.len(), draft.path.clone())
+        });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
         let mut back = false;
@@ -3687,6 +3746,9 @@ impl Encounters {
                     "Changes apply to the next fight. To add to this fight, use Add to fight in the run.",
                 ),
             );
+        }
+        if let Some((notes, faults, path)) = &unread_rows {
+            unread_roster_rows(ui, &active.path, path, notes, *faults);
         }
         design::rule(ui);
         if back {
@@ -4420,7 +4482,7 @@ impl Encounters {
                             if menu_action(ui, "Duplicate", None) { duplicate = Some(i); }
                             if creature.is_some_and(|c| !c.party) {
                                 if menu_action(ui, "Make it yours", None) { *make_yours = Some(i); }
-                                ui.add(egui::Label::new(Type::Small.rich(ui, "Edit a copy in this campaign.").color(colors().muted)).wrap());
+                                choice_note(ui, "Make it yours", Some("Edit a copy in this campaign."));
                             }
                             if menu_action(ui, "Remove", None) { remove = Some(i); }
                         });
@@ -4472,7 +4534,7 @@ impl Encounters {
                                         let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
                                         let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
                                         let fitted = changed_detail(ui, &detail, &word, ui.available_width());
-                                        let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
+                                        let detail_rect = ui.label(detail_text(ui, &stat_line(&fitted))).on_hover_text(&detail).rect;
                                         let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
                                         let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
@@ -4493,7 +4555,7 @@ impl Encounters {
                                         if part == "Bloodied" {
                                             design::status(ui, Status { icon: icons::BLOODIED, word: part, color: colors().hp.bloodied });
                                         } else {
-                                            ui.label(Type::Small.rich(ui, stat_line(part)).color(colors().muted));
+                                            ui.label(detail_text(ui, &stat_line(part)));
                                         }
                                     }
                                 });
@@ -4674,11 +4736,16 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
-            for flag in &rule_flags {
-                design::message(ui, Tone::Warning, &format!("Campaign.md, line {}: {}", flag.line, flag.message));
-            }
-            if !rule_flags.is_empty() {
-                crate::world::file_actions(ui, &active, "Campaign.md");
+            // The file's path and links start at the last warning's words.
+            for (at, flag) in rule_flags.iter().enumerate() {
+                let text = format!("Campaign.md, line {}: {}", flag.line, flag.message);
+                if at + 1 == rule_flags.len() {
+                    design::message_with_actions(ui, Tone::Warning, &text, |ui| {
+                        crate::world::file_actions(ui, &active, "Campaign.md");
+                    });
+                } else {
+                    design::message(ui, Tone::Warning, &text);
+                }
             }
             design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
@@ -4846,8 +4913,8 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 use list::{
-    blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,
-    side_control,
+    blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
+    ready_list, row_menu, side_control,
 };
 
 pub(crate) fn draft_switch_reason() -> &'static str {
