@@ -2032,6 +2032,14 @@ pub mod campaign_content {
                 std::fs::read(d.root.join(BROKEN_NOTE)).unwrap() == on_disk
             ),
         );
+        // Round 25 FD1: the long refusal sits in the message space, not in the message above
+        // the editor, so it moves the editor at no size.
+        let refused_tops = editor_tops(d);
+        d.observe(
+            "iter-25-C-FD1-refused",
+            refused_tops == clean_tops,
+            format!("Editor tops with a refused draft {refused_tops:?}, clean {clean_tops:?}"),
+        );
         // A draft that Save would write says Unsaved, and its Save is the one primary action.
         let valid = crate::library::note_text("Broken", "rule", None);
         d.replace_text_in("Note text", &valid);
