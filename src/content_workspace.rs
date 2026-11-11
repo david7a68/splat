@@ -16,6 +16,15 @@ use std::{
 };
 use uuid::Uuid;
 
+/// The one offer after a rename whose old name other notes still link to: its words, then its
+/// action. The Library and Timeline both use it. Several old names read `“A” or “B”`.
+pub fn link_offer_words(old: &[&str], new: &str, count: usize) -> (String, String) {
+    (
+        format!("Change links from “{}” to “{new}”.", old.join("” or “")),
+        format!("Update {}", crate::design::count(count, "link", "links")),
+    )
+}
+
 /// Recover an identity even when another front-matter line cannot be parsed.
 pub(crate) fn note_id(text: &str) -> Option<Uuid> {
     Uuid::parse_str(&note_property(text, "splat_id:")?)

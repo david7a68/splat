@@ -413,27 +413,24 @@ impl ProcessingSettings {
         let held = self.held(slot).is_some();
         let focus = slot == KeySlot::Speech && std::mem::take(&mut self.focus_speech_key);
         let mut save = false;
+        // The field and `Save key` share the form's width, so `Save key` ends at the edge the
+        // other fields end at. Its slot stays when it is hidden, so typing moves nothing. The
+        // line below holds the reason, else the saved status, so neither moves the form.
         design::small_field(ui, "API key", None, None, |ui| {
+            let mut reason = None;
             ui.horizontal(|ui| {
+                let row = ui.available_width().min(design::FORM_WIDTH);
                 let field = self.field(slot);
                 let empty = field.typing.trim().is_empty();
                 let show_save = !empty || (!saved && !held) || !fits;
-                let reason = (empty && show_save).then_some("Paste a key first.");
-                let reason_width = reason.map_or(0.0, |text| {
-                    design::number_width(ui, text, &Type::Small.font(ui)) + design::S
-                });
-                let room = if show_save {
-                    Action::secondary("Save key").natural_width(ui)
-                } else {
-                    0.0
-                } + reason_width
-                    + design::S * 3.0;
-                let width = (ui.available_width() - room - design::S * 2.0)
-                    .clamp(design::L * 4.0, design::FORM_WIDTH / 2.0);
+                reason = (empty && show_save).then_some("Paste a key first.");
+                let save_width = Action::secondary("Save key").natural_width(ui);
+                let width = (row - save_width - ui.spacing().item_spacing.x).max(design::L * 4.0);
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut field.typing)
                         .password(true)
-                        .desired_width(width)
+                        .desired_width(width - 2.0 * design::S)
+                        .min_size(egui::vec2(width, 0.0))
                         .margin(egui::vec2(design::S, 5.0))
                         .hint_text(design::placeholder(
                             ui,
@@ -456,8 +453,24 @@ impl ProcessingSettings {
                         .show(ui)
                         .clicked();
                 }
-                design::blocked_reason(ui, reason);
             });
+            // Where a field's help goes. A key error replaces the line with its message.
+            if self.field(slot).error.is_none() {
+                if let Some(reason) = reason {
+                    design::blocked_reason(ui, Some(reason));
+                } else if saved && fits {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("{} Saved on this computer.", icons::OK))
+                            .color(colors().document.saved),
+                    );
+                } else {
+                    // The line stays, so the reason coming and going moves nothing.
+                    let font = Type::Small.font(ui);
+                    let height = ui.fonts_mut(|fonts| fonts.row_height(&font));
+                    ui.allocate_space(egui::vec2(0.0, height));
+                }
+            }
         });
         if (saved || held) && !fits {
             design::message(ui, Tone::Warning, &warning);
@@ -488,12 +501,6 @@ impl ProcessingSettings {
                 Tone::Warning,
                 &format!("{error} Splat keeps the key until it closes."),
             );
-        } else if saved && fits {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("{} Saved on this computer.", icons::OK))
-                    .color(colors().document.saved),
-            );
         }
         if (saved || held)
             && Action::quiet(&remove)
@@ -523,7 +530,7 @@ impl ProcessingSettings {
         }
         match &self.probe {
             None => {
-                help(ui, "Looking for a recorder…");
+                design::help(ui, "Looking for a recorder…");
             }
             Some(Probe { tool: None, .. }) => {
                 design::message(
@@ -536,7 +543,7 @@ impl ProcessingSettings {
                 tool: Some(tool),
                 inputs,
             }) => {
-                help(
+                design::help(
                     ui,
                     &format!(
                         "Records with {}, as 16 kHz mono WAV in the campaign folder.",
@@ -610,7 +617,7 @@ impl ProcessingSettings {
 
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Speech service", 0);
-        help(
+        design::help(
             ui,
             "Turns your recording into text. Choose a speech service and enter its API key.",
         );
@@ -647,7 +654,7 @@ impl ProcessingSettings {
             ui.ctx().request_repaint();
         }
         if current == OTHER_SERVICE {
-            help(
+            design::help(
                 ui,
                 "The custom service must support the OpenAI audio/transcriptions API.",
             );
@@ -678,7 +685,7 @@ impl ProcessingSettings {
 
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Transcript and summary", 0);
-        help(
+        design::help(
             ui,
             "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
         );
@@ -747,7 +754,7 @@ impl ProcessingSettings {
             } else {
                 "The codex command was not found on this computer."
             };
-            help(ui, words);
+            design::help(ui, words);
         } else {
             self.key_row(ui, KeySlot::Llm, "Transcript and summary API key");
         }
@@ -780,7 +787,7 @@ impl ProcessingSettings {
                     design::named(ui, &response, label);
                     changed |= response.changed();
                     // The field's own help, at the reader measure like the rest of this tab.
-                    self::help(ui, help);
+                    design::help(ui, help);
                 });
                 if *prompt != default
                     && Action::quiet("Reset")
@@ -799,7 +806,7 @@ impl ProcessingSettings {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
-        help(
+        design::help(
             ui,
             "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.",
         );
@@ -849,12 +856,4 @@ impl ProcessingSettings {
             ui.scroll_to_rect(notice.union(reason), None);
         }
     }
-}
-
-/// Help on the Recording tab keeps the reader measure, as Account help does.
-fn help(ui: &mut egui::Ui, words: &str) {
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
-    });
 }
