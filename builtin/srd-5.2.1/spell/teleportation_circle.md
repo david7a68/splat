@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0808ce82-942c-5415-ba64-22c195930946"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/teleportation_circle"
-splat_name: "Teleportation Circle"
+splat_id: 0808ce82-942c-5415-ba64-22c195930946
+splat_kind: reference
+splat_key: dnd2024:reference/spell/teleportation_circle
+splat_name: Teleportation Circle
 splat_pages:
 - 168
 - 169

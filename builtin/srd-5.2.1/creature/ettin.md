@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "116a71ea-6217-5b39-98f3-d88797ead32f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ettin"
-splat_name: "Ettin"
+splat_id: 116a71ea-6217-5b39-98f3-d88797ead32f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ettin
+splat_name: Ettin
 splat_pages:
 - 284
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e983cc8d-6cfb-5fa4-a53f-eb02a6dfdaba"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magic_mouth"
-splat_name: "Magic Mouth"
+splat_id: e983cc8d-6cfb-5fa4-a53f-eb02a6dfdaba
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magic_mouth
+splat_name: Magic Mouth
 splat_pages:
 - 146
 ---

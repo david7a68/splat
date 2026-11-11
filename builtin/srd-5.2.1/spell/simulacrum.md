@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "87fc1212-e6a1-5e2e-83dd-2b7e9acf988c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/simulacrum"
-splat_name: "Simulacrum"
+splat_id: 87fc1212-e6a1-5e2e-83dd-2b7e9acf988c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/simulacrum
+splat_name: Simulacrum
 splat_pages:
 - 162
 - 163

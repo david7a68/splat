@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4d77924c-9dc1-5057-b9c5-2f809556e64e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_lightning_bolts"
-splat_name: "Wand of Lightning Bolts"
+splat_id: 4d77924c-9dc1-5057-b9c5-2f809556e64e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_lightning_bolts
+splat_name: Wand of Lightning Bolts
 splat_pages:
 - 251
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "35734c9a-0e96-5bb5-ac9e-eca1572d2bd6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/stone_of_good_luck_luckstone"
-splat_name: "Stone of Good Luck (Luckstone)"
+splat_id: 35734c9a-0e96-5bb5-ac9e-eca1572d2bd6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/stone_of_good_luck_luckstone
+splat_name: Stone of Good Luck (Luckstone)
 splat_pages:
 - 248
 ---

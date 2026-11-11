@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "85e58e06-a83d-5a06-bbef-2ba111b33843"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/tree_stride"
-splat_name: "Tree Stride"
+splat_id: 85e58e06-a83d-5a06-bbef-2ba111b33843
+splat_kind: reference
+splat_key: dnd2024:reference/spell/tree_stride
+splat_name: Tree Stride
 splat_pages:
 - 170
 ---

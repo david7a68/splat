@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "916dd6a4-42ad-5b8f-9336-9d6ec29e45db"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/damage"
-splat_name: "Damage"
+splat_id: 916dd6a4-42ad-5b8f-9336-9d6ec29e45db
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/damage
+splat_name: Damage
 splat_pages:
 - 180
 ---

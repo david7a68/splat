@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bc2c3796-7211-5821-94f0-ed28b98205cd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_centipede"
-splat_name: "Giant Centipede"
+splat_id: bc2c3796-7211-5821-94f0-ed28b98205cd
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_centipede
+splat_name: Giant Centipede
 splat_pages:
 - 349
 - 350

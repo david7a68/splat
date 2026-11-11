@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a20b514f-6eea-51ea-99c8-08036f40e85e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/blade_barrier"
-splat_name: "Blade Barrier"
+splat_id: a20b514f-6eea-51ea-99c8-08036f40e85e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/blade_barrier
+splat_name: Blade Barrier
 splat_pages:
 - 113
 ---

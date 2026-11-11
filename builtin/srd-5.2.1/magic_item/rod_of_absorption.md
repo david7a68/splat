@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "324b82a2-8095-5a86-9eb3-68d9da674002"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_absorption"
-splat_name: "Rod of Absorption"
+splat_id: 324b82a2-8095-5a86-9eb3-68d9da674002
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_absorption
+splat_name: Rod of Absorption
 splat_pages:
 - 241
 ---

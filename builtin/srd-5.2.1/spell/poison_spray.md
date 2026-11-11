@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3198a94a-4bf5-5df5-8c10-9a8bd34828da"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/poison_spray"
-splat_name: "Poison Spray"
+splat_id: 3198a94a-4bf5-5df5-8c10-9a8bd34828da
+splat_kind: reference
+splat_key: dnd2024:reference/spell/poison_spray
+splat_name: Poison Spray
 splat_pages:
 - 153
 ---

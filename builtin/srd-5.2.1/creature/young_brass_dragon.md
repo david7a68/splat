@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a8ba0433-94c2-59e1-8289-146cf7e9090b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_brass_dragon"
-splat_name: "Young Brass Dragon"
+splat_id: a8ba0433-94c2-59e1-8289-146cf7e9090b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_brass_dragon
+splat_name: Young Brass Dragon
 splat_pages:
 - 268
 ---

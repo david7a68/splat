@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9ba2c9ff-e875-5f76-a8e5-a128f709432c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/belt_of_dwarvenkind"
-splat_name: "Belt of Dwarvenkind"
+splat_id: 9ba2c9ff-e875-5f76-a8e5-a128f709432c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/belt_of_dwarvenkind
+splat_name: Belt of Dwarvenkind
 splat_pages:
 - 213
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2cd0d2a4-10db-526c-9693-d86b2242c696"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/deva"
-splat_name: "Deva"
+splat_id: 2cd0d2a4-10db-526c-9693-d86b2242c696
+splat_kind: reference
+splat_key: dnd2024:reference/creature/deva
+splat_name: Deva
 splat_pages:
 - 279
 ---

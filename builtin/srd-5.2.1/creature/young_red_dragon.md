@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0046912d-1178-5003-adfe-5b556213ca88"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_red_dragon"
-splat_name: "Young Red Dragon"
+splat_id: 0046912d-1178-5003-adfe-5b556213ca88
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_red_dragon
+splat_name: Young Red Dragon
 splat_pages:
 - 318
 ---

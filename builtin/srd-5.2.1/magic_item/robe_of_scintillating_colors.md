@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "616c4450-d9a3-5fb7-a66b-8400c034f07c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/robe_of_scintillating_colors"
-splat_name: "Robe of Scintillating Colors"
+splat_id: 616c4450-d9a3-5fb7-a66b-8400c034f07c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/robe_of_scintillating_colors
+splat_name: Robe of Scintillating Colors
 splat_pages:
 - 240
 ---

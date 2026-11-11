@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c5f21b87-5bb8-50ff-913a-36561d3dcb78"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/falling_hazard"
-splat_name: "Falling [Hazard]"
+splat_id: c5f21b87-5bb8-50ff-913a-36561d3dcb78
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/falling_hazard
+splat_name: Falling [Hazard]
 splat_pages:
 - 182
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5fa1b07c-63db-5fef-b11d-042b7ec6d21b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/oathbow"
-splat_name: "Oathbow"
+splat_id: 5fa1b07c-63db-5fef-b11d-042b7ec6d21b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/oathbow
+splat_name: Oathbow
 splat_pages:
 - 233
 ---

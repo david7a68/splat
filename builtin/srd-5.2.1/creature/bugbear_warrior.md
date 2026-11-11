@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "84555ebe-2af1-56ee-ab67-8da2c1affed1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bugbear_warrior"
-splat_name: "Bugbear Warrior"
+splat_id: 84555ebe-2af1-56ee-ab67-8da2c1affed1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bugbear_warrior
+splat_name: Bugbear Warrior
 splat_pages:
 - 272
 ---

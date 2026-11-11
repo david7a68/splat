@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f254b763-3709-5d64-9d17-6d0b32eea68c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/cone_area_of_effect"
-splat_name: "Cone [Area of Effect]"
+splat_id: f254b763-3709-5d64-9d17-6d0b32eea68c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/cone_area_of_effect
+splat_name: Cone [Area of Effect]
 splat_pages:
 - 179
 ---

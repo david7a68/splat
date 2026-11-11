@@ -35,29 +35,6 @@ fn note_property(text: &str, property: &str) -> Option<String> {
 
 pub(crate) const DELETED_MANIFEST: &str = "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup.";
 
-/// Read only the manifest, so a large generated book is never scanned for conversion.
-pub(crate) fn generated_package(root: &Path) -> bool {
-    fs::read_to_string(root.join("Package.md")).is_ok_and(|text| generated_manifest(&text))
-}
-
-pub(crate) fn generated_manifest(text: &str) -> bool {
-    let mut lines = text.trim_start_matches('\u{feff}').lines();
-    if lines.next().map(str::trim) != Some("---") {
-        return false;
-    }
-    // Keep the guard even when another property or the package body needs repair.
-    lines.take_while(|line| line.trim() != "---").any(|line| {
-        let Some((key, value)) = line.split_once(':') else {
-            return false;
-        };
-        !line.starts_with(char::is_whitespace)
-            && serde_yaml_ng::from_str::<Value>(key)
-                .is_ok_and(|key| key.as_str() == Some("splat_generated"))
-            && serde_yaml_ng::from_str::<Value>(value)
-                .is_ok_and(|value| value.as_bool() == Some(true))
-    })
-}
-
 pub(crate) fn package_manifest_path(module: &Module) -> String {
     match content::read_folder(&module.path) {
         Ok(folder) => manifest_path_in(&folder, module),
@@ -775,7 +752,6 @@ pub struct Catalogue {
 pub struct UnreadableNote {
     pub path: PathBuf,
     pub word: String,
-    pub old_layout: bool,
     key: Option<String>,
 }
 
@@ -977,7 +953,6 @@ impl Catalogue {
                 UnreadableNote {
                     path,
                     word,
-                    old_layout: false,
                     key: entry.key.clone(),
                 },
             );
@@ -1014,17 +989,11 @@ impl Catalogue {
             let (_, line) = crate::campaign_content::repair_problem(&error.path, &text);
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let line = line.map_or(String::new(), |line| format!(" (line {line})"));
-            let old_layout = crate::formats_ui::is_old(&error.message);
             self.unreadable.insert(
                 id,
                 UnreadableNote {
                     key: note_property(&text, "splat_key:"),
-                    word: if old_layout {
-                        crate::formats_ui::old_message(&error.path)
-                    } else {
-                        format!("{name} cannot be read{line}")
-                    },
-                    old_layout,
+                    word: format!("{name} cannot be read{line}"),
                     path,
                 },
             );
@@ -1124,16 +1093,6 @@ impl Catalogue {
                     .values()
                     .find(|note| note.key.as_deref() == Some(key))
             })
-    }
-    pub(crate) fn old_layout_ref(&self, reference: &Reference) -> Option<Uuid> {
-        self.unreadable.iter().find_map(|(id, note)| {
-            (note.old_layout
-                && match reference {
-                    Reference::Id(target) => id == target,
-                    Reference::Key(key) => note.key.as_ref() == Some(key),
-                })
-            .then_some(*id)
-        })
     }
     /// The package an unresolved reference points into, when no such package is loaded.
     fn missing_package(&self, reference: &Reference) -> Option<String> {
@@ -1325,17 +1284,7 @@ impl Catalogue {
                     "Duplicate package namespace: {ns}. Choose a new identity in Library."
                 ));
             }
-            let ids = entries
-                .iter()
-                .map(|e| e.id)
-                .chain(
-                    result
-                        .unreadable
-                        .iter()
-                        .filter(|(_, note)| note.old_layout && note.path.starts_with(&module.path))
-                        .map(|(id, _)| *id),
-                )
-                .collect();
+            let ids = entries.iter().map(|e| e.id).collect();
             let name = manifests[0].name.clone();
             for entry in entries {
                 if entry.kind == "package" && result.manifest_problems.contains_key(&module.id) {
@@ -1524,9 +1473,6 @@ impl Catalogue {
                         } else if let Some(note) = self.unreadable.get(&id)
                             && !result.errors.contains(&note.word)
                         {
-                            if note.old_layout {
-                                result.old_layout.insert(id);
-                            }
                             result.errors.push(note.word.clone());
                         }
                     }
@@ -1536,18 +1482,6 @@ impl Catalogue {
                         match self.resolve_ref(reference) {
                             Ok(id) if self.entries[&id].owner == module.id => {
                                 result.direct.insert(id);
-                            }
-                            _ if reference
-                                .reference()
-                                .ok()
-                                .and_then(|reference| self.old_layout_ref(&reference))
-                                .is_some() =>
-                            {
-                                let id = self
-                                    .old_layout_ref(&reference.reference().unwrap())
-                                    .unwrap();
-                                result.old_layout.insert(id);
-                                result.errors.push(self.unreadable[&id].word.clone());
                             }
                             _ => result.errors.push(format!(
                                 "Selected entry unavailable in {}: {}",
@@ -1596,13 +1530,6 @@ impl Catalogue {
                                         .insert(entry.entry.name.clone());
                                 }
                                 queue.push_back(dep);
-                            }
-                            Err(_) if self.old_layout_ref(&reference).is_some() => {
-                                let id = self.old_layout_ref(&reference).unwrap();
-                                result.old_layout.insert(id);
-                                if !result.errors.contains(&self.unreadable[&id].word) {
-                                    result.errors.push(self.unreadable[&id].word.clone());
-                                }
                             }
                             Err(_) => match self.missing_package(&reference) {
                                 Some(package) => {
@@ -1712,7 +1639,6 @@ pub struct Closure {
     pub direct: BTreeSet<Uuid>,
     pub required: BTreeMap<Uuid, BTreeSet<String>>,
     pub errors: Vec<String>,
-    pub old_layout: BTreeSet<Uuid>,
 }
 
 fn campaign_manifest(root: &Path, expected: Option<Uuid>) -> Result<Option<Entry>, String> {
@@ -2503,21 +2429,6 @@ impl CopyPlan {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn fmt_f2_generated_marker_is_a_flat_boolean_in_the_manifest() {
-        assert!(super::generated_manifest(
-            "\u{feff}---\r\n\"splat_generated\": true # converter\r\nother: [broken\r\n---\r\n"
-        ));
-        for text in [
-            "---\nsplat_generated: 'true'\n---\n",
-            "---\nsplat_generated: false\n---\n",
-            "---\nsplat_other:\n  splat_generated: true\n---\n",
-            "---\nsplat_schema: 1\n---\n\nsplat_generated: true\n",
-        ] {
-            assert!(!super::generated_manifest(text));
-        }
-    }
-
     use super::*;
     use splat::content::formats::patch_model as patch_fields;
 
@@ -2851,10 +2762,15 @@ mod tests {
         let id = Entry::parse("Wolf.md", &text).unwrap().id;
         fs::write(temp.path().join("Wolf.md"), text).unwrap();
         let manifest = temp.path().join("Package.md");
-        let before = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n",
-            module.id
-        )).expect("schema-2 fixture");
+        let before = splat::content::formats::fixture(
+            "Fixture.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n",
+                module.id
+            ),
+            "",
+        )
+        .expect("schema-2 fixture");
         fs::write(&manifest, "---\nsplat_id: [\n---\n").unwrap();
         for deleted in [false, true] {
             if deleted {
@@ -2901,7 +2817,19 @@ mod tests {
             name: "Test".into(),
             path: temp.path().into(),
         };
-        fs::write(module.path.join("Package.md"), splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n", module.id)).expect("schema-2 fixture")).unwrap();
+        fs::write(
+            module.path.join("Package.md"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n",
+                    module.id
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
+        )
+        .unwrap();
         let id = Uuid::new_v4();
         let text = format!(
             "---\nsplat_schema: 2\nsplat_id: '{id}' # keep identity\nsplat_kind: [\nsplat_key: test:creatures/wolf\n---\n"
@@ -2928,73 +2856,6 @@ mod tests {
             note_id(&format!("---\nsplat_id: [\n---\nsplat_id: {id}")),
             None
         );
-    }
-
-    #[test]
-    fn old_layout_only_blocks_selections_that_need_it() {
-        let owner = Uuid::new_v4();
-        let old = Uuid::new_v4();
-        let mut cat = Catalogue::default();
-        let mut manifest = entry("Module", "rule");
-        manifest.kind = "package".into();
-        manifest.id = owner;
-        cat.insert(manifest, owner, false).unwrap();
-        let optional = entry("Optional", "item");
-        let optional_id = optional.id;
-        cat.insert(optional, owner, false).unwrap();
-        cat.unreadable.insert(
-            old,
-            UnreadableNote {
-                path: "NPCs/Rook.md".into(),
-                word: crate::formats_ui::old_message("NPCs/Rook.md"),
-                old_layout: true,
-                key: Some("test:rook".into()),
-            },
-        );
-        cat.modules.push(ModuleIndex {
-            id: owner,
-            name: "Module".into(),
-            entries: vec![old, optional_id],
-            private: false,
-        });
-        let selected = |reference| {
-            vec![PackageSelection {
-                name: None,
-                package: EntryRef::id(owner),
-                selection: Selection::Selected {
-                    entries: vec![reference],
-                },
-            }]
-        };
-        let campaign = Uuid::new_v4();
-        assert!(cat.closure(&[], campaign).old_layout.is_empty());
-        assert!(
-            cat.closure(&selected(EntryRef::id(optional_id)), campaign)
-                .old_layout
-                .is_empty()
-        );
-        let needed = cat.closure(&selected(EntryRef::id(old)), campaign);
-        assert_eq!(needed.old_layout, BTreeSet::from([old]));
-        assert_eq!(
-            needed.errors,
-            vec![crate::formats_ui::old_message("NPCs/Rook.md")]
-        );
-        assert_eq!(
-            cat.closure(
-                &[PackageSelection {
-                    name: None,
-                    package: EntryRef::id(owner),
-                    selection: Selection::All
-                }],
-                campaign
-            )
-            .old_layout,
-            BTreeSet::from([old])
-        );
-        let mut user = entry("Uses Rook", "world");
-        require(&mut user, old);
-        cat.insert(user, campaign, true).unwrap();
-        assert_eq!(cat.closure(&[], campaign).old_layout, BTreeSet::from([old]));
     }
 
     #[test]
@@ -3074,7 +2935,6 @@ mod tests {
             )],
         )
         .unwrap();
-        let source = content::formats::convert("Rook.md", &source).unwrap();
         let source_id = note_id(&source).unwrap();
         fs::write(dir.path().join("Rook.md"), &source).unwrap();
         let cat = Catalogue::load(&[], Some(&campaign)).unwrap();
@@ -3220,11 +3080,10 @@ mod tests {
     #[test]
     fn reconnecting_a_related_entry_preserves_prose_and_unrelated_fields() {
         let old = entry("Captain Varra", "creature");
-        let original = splat::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\ncustom: 'keep the quotes'\n---\n\nCaptain Varra keeps her name here.\n",
-            Uuid::new_v4(),
-            old.id
-        )).expect("schema-2 fixture");
+        let original = splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: rule\nsplat_name: Ash Exposure\nsplat_rule: {{}}\nsplat_reading:\n  title: Ash Exposure\n  summary: Keep these words.\n  related:\n    {}: Read Captain Varra\n", Uuid::new_v4(), old.id), "\nCaptain Varra keeps her name here.\n").expect("schema-2 fixture");
+        // A property that a person typed keeps its quotes; the writer would drop them.
+        let original = original.replacen("---\n\n", "custom: 'keep the quotes'\n---\n\n", 1);
+        assert!(original.contains("custom: 'keep the quotes'\n---\n"));
         let new_id = Uuid::new_v4();
         let changed = redirect_reference(&original, &old, new_id).unwrap();
         assert!(changed.contains(&new_id.to_string()));
@@ -3613,9 +3472,7 @@ mod tests {
         fs::create_dir(folder).unwrap();
         fs::write(
             folder.join("Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n---\n"
-            )).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         id
@@ -3721,18 +3578,25 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(
             root.path().join("Campaign.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(
             root.path().join("Campaign Package/Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let rule = Uuid::new_v4();
         fs::write(
             folder.join("Rule.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n"
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
         )
         .unwrap();
         let discovered = CampaignDocument::discover(root.path()).unwrap().unwrap();
@@ -3759,13 +3623,20 @@ mod tests {
         );
         fs::write(
             folder.join("Package.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n---\n")).expect("schema-2 fixture"),
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n"
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
         )
         .unwrap();
         let item = |id: Uuid, name: &str, extra: &str| {
             fs::write(
                 folder.join(format!("{name}.md")),
-                splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}---\n")).expect("schema-2 fixture"),
+                splat::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}"), "").expect("schema-2 fixture"),
             )
             .unwrap();
         };
@@ -3778,7 +3649,7 @@ mod tests {
         item(other, "Other", "splat_dndbeyond_ids:\n- item:other\n");
         fs::write(
             campaign_root.join("Campaign.md"),
-            splat::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n---\n", Uuid::new_v4())).expect("schema-2 fixture"),
+            splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n", Uuid::new_v4()), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let modules = [Module {

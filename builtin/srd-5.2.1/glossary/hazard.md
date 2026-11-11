@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1d68955b-0a39-5c08-8106-4e6e0eb3b9c2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hazard"
-splat_name: "Hazard"
+splat_id: 1d68955b-0a39-5c08-8106-4e6e0eb3b9c2
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hazard
+splat_name: Hazard
 splat_pages:
 - 182
 ---

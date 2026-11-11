@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1a4549ea-1fd3-5a8f-821c-c7805bf4bc6e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sword_of_sharpness"
-splat_name: "Sword of Sharpness"
+splat_id: 1a4549ea-1fd3-5a8f-821c-c7805bf4bc6e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sword_of_sharpness
+splat_name: Sword of Sharpness
 splat_pages:
 - 248
 ---

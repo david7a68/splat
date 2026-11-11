@@ -4,7 +4,7 @@
 > supersedes earlier memory-only restrictions for D&D Beyond character records.
 > Encounter run state and encounter integration remain separate future work.
 
-Status: completed candidate schema 1 field contract for the agreed scope.
+Status: completed candidate field contract for the note model, for the agreed scope.
 Documentation only; existing settings, credentials and campaign folders are
 unchanged. This completes [Mechanics](mechanics-schema.md) and
 [State](state-schema.md).

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6a9cc310-73a6-53d6-9f0c-50ffd382c64c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/badger"
-splat_name: "Badger"
+splat_id: 6a9cc310-73a6-53d6-9f0c-50ffd382c64c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/badger
+splat_name: Badger
 splat_pages:
 - 345
 ---

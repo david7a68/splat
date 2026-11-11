@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "de4cfda7-01fd-5f64-8f6c-84e1db7922df"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/pipes_of_the_sewers"
-splat_name: "Pipes of the Sewers"
+splat_id: de4cfda7-01fd-5f64-8f6c-84e1db7922df
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/pipes_of_the_sewers
+splat_name: Pipes of the Sewers
 splat_pages:
 - 234
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "00b09037-ab35-5d0f-98d9-1fe41131b51d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/vampire_spawn"
-splat_name: "Vampire Spawn"
+splat_id: 00b09037-ab35-5d0f-98d9-1fe41131b51d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/vampire_spawn
+splat_name: Vampire Spawn
 splat_pages:
 - 334
 - 335

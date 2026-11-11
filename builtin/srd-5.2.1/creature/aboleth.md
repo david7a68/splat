@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0798f13e-2467-5457-ac2e-7fcd0865161b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/aboleth"
-splat_name: "Aboleth"
+splat_id: 0798f13e-2467-5457-ac2e-7fcd0865161b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/aboleth
+splat_name: Aboleth
 splat_pages:
 - 258
 ---

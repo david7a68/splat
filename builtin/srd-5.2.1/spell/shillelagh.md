@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b50092d0-ff20-5b5b-b87c-129e4e68256a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shillelagh"
-splat_name: "Shillelagh"
+splat_id: b50092d0-ff20-5b5b-b87c-129e4e68256a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shillelagh
+splat_name: Shillelagh
 splat_pages:
 - 162
 ---

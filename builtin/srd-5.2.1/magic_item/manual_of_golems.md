@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fd08e612-aea6-594f-8203-6f808cdf656c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/manual_of_golems"
-splat_name: "Manual of Golems"
+splat_id: fd08e612-aea6-594f-8203-6f808cdf656c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/manual_of_golems
+splat_name: Manual of Golems
 splat_pages:
 - 229
 - 230

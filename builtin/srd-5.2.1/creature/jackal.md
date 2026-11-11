@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7812ab18-fbd9-5301-8d6c-173b3c58e9b7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/jackal"
-splat_name: "Jackal"
+splat_id: 7812ab18-fbd9-5301-8d6c-173b3c58e9b7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/jackal
+splat_name: Jackal
 splat_pages:
 - 356
 ---

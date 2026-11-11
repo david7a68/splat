@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4300db17-7fdd-5056-9714-cd03c7cf4fda"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_wasp"
-splat_name: "Giant Wasp"
+splat_id: 4300db17-7fdd-5056-9714-cd03c7cf4fda
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_wasp
+splat_name: Giant Wasp
 splat_pages:
 - 354
 - 355

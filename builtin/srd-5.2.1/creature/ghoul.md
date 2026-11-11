@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "54b5dde6-3598-5344-85e7-73c99fa5e962"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ghoul"
-splat_name: "Ghoul"
+splat_id: 54b5dde6-3598-5344-85e7-73c99fa5e962
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ghoul
+splat_name: Ghoul
 splat_pages:
 - 288
 ---

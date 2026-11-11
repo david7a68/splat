@@ -459,21 +459,10 @@ fn rewrite(
             .map_err(|e| e.to_string())?;
     let mut fields: Value = serde_json::from_str(&replace(fields)).map_err(|e| e.to_string())?;
     refresh_coverage(&mut fields)?;
-    if entry
-        .fields
-        .get("splat_schema")
-        .and_then(serde_yaml_ng::Value::as_u64)
-        == Some(2)
-        && crate::content::formats::eligible(&entry)
-    {
-        // Routing edits the model, then emits its one payload. Reusing the
-        // previous fence here would create a second source for the same facts.
-        fields["splat_schema"] = 1.into();
-        let body = replace(rules::source_body(&entry));
-        let legacy = rules::rendered(fields, &body)?;
-        return crate::content::formats::convert(relative_path, &legacy);
-    }
-    rules::rendered(fields, &replace(entry.body))
+    // Routing edits the model, then writes its one payload. Reusing the
+    // previous fence here would create a second source for the same facts.
+    let body = replace(rules::source_body(&entry));
+    rules::written(relative_path, &fields, body.trim_matches('\n'))
 }
 fn refresh_coverage(fields: &mut Value) -> Result<(), String> {
     if fields["splat_import"]["rule_fingerprint"].is_string() {
@@ -1228,16 +1217,18 @@ mod tests {
         record
     }
     fn package_note(extra: &str, words: &str) -> String {
-        crate::content::formats::convert("Fixture.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {WAND}\nsplat_kind: item\nsplat_key: test:items/wand\nsplat_name: Rod\nsplat_item:\n  category: gear\n{extra}---\n\n# Rod\n\n## Source text\n\n*Gear*\n\n{words}\n"
-        )).expect("schema-2 fixture")
+        crate::content::formats::fixture(
+            "Fixture.md",
+            &format!("splat_id: {WAND}\nsplat_kind: item\nsplat_key: test:items/wand\nsplat_name: Rod\nsplat_item:\n  category: gear\n{extra}"),
+            &format!("\n# Rod\n\n## Source text\n\n*Gear*\n\n{words}\n"),
+        ).expect("schema-2 fixture")
     }
     fn package_with(root: &Path, extra: &str, words: &str) -> PathBuf {
         let folder = root.join("package");
         fs::create_dir_all(folder.join("Items")).unwrap();
         fs::write(
             folder.join("Package.md"),
-            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {PACKAGE}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n---\n")).expect("schema-2 fixture"),
+            crate::content::formats::fixture("Fixture.md", &format!("splat_id: {PACKAGE}\nsplat_kind: package\nsplat_name: Test\nsplat_namespace: test\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(folder.join("Items/Rod.md"), package_note(extra, words)).unwrap();
@@ -1417,7 +1408,7 @@ mod tests {
         fs::create_dir_all(&folder).unwrap();
         fs::write(
             folder.join("Package.md"),
-            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Other\nsplat_namespace: other{id}\n---\n")).expect("schema-2 fixture"),
+            crate::content::formats::fixture("Fixture.md", &format!("splat_id: {package}\nsplat_kind: package\nsplat_name: Other\nsplat_namespace: other{id}\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         fs::write(
@@ -1647,7 +1638,7 @@ mod tests {
             let id = Uuid::from_u128(campaign_id);
             fs::write(
                 campaign.path().join("Campaign.md"),
-                crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c{campaign_id}\n---\n")).expect("schema-2 fixture"),
+                crate::content::formats::fixture("Fixture.md", &format!("splat_id: {id}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c{campaign_id}\n"), "").expect("schema-2 fixture"),
             )
             .unwrap();
             with_words().save_campaign_copy(campaign.path()).unwrap();
@@ -1953,7 +1944,7 @@ mod tests {
         let folder = package_with(shared.path(), &extra, "Other words entirely here.");
         let note = Entry::parse(
             "note.md",
-            &crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: item\nsplat_name: Wand\nsplat_item:\n  category: gear\nsplat_rule:\n  mechanic: test:rules/mine\n  implementation: test:rules/mine\n---\n\n# Wand\n")).expect("schema-2 fixture"),
+            &crate::content::formats::fixture("Fixture.md", &format!("splat_id: {CAMPAIGN}\nsplat_kind: item\nsplat_name: Wand\nsplat_item:\n  category: gear\nsplat_rule:\n  mechanic: test:rules/mine\n  implementation: test:rules/mine\n"), "\n# Wand\n").expect("schema-2 fixture"),
         )
         .unwrap();
         assert!(
@@ -1973,12 +1964,12 @@ mod tests {
         let body = "\n# Goblin\n\n## Source text\n\n***Fury.*** You hit hard.\n";
         fs::write(
             &path,
-            crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {WAND}\nsplat_kind: reference\nsplat_name: Goblin\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n---\n{body}")).expect("schema-2 fixture"),
+            crate::content::formats::fixture("Fixture.md", &format!("splat_id: {WAND}\nsplat_kind: reference\nsplat_name: Goblin\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n"), body).expect("schema-2 fixture"),
         )
         .unwrap();
         let note = Entry::parse(
             "note.md",
-            &crate::content::formats::convert("Fixture.md", &format!("---\nsplat_schema: 1\nsplat_id: {CAMPAIGN}\nsplat_kind: rule\nsplat_name: Fury\nsplat_rule:\n  mechanic: test:rules/fury\n  implementation: test:rules/fury\n---\n")).expect("schema-2 fixture"),
+            &crate::content::formats::fixture("Fixture.md", &format!("splat_id: {CAMPAIGN}\nsplat_kind: rule\nsplat_name: Fury\nsplat_rule:\n  mechanic: test:rules/fury\n  implementation: test:rules/fury\n"), "").expect("schema-2 fixture"),
         )
         .unwrap();
         let write = package_write(&path, Some(&note), &["feature:1".into()])
@@ -2001,10 +1992,7 @@ mod tests {
         for (name, n) in [("Goblin", 5u128), ("Tabaxi", 6)] {
             fs::write(
                 folder.join(format!("{name}.md")),
-                crate::content::formats::convert("Fixture.md", &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: reference\nsplat_name: {name}\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n---\n\n# {name}\n\n***Darkvision.*** You see in the dark for 60 feet.\n\n***Small.*** You are Small.\n",
-                    Uuid::from_u128(n)
-                )).expect("schema-2 fixture"),
+                crate::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: reference\nsplat_name: {name}\nsplat_reference:\n  source: Test\n  category: species\n  executable: false\n", Uuid::from_u128(n)), &format!("\n# {name}\n\n***Darkvision.*** You see in the dark for 60 feet.\n\n***Small.*** You are Small.\n")).expect("schema-2 fixture"),
             )
             .unwrap();
         }

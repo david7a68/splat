@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b3b083f8-68dd-5125-9165-0910218073b5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_shooting_stars"
-splat_name: "Ring of Shooting Stars"
+splat_id: b3b083f8-68dd-5125-9165-0910218073b5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_shooting_stars
+splat_name: Ring of Shooting Stars
 splat_pages:
 - 238
 - 239

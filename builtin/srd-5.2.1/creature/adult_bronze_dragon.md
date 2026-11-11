@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5aac4ef8-1648-5d01-b104-77dfb6ef8d4a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_bronze_dragon"
-splat_name: "Adult Bronze Dragon"
+splat_id: 5aac4ef8-1648-5d01-b104-77dfb6ef8d4a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_bronze_dragon
+splat_name: Adult Bronze Dragon
 splat_pages:
 - 270
 - 271

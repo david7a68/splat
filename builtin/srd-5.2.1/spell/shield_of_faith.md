@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a08a9343-5605-5910-bdd3-5a008353dad7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shield_of_faith"
-splat_name: "Shield of Faith"
+splat_id: a08a9343-5605-5910-bdd3-5a008353dad7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shield_of_faith
+splat_name: Shield of Faith
 splat_pages:
 - 162
 ---

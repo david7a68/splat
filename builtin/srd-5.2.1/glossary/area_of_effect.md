@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "58433df1-e0b9-5d60-8cf5-c1acf5a53f14"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/area_of_effect"
-splat_name: "Area of Effect"
+splat_id: 58433df1-e0b9-5d60-8cf5-c1acf5a53f14
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/area_of_effect
+splat_name: Area of Effect
 splat_pages:
 - 177
 ---

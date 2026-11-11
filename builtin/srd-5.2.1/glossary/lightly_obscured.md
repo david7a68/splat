@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "80eef63d-c17d-5aa9-978d-5340a0c588ef"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/lightly_obscured"
-splat_name: "Lightly Obscured"
+splat_id: 80eef63d-c17d-5aa9-978d-5340a0c588ef
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/lightly_obscured
+splat_name: Lightly Obscured
 splat_pages:
 - 184
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "35a261df-2b80-5f81-8f47-c52f80d5f952"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wall_of_ice"
-splat_name: "Wall of Ice"
+splat_id: 35a261df-2b80-5f81-8f47-c52f80d5f952
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wall_of_ice
+splat_name: Wall of Ice
 splat_pages:
 - 172
 - 173

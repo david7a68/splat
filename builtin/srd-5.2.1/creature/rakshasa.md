@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2b85b9c2-435b-51ee-ba8b-15feb67f1fa7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/rakshasa"
-splat_name: "Rakshasa"
+splat_id: 2b85b9c2-435b-51ee-ba8b-15feb67f1fa7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/rakshasa
+splat_name: Rakshasa
 splat_pages:
 - 317
 - 318

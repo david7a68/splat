@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "68ec5e0c-f8d3-591c-893c-17f905f8501a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/blink"
-splat_name: "Blink"
+splat_id: 68ec5e0c-f8d3-591c-893c-17f905f8501a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/blink
+splat_name: Blink
 splat_pages:
 - 113
 - 114

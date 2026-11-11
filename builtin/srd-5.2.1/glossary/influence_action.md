@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e4df50b7-3a81-58b4-9c3a-b49e0a05cf29"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/influence_action"
-splat_name: "Influence [Action]"
+splat_id: e4df50b7-3a81-58b4-9c3a-b49e0a05cf29
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/influence_action
+splat_name: Influence [Action]
 splat_pages:
 - 184
 ---

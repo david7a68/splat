@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3f04d7ba-c428-5bc1-9b4b-933e0085f07a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/eyes_of_minute_seeing"
-splat_name: "Eyes of Minute Seeing"
+splat_id: 3f04d7ba-c428-5bc1-9b4b-933e0085f07a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/eyes_of_minute_seeing
+splat_name: Eyes of Minute Seeing
 splat_pages:
 - 221
 ---

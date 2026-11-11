@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "91a0068f-04be-57df-a663-015d9dcae317"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/silver_dragon_wyrmling"
-splat_name: "Silver Dragon Wyrmling"
+splat_id: 91a0068f-04be-57df-a663-015d9dcae317
+splat_kind: reference
+splat_key: dnd2024:reference/creature/silver_dragon_wyrmling
+splat_name: Silver Dragon Wyrmling
 splat_pages:
 - 324
 ---

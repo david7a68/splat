@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "802e406a-88f7-583d-adf5-2ab830adb0f2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/periapt_of_health"
-splat_name: "Periapt of Health"
+splat_id: 802e406a-88f7-583d-adf5-2ab830adb0f2
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/periapt_of_health
+splat_name: Periapt of Health
 splat_pages:
 - 234
 ---

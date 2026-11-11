@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3502098b-0ffc-58a2-bf7f-49da1e254e23"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/griffon"
-splat_name: "Griffon"
+splat_id: 3502098b-0ffc-58a2-bf7f-49da1e254e23
+splat_kind: reference
+splat_key: dnd2024:reference/creature/griffon
+splat_name: Griffon
 splat_pages:
 - 295
 ---

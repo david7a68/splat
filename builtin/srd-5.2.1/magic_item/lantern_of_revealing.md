@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6c61de99-eb46-5335-ad85-4be356a1caf8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/lantern_of_revealing"
-splat_name: "Lantern of Revealing"
+splat_id: 6c61de99-eb46-5335-ad85-4be356a1caf8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/lantern_of_revealing
+splat_name: Lantern of Revealing
 splat_pages:
 - 228
 - 229

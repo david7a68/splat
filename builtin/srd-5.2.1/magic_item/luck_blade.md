@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "65bfe886-d59b-55e2-983d-ec9e6cbf99a4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/luck_blade"
-splat_name: "Luck Blade"
+splat_id: 65bfe886-d59b-55e2-983d-ec9e6cbf99a4
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/luck_blade
+splat_name: Luck Blade
 splat_pages:
 - 229
 ---

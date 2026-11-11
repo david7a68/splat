@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ca2902eb-5d68-59f3-b10a-950db8d21f2d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_binding"
-splat_name: "Wand of Binding"
+splat_id: ca2902eb-5d68-59f3-b10a-950db8d21f2d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_binding
+splat_name: Wand of Binding
 splat_pages:
 - 250
 ---

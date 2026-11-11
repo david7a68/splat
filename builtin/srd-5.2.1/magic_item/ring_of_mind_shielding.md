@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "aac99ba9-bdc3-5913-8b6d-3f00d1d4208d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_mind_shielding"
-splat_name: "Ring of Mind Shielding"
+splat_id: aac99ba9-bdc3-5913-8b6d-3f00d1d4208d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_mind_shielding
+splat_name: Ring of Mind Shielding
 splat_pages:
 - 238
 ---

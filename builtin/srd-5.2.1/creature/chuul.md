@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "71e9e716-a550-5c77-8bc9-3407f8fcf901"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/chuul"
-splat_name: "Chuul"
+splat_id: 71e9e716-a550-5c77-8bc9-3407f8fcf901
+splat_kind: reference
+splat_key: dnd2024:reference/creature/chuul
+splat_name: Chuul
 splat_pages:
 - 273
 - 274

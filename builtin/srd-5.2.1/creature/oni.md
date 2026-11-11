@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c3c1b22f-da8a-5500-b859-7a654a0ab8d2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/oni"
-splat_name: "Oni"
+splat_id: c3c1b22f-da8a-5500-b859-7a654a0ab8d2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/oni
+splat_name: Oni
 splat_pages:
 - 312
 - 313

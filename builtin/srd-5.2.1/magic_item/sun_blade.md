@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "585d84b9-49a7-5e85-a150-8a04b551a5d9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sun_blade"
-splat_name: "Sun Blade"
+splat_id: 585d84b9-49a7-5e85-a150-8a04b551a5d9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sun_blade
+splat_name: Sun Blade
 splat_pages:
 - 248
 ---

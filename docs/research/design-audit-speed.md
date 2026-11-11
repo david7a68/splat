@@ -1358,9 +1358,7 @@ Local campaign/package notes are read repeatedly; 211,961 parse calls came from
 `read_directory`. These loads include fixture creation, generated character
 publishing, manifest/folder checks and scenario edits. They are not all redundant
 and are not removed. The elapsed sums overlap and must not be read as suite wall
-time or predicted savings. Convert files scanning starts on an explicit click;
-its dialog does parse preview summaries each frame, but this probe counted only
-1,138 such parses. No polling or scan frequency is changed.
+time or predicted savings. No polling or scan frequency is changed.
 
 A temporary focused harness populated a `Loaded` with all 3,518 embedded entries,
 then ran ten fresh duplicate-ID calculations and ten folder checks. It exercised
@@ -1448,7 +1446,7 @@ the suite's own many scenario threads and are not a separate contention measurem
 
 `snapshot_notice` compared each run creature with the current catalogue on every
 frame. It normalized both Markdown bodies before comparing the model, even when
-the source bodies were identical. Normalization strips legacy/printed stat
+the source bodies were identical. Normalization strips marked and printed stat
 blocks, reads the stat tables and joins whitespace. Temporary aggregate timers
 in a full original-source repeat measured:
 
@@ -1461,7 +1459,6 @@ in a full original-source repeat measured:
 | List reference resolution | 4,065,347 | 10.143 s |
 | `Catalogue::load` | 1,085 | 139.738 s |
 | Encounter/group recovery disk checks | 18 | 0.797 s |
-| Explicit Convert files scans | 4 | 3.748 s |
 
 These nested, concurrent sums are not suite wall times or predicted savings.
 The instrumented repeat passed in 120.89 s with the original behavior. Catalogue
@@ -1480,8 +1477,8 @@ A focused temporary harness used the real `snapshot_notice`, a parsed Wolf and
 an unchanged copy carrying run-source metadata. It asserted no notice on every
 call and used `black_box` inputs/results. The permanent regression test covers
 ignored schema/run metadata, a changed model with identical prose, changed prose
-with identical model, and whitespace-only body changes. Existing conversion,
-HP-change, unreadable-source and deleted-source tests also pass.
+with identical model, and whitespace-only body changes. Existing HP-change,
+unreadable-source and deleted-source tests also pass.
 
 ### Measurements
 

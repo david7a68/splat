@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4a732cb8-74bb-5fdf-8cd8-77212691f1f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/black_pudding"
-splat_name: "Black Pudding"
+splat_id: 4a732cb8-74bb-5fdf-8cd8-77212691f1f0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/black_pudding
+splat_name: Black Pudding
 splat_pages:
 - 265
 - 266

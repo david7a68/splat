@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "035f058e-c75a-53bd-bebf-56939eb9758f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/tongues"
-splat_name: "Tongues"
+splat_id: 035f058e-c75a-53bd-bebf-56939eb9758f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/tongues
+splat_name: Tongues
 splat_pages:
 - 169
 - 170

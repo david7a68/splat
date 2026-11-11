@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e3cc9b64-cd56-5cb1-a0ce-36010ca50d46"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bulette"
-splat_name: "Bulette"
+splat_id: e3cc9b64-cd56-5cb1-a0ce-36010ca50d46
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bulette
+splat_name: Bulette
 splat_pages:
 - 272
 ---

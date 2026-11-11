@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "82b9837f-ede9-50fd-91e3-d0f253558465"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/avatar_of_death"
-splat_name: "Avatar of Death"
+splat_id: 82b9837f-ede9-50fd-91e3-d0f253558465
+splat_kind: reference
+splat_key: dnd2024:reference/creature/avatar_of_death
+splat_name: Avatar of Death
 splat_pages:
 - 232
 ---

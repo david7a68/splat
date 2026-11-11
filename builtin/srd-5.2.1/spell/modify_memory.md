@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c1b6a48a-f77f-5f37-9ff4-9b2ecbc898c4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/modify_memory"
-splat_name: "Modify Memory"
+splat_id: c1b6a48a-f77f-5f37-9ff4-9b2ecbc898c4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/modify_memory
+splat_name: Modify Memory
 splat_pages:
 - 150
 ---

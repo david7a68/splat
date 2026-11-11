@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "188e3dc2-1ff9-5d92-92b8-ed31a0766768"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_elvenkind"
-splat_name: "Cloak of Elvenkind"
+splat_id: 188e3dc2-1ff9-5d92-92b8-ed31a0766768
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_elvenkind
+splat_name: Cloak of Elvenkind
 splat_pages:
 - 215
 ---

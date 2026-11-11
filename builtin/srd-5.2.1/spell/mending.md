@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94494908-9944-568b-b599-ae55bcf31a8a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mending"
-splat_name: "Mending"
+splat_id: 94494908-9944-568b-b599-ae55bcf31a8a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mending
+splat_name: Mending
 splat_pages:
 - 148
 ---

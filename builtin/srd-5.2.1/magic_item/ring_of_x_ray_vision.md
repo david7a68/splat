@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "30b3557e-1d95-5ad1-af39-593cc5bb9d6c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_x_ray_vision"
-splat_name: "Ring of X-ray Vision"
+splat_id: 30b3557e-1d95-5ad1-af39-593cc5bb9d6c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_x_ray_vision
+splat_name: Ring of X-ray Vision
 splat_pages:
 - 239
 - 240

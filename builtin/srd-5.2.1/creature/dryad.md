@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3ee896a9-2436-5c84-ae3b-e7efcd88a664"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/dryad"
-splat_name: "Dryad"
+splat_id: 3ee896a9-2436-5c84-ae3b-e7efcd88a664
+splat_kind: reference
+splat_key: dnd2024:reference/creature/dryad
+splat_name: Dryad
 splat_pages:
 - 282
 ---

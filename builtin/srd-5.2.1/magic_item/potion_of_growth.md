@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a44258b8-8d40-5bb3-a6f5-d68c97ef9a42"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_growth"
-splat_name: "Potion of Growth"
+splat_id: a44258b8-8d40-5bb3-a6f5-d68c97ef9a42
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_growth
+splat_name: Potion of Growth
 splat_pages:
 - 235
 ---

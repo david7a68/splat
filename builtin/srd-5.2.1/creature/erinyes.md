@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c82f8f0d-4d7a-5277-9eba-fe3b28790980"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/erinyes"
-splat_name: "Erinyes"
+splat_id: c82f8f0d-4d7a-5277-9eba-fe3b28790980
+splat_kind: reference
+splat_key: dnd2024:reference/creature/erinyes
+splat_name: Erinyes
 splat_pages:
 - 283
 ---

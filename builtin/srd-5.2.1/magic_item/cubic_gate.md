@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bbfb401c-04f2-535d-b202-b01105cc0ada"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cubic_gate"
-splat_name: "Cubic Gate"
+splat_id: bbfb401c-04f2-535d-b202-b01105cc0ada
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cubic_gate
+splat_name: Cubic Gate
 splat_pages:
 - 216
 ---

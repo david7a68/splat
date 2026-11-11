@@ -251,10 +251,9 @@ fn show_inner(
     let body = if let Some(entry) = entry.filter(|entry| creature::has_stats(entry)) {
         clean_body = creature::without_vitals(entry, body);
         clean_body.as_str()
-    } else if let Some(entry) = entry.filter(|entry| {
-        entry.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
-            && ["spell", "item"].contains(&entry.kind.as_str())
-    }) {
+    } else if let Some(entry) =
+        entry.filter(|entry| ["spell", "item"].contains(&entry.kind.as_str()))
+    {
         clean_body = splat::content::stat_blocks::reading_body(entry, body);
         clean_body.as_str()
     } else {
@@ -263,12 +262,10 @@ fn show_inner(
     let sections: Vec<_> = presentation::reading_sections(body, name)
         .into_iter()
         .filter(|section| {
-            if entry.is_some_and(|e| {
-                e.fields.get("splat_schema").and_then(|v| v.as_u64()) == Some(2)
-                    && ["creature", "spell", "item"].contains(&e.kind.as_str())
-            }) && presentation::overview_markdown(section.body)
-                .trim()
-                .is_empty()
+            if entry.is_some_and(|e| ["creature", "spell", "item"].contains(&e.kind.as_str()))
+                && presentation::overview_markdown(section.body)
+                    .trim()
+                    .is_empty()
             {
                 return false;
             }
@@ -487,10 +484,14 @@ mod tests {
     }
 
     fn note(flags: Vec<splat::content::layout::Flag>) -> Entry {
-        let old = "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: world\nsplat_name: Watch House\nsplat_world:\n  type: location\n---\n\n# Watch House\n\nKeep this prose.\n";
-        let converted = splat::content::formats::convert("World.md", old).unwrap();
+        let written = splat::content::formats::fixture(
+            "World.md",
+            "splat_id: 00000000-0000-0000-0000-000000000002\nsplat_kind: world\nsplat_name: Watch House\nsplat_world:\n  type: location\n",
+            "\n# Watch House\n\nKeep this prose.\n",
+        )
+        .unwrap();
         let mut entry =
-            Entry::parse("Places/Watch House.md", &converted).expect("fixture: a world note");
+            Entry::parse("Places/Watch House.md", &written).expect("fixture: a world note");
         entry.flags = flags;
         entry
     }

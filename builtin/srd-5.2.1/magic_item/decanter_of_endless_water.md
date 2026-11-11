@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c47eaa46-df18-575f-bc81-f6faa60798ca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/decanter_of_endless_water"
-splat_name: "Decanter of Endless Water"
+splat_id: c47eaa46-df18-575f-bc81-f6faa60798ca
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/decanter_of_endless_water
+splat_name: Decanter of Endless Water
 splat_pages:
 - 217
 ---

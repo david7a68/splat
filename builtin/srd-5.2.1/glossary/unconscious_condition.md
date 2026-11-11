@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "27312e3b-3d55-54ca-a766-e39eee84b028"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/unconscious_condition"
-splat_name: "Unconscious [Condition]"
+splat_id: 27312e3b-3d55-54ca-a766-e39eee84b028
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/unconscious_condition
+splat_name: Unconscious [Condition]
 splat_pages:
 - 191
 ---

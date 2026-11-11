@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c120b137-16d7-5544-901d-4395f248cf3a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_bronze_dragon"
-splat_name: "Ancient Bronze Dragon"
+splat_id: c120b137-16d7-5544-901d-4395f248cf3a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_bronze_dragon
+splat_name: Ancient Bronze Dragon
 splat_pages:
 - 271
 ---

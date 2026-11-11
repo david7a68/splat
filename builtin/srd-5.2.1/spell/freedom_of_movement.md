@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0585abcb-273c-552f-9f31-3b5d38f1ef14"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/freedom_of_movement"
-splat_name: "Freedom of Movement"
+splat_id: 0585abcb-273c-552f-9f31-3b5d38f1ef14
+splat_kind: reference
+splat_key: dnd2024:reference/spell/freedom_of_movement
+splat_name: Freedom of Movement
 splat_pages:
 - 134
 ---

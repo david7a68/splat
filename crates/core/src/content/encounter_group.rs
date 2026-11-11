@@ -158,12 +158,13 @@ mod tests {
     fn note(group: &str) -> Result<Entry, String> {
         Entry::parse(
             "group.md",
-            &crate::content::formats::convert(
+            &crate::content::formats::fixture(
                 "Fixture.md",
                 &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Rival team\nsplat_encounter_group: {group}\n---\n\nThey arrive through the east gate.\n",
+                    "splat_id: {}\nsplat_kind: encounter_group\nsplat_name: Rival team\nsplat_encounter_group: {group}\n",
                     Uuid::new_v4()
                 ),
+                "\nThey arrive through the east gate.\n",
             )?,
         )
     }
@@ -222,9 +223,12 @@ mod tests {
         let wrote = |id: Uuid, kind: &str, field: &str| {
             Entry::parse(
                 "other.md",
-                &crate::content::formats::convert("Fixture.md", &format!(
-                    "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: {kind}\nsplat_name: Other\n{field}\n---\n"
-                )).expect("schema-2 fixture"),
+                &crate::content::formats::fixture(
+                    "Fixture.md",
+                    &format!("splat_id: {id}\nsplat_kind: {kind}\nsplat_name: Other\n{field}\n"),
+                    "",
+                )
+                .expect("schema-2 fixture"),
             )
             .unwrap()
         };
@@ -307,9 +311,7 @@ mod tests {
 
     #[test]
     fn a_roster_slot_with_a_bad_override_names_its_slot() {
-        let error = crate::content::formats::convert("encounter.md", &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Arena\nsplat_encounter:\n  roster:\n  - key: rival_one\n    overrides: {{max_hp: {{set: 0}}}}\n---\n", Uuid::new_v4()
-        )).unwrap_err();
+        let error = crate::content::formats::fixture("encounter.md", &format!("splat_id: {}\nsplat_kind: encounter\nsplat_name: Arena\nsplat_encounter:\n  roster:\n  - key: rival_one\n    overrides: {{max_hp: {{set: 0}}}}\n", Uuid::new_v4()), "").unwrap_err();
         assert!(
             error.contains("rival_one") && error.contains("max_hp"),
             "{error}"
@@ -334,9 +336,14 @@ mod tests {
         );
         let spell = Entry::parse(
             "spell.md",
-            &crate::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: spell\nsplat_name: Bless\nsplat_spell: {{}}\n---\n"
-            )).expect("schema-2 fixture"),
+            &crate::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {id}\nsplat_kind: spell\nsplat_name: Bless\nsplat_spell: {{}}\n"
+                ),
+                "",
+            )
+            .expect("schema-2 fixture"),
         )
         .unwrap();
         let report = super::super::validate(&[group, spell]);

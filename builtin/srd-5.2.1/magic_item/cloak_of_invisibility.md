@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3fe0e402-b16a-59fe-9699-50720c919b3e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_invisibility"
-splat_name: "Cloak of Invisibility"
+splat_id: 3fe0e402-b16a-59fe-9699-50720c919b3e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_invisibility
+splat_name: Cloak of Invisibility
 splat_pages:
 - 215
 - 216

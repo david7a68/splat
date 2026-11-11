@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2daa7026-fb85-5076-9e00-6391f4aa9df6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cloak_of_displacement"
-splat_name: "Cloak of Displacement"
+splat_id: 2daa7026-fb85-5076-9e00-6391f4aa9df6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cloak_of_displacement
+splat_name: Cloak of Displacement
 splat_pages:
 - 215
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "73f64ceb-4077-5c76-9baa-e363e2d07d60"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/wind_wall"
-splat_name: "Wind Wall"
+splat_id: 73f64ceb-4077-5c76-9baa-e363e2d07d60
+splat_kind: reference
+splat_key: dnd2024:reference/spell/wind_wall
+splat_name: Wind Wall
 splat_pages:
 - 174
 ---

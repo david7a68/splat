@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "853585c4-2a18-5c0d-b828-71726c6354e3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/crystal_ball_of_true_seeing"
-splat_name: "Crystal Ball of True Seeing"
+splat_id: 853585c4-2a18-5c0d-b828-71726c6354e3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/crystal_ball_of_true_seeing
+splat_name: Crystal Ball of True Seeing
 splat_pages:
 - 216
 ---

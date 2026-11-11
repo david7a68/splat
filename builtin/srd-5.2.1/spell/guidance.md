@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "caabb628-bfd7-524c-a981-8004d88a3565"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/guidance"
-splat_name: "Guidance"
+splat_id: caabb628-bfd7-524c-a981-8004d88a3565
+splat_kind: reference
+splat_key: dnd2024:reference/spell/guidance
+splat_name: Guidance
 splat_pages:
 - 138
 ---

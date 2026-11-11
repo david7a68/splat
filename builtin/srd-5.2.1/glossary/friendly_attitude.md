@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b4af5f8d-0d3e-5302-a41c-4ee21039eb1f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/friendly_attitude"
-splat_name: "Friendly [Attitude]"
+splat_id: b4af5f8d-0d3e-5302-a41c-4ee21039eb1f
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/friendly_attitude
+splat_name: Friendly [Attitude]
 splat_pages:
 - 182
 ---

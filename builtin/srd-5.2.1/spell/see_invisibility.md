@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4470561d-9d0f-5fae-876c-b40c5b1be416"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/see_invisibility"
-splat_name: "See Invisibility"
+splat_id: 4470561d-9d0f-5fae-876c-b40c5b1be416
+splat_kind: reference
+splat_key: dnd2024:reference/spell/see_invisibility
+splat_name: See Invisibility
 splat_pages:
 - 160
 ---

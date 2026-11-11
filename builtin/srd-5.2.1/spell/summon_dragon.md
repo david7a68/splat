@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f143b88c-74fe-5aa0-9b49-780e983ae46f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/summon_dragon"
-splat_name: "Summon Dragon"
+splat_id: f143b88c-74fe-5aa0-9b49-780e983ae46f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/summon_dragon
+splat_name: Summon Dragon
 splat_pages:
 - 166
 ---

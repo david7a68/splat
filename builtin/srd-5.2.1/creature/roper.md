@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bd5961da-4b43-5ed5-99e4-0f0478c36ed0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/roper"
-splat_name: "Roper"
+splat_id: bd5961da-4b43-5ed5-99e4-0f0478c36ed0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/roper
+splat_name: Roper
 splat_pages:
 - 320
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c969c3a7-dd99-5f8a-a58f-6c2ac50bd80d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/draft_horse"
-splat_name: "Draft Horse"
+splat_id: c969c3a7-dd99-5f8a-a58f-6c2ac50bd80d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/draft_horse
+splat_name: Draft Horse
 splat_pages:
 - 347
 - 348

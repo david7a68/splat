@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "74aea044-0f7e-58e6-90db-0851e4d1c7e4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_fey"
-splat_name: "Conjure Fey"
+splat_id: 74aea044-0f7e-58e6-90db-0851e4d1c7e4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_fey
+splat_name: Conjure Fey
 splat_pages:
 - 118
 ---

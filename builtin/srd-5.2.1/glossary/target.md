@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6f2d450a-ebef-52ac-8e4c-0b1decd60327"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/target"
-splat_name: "Target"
+splat_id: 6f2d450a-ebef-52ac-8e4c-0b1decd60327
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/target
+splat_name: Target
 splat_pages:
 - 190
 ---

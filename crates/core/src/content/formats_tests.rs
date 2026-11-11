@@ -4,27 +4,87 @@ use super::{
     patch_fields,
 };
 
-fn note(kind: &str, data: &str, body: &str) -> String {
-    format!(
-        "---\nsplat_schema: 1\nsplat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{data}\n---\n\n{body}"
-    )
+/// A note model: its fields as YAML, and the body below the properties.
+#[derive(Clone)]
+struct Note {
+    fields: String,
+    body: String,
 }
 
-fn model(text: &str) -> Mapping {
-    let mut fields = (*super::legacy::parse("Rook.md", text).unwrap().fields).clone();
-    fields.remove("splat_schema");
-    fields
+fn note(kind: &str, data: &str, body: &str) -> Note {
+    Note {
+        fields: format!(
+            "splat_id: 00000000-0000-0000-0000-000000000001\nsplat_kind: {kind}\nsplat_name: Rook\n{data}\n"
+        ),
+        body: format!("\n{body}"),
+    }
+}
+
+impl Note {
+    /// The same change in the fields and the body.
+    fn replace(&self, from: &str, to: &str) -> Self {
+        Self {
+            fields: self.fields.replace(from, to),
+            body: self.body.replace(from, to),
+        }
+    }
+
+    /// The note as the writer lays it out.
+    fn write(&self, path: &str) -> Result<String, String> {
+        formats::fixture(path, &self.fields, &self.body)
+    }
+
+    /// The written note, as the reader reads it.
+    fn entry(&self, path: &str) -> Entry {
+        Entry::parse(path, &self.write(path).unwrap()).unwrap()
+    }
+
+    /// The note with each field as a property, as a person can type it.
+    fn text(&self) -> String {
+        format!("---\nsplat_schema: 2\n{}---\n{}", self.fields, self.body)
+    }
+}
+
+/// The model that a note text, or a note model, holds.
+trait Model {
+    fn model(&self) -> Mapping;
+}
+
+impl Model for str {
+    fn model(&self) -> Mapping {
+        let mut fields = (*Entry::parse("Rook.md", self).unwrap().fields).clone();
+        fields.remove("splat_schema");
+        fields
+    }
+}
+
+impl Model for String {
+    fn model(&self) -> Mapping {
+        self.as_str().model()
+    }
+}
+
+impl Model for Note {
+    fn model(&self) -> Mapping {
+        let fields = serde_yaml_ng::from_str(&self.fields).unwrap();
+        let entry = super::model::entry("Rook.md", &self.body, &fields).unwrap();
+        (*entry.fields).clone()
+    }
+}
+
+fn model(note: &(impl Model + ?Sized)) -> Mapping {
+    note.model()
 }
 
 #[test]
-fn converted_optional_spell_rows_do_not_repeat_in_reader_prose() {
+fn written_optional_spell_rows_do_not_repeat_in_reader_prose() {
     let old = note(
         "spell",
         "splat_spell: {level: 1, school: evocation, ritual: false, concentration: false, range: {feet: 30}, range_text: 'Within sight'}",
         "# Rook\n\nKeep this spell text.\n",
     );
-    let converted = formats::convert("Rook.md", &old).unwrap();
-    let entry = Entry::parse("Rook.md", &converted).unwrap();
+    let written = old.write("Rook.md").unwrap();
+    let entry = Entry::parse("Rook.md", &written).unwrap();
     assert!(entry.body.contains("| Ritual | No |"));
     assert!(entry.body.contains("| Concentration | No |"));
     assert!(entry.body.contains("| Range Text | Within sight |"));
@@ -36,17 +96,14 @@ fn converted_optional_spell_rows_do_not_repeat_in_reader_prose() {
 }
 
 #[test]
-fn fmt_f1_world_conversion_and_obsidian_properties_rewrite() {
+fn fmt_f1_world_write_and_obsidian_properties_rewrite() {
     let old = note(
         "world",
         "splat_world: {type: npc, status: alive, creature: {key: 'srd:creature/tough'}, in: '[[Undercroft]]', aliases: [The Veteran]}",
         "# Rook\n",
     );
-    let new = old.replace("splat_schema: 1", "splat_schema: 2").replace("splat_world: {type: npc, status: alive, creature: {key: 'srd:creature/tough'}, in: '[[Undercroft]]', aliases: [The Veteran]}", "splat_type: npc\nsplat_status: alive\nsplat_stat_block: srd:creature/tough\nsplat_in: '[[Undercroft]]'\naliases: [The Veteran]");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
+    let new = old.text().replace("splat_world: {type: npc, status: alive, creature: {key: 'srd:creature/tough'}, in: '[[Undercroft]]', aliases: [The Veteran]}", "splat_type: npc\nsplat_status: alive\nsplat_stat_block: srd:creature/tough\nsplat_in: '[[Undercroft]]'\naliases: [The Veteran]");
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
     let obsidian = new
         .replace(
             "splat_type: npc\nsplat_status: alive",
@@ -59,31 +116,25 @@ fn fmt_f1_world_conversion_and_obsidian_properties_rewrite() {
 }
 
 #[test]
-fn fmt_f1_provenance_mechanics_and_package_conversions() {
+fn fmt_f1_provenance_mechanics_and_package_writes() {
     let old = note(
         "rule",
         "splat_rule: {}\nsplat_origin: {key: 'srd:rules/test'}\nsplat_sources: [{title: Book, locator: 'p. 3'}]\nsplat_requires: [{key: 'srd:rules/other'}]",
         "# Rook\n",
     );
-    let new = note("rule", "splat_origin: srd:rules/test\nsplat_sources: ['Book, p. 3']\nsplat_requires: [srd:rules/other]", "# Rook\n").replace("splat_schema: 1", "splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
+    let new = note("rule", "splat_origin: srd:rules/test\nsplat_sources: ['Book, p. 3']\nsplat_requires: [srd:rules/other]", "# Rook\n").text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
     let old = note(
         "package",
         "splat_namespace: rook\nsplat_reference: {pages: [1, 2, 3]}\nsplat_import_routes: {items: 'pack:items'}",
         "# Rook\n",
     );
-    let new = note("package", "splat_namespace: rook\nsplat_pages: 1-3", "# Rook\n\n## Splat data\n\n<!-- splat:yaml path=splat_import_routes -->\n\n```yaml\nitems: pack:items\n```\n").replace("splat_schema: 1", "splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
+    let new = note("package", "splat_namespace: rook\nsplat_pages: 1-3", "# Rook\n\n## Splat data\n\n<!-- splat:yaml path=splat_import_routes -->\n\n```yaml\nitems: pack:items\n```\n").text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
 }
 
 #[test]
-fn fmt_f1_conversion_round_trip_and_idempotence_for_small_kinds() {
+fn fmt_f1_write_round_trip_for_small_kinds() {
     for old in [
         note(
             "world",
@@ -102,18 +153,13 @@ fn fmt_f1_conversion_round_trip_and_idempotence_for_small_kinds() {
         ),
         note("effect", "splat_effect: {}", "# Effect\n"),
     ] {
-        let converted = formats::convert("Rook.md", &old).unwrap();
-        assert_eq!(model(&old), model(&converted));
-        assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
-        assert_eq!(
-            super::legacy::parse("Rook.md", &old).unwrap().fields["splat_schema"],
-            Value::from(1)
-        );
+        let written = old.write("Rook.md").unwrap();
+        assert_eq!(model(&old), model(&written));
     }
 }
 
 #[test]
-fn fmt_f1_machine_kinds_and_character_have_independent_conversions() {
+fn fmt_f1_machine_kinds_and_character_have_independent_writes() {
     for kind in ["effect", "sequence", "strategy", "seed", "rule_group"] {
         let key = format!("splat_{kind}");
         let old = note(kind, &format!("{key}: {{}}"), "# Rook\n");
@@ -124,11 +170,10 @@ fn fmt_f1_machine_kinds_and_character_have_independent_conversions() {
                 "# Rook\n\n## Splat data\n\n<!-- splat:yaml path={key} -->\n\n```yaml\n{{}}\n```\n"
             ),
         )
-        .replace("splat_schema: 1", "splat_schema: 2");
+        .text();
         assert_eq!(model(&old), model(&new), "{kind}");
-        let converted = formats::convert("Rook.md", &old).unwrap();
-        assert_eq!(model(&new), model(&converted));
-        assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
+        let written = old.write("Rook.md").unwrap();
+        assert_eq!(model(&new), model(&written));
     }
     let sheet = super::character::Sheet {
         level: 1,
@@ -143,15 +188,9 @@ fn fmt_f1_machine_kinds_and_character_have_independent_conversions() {
     ]))
     .unwrap();
     let old = note("creature", &fields, "# Rook\n");
-    let new = note("creature", "", &format!("# Rook\n\n## Splat data (from D&D Beyond; do not edit)\n\n<!-- splat:yaml path=splat_payload -->\n\n```yaml\n{fields}```\n")).replace("splat_schema: 1", "splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
-    assert_eq!(
-        model(&new),
-        model(&formats::convert("Rook.md", &old).unwrap())
-    );
+    let new = note("creature", "", &format!("# Rook\n\n## Splat data (from D&D Beyond; do not edit)\n\n<!-- splat:yaml path=splat_payload -->\n\n```yaml\n{fields}```\n")).text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
+    assert_eq!(model(&new), model(&old.write("Rook.md").unwrap()));
 }
 
 #[test]
@@ -178,6 +217,7 @@ fn fmt_f1_flat_scalar_edit_preserves_position_comment_and_all_noise() {
         "# before\nsplat_world: {type: npc}\nsplat_status: alive # keep\ntags:\n- dnd\n# after",
         "# Rook\n\n%% keep %%\nCustom prose.  \n",
     )
+    .text()
     .replace('\n', "\r\n");
     let mut edited = old.clone();
     for status in ["dead", "missing", "here", "away", "alive"] {
@@ -258,8 +298,8 @@ fn fmt_f1_malformed_flat_property_stays_and_note_loads() {
         "splat_type: npc\nsplat_status: [alive]\naliases: [Rook]",
         "# Rook\n",
     )
-    .replace("splat_schema: 1", "splat_schema: 2");
-    let entry = super::legacy::parse("Rook.md", &text).unwrap();
+    .text();
+    let entry = Entry::parse("Rook.md", &text).unwrap();
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(entry.flags[0].line, 7);
     assert!(entry.fields["splat_world"].get("status").is_none());
@@ -270,11 +310,11 @@ fn fmt_f1_malformed_flat_property_stays_and_note_loads() {
     assert!(text.contains("splat_status: [alive]"));
     // A type is the DM's own word, and only a word.
     let own_type = text.replace("splat_type: npc", "splat_type: Company");
-    let entry = super::legacy::parse("Rook.md", &own_type).unwrap();
+    let entry = Entry::parse("Rook.md", &own_type).unwrap();
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(entry.fields["splat_world"]["type"], Value::from("company"));
     let bad_type = text.replace("splat_type: npc", "splat_type: [dragon]");
-    let entry = super::legacy::parse("Rook.md", &bad_type).unwrap();
+    let entry = Entry::parse("Rook.md", &bad_type).unwrap();
     assert_eq!(entry.flags.len(), 2);
     assert!(entry.fields["splat_world"].get("type").is_none());
 }
@@ -286,7 +326,7 @@ fn world_relations_and_dates_read_from_flat_properties_and_stay_on_a_patch() {
         "splat_type: event\nsplat_part_of:\n- '[[Verori]]'\n- Kaun\nsplat_when: 120 years ago\nsplat_until: 90 years ago",
         "# The Revolt\n",
     )
-    .replace("splat_schema: 1", "splat_schema: 2");
+    .text();
     let entry = Entry::parse("The Revolt.md", &text).unwrap();
     assert!(entry.flags.is_empty(), "{:?}", entry.flags);
     let world = &entry.fields["splat_world"];
@@ -325,9 +365,7 @@ fn fmt_f1_model_edits_keep_flat_references_and_end_fences() {
         "splat_rule: {enabled: true}\nsplat_requires: [{key: 'pack:rules/one'}]",
         "# Rook\n\n%% Keep %%\n",
     );
-    let text = formats::convert("Rook.md", &old)
-        .unwrap()
-        .replace('\n', "\r\n");
+    let text = old.write("Rook.md").unwrap().replace('\n', "\r\n");
     let required: Value = serde_yaml_ng::from_str("[{key: 'pack:rules/two'}]").unwrap();
     let rule: Value = serde_yaml_ng::from_str("{enabled: false}").unwrap();
     let after = formats::patch_model(
@@ -343,12 +381,14 @@ fn fmt_f1_model_edits_keep_flat_references_and_end_fences() {
         text.replace("pack:rules/one", "pack:rules/two")
             .replace("enabled: true", "enabled: false")
     );
-    assert_eq!(super::legacy::parse("Rook.md", &after).unwrap().flags, []);
+    assert_eq!(Entry::parse("Rook.md", &after).unwrap().flags, []);
     let quoted = old.replace("splat_rule:", "\"splat_rule\":");
-    let converted = formats::convert("Rook.md", &quoted).unwrap();
-    assert!(!converted.contains("\"splat_rule\":"));
-    assert_eq!(model(&quoted), model(&converted));
-    let empty = formats::convert("Rook.md", &note("rule", "splat_rule: {}", "# Rook\n")).unwrap();
+    let written = quoted.write("Rook.md").unwrap();
+    assert!(!written.contains("\"splat_rule\":"));
+    assert_eq!(model(&quoted), model(&written));
+    let empty = note("rule", "splat_rule: {}", "# Rook\n")
+        .write("Rook.md")
+        .unwrap();
     assert!(!empty.contains("path=splat_rule"));
     let updated = formats::patch_model(
         &empty,
@@ -366,30 +406,6 @@ fn fmt_f1_model_edits_keep_flat_references_and_end_fences() {
             .unwrap()
             .contains("splat_rule:")
     );
-}
-
-#[test]
-fn fmt_f1_world_conversion_resolves_ids_to_readable_links_once() {
-    let target = super::legacy::parse(
-        "Locations/Undercroft.md",
-        &note("world", "splat_world: {type: location}", "# Undercroft\n")
-            .replace("splat_name: Rook", "splat_name: Undercroft"),
-    )
-    .unwrap();
-    let old = note(
-        "world",
-        &format!("splat_world: {{type: npc, in: {{id: {}}}}}", target.id),
-        "# Rook\n",
-    );
-    let after = formats::convert_resolved("Rook.md", &old, [&target]).unwrap();
-    assert!(after.contains("[[Locations/Undercroft|Undercroft]]"));
-    assert_eq!(
-        after,
-        formats::convert_resolved("Rook.md", &after, [&target]).unwrap()
-    );
-    let parsed = super::legacy::parse("Rook.md", &after).unwrap();
-    let raw = parsed.fields["splat_world"]["in"].as_str().unwrap();
-    assert_eq!(formats::resolve_readable(raw, [&target]), Ok(target.id));
 }
 
 #[test]
@@ -414,7 +430,7 @@ fn fmt_f1_line_editor_checks_the_complete_model() {
     );
 }
 
-fn stat_note(kind: &str, data: &str, table: &str) -> (String, String) {
+fn stat_note(kind: &str, data: &str, table: &str) -> (Note, String) {
     (
         note(kind, data, "# Rook\n\nKeep my prose.\n"),
         note(
@@ -422,12 +438,12 @@ fn stat_note(kind: &str, data: &str, table: &str) -> (String, String) {
             "tags: [dnd]",
             &format!("# Rook\n\n{table}\nKeep my prose.\n"),
         )
-        .replace("splat_schema: 1", "splat_schema: 2")
+        .text()
         .replace("tags: [dnd]\n", ""),
     )
 }
 const CREATURE_TABLE: &str = "## Stat block\n\n%% splat omit=splat_creature/armor_class_text %%\n\n| Stat | Value |\n| --- | --- |\n| Size | medium |\n| Type | beast |\n| Alignment | Unaligned |\n| Armor Class | 13 |\n| Hit Points | 22 (4d8 + 4) |\n| Initiative | +2 (12) |\n| Speed | 40 ft. |\n| Challenge | 1 (XP 200; PB +2) |\n| Senses | Darkvision 60 ft. |\n\n| Ability | Score | Mod | Save |\n| --- | --- | --- | --- |\n| Str | 12 | +1 | |\n| Dex | 15 | +2 | +4 |\n| Con | 13 | +1 | |\n| Int | 3 | −4 | |\n| Wis | 12 | +1 | |\n| Cha | 6 | −2 | |\n";
-fn creature_pair() -> (String, String) {
+fn creature_pair() -> (Note, String) {
     stat_note(
         "creature",
         "splat_creature: {size: medium, type: beast, alignment: Unaligned, hit_points_text: '22 (4d8 + 4)', movement_text: '40 ft.', cr_text: '1 (XP 200; PB +2)', senses_text: 'Darkvision 60 ft.'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}, initiative: {value: 2}, speed: {value: 40, unit: ft}, strength: {value: 12}, dexterity: {value: 15}, save_dexterity: {value: 4}, constitution: {value: 13}, intelligence: {value: 3}, wisdom: {value: 12}, charisma: {value: 6}}",
@@ -436,7 +452,7 @@ fn creature_pair() -> (String, String) {
 }
 
 #[test]
-fn fmt_f2_creature_spell_item_independent_conversions() {
+fn fmt_f2_creature_spell_item_independent_writes() {
     let pairs = [
         creature_pair(),
         stat_note(
@@ -456,20 +472,11 @@ fn fmt_f2_creature_spell_item_independent_conversions() {
         ),
     ];
     for (old, new) in pairs {
-        assert_eq!(
-            model(&formats::convert("Rook.md", &old).unwrap()),
-            model(&new)
-        );
-        let converted = formats::convert("Rook.md", &old).unwrap();
-        assert_eq!(model(&new), model(&converted));
-        assert!(
-            super::legacy::parse("Rook.md", &converted)
-                .unwrap()
-                .flags
-                .is_empty()
-        );
-        assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
-        assert!(converted.contains("Keep my prose."));
+        assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
+        let written = old.write("Rook.md").unwrap();
+        assert_eq!(model(&new), model(&written));
+        assert!(Entry::parse("Rook.md", &written).unwrap().flags.is_empty());
+        assert!(written.contains("Keep my prose."));
     }
 }
 
@@ -486,27 +493,27 @@ fn fmt_f2_printed_identity_fills_missing_properties_and_writes_reader_case() {
         "## Stat block\n\n%% splat omit=splat_creature/hit_points_text %%\n\n| Stat | Value |\n| --- | --- |\n| Size | Medium |\n| Type | Beast |\n| Alignment | Unaligned |\n| Hit Points | 22 |\n",
     );
     assert_eq!(model(&old), model(&golden));
-    let converted = formats::convert("Rook.md", &old).unwrap();
-    assert_eq!(model(&converted), model(&golden));
+    let written = old.write("Rook.md").unwrap();
+    assert_eq!(model(&written), model(&golden));
     for row in [
         "| Size | Medium |",
         "| Type | Beast |",
         "| Alignment | Unaligned |",
     ] {
-        assert!(converted.contains(row), "{row}");
+        assert!(written.contains(row), "{row}");
     }
-    assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
     assert_eq!(
-        model(&converted),
+        model(&written),
         model(
-            &converted
+            &written
                 .replace("| Size | Medium |", "| Size | mEDiUm |")
                 .replace("| Type | Beast |", "| Type | bEaSt |")
         )
     );
     let no_alignment = old.replace(", Unaligned", "");
     assert!(
-        !formats::convert("Rook.md", &no_alignment)
+        !no_alignment
+            .write("Rook.md")
             .unwrap()
             .contains("| Alignment |")
     );
@@ -514,7 +521,7 @@ fn fmt_f2_printed_identity_fills_missing_properties_and_writes_reader_case() {
         "splat_creature: {}",
         "splat_creature: {size: small, type: fey, alignment: Neutral}",
     );
-    let explicit = formats::convert("Rook.md", &explicit).unwrap();
+    let explicit = explicit.write("Rook.md").unwrap();
     assert!(explicit.contains("| Size | Small |"));
     assert!(explicit.contains("| Type | Fey |"));
     assert!(explicit.contains("| Alignment | Neutral |"));
@@ -522,26 +529,23 @@ fn fmt_f2_printed_identity_fills_missing_properties_and_writes_reader_case() {
         "Medium beast, Unaligned",
         "Medium humanoid (human, elf), Neutral",
     );
-    let tagged = formats::convert("Rook.md", &tagged).unwrap();
+    let tagged = tagged.write("Rook.md").unwrap();
     assert!(tagged.contains("| Type | Humanoid (human, elf) |"));
     assert!(tagged.contains("| Alignment | Neutral |"));
 }
 
 #[test]
-fn fmt_f2_book_conversions_keep_mechanics_without_second_stat_source() {
+fn fmt_f2_book_notes_keep_mechanics_without_second_stat_source() {
     for path in [
         "creatures/wolf.md",
         "creatures/aboleth.md",
         "spells/bless.md",
         "items/bag_of_holding.md",
     ] {
-        let old = super::definitions::source_file(&format!("definitions/{path}")).unwrap();
-        let new = formats::convert(path, old).unwrap();
-        assert_eq!(model(old), model(&new), "{path}");
-        assert!(!new.contains("path=splat_stats "));
-        assert!(!new.contains("path=splat_spell "));
-        assert!(!new.contains("path=splat_item "));
-        assert_eq!(new, formats::convert(path, &new).unwrap());
+        let note = super::definitions::source_file(&format!("definitions/{path}")).unwrap();
+        assert!(!note.contains("path=splat_stats "));
+        assert!(!note.contains("path=splat_spell "));
+        assert!(!note.contains("path=splat_item "));
     }
 }
 
@@ -560,7 +564,7 @@ fn fmt_f2_one_cell_edit_keeps_formula_crlf_comments_and_unknown_rows() {
             "### Stat block\n\n| Stat | Value |\n| --- | --- |\n| HP | 999 |\n\n## Stat block",
         )
         .replace('\n', "\r\n");
-    let mut entry = super::legacy::parse("Rook.md", &new).unwrap();
+    let mut entry = Entry::parse("Rook.md", &new).unwrap();
     entry.fields.get_mut("splat_stats").unwrap()["max_hp"]["value"] = 23.into();
     let edited = formats::patch_model(
         &new,
@@ -568,7 +572,7 @@ fn fmt_f2_one_cell_edit_keeps_formula_crlf_comments_and_unknown_rows() {
     )
     .unwrap();
     assert_eq!(edited, new.replace("| **HP** | 22", "| **HP** | 23"));
-    let mut entry = super::legacy::parse("Rook.md", &edited).unwrap();
+    let mut entry = Entry::parse("Rook.md", &edited).unwrap();
     entry.fields.get_mut("splat_stats").unwrap()["dexterity"]["value"] = 16.into();
     let score = formats::patch_model(
         &edited,
@@ -586,7 +590,7 @@ fn fmt_f2_one_cell_edit_keeps_formula_crlf_comments_and_unknown_rows() {
 #[test]
 fn fmt_f2_clearing_optional_text_changes_only_its_cell() {
     let (_, new) = creature_pair();
-    let mut entry = super::legacy::parse("Rook.md", &new).unwrap();
+    let mut entry = Entry::parse("Rook.md", &new).unwrap();
     entry
         .fields
         .get_mut("splat_creature")
@@ -615,7 +619,7 @@ fn fmt_f2_edit_uses_the_first_alias_row_and_keeps_duplicate_bytes() {
         "| Hit Points | 22 (4d8 + 4) |",
         "| HP | 22 (4d8 + 4) |\n| Hit Points | 999 |",
     );
-    let mut entry = super::legacy::parse("Rook.md", &new).unwrap();
+    let mut entry = Entry::parse("Rook.md", &new).unwrap();
     entry.fields.get_mut("splat_stats").unwrap()["max_hp"]["value"] = 23.into();
     let edited = formats::patch_model(
         &new,
@@ -639,7 +643,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
             "splat_kind: creature",
             "splat_kind: creature\nsplat_stats: {max_hp: {value: 999}}",
         );
-    let entry = super::legacy::parse("Rook.md", &bad).unwrap();
+    let entry = Entry::parse("Rook.md", &bad).unwrap();
     let reading = super::stat_blocks::reading_body(&entry, &entry.body);
     assert!(!reading.contains("about twenty"));
     assert_eq!(
@@ -658,7 +662,7 @@ fn fmt_f2_malformed_cells_stay_first_alias_wins_and_old_yaml_is_ignored() {
         "Hit Points “about twenty” not read (line 21). Start with a number, such as 22 (4d8 + 4).",
         "Duplicate Hit Points",
         "Save needs",
-        "Old data ignored",
+        "Unused data ignored",
     ] {
         assert!(
             entry.flags.iter().any(|f| f.message.contains(words)),
@@ -686,7 +690,7 @@ fn fmt_f2_missing_rows_insert_in_order_and_unrelated_flags_do_not_block_edit() {
     let missing = new
         .replace("| Armor Class | 13 |\n", "")
         .replace("| Dex | 15 | +2 |", "| Dex | 15 | +9 |");
-    let mut entry = super::legacy::parse("Rook.md", &missing).unwrap();
+    let mut entry = Entry::parse("Rook.md", &missing).unwrap();
     entry
         .fields
         .get_mut("splat_stats")
@@ -711,64 +715,16 @@ fn fmt_f2_missing_rows_insert_in_order_and_unrelated_flags_do_not_block_edit() {
 }
 
 #[test]
-fn fmt_f2_every_book_stat_block_converts_or_refuses_conflicting_legacy_values() {
-    let mut errors = Vec::new();
-    for entry in super::definitions::entries()
-        .unwrap()
-        .iter()
-        .filter(|e| ["creature", "spell", "item"].contains(&e.kind.as_str()))
-    {
-        let old = super::definitions::source_file(&entry.path).unwrap();
-        match formats::convert(&entry.path, old) {
-            Ok(new) => assert_eq!(model(old), model(&new), "{}", entry.path),
-            Err(error) => {
-                let review = [
-                    "animated_object",
-                    "avatar_of_death",
-                    "draconic_spirit",
-                    "giant_insect",
-                    "otherworldly_steed",
-                    "werebear",
-                    "wereboar",
-                    "weretiger",
-                    "werewolf",
-                ];
-                let name = std::path::Path::new(&entry.path)
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
-                if !review.contains(&name) {
-                    errors.push(format!("{}: {error}", entry.path));
-                }
-                assert!(
-                    error.contains("unsupported")
-                        || error == "The printed stats and saved stats disagree.",
-                    "{}: {error}",
-                    entry.path
-                );
-            }
-        }
-    }
-    assert!(
-        errors.is_empty(),
-        "{} failures: {}",
-        errors.len(),
-        errors.join("\n")
-    );
-}
-
-#[test]
 fn fmt_f2_native_blank_hp_and_missing_ability_table_can_be_set() {
     let text = note(
         "creature",
         "",
         "# Rook\n\n## Stat block\n\n| Stat | Value |\n|---|---|\n| Hit Points | |\n\nKeep prose.\n",
     )
-    .replace("splat_schema: 1", "splat_schema: 2");
+    .text();
     let stats = serde_yaml_ng::from_str("{max_hp: {value: 22}, strength: {value: 12}}").unwrap();
     let after = formats::patch_model(&text, &[("splat_stats", Some(stats))]).unwrap();
-    let entry = super::legacy::parse("Rook.md", &after).unwrap();
+    let entry = Entry::parse("Rook.md", &after).unwrap();
     assert!(entry.flags.is_empty(), "{:?}", entry.flags);
     assert_eq!(
         entry.fields["splat_stats"]["max_hp"]["value"],
@@ -805,8 +761,8 @@ fn fmt_f2_spell_item_edits_preserve_other_cells_and_extras() {
         ),
     ] {
         let old = note(kind, data, "# Rook\n\nKeep prose.\n");
-        let text = formats::convert("Rook.md", &old).unwrap();
-        let mut entry = super::legacy::parse("Rook.md", &text).unwrap();
+        let text = old.write("Rook.md").unwrap();
+        let mut entry = Entry::parse("Rook.md", &text).unwrap();
         entry.fields.get_mut(root).unwrap()[key] = next;
         let edited =
             formats::patch_model(&text, &[(root, Some(entry.fields[root].clone()))]).unwrap();
@@ -824,18 +780,11 @@ fn fmt_f3_campaign_golden_toggle_noise_and_bad_rows() {
         ),
         "# Rook\n\nDM prose.\n",
     );
-    let new=note("campaign", "splat_namespace: rook\nsplat_run_folder: Runs",&format!("# Rook\n\nDM prose.\n\n## Packages\n\n- [x] Core ^{id}\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Side initiative %% splat rule=dnd2024:rules/combat_initiative id={id} %% |\n")).replace("splat_schema: 1","splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
-    let converted = formats::convert("Campaign.md", &old).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert!(converted.contains("DM prose."));
-    assert_eq!(
-        converted,
-        formats::convert("Campaign.md", &converted).unwrap()
-    );
+    let new=note("campaign", "splat_namespace: rook\nsplat_run_folder: Runs",&format!("# Rook\n\nDM prose.\n\n## Packages\n\n- [x] Core ^{id}\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Side initiative %% splat rule=dnd2024:rules/combat_initiative id={id} %% |\n")).text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
+    let written = old.write("Campaign.md").unwrap();
+    assert_eq!(model(&old), model(&written));
+    assert!(written.contains("DM prose."));
     let off =
         formats::patch_model(&new, &[("splat_packages", Some(Value::Sequence(vec![])))]).unwrap();
     assert_eq!(off, new.replace("[x]", "[ ]"));
@@ -851,7 +800,7 @@ fn fmt_f3_campaign_golden_toggle_noise_and_bad_rows() {
     let bad = new
         .replace("- [x] Core", "- [q] Core")
         .replace(&format!("id={id}"), "id=oops");
-    let entry = super::legacy::parse("Campaign.md", &bad).unwrap();
+    let entry = Entry::parse("Campaign.md", &bad).unwrap();
     assert_eq!(entry.flags.len(), 2);
     assert!(
         entry.fields["splat_packages"]
@@ -882,20 +831,16 @@ fn fmt_f3_group_golden_one_cell_noise_and_bad_changes() {
         ),
         "# Rook\n\nDM prose.\n",
     );
-    let new=note("encounter_group","splat_side: enemies",&format!("# Rook\n\nDM prose.\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | Scout | HP +5 | Quiet |\n")).replace("splat_schema: 1","splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
-    let converted = formats::convert("Group.md", &old).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert_eq!(converted, formats::convert("Group.md", &converted).unwrap());
+    let new=note("encounter_group","splat_side: enemies",&format!("# Rook\n\nDM prose.\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | Scout | HP +5 | Quiet |\n")).text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
+    let written = old.write("Group.md").unwrap();
+    assert_eq!(model(&old), model(&written));
     let mut group = model(&new)["splat_encounter_group"].clone();
     group["members"][0]["overrides"]["max_hp"]["add"] = 10.into();
     let edited = formats::patch_model(&new, &[("splat_encounter_group", Some(group))]).unwrap();
     assert_eq!(edited, new.replace("HP +5", "HP +10"));
     let bad = format!("{new}| 1 | [Goblin](splat:{key}) | | HP lots | Keep this |\n");
-    let entry = super::legacy::parse("Group.md", &bad).unwrap();
+    let entry = Entry::parse("Group.md", &bad).unwrap();
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(
         entry.flags[0].message,
@@ -922,17 +867,10 @@ fn fmt_f3_roster_golden_one_cell_noise_and_bad_rows() {
         ),
         "# Rook\n\nDM prose.\n",
     );
-    let new=note("encounter","",&format!("# Rook\n\nDM prose.\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5 | %% splat slot=actor_one %% |\n")).replace("splat_schema: 1","splat_schema: 2");
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
-    let converted = formats::convert("Encounter.md", &old).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert_eq!(
-        converted,
-        formats::convert("Encounter.md", &converted).unwrap()
-    );
+    let new=note("encounter","",&format!("# Rook\n\nDM prose.\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5 | %% splat slot=actor_one %% |\n")).text();
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
+    let written = old.write("Encounter.md").unwrap();
+    assert_eq!(model(&old), model(&written));
     let mut encounter = model(&new)["splat_encounter"].clone();
     encounter["roster"][0]["overrides"]["max_hp"]["add"] = 10.into();
     let edited = formats::patch_model(&new, &[("splat_encounter", Some(encounter))]).unwrap();
@@ -940,7 +878,7 @@ fn fmt_f3_roster_golden_one_cell_noise_and_bad_rows() {
     let bad = format!(
         "{new}| enemies | [Goblin](splat:{key}) | | HP lots | %% splat slot=actor_two %% |\n"
     );
-    let entry = super::legacy::parse("Encounter.md", &bad).unwrap();
+    let entry = Entry::parse("Encounter.md", &bad).unwrap();
     assert_eq!(entry.flags.len(), 1);
     assert_eq!(
         entry.fields["splat_encounter"]["roster"]
@@ -960,13 +898,10 @@ fn fmt_f3_roster_custom_sides_party_slots_and_controller_round_trip() {
         "splat_encounter: {roster: [{key: actor_party, party_slot: lead, side: Rivals, controller: {kind: manual, role: player}, initial: {hp: 12}, overrides: {}}], sides: {Rivals: {hostile_to: [party]}, party: {hostile_to: [Rivals]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 30, resolution_events: 10000}}",
         "DM prose.\n",
     );
-    let new = formats::convert("Encounter.md", &old).unwrap();
+    let new = old.write("Encounter.md").unwrap();
     assert!(new.contains("splat_sides:"));
     assert!(new.contains("Rivals (player) |  |"));
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
     let mut setup = model(&new)["splat_encounter"].clone();
     setup["roster"][0]["initial"]["hp"] = 13.into();
     let edited = formats::patch_model(&new, &[("splat_encounter", Some(setup.clone()))]).unwrap();
@@ -981,7 +916,7 @@ fn fmt_f3_table_append_without_final_newline_and_remove_preserve_noise() {
         "splat_encounter_group: {side: enemies, members: [{creature: {key: 'dnd2024:creatures/goblin_warrior'}}]}",
         "DM prose.\n",
     );
-    let new = formats::convert("Group.md", &old).unwrap();
+    let new = old.write("Group.md").unwrap();
     let new = new.trim_end();
     let mut group = model(new)["splat_encounter_group"].clone();
     let mut member = group["members"][0].clone();
@@ -1008,9 +943,7 @@ fn fmt_f3_campaign_toggle_ignores_unrelated_tasks_and_rule_edit_is_one_cell() {
         ),
         &format!("## DM tasks\n\n- [x] Ask players ^{id}\n\nDM prose.\n"),
     );
-    let new = formats::convert("Campaign.md", &old)
-        .unwrap()
-        .replace('\n', "\r\n");
+    let new = old.write("Campaign.md").unwrap().replace('\n', "\r\n");
     let edited = formats::patch_model(
         &new,
         &[("splat_packages", Some(Value::Sequence(Vec::new())))],
@@ -1044,7 +977,7 @@ fn fmt_f3_campaign_name_only_package_gets_id_on_save() {
         ),
         "DM prose.\n",
     );
-    let new = formats::convert("Campaign.md", &old).unwrap();
+    let new = old.write("Campaign.md").unwrap();
     let external = new.replace(&format!("Core ^{id}"), "Core");
     let edited = formats::patch_model(
         &external,
@@ -1087,7 +1020,7 @@ fn i19_challenge_derives_missing_xp_and_pb_and_flags_explicit_mismatches() {
         ),
     ] {
         let text = new.replace("1 (XP 200; PB +2)", raw);
-        let entry = super::legacy::parse("Rook.md", &text).unwrap();
+        let entry = Entry::parse("Rook.md", &text).unwrap();
         assert_eq!(
             entry.fields["splat_creature"]["cr_text"].as_str(),
             Some(expected)
@@ -1112,14 +1045,14 @@ fn i19_challenge_derives_missing_xp_and_pb_and_flags_explicit_mismatches() {
 }
 
 #[test]
-fn i19_conversion_folds_printed_stats_and_keeps_book_text() {
+fn i19_write_folds_printed_stats_and_keeps_book_text() {
     let old = note(
         "creature",
         "splat_creature: {size: medium, type: beast, cr_text: '1 (XP 200; PB +2)'}\nsplat_stats: {max_hp: {value: 22}, armor_class: {value: 13}}",
         "# Rook\n\n## Source text\n\nMedium beast, Unaligned\\\nAC 13  Initiative +2 (12)\\\nHP 22 (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Traits\n\nKeen Hearing. Keep this rule.\n\n### Actions\n\nBite. Keep this attack.\n",
     );
-    let converted = formats::convert("Rook.md", &old).unwrap();
-    assert!(converted.contains("> [!quote]- Printed stat block (not read; edit the table above)"));
+    let written = old.write("Rook.md").unwrap();
+    assert!(written.contains("> [!quote]- Printed stat block (not read; edit the table above)"));
     for line in [
         "Medium beast, Unaligned",
         "AC 13  Initiative +2 (12)",
@@ -1127,16 +1060,15 @@ fn i19_conversion_folds_printed_stats_and_keeps_book_text() {
         "Speed 30 ft.",
         "CR 1 (XP 200; PB +2)",
     ] {
-        assert!(converted.contains(&format!("> {line}")), "{line}");
+        assert!(written.contains(&format!("> {line}")), "{line}");
     }
-    assert!(converted.contains("Keen Hearing. Keep this rule."));
-    assert!(converted.contains("Bite. Keep this attack."));
-    let entry = super::legacy::parse("Rook.md", &converted).unwrap();
+    assert!(written.contains("Keen Hearing. Keep this rule."));
+    assert!(written.contains("Bite. Keep this attack."));
+    let entry = Entry::parse("Rook.md", &written).unwrap();
     let reading = super::stat_blocks::reading_body(&entry, &entry.body);
     assert!(!reading.contains("HP 22"));
     assert!(!reading.contains("[!quote]"));
     assert!(reading.contains("Keen Hearing. Keep this rule."));
-    assert_eq!(converted, formats::convert("Rook.md", &converted).unwrap());
 }
 
 #[test]
@@ -1148,7 +1080,7 @@ fn i19_derived_cells_and_speed_spellings_read_without_flags_and_write_back() {
             .replace("| Dex | 15 | +2 | +4 |", "| Dex | 16 | | +4 |")
             .replace("+2 (12)", "+3 (12)")
             .replace("1 (XP 200; PB +2)", "3");
-        let entry = super::legacy::parse("Rook.md", &text).unwrap();
+        let entry = Entry::parse("Rook.md", &text).unwrap();
         assert!(entry.flags.is_empty(), "{:?}", entry.flags);
         assert_eq!(
             entry.fields["splat_stats"]["speed"]["value"],
@@ -1171,7 +1103,7 @@ fn i19_derived_cells_and_speed_spellings_read_without_flags_and_write_back() {
 }
 
 #[test]
-fn i19_conversion_writes_human_words_and_puts_hints_after_tables() {
+fn i19_write_uses_human_words_and_puts_hints_after_tables() {
     for (kind, fields, rows) in [
         (
             "spell",
@@ -1192,7 +1124,7 @@ fn i19_conversion_writes_human_words_and_puts_hints_after_tables() {
             ],
         ),
     ] {
-        let text = formats::convert("Rook.md", &note(kind, fields, "# Rook\n")).unwrap();
+        let text = note(kind, fields, "# Rook\n").write("Rook.md").unwrap();
         for row in rows {
             assert!(text.contains(row), "{row}: {text}");
         }
@@ -1205,23 +1137,19 @@ fn i19_conversion_writes_human_words_and_puts_hints_after_tables() {
         "splat_creature: {}",
         "# Rook\n\n## Health\n\n<!-- splat:map path=splat_stats -->\n\n| Key | value |\n| --- | --- |\n| max_hp | 22 |\n",
     );
-    assert!(
-        !formats::convert("Rook.md", &health)
-            .unwrap()
-            .contains("## Health\n")
-    );
+    assert!(!health.write("Rook.md").unwrap().contains("## Health\n"));
 }
 
 #[test]
-fn i19_conversion_keeps_explicit_challenge_mismatch_and_flags_it() {
+fn i19_write_keeps_explicit_challenge_mismatch_and_flags_it() {
     let text = note(
         "creature",
         "splat_creature: {cr_text: '3 (XP 200; PB +2)'}\nsplat_stats: {}",
         "# Rook\n",
     );
-    let converted = formats::convert("Rook.md", &text).unwrap();
-    let entry = super::legacy::parse("Rook.md", &converted).unwrap();
-    assert_eq!(model(&text), model(&converted));
+    let written = text.write("Rook.md").unwrap();
+    let entry = Entry::parse("Rook.md", &written).unwrap();
+    assert_eq!(model(&text), model(&written));
     assert!(
         entry
             .flags
@@ -1231,35 +1159,29 @@ fn i19_conversion_keeps_explicit_challenge_mismatch_and_flags_it() {
 }
 
 #[test]
-fn i19_x5_visible_rule_choice_wins_and_save_updates_its_id() {
+fn i19_x5_visible_rule_choice_wins_over_its_saved_id() {
     let old_id = "00000000-0000-0000-0000-000000000002";
-    let target = super::legacy::parse(
-        "Rules/Individual.md",
-        &note("rule", "splat_rule: {}", "")
-            .replace("splat_name: Rook", "splat_name: Individual initiative"),
-    )
-    .unwrap();
+    let target = note("rule", "splat_rule: {}", "")
+        .replace("splat_name: Rook", "splat_name: Individual initiative")
+        .entry("Rules/Individual.md");
     for visible in [
         "Individual initiative",
         "[[Rules/Individual|Individual initiative]]",
     ] {
-        let source = note("campaign", "splat_namespace: rook", &format!("## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | {visible} %% splat rule=dnd2024:rules/combat_initiative id={old_id} %% |\n")).replace("splat_schema: 1", "splat_schema: 2");
-        let mut entry = super::legacy::parse("Campaign.md", &source).unwrap();
+        let source = note("campaign", "splat_namespace: rook", &format!("## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | {visible} %% splat rule=dnd2024:rules/combat_initiative id={old_id} %% |\n")).text();
+        let mut entry = Entry::parse("Campaign.md", &source).unwrap();
         super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &source);
         assert_eq!(
             entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
             Value::from(target.id.to_string())
         );
-        let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
-        assert!(saved.contains(&format!("id={} %%", target.id)));
-        assert!(!saved.contains(&format!("| {old_id} %%")));
     }
 }
 
 #[test]
 fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
-    let source = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Imaginary initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000002 %% |\n").replace("splat_schema: 1", "splat_schema: 2");
-    let mut entry = super::legacy::parse("Campaign.md", &source).unwrap();
+    let source = note("campaign", "splat_namespace: rook", "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Imaginary initiative %% splat rule=dnd2024:rules/combat_initiative id=00000000-0000-0000-0000-000000000002 %% |\n").text();
+    let mut entry = Entry::parse("Campaign.md", &source).unwrap();
     super::list_formats::resolve(&mut entry, &[], &source);
     assert!(
         entry.fields["splat_rule_choices"]
@@ -1281,25 +1203,20 @@ fn i19_x5_unknown_rule_choice_is_flagged_and_not_used() {
 }
 
 #[test]
-fn i20_x29_renamed_rule_uses_id_and_writes_current_name() {
-    let target = super::legacy::parse(
-        "Rules/Side.md",
-        &note("rule", "splat_rule: {}", "")
-            .replace("splat_name: Rook", "splat_name: Side initiative"),
-    )
-    .unwrap();
+fn i20_x29_renamed_rule_is_found_by_its_id() {
+    let target = note("rule", "splat_rule: {}", "")
+        .replace("splat_name: Rook", "splat_name: Side initiative")
+        .entry("Rules/Side.md");
     let source = note("campaign", "splat_namespace: rook", &format!(
         "## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n| Combat initiative | Campaign initiative %% splat rule=dnd2024:rules/combat_initiative id={} %% |\n", target.id))
-        .replace("splat_schema: 1", "splat_schema: 2");
-    let mut entry = super::legacy::parse("Campaign.md", &source).unwrap();
+        .text();
+    let mut entry = Entry::parse("Campaign.md", &source).unwrap();
     super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &source);
     assert!(entry.flags.is_empty(), "{:?}", entry.flags);
     assert_eq!(
         entry.fields["splat_rule_choices"]["dnd2024:rules/combat_initiative"]["id"],
         Value::from(target.id.to_string())
     );
-    let saved = formats::convert_resolved("Campaign.md", &source, [&target]).unwrap();
-    assert!(saved.contains("| Combat initiative | Side initiative %%"));
 }
 
 #[test]
@@ -1309,8 +1226,8 @@ fn i20_x31_package_prose_is_kept_and_bad_list_items_are_flagged() {
         "splat_namespace: rook",
         "## Packages\n\nWe use the 2024 rules.\n\n- Not a package task\n",
     )
-    .replace("splat_schema: 1", "splat_schema: 2");
-    let entry = super::legacy::parse("Campaign.md", &source).unwrap();
+    .text();
+    let entry = Entry::parse("Campaign.md", &source).unwrap();
     assert_eq!(entry.flags.len(), 1);
     assert!(
         source
@@ -1319,7 +1236,6 @@ fn i20_x31_package_prose_is_kept_and_bad_list_items_are_flagged() {
             .unwrap()
             .starts_with("- Not")
     );
-    assert_eq!(formats::convert("Campaign.md", &source).unwrap(), source);
 }
 
 #[test]
@@ -1330,8 +1246,8 @@ fn i19_world_properties_accept_case_and_explain_bad_values() {
             &format!("splat_type: {typed}\nsplat_status: [alive]"),
             "",
         )
-        .replace("splat_schema: 1", "splat_schema: 2");
-        let entry = super::legacy::parse("World.md", &source).unwrap();
+        .text();
+        let entry = Entry::parse("World.md", &source).unwrap();
         assert_eq!(entry.fields["splat_world"]["type"], Value::from(stored));
         assert_eq!(entry.flags.len(), 1);
         assert!(
@@ -1340,51 +1256,6 @@ fn i19_world_properties_accept_case_and_explain_bad_values() {
                 .contains("Status “[alive]” not read (line 7). Use a short word, such as alive.")
         );
     }
-}
-
-#[test]
-fn i19_readable_stat_block_and_vault_requirement_survive_save() {
-    let creature = super::legacy::parse(
-        "Creatures/captain.md",
-        &note(
-            "creature",
-            "splat_key: dnd2024:creatures/bandit_captain\nsplat_creature: {}",
-            "",
-        )
-        .replace("splat_name: Rook", "splat_name: Bandit Captain"),
-    )
-    .unwrap();
-    let required = super::legacy::parse(
-        "Rules/Other.md",
-        &note("rule", "splat_rule: {}\nsplat_key: srd:rules/other", "")
-            .replace("splat_name: Rook", "splat_name: Other")
-            .replace(
-                "00000000-0000-0000-0000-000000000001",
-                "00000000-0000-0000-0000-000000000002",
-            ),
-    )
-    .unwrap();
-    let old = note(
-        "world",
-        &format!(
-            "splat_world: {{type: npc, creature: {{key: dnd2024:creatures/bandit_captain}}}}\nsplat_requires: [{{id: {}}}]",
-            required.id
-        ),
-        "",
-    );
-    let saved = formats::convert_resolved("World.md", &old, [&creature, &required]).unwrap();
-    assert!(saved.contains("splat_stat_block: Bandit Captain"));
-    assert!(saved.contains("[[Rules/Other|Other]]"));
-    assert_eq!(
-        saved,
-        formats::convert_resolved("World.md", &saved, [&creature, &required]).unwrap()
-    );
-    let mut duplicate = creature.clone();
-    duplicate.id = uuid::Uuid::new_v4();
-    duplicate.key = Some("other:creatures/captain".into());
-    let saved =
-        formats::convert_resolved("World.md", &old, [&creature, &duplicate, &required]).unwrap();
-    assert!(saved.contains("splat_stat_block: dnd2024:creatures/bandit_captain"));
 }
 
 #[test]
@@ -1412,7 +1283,7 @@ fn i19_package_and_character_data_are_folded_and_editable() {
             data.into()
         };
         let old = note(kind, &data, "# Rook\n\nKeep my prose.\n");
-        let folded = formats::convert("Note.md", &old).unwrap();
+        let folded = old.write("Note.md").unwrap();
         assert!(folded.contains("> [!note]- Splat data"));
         assert!(!folded.contains("## Splat data"));
         assert_eq!(model(&old), model(&folded));
@@ -1431,7 +1302,6 @@ fn i19_package_and_character_data_are_folded_and_editable() {
         let edited = formats::patch_model(&folded, &[(key, Some(value))]).unwrap();
         assert_eq!(model(&edited)[key][field], revised);
         assert!(edited.contains("Keep my prose."));
-        assert_eq!(edited, formats::convert("Note.md", &edited).unwrap());
     }
 }
 
@@ -1439,8 +1309,8 @@ fn i19_package_and_character_data_are_folded_and_editable() {
 fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all() {
     let id = "00000000-0000-0000-0000-000000000002";
     for bullet in ["-", "*", "+"] {
-        let source = note("campaign", "splat_namespace: rook", &format!("## Packages\n\n{bullet} [x] Core ^{id}\n\t+ Only: [[Creatures/Rook, elder|Rook, elder]], [Goblin, scout](splat:dnd2024:creatures/goblin)\n")).replace("splat_schema: 1", "splat_schema: 2");
-        let entry = super::legacy::parse("Campaign.md", &source).unwrap();
+        let source = note("campaign", "splat_namespace: rook", &format!("## Packages\n\n{bullet} [x] Core ^{id}\n\t+ Only: [[Creatures/Rook, elder|Rook, elder]], [Goblin, scout](splat:dnd2024:creatures/goblin)\n")).text();
+        let entry = Entry::parse("Campaign.md", &source).unwrap();
         assert!(entry.flags.is_empty(), "{:?}", entry.flags);
         let selection = &entry.fields["splat_packages"][0]["selection"];
         assert_eq!(selection["mode"], Value::from("selected"));
@@ -1452,15 +1322,9 @@ fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all(
         .unwrap();
         assert_eq!(edited, source.replace("[x]", "[ ]"));
         let bad = source.replace("\t+ Only:", "- Unrecognised:");
-        assert_eq!(
-            super::legacy::parse("Campaign.md", &bad)
-                .unwrap()
-                .flags
-                .len(),
-            1
-        );
+        assert_eq!(Entry::parse("Campaign.md", &bad).unwrap().flags.len(), 1);
         let bad = source.replace("[[Creatures/Rook, elder|Rook, elder]]", "[[Unclosed");
-        let entry = super::legacy::parse("Campaign.md", &bad).unwrap();
+        let entry = Entry::parse("Campaign.md", &bad).unwrap();
         assert_eq!(entry.flags.len(), 1);
         assert_eq!(
             entry.fields["splat_packages"][0]["selection"]["mode"],
@@ -1478,8 +1342,8 @@ fn i19_package_tasks_and_only_links_accept_obsidian_lists_without_selecting_all(
 #[test]
 fn i19_x3_copied_roster_row_becomes_a_new_saved_slot() {
     let row = "| enemies | [Goblin](splat:dnd2024:creatures/goblin_warrior) | | HP +5 | %% splat slot=actor_one %% |\n";
-    let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n{row}{row}")).replace("splat_schema: 1", "splat_schema: 2");
-    let entry = super::legacy::parse("Encounter.md", &text).unwrap();
+    let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n{row}{row}")).text();
+    let entry = Entry::parse("Encounter.md", &text).unwrap();
     assert!(entry.flags.is_empty(), "{:?}", entry.flags);
     let setup = &entry.fields["splat_encounter"];
     assert_eq!(setup["roster"].as_sequence().unwrap().len(), 2);
@@ -1495,16 +1359,13 @@ fn i19_x3_copied_roster_row_becomes_a_new_saved_slot() {
 
 #[test]
 fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
-    let target = super::legacy::parse(
-        "goblin_warrior.md",
-        &note(
-            "creature",
-            "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
-            "",
-        )
-        .replace("splat_name: Rook", "splat_name: Goblin Warrior"),
+    let target = note(
+        "creature",
+        "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
+        "",
     )
-    .unwrap();
+    .replace("splat_name: Rook", "splat_name: Goblin Warrior")
+    .entry("goblin_warrior.md");
     for name in ["Goblin Warrior", "[[Goblin Warrior]]"] {
         for (kind, heading, first, columns) in [
             (
@@ -1520,8 +1381,8 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
                 super::list_formats::ROSTER,
             ),
         ] {
-            let text = note(kind, "splat_side: enemies", &format!("## {heading}\n\n| {} |\n| --- | --- | --- | --- | --- |\n| {first} | {name} | | | |\n", columns.join(" | "))).replace("splat_schema: 1", "splat_schema: 2");
-            let mut entry = super::legacy::parse("List.md", &text).unwrap();
+            let text = note(kind, "splat_side: enemies", &format!("## {heading}\n\n| {} |\n| --- | --- | --- | --- | --- |\n| {first} | {name} | | | |\n", columns.join(" | "))).text();
+            let mut entry = Entry::parse("List.md", &text).unwrap();
             super::list_formats::resolve(&mut entry, std::slice::from_ref(&target), &text);
             assert!(entry.flags.is_empty(), "{name}: {:?}", entry.flags);
             let key = if kind == "encounter" {
@@ -1538,20 +1399,20 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
                 entry.fields[key][rows][0]["creature"]["key"],
                 Value::from("dnd2024:creatures/goblin_warrior")
             );
-            let saved = formats::convert_resolved("List.md", &text, [&target]).unwrap();
+            let saved = super::list_formats::write_references(&text, [&target]).unwrap();
             assert!(
                 saved.contains("[Goblin Warrior](splat:dnd2024:creatures/goblin_warrior)"),
                 "{saved}"
             );
             assert_eq!(
-                super::legacy::parse("List.md", &saved).unwrap().fields[key][rows][0]["creature"]["id"],
+                Entry::parse("List.md", &saved).unwrap().fields[key][rows][0]["creature"]["id"],
                 Value::from(target.id.to_string())
             );
             let mut replacement = target.clone();
             replacement.id = uuid::Uuid::new_v4();
             replacement.key = Some("dnd2024:creatures/scout".into());
             let changed = saved.replace("creatures/goblin_warrior", "creatures/scout");
-            let mut changed_entry = super::legacy::parse("List.md", &changed).unwrap();
+            let mut changed_entry = Entry::parse("List.md", &changed).unwrap();
             super::list_formats::resolve(
                 &mut changed_entry,
                 &[target.clone(), replacement.clone()],
@@ -1563,7 +1424,7 @@ fn i19_x4_unique_creature_names_read_and_save_as_named_links() {
             );
             let mut duplicate = target.clone();
             duplicate.id = uuid::Uuid::new_v4();
-            let mut ambiguous = super::legacy::parse("List.md", &text).unwrap();
+            let mut ambiguous = Entry::parse("List.md", &text).unwrap();
             super::list_formats::resolve(&mut ambiguous, &[target.clone(), duplicate], &text);
             assert!(
                 ambiguous
@@ -1582,7 +1443,7 @@ fn i19_x16_starting_hp_lives_in_the_changes_cell() {
         "splat_encounter: {roster: [{key: actor_guard, creature: {key: 'dnd2024:creatures/guard'}, side: enemies, controller: {kind: manual, role: gm}, initial: {hp: 12, temporary_hp: 3}, overrides: {}}], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 20, resolution_events: 10000}}",
         "",
     );
-    let saved = formats::convert("Encounter.md", &old).unwrap();
+    let saved = old.write("Encounter.md").unwrap();
     assert!(saved.contains("Start HP 12"), "{saved}");
     assert!(!saved.contains("hp: 12"));
     assert_eq!(model(&old), model(&saved));
@@ -1601,22 +1462,19 @@ fn i19_x16_starting_hp_lives_in_the_changes_cell() {
 
 #[test]
 fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
-    let target = super::legacy::parse(
-        "goblin_warrior.md",
-        &note(
-            "creature",
-            "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
-            "",
-        )
-        .replace("splat_name: Rook", "splat_name: Goblin Warrior"),
+    let target = note(
+        "creature",
+        "splat_key: dnd2024:creatures/goblin_warrior\nsplat_creature: {}",
+        "",
     )
-    .unwrap();
-    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [goblin warrior](splat:dnd2024:creatures/goblin_warrior) | | | |\n").replace("splat_schema: 1", "splat_schema: 2");
-    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    .replace("splat_name: Rook", "splat_name: Goblin Warrior")
+    .entry("goblin_warrior.md");
+    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [goblin warrior](splat:dnd2024:creatures/goblin_warrior) | | | |\n").text();
+    let saved = super::list_formats::write_references(&text, [&target]).unwrap();
     assert_eq!(saved, text.replace("[goblin warrior]", "[Goblin Warrior]"));
     let alias = text.replace("[goblin warrior]", "[Gate guards]");
     assert_eq!(
-        formats::convert_resolved("Group.md", &alias, [&target]).unwrap(),
+        super::list_formats::write_references(&alias, [&target]).unwrap(),
         alias
     );
     let campaign = note(
@@ -1624,9 +1482,9 @@ fn i19_x9_saved_links_use_catalogue_names_and_keep_custom_aliases() {
         "splat_namespace: rook",
         "## Packages\n\n  - Only: [goblin warrior](splat:dnd2024:creatures/goblin_warrior)\n",
     )
-    .replace("splat_schema: 1", "splat_schema: 2");
+    .text();
     assert_eq!(
-        formats::convert_resolved("Campaign.md", &campaign, [&target]).unwrap(),
+        super::list_formats::write_references(&campaign, [&target]).unwrap(),
         campaign.replace("[goblin warrior]", "[Goblin Warrior]")
     );
 }
@@ -1638,7 +1496,7 @@ fn i20_x20_wiki_links_keep_five_obsidian_table_columns_and_read_both_forms() {
         "splat_encounter_group: {side: enemies, members: [{creature: {id: '00000000-0000-0000-0000-000000000002', link: '[[Characters/Rook|Rook]]'}, count: 1, overrides: {note: 'Before [[Gate|door]] after'}}]}",
         "",
     );
-    let saved = formats::convert("Group.md", &old).unwrap();
+    let saved = old.write("Group.md").unwrap();
     let row = saved
         .lines()
         .find(|line| line.starts_with("| 1 |"))
@@ -1651,14 +1509,12 @@ fn i20_x20_wiki_links_keep_five_obsidian_table_columns_and_read_both_forms() {
     assert!(saved.contains(r"[[Characters/Rook\|Rook]]"));
     assert_eq!(model(&saved), model(&old));
     assert_eq!(model(&saved.replace(r"\|", "|")), model(&old));
-    let target = super::legacy::parse(
-        "Characters/Rook.md",
-        &note("creature", "splat_creature: {}", "").replace(
+    let target = note("creature", "splat_creature: {}", "")
+        .replace(
             "00000000-0000-0000-0000-000000000001",
             "00000000-0000-0000-0000-000000000002",
-        ),
-    )
-    .unwrap();
+        )
+        .entry("Characters/Rook.md");
     let written = super::list_formats::write_references(&saved, [&target]).unwrap();
     assert!(written.contains(r"[[Characters/Rook\|Rook]]"));
 }
@@ -1670,8 +1526,8 @@ fn i20_x21_note_keeps_text_on_both_sides_of_machine_comments() {
         "Watch %% splat slot=actor_one %% the door",
         "Watch the door %% splat slot=actor_one %%",
     ] {
-        let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [[Rook]] | | | {note_cell} |\n")).replace("splat_schema: 1", "splat_schema: 2");
-        let entry = super::legacy::parse("Fight.md", &text).unwrap();
+        let text = note("encounter", "", &format!("## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [[Rook]] | | | {note_cell} |\n")).text();
+        let entry = Entry::parse("Fight.md", &text).unwrap();
         assert_eq!(
             entry.fields["splat_encounter"]["roster"][0]["overrides"]["note"],
             Value::from("Watch the door")
@@ -1690,13 +1546,10 @@ fn i20_x22_visible_vault_link_wins_over_backup_id_in_roster_group_and_only() {
     let targets: Vec<_> = [("First", first_id), ("Second", second_id)]
         .into_iter()
         .map(|(name, id)| {
-            super::legacy::parse(
-                &format!("Characters/{name}.md"),
-                &note("creature", "splat_creature: {}", "")
-                    .replace("splat_name: Rook", &format!("splat_name: {name}"))
-                    .replace("00000000-0000-0000-0000-000000000001", id),
-            )
-            .unwrap()
+            note("creature", "splat_creature: {}", "")
+                .replace("splat_name: Rook", &format!("splat_name: {name}"))
+                .replace("00000000-0000-0000-0000-000000000001", id)
+                .entry(&format!("Characters/{name}.md"))
         })
         .collect();
     for kind in ["encounter_group", "encounter", "campaign"] {
@@ -1728,7 +1581,7 @@ fn i20_x22_visible_vault_link_wins_over_backup_id_in_roster_group_and_only() {
             },
             &body,
         )
-        .replace("splat_schema: 1", "splat_schema: 2");
+        .text();
         let reference = |entry: &Entry| {
             if kind == "campaign" {
                 entry.fields["splat_packages"][0]["selection"]["entries"][0].clone()
@@ -1745,13 +1598,13 @@ fn i20_x22_visible_vault_link_wins_over_backup_id_in_roster_group_and_only() {
                     .clone()
             }
         };
-        let mut entry = super::legacy::parse("List.md", &text).unwrap();
+        let mut entry = Entry::parse("List.md", &text).unwrap();
         super::list_formats::resolve(&mut entry, &targets, &text);
         assert_eq!(reference(&entry)["id"], Value::from(second_id), "{kind}");
-        let saved = formats::convert_resolved("List.md", &text, targets.iter()).unwrap();
+        let saved = super::list_formats::write_references(&text, targets.iter()).unwrap();
         assert!(saved.contains(&format!("id={second_id}")), "{saved}");
         let missing = text.replace("Characters/Second", "Characters/Moved");
-        let mut entry = super::legacy::parse("List.md", &missing).unwrap();
+        let mut entry = Entry::parse("List.md", &missing).unwrap();
         super::list_formats::resolve(&mut entry, &targets, &missing);
         assert_eq!(reference(&entry)["id"], Value::from(first_id));
     }
@@ -1764,13 +1617,13 @@ fn i20_x27_copied_party_row_is_flagged_and_monster_copy_keeps_only_visible_cells
         "splat_encounter: {roster: [{key: actor_party, party_slot: lead, side: party, controller: {kind: manual, role: player}, overrides: {}}], sides: {party: {hostile_to: [enemies]}, enemies: {hostile_to: [party]}}, assumptions: [], completion: {mode: manual}, limits: {rounds: 20, resolution_events: 10000}}",
         "",
     );
-    let saved = formats::convert("Fight.md", &old).unwrap();
+    let saved = old.write("Fight.md").unwrap();
     let row = saved
         .lines()
         .find(|line| line.starts_with("| party |"))
         .unwrap();
     let copied = saved.replace(row, &format!("{row}\n{row}"));
-    let entry = super::legacy::parse("Fight.md", &copied).unwrap();
+    let entry = Entry::parse("Fight.md", &copied).unwrap();
     assert!(
         entry
             .flags
@@ -1788,13 +1641,13 @@ fn i20_x27_copied_party_row_is_flagged_and_monster_copy_keeps_only_visible_cells
         "party_slot: lead",
         "creature: {key: 'srd:creature/guard'}, initial: {temp_hp: 9}",
     );
-    let saved = formats::convert("Fight.md", &monster).unwrap();
+    let saved = monster.write("Fight.md").unwrap();
     let row = saved
         .lines()
         .find(|line| line.starts_with("| party |"))
         .unwrap();
     let copied = saved.replace(row, &format!("{row}\n{row}"));
-    let entry = super::legacy::parse("Fight.md", &copied).unwrap();
+    let entry = Entry::parse("Fight.md", &copied).unwrap();
     assert!(entry.flags.is_empty());
     assert_eq!(
         entry.fields["splat_encounter"]["roster"][0]["initial"]["temp_hp"],
@@ -1810,7 +1663,7 @@ fn i20_x28_member_side_moves_with_its_visible_row() {
         "splat_encounter_group: {side: enemies, members: [{creature: {key: 'srd:creature/guard'}, count: 1, overrides: {name: Scout, side: rivals}}, {creature: {key: 'srd:creature/guard'}, count: 2}]}",
         "",
     );
-    let saved = formats::convert("Group.md", &old).unwrap();
+    let saved = old.write("Group.md").unwrap();
     assert!(saved.contains("Side rivals"));
     assert!(!saved.contains("members_data"));
     let first = saved
@@ -1822,12 +1675,12 @@ fn i20_x28_member_side_moves_with_its_visible_row() {
         .find(|line| line.starts_with("| 2 |"))
         .unwrap();
     let moved = saved.replace(&format!("{first}\n{second}"), &format!("{second}\n{first}"));
-    let entry = super::legacy::parse("Group.md", &moved).unwrap();
+    let entry = Entry::parse("Group.md", &moved).unwrap();
     let members = &entry.fields["splat_encounter_group"]["members"];
     assert!(members[0]["overrides"]["side"].is_null());
     assert_eq!(members[1]["overrides"]["side"], Value::from("rivals"));
     let deleted = saved.replace(&format!("{first}\n"), "");
-    let entry = super::legacy::parse("Group.md", &deleted).unwrap();
+    let entry = Entry::parse("Group.md", &deleted).unwrap();
     assert!(entry.fields["splat_encounter_group"]["members"][0]["overrides"]["side"].is_null());
 }
 
@@ -1850,18 +1703,15 @@ fn i20_x30_changes_accept_speed_units_and_explain_group_start_hp() {
 #[test]
 fn i20_x22_named_package_alias_also_refreshes_the_backup_id() {
     let id = "00000000-0000-0000-0000-000000000003";
-    let target = super::legacy::parse(
-        "Guard.md",
-        &note(
-            "creature",
-            "splat_key: core:creatures/guard\nsplat_creature: {}",
-            "",
-        )
-        .replace("00000000-0000-0000-0000-000000000001", id),
+    let target = note(
+        "creature",
+        "splat_key: core:creatures/guard\nsplat_creature: {}",
+        "",
     )
-    .unwrap();
-    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Door watch](splat:core:creatures/guard) %% splat id=00000000-0000-0000-0000-000000000002 %% | | | |\n").replace("splat_schema: 1", "splat_schema: 2");
-    let saved = formats::convert_resolved("Group.md", &text, [&target]).unwrap();
+    .replace("00000000-0000-0000-0000-000000000001", id)
+    .entry("Guard.md");
+    let text = note("encounter_group", "splat_side: enemies", "## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 1 | [Door watch](splat:core:creatures/guard) %% splat id=00000000-0000-0000-0000-000000000002 %% | | | |\n").text();
+    let saved = super::list_formats::write_references(&text, [&target]).unwrap();
     assert!(
         saved.contains(&format!(
             "[Door watch](splat:core:creatures/guard) %% splat id={id} %%"
@@ -1877,7 +1727,7 @@ fn i20_x25_plain_vitals_need_no_prose_presence_hints() {
         "splat_creature: {size: medium, type: beast}\nsplat_stats: {armor_class: {value: 13}, max_hp: {value: 22}, speed: {value: 40, unit: ft}}",
         "# Rook\n",
     );
-    let new = formats::convert("Rook.md", &old).unwrap();
+    let new = old.write("Rook.md").unwrap();
     for path in [
         "splat_creature/armor_class_text",
         "splat_creature/hit_points_text",
@@ -1885,10 +1735,7 @@ fn i20_x25_plain_vitals_need_no_prose_presence_hints() {
     ] {
         assert!(!new.contains(path), "{new}");
     }
-    assert_eq!(
-        model(&formats::convert("Rook.md", &old).unwrap()),
-        model(&new)
-    );
+    assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
     assert!(new.contains("| Speed | 40 |"));
     let formula = new.replace("| Hit Points | 22 |", "| Hit Points | 22 (4d8 + 4) |");
     assert_eq!(
@@ -1901,8 +1748,8 @@ fn i20_x25_plain_vitals_need_no_prose_presence_hints() {
         Value::from("30")
     );
     assert!(
-        formats::convert("Rook.md", &conflict).is_err(),
-        "A conflicting legacy value needs review"
+        conflict.write("Rook.md").is_err(),
+        "A value that disagrees with the printed stats needs review"
     );
 }
 
@@ -1921,17 +1768,15 @@ fn i20_x26_all_machine_fences_are_folded_and_empty_defaults_are_omitted() {
         ),
     ] {
         let old = note(kind, fields, "# Rook\n");
-        let new = formats::convert("Rook.md", &old).unwrap_or_else(|e| panic!("{kind}: {e}"));
+        let new = old
+            .write("Rook.md")
+            .unwrap_or_else(|e| panic!("{kind}: {e}"));
         assert!(
             new.contains("> [!note]- Splat data (edit in Splat)"),
             "{new}"
         );
         assert!(!new.contains("## Splat data"));
-        assert_eq!(
-            model(&formats::convert("Rook.md", &old).unwrap()),
-            model(&new)
-        );
-        assert_eq!(new, formats::convert("Rook.md", &new).unwrap());
+        assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
         if kind == "encounter" {
             let mut encounter = model(&new)["splat_encounter"].clone();
             encounter["limits"]["rounds"] = Value::from(40);
@@ -1945,23 +1790,20 @@ fn i20_x26_all_machine_fences_are_folded_and_empty_defaults_are_omitted() {
     }
     for kind in ["rule", "effect", "rule_group"] {
         let old = note(kind, &format!("splat_{kind}: {{}}"), "# Rook\n");
-        let new = formats::convert("Rook.md", &old).unwrap();
+        let new = old.write("Rook.md").unwrap();
         assert!(!new.contains("```"), "{new}");
-        assert_eq!(
-            model(&formats::convert("Rook.md", &old).unwrap()),
-            model(&new)
-        );
+        assert_eq!(model(&old.write("Rook.md").unwrap()), model(&new));
     }
 }
 
 #[test]
-fn world_conversion_keeps_both_reference_identity_and_readable_link() {
+fn world_write_keeps_both_reference_identity_and_readable_link() {
     let old = note(
         "world",
         "splat_world: {type: npc, creature: {id: '00000000-0000-0000-0000-000000000002', link: '[[Watchkeeper Guard]]'}}",
         "# Rook\n",
     );
-    let new = formats::convert("Rook.md", &old).unwrap();
+    let new = old.write("Rook.md").unwrap();
     assert!(
         new.contains("[[Watchkeeper Guard]] %% splat id=00000000-0000-0000-0000-000000000002 %%")
     );
@@ -1970,19 +1812,19 @@ fn world_conversion_keeps_both_reference_identity_and_readable_link() {
 }
 
 #[test]
-fn vault_conversion_saved_creature_values_are_authoritative() {
+fn write_saved_creature_values_are_authoritative() {
     let old = note(
         "creature",
         "splat_creature: {size: 'medium or small', type: 'humanoid (scout)', hit_points_text: '19 (3d8 + 6)', movement_text: '30 ft., fly 60 ft.', cr_text: '2 (XP 450; PB +2)'}\nsplat_stats: {max_hp: {value: 19}, speed: {value: 60}}",
         "# Rook\n\n## Source text\n\nLarge beast, Unaligned\\\nHP 99 (18d10)\\\nSpeed 20 ft.\\\n\n### Actions\n\nA synthetic attack.\n",
     );
-    let converted = formats::convert("Rook.md", &old).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert!(converted.contains("> [!quote]- Printed stat block (not read; edit the table above)\n> Large beast, Unaligned\\\n> HP 99 (18d10)\\\n> Speed 20 ft.\\\n"));
+    let written = old.write("Rook.md").unwrap();
+    assert_eq!(model(&old), model(&written));
+    assert!(written.contains("> [!quote]- Printed stat block (not read; edit the table above)\n> Large beast, Unaligned\\\n> HP 99 (18d10)\\\n> Speed 20 ft.\\\n"));
 }
 
 #[test]
-fn vault_conversion_spell_and_item_optional_values_round_trip() {
+fn write_spell_and_item_optional_values_round_trip() {
     for (kind, data) in [
         (
             "spell",
@@ -2006,13 +1848,13 @@ fn vault_conversion_spell_and_item_optional_values_round_trip() {
         ),
     ] {
         let old = note(kind, data, "# Rook\n");
-        let converted = formats::convert("Rook.md", &old).unwrap();
-        assert_eq!(model(&old), model(&converted));
+        let written = old.write("Rook.md").unwrap();
+        assert_eq!(model(&old), model(&written));
     }
 }
 
 #[test]
-fn vault_conversion_missing_reference_keeps_identity() {
+fn write_missing_reference_keeps_identity() {
     let id = "00000000-0000-0000-0000-000000000099";
     let old = note(
         "encounter_group",
@@ -2021,65 +1863,52 @@ fn vault_conversion_missing_reference_keeps_identity() {
         ),
         "# Rook\n",
     );
-    let converted = formats::convert_resolved("Rook.md", &old, []).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert!(converted.contains(id));
-    formats::verify_conversion("Rook.md", &old, &converted, &[]).unwrap();
-    assert!(
-        formats::verify_conversion(
-            "Rook.md",
-            &old,
-            &converted.replace("splat_name: Rook", "splat_name: Changed"),
-            &[]
-        )
-        .is_err()
-    );
+    let written =
+        super::list_formats::write_references(&old.write("Rook.md").unwrap(), [] as [&Entry; 0])
+            .unwrap();
+    assert_eq!(model(&old), model(&written));
+    assert!(written.contains(id));
 }
 
 #[test]
-fn vault_conversion_composite_type_with_independent_tags_round_trips() {
+fn write_composite_type_with_independent_tags_round_trips() {
     let old = note(
         "creature",
         "splat_creature: {type: 'humanoid (Scout)', tags_text: '(Ranger)'}",
         "# Rook\n",
     );
-    let converted = formats::convert("Rook.md", &old).unwrap();
-    assert_eq!(model(&old), model(&converted));
-    assert!(converted.contains("| Type | humanoid (Scout) |"));
-    assert!(converted.contains("| Type Tags | (Ranger) |"));
+    let written = old.write("Rook.md").unwrap();
+    assert_eq!(model(&old), model(&written));
+    assert!(written.contains("| Type | humanoid (Scout) |"));
+    assert!(written.contains("| Type Tags | (Ranger) |"));
 }
 
 #[test]
-fn vault_conversion_requirement_does_not_choose_an_ambiguous_package_path() {
-    let target = super::legacy::parse(
-        "Package.md",
-        &note(
-            "package",
-            "splat_namespace: rook\nsplat_key: rook:package/core",
-            "# Rook\n",
-        ),
-    )
-    .unwrap();
-    let other = super::legacy::parse(
-        "Package.md",
-        &note("package", "splat_namespace: other", "# Other\n")
-            .replace("000000000001", "000000000002"),
-    )
-    .unwrap();
-    let old = note(
+fn readable_link_to_a_path_that_two_notes_share_is_refused_and_a_key_still_resolves() {
+    let target = note(
         "package",
-        "splat_namespace: third\nsplat_requires: [{key: 'rook:package/core'}]",
+        "splat_namespace: rook\nsplat_key: rook:package/core",
         "# Rook\n",
-    );
+    )
+    .entry("Package.md");
+    let other = note("package", "splat_namespace: other", "# Other\n")
+        .replace("000000000001", "000000000002")
+        .entry("Package.md");
     let entries = [target, other];
-    let converted = formats::convert_resolved("Third.md", &old, &entries).unwrap();
-    formats::verify_conversion("Third.md", &old, &converted, &entries).unwrap();
+    assert_eq!(
+        formats::resolve_readable("[[Package]]", &entries),
+        Err("Requirement [[Package]] matches 2 entries; use a link".into())
+    );
+    assert_eq!(
+        formats::resolve_readable("rook:package/core", &entries),
+        Ok(entries[0].id)
+    );
 }
 
 #[test]
 fn loot_is_the_last_term_of_a_changes_cell_in_a_roster_and_a_group() {
     let key = "dnd2024:creatures/goblin_warrior";
-    let roster = note("encounter", "", &format!("# Rook\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5, Loot Iron key, rusty; Roll gems | %% splat slot=actor_one %% |\n")).replace("splat_schema: 1", "splat_schema: 2");
+    let roster = note("encounter", "", &format!("# Rook\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| enemies | [Goblin](splat:{key}) | | HP +5, Loot Iron key, rusty; Roll gems | %% splat slot=actor_one %% |\n")).text();
     let slot = &model(&roster)["splat_encounter"]["roster"][0];
     assert_eq!(slot["overrides"]["loot"], "Iron key, rusty; Roll gems");
     assert_eq!(slot["overrides"]["max_hp"]["add"], 5);
@@ -2096,7 +1925,7 @@ fn loot_is_the_last_term_of_a_changes_cell_in_a_roster_and_a_group() {
         "Iron key, rusty; Roll gems"
     );
     // A group member's loot is its own, and taking it out leaves the other changes.
-    let group = note("encounter_group", "splat_side: enemies", &format!("# Rook\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | | Loot 3 sp | |\n")).replace("splat_schema: 1", "splat_schema: 2");
+    let group = note("encounter_group", "splat_side: enemies", &format!("# Rook\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n| 2 | [Goblin](splat:{key}) | | Loot 3 sp | |\n")).text();
     let mut members = model(&group)["splat_encounter_group"].clone();
     assert_eq!(members["members"][0]["overrides"]["loot"], "3 sp");
     members["members"][0]["overrides"] = serde_yaml_ng::from_str("{max_hp: {add: 2}}").unwrap();
@@ -2107,7 +1936,7 @@ fn loot_is_the_last_term_of_a_changes_cell_in_a_roster_and_a_group() {
     );
     let empty = group.replace("Loot 3 sp", "HP +1, Loot");
     assert!(
-        super::legacy::parse("Rook.md", &empty).unwrap().flags[0]
+        Entry::parse("Rook.md", &empty).unwrap().flags[0]
             .message
             .contains("Loot needs")
     );
@@ -2119,7 +1948,7 @@ fn fmt_f2_hit_points_hint_shows_the_shape_and_other_numbers_keep_theirs() {
     let bad = new
         .replace("| Hit Points | 22 (4d8 + 4) |", "| HP | about twenty |")
         .replace("| Armor Class | 13 |", "| Armor Class | about fifteen |");
-    let entry = super::legacy::parse("Rook.md", &bad).unwrap();
+    let entry = Entry::parse("Rook.md", &bad).unwrap();
     let messages: Vec<&str> = entry.flags.iter().map(|f| f.message.as_str()).collect();
     // The alias row still names the stat by its full name, with the example.
     assert!(

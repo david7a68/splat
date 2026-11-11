@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d702c1a3-ea8e-5439-9ff1-613c53936c8f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/scorpion"
-splat_name: "Scorpion"
+splat_id: d702c1a3-ea8e-5439-9ff1-613c53936c8f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/scorpion
+splat_name: Scorpion
 splat_pages:
 - 360
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "07ca3f5a-5723-5440-aebd-26937ff0b0cb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/nine_lives_stealer"
-splat_name: "Nine Lives Stealer"
+splat_id: 07ca3f5a-5723-5440-aebd-26937ff0b0cb
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/nine_lives_stealer
+splat_name: Nine Lives Stealer
 splat_pages:
 - 233
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "200b2b7f-2041-537d-b0dc-288390f8fbdc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ochre_jelly"
-splat_name: "Ochre Jelly"
+splat_id: 200b2b7f-2041-537d-b0dc-288390f8fbdc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ochre_jelly
+splat_name: Ochre Jelly
 splat_pages:
 - 312
 ---

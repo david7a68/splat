@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "19fb0064-9438-5138-9c8b-234620e71fd8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/seahorse"
-splat_name: "Seahorse"
+splat_id: 19fb0064-9438-5138-9c8b-234620e71fd8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/seahorse
+splat_name: Seahorse
 splat_pages:
 - 361
 ---

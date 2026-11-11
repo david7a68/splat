@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "60d8b37d-e63c-5d25-8461-6d26096bee9d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/robe_of_stars"
-splat_name: "Robe of Stars"
+splat_id: 60d8b37d-e63c-5d25-8461-6d26096bee9d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/robe_of_stars
+splat_name: Robe of Stars
 splat_pages:
 - 240
 ---

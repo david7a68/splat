@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2efead04-f23e-55e8-9aad-696dbfdc6393"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gauntlets_of_ogre_power"
-splat_name: "Gauntlets of Ogre Power"
+splat_id: 2efead04-f23e-55e8-9aad-696dbfdc6393
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gauntlets_of_ogre_power
+splat_name: Gauntlets of Ogre Power
 splat_pages:
 - 223
 ---

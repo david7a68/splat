@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "614371fa-c172-5d40-bd38-dffef6200783"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/conjure_celestial"
-splat_name: "Conjure Celestial"
+splat_id: 614371fa-c172-5d40-bd38-dffef6200783
+splat_kind: reference
+splat_key: dnd2024:reference/spell/conjure_celestial
+splat_name: Conjure Celestial
 splat_pages:
 - 118
 ---

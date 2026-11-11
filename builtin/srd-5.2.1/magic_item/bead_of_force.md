@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cfccf3c3-50f9-5d13-a762-46b4b03dbf81"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bead_of_force"
-splat_name: "Bead of Force"
+splat_id: cfccf3c3-50f9-5d13-a762-46b4b03dbf81
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bead_of_force
+splat_name: Bead of Force
 splat_pages:
 - 212
 - 213

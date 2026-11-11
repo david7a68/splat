@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "64d5bdc5-9ed2-50b0-9030-1117b3ed6402"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/knock"
-splat_name: "Knock"
+splat_id: 64d5bdc5-9ed2-50b0-9030-1117b3ed6402
+splat_kind: reference
+splat_key: dnd2024:reference/spell/knock
+splat_name: Knock
 splat_pages:
 - 143
 - 144

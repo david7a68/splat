@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c0d5142f-d5c2-5aca-9581-374ac2e4dc7d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bag_of_devouring"
-splat_name: "Bag of Devouring"
+splat_id: c0d5142f-d5c2-5aca-9581-374ac2e4dc7d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bag_of_devouring
+splat_name: Bag of Devouring
 splat_pages:
 - 212
 ---

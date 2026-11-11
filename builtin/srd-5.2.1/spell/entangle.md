@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a4b5df22-0dbb-5b31-99a0-f9c2ed160c12"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/entangle"
-splat_name: "Entangle"
+splat_id: a4b5df22-0dbb-5b31-99a0-f9c2ed160c12
+splat_kind: reference
+splat_key: dnd2024:reference/spell/entangle
+splat_name: Entangle
 splat_pages:
 - 128
 ---

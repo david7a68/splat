@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "87b5b17d-11c9-5e62-99dd-c80438e7e866"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ghast"
-splat_name: "Ghast"
+splat_id: 87b5b17d-11c9-5e62-99dd-c80438e7e866
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ghast
+splat_name: Ghast
 splat_pages:
 - 287
 ---

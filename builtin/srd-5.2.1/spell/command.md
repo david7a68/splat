@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f271a406-4fda-5f6d-be03-acc41072edcd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/command"
-splat_name: "Command"
+splat_id: f271a406-4fda-5f6d-be03-acc41072edcd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/command
+splat_name: Command
 splat_pages:
 - 116
 ---

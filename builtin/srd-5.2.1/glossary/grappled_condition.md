@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5f45ac0a-e14b-5868-8c96-e4d6f8ba544d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/grappled_condition"
-splat_name: "Grappled [Condition]"
+splat_id: 5f45ac0a-e14b-5868-8c96-e4d6f8ba544d
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/grappled_condition
+splat_name: Grappled [Condition]
 splat_pages:
 - 182
 ---

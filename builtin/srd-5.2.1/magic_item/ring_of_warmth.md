@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a4b164c7-3d2d-5f1d-910f-ef2ac3751a16"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_warmth"
-splat_name: "Ring of Warmth"
+splat_id: a4b164c7-3d2d-5f1d-910f-ef2ac3751a16
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_warmth
+splat_name: Ring of Warmth
 splat_pages:
 - 239
 ---

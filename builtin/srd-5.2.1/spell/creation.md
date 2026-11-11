@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ad15db7-b6ba-5e03-b38b-64360fe0fbf7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/creation"
-splat_name: "Creation"
+splat_id: 1ad15db7-b6ba-5e03-b38b-64360fe0fbf7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/creation
+splat_name: Creation
 splat_pages:
 - 121
 ---

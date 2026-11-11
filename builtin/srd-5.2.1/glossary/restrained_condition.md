@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7929a897-22c0-514c-b76b-c6377721fe88"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/restrained_condition"
-splat_name: "Restrained [Condition]"
+splat_id: 7929a897-22c0-514c-b76b-c6377721fe88
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/restrained_condition
+splat_name: Restrained [Condition]
 splat_pages:
 - 187
 ---

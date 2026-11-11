@@ -120,27 +120,40 @@ a table a person writes. Today an unknown marker fails the whole note's parse
 
 A **house rule note** is a `rule` entry with `implementation: splat:house_rules`. It reuses the Library's
 Rules section and **Copy to…**, and the document stays one document. **Make house rule note** on a world
-note adds this frontmatter and puts it in play. It does not touch the body.
+note adds these properties and a folded Splat data callout at the end of the note, and puts it in play. It does
+not change the note's own text.
 
-```yaml
+````markdown
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 8d20…
 splat_kind: rule
 splat_name: Tournament
-splat_rule:
-  mechanic: heralds:tournament
-  mode: augment
-  implementation: splat:house_rules
-  parameters: {}
-splat_members:
-  trackers: {}
 ---
-```
 
-Members live under `splat_members/{trackers,day_marks,event_types}`. A note keeps them in frontmatter or in
-`splat:yaml` body blocks, and not both, because the reader rejects a body block under a field that
-frontmatter assigns (`src/content/markdown.rs:25`).
+The note's own text.
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_members -->
+>
+> ```yaml
+> trackers: {}
+> ```
+>
+> <!-- splat:yaml path=splat_rule -->
+>
+> ```yaml
+> mechanic: heralds:tournament
+> mode: augment
+> implementation: splat:house_rules
+> parameters: {}
+> ```
+````
+
+Members live under `splat_members/{trackers,day_marks,event_types}`. Splat writes them as one `splat:yaml` block
+in the callout. A DM can also write a block for one part, such as `splat_members/trackers`, anywhere in the body.
+Each field has one place, because the reader rejects two blocks that give the same field
+(`src/content/markdown.rs:25`).
 
 **Keys are plain words.** `tracker: favor`, `table: gifts`, `type: gate_trip`. A key is unique across the notes
 in play. A duplicate is a visible error on both members. A word that resolves to nothing is an error on
@@ -326,9 +339,7 @@ event_types:
 whole file unreadable (`src/timeline.rs:380`), and this design never writes one. An unknown type shows its raw
 word on a working row.
 
-**The version.** `timeline_version` goes to 2 when a file first holds a `type`, and Splat reads 1 and 2. An old
-build then refuses the file with a clear message (`src/timeline.rs:381`). This is needed, because an old build
-would otherwise drop `type` on its next save.
+**The version.** Splat reads and writes `timeline_version: 2` only. A custom type does not change the version.
 
 **The page.** Custom types are under **More…** in the Add row, so the row stays short. They count as Major events
 in the filters, and search finds them by name. **More… → New event type** asks for a name and an icon, and it
@@ -346,31 +357,34 @@ clock except through `duration`, and it never changes a tracker.
 
 ## NPCs and locations
 
-A note gets an identity when something needs to point at it. **Make world entry** adds the frontmatter, and the body
+A note gets an identity when something needs to point at it. **Make world entry** adds these properties, and the body
 does not change.
 
 ```yaml
 ---
-splat_schema: 1
+splat_schema: 2
 splat_id: 5b7e…
 splat_kind: world
 splat_name: Gravel
-splat_world:
-  type: npc
-  aliases: [Champion of the Red Seat]
-  status: alive
-  in: {id: 9c1f…}
-  creature: {key: dnd2024:creatures/goblin_boss}
+splat_type: npc
+splat_status: alive
+splat_stat_block: dnd2024:creatures/goblin_boss
+splat_in: 9c1f…
+aliases:
+- Champion of the Red Seat
 ---
 ```
 
-| Field | Meaning |
+The properties are flat, so Obsidian's Properties view can edit each one. In the note model they are the
+`splat_world` fields `type`, `status`, `creature`, `in` and `aliases`.
+
+| Property | Meaning |
 |---|---|
-| `type` | A free word. It only groups the World page. Fields give behaviour: see [World data](world-data.md) |
-| `aliases` | Other names for search and mentions |
-| `in` | The place this is in. A location's `in` builds the tree, and a loop is an error |
-| `status` | A free word, kept in the note. The page has a control for it. A different status per campaign needs a campaign copy |
-| `creature` | The stat block. An NPC is not a creature entry, because many NPCs have no stats and many share one |
+| `splat_type` | A free word. It only groups the World page. Fields give behaviour: see [World data](world-data.md) |
+| `aliases` | Other names for search and mentions. This is Obsidian's own property |
+| `splat_in` | The place this is in. A location's `splat_in` builds the tree, and a loop is an error |
+| `splat_status` | A free word, kept in the note. The page has a control for it. A different status per campaign needs a campaign copy |
+| `splat_stat_block` | The stat block. An NPC is not a creature entry, because many NPCs have no stats and many share one |
 
 **Create at the table.** Lookup always shows **New NPC** and **New location** for the typed words, in a fixed row outside
 the scrolling results, because a name can also match unrelated prose. That is 3 interactions: open, type, press.

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ce159381-f276-53f8-988a-2233550d88b7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/stable"
-splat_name: "Stable"
+splat_id: ce159381-f276-53f8-988a-2233550d88b7
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/stable
+splat_name: Stable
 splat_pages:
 - 188
 ---

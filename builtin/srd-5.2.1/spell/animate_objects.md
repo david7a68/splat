@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "905776b7-5b9d-5d79-8b9d-9838a6b0e054"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/animate_objects"
-splat_name: "Animate Objects"
+splat_id: 905776b7-5b9d-5d79-8b9d-9838a6b0e054
+splat_kind: reference
+splat_key: dnd2024:reference/spell/animate_objects
+splat_name: Animate Objects
 splat_pages:
 - 108
 - 109

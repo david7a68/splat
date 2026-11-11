@@ -190,21 +190,6 @@ pub(crate) fn challenge_text(entry: &Entry) -> Option<&str> {
         .and_then(|creature| creature.get("cr_text"))
         .and_then(serde_yaml_ng::Value::as_str)
         .filter(|text| !text.trim().is_empty())
-        .or_else(|| {
-            if entry
-                .fields
-                .get("splat_schema")
-                .and_then(serde_yaml_ng::Value::as_u64)
-                == Some(2)
-            {
-                return None;
-            }
-            entry
-                .body
-                .lines()
-                .find_map(|line| line.trim().strip_prefix("CR "))
-                .map(|text| text.trim_end().trim_end_matches('\\').trim_end())
-        })
 }
 
 fn list_fact(entry: &Entry) -> Option<String> {

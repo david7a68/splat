@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "200a2743-1ec9-5f05-adf4-a0212496e133"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_fireballs"
-splat_name: "Wand of Fireballs"
+splat_id: 200a2743-1ec9-5f05-adf4-a0212496e133
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_fireballs
+splat_name: Wand of Fireballs
 splat_pages:
 - 250
 - 251

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9fb97209-1ed9-51af-869f-74b21e09c503"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/stinking_cloud"
-splat_name: "Stinking Cloud"
+splat_id: 9fb97209-1ed9-51af-869f-74b21e09c503
+splat_kind: reference
+splat_key: dnd2024:reference/spell/stinking_cloud
+splat_name: Stinking Cloud
 splat_pages:
 - 165
 ---

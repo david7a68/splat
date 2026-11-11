@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2a4594e5-d4aa-58f3-aa4e-43d38d18b93b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/broom_of_flying"
-splat_name: "Broom of Flying"
+splat_id: 2a4594e5-d4aa-58f3-aa4e-43d38d18b93b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/broom_of_flying
+splat_name: Broom of Flying
 splat_pages:
 - 214
 ---

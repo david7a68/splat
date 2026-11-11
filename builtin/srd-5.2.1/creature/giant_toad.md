@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "68224839-de13-51e4-b752-e733b4ff5f53"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_toad"
-splat_name: "Giant Toad"
+splat_id: 68224839-de13-51e4-b752-e733b4ff5f53
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_toad
+splat_name: Giant Toad
 splat_pages:
 - 354
 ---

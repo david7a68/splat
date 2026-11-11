@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7da23cc7-d35b-5b7c-9195-8bb31a116422"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/elixir_of_health"
-splat_name: "Elixir of Health"
+splat_id: 7da23cc7-d35b-5b7c-9195-8bb31a116422
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/elixir_of_health
+splat_name: Elixir of Health
 splat_pages:
 - 220
 ---

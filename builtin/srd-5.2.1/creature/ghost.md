@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f5e5a312-b821-59be-b082-0ed468d6d03c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ghost"
-splat_name: "Ghost"
+splat_id: f5e5a312-b821-59be-b082-0ed468d6d03c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ghost
+splat_name: Ghost
 splat_pages:
 - 287
 - 288

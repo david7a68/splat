@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c62df51e-2967-5a2f-9e55-04712190ebc8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_the_python"
-splat_name: "Staff of the Python"
+splat_id: c62df51e-2967-5a2f-9e55-04712190ebc8
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_the_python
+splat_name: Staff of the Python
 splat_pages:
 - 247
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0e9d6349-a3b9-5d0c-9029-fb682c434833"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/elemental_gem"
-splat_name: "Elemental Gem"
+splat_id: 0e9d6349-a3b9-5d0c-9029-fb682c434833
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/elemental_gem
+splat_name: Elemental Gem
 splat_pages:
 - 220
 ---

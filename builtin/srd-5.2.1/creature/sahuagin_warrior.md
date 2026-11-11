@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b8c7a418-64b4-57bd-a066-f6912be5a937"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sahuagin_warrior"
-splat_name: "Sahuagin Warrior"
+splat_id: b8c7a418-64b4-57bd-a066-f6912be5a937
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sahuagin_warrior
+splat_name: Sahuagin Warrior
 splat_pages:
 - 321
 ---

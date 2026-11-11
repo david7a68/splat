@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e975f08e-8ea1-56bf-91e1-bd4124999a2f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/vorpal_sword"
-splat_name: "Vorpal Sword"
+splat_id: e975f08e-8ea1-56bf-91e1-bd4124999a2f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/vorpal_sword
+splat_name: Vorpal Sword
 splat_pages:
 - 250
 ---

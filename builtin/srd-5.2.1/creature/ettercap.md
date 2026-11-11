@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "76c25fa3-983d-58f1-a180-78ac791e6a36"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ettercap"
-splat_name: "Ettercap"
+splat_id: 76c25fa3-983d-58f1-a180-78ac791e6a36
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ettercap
+splat_name: Ettercap
 splat_pages:
 - 284
 ---

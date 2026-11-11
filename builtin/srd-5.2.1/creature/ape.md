@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "97875881-aa56-5fe1-b865-ab6692abb161"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ape"
-splat_name: "Ape"
+splat_id: 97875881-aa56-5fe1-b865-ab6692abb161
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ape
+splat_name: Ape
 splat_pages:
 - 344
 ---

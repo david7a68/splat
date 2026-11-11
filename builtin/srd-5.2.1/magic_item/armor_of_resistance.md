@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bd7cace3-7fea-58ce-ac36-f3479c15a49a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/armor_of_resistance"
-splat_name: "Armor of Resistance"
+splat_id: bd7cace3-7fea-58ce-ac36-f3479c15a49a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/armor_of_resistance
+splat_name: Armor of Resistance
 splat_pages:
 - 210
 ---

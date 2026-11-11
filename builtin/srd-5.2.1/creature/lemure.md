@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "27f5ba33-e822-52df-944f-3bf035ae0fe4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/lemure"
-splat_name: "Lemure"
+splat_id: 27f5ba33-e822-52df-944f-3bf035ae0fe4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/lemure
+splat_name: Lemure
 splat_pages:
 - 304
 ---

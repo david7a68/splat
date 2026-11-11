@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "73a2b7f6-5cea-563a-a048-e6deb06fe8ee"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/blindsight"
-splat_name: "Blindsight"
+splat_id: 73a2b7f6-5cea-563a-a048-e6deb06fe8ee
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/blindsight
+splat_name: Blindsight
 splat_pages:
 - 177
 ---

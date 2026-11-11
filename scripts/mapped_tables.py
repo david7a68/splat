@@ -114,7 +114,7 @@ def label_ref(identity,names):
 
 
 def inline(value):
-    # Code spans protect literal strings; unlike legacy cells these are typed,
+    # Code spans protect literal strings; unlike field-name table cells these are typed,
     # so strings need no YAML quoting. Newlines are excluded by planning.
     value=str(value).replace('|','\\|')
     fence='`'*(max([len(s) for s in re.findall('`+',value)] or [0])+1)

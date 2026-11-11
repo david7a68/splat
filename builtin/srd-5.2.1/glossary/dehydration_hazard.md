@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5911a8d2-d846-5bfd-8775-39bd8171db43"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/dehydration_hazard"
-splat_name: "Dehydration [Hazard]"
+splat_id: 5911a8d2-d846-5bfd-8775-39bd8171db43
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/dehydration_hazard
+splat_name: Dehydration [Hazard]
 splat_pages:
 - 181
 ---

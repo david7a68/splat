@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "05b61d95-9193-5090-b5e1-fb501d767ff7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_wolf_spider"
-splat_name: "Giant Wolf Spider"
+splat_id: 05b61d95-9193-5090-b5e1-fb501d767ff7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_wolf_spider
+splat_name: Giant Wolf Spider
 splat_pages:
 - 355
 ---

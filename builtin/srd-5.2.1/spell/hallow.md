@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fe66806d-518b-56c2-a1c0-3f07e6ee7509"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hallow"
-splat_name: "Hallow"
+splat_id: fe66806d-518b-56c2-a1c0-3f07e6ee7509
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hallow
+splat_name: Hallow
 splat_pages:
 - 138
 - 139

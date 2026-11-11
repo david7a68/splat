@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "448c955e-58dc-57e1-a68c-6132148cdb81"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/fire_elemental"
-splat_name: "Fire Elemental"
+splat_id: 448c955e-58dc-57e1-a68c-6132148cdb81
+splat_kind: reference
+splat_key: dnd2024:reference/creature/fire_elemental
+splat_name: Fire Elemental
 splat_pages:
 - 284
 - 285

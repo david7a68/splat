@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0f0564d9-7efc-536c-9327-280155412183"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/iron_bands"
-splat_name: "Iron Bands"
+splat_id: 0f0564d9-7efc-536c-9327-280155412183
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/iron_bands
+splat_name: Iron Bands
 splat_pages:
 - 228
 ---

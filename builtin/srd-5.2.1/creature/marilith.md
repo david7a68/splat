@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "91658395-d0c8-54f3-a9e0-e3416ed9420c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/marilith"
-splat_name: "Marilith"
+splat_id: 91658395-d0c8-54f3-a9e0-e3416ed9420c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/marilith
+splat_name: Marilith
 splat_pages:
 - 306
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ceebb3c7-9df6-52fa-a44f-655971f6d6a5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/doppelganger"
-splat_name: "Doppelganger"
+splat_id: ceebb3c7-9df6-52fa-a44f-655971f6d6a5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/doppelganger
+splat_name: Doppelganger
 splat_pages:
 - 280
 ---

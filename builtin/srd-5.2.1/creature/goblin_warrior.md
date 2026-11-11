@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af093915-7802-5143-87bc-d0cdbf89b358"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/goblin_warrior"
-splat_name: "Goblin Warrior"
+splat_id: af093915-7802-5143-87bc-d0cdbf89b358
+splat_kind: reference
+splat_key: dnd2024:reference/creature/goblin_warrior
+splat_name: Goblin Warrior
 splat_pages:
 - 290
 ---

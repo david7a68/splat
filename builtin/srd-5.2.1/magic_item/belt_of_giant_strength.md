@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "da6c7db6-29b3-5888-a4ce-0493d831f75b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/belt_of_giant_strength"
-splat_name: "Belt of Giant Strength"
+splat_id: da6c7db6-29b3-5888-a4ce-0493d831f75b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/belt_of_giant_strength
+splat_name: Belt of Giant Strength
 splat_pages:
 - 213
 ---

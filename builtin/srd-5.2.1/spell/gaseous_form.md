@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e749f887-08ea-5f82-9e2a-d12031dbda14"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/gaseous_form"
-splat_name: "Gaseous Form"
+splat_id: e749f887-08ea-5f82-9e2a-d12031dbda14
+splat_kind: reference
+splat_key: dnd2024:reference/spell/gaseous_form
+splat_name: Gaseous Form
 splat_pages:
 - 134
 - 135

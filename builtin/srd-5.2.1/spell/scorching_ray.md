@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b3e7c876-572d-5108-8839-a2e1d1104d6b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/scorching_ray"
-splat_name: "Scorching Ray"
+splat_id: b3e7c876-572d-5108-8839-a2e1d1104d6b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/scorching_ray
+splat_name: Scorching Ray
 splat_pages:
 - 159
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2d98eec4-27d0-5ff4-be18-aadde097c703"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/green_dragon_wyrmling"
-splat_name: "Green Dragon Wyrmling"
+splat_id: 2d98eec4-27d0-5ff4-be18-aadde097c703
+splat_kind: reference
+splat_key: dnd2024:reference/creature/green_dragon_wyrmling
+splat_name: Green Dragon Wyrmling
 splat_pages:
 - 293
 ---

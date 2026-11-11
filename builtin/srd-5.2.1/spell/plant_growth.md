@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "be343711-728b-529a-be53-a1df9dac5251"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/plant_growth"
-splat_name: "Plant Growth"
+splat_id: be343711-728b-529a-be53-a1df9dac5251
+splat_kind: reference
+splat_key: dnd2024:reference/spell/plant_growth
+splat_name: Plant Growth
 splat_pages:
 - 153
 ---

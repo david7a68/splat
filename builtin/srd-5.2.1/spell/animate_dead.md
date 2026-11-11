@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0ccc90d6-b4f6-539f-af4c-a090531b3acb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/animate_dead"
-splat_name: "Animate Dead"
+splat_id: 0ccc90d6-b4f6-539f-af4c-a090531b3acb
+splat_kind: reference
+splat_key: dnd2024:reference/spell/animate_dead
+splat_name: Animate Dead
 splat_pages:
 - 108
 ---

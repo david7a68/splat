@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "26842422-916b-5d32-93ec-2c943eb19a12"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_bat"
-splat_name: "Giant Bat"
+splat_id: 26842422-916b-5d32-93ec-2c943eb19a12
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_bat
+splat_name: Giant Bat
 splat_pages:
 - 349
 ---

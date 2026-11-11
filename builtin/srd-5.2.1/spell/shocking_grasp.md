@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "09bffe6f-abc2-56e9-90d3-10f45fb3b88e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/shocking_grasp"
-splat_name: "Shocking Grasp"
+splat_id: 09bffe6f-abc2-56e9-90d3-10f45fb3b88e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/shocking_grasp
+splat_name: Shocking Grasp
 splat_pages:
 - 162
 ---

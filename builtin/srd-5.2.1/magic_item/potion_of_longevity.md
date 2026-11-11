@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "78f524a1-fbbd-5333-81e9-0280c4b4a9e3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_longevity"
-splat_name: "Potion of Longevity"
+splat_id: 78f524a1-fbbd-5333-81e9-0280c4b4a9e3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_longevity
+splat_name: Potion of Longevity
 splat_pages:
 - 236
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8c2aff6d-ef14-50dd-be3a-bd81e6165e31"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bowl_of_commanding_water_elementals"
-splat_name: "Bowl of Commanding Water Elementals"
+splat_id: 8c2aff6d-ef14-50dd-be3a-bd81e6165e31
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bowl_of_commanding_water_elementals
+splat_name: Bowl of Commanding Water Elementals
 splat_pages:
 - 214
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bebd4e2f-ec36-585f-8d47-7d1c82a21556"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/invisibility"
-splat_name: "Invisibility"
+splat_id: bebd4e2f-ec36-585f-8d47-7d1c82a21556
+splat_kind: reference
+splat_key: dnd2024:reference/spell/invisibility
+splat_name: Invisibility
 splat_pages:
 - 143
 ---

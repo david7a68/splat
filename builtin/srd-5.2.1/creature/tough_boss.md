@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94da1300-ac2a-53bb-b26e-6f6be74c1b60"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/tough_boss"
-splat_name: "Tough Boss"
+splat_id: 94da1300-ac2a-53bb-b26e-6f6be74c1b60
+splat_kind: reference
+splat_key: dnd2024:reference/creature/tough_boss
+splat_name: Tough Boss
 splat_pages:
 - 332
 ---

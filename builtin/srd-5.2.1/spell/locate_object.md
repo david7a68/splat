@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e80d12ef-cb0a-558a-9b1b-26e959d563bb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/locate_object"
-splat_name: "Locate Object"
+splat_id: e80d12ef-cb0a-558a-9b1b-26e959d563bb
+splat_kind: reference
+splat_key: dnd2024:reference/spell/locate_object
+splat_name: Locate Object
 splat_pages:
 - 145
 ---

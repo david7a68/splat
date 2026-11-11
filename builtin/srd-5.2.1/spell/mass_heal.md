@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ab81c9a0-8d1a-5781-a27d-09fd62067e8a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mass_heal"
-splat_name: "Mass Heal"
+splat_id: ab81c9a0-8d1a-5781-a27d-09fd62067e8a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mass_heal
+splat_name: Mass Heal
 splat_pages:
 - 147
 ---

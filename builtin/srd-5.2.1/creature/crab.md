@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a575da1d-f98a-51cf-8f21-62123e9a5d2f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/crab"
-splat_name: "Crab"
+splat_id: a575da1d-f98a-51cf-8f21-62123e9a5d2f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/crab
+splat_name: Crab
 splat_pages:
 - 347
 ---

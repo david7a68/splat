@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "19c84181-ac6e-5e94-80d1-27848912654e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/horseshoes_of_speed"
-splat_name: "Horseshoes of Speed"
+splat_id: 19c84181-ac6e-5e94-80d1-27848912654e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/horseshoes_of_speed
+splat_name: Horseshoes of Speed
 splat_pages:
 - 227
 ---

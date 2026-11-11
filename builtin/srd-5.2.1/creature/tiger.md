@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2e9dcb77-68c9-53e0-a5d2-64073827ac3d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/tiger"
-splat_name: "Tiger"
+splat_id: 2e9dcb77-68c9-53e0-a5d2-64073827ac3d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/tiger
+splat_name: Tiger
 splat_pages:
 - 363
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d45b76fc-0c1d-5e48-aca8-10eda7e1bbb9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/clone"
-splat_name: "Clone"
+splat_id: d45b76fc-0c1d-5e48-aca8-10eda7e1bbb9
+splat_kind: reference
+splat_key: dnd2024:reference/spell/clone
+splat_name: Clone
 splat_pages:
 - 115
 - 116

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b5f6ae4b-b72c-52ce-a008-7e468f66e9fa"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/short_rest"
-splat_name: "Short Rest"
+splat_id: b5f6ae4b-b72c-52ce-a008-7e468f66e9fa
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/short_rest
+splat_name: Short Rest
 splat_pages:
 - 187
 ---

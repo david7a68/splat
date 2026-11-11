@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4485ded0-1a6f-5d2c-8fc4-0be00cb3c5b8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/contingency"
-splat_name: "Contingency"
+splat_id: 4485ded0-1a6f-5d2c-8fc4-0be00cb3c5b8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/contingency
+splat_name: Contingency
 splat_pages:
 - 119
 ---

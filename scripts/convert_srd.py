@@ -8,7 +8,7 @@ if its source also imposes a condition, movement, resource or other effect.
 from pathlib import Path
 import argparse, copy, hashlib, json, re, uuid
 import yaml
-from schema2_notes import convert
+from schema2_notes import read, write
 
 SOURCE=Path('builtin/srd-5.2.1')
 MANUAL=Path('builtin/dnd2024-mechanics')
@@ -24,9 +24,9 @@ def load_note(path):
     text=path.read_text()
     _,front,body=text.split('---',2)
     if yaml.load(front,Loader=LOAD).get('splat_schema') == 2:
-        front=convert(text, '__model__')
         if path.is_relative_to(SOURCE):
             body=body.split('\n> [!note]- Splat data')[0]
+        return read(text,path)['fields'],body
     return yaml.load(front,Loader=LOAD),body
 
 def slug(name):return re.sub('[^a-z0-9]+','_',name.lower()).strip('_')
@@ -132,10 +132,9 @@ def main():
         elif category=='creature':
             try:
                 fields=creature(meta,body);key='dnd2024:creatures/'+path.stem
-                front={'splat_schema':1,'splat_id':str(uuid.uuid5(NAMESPACE,'mechanics/creatures/'+path.stem)),'splat_kind':'creature','splat_key':key,'splat_name':meta['splat_name'],'splat_origin':{'key':source},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,record['pages'])),'url':'https://www.dndbeyond.com/srd'}],**fields}
+                front={'splat_id':str(uuid.uuid5(NAMESPACE,'mechanics/creatures/'+path.stem)),'splat_kind':'creature','splat_key':key,'splat_name':meta['splat_name'],'splat_origin':{'key':source},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,record['pages'])),'url':'https://www.dndbeyond.com/srd'}],**fields}
                 # Full source prose stays with the typed note for review of the profile.
-                data='---\n'+yaml.safe_dump(front,sort_keys=False,allow_unicode=True)+'---\n\n'+body.strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')+'\n'
-                outputs[path.stem+'.md']=convert(data, path.stem+'.md');record.update(status='converted_attack_profile',definitions=[key])
+                outputs[path.stem+'.md']=write(front,'\n'+body.strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')+'\n',path.stem+'.md');record.update(status='converted_attack_profile',definitions=[key])
             except Unsupported as error:record.update(status='outside_execution_profile',reason=str(error))
         else:record.update(status='outside_execution_profile',reason='Outside the bounded execution profile; see the full definition catalogue for typed rules and engine gaps')
         records.append(record)

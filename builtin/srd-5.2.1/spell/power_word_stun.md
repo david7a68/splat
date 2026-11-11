@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2dd35283-b979-540a-9610-93ddfb2c3579"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/power_word_stun"
-splat_name: "Power Word Stun"
+splat_id: 2dd35283-b979-540a-9610-93ddfb2c3579
+splat_kind: reference
+splat_key: dnd2024:reference/spell/power_word_stun
+splat_name: Power Word Stun
 splat_pages:
 - 154
 ---

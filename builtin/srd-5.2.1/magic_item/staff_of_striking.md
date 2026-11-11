@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4b0c58ed-7e9f-5f1d-9798-c1f5718c9cc3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/staff_of_striking"
-splat_name: "Staff of Striking"
+splat_id: 4b0c58ed-7e9f-5f1d-9798-c1f5718c9cc3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/staff_of_striking
+splat_name: Staff of Striking
 splat_pages:
 - 246
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2d66264f-3ee4-5307-8b7a-9f63929901db"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_spell_turning"
-splat_name: "Ring of Spell Turning"
+splat_id: 2d66264f-3ee4-5307-8b7a-9f63929901db
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_spell_turning
+splat_name: Ring of Spell Turning
 splat_pages:
 - 239
 ---

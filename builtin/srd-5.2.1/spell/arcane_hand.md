@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4b8f4125-dc41-5b11-bdff-d67636fa0816"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/arcane_hand"
-splat_name: "Arcane Hand"
+splat_id: 4b8f4125-dc41-5b11-bdff-d67636fa0816
+splat_kind: reference
+splat_key: dnd2024:reference/spell/arcane_hand
+splat_name: Arcane Hand
 splat_pages:
 - 110
 ---

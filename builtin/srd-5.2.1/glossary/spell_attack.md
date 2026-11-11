@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b9739dad-c3b6-594b-afd3-b8d9f5ce7fa6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/spell_attack"
-splat_name: "Spell Attack"
+splat_id: b9739dad-c3b6-594b-afd3-b8d9f5ce7fa6
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/spell_attack
+splat_name: Spell Attack
 splat_pages:
 - 188
 ---

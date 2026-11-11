@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a22f9d51-2e34-513c-a629-762a07e5f772"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_lordly_might"
-splat_name: "Rod of Lordly Might"
+splat_id: a22f9d51-2e34-513c-a629-762a07e5f772
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_lordly_might
+splat_name: Rod of Lordly Might
 splat_pages:
 - 241
 - 242

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0245391b-9d2a-5de1-b030-3fb01409c272"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/comprehend_languages"
-splat_name: "Comprehend Languages"
+splat_id: 0245391b-9d2a-5de1-b030-3fb01409c272
+splat_kind: reference
+splat_key: dnd2024:reference/spell/comprehend_languages
+splat_name: Comprehend Languages
 splat_pages:
 - 117
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "61a13aa9-eca9-57f9-b83f-8610e7af065c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hostile_attitude"
-splat_name: "Hostile [Attitude]"
+splat_id: 61a13aa9-eca9-57f9-b83f-8610e7af065c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hostile_attitude
+splat_name: Hostile [Attitude]
 splat_pages:
 - 183
 ---

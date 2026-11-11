@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "941e8cc1-06b9-5917-b0e4-a95e50e1823f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/true_resurrection"
-splat_name: "True Resurrection"
+splat_id: 941e8cc1-06b9-5917-b0e4-a95e50e1823f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/true_resurrection
+splat_name: True Resurrection
 splat_pages:
 - 170
 - 171

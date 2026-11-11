@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7edb098b-3bd6-5026-b56d-b00c332211cd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/campaign"
-splat_name: "Campaign"
+splat_id: 7edb098b-3bd6-5026-b56d-b00c332211cd
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/campaign
+splat_name: Campaign
 splat_pages:
 - 178
 ---

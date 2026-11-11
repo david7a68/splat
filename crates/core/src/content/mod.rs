@@ -8,9 +8,6 @@ use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// Action shown for a retired on-disk layout. Loading never changes the file.
-pub const OLD_LAYOUT: &str = "Old layout: Splat no longer reads this file. Use Convert files.";
-
 /// A note's line that makes the table below it rollable. It holds no entry data.
 pub const ROLLS_MARKER: &str = "<!-- splat:rolls ";
 
@@ -35,10 +32,10 @@ mod reading;
 pub use reading::Reading;
 pub mod formats;
 pub mod layout;
-pub mod legacy;
 pub mod list_formats;
 pub mod loot;
 mod markdown;
+mod model;
 pub use markdown::{body_text, inline_text};
 mod shared;
 pub mod stat_blocks;
@@ -48,7 +45,7 @@ mod table_mapping;
 #[cfg(test)]
 mod formats_tests;
 #[cfg(test)]
-mod retirement_tests;
+mod schema_tests;
 #[cfg(test)]
 mod tests;
 
@@ -91,7 +88,6 @@ impl TryFrom<EntryWire> for Entry {
     fn try_from(wire: EntryWire) -> Result<Self, String> {
         match wire.fields.get("splat_schema").and_then(Value::as_u64) {
             Some(2) => {}
-            Some(1) => return Err(OLD_LAYOUT.into()),
             _ => return Err("Unsupported content schema; expected 2".into()),
         }
         let entry = Self {
@@ -213,75 +209,123 @@ fn reference(value: &str) -> Result<Reference, String> {
     }
 }
 
+/// What every note must name. The reader and the writer check it the same way.
+struct Identity {
+    id: Uuid,
+    name: String,
+    kind: String,
+    key: Option<String>,
+}
+
+fn identity(fields: &Mapping) -> Result<Identity, String> {
+    let id = Uuid::parse_str(string(fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
+    let name = string(fields, "splat_name")?.to_owned();
+    if name.trim().is_empty() {
+        return Err("Empty splat_name".into());
+    }
+    let kind = string(fields, "splat_kind")?.to_owned();
+    if ![
+        "package",
+        "campaign",
+        "creature",
+        "item",
+        "spell",
+        "effect",
+        "container",
+        "encounter",
+        "encounter_group",
+        "world",
+        "sequence",
+        "rule",
+        "rule_group",
+        "strategy",
+        "seed",
+        "reference",
+    ]
+    .contains(&kind.as_str())
+    {
+        return Err(format!("Unknown kind {kind}"));
+    }
+    let key = match field(fields, "splat_key") {
+        Some(v) => {
+            let k = v.as_str().ok_or("splat_key must be a string")?;
+            if !resource_key(k) {
+                return Err("Invalid splat_key".into());
+            }
+            Some(k.into())
+        }
+        None => None,
+    };
+    Ok(Identity {
+        id,
+        name,
+        kind,
+        key,
+    })
+}
+
+/// A note's text with one line ending, its properties, and where they end after the first line.
+struct Front {
+    text: String,
+    fields: Mapping,
+    end: usize,
+}
+
+fn front(text: &str) -> Result<Front, String> {
+    let text = text
+        .strip_prefix('\u{feff}')
+        .unwrap_or(text)
+        .replace("\r\n", "\n");
+    let rest = text
+        .strip_prefix("---\n")
+        .ok_or("Missing YAML frontmatter")?;
+    let end = rest
+        .find("\n---\n")
+        .or_else(|| rest.strip_suffix("\n---").map(str::len))
+        .ok_or("Unclosed YAML frontmatter")?;
+    let value: Value =
+        serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
+    let Value::Mapping(fields) = value else {
+        return Err("Frontmatter must be a mapping".into());
+    };
+    Ok(Front { text, fields, end })
+}
+
+/// The ID in a note's properties, as `Entry::parse` reads it. A note that does not load can
+/// still have one. Words below the properties never count.
+pub fn note_id(text: &str) -> Option<Uuid> {
+    let fields = front(text).ok()?.fields;
+    Uuid::parse_str(string(&fields, "splat_id").ok()?).ok()
+}
+
 impl Entry {
     pub fn parse(path: &str, text: &str) -> Result<Self, String> {
-        let text = text
-            .strip_prefix('\u{feff}')
-            .unwrap_or(text)
-            .replace("\r\n", "\n");
-        let rest = text
-            .strip_prefix("---\n")
-            .ok_or("Missing YAML frontmatter")?;
-        let end = rest
-            .find("\n---\n")
-            .or_else(|| rest.strip_suffix("\n---").map(str::len))
-            .ok_or("Unclosed YAML frontmatter")?;
-        let value: Value =
-            serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
-        let Value::Mapping(mut fields) = value else {
-            return Err("Frontmatter must be a mapping".into());
-        };
+        let Front {
+            text,
+            mut fields,
+            end,
+        } = front(text)?;
+        let rest = &text["---\n".len()..];
         match fields.get("splat_schema").and_then(Value::as_u64) {
             Some(2) => {}
-            Some(1) => return Err(OLD_LAYOUT.into()),
             _ => return Err("Unsupported content schema; expected 2".into()),
         }
-        let id =
-            Uuid::parse_str(string(&fields, "splat_id")?).map_err(|_| "Invalid splat_id UUID")?;
-        let name = string(&fields, "splat_name")?.to_owned();
-        if name.trim().is_empty() {
-            return Err("Empty splat_name".into());
-        }
-        let kind = string(&fields, "splat_kind")?.to_owned();
-        if ![
-            "package",
-            "campaign",
-            "creature",
-            "item",
-            "spell",
-            "effect",
-            "container",
-            "encounter",
-            "encounter_group",
-            "world",
-            "sequence",
-            "rule",
-            "rule_group",
-            "strategy",
-            "seed",
-            "reference",
-        ]
-        .contains(&kind.as_str())
-        {
-            return Err(format!("Unknown kind {kind}"));
-        }
-        let key = match field(&fields, "splat_key") {
-            Some(v) => {
-                let k = v.as_str().ok_or("splat_key must be a string")?;
-                if !resource_key(k) {
-                    return Err("Invalid splat_key".into());
-                }
-                Some(k.into())
-            }
-            None => None,
-        };
+        let Identity {
+            id,
+            name,
+            kind,
+            key,
+        } = identity(&fields)?;
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
         let tables = stat_blocks::owns(
             &kind,
             fields.contains_key("splat_character") || body.contains("path=splat_payload"),
         );
         if tables {
-            markdown::read(&stat_blocks::without_legacy(&body, &kind), &mut fields)?;
+            markdown::read(
+                &stat_blocks::without_marked_stats(&body, &kind),
+                &mut fields,
+            )?;
         } else {
             markdown::read(&body, &mut fields)?;
         }
@@ -1198,14 +1242,7 @@ pub fn patch_fields(
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    read_directory_using(root, Entry::parse)
-}
-
-fn read_directory_using(
-    root: &Path,
-    parse: fn(&str, &str) -> Result<Entry, String>,
-) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    read_folder_using(root, parse).map(|folder| (folder.entries.clone(), folder.errors.clone()))
+    read_folder(root).map(|folder| (folder.entries.clone(), folder.errors.clone()))
 }
 
 /// `text` up to the first line that starts with `start`, without that line's newline.
@@ -1275,13 +1312,6 @@ impl Folder {
 
 /// [`read_directory`], shared: later reads of unchanged notes return the same `Folder`.
 pub fn read_folder(root: &Path) -> Result<Arc<Folder>, String> {
-    read_folder_using(root, Entry::parse)
-}
-
-fn read_folder_using(
-    root: &Path,
-    parse: fn(&str, &str) -> Result<Entry, String>,
-) -> Result<Arc<Folder>, String> {
     fn walk(
         root: &Path,
         current: &Path,
@@ -1406,10 +1436,7 @@ fn read_folder_using(
         Ok(())
     }
     // Pages name some folders by their canonical path. Both names share one reading.
-    let key = (
-        root.canonicalize().unwrap_or_else(|_| root.to_path_buf()),
-        parse as usize,
-    );
+    let key = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     // Pages often read the same folder at the same time. The later ones wait and reuse it.
     let reading = read_cache::reading(&key);
     let _reading = reading
@@ -1426,7 +1453,7 @@ fn read_folder_using(
     let parsed: Vec<_> = files
         .par_iter()
         .map(|(path, text, _)| {
-            parse(path, text.as_str().unwrap_or_default()).map_err(|message| Diagnostic {
+            Entry::parse(path, text.as_str().unwrap_or_default()).map_err(|message| Diagnostic {
                 path: path.clone(),
                 message,
             })
@@ -1469,7 +1496,7 @@ mod read_cache {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
-    pub(super) type Key = (PathBuf, usize);
+    pub(super) type Key = PathBuf;
 
     /// Enough for every package and campaign in use; tests make many temporary folders.
     const LIMIT: usize = 64;

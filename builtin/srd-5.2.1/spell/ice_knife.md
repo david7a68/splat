@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cbc7228c-2884-5283-b16c-1b8b5c0034e7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/ice_knife"
-splat_name: "Ice Knife"
+splat_id: cbc7228c-2884-5283-b16c-1b8b5c0034e7
+splat_kind: reference
+splat_key: dnd2024:reference/spell/ice_knife
+splat_name: Ice Knife
 splat_pages:
 - 141
 ---

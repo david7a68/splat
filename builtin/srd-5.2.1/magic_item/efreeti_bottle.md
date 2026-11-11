@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1722cb38-5538-56b1-a75b-c89cc45e25ed"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/efreeti_bottle"
-splat_name: "Efreeti Bottle"
+splat_id: 1722cb38-5538-56b1-a75b-c89cc45e25ed
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/efreeti_bottle
+splat_name: Efreeti Bottle
 splat_pages:
 - 220
 ---

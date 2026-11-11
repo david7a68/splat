@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "10fcca4e-8949-568e-b62a-9b354e065e7d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/forbiddance"
-splat_name: "Forbiddance"
+splat_id: 10fcca4e-8949-568e-b62a-9b354e065e7d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/forbiddance
+splat_name: Forbiddance
 splat_pages:
 - 133
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8574fd5f-d66b-5a57-87f7-19c6029754a6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/scarab_of_protection"
-splat_name: "Scarab of Protection"
+splat_id: 8574fd5f-d66b-5a57-87f7-19c6029754a6
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/scarab_of_protection
+splat_name: Scarab of Protection
 splat_pages:
 - 243
 ---

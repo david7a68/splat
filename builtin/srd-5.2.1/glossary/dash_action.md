@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "97f479cb-c69a-50ee-b949-cc7d086ce8ea"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/dash_action"
-splat_name: "Dash [Action]"
+splat_id: 97f479cb-c69a-50ee-b949-cc7d086ce8ea
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/dash_action
+splat_name: Dash [Action]
 splat_pages:
 - 180
 ---

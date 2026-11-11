@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "dc5c84af-873c-5abb-a89a-212763a32eb4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/dire_wolf"
-splat_name: "Dire Wolf"
+splat_id: dc5c84af-873c-5abb-a89a-212763a32eb4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/dire_wolf
+splat_name: Dire Wolf
 splat_pages:
 - 347
 ---

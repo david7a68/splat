@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4e63dec4-9941-5ebc-aa99-3bd08dc4d388"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/druid"
-splat_name: "Druid"
+splat_id: 4e63dec4-9941-5ebc-aa99-3bd08dc4d388
+splat_kind: reference
+splat_key: dnd2024:reference/creature/druid
+splat_name: Druid
 splat_pages:
 - 282
 ---

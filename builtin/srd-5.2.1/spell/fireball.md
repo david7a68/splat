@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "39432b55-f861-509f-ab00-ff1869f4ec6a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fireball"
-splat_name: "Fireball"
+splat_id: 39432b55-f861-509f-ab00-ff1869f4ec6a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fireball
+splat_name: Fireball
 splat_pages:
 - 131
 ---

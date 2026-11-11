@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "df1eb196-9b82-585f-b001-c5f609cede05"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/augury"
-splat_name: "Augury"
+splat_id: df1eb196-9b82-585f-b001-c5f609cede05
+splat_kind: reference
+splat_key: dnd2024:reference/spell/augury
+splat_name: Augury
 splat_pages:
 - 111
 ---

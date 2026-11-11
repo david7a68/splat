@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d07bc762-9eeb-5f3c-8229-d2fbb47b8966"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sunburst"
-splat_name: "Sunburst"
+splat_id: d07bc762-9eeb-5f3c-8229-d2fbb47b8966
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sunburst
+splat_name: Sunburst
 splat_pages:
 - 167
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "81650905-4605-5d85-a0ef-35a42277bb28"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_hyena"
-splat_name: "Giant Hyena"
+splat_id: 81650905-4605-5d85-a0ef-35a42277bb28
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_hyena
+splat_name: Giant Hyena
 splat_pages:
 - 352
 ---

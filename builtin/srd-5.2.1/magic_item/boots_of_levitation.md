@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "da4e4644-af83-560f-a803-9475f0bfaf39"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/boots_of_levitation"
-splat_name: "Boots of Levitation"
+splat_id: da4e4644-af83-560f-a803-9475f0bfaf39
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/boots_of_levitation
+splat_name: Boots of Levitation
 splat_pages:
 - 213
 ---

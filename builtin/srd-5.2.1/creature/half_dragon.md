@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e219dff4-7eed-5927-a8d8-a53af77198df"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/half_dragon"
-splat_name: "Half-Dragon"
+splat_id: e219dff4-7eed-5927-a8d8-a53af77198df
+splat_kind: reference
+splat_key: dnd2024:reference/creature/half_dragon
+splat_name: Half-Dragon
 splat_pages:
 - 297
 ---

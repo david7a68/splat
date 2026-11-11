@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "dc625c06-aea8-571f-92cb-98bce46b9808"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/suggestion"
-splat_name: "Suggestion"
+splat_id: dc625c06-aea8-571f-92cb-98bce46b9808
+splat_kind: reference
+splat_key: dnd2024:reference/spell/suggestion
+splat_name: Suggestion
 splat_pages:
 - 166
 ---

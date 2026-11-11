@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f36af10a-4bc1-5db5-8f0e-b8eca080f58f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/enlarge_reduce"
-splat_name: "Enlarge/Reduce"
+splat_id: f36af10a-4bc1-5db5-8f0e-b8eca080f58f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/enlarge_reduce
+splat_name: Enlarge/Reduce
 splat_pages:
 - 127
 - 128

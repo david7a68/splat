@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6150073e-3e00-5de5-b4b0-2e54807d5667"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/folding_boat"
-splat_name: "Folding Boat"
+splat_id: 6150073e-3e00-5de5-b4b0-2e54807d5667
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/folding_boat
+splat_name: Folding Boat
 splat_pages:
 - 223
 ---

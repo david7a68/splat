@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ba81c5f-ad23-5c03-b050-ee70936daea3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/charmed_condition"
-splat_name: "Charmed [Condition]"
+splat_id: 2ba81c5f-ad23-5c03-b050-ee70936daea3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/charmed_condition
+splat_name: Charmed [Condition]
 splat_pages:
 - 178
 ---

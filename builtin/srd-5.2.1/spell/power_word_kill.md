@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ed22138b-0ffc-508d-86b1-540f6e8e1c39"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/power_word_kill"
-splat_name: "Power Word Kill"
+splat_id: ed22138b-0ffc-508d-86b1-540f6e8e1c39
+splat_kind: reference
+splat_key: dnd2024:reference/spell/power_word_kill
+splat_name: Power Word Kill
 splat_pages:
 - 154
 ---

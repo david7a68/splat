@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4a843653-8d74-540a-b709-889e1e52533c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wyvern"
-splat_name: "Wyvern"
+splat_id: 4a843653-8d74-540a-b709-889e1e52533c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wyvern
+splat_name: Wyvern
 splat_pages:
 - 343
 ---

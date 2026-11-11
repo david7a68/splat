@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4abcbf0c-8667-5fea-bf8c-ac7fe3daba5b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/moonbeam"
-splat_name: "Moonbeam"
+splat_id: 4abcbf0c-8667-5fea-bf8c-ac7fe3daba5b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/moonbeam
+splat_name: Moonbeam
 splat_pages:
 - 150
 - 151

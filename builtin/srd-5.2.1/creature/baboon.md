@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e5e5cb9c-02fa-5029-81e4-c62568d6d9fc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/baboon"
-splat_name: "Baboon"
+splat_id: e5e5cb9c-02fa-5029-81e4-c62568d6d9fc
+splat_kind: reference
+splat_key: dnd2024:reference/creature/baboon
+splat_name: Baboon
 splat_pages:
 - 345
 ---

@@ -485,10 +485,15 @@ mod tests {
         let index = Arc::new(ArtIndex::load([root.path()]));
         ctx.data_mut(|data| data.insert_temp(index_id(), index));
         let creature = |fields: &str| {
-            let text = splat::content::formats::convert("Fixture.md", &format!(
-                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\n{fields}---\n",
-                uuid::Uuid::new_v4()
-            )).expect("schema-2 fixture");
+            let text = splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {}\nsplat_kind: creature\nsplat_name: C\n{fields}",
+                    uuid::Uuid::new_v4()
+                ),
+                "",
+            )
+            .expect("schema-2 fixture");
             Entry::parse("c.md", &text).unwrap()
         };
         let art = |fields: &str| {

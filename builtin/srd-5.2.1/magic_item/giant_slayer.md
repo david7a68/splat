@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "42f171a6-4b85-5eb8-b633-8368aafbece9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/giant_slayer"
-splat_name: "Giant Slayer"
+splat_id: 42f171a6-4b85-5eb8-b633-8368aafbece9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/giant_slayer
+splat_name: Giant Slayer
 splat_pages:
 - 223
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1e5faa52-f220-588f-91bb-133486d92301"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/talisman_of_the_sphere"
-splat_name: "Talisman of the Sphere"
+splat_id: 1e5faa52-f220-588f-91bb-133486d92301
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/talisman_of_the_sphere
+splat_name: Talisman of the Sphere
 splat_pages:
 - 249
 ---

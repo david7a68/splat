@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "93ec7c59-aab4-5c66-a848-5f0bbe8da31c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/horn_of_valhalla"
-splat_name: "Horn of Valhalla"
+splat_id: 93ec7c59-aab4-5c66-a848-5f0bbe8da31c
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/horn_of_valhalla
+splat_name: Horn of Valhalla
 splat_pages:
 - 226
 ---

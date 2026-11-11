@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8e31780a-b953-59ba-b408-571cd28379c1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mislead"
-splat_name: "Mislead"
+splat_id: 8e31780a-b953-59ba-b408-571cd28379c1
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mislead
+splat_name: Mislead
 splat_pages:
 - 150
 ---

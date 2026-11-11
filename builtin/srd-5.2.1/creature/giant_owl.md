@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f0eb4eda-b555-5200-99d7-abb89da655c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_owl"
-splat_name: "Giant Owl"
+splat_id: f0eb4eda-b555-5200-99d7-abb89da655c9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_owl
+splat_name: Giant Owl
 splat_pages:
 - 352
 ---

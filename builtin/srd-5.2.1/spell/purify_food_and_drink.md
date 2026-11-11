@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "704dec56-c0d1-5f22-a2eb-588021e5cead"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/purify_food_and_drink"
-splat_name: "Purify Food and Drink"
+splat_id: 704dec56-c0d1-5f22-a2eb-588021e5cead
+splat_kind: reference
+splat_key: dnd2024:reference/spell/purify_food_and_drink
+splat_name: Purify Food and Drink
 splat_pages:
 - 157
 ---
