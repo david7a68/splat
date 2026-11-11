@@ -10,8 +10,9 @@ this design takes their shape and not their numbers.
 Session page, plan, rail and saved Undo. It keeps the data model and changes these things, which this
 document now states. Trackers is a view of the Lookup panel, and Ctrl+T goes there and back. The rail says
 `Due N` only while a notice is due. A tracker action is never a step of a run's Undo: the ledger is one
-ordered list of acts, and Undo steps back through it. A quick action can be offered once for each round of a
-fight. A mark's table can name its rolls. A Due row with proposed changes has `Apply and finish`.
+ordered list of acts, and Undo steps back through it. A mark can be raised by each new round of a
+fight (`every: round`). A mark's table can name its rolls. Each Due row ends with `Done`, which applies its
+proposed changes. A tracker with instances has one line for each instance.
 
 Three rounds of review shaped this version. The third round showed that each fix was adding rules for
 the next reviewer to break, so this version replaces most of those rules with stated limits. It has
@@ -126,9 +127,9 @@ a table a person writes. Today an unknown marker fails the whole note's parse
 ## House rule notes
 
 A **house rule note** is a `rule` entry with `implementation: splat:house_rules`. It reuses the Library's
-Rules section and **Copy to…**, and the document stays one document. **Make house rule note** on a world
-note adds these properties and a folded Splat data callout at the end of the note, and puts it in play. It does
-not change the note's own text.
+Rules section and **Copy to…**, and the document stays one document. A world note becomes a house rule note when it has
+these properties and a folded Splat data callout at its end, and it is then put in play. An action that adds them
+(**Make house rule note**) has no place yet ([The session cycle](session-cycle.md), F4).
 
 ````markdown
 ---
@@ -233,7 +234,6 @@ Rohan, missed 1", "Mirror Maze, Library". The DM changes it, and no rule reads i
 | `set` | A number |
 | `changes` | Several changes, to this or other trackers. They undo as one |
 | `table` | Also roll this table. The row's text is recorded with the change |
-| `each` | `round`: while a run is live, the run's notice line offers this action once at each new round, as one link (`Round 3: Fight minute`). Its entry holds the run and the round, so the link shows once for each. Splat never presses it |
 
 `Collect soul` moves the clock and fills the jar in one click:
 
@@ -261,18 +261,17 @@ A **mark** raises a notice when a value rises past it. Marks never act.
 
 | Field | Meaning |
 |---|---|
-| `at` or `every` | A value, or a repeating step |
+| `at` or `every` | A value, or a repeating step. `every: round` is raised by each new round of the open run. Its notice names the round (`Round 2 · Fight minute`), stays until **Done** or **Dismiss**, and is worked out from the run's round, so Splat writes nothing when a round begins |
 | `say` | The text of the notice |
 | `tables` | Tables to roll, with a **Roll** button on the notice. A table can name its rolls, `{table: rival_track, for: [Old Guard, Keyring, Convicts]}`: each press rolls for the next name, and the result starts with it |
 | `changes` | Proposed changes, shown on the notice |
 
-The **Due list** holds open notices. Each row names its instance: "Old Guard: First seal". A row with no
-proposed changes starts with a box, as a scene in the session's plan does: a tick means done, and the row
-goes. A row with proposed `changes` lists them with a box each and ends with **Apply and finish**, which
-applies the ones still ticked. **Dismiss**, in the row's menu, clears the row and applies nothing. A notice
+The **Due list** holds open notices. Each row names its instance: "Old Guard: First seal". Each row has its words, then
+one line of actions that ends with **Done**. Proposed `changes` show with a box each, ticked; **Done** applies
+the ticked ones and finishes the notice, as one entry. **Dismiss**, in the row's menu, clears the row and
+applies nothing. A notice
 stays open until then, including after a restart. A table's roll results are listed under the notice. A roll
-button names its table by the table's heading, never by its key. A notice whose words link an encounter
-group offers **Add to fight** on its row during a run, and **Plan “<name>”** outside one.
+button names its table by the table's heading, never by its key.
 
 A Due notice is not a turn reminder. A reminder belongs to one participant of one run and is in the run file.
 A notice belongs to the campaign and is in the ledger. A mark never makes a reminder. See the table in
@@ -327,7 +326,9 @@ notes:
 an entry ends it. So removing an entry gives back what it replaced. An entry holds the old value only where
 that cannot be worked out: `was` on a `set`.
 
-A tracker change has `add` or `set`, and it can also have `for`, `why`, `roll`, `row`, `use`, `session` and `event`. `event`
+A tracker change has `add` or `set`, and it can also have `for`, `why`, `roll`, `row`, `use`, `session` and `event`. `why`
+is the quick action's label, so the result line and Undo can name the act after a restart. `use` joins the changes of
+one press, which undo together. `event`
 is the latest Timeline event when the change was written, once the clock exists. If that event is gone, the
 row shows no time.
 
@@ -337,10 +338,11 @@ row shows no time.
 - **Moving a Timeline event never changes a value.**
 - **Tuning.** Editing `start` corrects the past. To change a value from today, the DM adds a change. The history
   shows the start value at its top.
-- **Undo.** The result line names the last act and has **Undo: <label>**. It removes this session's newest
-  entry, and the line then names the entry before it, so the DM steps back through the session's acts. The
+- **Undo.** The result line names the last act and has **Undo: <label>**. It removes the newest entry that
+  has the stamp of the session being played ([The session cycle](session-cycle.md), section 1.1), and the
+  line then names the entry before it, so the DM steps back, newest first. The
   ledger is a file, so the steps are there after a restart. Undo of an entry that raised a notice removes the
-  notice and its entries. In a tracker's history, **Remove** works on any row of an older session, with a
+  notice and its entries. A tracker's history shows in the house rule note's reader. There **Remove** works on any row with another stamp, with a
   one-step undo as the Timeline has (`src/timeline.rs:654-658`). Changes that share a `use` go together.
   Neither reverses later spending that relied on the old value.
 - **The `U` key.** A tracker action is never a step of a run's Undo. An earlier version put a step on the run's
@@ -350,8 +352,8 @@ row shows no time.
   keys are as beside any Lookup view: the letter keys are off.
 - **Repair.** A row for an unknown tracker or word stays in the file and shows in a problems list. The DM fixes
   it with find and replace, because the keys are plain words.
-- **Saving.** This shares `timeline::Book`'s atomic write and external-change checks (`src/timeline.rs:403-599`),
-  and does not copy them.
+- **Saving.** The ledger shares `timeline::Book`'s atomic write and external-change checks (`src/timeline.rs:924`),
+  which move to a shared place, and it merges by entry ID with its own code.
 - **The Timeline stays the story.** A race makes dozens of changes, and they do not go on the Timeline unless the DM
   presses **Add to Timeline**.
 
@@ -432,8 +434,9 @@ while a run is open. It asks for a stat block if the NPC has none, and it offers
 the run has more than one, and for initiative, or rolls it if that is empty. It then adds a one-member group, with the
 NPC's name as an override, through the run's existing `AddGroup` command. A team of rivals
 is a group already, such as `Rival: Convicts, 1-2 seals`, so the same path brings them in together. With no run open,
-the same place says **Start fight**: it saves an encounter named `Fight with <name>`, with the party and the
-NPC, and opens Setup ([The session cycle](session-cycle.md), F3). This is proposed, not built.
+the reader's header has **Start fight**: it saves an encounter named `Fight with <name>`, with the party and the
+NPC, and opens Setup. An NPC with no stat block joins through the form for a made-up creature
+([The session cycle](session-cycle.md), F3). This is proposed, not built.
 
 **Locations.** A location's page lists the places inside it and the NPCs there. The Timeline's `place` field suggests
 locations but stays plain text. An event's detail panel links to the location when the text matches exactly one name or
@@ -469,8 +472,6 @@ must not change this clock.
   its day, an event's panel shows when it starts, and the list says where the story is now.
 - **Shorter time** stays where it already works: rounds in a run, and the race clock as a tracker. A run does not move
   the clock, because a fight is minutes.
-- **Day numbers change once.** Only `Day` events count today (`src/timeline.rs:160`), so a "3 days" trip does not move the
-  day. With the clock, it does. References still work, because they use IDs. Heralds has no durations yet.
 - **If `Timeline.md` cannot be read,** the clock and the day marks must freeze when day marks exist, and the Due list must
   say why. They must not treat this as a timeline with no events (`src/timeline.rs:458-463`).
 
@@ -513,22 +514,25 @@ Trackers
 PINNED
 Elapsed race time 42 / 120   [Enter room] [Fight minute] ...
 Crowd Favor            3   [Crowd loves it] [Throw a gift]
-Seals   Party 1 · Old Guard 2   Old Guard: Coming for the party   [Take seal ⌄]
-> MORE TRACKERS 1
+Seals
+  Party        1   [Take seal] [Lose seal]
+  Old Guard    2   [Take seal] [Lose seal]   Coming for the party
 DUE 1
-☐ Bell. The Cistern floods.                          ⋯
-  [Roll Rival Track] [Roll Wandering, 0:40 to 1:19]
+Bell. The Cistern floods.
+  [Roll Rival Track] [Roll Wandering, 0:40 to 1:19]   Done ⋯
   Old Guard: 4 · Takes a seal.
+> MORE TRACKERS 1
 ──────────────────────────────────────────────
 ✓ Throw a gift: Favor −1.   Undo: Throw a gift   Add to Timeline
 ```
 
-Pinned trackers come first, in the note's order, and the rest are under **More trackers**. Due rows sit above the result
-line and grow upward, so a new notice moves no quick action. The result line keeps a fixed place at the panel's bottom
-edge, and the list above it scrolls. A typed amount holds focus until Enter or Escape. The rail's status slot says `Due 2`
+The view is one scroll area, as Lookup's reader is: the pinned trackers in the note's order, then the Due rows, then
+**More trackers**. So a new notice moves no pinned quick action. The view's heading holds the Due count, which opens the
+Due rows, and the result line keeps a fixed place at the panel's bottom edge. A tracker with instances has one line for
+each instance, with its value and the quick actions. A typed amount holds focus until Enter or Escape. The rail's status slot says `Due 2`
 with a bell while a notice is due, on every page, and nothing about trackers at other times; a click opens the view. In a
-run, the header's notice line ends with the bell and the count while a notice is due, shows a new notice's words for one
-turn, and offers an `each: round` action once at each new round; [The session cycle](session-cycle.md), section 1.4, has
+run, the header's notice line ends with the bell and the count while a notice is due, and shows a new notice for one
+turn with its one action (**Done**, or **Add to fight** for a group); [The session cycle](session-cycle.md), section 1.4, has
 the one order for that line. The Session page has no tracker surface of its own: the rail is on that page too. Splat is
 one DM's tool, so it has no visibility model. A secret number is secret because it is not pinned.
 
