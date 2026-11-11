@@ -2322,7 +2322,7 @@ impl CopyPlan {
                 }
             }
         }
-        let new_id = Uuid::new_v4();
+        let new_id = crate::hermetic::new_uuid();
         // A were-creature's curse makes more of this creature, and the copy's makes more of the
         // copy. Prose that only names the original keeps its words.
         let normalized = source.text.clone();
