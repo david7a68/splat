@@ -4580,8 +4580,20 @@ impl Encounters {
                 let side = design::reader::human_label(&slot.side);
                 // The row states the fault in the tone of the message above the roster.
                 let (fault_icon, fault_color) = missing_creature_mark(unreadable);
+                // Two files of one identity: the row says the short cause, and the message above
+                // the roster and the row's hover name the files once.
+                let fault_words = unreadable.map_or(MISSING_CREATURE, |note| {
+                    if !note.duplicate {
+                        note.word.as_str()
+                    } else if crate::world::repair_in_world(&note.path) {
+                        // World's row words for the same fault.
+                        "Same note in two files"
+                    } else {
+                        crate::library::SAME_ENTRY
+                    }
+                });
                 let detail = if missing {
-                    format!("{side_icon} {side} · {fault_icon} {}", unreadable.map_or(MISSING_CREATURE, |note| note.word.as_str()))
+                    format!("{side_icon} {side} · {fault_icon} {fault_words}")
                 } else if detail.is_empty() {
                     format!("{side_icon} {side}{identity}")
                 } else {
@@ -4638,7 +4650,10 @@ impl Encounters {
                                 for (text, color) in [(&detail[..split], colors().muted), (&detail[split..split + fault_icon.len()], fault_color), (&detail[split + fault_icon.len()..], colors().muted)] {
                                     job.append(text, 0.0, egui::TextFormat { font_id: Type::Small.font(ui), color, ..Default::default() });
                                 }
-                                ui.add(egui::Label::new(job).wrap());
+                                let shown = ui.add(egui::Label::new(job).wrap());
+                                if let Some(note) = unreadable.filter(|note| note.duplicate) {
+                                    shown.on_hover_text(&note.word);
+                                }
                             } else if !detail.is_empty() {
                                 if changed && !is_open {
                                     ui.spacing_mut().interact_size.y = 0.0;
@@ -5599,7 +5614,10 @@ mod tests {
             .shapes
             .iter()
             .filter_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.text().contains("These two files claim") => {
+                // Round 24 FA3: each row says the short cause; the file names are on its hover.
+                egui::Shape::Text(text)
+                    if text.galley.text().contains(crate::library::SAME_ENTRY) =>
+                {
                     Some(text)
                 }
                 _ => None,

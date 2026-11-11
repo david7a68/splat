@@ -471,17 +471,14 @@ impl ManifestWrite {
     pub fn path(&self) -> &str {
         &self.path
     }
+    /// The result, with one verb for the step and its Undo (`Undo write <file>`), whether the
+    /// write replaced a file or wrote a missing one.
     pub fn message(&self) -> String {
-        format!(
-            "{} was {}.",
-            self.path,
-            if self.replaced() {
-                "replaced"
-            } else {
-                "written again"
-            }
-        )
+        format!("{} was written again.", self.path)
     }
+    /// True when the write replaced a file that was there. The result says `written again`
+    /// either way; tests ask which write it was.
+    #[cfg(test)]
     pub fn replaced(&self) -> bool {
         self.before.is_some()
     }

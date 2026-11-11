@@ -1567,6 +1567,40 @@ pub mod reader_tables {
                 ),
             );
         }
+        // Round 24 FA8: the first column's rule shows only while the columns scroll under it, and
+        // then it runs through the header as well as the rows.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let seen = d.at_size(size, |d| {
+                let level = d.painted_rect_in("Level", egui::Rect::EVERYTHING)?;
+                let row = d.painted_rect_in("Memorize Spell", egui::Rect::EVERYTHING)?;
+                let area = egui::Rect::from_min_max(
+                    egui::pos2(level.left() - 1.0, level.top() - crate::design::XS),
+                    egui::pos2(row.right(), row.bottom() + crate::design::XS),
+                );
+                Some((
+                    level,
+                    row,
+                    d.vertical_segments_in(area),
+                    d.has_containing("More columns"),
+                ))
+            });
+            let ok = seen.as_ref().is_some_and(|(level, row, rules, scrolls)| {
+                if *scrolls {
+                    rules
+                        .iter()
+                        .any(|rule| rule.top() <= level.top() && rule.bottom() >= row.bottom())
+                } else {
+                    rules.is_empty()
+                }
+            });
+            d.observe(
+                "iter-24-L-FA8",
+                ok,
+                format!(
+                    "At {size:?} a table that fits has no column rule, and a scrolling one has a rule through its header: header, row, rules, scrolls = {seen:?}"
+                ),
+            );
+        }
         let table = d.place_of("Memorize Spell").expect("feature cell");
         d.scroll_at(table.center(), 1);
         d.observe(
@@ -6785,6 +6819,34 @@ pub mod library_scope {
                 }),
                 format!(
                     "At {size:?} every scope choice {choices:?} ends inside the scope control {control:?}"
+                ),
+            );
+        }
+        // Round 24 FA5: the open menu is as wide as its control, so it covers the counts beside
+        // the control. Each choice fills the menu's content width, so the choices' insets from
+        // the control's two edges are equal, and each is the menu's frame (its margin and rule).
+        let frame = f32::from(d.app_style().spacing.menu_margin.left)
+            + d.app_style().visuals.window_stroke.width;
+        for size in [SMALL, DEFAULT] {
+            let (control, choices) = d.at_size(size, |d| {
+                (
+                    d.place_of(&format!("What the Library shows: {USES}")),
+                    [USES, EVERYTHING, MODULE].map(|name| d.place_of(name)),
+                )
+            });
+            d.observe(
+                "iter-24-L-FA5",
+                control.is_some_and(|control| {
+                    choices.iter().all(|choice| {
+                        choice.is_some_and(|choice| {
+                            let left = choice.left() - control.left();
+                            let right = control.right() - choice.right();
+                            (left - right).abs() <= 1.0 && right <= frame + 1.0
+                        })
+                    })
+                }),
+                format!(
+                    "At {size:?} the scope menu's choices {choices:?} sit the menu frame ({frame}) inside both edges of the control {control:?}"
                 ),
             );
         }
@@ -13459,6 +13521,24 @@ pub mod session_plan_groups {
             d.editor_text()
                 .is_some_and(|text| text.contains(&missing_id)),
             "Repair opens the referring member's file without changing it",
+        );
+        // Round 24 FH5: both links name the one missing creature, so the row has one mark and
+        // one cause.
+        let rows: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Lost Patrol · "))
+            .map(|node| node.name)
+            .collect();
+        d.observe(
+            "iter-24-L-FH5",
+            !rows.is_empty()
+                && rows.iter().all(|row| {
+                    row.contains(&format!("{} 2 broken links", crate::icons::WARN))
+                        && row.matches(crate::icons::WARN).count() == 1
+                        && !row.contains("Needs fixing")
+                }),
+            format!("The Lost Patrol row says its broken links once: {rows:?}"),
         );
         d.state("missing-member-repair", Sizes::All);
         // Lines that name the id: the notes' words, the example row, and the member row, which
