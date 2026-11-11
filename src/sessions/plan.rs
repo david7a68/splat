@@ -5,16 +5,22 @@ use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     encounter_run::fight_summary,
     encounters::PlanFight,
-    sessions::{Apply, each_linked_name, insert_in_note, linked_names, section_text},
+    lookup::ContentIndex,
+    sessions::{
+        Apply, NoteUndo, PlanLine, TaskLine, add_scene, change_line, each_linked_name,
+        insert_in_note, linked_names, plain_links, plan_lines, ticked,
+    },
     timeline::{
         self, Book, Kind,
-        page::{added_message, long_rest_status, problems, quick_add, rest_ruling},
+        page::{added_message, long_rest_status, problems, quick_add_with, rest_ruling},
         removed_event_words,
     },
 };
 use eframe::egui;
 use std::{
     collections::BTreeMap,
+    path::Path,
+    sync::Arc,
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -243,13 +249,34 @@ fn plan_row(
     ui: &mut egui::Ui,
     widths: &[f32],
     icon: &str,
+    words: impl FnMut(&mut egui::Ui),
+    summary: impl FnMut(&mut egui::Ui),
+    action: impl FnMut(&mut egui::Ui),
+) {
+    plan_row_with(
+        ui,
+        widths,
+        |ui| {
+            ui.label(Type::Body.rich(ui, icon).color(colors().muted));
+        },
+        words,
+        summary,
+        action,
+    );
+}
+
+/// A plan row whose start is `lead`: a fight's caret, or a scene's box.
+fn plan_row_with(
+    ui: &mut egui::Ui,
+    widths: &[f32],
+    lead: impl FnOnce(&mut egui::Ui),
     mut words: impl FnMut(&mut egui::Ui),
     mut summary: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
-        ui.label(Type::Body.rich(ui, icon).color(colors().muted));
+        lead(ui);
         ui.vertical(|ui| {
             let left = ui.cursor().min;
             let title_width = (ui.available_width() - widths[1] - design::S).max(design::XL);
@@ -474,6 +501,196 @@ fn removal_replaced_by(book: &Book, deleted_run: Option<Uuid>) -> Option<u64> {
         .and(book.removal_action())
 }
 
+/// Where a scene stands among the plan's rows: before the planned fight at that position, or
+/// after the last, and its place among the scenes there.
+type Slot = (usize, usize);
+
+/// A scene of the plan: a task line that links no fight and no group.
+struct Scene {
+    task: TaskLine,
+    /// The one entry that its words link, when they link exactly one.
+    entry: Option<SceneEntry>,
+}
+
+struct SceneEntry {
+    /// Its kind, status and place, for a World entry.
+    detail: Option<String>,
+    /// The fight that its `Start fight` starts, for an NPC or a creature.
+    start: Option<crate::world::StartFight>,
+}
+
+/// A World entry's kind, status and place, as a scene's second line and a suggestion say it.
+fn world_detail(index: &ContentIndex, at: usize) -> String {
+    let item = &index.items[at];
+    let kind = if crate::world::world_type(&item.entry) == "npc" {
+        "NPC".to_owned()
+    } else {
+        item.subtitle.clone()
+    };
+    let place = index
+        .place_of(item.entry.id)
+        .map(|place| index.items[place].entry.name.clone());
+    [
+        Some(kind),
+        Some(crate::world::status(&item.entry).to_owned()),
+        place,
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|part| !part.trim().is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
+fn is_world(index: &ContentIndex, at: usize) -> bool {
+    let item = &index.items[at];
+    item.entry.kind == "world" || item.is_world_note()
+}
+
+/// The one entry that a scene's words link, when they link exactly one.
+fn scene_entry(index: &ContentIndex, words: &str) -> Option<SceneEntry> {
+    let mut found = Vec::new();
+    for name in each_linked_name(words) {
+        if let crate::world::Go::Item(at, _) = index.resolve_link(&name, None)
+            && !found.contains(&at)
+        {
+            found.push(at);
+        }
+    }
+    let [at] = found[..] else {
+        return None;
+    };
+    let item = &index.items[at];
+    Some(SceneEntry {
+        detail: is_world(index, at).then(|| world_detail(index, at)),
+        start: crate::world::start_fight(item, index),
+    })
+}
+
+/// What the plan's scenes keep between frames. Each result belongs to its act and ends as that
+/// act's Undo does: at any other change of the note's words, or in another note.
+#[derive(Default)]
+pub(super) struct Scenes {
+    /// The Scene field, while it is open.
+    field: Option<design::AddField>,
+    /// `Scene added to tonight.`
+    added: Option<NoteUndo>,
+    /// A scene taken out of tonight: its place among the rows, its words, and its Undo.
+    removed: Option<(Slot, String, NoteUndo)>,
+    /// What the last act could not do, while the note's words are the words it met.
+    fault: Option<(String, String)>,
+}
+
+impl Scenes {
+    /// The note moved to a new file, and the Undos follow it.
+    pub(super) fn moved(&mut self, from: &Path, to: &Path) {
+        if let Some(undo) = &mut self.added {
+            undo.moved(from, to);
+        }
+        if let Some((.., undo)) = &mut self.removed {
+            undo.moved(from, to);
+        }
+    }
+}
+
+/// A scene act that the plan takes after it draws.
+enum SceneAct {
+    Add(String),
+    Tick(TaskLine),
+    Remove(Slot, TaskLine),
+    UndoAdd,
+    UndoRemove,
+    StartFight(crate::world::StartFight),
+}
+
+/// One scene: its box where a fight has its caret, its words as the Reader draws them, its
+/// entry's kind, status and place, and its menu.
+fn scene_row(
+    ui: &mut egui::Ui,
+    width: f32,
+    scene: &Scene,
+    slot: Slot,
+    plan: &Plan<'_>,
+    act: &mut Option<SceneAct>,
+) {
+    let c = colors();
+    let task = &scene.task;
+    let plain = plain_links(&task.words);
+    let widths = [
+        width - Density::Read.control() - design::S,
+        Density::Read.control(),
+    ];
+    let mut tick = false;
+    let mut remove = false;
+    let mut start = None;
+    ui.push_id(("scene", task.at, &task.line), |ui| {
+        plan_row_with(
+            ui,
+            &widths,
+            |ui| {
+                let mut done = task.done;
+                let size = egui::vec2(design::XL, design::XL);
+                let response = ui.add_sized(size, egui::Checkbox::without_text(&mut done));
+                let state = if task.done { "Done" } else { "Open" };
+                design::named(ui, &response, &format!("{state}: {plain}"));
+                tick = response.clicked();
+            },
+            |ui| {
+                ui.scope(|ui| {
+                    if task.done {
+                        ui.visuals_mut().override_text_color = Some(c.muted);
+                    }
+                    crate::markdown_view::show_reader(ui, &task.words);
+                });
+            },
+            |ui| {
+                if let Some(detail) = scene
+                    .entry
+                    .as_ref()
+                    .and_then(|entry| entry.detail.as_deref())
+                {
+                    wrapped_words(ui, Type::Small, detail, c.muted);
+                }
+            },
+            |ui| {
+                design::row_menu(ui, &plain, |ui| {
+                    if Action::quiet("Remove from tonight").show(ui).clicked() {
+                        remove = true;
+                        ui.close();
+                    }
+                    // While a run is open, the reader's Add to fight is the way in.
+                    if plan.open_run.is_none()
+                        && let Some(fight) =
+                            scene.entry.as_ref().and_then(|entry| entry.start.as_ref())
+                    {
+                        if Action::quiet("Start fight")
+                            .icon(icons::RUN)
+                            .name(&format!("Start a fight with {}", fight.name))
+                            .blocked(plan.blocked)
+                            .show(ui)
+                            .clicked()
+                        {
+                            start = Some(fight.clone());
+                            ui.close();
+                        }
+                        if let Some(reason) = plan.blocked {
+                            wrapped_words(ui, Type::Small, reason, c.muted);
+                        }
+                    }
+                });
+            },
+        );
+        plan_rule(ui);
+    });
+    if tick {
+        *act = Some(SceneAct::Tick(task.clone()));
+    } else if remove {
+        *act = Some(SceneAct::Remove(slot, task.clone()));
+    } else if let Some(fight) = start {
+        *act = Some(SceneAct::StartFight(fight));
+    }
+}
+
 impl Sessions {
     fn removed_group_message(
         &self,
@@ -532,21 +749,60 @@ impl Sessions {
                 *played.entry(event.title.to_lowercase()).or_default() += 1;
             }
         }
-        let fight_plan = section_text(&body, "Plan for tonight").unwrap_or_default();
-        let planned: Vec<&PlanFight> = each_linked_name(&fight_plan)
-            .iter()
-            .filter_map(|name| {
+        // The plan's lines in the note's order: the fights still to come, and the scenes
+        // before each of them and after the last.
+        let index = ui
+            .ctx()
+            .data(|data| data.get_temp::<Arc<ContentIndex>>(egui::Id::new("reader_link_index")));
+        let mut planned: Vec<&PlanFight> = Vec::new();
+        let mut scenes: Vec<Vec<Scene>> = vec![Vec::new()];
+        for line in plan_lines(&body) {
+            let (names, task) = match line {
+                PlanLine::Task(task) => (each_linked_name(&task.words), Some(task)),
+                PlanLine::Links(names) => (names, None),
+            };
+            let fight_or_group = names.iter().any(|name| {
                 plan.fights
                     .iter()
-                    .find(|fight| fight.name.eq_ignore_ascii_case(name))
-            })
-            .filter(|fight| {
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                    || plan
+                        .groups
+                        .iter()
+                        .any(|group| group.name.eq_ignore_ascii_case(name))
+            });
+            if let Some(task) = task.filter(|_| !fight_or_group) {
+                let entry = index
+                    .as_ref()
+                    .and_then(|index| scene_entry(index, &task.words));
+                scenes
+                    .last_mut()
+                    .expect("one list of scenes for each place")
+                    .push(Scene { task, entry });
+                continue;
+            }
+            for name in names {
+                let Some(fight) = plan
+                    .fights
+                    .iter()
+                    .find(|fight| fight.name.eq_ignore_ascii_case(&name))
+                else {
+                    continue;
+                };
                 let done = played.entry(fight.name.to_lowercase()).or_default();
                 let waiting = *done == 0;
                 *done = done.saturating_sub(1);
-                waiting
-            })
-            .collect();
+                if waiting {
+                    planned.push(fight);
+                    scenes.push(Vec::new());
+                }
+            }
+        }
+        let open_scenes = scenes
+            .iter()
+            .flatten()
+            .filter(|scene| !scene.task.done)
+            .count();
+        let mut scene_act = None;
         let planned_groups: Vec<_> = linked_names(&body)
             .iter()
             .filter(|name| {
@@ -574,12 +830,26 @@ impl Sessions {
                 .filter(|event| event.is_in(session))
                 .count()
                 + planned.len()
-                + planned_groups.len(),
+                + planned_groups.len()
+                + open_scenes,
         );
-        let added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
+        let scene = Action::quiet("Scene")
+            .icon(icons::CHECK_SQUARE)
+            .name("Add Scene")
+            .density(Density::Read);
+        let added = match quick_add_with(ui, book, session, &PLAN_KINDS, vec![scene], |ui| {
             self.fight_menu(ui, plan);
             self.group_menu(ui, plan);
-        });
+        }) {
+            Some(Ok(id)) => Some(id),
+            Some(Err(_)) => {
+                let mut field = design::AddField::default();
+                field.focus = true;
+                self.scenes.field = Some(field);
+                None
+            }
+            None => None,
+        };
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
                 .notes
@@ -618,6 +888,7 @@ impl Sessions {
             })
             .collect();
         self.plan_messages(ui, book, session, plan, &planned_results);
+        self.scene_messages(ui, &mut scene_act);
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
@@ -775,6 +1046,7 @@ impl Sessions {
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
+                    self.scene_rows(ui, width, &scenes[position], position, plan, &mut scene_act);
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     let saved = planned_saved_run(fight, plan.fights, plan.saved_runs);
@@ -838,6 +1110,8 @@ impl Sessions {
                     });
                 }
                 self.removed_fight_message(ui, session, planned.len());
+                self.scene_rows(ui, width, &scenes[planned.len()], planned.len(), plan, &mut scene_act);
+                any |= scenes.iter().any(|scenes| !scenes.is_empty());
                 for (position, group) in planned_groups.iter().enumerate() {
                     undo_group_remove |= self.removed_group_message(ui, session, position);
                     any = true;
@@ -900,8 +1174,15 @@ impl Sessions {
                     design::empty_state(ui, icons::SESSIONS, "Nothing planned yet",
                         "Use Add to plan a fight, a group, or an event.", |_| {});
                 }
+                self.scene_field(ui, index.as_deref(), &mut scene_act);
             });
         });
+        if let Some(target) = crate::markdown_view::take_note_link(ui.ctx()) {
+            self.open_note_link(target);
+        }
+        if let Some(act) = scene_act {
+            self.scene_act(act, session);
+        }
         // A draft is open only for a selected session, so the act has its session.
         if let Some((position, name)) = remove_fight
             && let Some(draft) = &mut self.draft
@@ -1009,6 +1290,171 @@ impl Sessions {
             self.added = None;
             self.mentions
                 .insert(session, timeline::referenced_ids(&draft.body));
+        }
+    }
+
+    /// The scenes at one place among the plan's rows, each with its removal's Undo in its place.
+    fn scene_rows(
+        &mut self,
+        ui: &mut egui::Ui,
+        width: f32,
+        scenes: &[Scene],
+        position: usize,
+        plan: &Plan<'_>,
+        act: &mut Option<SceneAct>,
+    ) {
+        for (at, scene) in scenes.iter().enumerate() {
+            self.removed_scene_message(ui, (position, at), act);
+            scene_row(ui, width, scene, (position, at), plan, act);
+        }
+        self.removed_scene_message(ui, (position, scenes.len()), act);
+    }
+
+    fn removed_scene_message(&self, ui: &mut egui::Ui, slot: Slot, act: &mut Option<SceneAct>) {
+        let Some((at, words, undo)) = &self.scenes.removed else {
+            return;
+        };
+        if *at != slot || self.draft.as_ref().is_none_or(|draft| !undo.live(draft)) {
+            return;
+        }
+        ui.add_space(design::S);
+        if design::undo_message(
+            ui,
+            Tone::Info,
+            &format!("Removed “{words}” from tonight."),
+            "Undo remove",
+        ) {
+            *act = Some(SceneAct::UndoRemove);
+        }
+    }
+
+    /// The scenes' results in the plan's message place, below the Add strip.
+    fn scene_messages(&mut self, ui: &mut egui::Ui, act: &mut Option<SceneAct>) {
+        let body = self.draft.as_ref().map(|draft| draft.body.as_str());
+        if let Some((words, met)) = &self.scenes.fault {
+            if body == Some(met.as_str()) {
+                design::message(ui, Tone::Warning, words);
+            } else {
+                self.scenes.fault = None;
+            }
+        }
+        if let Some(undo) = &self.scenes.added
+            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+            && design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene")
+        {
+            *act = Some(SceneAct::UndoAdd);
+        }
+    }
+
+    /// `Scene`'s field at the end of the plan. Enter adds a scene and keeps the field open for
+    /// the next; Escape clears and closes it.
+    fn scene_field(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: Option<&ContentIndex>,
+        act: &mut Option<SceneAct>,
+    ) {
+        let Some(state) = &mut self.scenes.field else {
+            return;
+        };
+        let reveal = state.focus;
+        ui.add_space(design::S);
+        let result = design::add_field(
+            ui,
+            state,
+            "Plan a scene",
+            "Plan a scene: words, a person or a place",
+            0.0,
+            |_| None,
+            |words| {
+                let Some(index) = index else {
+                    return Vec::new();
+                };
+                let rows = index
+                    .search(&words.trim().to_lowercase())
+                    .into_iter()
+                    .filter(|at| is_world(index, *at))
+                    .take(4)
+                    .map(|at| {
+                        (
+                            index.items[at].entry.name.clone(),
+                            world_detail(index, at),
+                            index.link_to(at),
+                        )
+                    })
+                    .collect();
+                vec![design::Suggestions {
+                    label: "World",
+                    rows,
+                }]
+            },
+        );
+        if reveal {
+            result.field.scroll_to_me(None);
+        }
+        let typed = state.words.trim().to_owned();
+        if let Some(link) = result.chosen {
+            *act = Some(SceneAct::Add(link));
+        } else if result.enter && !typed.is_empty() {
+            *act = Some(SceneAct::Add(typed));
+        }
+        if ui.input(|input| input.key_pressed(egui::Key::Escape))
+            && (result.field.has_focus() || result.field.lost_focus())
+            && state.words.is_empty()
+        {
+            self.scenes.field = None;
+        }
+    }
+
+    /// One scene act, through the note's one act path: it follows the disk, changes one line and
+    /// saves at once. What it could not do shows in the plan's message place.
+    fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
+        if let SceneAct::StartFight(fight) = act {
+            self.wants_start_fight = Some(fight);
+            return;
+        }
+        let (Some(draft), Some(note)) = (&mut self.draft, session) else {
+            return;
+        };
+        let scenes = &mut self.scenes;
+        scenes.fault = None;
+        let result = match act {
+            SceneAct::StartFight(_) => return,
+            SceneAct::Add(words) => draft
+                .apply(note, Apply::Now, |text| Some(add_scene(text, &words)))
+                .map(|undo| {
+                    scenes.added = Some(undo);
+                    if let Some(field) = &mut scenes.field {
+                        field.clear();
+                        field.focus = true;
+                    }
+                }),
+            SceneAct::Tick(task) => draft
+                .apply(note, Apply::Now, |text| {
+                    change_line(
+                        text,
+                        task.at,
+                        &task.line,
+                        Some(&ticked(&task.line, !task.done)),
+                    )
+                })
+                .map(drop),
+            SceneAct::Remove(slot, task) => draft
+                .apply(note, Apply::Now, |text| {
+                    change_line(text, task.at, &task.line, None)
+                })
+                .map(|undo| scenes.removed = Some((slot, plain_links(&task.words), undo))),
+            SceneAct::UndoAdd => match scenes.added.take() {
+                Some(undo) => undo.undo(draft),
+                None => Ok(()),
+            },
+            SceneAct::UndoRemove => match scenes.removed.take() {
+                Some((.., undo)) => undo.undo(draft),
+                None => Ok(()),
+            },
+        };
+        if let Err(fault) = result {
+            scenes.fault = Some((fault.words().to_owned(), draft.body.clone()));
         }
     }
 
@@ -1727,6 +2173,217 @@ mod tests {
             );
             assert_eq!(undo.live(draft), !copy, "a copy: {copy}");
         }
+    }
+
+    /// T12.10 and section 4.1 of the session-cycle design: a scene's box, its removal and the
+    /// Scene field are note acts. Each follows the disk, writes the note at once, and refuses with
+    /// words when unsaved typed words meet a changed file; a failed save says so, and the file
+    /// holds what an act wrote after a restart. An Undo survives an act that leaves the note's
+    /// words alone, and ends at one that changes them.
+    #[test]
+    fn scenes_are_note_acts_with_their_own_undo() {
+        use crate::sessions::{NewNote, create_note, plan_lines};
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 2,
+                title: "The Crossing",
+                date: "2026-11-01",
+                campaign: "Marches",
+                template: "## Plan for tonight\n\n- [[Bridge]]\n- [ ] [[Captain Varra]]\n- [x] The miller is the informer\n- Hobb owes money\n\n## What happened\n\n",
+            },
+        )
+        .unwrap();
+        let read = || fs::read_to_string(&note.path).unwrap();
+        let page = Sessions {
+            selected: Some(note.id),
+            notes: vec![note.clone()],
+            folder: Some(dir.path().to_owned()),
+            draft: Some(Draft::open(&note.path).unwrap()),
+            ..Sessions::default()
+        };
+        let fights = [planned_fight("Bridge", "Encounters/Bridge.md")];
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH, 800.0))
+            .build_state(
+                |ctx, (page, book): &mut (Sessions, Book)| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &fights,
+                        saved_runs: &[],
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                    };
+                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan));
+                },
+                (page, Book::default()),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        // Two scenes, each with its box; the plain list line has no row. A done scene does not
+        // count among the rows still to come.
+        assert!(harness.query_by_label("Open: Captain Varra").is_some());
+        assert!(
+            harness
+                .query_by_label("Done: The miller is the informer")
+                .is_some()
+        );
+        assert!(harness.query_by_label_contains("Hobb").is_none());
+        assert!(harness.query_by_label("TONIGHT 2").is_some());
+
+        // An edit on disk a moment before is in the words that a tick changes. One character.
+        let outside = read().replace(
+            "- Hobb owes money\n",
+            "- Hobb owes money\n- [ ] Pay the toll\n",
+        );
+        fs::write(&note.path, &outside).unwrap();
+        harness.get_by_label("Open: Captain Varra").click();
+        harness.run_steps(2);
+        let ticked = read();
+        assert_eq!(ticked.len(), outside.len());
+        assert_eq!(
+            ticked
+                .chars()
+                .zip(outside.chars())
+                .filter(|(a, b)| a != b)
+                .count(),
+            1
+        );
+        assert!(ticked.contains("- [x] [[Captain Varra]]\n- [x] The miller"));
+        assert!(harness.query_by_label("Done: Captain Varra").is_some());
+        assert!(harness.query_by_label("Open: Pay the toll").is_some());
+        // A tick is its own Undo.
+        harness.get_by_label("Done: Captain Varra").click();
+        harness.run_steps(2);
+        assert_eq!(read(), outside);
+
+        // Remove from tonight takes the line out at once, with Undo remove in its place. An act
+        // that leaves the note's words alone keeps that Undo, and it puts the line back.
+        harness
+            .get_by_label("More actions for Captain Varra")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove from tonight").click();
+        harness.run_steps(2);
+        assert!(!read().contains("Captain Varra"));
+        assert!(
+            harness
+                .query_by_label("Removed “Captain Varra” from tonight.")
+                .is_some()
+        );
+        harness.state_mut().1.add(Kind::Day, Some(note.id));
+        harness.run_steps(2);
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(2);
+        assert_eq!(read(), outside);
+        assert_eq!(harness.state().1.events.len(), 1, "the other act stays");
+        // An act that changes the note's words ends that Undo.
+        harness
+            .get_by_label("More actions for Captain Varra")
+            .click();
+        harness.run_steps(2);
+        harness.get_by_label("Remove from tonight").click();
+        harness.run_steps(2);
+        harness.get_by_label("Open: Pay the toll").click();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Undo remove").is_none());
+        assert!(read().contains("- [x] Pay the toll") && !read().contains("Captain Varra"));
+
+        // Scene, in the strip's More list: Enter adds a task line at the end of the plan, keeps
+        // the field open, and Undo scene takes the line back out.
+        harness.get_by_label("More Add actions").click();
+        harness.run_steps(2);
+        harness.get_by_label("Add Scene").click();
+        harness.run_steps(3);
+        let before = read();
+        harness
+            .get_by_label("Plan a scene")
+            .type_text("Meet the ferryman");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert!(read().contains("- [x] Pay the toll\n- [ ] Meet the ferryman\n\n## What happened"));
+        assert!(harness.query_by_label("Scene added to tonight.").is_some());
+        assert!(
+            harness.query_by_label("Plan a scene").is_some(),
+            "the field stays open"
+        );
+        harness.get_by_label("Undo scene").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+
+        // Unsaved typed words and a changed file: the act changes nothing and says why.
+        {
+            let draft = harness.state_mut().0.draft.as_mut().unwrap();
+            draft.body.push_str("Words being typed.\n");
+            draft.edited();
+        }
+        let changed = read().replace("## What happened", "## What happened\n\nObsidian");
+        fs::write(&note.path, &changed).unwrap();
+        harness.get_by_label("Done: Pay the toll").click();
+        harness.run_steps(2);
+        assert_eq!(read(), changed);
+        assert!(
+            harness
+                .query_by_label("The note changed on disk. Choose in the note first.")
+                .is_some()
+        );
+
+        // A failed save says so, and the tick waits in the draft.
+        {
+            let page = &mut harness.state_mut().0;
+            page.draft = Some(Draft::open(&note.path).unwrap());
+        }
+        harness.run_steps(2);
+        let mut permissions = fs::metadata(dir.path()).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o555);
+        fs::set_permissions(dir.path(), permissions.clone()).unwrap();
+        harness.get_by_label("Done: Pay the toll").click();
+        harness.run_steps(2);
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+        fs::set_permissions(dir.path(), permissions).unwrap();
+        assert_eq!(read(), changed);
+        assert!(harness.query_by_label("Notes not saved").is_some());
+        assert!(
+            harness
+                .state()
+                .0
+                .draft
+                .as_ref()
+                .unwrap()
+                .body
+                .contains("- [ ] Pay the toll")
+        );
+
+        // After a restart, the note holds what the acts wrote.
+        let reopened = Draft::open(&note.path).unwrap();
+        let tasks: Vec<_> = plan_lines(&reopened.body)
+            .into_iter()
+            .filter_map(|line| match line {
+                crate::sessions::PlanLine::Task(task) => Some((task.done, task.words)),
+                crate::sessions::PlanLine::Links(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            tasks,
+            [
+                (true, "The miller is the informer".to_owned()),
+                (true, "Pay the toll".to_owned())
+            ]
+        );
     }
 
     #[test]

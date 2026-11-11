@@ -508,6 +508,56 @@ pub(super) fn in_progress_list(
     ui.add_space(design::L);
 }
 
+impl Encounters {
+    /// `Remove…` on a Ready to run row: its result, with the words and the pattern of a saved
+    /// group's removal.
+    pub(super) fn encounter_remove_undo(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        modules: &[Module],
+    ) {
+        let Some(removed) = &self.removed_encounter else {
+            return;
+        };
+        if design::undo_message(
+            ui,
+            Tone::Info,
+            &format!("Removed encounter {}.", removed.name),
+            "Undo remove encounter",
+        ) {
+            match removed.restore() {
+                Ok(()) => {
+                    self.removed_encounter = None;
+                    self.reload_snapshot(active, modules);
+                    self.saved = true;
+                }
+                Err(error) => {
+                    self.error = Some(format!("The encounter did not come back: {error}"));
+                }
+            }
+        }
+    }
+}
+
+/// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
+/// but names it. Only an encounter with none can be removed.
+fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> bool {
+    let template = row.template;
+    row.unfinished_run
+        || page
+            .history
+            .iter()
+            .flat_map(|session| &session.runs)
+            .any(|past| {
+                past.template
+                    .is_some_and(|other| other.path == template.path)
+            })
+        || page.unreadable.iter().any(|run| {
+            run.source == Some(template.id) || run.encounter.eq_ignore_ascii_case(&template.name)
+        })
+}
+
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -561,6 +611,9 @@ pub(super) fn ready_list(
                 row_menu(ui, &template.name, |ui| {
                     if menu_action(ui, "Edit encounter", None) {
                         *action = Some(ListAction::Edit(template.path.clone()));
+                    }
+                    if !has_saved_run(page, row) && menu_action(ui, "Remove…", None) {
+                        *action = Some(ListAction::RemoveEncounter(template.path.clone()));
                     }
                 });
                 if Action::quiet("Edit")

@@ -244,6 +244,8 @@ pub struct Sessions {
     #[cfg(test)]
     removal_scans: usize,
     removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
+    /// The plan's scenes: the Scene field and the results of scene acts.
+    scenes: plan::Scenes,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -349,6 +351,8 @@ pub struct Sessions {
     pub wants_saved_run: Option<PathBuf>,
     /// A name in a note's link to read in Lookup.
     pub wants_lookup: Option<String>,
+    /// A scene's NPC or creature, by its ID, to start a fight that nobody planned with.
+    pub wants_start_fight: Option<crate::world::StartFight>,
     /// The `/` menu in the note, and what its command has open.
     slash: super::slash::Slash,
     /// A command wrote a file, so Lookup must read the campaign again.
@@ -559,8 +563,33 @@ fn compact_plan_for_reading(
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect();
+    let fight_or_group = |name: &str| {
+        fights
+            .iter()
+            .any(|fight| fight.name.eq_ignore_ascii_case(name))
+            || groups
+                .iter()
+                .any(|group| group.name.eq_ignore_ascii_case(name))
+    };
+    // A scene is a row beside the note too.
+    let scenes: Vec<String> = super::plan_lines(body)
+        .into_iter()
+        .filter_map(|line| match line {
+            super::PlanLine::Task(task)
+                if !super::each_linked_name(&task.words)
+                    .iter()
+                    .any(|name| fight_or_group(name)) =>
+            {
+                Some(task.line.trim().to_owned())
+            }
+            _ => None,
+        })
+        .collect();
     let only_planned_links = !lines.is_empty()
         && lines.iter().all(|line| {
+            if scenes.iter().any(|scene| scene == line.trim()) {
+                return true;
+            }
             let link = line
                 .trim()
                 .strip_prefix("- ")
@@ -602,20 +631,29 @@ fn compact_plan_for_reading(
     let group_count = linked_names(&plan)
         .iter()
         .filter(|name| {
-            !fights
+            groups
                 .iter()
-                .any(|fight| fight.name.eq_ignore_ascii_case(name))
+                .any(|group| group.name.eq_ignore_ascii_case(name))
+                && !fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
         })
         .count();
-    let counts = [
+    let mut counts = [
         (fight_count, "fight", "fights"),
         (group_count, "group", "groups"),
+        (scenes.len(), "scene", "scenes"),
     ]
     .into_iter()
     .filter(|(count, _, _)| *count > 0)
     .map(|(count, one, many)| design::count(count, one, many))
     .collect::<Vec<_>>();
-    let words = format!("{}, in the plan", counts.join(" and "));
+    let last = counts.pop().unwrap_or_default();
+    let words = if counts.is_empty() {
+        format!("{last}, in the plan")
+    } else {
+        format!("{} and {last}, in the plan", counts.join(", "))
+    };
     let heading = body
         .split_inclusive('\n')
         .scan(0, |offset, line| {
@@ -1388,10 +1426,11 @@ impl Sessions {
                             .then(|| (draft.path.clone(), note.path.clone()));
                         self.draft = None;
                         self.select(Some(id));
-                        if let (Some((from, to)), Some((.., undo))) =
-                            (moved, &mut self.removed_fight)
-                        {
-                            undo.moved(&from, &to);
+                        if let Some((from, to)) = moved {
+                            if let Some((.., undo)) = &mut self.removed_fight {
+                                undo.moved(&from, &to);
+                            }
+                            self.scenes.moved(&from, &to);
                         }
                     }
                     None => {
@@ -1504,6 +1543,7 @@ impl Sessions {
         self.updated_links = None;
         self.link_undo_state = None;
         self.removed_fight = None;
+        self.scenes = plan::Scenes::default();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -6799,6 +6839,12 @@ mod tests {
             ("- [[ash pack|The wolves]]", "1 group"),
             ("- [[Ash Pack]]\n- [[Bridge Ambush]]", "1 fight and 1 group"),
             ("- [[Ash Pack]]\n- [[Ash Pack]]", "1 group"),
+            // A scene is a row beside the note too (T12.10).
+            (
+                "- [[Bridge Ambush]]\n- [ ] [[Captain Varra]]\n- [x] The miller is the informer\n- [[Ash Pack]]",
+                "1 fight, 1 group and 2 scenes",
+            ),
+            ("- [ ] Meet Hobb", "1 scene"),
         ] {
             let source = format!(
                 "## Plan for tonight\n\n{links}\n\n## What happened\n\nWe reached the mill.\n"
@@ -6817,6 +6863,9 @@ mod tests {
             "- [[Ash Pack]]\nAsk the ferryman.",
             "- [[Unknown group]]",
             "- [[Ash Pack]] extra words",
+            // A nested task line is not a scene, and a task line with a fight is not hidden.
+            "- [ ] Meet Hobb\n  - [ ] Bring the coin",
+            "- [ ] [[Bridge Ambush]]",
         ] {
             let source = format!("## Plan for tonight\n\n{lines}\n");
             assert_eq!(

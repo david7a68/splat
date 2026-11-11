@@ -707,6 +707,45 @@ pub fn fights(entry: &Entry) -> bool {
     world_type(entry) == "npc" || world_field(entry, "creature").is_some_and(|v| !v.is_null())
 }
 
+/// A fight that nobody planned: what a reader's or a scene's `Start fight` asks the app for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StartFight {
+    /// The NPC's or the creature's name, for the encounter `Fight with <name>`.
+    pub name: String,
+    /// The stat block that joins: the creature itself, or the NPC's. An NPC with none joins
+    /// through the run's form for a creature made up at the table.
+    pub creature: Option<Uuid>,
+    /// The name is an NPC's, which its stat block's row takes.
+    pub npc: bool,
+}
+
+/// A creature or an NPC that a fight can start with. A party member's copy is neither.
+pub fn start_fight(item: &Item, index: &ContentIndex) -> Option<StartFight> {
+    let entry = &item.entry;
+    let npc = entry.kind == "world" || item.is_world_note();
+    if npc {
+        if !fights(entry) {
+            return None;
+        }
+        return Some(StartFight {
+            name: entry.name.clone(),
+            creature: index
+                .world_target(entry, "creature")
+                .filter(|at| index.items[*at].entry.kind == "creature")
+                .map(|at| index.items[at].entry.id),
+            npc: true,
+        });
+    }
+    (entry.kind == "creature"
+        && crate::lookup::entry_origin(Some(entry), item.is_private())
+            != crate::lookup::Origin::Sheet)
+        .then(|| StartFight {
+            name: entry.name.clone(),
+            creature: Some(entry.id),
+            npc: false,
+        })
+}
+
 pub(crate) fn link_name(value: &Value, fallback: &str) -> String {
     value
         .as_str()
@@ -1758,6 +1797,10 @@ pub struct Reader {
     heading: Option<String>,
     /// What only the app can do, for it to take after this reader draws.
     pub join: Option<Join>,
+    /// `Start fight` in the header, for the app to take after this reader draws.
+    pub start_fight: Option<StartFight>,
+    /// Why no fight can start now, as the encounter editor's `Start fight` says it.
+    pub start_blocked: Option<&'static str>,
     pub open_timeline: Option<String>,
     pub sides: RunSides,
     /// A run is in live play and owns `Next turn`, the screen's primary action.
@@ -1975,11 +2018,16 @@ impl Reader {
                 item.owner
             )
         };
+        // While a run is open, an NPC has Add to fight below, and Arrivals adds a creature.
+        let start = (self.sides.is_none() && !campaign.is_some_and(|c| self.editing(id, c)))
+            .then(|| start_fight(item, index))
+            .flatten();
         ui.horizontal_top(|ui| {
             let edit_action = Action::quiet("Edit")
                 .icon(design::icons::EDIT)
                 .density(Density::Read);
             let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::L);
+            let right = ui.max_rect().right();
             let width = ui.available_width() - room;
             let cell = ui
                 .allocate_ui_with_layout(
@@ -1991,31 +2039,71 @@ impl Reader {
                 )
                 .response
                 .rect;
+            let art = crate::art::entry_art(ui.ctx(), &item.entry).is_some();
+            let art_width = if art {
+                design::XXL * 2.0 + design::M
+            } else {
+                0.0
+            };
+            let title_width = ui
+                .painter()
+                .layout(
+                    title.clone(),
+                    Type::Display.font(ui),
+                    colors().text,
+                    (width - art_width).max(design::XXL),
+                )
+                .size()
+                .x;
+            // Where the header's next action's target starts: one `L` after the measured title,
+            // less the `S` before its icon. Art beside the title keeps Edit after the art.
+            let mut next = cell.left() + title_width + design::L - design::S;
+            let mut top = cell.top();
             if let Some(campaign) = edit {
                 // Edit's icon sits one `L` after the measured title, so a kind line wider than
                 // a short title never pushes it away. Its target starts `S` before the icon.
-                // Art beside the title keeps it after the art.
-                if crate::art::entry_art(ui.ctx(), &item.entry).is_none() {
-                    let title_width = ui
-                        .painter()
-                        .layout(
-                            title.clone(),
-                            Type::Display.font(ui),
-                            colors().text,
-                            width.max(design::XXL),
-                        )
-                        .size()
-                        .x;
-                    ui.add_space(
-                        cell.left() + title_width + design::L - design::S - ui.cursor().left(),
-                    );
+                if !art {
+                    ui.add_space(next - ui.cursor().left());
                 }
-                if edit_action
+                let response = edit_action
                     .name(&format!("Edit {}", item.entry.name))
-                    .show(ui)
-                    .clicked()
-                {
+                    .show(ui);
+                if response.clicked() {
                     self.begin_edit(campaign, item);
+                }
+                next = response.rect.right() + design::XS;
+                top = response.rect.top();
+            }
+            // The header's quiet actions follow Edit, `XS` apart, in the room that is spare: the
+            // title keeps its width and the row its line (section 1.2 of the session-cycle
+            // design). `Add to Log` comes first, next to Edit. `Start fight` keeps its word, or
+            // does not show.
+            if let Some(start) = start {
+                let name = format!("Start a fight with {}", start.name);
+                let action = Action::quiet("Start fight")
+                    .icon(design::icons::RUN)
+                    .density(Density::Read)
+                    .name(&name)
+                    .blocked(self.start_blocked);
+                let size = egui::vec2(action.natural_width(ui), Density::Read.control());
+                let limit = if art && edit.is_none() {
+                    cell.right() - art_width
+                } else {
+                    right
+                };
+                if next + size.x <= limit {
+                    let rect = egui::Rect::from_min_size(egui::pos2(next, top), size);
+                    let pressed = ui
+                        .scope_builder(
+                            egui::UiBuilder::new()
+                                .max_rect(rect)
+                                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                            |ui| action.show(ui).clicked(),
+                        )
+                        .inner;
+                    if pressed {
+                        self.start_fight = Some(start);
+                    }
                 }
             }
         });

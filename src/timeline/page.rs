@@ -93,6 +93,19 @@ pub fn quick_add(
     kinds: &[Kind],
     first: impl FnOnce(&mut egui::Ui),
 ) -> Option<String> {
+    quick_add_with(ui, book, session, kinds, Vec::new(), first).and_then(|chosen| chosen.ok())
+}
+
+/// `quick_add`, with lines of the strip's More menu alone, after the kinds. A new event's ID
+/// comes back as `Ok`, and a chosen line of `more` as `Err` with its index there.
+pub fn quick_add_with(
+    ui: &mut egui::Ui,
+    book: &mut Book,
+    session: Option<Uuid>,
+    kinds: &[Kind],
+    more: Vec<Action<'_>>,
+    first: impl FnOnce(&mut egui::Ui),
+) -> Option<Result<String, usize>> {
     let blocked = book.unreadable.is_some();
     let names: Vec<_> = kinds
         .iter()
@@ -116,13 +129,15 @@ pub fn quick_add(
         .filter(|(_, kind)| matches!(kind, Kind::Encounter | Kind::LongRest))
         .map(|(index, _)| index)
         .collect();
-    design::hanging_add_strip(ui, first, actions, &always_visible).map(|index| {
-        let kind = kinds[index];
-        if kind == Kind::LongRest {
+    design::hanging_add_strip(ui, first, actions, &always_visible, more).map(|index| {
+        let Some(&kind) = kinds.get(index) else {
+            return Err(index - kinds.len());
+        };
+        Ok(if kind == Kind::LongRest {
             book.add_long_rest(session)
         } else {
             book.add(kind, session)
-        }
+        })
     })
 }
 
@@ -1570,6 +1585,84 @@ mod tests {
     #[test]
     fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {
         check_long_rest_add(&Kind::ALL);
+    }
+
+    /// Row 7 of the plain evening's contract: a line of More alone moves no action of the strip.
+    /// A strip that needs no More has none of those lines; one that has More lists them last.
+    #[test]
+    fn a_line_of_more_alone_moves_no_action() {
+        use egui_kittest::kittest::Queryable;
+        const KINDS: [Kind; 5] = [
+            Kind::Day,
+            Kind::LongRest,
+            Kind::ShortRest,
+            Kind::Travel,
+            Kind::Event,
+        ];
+        let draw = |width: f32, scene: bool| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(width, 300.0))
+                .build_state(
+                    move |ctx, (book, chosen): &mut (Book, Option<Result<String, usize>>)| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let more = if scene {
+                                vec![
+                                    Action::quiet("Scene")
+                                        .icon(icons::CHECK_SQUARE)
+                                        .name("Add Scene"),
+                                ]
+                            } else {
+                                Vec::new()
+                            };
+                            if let Some(picked) =
+                                quick_add_with(ui, book, None, &KINDS, more, |ui| {
+                                    let _ = Action::quiet("Fight").icon(icons::ENCOUNTERS).show(ui);
+                                })
+                            {
+                                *chosen = Some(picked);
+                            }
+                        });
+                    },
+                    (Book::default(), None),
+                );
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+        };
+        let shown = |harness: &egui_kittest::Harness<'_, _>| {
+            [
+                "Add Day",
+                "Add Long rest",
+                "Add Short rest",
+                "Add Travel",
+                "Add Major event",
+                "More Add actions",
+                "Add Scene",
+            ]
+            .map(|name| harness.query_by_label(name).map(|node| node.rect()))
+        };
+        for width in [360.0, 1200.0] {
+            let without = draw(width, false);
+            let mut with = draw(width, true);
+            assert_eq!(shown(&without), shown(&with), "at {width} px");
+            let more = with.query_by_label("More Add actions").is_some();
+            assert_eq!(more, width < 1000.0, "at {width} px");
+            if more {
+                with.get_by_label("More Add actions").click();
+                with.run_steps(2);
+                let scene = with.get_by_label("Add Scene").rect();
+                for name in ["Add Day", "Add Short rest", "Add Travel", "Add Major event"] {
+                    assert!(
+                        with.get_by_label(name).rect().bottom() <= scene.top(),
+                        "{name}"
+                    );
+                }
+                with.get_by_label("Add Scene").click();
+                with.run_steps(2);
+                assert_eq!(with.state().1, Some(Err(0)));
+                assert!(with.state().0.events.is_empty());
+            }
+        }
     }
 
     #[test]
