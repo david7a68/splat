@@ -13507,6 +13507,12 @@ pub mod run_rolls {
                 "Undo restores each row's HP: {hp_before:?} then {hp_after:?}, undone {hp_undone:?}"
             ),
         );
+        // The save's results go with the step that applied them (iter-19-R2-1).
+        d.observe_both(
+            "iter-19-R2-1",
+            "After Undo no row still names the save's result",
+            |d| !d.visible_text("Failed · ") && !d.visible_text("Saved · "),
+        );
         d.press(Key::Escape);
 
         // A player rolls their own dice: the tile targets, and the DM types the damage.

@@ -508,6 +508,10 @@ struct State {
     /// What each loot line rolled, by its place: `loot::place`. Saves from before loot have none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     loot: BTreeMap<String, Vec<loot::Found>>,
+    /// What a save's damage step gave each target row, such as `Failed · 3 damage`. It
+    /// belongs to the step, so Undo takes it back with the HP. Not saved.
+    #[serde(skip)]
+    roll_results: BTreeMap<usize, String>,
 }
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
@@ -878,6 +882,7 @@ impl Run {
                 ],
                 last_change: None,
                 loot: BTreeMap::new(),
+                roll_results: BTreeMap::new(),
                 random: Random::seeded(seed),
             },
             history: Vec::new(),
@@ -1789,6 +1794,17 @@ impl Run {
             other => Self::participant_command(&mut next, other, roster_ties)?,
         };
         next.log.push(label);
+        // A new turn ends the results of the last one; a save's damage step records its own.
+        if follow_turn {
+            next.roll_results.clear();
+        }
+        if !roll_results.is_empty() {
+            next.roll_results.extend(roll_results);
+            // The save's damage is spent: a later step on these rows is not its result.
+            if let Some(armed) = self.armed.as_mut() {
+                armed.damage = None;
+            }
+        }
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
         if self.history.len() == 100 {
             self.history.remove(0);
@@ -1798,7 +1814,6 @@ impl Run {
         self.dm_steps += 1;
         self.notice = None;
         self.history.push(std::mem::replace(&mut self.state, next));
-        self.badges.extend(roll_results);
         if began {
             self.panel = Panel::Reference;
         }

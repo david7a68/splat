@@ -208,6 +208,7 @@ impl Run {
     /// Arm an action. Its rows' results from before go.
     fn arm(&mut self, actor: usize, link: RollLink, mode: Mode, inspired: bool) {
         self.badges.clear();
+        self.state.roll_results.clear();
         self.saves.clear();
         self.asking = None;
         self.reroll = None;
@@ -906,6 +907,7 @@ impl Run {
             // on these rows no longer stands.
             for row in self.save_targets() {
                 self.badges.remove(&row);
+                self.state.roll_results.remove(&row);
             }
             if let Some(armed) = self.armed.as_mut() {
                 armed.damage = Some(total);
@@ -947,7 +949,8 @@ impl Run {
     }
 
     /// Each save target's result, from the damage step about to apply, so its row keeps
-    /// what it was given after Amount and the targets clear. Nothing for another step.
+    /// what it was given after Amount and the targets clear. `apply` keeps them with the
+    /// step's state, and spends the save's damage. Nothing for another step.
     pub(super) fn save_results(&self, command: &Command) -> Vec<(usize, String)> {
         damage_shares(command)
             .into_iter()
@@ -970,7 +973,13 @@ impl Run {
     /// What a row shows while an action is armed or after it: the chance to hit, or the
     /// result against it.
     pub(super) fn row_badge(&self, row: usize) -> Option<String> {
-        if let Some(words) = self.badges.get(&row) {
+        // A save's applied result first: it lives in the run's state, so Undo takes it back.
+        if let Some(words) = self
+            .state
+            .roll_results
+            .get(&row)
+            .or_else(|| self.badges.get(&row))
+        {
             return Some(words.clone());
         }
         let armed = self.armed.as_ref()?;
@@ -1370,6 +1379,9 @@ mod tests {
                 p.hp.unwrap() + p.temporary_hp
             })
         };
+        // Temporary HP takes damage first: the row and the Log still name what the row took.
+        run.state.participants[saved].temporary_hp = 0;
+        run.state.participants[failed].temporary_hp = 3;
         let before = hp(&run);
         let log = run.state.log.len();
         // Enter: the dock applies Amount to its targets, then clears both.
@@ -1391,11 +1403,45 @@ mod tests {
         assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
         let lines = run.state.log[log..].join("\n");
         assert!(
-            lines.contains("5 damage applied") && lines.contains("10 damage applied"),
-            "the Log names each row's own amount: {lines}"
+            lines.contains("5 damage applied;")
+                && lines.contains("10 damage applied (3 absorbed by temporary HP)"),
+            "the Log names each row's own amount, as the row does: {lines}"
         );
+        // iter-19-R2-2: a later step on a target is not the save's result. The save's
+        // damage is spent, so no row shows save words for it, and the first result stays.
+        run.selected = failed;
+        run.amount = "4".into();
+        assert_eq!(
+            run.row_badge(failed).as_deref(),
+            Some("Failed · 10 damage"),
+            "typing an amount does not relabel the row"
+        );
+        run.apply(Command::Damage(failed, 4)).unwrap();
+        run.amount.clear();
+        assert_eq!(
+            run.row_badge(failed).as_deref(),
+            Some("Failed · 10 damage"),
+            "iter-19-R2-2: a later damage step keeps the save's result as it was"
+        );
+        assert_eq!(
+            run.row_badge(saved).as_deref(),
+            Some("Saved · 5 damage (half)")
+        );
+        let other = (0..3).find(|row| !pair.contains(row)).unwrap();
+        run.selected = other;
+        run.amount = "4".into();
+        assert_eq!(run.row_badge(other), None, "no save words on another row");
+        run.amount.clear();
+        // iter-19-R2-1: Undo takes back the later step, then the save's step and its results.
+        run.undo();
+        assert_eq!(run.row_badge(failed).as_deref(), Some("Failed · 10 damage"));
         run.undo();
         assert_eq!(hp(&run), before, "Undo gives each row back its own HP");
+        assert_eq!(
+            [run.row_badge(saved), run.row_badge(failed)],
+            [None, None],
+            "iter-19-R2-1: Undo takes the save's results off its rows"
+        );
     }
 
     #[test]
