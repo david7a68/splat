@@ -1551,7 +1551,8 @@ pub mod reader_tables {
                     && prose >= measure - crate::design::XXL
                     && match surface {
                         // It scrolls: the surface ends at or before the pane's inner edge.
-                        Some(surface) => hint && surface.right() <= edge + 0.5,
+                        // At 1920 the table must not scroll at all.
+                        Some(surface) => size != LARGE && hint && surface.right() <= edge + 0.5,
                         // It fits: past the prose measure, inside the pane, with no scroll hint.
                         None => {
                             !hint && size == LARGE && last > left + measure && last <= edge + 0.5

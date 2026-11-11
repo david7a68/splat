@@ -1464,6 +1464,36 @@ struct SaveFailure {
     reason: String,
 }
 
+impl SaveFailure {
+    /// True while the open draft is still the one this Save tried to write: the same entry and no
+    /// change event since. The check reaches the draft's words only through `draft`, which counts
+    /// each read in tests; it needs none of them, so no frame compares or hashes the draft.
+    fn owns(&self, note: &Note, revision: u64, draft: DraftView<'_>) -> bool {
+        let _ = draft;
+        self.owner == note.owner.id() && self.path == note.path && self.revision == revision
+    }
+}
+
+/// The open draft's words, as the failed-Save check may see them. In tests, every read of the
+/// words adds one to the check's read count.
+struct DraftView<'a> {
+    text: &'a str,
+    #[cfg(test)]
+    checks: &'a std::cell::Cell<(usize, usize)>,
+}
+
+impl std::ops::Deref for DraftView<'_> {
+    type Target = str;
+    fn deref(&self) -> &str {
+        #[cfg(test)]
+        {
+            let (checks, reads) = self.checks.get();
+            self.checks.set((checks, reads + 1));
+        }
+        self.text
+    }
+}
+
 /// A draft that `Let it go` dropped after its file left the disk, for one step of undo, and
 /// whether this campaign used its entry then.
 struct LetGo {
@@ -2455,7 +2485,8 @@ pub struct Library {
     /// reload, a repair action). A failed Save keeps the revision it wrote, so no frame compares
     /// the draft's words to know whether it is still that draft.
     draft_revision: u64,
-    /// Test only: how often the failed-Save check ran, and how often it read the draft's words.
+    /// Test only: how often the failed-Save check ran, and how often it read the draft's words
+    /// (counted by `DraftView` itself).
     #[cfg(test)]
     failure_checks: std::cell::Cell<(usize, usize)>,
     identity_undo: Option<IdentityUndo>,
@@ -5541,19 +5572,21 @@ impl Library {
         let save_refusal = refusal.clone().filter(|_| dirty);
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
-        // A Save that failed on the disk, while this is still the draft it tried to write: the
-        // same entry and no change event since. No words are compared.
-        #[cfg(test)]
-        {
-            let (checks, reads) = self.failure_checks.get();
-            self.failure_checks.set((checks + 1, reads));
-        }
-        if self.save_failure.as_ref().is_some_and(|failure| {
-            failure.owner != note.owner.id()
-                || failure.path != note.path
-                || failure.revision != self.draft_revision
-        }) {
-            self.save_failure = None;
+        // A Save that failed on the disk, while this is still the draft it tried to write.
+        if let Some(failure) = &self.save_failure {
+            #[cfg(test)]
+            {
+                let (checks, reads) = self.failure_checks.get();
+                self.failure_checks.set((checks + 1, reads));
+            }
+            let draft = DraftView {
+                text: &self.draft,
+                #[cfg(test)]
+                checks: &self.failure_checks,
+            };
+            if !failure.owns(note, self.draft_revision, draft) {
+                self.save_failure = None;
+            }
         }
         let failed = self
             .save_failure
