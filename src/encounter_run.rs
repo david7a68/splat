@@ -34,41 +34,6 @@ pub(crate) const SHEET_CHANGED: &str = "’s sheet changed:";
 /// The words after a name in the log line of a new turn.
 const TURN: &str = "’s turn.";
 
-/// The log's generated phrases are curly on screen and straight in the run file, as file
-/// content is. Only these phrases change, so names and typed words keep their own marks, and
-/// a run saved before curly marks reads the same way.
-mod stored_words {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    /// Every generated phrase in the log that has a curly mark.
-    fn phrases() -> impl Iterator<Item = &'static str> {
-        std::iter::once(super::TURN)
-            .chain(super::Grouping::ALL.iter().map(|grouping| grouping.label()))
-            .filter(|phrase| phrase.contains('’'))
-    }
-    pub(super) fn to_file(line: &str) -> String {
-        phrases().fold(line.to_owned(), |line, phrase| {
-            line.replace(phrase, &phrase.replace('’', "'"))
-        })
-    }
-    pub(super) fn from_file(line: &str) -> String {
-        phrases().fold(line.to_owned(), |line, phrase| {
-            line.replace(&phrase.replace('’', "'"), phrase)
-        })
-    }
-    pub(super) mod lines {
-        use super::*;
-        pub fn serialize<S: Serializer>(lines: &[String], s: S) -> Result<S::Ok, S::Error> {
-            let stored: Vec<String> = lines.iter().map(|line| to_file(line)).collect();
-            stored.serialize(s)
-        }
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
-            let stored = Vec::<String>::deserialize(d)?;
-            Ok(stored.iter().map(|line| from_file(line)).collect())
-        }
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
     pub key: String,
@@ -614,7 +579,6 @@ struct State {
     cursor: usize,
     round: u64,
     phase: Phase,
-    #[serde(with = "stored_words::lines")]
     log: Vec<String>,
     #[serde(default)]
     last_change: Option<String>,
@@ -4827,9 +4791,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let campaign = Uuid::new_v4();
         let mut run = run();
+        // A name and notes with straight marks, and a note with the grouping phrase.
+        run.state.participants[2].name = "Ka'ar".into();
         begin(&mut run);
         run.apply(Command::Damage(0, 5)).unwrap();
         run.apply(Command::Next).unwrap();
+        run.apply(Command::Note(0, "Wait until Bob's turn.".into()))
+            .unwrap();
+        let grouping = Grouping::Explicit.label().replace('’', "'");
+        run.apply(Command::Note(2, format!("Roll {grouping} next time.")))
+            .unwrap();
         run.configure_storage(campaign, dir.path(), Initiative::default())
             .unwrap();
         let path = run.storage.as_ref().unwrap().path.clone();
@@ -4840,23 +4811,29 @@ mod tests {
             run.state.participants[0].hp
         );
         assert_eq!(reopened.state.log, run.state.log);
-        // Astra review of PR 235: the run file keeps straight marks in the log's generated
-        // phrases, and the shown log has curly ones, also for a run saved before them.
+        // Lead ruling on PR 235: the run file is Splat's own state, so the log keeps every
+        // line as shown, byte for byte, through two saves and loads: the generated curly
+        // turn, and the straight marks the DM and the names typed.
+        let expected = [
+            "Round 1: Guard 2’s turn.".to_owned(),
+            "Guard 1: DM note: Wait until Bob's turn.".to_owned(),
+            format!("Ka'ar: DM note: Roll {grouping} next time."),
+        ];
+        for line in &expected {
+            assert!(
+                run.state.log.contains(line),
+                "{line:?} in {:?}",
+                run.state.log
+            );
+            assert!(reopened.state.log.contains(line), "{line:?} after a load");
+        }
         let stored = fs::read_to_string(&path).unwrap();
-        assert!(stored.contains("'s turn."), "{stored}");
-        assert!(!stored.contains('’'), "{stored}");
-        let turns = |log: &[String]| log.iter().filter(|line| line.ends_with("’s turn.")).count();
-        assert_eq!(turns(&run.state.log), 2, "{:?}", run.state.log);
-        assert_eq!(turns(&reopened.state.log), 2, "{:?}", reopened.state.log);
-        // The grouping phrase does the same. A name keeps its own straight mark.
-        let line = format!("NPC initiative — {}. Ka'ar 12", Grouping::Explicit.label());
-        let filed = stored_words::to_file(&line);
-        assert_eq!(
-            filed,
-            "NPC initiative — In the encounter's initiative groups. Ka'ar 12"
-        );
-        assert_eq!(stored_words::from_file(&filed), line);
+        assert!(stored.contains("Guard 2’s turn.") && stored.contains("Bob's turn."));
         assert!(!reopened.needs_save());
+        reopened.dirty = true;
+        reopened.save().unwrap();
+        let twice = Run::open(&path, campaign).unwrap();
+        assert_eq!(twice.state.log, run.state.log);
         reopened.apply(Command::Next).unwrap();
         reopened.save().unwrap();
         assert_eq!(Run::open(&path, campaign).unwrap().current(), Some(2));
