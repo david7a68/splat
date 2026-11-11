@@ -14614,7 +14614,7 @@
     "what": "control",
     "change": "new",
     "name": "Button: Remove…",
-    "detail": "at 916 296 109.4x28"
+    "detail": "at 900 296 109.4x28"
    }
   },
   {
@@ -14626,7 +14626,7 @@
     "what": "text",
     "change": "new",
     "name": "Remove…",
-    "detail": "at 924 301 63.8x18"
+    "detail": "at 908 301 63.8x18"
    }
   },
   {
@@ -14638,7 +14638,7 @@
     "what": "control",
     "change": "new",
     "name": "Button: Remove…",
-    "detail": "at 832 296 109.4x28"
+    "detail": "at 820 296 109.4x28"
    }
   },
   {
@@ -14650,7 +14650,7 @@
     "what": "text",
     "change": "new",
     "name": "Remove…",
-    "detail": "at 840 301 63.8x18"
+    "detail": "at 828 301 63.8x18"
    }
   },
   {
