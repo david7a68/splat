@@ -512,11 +512,14 @@ const ADD_TO_FIGHT: &str = "Add to fight…";
 
 /// A plan group's summary that wraps between members, never inside a member's
 /// `N × name (as base)`, as Arrivals does.
-fn plan_summary_text(group: &crate::encounter_run::RunGroup) -> String {
+fn plan_summary_text(ui: &egui::Ui, group: &crate::encounter_run::RunGroup) -> String {
     let summary = group.summary();
     let members = group.member_summary();
     match summary.strip_suffix(&members) {
-        Some(head) if !members.is_empty() => format!("{head}{}", group.member_summary_wrapped()),
+        Some(head) if !members.is_empty() => format!(
+            "{head}{}",
+            group.member_summary_wrapped(ui, &Type::Small.font(ui), ui.available_width())
+        ),
         _ => summary,
     }
 }
@@ -4640,13 +4643,15 @@ impl Sessions {
                         let mut read_group = false;
                         let edit_word = if group.warnings.is_empty() { "Edit" } else { "Edit group" };
                         // With a fight open, the run's words and plus icon: the group joins it through Arrivals.
-                        let group_action = if plan.arrivals_open { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
+                        // A group none of whose members can join has only its repair to offer.
+                        let joins_fight = plan.arrivals_open && !group.members.is_empty();
+                        let group_action = if joins_fight { Action::quiet(ADD_TO_FIGHT).icon(icons::ADD) } else { Action::quiet(edit_word) };
                         let action_width = group_action.density(Density::Read).natural_width(ui) + Density::Read.control() + design::S;
                         let group_widths = [width - action_width - design::S, action_width];
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = plan_summary_text(group);
+                            let summary = plan_summary_text(ui, group);
                             // Members stay whole, so a long member list can take a third line
                             // before it shortens. A flagged group shows every fact.
                             plan_group_summary(ui, &summary, if group.warnings.is_empty() { 3 } else { usize::MAX });
@@ -4666,8 +4671,14 @@ impl Sessions {
                                     .blocked(plan.group_blocked).show(ui).clicked() {
                                     remove_group = Some((position, group.name.clone(), 0.0)); ui.close();
                                 }
+                                // Add to fight takes the action place; the repair its faults name stays one step away.
+                                if joins_fight && !group.warnings.is_empty()
+                                    && Action::quiet("Edit group").name(&format!("Edit group {}", group.name))
+                                        .blocked(plan.group_blocked).show(ui).clicked() {
+                                    self.wants_group = Some(group.path.clone()); self.group_session = self.selected; ui.close();
+                                }
                             });
-                            if plan.arrivals_open {
+                            if joins_fight {
                                 if Action::quiet(ADD_TO_FIGHT).icon(icons::ADD)
                                     .name(&format!("Add {} to fight", group.name)).density(Density::Read).show(ui).clicked() {
                                     self.wants_arrivals = true;

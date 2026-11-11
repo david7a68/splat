@@ -1470,6 +1470,19 @@ impl<'a> Driver<'a> {
             .and_then(|node| node.accesskit_node().value())
     }
 
+    /// The 1-based line of the source editor's caret, read from its text selection.
+    pub fn editor_caret_line(&self) -> Option<usize> {
+        let editor = self
+            .harness
+            .root()
+            .children_recursive()
+            .find(|node| node.accesskit_node().role() == Role::MultilineTextInput)?;
+        let node = editor.accesskit_node();
+        let at = node.text_selection_focus()?.to_global_usv_index();
+        let text = node.value()?;
+        Some(text.chars().take(at).filter(|c| *c == '\n').count() + 1)
+    }
+
     /// The text in a single-line field, by its accessible name.
     pub fn field_text(&self, name: &str) -> Option<String> {
         self.harness

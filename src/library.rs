@@ -2485,6 +2485,29 @@ struct IdentityUndo {
 
 type ParsedDraft = std::sync::Arc<Result<Entry, String>>;
 
+/// A missing link Campaign's repair sent to a file: the file, the typed reference and the
+/// fault's words. `found` is the row that links it in one parse of the draft; the draft's
+/// parse is rebuilt only when its text changes, so the row is looked up again only then.
+struct RepairLink {
+    path: PathBuf,
+    target: splat::content::Reference,
+    words: String,
+    found: Option<(ParsedDraft, Option<usize>)>,
+}
+
+#[cfg(test)]
+thread_local! {
+    static REPAIR_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The row that links a repair's reference. Every repair lookup goes through here, and the
+/// test count is kept here.
+fn repair_row(entry: &Entry, target: &splat::content::Reference) -> Option<usize> {
+    #[cfg(test)]
+    REPAIR_LOOKUPS.with(|count| count.set(count.get() + 1));
+    splat::content::list_formats::row_linking(entry, target)
+}
+
 #[derive(Default)]
 pub struct Library {
     /// The draft as last parsed, with its path. The editor needs the parse on every frame,
@@ -2561,6 +2584,9 @@ pub struct Library {
     pub open_world_npc: Option<Uuid>,
     pending_edit: Option<Entry>,
     pending_repair: Option<PathBuf>,
+    /// A missing link that Campaign's repair opened this file for. Edit Markdown names it at its
+    /// line while the draft still holds it; it ends when another note opens or a Save writes.
+    repair_link: Option<RepairLink>,
     scope_notice: Option<String>,
     new_form: bool,
     focus_new_name: bool,
@@ -3116,7 +3142,43 @@ impl Library {
     pub fn edit_copy(&mut self, entry: Entry) {
         self.pending_edit = Some(entry);
     }
-    pub fn repair_file(&mut self, path: PathBuf) {
+    /// Open a file for repair; with a missing link's reference and words, at that link.
+    /// The repair guidance has one owner, its entry. When no load and no pending repair is in
+    /// progress and the selected entry is not the owner, the guidance ends, however the
+    /// selection was made: the list, the keyboard, search, `reveal`, Back or Forward, a link, or
+    /// a repair whose file could not be opened.
+    fn end_repair_on_owner_change(&mut self) {
+        if self.pending.is_some() || self.stale || self.pending_repair.is_some() {
+            return;
+        }
+        let here = self
+            .selected
+            .and_then(|i| self.loaded.as_ref()?.notes.get(i))
+            .and_then(|note| Some(note.owner.root()?.join(&note.path)));
+        if self
+            .repair_link
+            .as_ref()
+            .is_some_and(|link| here.as_ref() != Some(&link.path))
+        {
+            self.repair_link = None;
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn repair_lookups(&self) -> usize {
+        REPAIR_LOOKUPS.with(std::cell::Cell::get)
+    }
+    pub fn repair_file_link(
+        &mut self,
+        path: PathBuf,
+        link: Option<(splat::content::Reference, String)>,
+    ) {
+        self.repair_link = link.map(|(target, words)| RepairLink {
+            path: path.clone(),
+            target,
+            words,
+            found: None,
+        });
         self.pending_repair = Some(path);
         self.stale = true;
     }
@@ -3247,6 +3309,7 @@ impl Library {
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        self.end_repair_on_owner_change();
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
         });
@@ -5264,6 +5327,8 @@ impl Library {
                 self.content_changed = Some(root);
                 l.refresh_diagnostics();
                 self.error = None;
+                // Written: the repair it was opened for is done. A failed Save keeps it.
+                self.repair_link = None;
             }
             Err(e) => match read_disk(&root, &note.path) {
                 // The file is there but cannot be read: the draft stays, the file keeps its bytes.
@@ -5590,6 +5655,35 @@ impl Library {
         let save_refusal = refusal.clone().filter(|_| dirty);
         let (repair_problem, repair_line) =
             draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
+        // A missing link Campaign sent here: the row that holds it in the parsed draft.
+        let here = note.owner.root().map(|root| root.join(&note.path));
+        let missing_link = self
+            .repair_link
+            .as_mut()
+            .filter(|link| here.as_ref() == Some(&link.path))
+            .and_then(|link| {
+                // Looked up again only for a new parse, that is, new draft text.
+                let stale = !link
+                    .found
+                    .as_ref()
+                    .is_some_and(|(seen, _)| std::sync::Arc::ptr_eq(seen, &parsed_draft));
+                if stale {
+                    let line = parsed
+                        .as_ref()
+                        .ok()
+                        .and_then(|entry| repair_row(entry, &link.target));
+                    link.found = Some((parsed_draft.clone(), line));
+                }
+                let line = link.found.as_ref()?.1?;
+                let words = &link.words;
+                Some((
+                    line,
+                    format!(
+                        "Line {line}: {words} Replace the link on this line with another creature, or remove its row."
+                    ),
+                ))
+            });
+        let repair_line = repair_line.or(missing_link.as_ref().map(|(line, _)| *line));
         // A Save that failed on the disk, while this is still the draft it tried to write.
         if let Some(failure) = &self.save_failure {
             #[cfg(test)]
@@ -6033,6 +6127,9 @@ impl Library {
                     });
                 });
             });
+            // The missing link Campaign sent here stays in view on its own line, above the
+            // reserved slot that holds Save's reason or the discard result.
+            let link_words = missing_link.as_ref().map(|(_, words)| words);
             // A readable entry's refused draft and a failed Save name their reason in the reserved
             // slot below Save, so neither the first refusal nor Discard moves the editor.
             let slot_problem = repair_problem
@@ -6052,34 +6149,49 @@ impl Library {
                 }
                 ui.add_space(design::S);
             } else {
+                // The guidance takes the reserved slot. When a Save reason or the discard result
+                // needs the slot, the guidance comes first, directly above it.
+                let discard_shown =
+                    discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
+                let slot_busy = discard_shown || slot_problem.is_some();
+                let slot_link = link_words.filter(|_| !slot_busy);
+                if let Some(words) = link_words.filter(|_| slot_busy) {
+                    design::message(ui, Tone::Warning, words);
+                }
                 // Measure the same words in both states, so the first edit keeps the caret in place.
                 let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
                 // The discard message is measured too, so neither state moves the editor.
-                let height = egui::WidgetText::from(Type::Small.rich(ui, words))
-                    .into_galley(
-                        ui,
-                        Some(egui::TextWrapMode::Wrap),
-                        editor_width,
-                        Type::Small.font(ui),
-                    )
-                    .size()
-                    .y
-                    .max(discarded_height(ui, note.name(), editor_width))
-                    .max(Density::Read.control() + design::XS)
-                    .max(slot_problem.map_or(0.0, |problem| {
-                        egui::WidgetText::from(Type::Body.rich(ui, problem))
-                            .into_galley(
-                                ui,
-                                Some(egui::TextWrapMode::Wrap),
-                                editor_width - design::XL,
-                                Type::Body.font(ui),
-                            )
-                            .size()
-                            .y
-                    }));
+                let body_height = |words: &str| {
+                    egui::WidgetText::from(Type::Body.rich(ui, words))
+                        .into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Wrap),
+                            editor_width - design::XL,
+                            Type::Body.font(ui),
+                        )
+                        .size()
+                        .y
+                };
+                // The guidance alone fills the slot: a discard result would move it above anyway.
+                let height = if let Some(link) = slot_link {
+                    body_height(link).max(Density::Read.control() + design::XS)
+                } else {
+                    egui::WidgetText::from(Type::Small.rich(ui, words))
+                        .into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Wrap),
+                            editor_width,
+                            Type::Small.font(ui),
+                        )
+                        .size()
+                        .y
+                        .max(discarded_height(ui, note.name(), editor_width))
+                        .max(Density::Read.control() + design::XS)
+                        .max(slot_problem.map_or(0.0, |problem| body_height(problem)))
+                };
                 let (slot, _) =
                     ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                if discard_shown {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(slot)
@@ -6100,6 +6212,14 @@ impl Library {
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
                     design::message(&mut slot_ui, Tone::Error, problem);
+                } else if let Some(words) = slot_link {
+                    // The repair this note was opened for, in the reason line.
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    design::message(&mut slot_ui, Tone::Warning, words);
                 } else if let Some(reason) = draft_reason {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()

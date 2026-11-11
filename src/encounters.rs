@@ -175,20 +175,15 @@ pub(crate) struct RosterFault {
 }
 
 impl RosterFault {
+    /// `<name> · line <n>: <problem>`: the one form that the encounter editor, the run setup and
+    /// Save's reason give an unread roster row.
     pub(crate) fn words(&self) -> String {
-        let (problem, repair) = self.problem.split_once(". ").unwrap_or((&self.problem, ""));
-        format!(
-            "{}: {} (line {}).{}",
-            self.name,
-            problem,
-            self.line,
-            if repair.is_empty() {
-                String::new()
-            } else {
-                format!(" {repair}")
-            }
-        )
+        row_fault_words(&self.name, self.line, &self.problem)
     }
+}
+
+fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
+    format!("{name} · line {line}: {problem}")
 }
 
 /// Read rejected rows from a fresh parse, before catalogue reference resolution.
@@ -258,11 +253,31 @@ fn unread_notes(
                 _ if faults.is_empty() => {
                     format!("{path}, line {}: {}", flag.line, flag.message)
                 }
-                Some(fault) => format!("{} · line {}: {}", fault.name, flag.line, flag.message),
+                Some(fault) => row_fault_words(&fault.name, flag.line, &flag.message),
                 None => format!("Line {}: {}", flag.line, flag.message),
             }
         })
         .collect()
+}
+
+/// `N content issues to repair`: the words of a page's collapsing content issue count.
+pub(crate) fn content_issue_count(count: usize) -> String {
+    design::count(count, "content issue to repair", "content issues to repair")
+}
+
+/// A collapsing content issue count is a status, in one look on every page: the warning icon
+/// and colour, then the count, at the size of a section title.
+pub(crate) fn issue_count_title(ui: &egui::Ui, heading: &str) -> egui::text::LayoutJob {
+    let format = egui::TextFormat {
+        font_id: egui::TextStyle::Button.resolve(ui.style()),
+        color: colors().result.warning,
+        ..Default::default()
+    };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(icons::WARN, 0.0, format.clone());
+    job.append(" ", 0.0, format.clone());
+    job.append(heading, 0.0, format);
+    job
 }
 
 /// A warning's file line: the path, whole, then `Edit in Obsidian` and `Show file`. A path too
@@ -317,12 +332,7 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
             faults
                 .iter()
                 .map(|fault| {
-                    format!(
-                        "{} (line {}): {}",
-                        fault.name,
-                        fault.line,
-                        fault.problem.trim_end_matches('.')
-                    )
+                    row_fault_words(&fault.name, fault.line, fault.problem.trim_end_matches('.'))
                 })
                 .collect::<Vec<_>>()
                 .join("; "),
@@ -1219,9 +1229,7 @@ fn changed_detail_parts(
     hp_missing: bool,
 ) -> (String, bool) {
     let font = Type::Small.font(ui);
-    let reserved = design::number_width(ui, word, &font)
-        + design::number_width(ui, " · ", &font)
-        + design::XS * 2.0;
+    let reserved = design::number_width(ui, word, &font) + design::number_width(ui, " · ", &font);
     let width = (width - reserved).max(0.0);
     let mut parts = detail_parts(detail, hp_missing);
     let kept = |parts: &[DetailPart<'_>]| parts.iter().any(|part| part.hp_fault);
@@ -3483,16 +3491,7 @@ impl Encounters {
         if !snapshot.issues.is_empty() {
             design::section(
                 ui,
-                Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "{} {}",
-                            icons::WARN,
-                            design::count(snapshot.issues.len(), "content issue", "content issues")
-                        ),
-                    )
-                    .color(colors().result.warning),
+                issue_count_title(ui, &content_issue_count(snapshot.issues.len())),
                 |ui| {
                     for issue in &snapshot.issues {
                         ui.add(
@@ -3722,6 +3721,8 @@ impl Encounters {
         let compact = ui.available_width() < 760.0;
         // The title and its actions need more room than the panes do.
         let has_run = self.has_run();
+        // A draft that Save refused, until its fault is fixed, does not own the primary.
+        let refused = self.shows_validation_error();
         let loading = self.pending.is_some();
 
         let saved_note = self.message.clone();
@@ -3820,7 +3821,9 @@ impl Encounters {
                     } else {
                         START_FIGHT
                     };
-                    run_it = if has_run || (dirty && unfinished.is_none()) {
+                    // Unsaved changes own the primary: Resume waits until they are saved or
+                    // discarded.
+                    run_it = if has_run || dirty {
                         Action::secondary(word)
                     } else {
                         Action::primary(word)
@@ -3844,7 +3847,7 @@ impl Encounters {
                         blocked_reason(ui, Some("Close the open run first"));
                         ui.add_space(design::L);
                     }
-                    save = if dirty && !has_run && unfinished.is_none() {
+                    save = if dirty && !has_run && !refused {
                         Action::primary("Save encounter")
                     } else {
                         Action::secondary("Save encounter")
@@ -4698,14 +4701,15 @@ impl Encounters {
                                 if changed && !is_open {
                                     ui.spacing_mut().interact_size.y = 0.0;
                                     ui.horizontal(|ui| {
-                                        ui.spacing_mut().item_spacing.x = design::XS;
+                                        // The separator's own blanks are the gap on both sides, as in the text before it.
+                                        ui.spacing_mut().item_spacing.x = 0.0;
                                         let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side, &crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref())))).unwrap_or_else(|| "Changed".into());
                                         let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
                                         let (fitted, fault_kept) = changed_detail_parts(ui, &detail, &word, ui.available_width(), hp_missing);
                                         let detail_rect = ui.label(detail_text(ui, &stat_line(&fitted), fault_kept)).on_hover_text(&detail).rect;
                                         let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
+                                        let at = egui::pos2(separator.right(), detail_rect.center().y - design::XL / 2.0);
                                         let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
                                         if design::small_link(&mut inline, &word).clicked() {
                                             groups::show_form_when_it_opens(ui);
@@ -4992,7 +4996,9 @@ impl Encounters {
                 design::message(ui, Tone::Warning, &words);
             }
             ui.vertical(|ui| {
-                let save_key = changed && blocked.is_none() && run_files == 0
+                // Ctrl+S saves exactly when the button it labels can: a rule repair with no
+                // other change too.
+                let save_key = blocked.is_none() && run_files == 0
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 ui.horizontal(|ui| {
                 if changed {
@@ -5012,7 +5018,17 @@ impl Encounters {
                         ));
                     }
                 }
-                if !changed {
+                if !changed && !rule_flags.is_empty() {
+                    // Save is the repair here: it writes the shown settings over the unread choice.
+                    let lines: Vec<_> = rule_flags.iter().map(|flag| flag.line.to_string()).collect();
+                    let lines = match lines.split_last() {
+                        Some((last, [])) => format!("line {last}"),
+                        Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
+                        None => String::new(),
+                    };
+                    let word = format!("Save replaces the unread choice on {lines} with these settings");
+                    design::save_row_state(ui, Status { icon: icons::WARN, word: &word, color: colors().result.warning }, false, None);
+                } else if !changed {
                     design::save_row_state(ui, Status { icon: icons::OK, word: "No changes", color: colors().muted }, false, None);
                 }
                 if !changed
@@ -5264,6 +5280,20 @@ mod tests {
         ] {
             let notes = unread_notes(path, &flags, &rows);
             assert_eq!(notes, expected);
+            // The run setup and Save's reason give each row the editor's words (iter-23 FA4).
+            for row in &rows {
+                let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
+                let fault = RosterFault {
+                    problem: flag.message.clone(),
+                    ..row.clone()
+                };
+                assert!(notes.contains(&fault.words()), "{}", fault.words());
+                let reason = roster_fault_reason(path, std::slice::from_ref(&fault)).unwrap();
+                assert!(
+                    reason.contains(fault.words().trim_end_matches('.')),
+                    "{reason}"
+                );
+            }
             let faults = rows.len();
             let ctx = egui::Context::default();
             design::theme::install(&ctx);
@@ -5825,7 +5855,7 @@ mod tests {
                     let font = Type::Small.font(ui);
                     let used = design::number_width(ui, &fitted, &font)
                         + design::number_width(ui, word, &font)
-                        + design::number_width(ui, " · ", &font) + design::XS * 2.0;
+                        + design::number_width(ui, " · ", &font);
                     assert!(used <= width, "{used} exceeds {width}");
                 }
             });
