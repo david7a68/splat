@@ -228,10 +228,12 @@ fn part_text(part: &DamagePart) -> String {
 pub(crate) fn parts_text(parts: &[DamagePart]) -> String {
     parts
         .iter()
-        .map(|part| match &part.when {
-            None => part_text(part),
-            Some(when) if when.instead => format!("or {}", part_text(part)),
-            Some(_) => format!("plus {}", part_text(part)),
+        .enumerate()
+        .map(|(at, part)| match &part.when {
+            // With nothing before it, a part has nothing to replace or to add to.
+            Some(when) if at > 0 && when.instead => format!("or {}", part_text(part)),
+            Some(_) if at > 0 => format!("plus {}", part_text(part)),
+            _ => part_text(part),
         })
         .collect::<Vec<_>>()
         .join(", ")

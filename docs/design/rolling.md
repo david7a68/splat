@@ -83,8 +83,25 @@ anything else, such as `if the goat moved 20+ feet straight toward the target`,
 the click on the target opens a question under the row before anything rolls:
 the condition, then `Yes · 2d8+2 bludgeoning`, `No · 2d6+2 bludgeoning` and
 `Cancel`. In the built-in creatures, 16 attacks have such damage; 3 need the
-question. A save's damage, rolled once for every target, rolls without its
-conditions.
+question.
+
+### A save's damage
+
+A save's damage is what a failure takes at once: the damage in the first
+sentence after `Failure:`. Damage in a later sentence is another effect at
+another time (`takes 10 (3d6) Acid damage at the start of each of its turns`),
+so it is not rolled with the save; it stays in the tile's hover. Before this,
+30 of the 143 built-in saves with damage rolled too much, such as 6d6 for the
+gelatinous cube's 3d6 Engulf. Older text without the label uses the damage
+after the DC in its sentence.
+
+One later form is read as a condition: `If the target has 20 Hit Points or
+fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic
+damage` rolls only for a target with more than 20 HP. `Roll damage` settles a
+condition when every target gives the same answer. When they differ, or the
+run cannot tell, the question opens under the first target's row, because one
+roll of damage cannot be both. When the answer gives no damage, the rows say
+`No damage · see the text`.
 
 ### Inspiration
 
@@ -104,14 +121,22 @@ With one such rule, the campaign uses it. With several, campaign settings shows
 With none, a run offers no inspiration. A run keeps the rule it started with.
 
 Only a player character with inspiration is offered it: by the synced D&D Beyond
-sheet, or else by the sheet's last read. Expending it sends `No inspiration` to
-a synced sheet; without sync, the run remembers it and the Log says so.
+sheet, or else by the last read of their sheet. The run remembers each spend, by
+participant, in the run file, until that sheet shows no inspiration. A synced
+sheet is sent `No inspiration` at once, or when its sync next can take it (a
+sync that starts later, or reconnects). A read that still shows inspiration is
+older than the spend and does not give it back; after the sheet has shown none,
+a new grant counts again.
 
-- **Reroll rule.** After the run rolls a d20 for a player (`Roll for them`, or a
-  check, save or skill from the sheet), a right-click on the row with the result
-  offers `Reroll the d20 with inspiration`. The new die takes the place of the
-  one that counted, the keep is made again, and the Log says `3 becomes 17`. On
-  an attack, the damage rolls again only when a critical hit begins or ends.
+- **Reroll rule.** After the run rolls for a player (`Roll for them`, or a
+  check, save, skill or dice from the sheet), a right-click on the row with the
+  result shows `Inspiration: reroll one die` and each die of that roll: `4 on
+  the d20`, `8 on 1d8+4 slashing`. Equal faces of one roll are one line, lowest
+  first, at most 8. The new die stands, its keep and totals are made again
+  (`Dice::reroll`), Amount takes the new damage, and the Log says `1 becomes 6`
+  and only the roll that changed. On an attack, the damage rolls again only when
+  the d20 begins or ends a critical hit. The next step of the run (an applied
+  amount, Next turn) ends the chance to reroll.
 - **Advantage rule.** The tile, number or target menu offers `with inspiration
   (advantage)`; the roll has advantage and the Log says inspiration was expended.
 
@@ -147,6 +172,8 @@ the tiles, and nothing is saved.
   repeats the dice.
 - The run keeps the armed action (`Armed`), each row's result (`badges`) and each
   save (`saves`). Next turn, Escape or `Stop` disarms; Next turn clears the rows.
+- While an action is armed, the panel and its D&D Beyond sheet stay on the actor,
+  so a player's tiles and `Roll for them` stay when the dock moves to the target.
 - `dice_text` marks a damage part's condition (`When`: its words, and whether it
   replaces or adds); `dice_text::resolve` picks the parts whose conditions hold.
 - Chips come from `rolls::chips` over the rules text: each paragraph with a
@@ -169,6 +196,7 @@ The `run-rolls` visual scenario measures these:
 | T16.8 | Arm an attack with advantage from its menu | 2 |
 | T16.9 | Roll against one target with disadvantage from its menu | 2 |
 | T16.10 | Attack when its damage depends on a condition | 3 |
+| T16.11 | Reroll one die of a player's roll with inspiration | 3 |
 
 ## History
 
@@ -196,7 +224,8 @@ The `run-rolls` visual scenario measures these:
 
 - Keyboard: a key to step through target rows while an action is armed.
 - A situational bonus, such as Bless.
-- Heroic Inspiration on a damage die, and gaining or giving inspiration.
+- Gaining or giving inspiration.
+- Damage at a later time, such as at the start of each turn, as its own roll.
 - Recharge: `(Recharge 5–6)` rolls a d6 against the range.
 - Multiattack: one press for all of its attacks. Its structured data has at
   least three shapes.

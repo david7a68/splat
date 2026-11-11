@@ -4184,6 +4184,8 @@ pub(crate) fn write_in_progress_run_with(
 ) -> Result<(), String> {
     let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
     let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    // The test campaign uses the SRD 5.2.1 package, whose inspiration rule is a reroll.
+    run.set_inspiration(Some(Inspiration::Reroll));
     run.state.random = Random::seeded(20_260_101);
     for (index, total) in initiatives.into_iter().enumerate() {
         run.apply(Command::Initiative(index, Some(total)))?;

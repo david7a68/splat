@@ -76,12 +76,12 @@ fn with_damage(link: &RollLink, parts: Vec<DamagePart>) -> RollLink {
     }
 }
 
-/// The damage parts of an attack or a damage roll.
+/// The damage parts of an attack, a save or a damage roll.
 fn damage_of(link: &RollLink) -> &[DamagePart] {
     match link {
-        RollLink::D20 { damage, .. } => damage,
+        RollLink::D20 { damage, .. } | RollLink::SaveDc { damage, .. } => damage,
         RollLink::Damage { parts, .. } => parts,
-        _ => &[],
+        RollLink::Dice { .. } => &[],
     }
 }
 
@@ -574,7 +574,31 @@ impl Run {
                 )),
             };
         }
+        // `if the target has more than 20 Hit Points`, from a save's `Otherwise`.
+        if let Some(limit) = words
+            .strip_prefix("if the target has more than ")
+            .and_then(|rest| rest.strip_suffix(" hit points"))
+            .and_then(|number| number.parse::<i64>().ok())
+        {
+            return self.state.participants[row].hp.map(|hp| hp > limit);
+        }
         None
+    }
+
+    /// Whether a condition holds for every one of `rows`. `None` when the run cannot tell for
+    /// one of them, or when they differ: one roll of damage cannot be both.
+    fn condition_holds_for(
+        &self,
+        when: &When,
+        mode: Mode,
+        actor: usize,
+        rows: &[usize],
+    ) -> Option<bool> {
+        let mut answers = rows
+            .iter()
+            .map(|row| self.condition_holds(when, mode, actor, *row));
+        let first = answers.next()??;
+        answers.all(|answer| answer == Some(first)).then_some(first)
     }
 
     /// The question a target waits on: one choice without the unknown conditions, then one
@@ -584,16 +608,16 @@ impl Run {
         link: &RollLink,
         mode: Mode,
         actor: usize,
-        row: usize,
+        rows: &[usize],
     ) -> Result<Vec<DamagePart>, Question> {
         let parts = damage_of(link);
         let unknown: Vec<&When> = dice_text::conditions(parts)
             .into_iter()
-            .filter(|when| self.condition_holds(when, mode, actor, row).is_none())
+            .filter(|when| self.condition_holds_for(when, mode, actor, rows).is_none())
             .collect();
         let settle = |yes: Option<&When>| {
             dice_text::resolve(parts, |when| {
-                self.condition_holds(when, mode, actor, row)
+                self.condition_holds_for(when, mode, actor, rows)
                     .unwrap_or(Some(when) == yes)
             })
         };
@@ -639,6 +663,9 @@ impl Run {
         let Some((_, parts)) = asking.choices.get(index) else {
             return Ok(());
         };
+        if matches!(armed.link, RollLink::SaveDc { .. }) {
+            return self.roll_save_damage(&armed, parts);
+        }
         let link = with_damage(&armed.link, parts.clone());
         self.roll_attack(armed.actor, asking.row, &link, asking.mode, asking.inspired)
     }
@@ -663,7 +690,7 @@ impl Run {
         inspired: bool,
     ) -> Result<(), String> {
         let mode = if inspired { Mode::Advantage } else { mode };
-        match self.damage_for(link, mode, actor, row) {
+        match self.damage_for(link, mode, actor, &[row]) {
             Ok(parts) => self.roll_attack(actor, row, &with_damage(link, parts), mode, inspired),
             Err((question, choices)) => {
                 self.asking = Some(Asking {
@@ -845,20 +872,44 @@ impl Run {
     }
 
     /// A save's damage, rolled once for every target, into Amount. Halves follow the marks.
+    /// A damage condition is settled first: by the targets, when the run can tell and they
+    /// agree, or else by a question under the first target's row.
     fn save_damage(&mut self, armed: &Armed) -> Result<(), String> {
+        let targets = self.save_targets();
+        match self.damage_for(&armed.link, Mode::Normal, armed.actor, &targets) {
+            Ok(parts) => self.roll_save_damage(armed, &parts),
+            Err((question, choices)) => {
+                self.asking = targets.first().map(|row| Asking {
+                    row: *row,
+                    mode: Mode::Normal,
+                    inspired: false,
+                    question,
+                    choices,
+                });
+                Ok(())
+            }
+        }
+    }
+
+    /// Roll a save's settled damage once, into Amount.
+    fn roll_save_damage(&mut self, armed: &Armed, parts: &[DamagePart]) -> Result<(), String> {
         let RollLink::SaveDc {
-            label,
-            damage,
-            dc,
-            half,
-            ..
+            label, dc, half, ..
         } = &armed.link
         else {
             return Ok(());
         };
+        if parts.is_empty() {
+            // Its condition gives these targets another effect, in the rules text.
+            for row in self.save_targets() {
+                self.badges
+                    .insert(row, "No damage · see the text".to_owned());
+            }
+            return Ok(());
+        }
         let link = RollLink::Damage {
             label: label.clone(),
-            parts: damage.clone(),
+            parts: parts.to_vec(),
         };
         let who = self.state.participants[armed.actor].name.clone();
         let changes = self.changes(armed.actor);
@@ -1384,6 +1435,50 @@ mod tests {
         run.state.random = Random::controlled([1, 2, 3, 4]);
         run.save_damage(&armed).unwrap();
         assert_eq!(run.amount, "10");
+    }
+
+    #[test]
+    fn a_saves_damage_follows_its_condition_or_asks_when_the_targets_differ() {
+        let glare = "Death Glare. Wisdom Saving Throw: DC 11, one Frightened creature. Failure: If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage.";
+        let link = dice_text::find(glare, "Death Glare")
+            .into_iter()
+            .find_map(|span| matches!(span.link, RollLink::SaveDc { .. }).then_some(span.link))
+            .unwrap();
+        let mut run = live();
+        let actor = run.current().unwrap();
+        let others: Vec<usize> = (0..3).filter(|row| *row != actor).collect();
+        run.roll_link(ask(link, actor));
+        let armed = run.armed.clone().unwrap();
+        // One target above the limit: the damage rolls.
+        run.state.participants[others[0]].hp = Some(30);
+        run.target(others[0], None);
+        run.state.random = Random::controlled([2, 3, 4]);
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.amount, "9");
+        // At the limit or under it: no damage rolls, and the row says so.
+        run.state.participants[others[0]].hp = Some(20);
+        let lines = run.state.log.len();
+        run.save_damage(&armed).unwrap();
+        assert_eq!(run.state.log.len(), lines);
+        assert_eq!(
+            run.badges.get(&others[0]).map(String::as_str),
+            Some("No damage · see the text")
+        );
+        // Two targets that differ: one roll cannot be both, so the DM says.
+        run.state.participants[others[1]].hp = Some(30);
+        run.target(others[1], None);
+        run.save_damage(&armed).unwrap();
+        let asking = run.asking.clone().unwrap();
+        assert_eq!(
+            asking.question,
+            "If the target has more than 20 Hit Points?"
+        );
+        assert_eq!(asking.choices[0].0, "Yes · 3d8 psychic");
+        assert_eq!(asking.choices[1].0, "No · no dice");
+        run.state.random = Random::controlled([1, 1, 1]);
+        run.row_choice(asking.row, RowChoice::Damage(0));
+        assert_eq!(run.amount, "3");
+        assert!(run.asking.is_none());
     }
 
     #[test]

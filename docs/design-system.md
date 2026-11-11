@@ -944,8 +944,9 @@ targets show their roll in the AC cell. Outside a run a tile previews, and its t
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
-and the character allow it. A row's menu opens under the row, headed in muted Small (`Bite against Cinder Wolf 2`), so
-the row stays in view. A damage question opens there too: the condition in Small, wrapped at 320 px, then `Yes · …`,
+and the character allow it. A row's menu opens under the row, so the row stays in view. Each of its sections has a
+heading in muted Small: `Bite against Cinder Wolf 2`, then `Inspiration: reroll one die` with a line for each die
+(`4 on the d20`). A damage question opens there too: the condition in Small, wrapped at 320 px, then `Yes · …`,
 `No · …` and `Cancel`.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
