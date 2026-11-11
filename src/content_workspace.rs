@@ -34,6 +34,21 @@ fn note_property(text: &str, property: &str) -> Option<String> {
 }
 
 pub(crate) const DELETED_MANIFEST: &str = "The package manifest was deleted. Entries are still available. Write it again, or restore it from a backup.";
+/// One tone for a package manifest fault, in Campaign and in Library: a manifest that is on disk
+/// but invalid is an error; a deleted one is a warning, because its entries stay available.
+pub(crate) fn manifest_fault_tone(on_disk: bool) -> crate::design::Tone {
+    if on_disk {
+        crate::design::Tone::Error
+    } else {
+        crate::design::Tone::Warning
+    }
+}
+/// What `Replace with a basic <path>` keeps and what it replaces, in Campaign and in Library.
+pub(crate) fn manifest_replace_consequence(path: &str) -> String {
+    format!(
+        "Keeps the package name and its links. Replaces the other contents of {path}, including its description. The entries stay unchanged."
+    )
+}
 
 pub(crate) fn package_manifest_path(module: &Module) -> String {
     match content::read_folder(&module.path) {

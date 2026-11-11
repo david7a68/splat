@@ -449,7 +449,7 @@ impl Party {
                 design::empty_state(
                     ui,
                     icons::PARTY,
-                    "No local characters yet",
+                    "No characters yet",
                     "Connect to D&D Beyond in Settings to load this party.",
                     |ui| {
                         if if self.run_open {

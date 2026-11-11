@@ -77,8 +77,9 @@ pub struct CampaignContent {
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
     campaign_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
-    /// What `Discard` last dropped, for one step of undo.
-    discarded_selections: Option<Vec<PackageSelection>>,
+    /// What `Discard` last dropped, for one step of undo, and the Campaign.md text it was a draft
+    /// of. A missing or changed Campaign.md ends it.
+    discarded_selections: Option<(Vec<PackageSelection>, Option<String>)>,
     discarded_repair: Option<(String, String)>,
     /// The repair the DM edited or focused last. It owns the primary Save while it is open and
     /// changed; other changed repairs keep their drafts with a secondary Save.
@@ -100,6 +101,26 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
     PROBLEMS.get_or(&[path.as_bytes(), text.as_bytes()], || {
         find_repair_problem(path, text)
     })
+}
+
+/// Why `Save repaired note` would refuse this draft, checked as Save checks it: the YAML fault,
+/// or an identity that settings own. None when Save would write it.
+fn repair_refusal(path: &str, draft: &str, campaign: Uuid) -> Option<String> {
+    // The save row asks on every frame; the parse is remembered as `repair_problem`'s is.
+    static REFUSALS: splat::memo::Memo<Option<String>> = splat::memo::Memo::new(64);
+    REFUSALS.get_or(
+        &[path.as_bytes(), draft.as_bytes(), campaign.as_bytes()],
+        || match Entry::parse(path, draft) {
+            Err(error) => Some(repair_problem(path, draft).0.unwrap_or(error)),
+            Ok(entry)
+                if entry.kind == "package"
+                    || (entry.kind == "campaign" && entry.id != campaign) =>
+            {
+                Some("Keep campaign ownership consistent with settings.".into())
+            }
+            Ok(_) => None,
+        },
+    )
 }
 
 fn find_repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
@@ -386,6 +407,19 @@ impl CampaignContent {
             self.removed_package = None;
         }
     }
+    /// `Undo discard` of the package choices belongs to Campaign.md as it was. When the file goes
+    /// missing or changes on disk, the discarded draft and its Undo go.
+    fn forget_discard_of_changed_file(&mut self, loaded: Result<&CampaignDocument, &String>) {
+        if self
+            .discarded_selections
+            .as_ref()
+            .is_some_and(|(_, baseline)| {
+                !loaded.is_ok_and(|document| document.baseline == *baseline)
+            })
+        {
+            self.discarded_selections = None;
+        }
+    }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(&campaign);
         crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.manifest_write);
@@ -452,6 +486,7 @@ impl CampaignContent {
                 Ok((repairs, result)) => {
                     self.pending = None;
                     self.repairs = repairs;
+                    self.forget_discard_of_changed_file(result.as_ref().map(|s| &s.document));
                     match result {
                         Ok(snapshot) => {
                             campaigns.remember_campaign_document(&snapshot.document);
@@ -487,14 +522,7 @@ impl CampaignContent {
                 design::message(ui, Tone::Error, error);
             }
             let (preview, action) = campaigns.campaign_write_preview(&active);
-            if missing
-                && design::message_with_action(
-                    ui,
-                    Tone::Error,
-                    &format!("Campaign.md is missing. {preview}"),
-                    action,
-                )
-            {
+            if missing && design::message_with_action(ui, Tone::Error, &preview, action) {
                 match campaigns.write_campaign_again(&active) {
                     Ok(write) => {
                         self.campaign_write = Some(write);
@@ -673,6 +701,7 @@ impl CampaignContent {
             .iter()
             .filter(|(path, baseline, draft)| {
                 draft != baseline
+                    && repair_refusal(path, draft, active.id).is_none()
                     && ui.data(|data| {
                         data.get_temp::<bool>(egui::Id::new(("repair_open", path.as_str())))
                             .unwrap_or(false)
@@ -680,6 +709,7 @@ impl CampaignContent {
             })
             .map(|(path, _, _)| path.as_str())
             .collect();
+        // Only a draft that Save would write can hold the primary.
         let owner = (!self.run_open)
             .then(|| {
                 self.active_repair
@@ -712,10 +742,9 @@ impl CampaignContent {
             }
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
-                ui.horizontal(|ui| {
-                    design::group_heading(ui, "Repair", 0);
-                    ui.label(Type::Mono.rich(ui, path.as_str()));
-                });
+                // The message above names the file. The heading keeps it for screen readers only.
+                let heading = ui.label(design::group_heading_text(ui, "Repair", 0));
+                design::named(ui, &heading, &format!("Repair {path}"));
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
@@ -725,16 +754,30 @@ impl CampaignContent {
 
                     ui.horizontal(|ui| {
                         let dirty = draft != baseline;
+                        // The Library rule: the draft is checked as Save checks it. While Save
+                        // would refuse it, the state says Invalid and Save names the cause.
+                        let refusal = repair_refusal(path, draft, active.id);
+                        let c = colors();
                         design::save_row_state(
                             ui,
-                            design::Status {
-                                icon: if dirty { icons::DRAFT } else { icons::OK },
-                                word: if dirty { "Unsaved" } else { "No changes" },
-                                color: if dirty {
-                                    colors().document.unsaved
-                                } else {
-                                    colors().muted
-                                },
+                            if refusal.is_some() {
+                                design::Status {
+                                    icon: icons::ERROR,
+                                    word: "Invalid",
+                                    color: c.document.invalid,
+                                }
+                            } else if dirty {
+                                design::Status {
+                                    icon: icons::DRAFT,
+                                    word: "Unsaved",
+                                    color: c.document.unsaved,
+                                }
+                            } else {
+                                design::Status {
+                                    icon: icons::OK,
+                                    word: "No changes",
+                                    color: c.muted,
+                                }
                             },
                             false,
                             None,
@@ -773,34 +816,31 @@ impl CampaignContent {
                             // One weight for a save row: primary while the draft has
                             // changes, unless an open run owns `Next turn` or another
                             // repair is the active one.
-                            let pressed =
-                                (if draft != baseline && owner.as_deref() == Some(path.as_str()) {
-                                    Action::primary("Save repaired note")
-                                } else {
-                                    Action::secondary("Save repaired note")
-                                })
-                                .density(Density::Read)
-                                .blocked_if(draft == baseline, "No changes to save.")
-                                .show(ui)
-                                .clicked();
+                            let writes = draft != baseline && refusal.is_none();
+                            let pressed = (if writes && owner.as_deref() == Some(path.as_str()) {
+                                Action::primary("Save repaired note")
+                            } else {
+                                Action::secondary("Save repaired note")
+                            })
+                            .density(Density::Read)
+                            .blocked(
+                                refusal
+                                    .as_deref()
+                                    .or((draft == baseline).then_some("No changes to save.")),
+                            )
+                            .show(ui)
+                            .clicked();
 
                             if pressed
-                                || (draft != baseline
+                                || (writes
                                     && ui.input_mut(|i| {
                                         i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
                                     }))
                             {
-                                let result = Entry::parse(path, draft).and_then(|entry| {
-                                    if entry.kind == "package"
-                                        || (entry.kind == "campaign" && entry.id != active.id)
-                                    {
-                                        return Err(
-                                            "Keep campaign ownership consistent with settings."
-                                                .into(),
-                                        );
-                                    }
-                                    write_note(&active.path, path, Some(baseline), draft)
-                                });
+                                let result = match repair_refusal(path, draft, active.id) {
+                                    Some(refusal) => Err(refusal),
+                                    None => write_note(&active.path, path, Some(baseline), draft),
+                                };
                                 match result {
                                     Ok(_) => {
                                         *baseline = draft.clone();
@@ -879,9 +919,9 @@ impl CampaignContent {
                     .show(ui)
                     .clicked()
                 {
-                    self.discarded_selections = Some(std::mem::replace(
-                        &mut document.selections,
-                        self.saved_selections.clone(),
+                    self.discarded_selections = Some((
+                        std::mem::replace(&mut document.selections, self.saved_selections.clone()),
+                        document.baseline.clone(),
                     ));
                 }
             } else {
@@ -899,7 +939,7 @@ impl CampaignContent {
             if !changed
                 && self.discarded_selections.is_some()
                 && design::draft_discarded(ui, "Campaign packages")
-                && let Some(selections) = self.discarded_selections.take()
+                && let Some((selections, _)) = self.discarded_selections.take()
             {
                 document.selections = selections;
             }
@@ -915,15 +955,6 @@ impl CampaignContent {
             }
             let pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let reason_fits = repair.is_none_or(|reason| {
-                        design::number_width(ui, reason, &Type::Small.font(ui))
-                            + Action::primary("Save selections")
-                                .density(Density::Read)
-                                .key("Ctrl+S")
-                                .natural_width(ui)
-                            + design::S
-                            <= ui.available_width()
-                    });
                     let blocked = repair.or((!dirty).then_some("No changes to save."));
                     let pressed = (if self.run_open {
                         Action::secondary("Save selections")
@@ -935,11 +966,9 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
-                    if reason_fits {
-                        design::blocked_reason(ui, repair);
-                    } else {
-                        reason_below = repair.map(str::to_owned);
-                    }
+                    // One place at every width: beside Save it would fit only once `Reload from
+                    // disk` hides, so the first repair edit would move the editor.
+                    reason_below = repair.map(str::to_owned);
                     pressed
                 })
                 .inner;
@@ -1014,8 +1043,9 @@ impl CampaignContent {
                     }
                 );
                 let mut open = false;
+                let tone = crate::content_workspace::manifest_fault_tone(exists);
                 let pressed = if exists {
-                    design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                    design::message_with_actions(ui, tone, &message, |ui| {
                         let mut pressed = false;
                         ui.horizontal_wrapped(|ui| {
                             open = Action::secondary("Open in Library").show(ui).clicked();
@@ -1025,14 +1055,17 @@ impl CampaignContent {
                         });
                         ui.label(
                             Type::Small
-                                .rich(ui, format!("Keeps the package name and its links. Replaces the other contents of {path}, including its description. The entries stay unchanged."))
+                                .rich(
+                                    ui,
+                                    crate::content_workspace::manifest_replace_consequence(path),
+                                )
                                 .color(colors().muted),
                         );
                         pressed
                     })
                 } else {
                     design::locked(ui, manifest_locked, |ui| {
-                        design::message_with_action(ui, Tone::Warning, &message, &label)
+                        design::message_with_action(ui, tone, &message, &label)
                     })
                 };
                 if pressed {
@@ -2106,6 +2139,35 @@ mod tests {
             problem.as_deref(),
             Some("Line 3 opens a list with [ that never closes.")
         );
+        // Round 23 FA3: the save row asks Save's own question. A draft Save refuses names its
+        // cause; one Save writes has none.
+        let campaign = Uuid::new_v4();
+        assert_eq!(
+            repair_refusal("Notes/Broken.md", text, campaign).as_deref(),
+            Some("Line 3 opens a list with [ that never closes.")
+        );
+        let rule = crate::library::note_text("Broken", "rule", None);
+        assert_eq!(repair_refusal("Notes/Broken.md", &rule, campaign), None);
+        // A draft that parses but takes an identity settings own is still refused.
+        let ownership = Some("Keep campaign ownership consistent with settings.".to_owned());
+        let package = crate::library::note_text("Broken", "package", Some("broken"));
+        assert_eq!(
+            repair_refusal("Notes/Broken.md", &package, campaign),
+            ownership
+        );
+        let other = crate::library::note_text("Broken", "campaign", Some("broken"));
+        assert_eq!(
+            repair_refusal("Notes/Broken.md", &other, campaign),
+            ownership
+        );
+        let own = other.replace(
+            &splat::content::Entry::parse("Campaign.md", &other)
+                .unwrap()
+                .id
+                .to_string(),
+            &campaign.to_string(),
+        );
+        assert_eq!(repair_refusal("Notes/Broken.md", &own, campaign), None);
     }
 
     #[test]
@@ -2235,7 +2297,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut content = CampaignContent {
             active: Some(first.clone()),
-            discarded_selections: Some(Vec::new()),
+            discarded_selections: Some((Vec::new(), None)),
             discarded_repair: Some(("note.md".into(), "words".into())),
             ..Default::default()
         };
@@ -2245,6 +2307,39 @@ mod tests {
         content.reload(&ctx, &campaigns, second);
         assert!(content.discarded_selections.is_none());
         assert!(content.discarded_repair.is_none());
+
+        // Round 23 FA8: the discard belongs to Campaign.md as it was read. The same file keeps
+        // it; a changed or missing file ends it.
+        let folder = temp.path().join("c");
+        fs::create_dir(&folder).unwrap();
+        let active = campaign(&folder);
+        let document = CampaignDocument::load(&active).unwrap();
+        let discarded = || Some((Vec::new(), document.baseline.clone()));
+        content.discarded_selections = discarded();
+        content.forget_discard_of_changed_file(Ok(&CampaignDocument::load(&active).unwrap()));
+        assert!(
+            content.discarded_selections.is_some(),
+            "the same file keeps it"
+        );
+        let file = active.path.join(&document.path);
+        fs::write(
+            &file,
+            format!("{}\nA later note.\n", fs::read_to_string(&file).unwrap()),
+        )
+        .unwrap();
+        content.forget_discard_of_changed_file(Ok(&CampaignDocument::load(&active).unwrap()));
+        assert!(
+            content.discarded_selections.is_none(),
+            "a changed file ends it"
+        );
+        content.discarded_selections = discarded();
+        fs::remove_file(&file).unwrap();
+        let missing = CampaignDocument::load(&active).map(|_| ()).unwrap_err();
+        content.forget_discard_of_changed_file(Err(&missing));
+        assert!(
+            content.discarded_selections.is_none(),
+            "a missing file ends it"
+        );
     }
     /// AD1: `Undo package removal` goes when the file's package choices changed after it.
     #[test]

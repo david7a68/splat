@@ -2273,6 +2273,16 @@ pub(super) fn finished_change_tone(d: &Driver<'_>, words: &str) -> (bool, String
 
 /// FD5: one tone for one fault. The message above the roster has this tone's bar, and every
 /// roster row that states the fault marks it once, with this tone's icon and colour.
+/// Round 23 AE4: the tone bar beside a manifest fault's words, as `error` or `warning`.
+fn manifest_fault_tone(d: &Driver<'_>, words: &str) -> Option<&'static str> {
+    let rect = d.painted_rect_in(words, egui::Rect::EVERYTHING)?;
+    let tones = design::colors().result;
+    [("error", tones.error), ("warning", tones.warning)]
+        .into_iter()
+        .find(|(_, color)| d.has_tone_bar(rect, *color))
+        .map(|(name, _)| name)
+}
+
 fn fault_tone(
     d: &Driver<'_>,
     message: &str,
@@ -2977,7 +2987,7 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
             .expect("Replacement is visible");
         let consequence = d
             .painted_rect_in(
-                "Keeps the id, name and namespace. Drops the rest.",
+                &crate::content_workspace::manifest_replace_consequence("Package.md"),
                 egui::Rect::EVERYTHING,
             )
             .expect("The consequence is visible");
@@ -2991,10 +3001,11 @@ fn check_repair_reason(d: &mut Driver<'_>, manifest: bool) {
                     .is_some_and(|frame| frame.stroke.width > 0.0),
             "Manifest error, bordered repair and muted consequence share the text edge in order",
         );
-        // The pane has room for the short consequence, so it stays on one line.
+        // Round 23 AE3: the consequence is Campaign's longer sentence, so it may take two lines,
+        // but it wraps at the pane measure, not at the action's width.
         d.observe(
             "iter-10-E-FD8",
-            consequence.height() <= design::Type::Small.line() * 1.5
+            consequence.height() <= design::Type::Small.line() * 2.5
                 && consequence.right() > action.right(),
             "The replacement consequence wraps at the pane measure, not the action width",
         );
@@ -3177,6 +3188,9 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
             "Manifest replacement states the package name, links, description and unchanged entries");
+        let tone = manifest_fault_tone(d, "Ashen Marches: Package.md cannot be read");
+        d.observe("iter-23-C-AE4-campaign", tone == Some("error"),
+            format!("An invalid manifest on disk is an error in Campaign, as in Library: {tone:?}"));
     });
     let broken = fs::read_to_string(&path).unwrap();
     let creatures = folder.join("Creatures/Cinder Wolf.md");
@@ -3200,8 +3214,21 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("Markdown editor");
     d.expect("Line 4 opens a list");
     d.expect("Replace with a basic Package.md");
-    d.expect("Keeps the id, name and namespace. Drops the rest.");
+    d.expect(&crate::content_workspace::manifest_replace_consequence(
+        "Package.md",
+    ));
+    d.observe(
+        "iter-23-C-AE3",
+        !d.has_containing("Keeps the id") && !d.has_containing("Drops the rest"),
+        "Library states the replacement in Campaign's words, without field names",
+    );
     d.state_prepared("manifest-opened-for-repair", Sizes::All, |d| {
+        let tone = manifest_fault_tone(d, "Line 4 opens a list");
+        d.observe(
+            "iter-23-C-AE4-library",
+            tone == Some("error"),
+            format!("The invalid manifest keeps its error tone in Library repair: {tone:?}"),
+        );
         let about = d
             .place_of(&format!("{} About Ashen Marches", design::icons::WARN))
             .expect("The warning About row is visible");
@@ -3232,6 +3259,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.expect("The package manifest was deleted");
     assert!(!d.has("Find the folder…"));
     d.state_prepared("manifest-deleted-campaign", Sizes::All, |d| {
+        // Round 23 AE4, outside its scope: a deleted manifest stays a warning.
+        let tone = manifest_fault_tone(d, "The package manifest was deleted");
+        d.observe(
+            "iter-23-C-AE4-deleted",
+            tone == Some("warning"),
+            format!("A deleted manifest is a warning in Campaign: {tone:?}"),
+        );
         let search = d
             .place_of("Find a needed entry")
             .expect("The entry search is present");
@@ -3293,6 +3327,12 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "A missing manifest shows its registered name and folder without a guessed file",
         );
         check_read_repair(d, "Ashen Marches");
+        let tone = manifest_fault_tone(d, "The package manifest was deleted.");
+        d.observe(
+            "iter-23-C-AE4-deleted-library",
+            tone == Some("warning"),
+            format!("A deleted manifest is a warning in Library: {tone:?}"),
+        );
         d.observe(
             "iter-8-E-FD8-deleted",
             !d.visible_text("Missing YAML frontmatter"),
@@ -5104,9 +5144,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     for size in [SMALL, DEFAULT, LARGE] {
-        // SD1 (round 19 ruling): the action below the message is a quiet `line_start` action
-        // without an icon or border. Its painted words, not its border, start at the message
-        // words, and its padding hangs `S` into the message's icon column.
+        // Round 23 FB3: a message choice without an icon has the secondary border; only Undo
+        // is quiet. The border starts at the message words, below the message.
         let (action, words, message, frame, icon, clear) = d.at_size(size, |d| {
             d.expect(crate::library::USE_COPY);
             let action = d.place_of(crate::library::USE_COPY);
@@ -5133,12 +5172,12 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             (action, words, message, frame, icon, clear)
         });
         d.observe(
-            "iter-19-E-SD1",
+            "iter-23-C-FB3-use-copy",
             action.zip(words).zip(message).is_some_and(|((action, words), message)| {
                 action.top() >= message.bottom()
-                    && (words - message.left()).abs() <= 1.0
-                    && (action.left() - (message.left() - design::S)).abs() <= 1.0
-            }) && frame != Some(design::colors().field_border)
+                    && (action.left() - message.left()).abs() <= 1.0
+                    && words > action.left()
+            }) && frame == Some(design::colors().field_border)
                 && !icon
                 && clear.is_ok(),
             format!(
@@ -6563,17 +6602,28 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             );
             (message, build, words, clear)
         });
-        let placed = message
-            .zip(build)
-            .zip(words)
-            .is_some_and(|((message, build), words)| {
-                build.top() >= message.bottom() - 1.0 && (words - message.left()).abs() <= 1.0
-            });
+        let (frame, undo) = d.at_size(size, |d| {
+            (
+                d.control_frame("Build an encounter")
+                    .map(|frame| frame.stroke.color),
+                d.place_of("Undo register campaign"),
+            )
+        });
+        // Round 23 FB3: the same bordered action as after a plain add, on its own line below
+        // the Undo line, its border at the message words.
+        let placed = message.zip(build).zip(words).zip(undo).is_some_and(
+            |(((message, build), words), undo)| {
+                build.top() >= message.bottom() - 1.0
+                    && build.top() >= undo.bottom()
+                    && (build.left() - message.left()).abs() <= 1.0
+                    && words > build.left()
+            },
+        );
         d.observe(
-            "iter20-E-SD2-build",
-            placed && clear.is_ok(),
+            "iter-23-C-FB3-build",
+            placed && frame == Some(design::colors().field_border) && clear.is_ok(),
             format!(
-                "At {size:?}, Build an encounter {build:?} starts its words {words:?} at the message words {message:?}; press area: {clear:?}"
+                "At {size:?}, Build an encounter {build:?} (border {frame:?}, words {words:?}) starts at the message words {message:?}, below Undo {undo:?}; press area: {clear:?}"
             ),
         );
     }
