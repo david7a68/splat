@@ -1276,25 +1276,25 @@ fn belongs_to(
         // The choice ends where the name field ends, inside the column.
         let right = name_right.min(ui.max_rect().right());
         let width = (right - ui.cursor().left()).max(Density::Scan.control());
-        // FB8: egui keeps a popup's first size, so a menu opened at one width stays that wide
-        // after a resize. The control is keyed by its whole-pixel width: a new width gets a new
-        // popup, sized from the control, and the open state and focus move to it.
-        let salt = ("group_encounter", width.round() as i32);
+        // FB8: egui keeps a popup's first size, so a menu opened at one width would stay that
+        // wide after a resize. When the control's width changes while its menu is open, the
+        // remembered sizes go, and the menu takes the control's width again. Only one popup is
+        // open at a time, and Splat has no window that keeps a place.
+        let key = width.round() as i32;
         let last_id = ui.make_persistent_id("group_encounter_width");
-        if let Some(last) = ui.data(|data| data.get_temp::<i32>(last_id))
-            && last != salt.1
+        // The combo's own popup id: its button is `make_persistent_id(Id::new(salt))`.
+        let popup = ui
+            .make_persistent_id(egui::Id::new("group_encounter"))
+            .with("popup");
+        if ui
+            .data(|data| data.get_temp::<i32>(last_id))
+            .is_some_and(|last| last != key)
+            && egui::Popup::is_id_open(ui.ctx(), popup)
         {
-            let old = ui.make_persistent_id(("group_encounter", last));
-            let new = ui.make_persistent_id(salt);
-            if egui::Popup::is_id_open(ui.ctx(), old.with("popup")) {
-                egui::Popup::open_id(ui.ctx(), new.with("popup"));
-            }
-            if ui.memory(|memory| memory.has_focus(old)) {
-                ui.memory_mut(|memory| memory.request_focus(new));
-            }
+            ui.ctx().memory_mut(egui::Memory::reset_areas);
         }
-        ui.data_mut(|data| data.insert_temp(last_id, salt.1));
-        let combo = egui::ComboBox::from_id_salt(salt)
+        ui.data_mut(|data| data.insert_temp(last_id, key));
+        let combo = egui::ComboBox::from_id_salt("group_encounter")
             .icon(design::combo_icon)
             .width(width)
             .truncate()

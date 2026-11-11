@@ -13396,34 +13396,39 @@ pub mod encounter_owned_groups {
                 ),
             );
         }
-        // A proof aside (revision 17 menu checks): Escape closes it with nothing chosen and
-        // keeps focus on the control; Tab leaves and Shift+Tab comes back; the keyboard opens it
-        // again, and Escape closes it again. It is opened once more for the capture.
+        // A proof aside (revision 17 menu checks). Mouse open, then Escape: the menu closes with
+        // nothing chosen, and egui leaves no control focused. Keyboard: Tab reaches the control,
+        // Enter opens it, Escape closes it; Tab leaves and Shift+Tab comes back to it. The
+        // group stays unchanged throughout, and the menu is opened once more for the capture.
         d.aside(|d| {
             d.press(Key::Escape);
             let closed = !d.has(RUN_ARENA) && d.has(CONTROL);
             let after_escape = d.focused_name();
-            d.press(Key::Tab);
-            let after_tab = d.focused_name();
-            d.press_shift(Key::Tab);
-            let back = d.focused_name();
+            let reached = d.tab_to(CONTROL);
             d.press(Key::Enter);
             let opened = d.has(RUN_ARENA);
             d.press(Key::Escape);
             let closed_again = !d.has(RUN_ARENA);
-            let owner = d.focused_name();
+            let reached_again = d.tab_to(CONTROL);
+            d.press(Key::Tab);
+            let after_tab = d.focused_name();
+            d.press_shift(Key::Tab);
+            let back = d.focused_name();
+            let clean = !d.visible_text("Unsaved");
             d.observe(
                 "iter-25-B-FB8-escape",
                 closed
-                    && after_escape.as_deref() == Some(CONTROL)
+                    && after_escape.is_none()
+                    && reached
+                    && opened
+                    && closed_again
+                    && reached_again
                     && after_tab.is_some()
                     && after_tab.as_deref() != Some(CONTROL)
                     && back.as_deref() == Some(CONTROL)
-                    && opened
-                    && closed_again
-                    && owner.as_deref() == Some(CONTROL),
+                    && clean,
                 format!(
-                    "Escape {closed} (focus {after_escape:?}), Tab {after_tab:?}, back {back:?}, Enter opens {opened}, Escape closes {closed_again} (focus {owner:?})"
+                    "Escape closes {closed} (focus {after_escape:?}); Tab reaches it {reached}, Enter opens {opened}, Escape closes {closed_again}; Tab {after_tab:?}, Shift+Tab {back:?}; unchanged {clean}"
                 ),
             );
             d.open_combo_at(BELONGS_DROPDOWN);

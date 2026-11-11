@@ -215,16 +215,16 @@ fn missing_folders(
         "When the folder is back, its runs show again",
     );
     // A run folder whose parent cannot be looked in is not a folder that was never made: the
-    // lists say it cannot be read, through a reload and a synchronous refresh.
+    // lists say it cannot be read, through a reload and a synchronous refresh. The parent here is
+    // a plain file, so the system answers "not a directory", not "not found" (a permission
+    // change would not hold in this sandbox).
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let locked = campaign.path.join("Locked");
-        fs::create_dir_all(&locked).unwrap();
-        let inside = locked.join("Encounter Runs");
-        fs::rename(&run_folder, &inside).unwrap();
-        std::os::unix::fs::symlink(&inside, &run_folder).unwrap();
-        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+        let blocker = d.root.join("Run folder parent");
+        fs::write(&blocker, "not a folder").unwrap();
+        let moved_out = d.root.join("Runs kept aside");
+        fs::rename(&run_folder, &moved_out).unwrap();
+        std::os::unix::fs::symlink(blocker.join("Encounter Runs"), &run_folder).unwrap();
         d.click("Reload from disk");
         d.settle();
         let reloaded = unread(d);
@@ -233,12 +233,11 @@ fn missing_folders(
         d.observe(
             "iter-25-B-AB1-parent",
             reloaded && unread(d),
-            "A run folder under a parent that cannot be read says so after a reload and a refresh",
+            format!("A run folder under a parent that is not a folder says it cannot be read after a reload ({reloaded}) and a refresh"),
         );
-        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
         fs::remove_file(&run_folder).unwrap();
-        fs::rename(&inside, &run_folder).unwrap();
-        fs::remove_dir(&locked).unwrap();
+        fs::rename(&moved_out, &run_folder).unwrap();
+        fs::remove_file(&blocker).unwrap();
         d.app_mut().encounters.read_runs_again(campaign);
         d.settle();
     }

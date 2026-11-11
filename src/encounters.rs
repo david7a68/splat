@@ -7839,6 +7839,7 @@ mod tests {
         draft.add(stat_creature(dir.path(), "Wolf", 20), false);
         draft.save(&campaign, &[]).unwrap();
         let mut editor = Encounters {
+            active: Some(campaign.clone()),
             draft: Some(draft),
             ..Default::default()
         };
@@ -7872,7 +7873,7 @@ mod tests {
                 .count(),
             1
         );
-        fs::rename(dir.path().join("Moved runs"), folder).unwrap();
+        fs::rename(dir.path().join("Moved runs"), &folder).unwrap();
         editor.read_runs_again(&campaign);
         assert_eq!(editor.paused_run_count(), 1);
         assert!(
@@ -7884,6 +7885,24 @@ mod tests {
                 .iter()
                 .any(|issue| issue.starts_with("Run folder not found"))
         );
+
+        // AB1 (Astra review of PR 259): on a first load, with nothing known about earlier runs,
+        // a run folder whose parent cannot be looked in is unread, not "never made"; a folder
+        // that is simply not there is still the empty case.
+        #[cfg(unix)]
+        {
+            let aside = dir.path().join("Runs aside");
+            fs::rename(&folder, &aside).unwrap();
+            let blocker = dir.path().join("Not a folder");
+            fs::write(&blocker, "").unwrap();
+            std::os::unix::fs::symlink(blocker.join("runs"), &folder).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            assert!(snapshot.runs_unread && snapshot.runs_missing.is_none());
+            fs::remove_file(&folder).unwrap();
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            assert!(!snapshot.runs_unread && snapshot.runs_missing.is_some());
+            fs::rename(&aside, &folder).unwrap();
+        }
     }
 
     #[test]
