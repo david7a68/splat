@@ -1,5 +1,5 @@
 ---
-session_id: 972320fe-cf02-5806-0000-000000000009
+session_id: 972320fe-cf02-5806-0000-00000000000b
 session_number: 9
 session_title: The Shrine
 session_date: 2026-01-01

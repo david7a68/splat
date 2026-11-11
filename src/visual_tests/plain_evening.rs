@@ -26,7 +26,8 @@
 use super::{
     driver::{Driver, Sizes},
     fixture::{
-        PLAIN_LAST, PLAIN_PLAYED, PLAIN_RUN, PLAIN_TITLES, plain_package_creature, plain_reader,
+        PLAIN_LAST, PLAIN_OLDER, PLAIN_PLAYED, PLAIN_RUN, PLAIN_TITLES, plain_package_creature,
+        plain_reader,
     },
     steps::*,
 };
@@ -51,6 +52,9 @@ const CONTRACT_ROWS: std::ops::RangeInclusive<u32> = 1..=21;
 /// What the test folder becomes in a run's `splat_run_source_path`.
 const WORLD: &str = "<world>";
 const SAME: &str = "the same as at the start";
+/// The app writes this index again with the same bytes on a one-second poll of real time, so
+/// the act in which that write lands is not repeatable. A change of its bytes is still recorded.
+const POLLED: &[&str] = &["emberfall/Sessions/.splat-session-paths.json"];
 
 /// How a screen is seen.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -75,7 +79,8 @@ const SCREENS: &[(&str, Shown)] = &[
     ("session-tonight: Travel row open", Page),
     ("session-tonight: planned fight open", Page),
     ("session-last: played fight open", Page),
-    ("run-ended", Page),
+    ("run-ended: played last", Page),
+    ("run-ended: played before", Page),
     ("encounters", Page),
     ("encounters: row menu", Held),
     ("encounter-editor", Page),
@@ -418,7 +423,9 @@ impl Evening {
         for (path, (time, digest)) in &now {
             match files.get(path) {
                 None => written.push(format!("{path}: new, sha256 {}", &digest[..16])),
-                Some((old_time, old)) if old != digest || old_time != time => {
+                Some((old_time, old))
+                    if old != digest || (old_time != time && !POLLED.contains(&path.as_str())) =>
+                {
                     written.push(format!(
                         "{path}: written, sha256 {}{}",
                         &digest[..16],
@@ -702,11 +709,30 @@ fn play(
     d.expect(PLAIN_PLAYED);
     ev.act(d, "open the played fight", |d| d.click(PLAIN_PLAYED));
     ev.page(d, "session-last: played fight open");
-    // `Whole run` opens the ended run in place, in the Encounters history.
+    // `Whole run` opens the ended run in place, in the Encounters history: the fight that was
+    // played last, then an older one, whose view says why it cannot go on.
     ev.act(d, "Whole run", |d| d.click_link("Whole run"));
-    ev.page(d, "run-ended");
+    assert!(
+        d.has("Continue fight"),
+        "G7: the fight that was played last offers no Continue fight"
+    );
+    ev.page(d, "run-ended: played last");
     ev.act(d, "close the ended run", |d| {
         d.click_starting(&format!("Close the run of {PLAIN_PLAYED}"));
+    });
+    ev.act(d, "Session", |d| d.click(NAV_SESSIONS));
+    ev.act(d, "open the older fight", |d| d.click(PLAIN_OLDER));
+    ev.act(d, "Whole run", |d| d.click_link("Whole run"));
+    assert!(
+        !d.has("Continue fight")
+            && d.has_label(
+                "A later fight or rest was played. Start a new run to play this one again."
+            ),
+        "G7: the older fight does not say why it cannot go on"
+    );
+    ev.page(d, "run-ended: played before");
+    ev.act(d, "close the older run", |d| {
+        d.click_starting(&format!("Close the run of {PLAIN_OLDER}"));
     });
 
     ev.act(d, "Encounters", |d| d.click(NAV_ENCOUNTERS));

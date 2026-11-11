@@ -50,6 +50,8 @@ pub const PLAIN_RUN: &str = "Ambush at the Ropes";
 /// The plain campaign's played fight, with loot and a title longer than its row.
 pub const PLAIN_PLAYED: &str = "Wolves at the Ford Below the Burning Shrine Road";
 pub const PLAIN_LAST: &str = "The Road to Emberfall";
+/// A fight played before `PLAIN_PLAYED`, in the same session.
+pub const PLAIN_OLDER: &str = "The Toll Bridge Brawl";
 pub const PLAIN_TONIGHT: &str = "The Crossing";
 /// A participant's name that is longer than a roster row likes.
 pub const PLAIN_LONG_NAME: &str = "Ashfang, Eldest Wolf of the Southern Ridge";
@@ -1051,6 +1053,24 @@ fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> 
             true,
         )?);
     }
+    // An older fight of the same session, played before it, with no encounter of its own.
+    let mut brawl: Vec<Participant> = heroes()?.into_iter().map(|(hero, _)| hero).collect();
+    brawl.push(Participant::new(
+        "actor_toll_wolf".into(),
+        "enemies".into(),
+        creature(wolf)?,
+        &down,
+        true,
+    )?);
+    let older = write_ended_run_with(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        PLAIN_OLDER,
+        None,
+        "Party won",
+        brawl,
+        &format!("# {PLAIN_OLDER}"),
+    )?;
     let fact = write_ended_run_with(
         campaign.id,
         &root.join("Encounter Runs"),
@@ -1130,6 +1150,7 @@ fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> 
     .map_err(|e| e.to_string())?;
     let mut book = crate::timeline::Book::default();
     book.open(Some(&sessions));
+    book.record_run(&older, Some(last), false);
     book.record_run(&fact, Some(last), false);
     let road = book.add(crate::timeline::Kind::Travel, Some(tonight));
     if let Some(event) = book.events.iter_mut().find(|event| event.id == road) {
