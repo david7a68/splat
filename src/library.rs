@@ -60,13 +60,15 @@ fn fault_notice(ui: &mut egui::Ui, fault: &FileFault) -> bool {
     again
 }
 
-/// What is wrong with a repair draft now, and the line to mark. A saved file whose own text does
-/// not parse has a parse fault: the draft's current parse decides, so a draft that parses has no
+/// What is wrong with a repair draft now, and the line to mark. Any reason Save would refuse the
+/// draft (`refusal`, from `Loaded::draft_refusal`) is the notice, a YAML fault in its own words. A
+/// saved file whose own text does not parse has a parse fault: a draft Save would write has no
 /// notice. Another fault (a read fault, a deleted manifest, a manifest with another identity) is
 /// not in the draft's text, so its stored words stay until the file changes.
 fn draft_repair_problem(
     note: &Note,
     draft: &str,
+    refusal: Option<String>,
     recovery: Option<&(Module, String, bool)>,
 ) -> (Option<String>, Option<usize>) {
     let (problem, line) = crate::campaign_content::repair_problem(&note.path, draft);
@@ -81,7 +83,7 @@ fn draft_repair_problem(
             .0
             .is_some()
     };
-    match problem {
+    match problem.or(refusal) {
         Some(problem) => (Some(problem), line),
         None if parse_fault() => (None, line),
         None => (Some(error.clone()), line),
@@ -938,6 +940,40 @@ impl Loaded {
             }
             index
         })
+    }
+    /// Why Save would refuse this parse of note `index`'s draft, without writing anything. Save
+    /// asks this before it writes, and a repair draft shows the same reason as its notice. It
+    /// reads the identity index, which `invalidate` clears.
+    fn draft_refusal(&self, index: usize, draft: &Result<Entry, String>) -> Option<String> {
+        let entry = match draft {
+            Ok(entry) => entry,
+            Err(error) => return Some(error.clone()),
+        };
+        let note = &self.notes[index];
+        if let Some(old) = &note.entry {
+            if entry.id != old.id || entry.kind != old.kind {
+                return Some("Keep this entry's UUID and kind unchanged.".into());
+            }
+            if matches!(note.owner, Owner::Campaign(_)) && entry.key != old.key {
+                return Some("Keep the entry's UUID, kind and key unchanged.".into());
+            }
+            if old.kind == "package"
+                && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
+            {
+                return Some("Keep the package namespace unchanged.".into());
+            }
+        }
+        let lookup = self.duplicate_index();
+        let other = |at: &Vec<usize>| at.iter().any(|&at| at != index);
+        let id_taken = note.entry.as_ref().is_none_or(|old| old.id != entry.id)
+            && lookup.ids.get(&entry.id).is_some_and(other);
+        let key_taken = entry.key.as_ref().is_some_and(|key| {
+            note.entry
+                .as_ref()
+                .is_none_or(|old| old.key.as_ref() != Some(key))
+                && lookup.keys.get(key).is_some_and(other)
+        });
+        (id_taken || key_taken).then(|| "Another entry already uses this UUID or key.".into())
     }
     fn duplicates(&self, index: usize) -> Vec<usize> {
         let Some(target) = self.notes[index].entry.as_ref() else {
@@ -4684,47 +4720,18 @@ impl Library {
                 _ => {}
             }
         }
-        let note = &self.loaded.as_ref().unwrap().notes[i];
+        // The write check reads the identity index from the notes as they are now.
+        self.loaded.as_mut().unwrap().duplicates.take();
+        let loaded = self.loaded.as_ref().unwrap();
+        let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
-        let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
-        let result = Entry::parse(&note.path, &self.draft).and_then(|entry| {
-            if let Some(old) = &note.entry {
-                if entry.id != old.id || entry.kind != old.kind {
-                    return Err("Keep this entry's UUID and kind unchanged.".into());
-                }
-                if owner_is_campaign && entry.key != old.key {
-                    return Err("Keep the entry's UUID, kind and key unchanged.".into());
-                }
-                if old.kind == "package"
-                    && entry.fields.get("splat_namespace") != old.fields.get("splat_namespace")
-                {
-                    return Err("Keep the package namespace unchanged.".into());
-                }
+        let result = match loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft)) {
+            Some(error) => Err(error),
+            None => {
+                let baseline = (!file_gone).then_some(note.text.as_str());
+                write_note(&root, &note.path, baseline, &self.draft)
             }
-            if self
-                .loaded
-                .as_ref()
-                .unwrap()
-                .notes
-                .iter()
-                .enumerate()
-                .any(|(other, n)| {
-                    other != i
-                        && n.entry.as_ref().is_some_and(|e| {
-                            (e.id == entry.id
-                                && note.entry.as_ref().is_none_or(|old| old.id != entry.id))
-                                || (entry.key.is_some()
-                                    && e.key == entry.key
-                                    && note.entry.as_ref().is_none_or(|old| old.key != entry.key))
-                        })
-                })
-            {
-                return Err("Another entry already uses this UUID or key.".into());
-            }
-            let baseline = (!file_gone).then_some(note.text.as_str());
-            let entry = write_note(&root, &note.path, baseline, &self.draft)?;
-            Ok(entry)
-        });
+        };
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
@@ -5039,8 +5046,13 @@ impl Library {
             ),
             _ => String::new(),
         };
+        // Only a repair draft asks why Save would refuse it; the parse is already cached.
+        let refusal = note
+            .error
+            .as_ref()
+            .and_then(|_| self.loaded.as_ref().unwrap().draft_refusal(i, parsed));
         let (repair_problem, repair_line) =
-            draft_repair_problem(note, &self.draft, recovery.as_ref());
+            draft_repair_problem(note, &self.draft, refusal, recovery.as_ref());
         // A parse fault ends with the draft that parses: the saved file stays unreadable on the
         // owner line until Save, but the draft is not Invalid.
         let state = if fault.is_some() || repair_problem.is_some() {
@@ -9308,6 +9320,9 @@ mod tests {
         fs::write(campaign.path.join("Notes/Bad.md"), NOT_TEXT).unwrap();
         let yaml = note_text("Yaml", "rule", None).replace("splat_kind: rule", "splat_kind: [");
         fs::write(campaign.path.join("Notes/Yaml.md"), &yaml).unwrap();
+        // Another loaded note, whose UUID a repair draft can take.
+        let other = note_text("Other", "rule", None);
+        fs::write(campaign.path.join("Notes/Other.md"), &other).unwrap();
 
         let loaded = load_all(&[], Some(&campaign)).unwrap();
         let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Yaml.md");
@@ -9386,6 +9401,45 @@ mod tests {
             "SD1-discard\n{painted}"
         );
         assert!(painted.contains("Invalid"), "SD1-discard-state\n{painted}");
+        // A draft that parses but takes another note's UUID: Save would refuse it, so the notice
+        // names that cause and the state is Invalid. Save leaves the file as it was.
+        let id_line = |text: &str| {
+            text.lines()
+                .find(|line| line.starts_with("splat_id: "))
+                .unwrap()
+                .to_owned()
+        };
+        let taken = valid.replace(&id_line(&valid), &id_line(&other));
+        assert_ne!(taken, valid);
+        assert!(Entry::parse("Notes/Yaml.md", &taken).is_ok());
+        library.draft = taken.clone();
+        let painted = sd1_painted(&mut library);
+        let cause = "Another entry already uses this UUID or key.";
+        assert!(painted.contains(cause), "SD1-taken-notice\n{painted}");
+        assert!(painted.contains("Invalid"), "SD1-taken-state\n{painted}");
+        assert!(
+            !painted.contains("Unsaved"),
+            "SD1-taken-not-unsaved\n{painted}"
+        );
+        library.save_selected(false);
+        assert_eq!(
+            fs::read(campaign.path.join("Notes/Yaml.md")).unwrap(),
+            yaml.as_bytes(),
+            "SD1-taken-not-written"
+        );
+        assert_eq!(library.draft, taken, "SD1-taken-draft-kept");
+        let painted = sd1_painted(&mut library);
+        assert!(painted.contains(cause), "SD1-taken-after-save\n{painted}");
+        // Must stay true: a draft Save accepts has no notice, and Save writes it.
+        library.draft = valid.clone();
+        let painted = sd1_painted(&mut library);
+        assert!(!painted.contains(cause), "SD1-valid-again\n{painted}");
+        library.save_selected(false);
+        assert_eq!(
+            fs::read_to_string(campaign.path.join("Notes/Yaml.md")).unwrap(),
+            valid,
+            "SD1-valid-written"
+        );
 
         // Lookalike outside the rule: another identity is not in the draft's parse, so a draft
         // that parses keeps the stored fault and Invalid until the file changes.
