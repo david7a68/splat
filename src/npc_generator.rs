@@ -1,7 +1,7 @@
 //! A new NPC from dice: a name and three attributes. A campaign's own roll tables decide the
 //! words, because only the campaign knows how its people are named. Built-in lists fill any
 //! gap. Nothing is written until the DM saves the result.
-use crate::roll_table::{RollRow, marked_tables, table_rows};
+use crate::roll_table::RollRow;
 use splat::execution::dice::{Dice, Random};
 
 /// The attributes, in the order a note lists them.
@@ -148,41 +148,37 @@ impl Tables {
     /// a bad one gives its warning and no later table takes its place by surprise.
     pub fn read<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
         let mut tables = Self::default();
-        let mut seen = std::collections::HashSet::new();
-        for (path, body) in notes {
-            for (marker, rows) in marked_tables(body) {
-                let Ok((key, dice)) = marker else {
-                    continue;
-                };
-                let (slot, label) = if key == NAME_KEY {
-                    (&mut tables.name, "name".to_owned())
-                } else if let Some(at) = ATTRIBUTE_KEYS.iter().position(|k| *k == key) {
-                    (&mut tables.attributes[at], ATTRIBUTES[at].to_lowercase())
-                } else {
-                    continue;
-                };
-                if !seen.insert(key.clone()) {
-                    continue;
+        for table in crate::roll_table::tables_in(notes) {
+            let key = table.key;
+            let (slot, label) = if key == NAME_KEY {
+                (&mut tables.name, "name".to_owned())
+            } else if let Some(at) = ATTRIBUTE_KEYS.iter().position(|k| *k == key) {
+                (&mut tables.attributes[at], ATTRIBUTES[at].to_lowercase())
+            } else {
+                continue;
+            };
+            let path = table.path;
+            match table.problem {
+                None => {
+                    *slot = Some(Table {
+                        dice: table.dice,
+                        rows: table.rows,
+                    });
+                    tables.sources.push(format!("{key}: {path}"));
                 }
-                match table_rows(&dice, &rows) {
-                    Ok(rows) => {
-                        *slot = Some(Table { dice, rows });
-                        tables.sources.push(format!("{key}: {path}"));
-                    }
-                    Err(error) => tables.problems.push(TableProblem {
-                        path: path.to_owned(),
-                        marker: key.clone(),
-                        message: format!(
-                            "{path}: {} Built-in {} stand in until it is fixed.",
-                            error.replacen("the table", &format!("the {label} table"), 1),
-                            if key == NAME_KEY {
-                                "names"
-                            } else {
-                                "attributes"
-                            }
-                        ),
-                    }),
-                }
+                Some(error) => tables.problems.push(TableProblem {
+                    path: path.clone(),
+                    marker: key.clone(),
+                    message: format!(
+                        "{path}: {} Built-in {} stand in until it is fixed.",
+                        error.replacen("the table", &format!("the {label} table"), 1),
+                        if key == NAME_KEY {
+                            "names"
+                        } else {
+                            "attributes"
+                        }
+                    ),
+                }),
             }
         }
         tables

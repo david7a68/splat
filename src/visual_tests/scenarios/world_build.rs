@@ -1214,7 +1214,8 @@ pub fn facts(d: &mut Driver<'_>) {
         format!(
             "---\nsession_id: {}\nsession_number: 1\nsession_title: ''\nsession_date: {}\n---\n\nThe race began.\n",
             splat::character::stable_id("visual:session:facts"),
-            // A change goes in the Log only while a session is played, which is on its date.
+            // A change goes in the Log only while a session is played (W14): a fight, a
+            // recording, or a current session that is not dated before today.
             crate::hermetic::today()
         ),
     )
@@ -1714,6 +1715,62 @@ pub fn facts(d: &mut Driver<'_>) {
     );
     d.state("session-world-changes", Sizes::All);
     d.click(NAV_WORLD);
+    // Row 19 of the session-cycle design: the Log stamp asks W14's one test of the session being
+    // played. In prep for a session dated later, a Change now writes its Log line; before, only
+    // a session dated today did. Beside Lookup as without it. Dated before today, it writes none.
+    let note = sessions.join("Session 1.md");
+    let dated = fs::read_to_string(&note).unwrap();
+    let change_part_of = |d: &mut Driver<'_>, date: &str| {
+        fs::write(&note, dated.replace(&crate::hermetic::today(), date)).unwrap();
+        fs::write(&path, &before).unwrap();
+        d.app_mut().sessions.refresh();
+        reload(d);
+        d.click_containing("Zarel · ");
+        d.click("Change Part of");
+        d.type_into("Find a group", "Arena");
+        d.click("The Arena");
+        d.expect("Part of: Arena Guild → Arena Guild, The Arena.");
+        fs::read_to_string(&path).unwrap()
+    };
+    let later = change_part_of(d, "2999-01-01");
+    d.observe(
+        "P1c-row-19",
+        later == after,
+        "In prep for a session dated later, a Change writes its Log line, with the session's link",
+    );
+    // The same view as on the session's date.
+    d.assert_state_matches("group-joined-with-log-in-prep", "group-joined-with-log");
+    // The session lists that line from the entry's Log, beside Lookup as without it.
+    d.click(NAV_SESSIONS);
+    d.click_containing("Session 1 · ");
+    d.click("Note");
+    if d.has("Read") {
+        d.click("Read");
+    }
+    d.expect("World changes");
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "P1c-row-19",
+        d.has("Close Lookup") && d.visible_text("Part of Arena Guild → Arena Guild, The Arena."),
+        "Beside Lookup, the session in prep lists the change from the entry's Log",
+    );
+    d.state(
+        "session-world-changes-in-prep-beside-lookup",
+        Sizes::Default,
+    );
+    d.click("Close Lookup");
+    d.click(NAV_WORLD);
+    let older = change_part_of(d, "2000-01-01");
+    d.observe(
+        "P1c-row-19",
+        older.contains("- '[[The Arena]]'") && !older.contains("## Log"),
+        "After the session's date, with no fight or recording, a Change writes no Log line",
+    );
+    d.click("Undo group change");
+    fs::write(&note, &dated).unwrap();
+    fs::write(&path, &after).unwrap();
+    d.app_mut().sessions.refresh();
+    reload(d);
 
     d.click_containing("Open questions · ");
     d.expect("Can a horn ring be sold?");
@@ -2381,6 +2438,49 @@ pub fn tables(d: &mut Driver<'_>) {
     d.state_prepared("authored-table-gap-and-overlap", Sizes::All, |d| {
         d.scroll_until(READER, "The first column must be a number", 24);
     });
+    // P1c: one descriptor names a marked table outside its note: its note, its heading, its key
+    // and its dice. Every reader of the campaign's tables takes it from the index. The Reader's
+    // own button is as before, in Lookup too.
+    let tables = d
+        .app()
+        .lookup
+        .index()
+        .map(|index| index.loot_sources().tables.clone())
+        .unwrap_or_default();
+    let named = |key: &str| {
+        tables.iter().find(|table| table.key == key).map(|table| {
+            (
+                table.path.clone(),
+                table.heading.clone(),
+                table.dice.clone(),
+                table.fault(),
+            )
+        })
+    };
+    // A note's title is its name, not a heading above the table; a `##` heading is one.
+    d.observe(
+        "P1c-table-descriptor",
+        named("forced_trip")
+            == Some((
+                "Gate Mechanics.md".into(),
+                Some("Forced trips".into()),
+                "1d20".into(),
+                None,
+            ))
+            && named("valid") == Some(("Table Workshop.md".into(), None, "1d6".into(), None))
+            && named("gap").and_then(|table| table.3).is_some_and(|fault| {
+                fault.starts_with("Table Workshop.md: 1d4 needs a row for 2.")
+            }),
+        format!("The campaign's tables name their note and heading: {tables:?}"),
+    );
+    look_up(d, "Table Workshop");
+    d.wait_for_text("Roll 1d6");
+    d.observe(
+        "P1c-table-descriptor",
+        d.has("Roll 1d6") && d.has("Close Lookup"),
+        "In Lookup, the table's own button says Roll 1d6, as before",
+    );
+    d.state("authored-table-in-lookup", Sizes::Default);
 }
 
 pub fn generator(d: &mut Driver<'_>) {
@@ -3502,6 +3602,68 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             ),
         );
     }
+    // Row 17 of the session-cycle design: while Lookup holds an unsaved generated NPC, an entry
+    // that opens shows under one row, `Unsaved NPC: <name> · Show`. Before, the card hid it.
+    d.click("Clear");
+    d.click("Generate NPC");
+    d.expect("Save NPC");
+    let npc = d.app().lookup.generated_name().unwrap().to_owned();
+    let row = format!("{}: {npc}", crate::world::page::UNSAVED_NPC);
+    d.observe(
+        "P1c-row-17",
+        !d.has(&row),
+        "While the NPC's card is the view, no row says so",
+    );
+    look_up_again(d, "Watch House");
+    d.wait_for_text("Location · Campaign");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (above, detail) = d.at_size(size, |d| {
+            let held = d.place_of(&row);
+            let kind = d.painted_rect_in("Location · Campaign", egui::Rect::EVERYTHING);
+            (
+                d.in_view("Show")
+                    && !d.has("Save NPC")
+                    && held
+                        .zip(kind)
+                        .is_some_and(|(held, kind)| held.bottom() <= kind.top()),
+                format!("row {held:?}, the entry's kind line {kind:?}"),
+            )
+        });
+        d.observe(
+            "P1c-row-17",
+            above,
+            format!("At {size:?}, the opened entry shows under the NPC's one row: {detail}"),
+        );
+    }
+    d.state("npc-held-under-an-entry", Sizes::All);
+    d.click("Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.click("Show");
+    d.expect("Save NPC");
+    d.observe(
+        "P1c-row-17",
+        !d.has(&row) && d.has("Back"),
+        "Show makes the NPC's card the view again",
+    );
+    // Back is as before: it opens the entry that was open, under the NPC's row.
+    d.click("Back");
+    d.wait_for_text("Location · Campaign");
+    d.observe(
+        "P1c-row-17",
+        d.has(&row) && !d.has("Save NPC"),
+        "Back opens the last entry under the NPC's row, and the NPC stays held",
+    );
+    // Section 7, recorded as it is: Lookup's place is not kept across a restart, and the held
+    // NPC goes with it.
+    d.restart();
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "P1c-limits",
+        !d.has_containing(crate::world::page::UNSAVED_NPC)
+            && !d.has("Back")
+            && !d.visible_text("Location · Campaign"),
+        "After a restart, Lookup opens with no entry, no trail and no held NPC",
+    );
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the

@@ -5,7 +5,7 @@ use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     encounter_run::fight_summary,
     encounters::PlanFight,
-    sessions::{each_linked_name, insert_in_note, linked_names, section_text},
+    sessions::{Apply, each_linked_name, insert_in_note, linked_names, section_text},
     timeline::{
         self, Book, Kind,
         page::{added_message, long_rest_status, problems, quick_add, rest_ruling},
@@ -918,13 +918,13 @@ impl Sessions {
                     .iter()
                     .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
                     .count();
-            let before = draft.body.clone();
-            let after = unlink_planned_fight(&before, &name, occurrence);
-            if before != after {
-                draft.body = after.clone();
-                draft.edited();
-                self.removed_fight = Some((session, position, name, before, after.clone()));
-                self.plan_notice_state = Some((after, book.events.clone()));
+            // A fight that is not in the words changes nothing, and says nothing, as before.
+            if let Ok(undo) = draft.apply(Apply::WithTyping, |words| {
+                let after = unlink_planned_fight(words, &name, occurrence);
+                (after != words).then_some(after)
+            }) {
+                self.plan_notice_state = Some((undo.after().to_owned(), book.events.clone()));
+                self.removed_fight = Some((session, position, name, undo));
             }
         }
         if undo_group_remove
@@ -1011,12 +1011,12 @@ impl Sessions {
     }
 
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
-        let Some((id, at, name, before, after)) = &self.removed_fight else {
+        let Some((id, at, name, undo)) = &self.removed_fight else {
             return;
         };
         if *id != session
             || *at != position
-            || self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+            || self.draft.as_ref().is_none_or(|draft| !undo.live(draft))
         {
             return;
         }
@@ -1028,8 +1028,7 @@ impl Sessions {
             "Undo remove",
         ) {
             if let Some(draft) = &mut self.draft {
-                draft.body = before.clone();
-                draft.edited();
+                let _ = undo.undo(draft, Apply::WithTyping);
             }
             self.removed_fight = None;
             self.plan_notice_state = None;
