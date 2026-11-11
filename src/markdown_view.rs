@@ -1043,13 +1043,16 @@ fn draw_with_links(
     mut links: Vec<(std::ops::Range<usize>, LinkTarget)>,
     reader: egui::Id,
 ) -> egui::Rect {
-    // A one-line linked paragraph still needs a full target. Every row of a linked paragraph is
-    // `XL` (see `lift_link_rows`), so the first row is no taller than the rest.
-    job.first_row_min_height = job.first_row_min_height.max(design::XL);
     // The paragraph's own words, before any display space is added.
     let text = job.text.clone();
     reserve_short_links(ui, &mut job, &mut links);
     lift_link_rows(ui, &mut job);
+    // A one-line linked paragraph still needs a full target. Set only after `lift_link_rows`:
+    // that measures each row, and a first row already raised to `XL` here would not be lifted,
+    // so its words would sit at its bottom, while a lifted row keeps them where an unlinked row
+    // has them (an uneven pitch, and a larger gap above the paragraph).
+    // After the lift every row is at least `XL`, so this is only a floor.
+    job.first_row_min_height = job.first_row_min_height.max(design::XL);
     // The paragraph draws each link's underline itself, 2 px below the words' baseline, so a
     // taller row never moves it down to the bottom of the target, near the next line.
     let mut underlines: Vec<egui::Stroke> = vec![egui::Stroke::NONE; links.len()];
@@ -2875,6 +2878,74 @@ mod tests {
             assert!(
                 plain_pitch.len() >= 2 && plain_pitch.iter().all(|pitch| *pitch < design::XL - 0.5),
                 "FT1-plain-keeps-pitch: {at}: {plain_pitch:?}"
+            );
+        }
+    }
+
+    /// Each painted row of the first paragraph: its top, its height, and its first glyph's
+    /// baseline, on the screen.
+    fn row_baselines(harness: &egui_kittest::Harness<'_>) -> Vec<(f32, f32, f32)> {
+        let (pos, galley) = galleys_in(harness)[0].clone();
+        galley
+            .rows
+            .iter()
+            .filter_map(|row| {
+                let glyph = row.glyphs.first()?;
+                let top = pos.y + row.pos.y;
+                Some((top, row.height(), top + glyph.pos.y))
+            })
+            .collect()
+    }
+
+    /// FT5: every line of a compact linked paragraph, the first line too, has the same row
+    /// height, the same baseline offset in its row, and so one baseline pitch. This holds with
+    /// the link on the first line, on a later line, in bold text, and for a one-line paragraph.
+    #[test]
+    fn iter19_a_ft5_every_line_of_a_linked_compact_paragraph_shares_one_baseline_pitch() {
+        let cases = [
+            // The link is on a later line (the Lookup card's paragraph).
+            "The ferry crosses the inner sea twice each day, and the hands rest on the far pier. On the way back [ask Wren](splat-note:Wren) about the rope, then about the bells and the tide tables.",
+            // The link starts the first line.
+            "[Wren](splat-note:Wren) crosses the inner sea twice each day, and the hands rest on the far pier. On the way back ask about the rope, then about the bells.",
+            // Bold words on the first line, the link on the last.
+            "**The ferry** crosses the inner sea twice each day, and the hands rest on the far pier. On the way back ask about the rope, then [Wren](splat-note:Wren).",
+        ];
+        for width in [480.0, 300.0, 220.0] {
+            // The offset that every row of every case must share.
+            let mut offset: Option<f32> = None;
+            for markdown in cases {
+                let harness = reader_at(markdown, width, true);
+                let rows = row_baselines(&harness);
+                let at = format!("at {width}: {markdown:.30}: {rows:?}");
+                assert!(rows.len() >= 2, "FT5-rows: {at}");
+                for (top, height, baseline) in &rows {
+                    assert!((height - design::XL).abs() < 0.01, "FT5-row-height: {at}");
+                    let here = baseline - top;
+                    let first = *offset.get_or_insert(here);
+                    assert!((here - first).abs() < 0.5, "FT5-offset: {at}");
+                }
+                assert!(
+                    rows.windows(2)
+                        .all(|pair| (pair[1].2 - pair[0].2 - design::XL).abs() < 0.5),
+                    "FT5-baseline-pitch: {at}"
+                );
+            }
+            // A one-line linked paragraph keeps a full row and the same baseline offset.
+            let harness = reader_at("Ask [Wren](splat-note:Wren).", width, true);
+            let rows = row_baselines(&harness);
+            let offset = offset.expect("the cases have rows");
+            assert!(
+                rows.len() == 1
+                    && (rows[0].1 - design::XL).abs() < 0.01
+                    && (rows[0].2 - rows[0].0 - offset).abs() < 0.5,
+                "FT5-one-line: at {width}: {rows:?}, offset {offset}"
+            );
+            // The gap above the paragraph: a lifted row keeps its words where an unlinked row
+            // has them and adds its height below, so the first line starts as an unlinked one does.
+            let plain = row_baselines(&reader_at("Ask Wren.", width, true));
+            assert!(
+                plain.len() == 1 && plain[0].1 < design::XL && (rows[0].2 - plain[0].2).abs() < 0.5,
+                "FT5-gap-above: at {width}: linked {rows:?}, plain {plain:?}"
             );
         }
     }
