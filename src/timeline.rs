@@ -1261,11 +1261,20 @@ impl Book {
         if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
             return;
         }
-        // Another opening, or another run: what the last one remembered is over.
-        if before.is_none_or(|old| old.id != fact.id) {
-            self.before_play = None;
+        match (before, &mut self.before_play) {
+            // The open run saved itself as a new run. What was remembered goes with it.
+            (Some(old), Some((run, ..))) if fact.copied_from == Some(old.id) && *run == old.id => {
+                *run = fact.id;
+            }
+            (Some(old), _) if old.id == fact.id => {}
+            // Another opening, or another run: what the last one remembered is over.
+            _ => self.before_play = None,
         }
-        let played = before.is_some_and(|old| fact.played_since(old));
+        // A run that opens with a step already taken was opened to go on with it.
+        let played = match before {
+            Some(old) => fact.played_since(old),
+            None => fact.steps > 0,
+        };
         let taken_back =
             before.is_some_and(|old| old.id == fact.id && old.steps > 0 && fact.steps == 0);
         self.record(fact, session, played, taken_back);
@@ -2191,6 +2200,50 @@ mod tests {
         book.record_change(Some(&stepped), &ended_again, later);
         assert_eq!(latest(&book), Some(bridge.id));
         assert_eq!(event(&book).result, "Lost, round 3");
+
+        // Continue fight from History opens the run with that step taken: the first fact the
+        // Timeline hears has one step. That is play, and Undo of it is not.
+        book.record_change(None, &played, session);
+        book.record_change(Some(&played), &shrine_opened(&shrine), session);
+        let played = RunFact {
+            steps: 2,
+            ..shrine.clone()
+        };
+        book.record_change(Some(&shrine_opened(&shrine)), &played, session);
+        assert_eq!(latest(&book), Some(shrine.id));
+        book.record_change(None, &stepped, later);
+        assert_eq!(latest(&book), Some(bridge.id), "opened with a step taken");
+        assert_eq!(event(&book).continued_in, later);
+        let ended = RunFact {
+            steps: 0,
+            ..ended_again.clone()
+        };
+        book.record_change(Some(&stepped), &ended, later);
+        assert_eq!(latest(&book), Some(shrine.id));
+
+        // A disk conflict in the middle: the run saves itself as a new run, with a new ID.
+        // What Undo must restore goes with it.
+        book.record_change(None, &ended, later);
+        book.record_change(Some(&ended), &stepped, later);
+        assert_eq!(latest(&book), Some(bridge.id));
+        let copy = RunFact {
+            id: Uuid::from_u128(9),
+            copied_from: Some(bridge.id),
+            ..stepped.clone()
+        };
+        book.record_change(Some(&stepped), &copy, later);
+        assert_eq!(
+            latest(&book),
+            Some(copy.id),
+            "the copy has the fight's event"
+        );
+        let copy_undone = RunFact {
+            steps: 0,
+            state: RunState::Ended("Lost".into()),
+            ..copy.clone()
+        };
+        book.record_change(Some(&copy), &copy_undone, later);
+        assert_eq!(latest(&book), Some(shrine.id), "Undo in the copy");
     }
     fn shrine_opened(shrine: &RunFact) -> RunFact {
         RunFact {

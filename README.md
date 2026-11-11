@@ -946,7 +946,8 @@ conflict says **Changed on disk**, after its copy number if it has one. Other fa
 in memory and show an error. Changing the folder does not move old runs.
 
 The run file also holds the Undo steps, in its `undo` field. Each step is saved as its differences from the state
-after it, so 100 steps add little to the file. **Replace the file with this run** writes this run's steps, and
+after it, so 100 steps add little to the file. When the steps would take more than 16 MiB of the file, or more
+than 256 MiB of memory when read, the oldest stay out and the newest are kept. **Replace the file with this run** writes this run's steps, and
 **Save as a new run** gives the new file this run's steps and leaves the other file's steps as they are. A file
 from before this field loads with no steps. If Splat cannot read a file's steps, for example because a later
 version wrote them, the run still opens. It says once that Undo starts again from there, the Log keeps that

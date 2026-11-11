@@ -266,10 +266,20 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.click(NAV_SESSIONS);
     show_plan(d);
+    // The row itself, and not the strip above the page: its name, with the link to the
+    // running fight on the line below it.
+    let row = d.place_of(RUN_VAULT);
+    let running = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "Round 2" && node.is_link())
+        .map(|node| node.rect);
     d.observe(
         "T15.4",
-        d.has(BACK_TO_RUN) && !d.has_containing("Undecided · Ended"),
-        "The plan's row is a running fight again",
+        row.zip(running).is_some_and(|(row, link)| {
+            link.top() >= row.top() && link.top() - row.bottom() <= crate::design::XL
+        }) && !d.has_containing("Undecided · Ended"),
+        format!("The plan's row is a running fight again: row {row:?}, its link {running:?}"),
     );
     d.state("plan-with-continued-fight", Sizes::Default);
     d.click(BACK_TO_RUN);

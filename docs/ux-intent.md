@@ -160,7 +160,8 @@ first turn, or the exact turn left off, fast. **Context:** boundary of desk and 
 - Saved run labels are name, round, and status. They have no date (`:1143-1152`).
   There is no way to delete a run. Runs are not grouped by encounter.
 - Saved runs and run settings are in collapsed sections of the builder page.
-- A resumed ended run cannot be reopened, because undo is not saved (`:261`, `:1119`).
+- A resumed ended run could not be reopened, because undo was not saved (`:261`, `:1119`). Now the run file keeps
+  the Undo steps, and **Continue fight** takes an ending away (T15.1 to T15.4).
 
 **Done well:** T4.1 to T4.6.
 

@@ -19,14 +19,29 @@ use std::{
 /// The most steps a run keeps, in memory and in its file.
 pub(super) const LIMIT: usize = 100;
 const VERSION: u32 = 1;
+/// The most bytes the steps may take in the run file. A run file above 64 MiB does not open
+/// again, so the steps must leave room for the run itself.
+const SAVED_BYTES: usize = if cfg!(test) {
+    1024 * 1024
+} else {
+    16 * 1024 * 1024
+};
+/// The most memory the steps read from a file may take, as `weight` counts it. Tests use
+/// smaller budgets for both, so that they can reach them with small files.
+const MEMORY_BYTES: usize = if cfg!(test) {
+    4 * 1024 * 1024
+} else {
+    256 * 1024 * 1024
+};
 
 /// The state before each step, oldest first, with each step's name and whether a sheet made it.
 pub(super) type History = (Vec<State>, Vec<String>, Vec<bool>);
 
+/// The file's form. It is written from steps that are already text, and read as steps.
 #[derive(Serialize, Deserialize)]
-struct Saved {
+struct Saved<T> {
     version: u32,
-    steps: Vec<Step>,
+    steps: Vec<T>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -262,21 +277,28 @@ impl Step {
     }
 }
 
-/// The steps for the run file. `now` is the run's current state, which the file holds whole.
+/// The steps for the run file, oldest first. `now` is the run's current state, which the file
+/// holds whole. When the steps are more than the file may hold, the oldest stay out of it.
 pub(super) fn save(
     history: &[State],
     labels: &[String],
     from_sheet: &[bool],
     now: &State,
 ) -> Result<Box<RawValue>, String> {
-    let steps = history
-        .iter()
-        .enumerate()
-        .map(|(at, before)| {
-            let after = history.get(at + 1).unwrap_or(now);
-            Step::of(before, after, &labels[at], from_sheet[at])
-        })
-        .collect();
+    let mut steps = Vec::new();
+    let mut bytes = 0;
+    // The newest step is the one the DM needs first, so the budget is spent from that end.
+    for at in (0..history.len()).rev() {
+        let after = history.get(at + 1).unwrap_or(now);
+        let step = Step::of(&history[at], after, &labels[at], from_sheet[at]);
+        let step = serde_json::value::to_raw_value(&step).map_err(|e| e.to_string())?;
+        bytes += step.get().len();
+        if bytes > SAVED_BYTES {
+            break;
+        }
+        steps.push(step);
+    }
+    steps.reverse();
     serde_json::value::to_raw_value(&Saved {
         version: VERSION,
         steps,
@@ -285,22 +307,41 @@ pub(super) fn save(
 }
 
 /// The steps from a run file. None when this version cannot read them: another version wrote
-/// them, or they do not fit the run's current state.
+/// them, or they do not fit the run's current state. A file can hold more than this version
+/// keeps, or states that would take too much memory: then the newest steps that fit are read.
 pub(super) fn read(saved: &RawValue, now: &State) -> Option<History> {
-    let saved: Saved = serde_json::from_str(saved.get()).ok()?;
-    if saved.version != VERSION || saved.steps.len() > LIMIT {
+    let saved: Saved<Step> = serde_json::from_str(saved.get()).ok()?;
+    if saved.version != VERSION {
         return None;
     }
     let mut history = (Vec::new(), Vec::new(), Vec::new());
+    let mut memory = 0;
     // The newest step is next to the current state, so the states are rebuilt from the end.
-    for step in saved.steps.into_iter().rev() {
+    for step in saved.steps.into_iter().rev().take(LIMIT) {
+        let after = history.0.last().unwrap_or(now);
+        // Each state is as large as the one after it, give or take one step.
+        memory += weight(after);
+        if memory > MEMORY_BYTES {
+            break;
+        }
         history.1.push(step.label.clone());
         history.2.push(step.from_sheet);
-        let state = step.before(history.0.last().unwrap_or(now))?;
+        let state = step.before(after)?;
         history.0.push(state);
     }
     history.0.reverse();
     history.1.reverse();
     history.2.reverse();
     Some(history)
+}
+
+/// About how many bytes a state's text takes: its log, and the words of each row.
+fn weight(state: &State) -> usize {
+    let log: usize = state.log.iter().map(String::len).sum();
+    let rows: usize = state
+        .participants
+        .iter()
+        .map(|row| row.notes.len() + row.name.len() + 256)
+        .sum();
+    log + rows
 }

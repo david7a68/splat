@@ -1053,9 +1053,7 @@ impl Run {
                 participant.temporary_hp = 0;
             }
         }
-        self.history.push(before);
-        self.history_labels.push(REST_STEP.into());
-        self.history_from_sheet.push(false);
+        self.keep_step(before, REST_STEP.into(), false);
         self.state.last_change = Some(REST_STEP.into());
         self.state
             .log
@@ -1068,6 +1066,17 @@ impl Run {
         });
         self.rest_order = order;
         self.dirty = true;
+    }
+    /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
+    /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
+    fn keep_step(&mut self, before: State, label: String, from_sheet: bool) {
+        let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
+        self.history.drain(..extra);
+        self.history_labels.drain(..extra);
+        self.history_from_sheet.drain(..extra);
+        self.history.push(before);
+        self.history_labels.push(label);
+        self.history_from_sheet.push(from_sheet);
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -1879,26 +1888,20 @@ impl Run {
         next.roll_results.extend(roll_results);
         next.cast = None;
         next.last_change = Some(Self::change_with_result(&next, &undo_label));
-        if self.history.len() == undo::LIMIT {
-            self.history.remove(0);
-            self.history_labels.remove(0);
-            self.history_from_sheet.remove(0);
-        }
         self.dm_steps += 1;
-        self.own_steps = (self.own_steps + 1).min(undo::LIMIT);
         self.notice = None;
         // The step keeps the save as it stood, and the save is finished: its tile disarms.
         let finished = cast.is_some();
         self.state.cast = cast;
-        self.history.push(std::mem::replace(&mut self.state, next));
+        let before = std::mem::replace(&mut self.state, next);
+        self.keep_step(before, undo_label, false);
+        self.own_steps = (self.own_steps + 1).min(self.history.len());
         if finished {
             self.end_cast();
         }
         if began {
             self.panel = Panel::Reference;
         }
-        self.history_labels.push(undo_label);
-        self.history_from_sheet.push(false);
         self.notice_summary = None;
         if let Some((index, total, had, acted)) = live_initiative {
             self.notice = Some(Self::initiative_notice(
@@ -3052,7 +3055,6 @@ impl Run {
             for index in &indices {
                 previous.participants[*index] = self.state.participants[*index].clone();
             }
-            self.history.push(previous);
             let label = if let [index] = choices {
                 let old = &before.participants[*index];
                 let now = &self.state.participants[*index];
@@ -3072,10 +3074,9 @@ impl Run {
                 )
             };
             self.state.last_change = Some(Self::change_with_result(&self.state, &label));
-            self.history_labels.push(label);
-            self.history_from_sheet.push(true);
+            self.keep_step(previous, label, true);
             self.dm_steps += 1;
-            self.own_steps += 1;
+            self.own_steps = (self.own_steps + 1).min(self.history.len());
         }
     }
 
@@ -4987,6 +4988,92 @@ mod tests {
             "100 steps add {} bytes to a run of {without} bytes",
             with_steps - without
         );
+    }
+    /// Every way a step enters the stack keeps the limit, so that the file never holds more
+    /// steps than a reopen reads.
+    #[test]
+    fn the_undo_stack_keeps_its_limit_for_a_sync_choice_and_a_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, path, campaign) = long_fight(dir.path());
+        let oldest = run.history_labels[1].clone();
+        // The DM takes the sheet's value in the sync panel: a step that the panel makes.
+        let before = run.state.clone();
+        run.state.participants[0].hp = Some(1);
+        run.reconcile_sync_history(&before, &[], &[0]);
+        assert_eq!(run.history.len(), undo::LIMIT);
+        assert_eq!(run.history_labels[0], oldest, "the oldest step went");
+        assert!(run.undo_label().starts_with("Undo: D&D Beyond HP for "));
+        run.dirty = true;
+        run.save().unwrap();
+        let mut reopened = Run::open(&path, campaign).unwrap();
+        assert_same_undo(&run, &reopened);
+        reopened.undo();
+        assert_eq!(reopened.state.participants[0].hp, before.participants[0].hp);
+
+        // A Setup with a full stack, resumed after a long rest: the rest's step is one more.
+        let mut setup = self::run();
+        for step in 0..undo::LIMIT {
+            setup
+                .apply(Command::Initiative(step % 3, Some(step as i64)))
+                .unwrap();
+        }
+        assert_eq!(setup.history.len(), undo::LIMIT);
+        setup.rest_saved_setup(1);
+        assert_eq!(setup.history.len(), undo::LIMIT);
+        assert_eq!(setup.undo_label(), "Undo: full HP after long rest");
+        let campaign = stored(&mut setup, dir.path());
+        let reopened = close_and_reopen(&mut setup, campaign);
+        assert_same_undo(&setup, &reopened);
+
+        // A file with one step too many, as another program can leave it: the newest are read.
+        with_undo_field(&path, |saved| {
+            let steps = saved["undo"]["steps"].as_array_mut().unwrap();
+            steps.insert(0, steps[0].clone());
+            assert_eq!(steps.len(), undo::LIMIT + 1);
+        });
+        assert_same_undo(&run, &Run::open(&path, campaign).unwrap());
+    }
+    /// Steps that would make the file too large for a reopen stay out of the file, oldest
+    /// first. Steps that would take too much memory are not read, oldest first.
+    #[test]
+    fn the_newest_steps_are_kept_when_all_of_them_do_not_fit() {
+        let newest = |run: &Run, reopened: &Run| {
+            let kept = reopened.history.len();
+            assert!(kept > 0 && kept < run.history.len(), "{kept} steps");
+            let from = run.history.len() - kept;
+            assert_eq!(reopened.history_labels, run.history_labels[from..]);
+            for (kept, read) in run.history[from..].iter().zip(&reopened.history) {
+                assert_eq!(
+                    serde_json::to_value(read).unwrap(),
+                    serde_json::to_value(kept).unwrap()
+                );
+            }
+        };
+        // Long notes on one row: each step that changes the row saves the row's words.
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        run.state.participants[0].notes = "word ".repeat(8 * 1024);
+        for step in 0..60 {
+            run.apply(Command::Health(0, Some(1 + step % 2), Some(20)))
+                .unwrap();
+        }
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        newest(&run, &reopened);
+        assert!(fs::metadata(run.path().unwrap()).unwrap().len() < 2 * 1024 * 1024);
+
+        // A long log line: every state read from the file holds the log again.
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = self::run();
+        begin(&mut run);
+        run.state.log.push("line ".repeat(200 * 1024));
+        for _ in 0..12 {
+            run.apply(Command::Next).unwrap();
+        }
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        newest(&run, &reopened);
     }
     /// Rewrite the saved run's `undo` field, as another version of Splat would leave it.
     fn with_undo_field(path: &Path, change: impl FnOnce(&mut serde_json::Value)) {
