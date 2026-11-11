@@ -594,8 +594,8 @@ until the next note or plan edit.
 Readers show the relative path, Edit in Obsidian and Show file for every note that the system reads as text. Duplicate readers keep
 the path on this file line only; search results keep paths to distinguish names. A duplicate Lookup row
 puts the path right after the name, so the part that differs is cut last. Plain notes use
-one-line rows. A plain note's `Give this note a type` section says what the choice does for the DM: `Gives this note a
-type. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
+one-line rows. A plain note's `Give this note a type` section says what a type gives the DM, and does not repeat the heading:
+`A type adds the fields for that kind of note, such as an NPC's place and stat block. Its text stays the same.` How Splat stores the type waits in Technical details at the end of the section. Help
 text states the purpose in the DM's words; file formats and field names go to Technical details. Typed names that match show each filename on the second line. Copied typed notes remain
 visible with duplicate warnings. A duplicate NPC still has its existing name-only roster override; its
 warning does not imply changed stats. Encounter repair opens World for World notes. A note with no
@@ -620,6 +620,12 @@ with `Undo changes`, or `Your changes are already in the note.`) sits there too,
 replaces `Note repaired.`. An Undo message centres its words on its Undo target's line, so its words start 4 px lower
 than a message without an action. In an edit form, which has no file line, a result
 sits below the title. With no note open, it sits below the empty state's words.
+A finished change has the success tone, as Library's results have: `Changes saved.`, a value change beside its row
+(`In: … → …`, `Stat block: … → …`, Status, Part of), `Name changed to <name>.`, `Note repaired.` and
+`<file> is now a separate note.` (`world::CHANGED`). A result that wrote nothing keeps the info tone:
+`Your changes are already in the note.` and `<name> draft discarded.`. The unread `Part of` warning draws
+`Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
+reader with no file line.
 
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader keeps status on the kind line because it has no Status row. A compact reader has no file line either: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
@@ -752,7 +758,10 @@ blocked Add reason and Open in World repair. Unreadable package creatures retain
 the roster; Open in Library opens repair. Only deleted files offer replacement. Deleted creatures keep their
 last known name or Missing creature, plus a warning such as `Enemies · Not found. Its package entry was
 deleted.` One fault has one tone: the message above the roster and the rows that state its fault share it.
-An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
+An unreadable file is an error (the error icon and colour in the row), and a deleted entry is a warning. The
+check that finds the fault records its kind, and the message takes its tone from that kind, never from its
+words. A roster fault names the row as the DM sees it, `Row 2 (Cinder Wolf): …`, never its stored key or a
+stored field name. Replace… uses the shared creature row with CR, HP, AC and Use. Replace all matching rows defaults to
 on and retains names and starting values, with one Undo.
 
 Roster rows have name and detail, quiet Edit and a row menu. Sides sit on the second line and change in Edit.
@@ -766,6 +775,8 @@ An unread roster row stays visible by participant name, file and line, with Edit
 
 The encounter editor keeps roster rows, loot and notes within `LIST_MEASURE`, including the scroll content
 and row actions. Add participants sits directly beside that column; extra space stays at the far right.
+Its note says where party members come from in the DM's words: `Party members come from the sheets Splat
+saved last.`
 Notes retain their own width cap. Resizing keeps unsent notes, focus and scroll.
 
 The editor header keeps Save and Start on line one; the name field gives up width. An unfinished encounter
@@ -1136,7 +1147,9 @@ next note or plan edit. Removing a timeline event names it by its state or resul
 Ambush” and its result stay.` Plan additions offer Undo add. A recording count stays muted inside its tab and
 accessible name. Duplicate saved-run names first add session name; only same-name, same-session rows or rows
 without a known session need a date. Same-date copies also show time. Such rows omit Saved … so time appears
-once. Resume has the run icon.
+once. When the second line is too long, its `Last:` part gives up whole words first (`Last: 1 damage to
+Kestrel…`), and goes when no word of it fits; the save time stays whole. Hover keeps the full line. Resume has
+the run icon.
 
 Session and Timeline add long rests with the same full-HP ruling, message and Undo add. Every closed
 long-rest row shows an icon and either Everyone at full or Not at full. Open rows hide that summary so the

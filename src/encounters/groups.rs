@@ -1793,7 +1793,7 @@ impl Encounters {
             .as_ref()
             .and_then(|snapshot| draft.validate(snapshot, None).err())
         {
-            self.validation_error = Some(error.clone());
+            self.validation_error = Some(error.clone().into());
             self.error = Some(error);
             return;
         }
@@ -1832,7 +1832,8 @@ impl Encounters {
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.validate(snapshot, None).err())
-                    .filter(|validation| *validation == e);
+                    .filter(|validation| *validation == e)
+                    .map(Into::into);
                 self.error = Some(e);
             }
         }
@@ -2858,7 +2859,7 @@ mod tests {
         let error = group.validate(&snapshot, None).unwrap_err();
         let mut encounters = Encounters {
             validation_path: Some(group.path.clone()),
-            validation_error: Some(error.clone()),
+            validation_error: Some(error.clone().into()),
             error: Some(error),
             snapshot: Some(snapshot),
             group_draft: Some(group),

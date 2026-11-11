@@ -6665,6 +6665,9 @@ pub mod world {
         );
         d.expect("Stat block: not set → Guard.");
         d.expect("Undo stat block change");
+        let (success, detail) =
+            world_build::finished_change_tone(d, "Stat block: not set → Guard.");
+        d.observe("iter-20-D-FD5-stat-block", success, detail);
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
@@ -8188,7 +8191,34 @@ pub mod session_notes {
                 ),
             );
         }
+        // FT5 (round 20): the card has one `L` gap after its kind line, as a spell has in
+        // Lookup. Bless below sets the gap.
+        let card_gaps: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| {
+                d.at_size(size, |d| {
+                    world_build::lookup_prose_gap(d, "Session 4: Ferry Watch", "Session note · ")
+                })
+            })
+            .collect();
         d.state("lookup-written-card-link", Sizes::Default);
+        look_up_again(d, "bless");
+        d.wait_for_text("Spell · Level 1 · Campaign");
+        for (size, card) in [SMALL, DEFAULT, LARGE].into_iter().zip(card_gaps) {
+            let spell = d.at_size(size, |d| {
+                world_build::lookup_prose_gap(d, "Bless", "Spell · Level 1 · Campaign")
+            });
+            d.observe(
+                "iter-20-D-FT5",
+                card.zip(spell).is_some_and(|(card, spell)| {
+                    card >= crate::design::L && (card - spell).abs() <= 1.0
+                }),
+                format!(
+                    "At {size:?}, Lookup's session-note card has {card:?} px from its kind line \
+                     to its words, Bless {spell:?} px"
+                ),
+            );
+        }
     }
 }
 
@@ -10606,6 +10636,8 @@ pub mod encounter_owned_groups {
         open_saved_encounter(d, SHRINE);
         d.expect("GROUPS FOR THIS ENCOUNTER 1");
         d.expect("Adding to the roster");
+        // Add participants says where party members come from in the DM's words.
+        d.expect("Party members come from the sheets Splat saved last.");
         d.state_prepared("encounter-with-its-groups", Sizes::All, |d| {
             // FD3 family: a group's name in the encounter's frame starts at the frame's left edge,
             // where its notes start, at every width.
