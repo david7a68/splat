@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af1f8701-6c6f-56d5-8c45-af119e8017dd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_djinni_summoning"
-splat_name: "Ring of Djinni Summoning"
+splat_id: af1f8701-6c6f-56d5-8c45-af119e8017dd
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_djinni_summoning
+splat_name: Ring of Djinni Summoning
 splat_pages:
 - 237
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3202d273-16ff-5b2b-ae1e-a24c0389aaf1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/figurine_of_wondrous_power"
-splat_name: "Figurine of Wondrous Power"
+splat_id: 3202d273-16ff-5b2b-ae1e-a24c0389aaf1
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/figurine_of_wondrous_power
+splat_name: Figurine of Wondrous Power
 splat_pages:
 - 221
 - 222

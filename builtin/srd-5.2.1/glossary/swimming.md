@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7c54ba91-923c-5a6b-b7ff-2ed6143bc099"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/swimming"
-splat_name: "Swimming"
+splat_id: 7c54ba91-923c-5a6b-b7ff-2ed6143bc099
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/swimming
+splat_name: Swimming
 splat_pages:
 - 189
 ---

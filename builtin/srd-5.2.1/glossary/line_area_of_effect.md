@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "572b0003-f44c-5597-b66a-1adde6d8d78e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/line_area_of_effect"
-splat_name: "Line [Area of Effect]"
+splat_id: 572b0003-f44c-5597-b66a-1adde6d8d78e
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/line_area_of_effect
+splat_name: Line [Area of Effect]
 splat_pages:
 - 184
 ---

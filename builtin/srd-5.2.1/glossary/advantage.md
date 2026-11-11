@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8030e351-57be-5a1e-8594-a083177f33d3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/advantage"
-splat_name: "Advantage"
+splat_id: 8030e351-57be-5a1e-8594-a083177f33d3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/advantage
+splat_name: Advantage
 splat_pages:
 - 176
 ---

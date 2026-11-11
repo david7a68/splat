@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "178a11d8-f351-55e0-ae1b-d027bbfded63"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/allosaurus"
-splat_name: "Allosaurus"
+splat_id: 178a11d8-f351-55e0-ae1b-d027bbfded63
+splat_kind: reference
+splat_key: dnd2024:reference/creature/allosaurus
+splat_name: Allosaurus
 splat_pages:
 - 344
 ---

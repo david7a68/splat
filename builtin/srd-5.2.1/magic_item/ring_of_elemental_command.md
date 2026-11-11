@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3e4a60bc-b1bf-548c-a68f-32b3225b3318"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_elemental_command"
-splat_name: "Ring of Elemental Command"
+splat_id: 3e4a60bc-b1bf-548c-a68f-32b3225b3318
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_elemental_command
+splat_name: Ring of Elemental Command
 splat_pages:
 - 237
 - 238

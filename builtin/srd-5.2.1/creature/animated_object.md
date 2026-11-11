@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eac8b1a0-1f5c-52de-a21c-3c1bd243ba24"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/animated_object"
-splat_name: "Animated Object"
+splat_id: eac8b1a0-1f5c-52de-a21c-3c1bd243ba24
+splat_kind: reference
+splat_key: dnd2024:reference/creature/animated_object
+splat_name: Animated Object
 splat_pages:
 - 109
 ---

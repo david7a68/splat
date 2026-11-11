@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d5ebbd2a-bad4-5623-be8b-bd970f2da7d8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hit_point_dice"
-splat_name: "Hit Point Dice"
+splat_id: d5ebbd2a-bad4-5623-be8b-bd970f2da7d8
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hit_point_dice
+splat_name: Hit Point Dice
 splat_pages:
 - 183
 ---

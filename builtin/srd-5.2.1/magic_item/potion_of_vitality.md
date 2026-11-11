@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fc2129d4-2909-5b8e-8930-796117f2bc1d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_vitality"
-splat_name: "Potion of Vitality"
+splat_id: fc2129d4-2909-5b8e-8930-796117f2bc1d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_vitality
+splat_name: Potion of Vitality
 splat_pages:
 - 236
 ---

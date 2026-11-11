@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "36979fdf-569b-5b27-9c54-462f1727b018"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_gold_dragon"
-splat_name: "Ancient Gold Dragon"
+splat_id: 36979fdf-569b-5b27-9c54-462f1727b018
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_gold_dragon
+splat_name: Ancient Gold Dragon
 splat_pages:
 - 292
 ---

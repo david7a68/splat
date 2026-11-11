@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ff422a5e-e6f1-51ff-969d-4e10d60e68c4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/chill_touch"
-splat_name: "Chill Touch"
+splat_id: ff422a5e-e6f1-51ff-969d-4e10d60e68c4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/chill_touch
+splat_name: Chill Touch
 splat_pages:
 - 115
 ---

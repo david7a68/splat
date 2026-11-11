@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0cca767c-19ae-5283-bc83-2df682d940f2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dominate_person"
-splat_name: "Dominate Person"
+splat_id: 0cca767c-19ae-5283-bc83-2df682d940f2
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dominate_person
+splat_name: Dominate Person
 splat_pages:
 - 126
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c047be08-614d-55fc-bcab-b559b733a41d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/weapon"
-splat_name: "Weapon"
+splat_id: c047be08-614d-55fc-bcab-b559b733a41d
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/weapon
+splat_name: Weapon
 splat_pages:
 - 191
 ---

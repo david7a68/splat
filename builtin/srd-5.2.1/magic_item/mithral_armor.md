@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a8bae6ac-ef78-5cdb-a13b-3b5e2aed3646"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mithral_armor"
-splat_name: "Mithral Armor"
+splat_id: a8bae6ac-ef78-5cdb-a13b-3b5e2aed3646
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mithral_armor
+splat_name: Mithral Armor
 splat_pages:
 - 231
 ---

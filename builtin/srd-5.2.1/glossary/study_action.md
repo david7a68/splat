@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7459594b-4ad2-5151-952c-e715e92906ec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/study_action"
-splat_name: "Study [Action]"
+splat_id: 7459594b-4ad2-5151-952c-e715e92906ec
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/study_action
+splat_name: Study [Action]
 splat_pages:
 - 189
 ---

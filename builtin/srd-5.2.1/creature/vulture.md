@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8d66d82e-dd04-5454-8406-4d637dad118f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/vulture"
-splat_name: "Vulture"
+splat_id: 8d66d82e-dd04-5454-8406-4d637dad118f
+splat_kind: reference
+splat_key: dnd2024:reference/creature/vulture
+splat_name: Vulture
 splat_pages:
 - 363
 - 364

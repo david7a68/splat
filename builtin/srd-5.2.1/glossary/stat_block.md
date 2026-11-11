@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f32ab0af-c390-5bc3-b7f6-00959f640077"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/stat_block"
-splat_name: "Stat Block"
+splat_id: f32ab0af-c390-5bc3-b7f6-00959f640077
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/stat_block
+splat_name: Stat Block
 splat_pages:
 - 188
 - 189

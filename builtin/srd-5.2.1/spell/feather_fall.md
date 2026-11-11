@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7517abf5-5b66-58e1-ace1-282ddf43d1bd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/feather_fall"
-splat_name: "Feather Fall"
+splat_id: 7517abf5-5b66-58e1-ace1-282ddf43d1bd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/feather_fall
+splat_name: Feather Fall
 splat_pages:
 - 130
 ---

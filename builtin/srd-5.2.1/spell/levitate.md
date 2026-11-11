@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ac52134d-bbe1-5f59-a173-91d9de226bc6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/levitate"
-splat_name: "Levitate"
+splat_id: ac52134d-bbe1-5f59-a173-91d9de226bc6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/levitate
+splat_name: Levitate
 splat_pages:
 - 144
 ---

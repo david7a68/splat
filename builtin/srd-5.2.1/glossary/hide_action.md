@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1309414b-839a-508f-a8b5-ec0594bb92d3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/hide_action"
-splat_name: "Hide [Action]"
+splat_id: 1309414b-839a-508f-a8b5-ec0594bb92d3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/hide_action
+splat_name: Hide [Action]
 splat_pages:
 - 183
 ---

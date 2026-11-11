@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1ba23582-e5a7-5c6d-b26e-e47d0ae10bf9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/starry_wisp"
-splat_name: "Starry Wisp"
+splat_id: 1ba23582-e5a7-5c6d-b26e-e47d0ae10bf9
+splat_kind: reference
+splat_key: dnd2024:reference/spell/starry_wisp
+splat_name: Starry Wisp
 splat_pages:
 - 165
 ---

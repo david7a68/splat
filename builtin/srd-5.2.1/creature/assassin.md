@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "618badb3-ea7a-5d86-ae21-98b3c373685c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/assassin"
-splat_name: "Assassin"
+splat_id: 618badb3-ea7a-5d86-ae21-98b3c373685c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/assassin
+splat_name: Assassin
 splat_pages:
 - 260
 ---

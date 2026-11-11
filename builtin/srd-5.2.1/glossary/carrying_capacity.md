@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "02b83948-8ea9-5359-84da-0dd04e525c27"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/carrying_capacity"
-splat_name: "Carrying Capacity"
+splat_id: 02b83948-8ea9-5359-84da-0dd04e525c27
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/carrying_capacity
+splat_name: Carrying Capacity
 splat_pages:
 - 178
 ---

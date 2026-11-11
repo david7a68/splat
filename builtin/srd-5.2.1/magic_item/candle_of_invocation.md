@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "db5fcd52-e2d9-5af6-a04c-61d539a4a8c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/candle_of_invocation"
-splat_name: "Candle of Invocation"
+splat_id: db5fcd52-e2d9-5af6-a04c-61d539a4a8c9
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/candle_of_invocation
+splat_name: Candle of Invocation
 splat_pages:
 - 214
 - 215

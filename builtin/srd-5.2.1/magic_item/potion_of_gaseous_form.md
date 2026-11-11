@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d4215ac1-a6d2-5ede-a1bc-c256a18c2044"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_gaseous_form"
-splat_name: "Potion of Gaseous Form"
+splat_id: d4215ac1-a6d2-5ede-a1bc-c256a18c2044
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_gaseous_form
+splat_name: Potion of Gaseous Form
 splat_pages:
 - 235
 ---

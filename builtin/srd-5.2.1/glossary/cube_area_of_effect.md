@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e09199a7-394f-59c6-bb82-444fe8823878"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/cube_area_of_effect"
-splat_name: "Cube [Area of Effect]"
+splat_id: e09199a7-394f-59c6-bb82-444fe8823878
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/cube_area_of_effect
+splat_name: Cube [Area of Effect]
 splat_pages:
 - 179
 ---

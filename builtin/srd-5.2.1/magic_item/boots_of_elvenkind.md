@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "023e773f-9fbc-565a-a28c-692bcd527fea"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/boots_of_elvenkind"
-splat_name: "Boots of Elvenkind"
+splat_id: 023e773f-9fbc-565a-a28c-692bcd527fea
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/boots_of_elvenkind
+splat_name: Boots of Elvenkind
 splat_pages:
 - 213
 ---

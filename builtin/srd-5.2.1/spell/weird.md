@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eb1f897f-bb11-55e9-a4de-f8e2a902a747"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/weird"
-splat_name: "Weird"
+splat_id: eb1f897f-bb11-55e9-a4de-f8e2a902a747
+splat_kind: reference
+splat_key: dnd2024:reference/spell/weird
+splat_name: Weird
 splat_pages:
 - 174
 ---

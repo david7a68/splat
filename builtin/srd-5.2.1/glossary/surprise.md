@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b6ffef56-cdbe-51f1-986d-acce1f10c32c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/surprise"
-splat_name: "Surprise"
+splat_id: b6ffef56-cdbe-51f1-986d-acce1f10c32c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/surprise
+splat_name: Surprise
 splat_pages:
 - 189
 ---

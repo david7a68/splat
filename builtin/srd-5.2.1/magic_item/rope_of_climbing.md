@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "52857c49-4032-51e0-94ad-ef77aacc284e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rope_of_climbing"
-splat_name: "Rope of Climbing"
+splat_id: 52857c49-4032-51e0-94ad-ef77aacc284e
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rope_of_climbing
+splat_name: Rope of Climbing
 splat_pages:
 - 242
 ---

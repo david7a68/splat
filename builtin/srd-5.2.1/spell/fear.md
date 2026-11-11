@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af90fac6-5845-50cc-9dfd-07d56f38e831"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fear"
-splat_name: "Fear"
+splat_id: af90fac6-5845-50cc-9dfd-07d56f38e831
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fear
+splat_name: Fear
 splat_pages:
 - 130
 ---

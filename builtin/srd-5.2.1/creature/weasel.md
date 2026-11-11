@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fffc77d0-de17-564f-a18e-82c29216f3c5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/weasel"
-splat_name: "Weasel"
+splat_id: fffc77d0-de17-564f-a18e-82c29216f3c5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/weasel
+splat_name: Weasel
 splat_pages:
 - 364
 ---

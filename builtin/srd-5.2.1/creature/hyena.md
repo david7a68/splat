@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "265401a2-79aa-5125-99d5-0e6dbac74d12"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hyena"
-splat_name: "Hyena"
+splat_id: 265401a2-79aa-5125-99d5-0e6dbac74d12
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hyena
+splat_name: Hyena
 splat_pages:
 - 356
 ---

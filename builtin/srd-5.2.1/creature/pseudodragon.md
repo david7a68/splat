@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5268557f-132b-5bc0-a12c-ddc64c7102c8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/pseudodragon"
-splat_name: "Pseudodragon"
+splat_id: 5268557f-132b-5bc0-a12c-ddc64c7102c8
+splat_kind: reference
+splat_key: dnd2024:reference/creature/pseudodragon
+splat_name: Pseudodragon
 splat_pages:
 - 316
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "88febe22-0cf6-5c47-92e2-4402b88434e1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/truesight"
-splat_name: "Truesight"
+splat_id: 88febe22-0cf6-5c47-92e2-4402b88434e1
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/truesight
+splat_name: Truesight
 splat_pages:
 - 190
 ---

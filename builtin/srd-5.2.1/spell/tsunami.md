@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "dc8bbb5f-6642-55d1-90f1-7ae5576f4278"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/tsunami"
-splat_name: "Tsunami"
+splat_id: dc8bbb5f-6642-55d1-90f1-7ae5576f4278
+splat_kind: reference
+splat_key: dnd2024:reference/spell/tsunami
+splat_name: Tsunami
 splat_pages:
 - 171
 ---

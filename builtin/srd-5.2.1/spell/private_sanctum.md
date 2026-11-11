@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ddf1f94c-d9cd-54e2-88a8-862d56e8b192"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/private_sanctum"
-splat_name: "Private Sanctum"
+splat_id: ddf1f94c-d9cd-54e2-88a8-862d56e8b192
+splat_kind: reference
+splat_key: dnd2024:reference/spell/private_sanctum
+splat_name: Private Sanctum
 splat_pages:
 - 156
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "3f277781-b99f-5043-be7e-b46b5585d070"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hallucinatory_terrain"
-splat_name: "Hallucinatory Terrain"
+splat_id: 3f277781-b99f-5043-be7e-b46b5585d070
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hallucinatory_terrain
+splat_name: Hallucinatory Terrain
 splat_pages:
 - 139
 ---

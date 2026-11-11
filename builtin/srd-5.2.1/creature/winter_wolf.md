@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "48889153-770e-53da-89a2-9ff7b87a9c3e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/winter_wolf"
-splat_name: "Winter Wolf"
+splat_id: 48889153-770e-53da-89a2-9ff7b87a9c3e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/winter_wolf
+splat_name: Winter Wolf
 splat_pages:
 - 342
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "95735f0a-0f15-5002-b0e9-c621cc8bd041"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gem_of_seeing"
-splat_name: "Gem of Seeing"
+splat_id: 95735f0a-0f15-5002-b0e9-c621cc8bd041
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gem_of_seeing
+splat_name: Gem of Seeing
 splat_pages:
 - 223
 ---

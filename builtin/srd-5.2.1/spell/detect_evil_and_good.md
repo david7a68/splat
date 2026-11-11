@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4145360b-e897-52bd-851e-5358beb0a1dd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/detect_evil_and_good"
-splat_name: "Detect Evil and Good"
+splat_id: 4145360b-e897-52bd-851e-5358beb0a1dd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/detect_evil_and_good
+splat_name: Detect Evil and Good
 splat_pages:
 - 123
 ---

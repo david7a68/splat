@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "71583ba2-08b0-51bf-9679-9c877a0fd466"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/swarm_of_insects"
-splat_name: "Swarm of Insects"
+splat_id: 71583ba2-08b0-51bf-9679-9c877a0fd466
+splat_kind: reference
+splat_key: dnd2024:reference/creature/swarm_of_insects
+splat_name: Swarm of Insects
 splat_pages:
 - 361
 ---

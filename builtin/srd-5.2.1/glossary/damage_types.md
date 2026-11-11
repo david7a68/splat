@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1e8f90a0-888a-58d6-a584-360d37ab97f9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/damage_types"
-splat_name: "Damage Types"
+splat_id: 1e8f90a0-888a-58d6-a584-360d37ab97f9
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/damage_types
+splat_name: Damage Types
 splat_pages:
 - 180
 ---

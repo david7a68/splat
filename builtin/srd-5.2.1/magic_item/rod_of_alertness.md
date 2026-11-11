@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6724b77a-6ec1-55b5-a629-8eaaba4bd5a5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/rod_of_alertness"
-splat_name: "Rod of Alertness"
+splat_id: 6724b77a-6ec1-55b5-a629-8eaaba4bd5a5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/rod_of_alertness
+splat_name: Rod of Alertness
 splat_pages:
 - 241
 ---

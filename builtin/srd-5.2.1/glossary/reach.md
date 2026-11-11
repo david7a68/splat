@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "75073fb1-b9bb-5cb5-ba41-4c5b2b222733"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/reach"
-splat_name: "Reach"
+splat_id: 75073fb1-b9bb-5cb5-ba41-4c5b2b222733
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/reach
+splat_name: Reach
 splat_pages:
 - 186
 ---

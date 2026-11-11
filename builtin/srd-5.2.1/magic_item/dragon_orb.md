@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6800fdb2-c30c-5c09-a509-897341abddec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/dragon_orb"
-splat_name: "Dragon Orb"
+splat_id: 6800fdb2-c30c-5c09-a509-897341abddec
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/dragon_orb
+splat_name: Dragon Orb
 splat_pages:
 - 218
 ---

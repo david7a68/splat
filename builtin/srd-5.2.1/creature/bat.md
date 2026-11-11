@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "c0237922-5140-555d-b33a-bb73a16bda91"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bat"
-splat_name: "Bat"
+splat_id: c0237922-5140-555d-b33a-bb73a16bda91
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bat
+splat_name: Bat
 splat_pages:
 - 345
 ---

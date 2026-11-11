@@ -188,16 +188,15 @@ Each save renumbers day headings. Separate edits in Splat and in Obsidian save t
 changes to the same event require a choice. A flagged day names the file and line and
 provides `Edit in Obsidian` and `Show file`.
 
-Conversion and draft comparisons align unchanged lines. Their highlights and counts
+Draft comparisons align unchanged lines. Their highlights and counts
 show actual changes. **Next difference** moves between separate change groups and
 stays hidden when there is only one group.
-Long conversion previews give the source panes about 60% of the window height and show whole aligned rows, with space reserved for the horizontal scroll bar.
 
 Registering a copied package keeps its warning above the name form. **Cancel** closes the form without
 writing and keeps the typed name and use choice. Help below **Use in this campaign** follows its check.
 World's unreadable-note count opens the first note's repair and keeps other repair drafts.
 
-Converted creature, spell and item files use readable tables. The reader shows
+Creature, spell and item files use readable tables. The reader shows
 each set fact once and hides machine lines. A creature's CR supplies missing XP
 and PB; mismatches are flagged unless they describe a lair. Printed creature stats
 stay in a folded quote as a record; edit the table above it to change the values.
@@ -296,62 +295,37 @@ ones they share are in `steps.rs`. Goals use the test IDs in `docs/ux-intent.md`
 
 ## Local layout
 
-Splat reads `splat_schema: 2` and `timeline_version: 2` only. A schema-1 file stays
-on disk and is flagged with its path: `Old layout: Splat no longer reads this file.
-Use Convert files.` Library keeps the old-layout count in its header.
+Splat reads `splat_schema: 2` and `timeline_version: 2` only. A file with any other
+version is an unreadable file. It stays on disk unchanged, and Splat names its path
+and the reason. The reader never shows front matter as prose.
 
-Old-layout warnings offer **Convert files…**. They do not offer Repair. Campaign
-combines several old files into one count line. An unused old file does not block
-**Save selections**. The reader never shows front matter as prose.
-
-Library's **Packages** menu and Campaign offer **Convert files…**. The preview lists
-each file before and after conversion. Changes are marked, and both sides scroll
-together from the first difference. Only the campaign is selected at first.
-Generated packages (`splat_generated: true`) start unticked. You can tick them;
-their converter will overwrite these files on its next run.
-
-Conversion skips read-only files and files changed since the preview. It keeps each
-skipped path and reason in view. **Undo convert** restores the original bytes and
-refuses to replace later edits. Convert files is unavailable during a run.
-Loading, polling and ordinary saves do not convert files.
-
-The existing binary also has two commands that open no window:
+The existing binary also has a command that opens no window:
 
 ```sh
 devenv shell -- cargo build --locked --bin splat
-devenv shell -- ./target/debug/splat convert /path/to/folder --dry-run --verify
-devenv shell -- ./target/debug/splat convert /path/to/folder
-devenv shell -- ./target/debug/splat convert /path/to/folder --include-generated
 devenv shell -- ./target/debug/splat check /path/to/folder
 ```
 
-The folder can be a vault, campaign or package. `convert` uses the same converter
-and baseline-checked writes as the dialog. It prints each converted or skipped file,
-its reason and a total. `--dry-run` writes nothing. Generated packages are skipped
-unless `--include-generated` is set. `--verify` requires `--dry-run` and compares
-the old and converted reader models in memory, with counts for each file kind.
-References use built-in content, registered packages and campaigns, and the selected
-folder. Missing identities stay unchanged and produce warnings, not skips.
-Exit status is 1 if any file is skipped.
-`check` uses the schema-2 readers, prints flagged or unreadable paths with their line
-and reason, and prints counts. Exit status is 1 if any file is flagged or unreadable.
-Invalid command arguments or a folder that cannot be opened return status 2.
+The folder can be a vault, campaign or package. `check` uses the schema-2 readers,
+prints flagged or unreadable paths with their line and reason, and prints counts.
+Exit status is 1 if any file is flagged or unreadable. Invalid command arguments or
+a folder that cannot be opened return status 2.
 
 Creatures use a `Stat block` section with `Stat | Value` and `Ability | Score | Mod | Save`
 tables. Spells and items use a `Field | Value` table in `Spell` or `Item`.
 These tables supply the stats in schema 2. A bad cell stays in the file and gets a
 line flag; its value is not set. Printed modifiers and passive initiative are checked.
-Rejected vital text stays in its reader row with a warning. Conversion fills missing
-creature identity from the printed line and writes `Medium` and `Beast` in reader case.
+Rejected vital text stays in its reader row with a warning.
 Stat edits keep formulas, spacing, and other text. New entries use this layout.
-Conversion writes creature tables from the saved model. Original printed stat lines
-stay unchanged inside a folded quote callout and are not read as stats. Table shape
-hints preserve legacy compound identities and text ranges; explicit spell ritual
-and concentration rows preserve both true and false values.
+Printed stat lines stay unchanged inside a folded quote callout and are not read as
+stats. Table shape hints preserve compound identities and text ranges; explicit spell
+ritual and concentration rows preserve both true and false values.
 Timeline uses event lists. Campaign packages use task items. Groups and encounter
 rosters use tables. Character copies use their character's name once,
 keep their identity after a rename, and put imported data in a foldable end section.
-Convert an old character copy before a provider refresh.
+A provider refresh writes again a character copy that Splat cannot read, when its generated
+text still matches its checksum, and keeps the personal notes. With a change in that text, the
+refresh stops and keeps the file, and Replace archives it first.
 
 Session plans accept task items such as `- [ ] [[Bridge Ambush]]`. Empty session
 titles have no property. Obsidian's core Templates plugin also fills `{{date}}`
@@ -1115,11 +1089,9 @@ folders and the affected encounters. **Use this folder** comes first on the acti
 
 ## Obsidian file layouts
 
-Splat reads schema 2 and Timeline version 2 only. Old-layout files are flagged
-with their path and the action **Use Convert files**. Library and Campaign offer
-**Convert files…** with a comparison, baseline-checked writes and **Undo convert**.
-Loading and saving never convert files. Encounter and group comparisons retain
-outside tags and prose.
+Splat reads schema 2 and Timeline version 2 only. Other versions are unreadable
+files, flagged with their path. Encounter and group comparisons retain outside tags
+and prose.
 
 - Timeline version 2 keeps days and events in the body. Day IDs sit in `%% splat id=… %%`
   below the heading. Event IDs stay at the end of the list item.
@@ -1145,7 +1117,4 @@ outside tags and prose.
 Bad rows stay in the file and have a line warning. Saves keep other prose and properties.
 Run files stay JSON. Turn on Obsidian Sync's **other file types** option to sync them.
 
-Skipped conversions offer **Convert files…** beside the skipped file. The open file's reader
-then keeps its old-layout sentence without a second button. Reopening the preview
-keeps **Undo convert** until you apply the next conversion. Duplicate-file repair names
-the file that becomes a separate entry and offers **Undo separate entry** beside its result.
+Duplicate-file repair names the file that becomes a separate entry and offers **Undo separate entry** beside its result.

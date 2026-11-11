@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "511929f4-aeab-51cf-9252-8eaf85414cd0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/greater_restoration"
-splat_name: "Greater Restoration"
+splat_id: 511929f4-aeab-51cf-9252-8eaf85414cd0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/greater_restoration
+splat_name: Greater Restoration
 splat_pages:
 - 137
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "cca3fed1-0249-5111-9757-fa05084e864a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/marvelous_pigments"
-splat_name: "Marvelous Pigments"
+splat_id: cca3fed1-0249-5111-9757-fa05084e864a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/marvelous_pigments
+splat_name: Marvelous Pigments
 splat_pages:
 - 230
 ---

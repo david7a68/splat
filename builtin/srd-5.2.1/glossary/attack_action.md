@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "84b537b4-0be0-5282-aebc-b3944d695c20"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/attack_action"
-splat_name: "Attack [Action]"
+splat_id: 84b537b4-0be0-5282-aebc-b3944d695c20
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/attack_action
+splat_name: Attack [Action]
 splat_pages:
 - 177
 ---

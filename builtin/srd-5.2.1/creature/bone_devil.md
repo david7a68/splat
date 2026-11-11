@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0c53add1-65c6-5280-a949-3383b3c93d0d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bone_devil"
-splat_name: "Bone Devil"
+splat_id: 0c53add1-65c6-5280-a949-3383b3c93d0d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bone_devil
+splat_name: Bone Devil
 splat_pages:
 - 267
 - 268

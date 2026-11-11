@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f79e324f-39cc-57f3-88b2-2188ada76b04"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/black_bear"
-splat_name: "Black Bear"
+splat_id: f79e324f-39cc-57f3-88b2-2188ada76b04
+splat_kind: reference
+splat_key: dnd2024:reference/creature/black_bear
+splat_name: Black Bear
 splat_pages:
 - 345
 ---

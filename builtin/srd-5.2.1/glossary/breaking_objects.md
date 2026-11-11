@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "20ebcef8-6a94-5256-b301-7a72503c88ea"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/breaking_objects"
-splat_name: "Breaking Objects"
+splat_id: 20ebcef8-6a94-5256-b301-7a72503c88ea
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/breaking_objects
+splat_name: Breaking Objects
 splat_pages:
 - 177
 - 178

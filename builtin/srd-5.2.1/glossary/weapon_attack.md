@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eec929f1-da35-5a1f-b67a-401c00192666"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/weapon_attack"
-splat_name: "Weapon Attack"
+splat_id: eec929f1-da35-5a1f-b67a-401c00192666
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/weapon_attack
+splat_name: Weapon Attack
 splat_pages:
 - 191
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e20324d7-2b5f-54ec-94cd-e03c9ab378d2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gloves_of_missile_snaring"
-splat_name: "Gloves of Missile Snaring"
+splat_id: e20324d7-2b5f-54ec-94cd-e03c9ab378d2
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gloves_of_missile_snaring
+splat_name: Gloves of Missile Snaring
 splat_pages:
 - 224
 ---

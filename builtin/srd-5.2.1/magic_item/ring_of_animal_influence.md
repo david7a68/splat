@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1b948d9f-8a11-5081-9096-40eb686929bf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_animal_influence"
-splat_name: "Ring of Animal Influence"
+splat_id: 1b948d9f-8a11-5081-9096-40eb686929bf
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_animal_influence
+splat_name: Ring of Animal Influence
 splat_pages:
 - 237
 ---

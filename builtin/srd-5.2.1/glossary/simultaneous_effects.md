@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "58eb462f-792c-542f-9084-8911f9465f25"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/simultaneous_effects"
-splat_name: "Simultaneous Effects"
+splat_id: 58eb462f-792c-542f-9084-8911f9465f25
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/simultaneous_effects
+splat_name: Simultaneous Effects
 splat_pages:
 - 187
 ---

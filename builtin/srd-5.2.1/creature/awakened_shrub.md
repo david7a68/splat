@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "69cc6790-849f-500c-b45e-6e0f7f5fa9a2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/awakened_shrub"
-splat_name: "Awakened Shrub"
+splat_id: 69cc6790-849f-500c-b45e-6e0f7f5fa9a2
+splat_kind: reference
+splat_key: dnd2024:reference/creature/awakened_shrub
+splat_name: Awakened Shrub
 splat_pages:
 - 260
 ---

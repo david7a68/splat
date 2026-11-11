@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "84b325ca-707e-5740-91af-307474b07be0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/sacred_flame"
-splat_name: "Sacred Flame"
+splat_id: 84b325ca-707e-5740-91af-307474b07be0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/sacred_flame
+splat_name: Sacred Flame
 splat_pages:
 - 159
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "090983c3-bcab-5a1f-a473-bfcb322bd3d5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sovereign_glue"
-splat_name: "Sovereign Glue"
+splat_id: 090983c3-bcab-5a1f-a473-bfcb322bd3d5
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sovereign_glue
+splat_name: Sovereign Glue
 splat_pages:
 - 244
 ---

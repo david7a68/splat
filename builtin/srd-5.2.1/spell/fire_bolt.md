@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d177653e-6d66-5a69-be2a-34febf1a5106"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fire_bolt"
-splat_name: "Fire Bolt"
+splat_id: d177653e-6d66-5a69-be2a-34febf1a5106
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fire_bolt
+splat_name: Fire Bolt
 splat_pages:
 - 132
 ---

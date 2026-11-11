@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8e46b575-bc8f-5574-a2bb-df8ccde5ade0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/demiplane"
-splat_name: "Demiplane"
+splat_id: 8e46b575-bc8f-5574-a2bb-df8ccde5ade0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/demiplane
+splat_name: Demiplane
 splat_pages:
 - 122
 - 123

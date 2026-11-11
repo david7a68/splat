@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "956241f7-5ed5-557f-8799-d15d4586984b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hex"
-splat_name: "Hex"
+splat_id: 956241f7-5ed5-557f-8799-d15d4586984b
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hex
+splat_name: Hex
 splat_pages:
 - 140
 ---

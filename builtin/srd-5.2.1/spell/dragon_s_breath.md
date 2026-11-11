@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8e5f0ff4-e75a-54cc-856c-82c3e3c9f7af"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/dragon_s_breath"
-splat_name: "Dragon’s Breath"
+splat_id: 8e5f0ff4-e75a-54cc-856c-82c3e3c9f7af
+splat_kind: reference
+splat_key: dnd2024:reference/spell/dragon_s_breath
+splat_name: Dragon’s Breath
 splat_pages:
 - 126
 ---

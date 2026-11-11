@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5e9ebb28-16de-5edb-a577-59f0ad1a2127"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/hunter_shark"
-splat_name: "Hunter Shark"
+splat_id: 5e9ebb28-16de-5edb-a577-59f0ad1a2127
+splat_kind: reference
+splat_key: dnd2024:reference/creature/hunter_shark
+splat_name: Hunter Shark
 splat_pages:
 - 356
 ---

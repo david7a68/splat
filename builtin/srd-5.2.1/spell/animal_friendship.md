@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "12638a71-2e87-5d58-833d-376a58fc1f10"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/animal_friendship"
-splat_name: "Animal Friendship"
+splat_id: 12638a71-2e87-5d58-833d-376a58fc1f10
+splat_kind: reference
+splat_key: dnd2024:reference/spell/animal_friendship
+splat_name: Animal Friendship
 splat_pages:
 - 107
 - 108

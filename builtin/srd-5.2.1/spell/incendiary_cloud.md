@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9c40feb7-09ab-5235-8e4d-e20ec9d1a6bc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/incendiary_cloud"
-splat_name: "Incendiary Cloud"
+splat_id: 9c40feb7-09ab-5235-8e4d-e20ec9d1a6bc
+splat_kind: reference
+splat_key: dnd2024:reference/spell/incendiary_cloud
+splat_name: Incendiary Cloud
 splat_pages:
 - 142
 - 143

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e5d5bb66-982b-58b0-b596-e4a80cf290f6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/zombie"
-splat_name: "Zombie"
+splat_id: e5d5bb66-982b-58b0-b596-e4a80cf290f6
+splat_kind: reference
+splat_key: dnd2024:reference/creature/zombie
+splat_name: Zombie
 splat_pages:
 - 343
 - 344

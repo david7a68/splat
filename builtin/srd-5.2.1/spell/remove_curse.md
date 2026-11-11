@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "eee1345c-75a1-57e0-a0e1-93ce090a9563"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/remove_curse"
-splat_name: "Remove Curse"
+splat_id: eee1345c-75a1-57e0-a0e1-93ce090a9563
+splat_kind: reference
+splat_key: dnd2024:reference/spell/remove_curse
+splat_name: Remove Curse
 splat_pages:
 - 158
 ---

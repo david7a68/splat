@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "62e2c56e-d88e-5961-b486-9157f2d3f06f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/spiritual_weapon"
-splat_name: "Spiritual Weapon"
+splat_id: 62e2c56e-d88e-5961-b486-9157f2d3f06f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/spiritual_weapon
+splat_name: Spiritual Weapon
 splat_pages:
 - 165
 ---

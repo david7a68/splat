@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "77bdc9a2-99a4-5d86-bb3e-169e28e7939a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/eldritch_blast"
-splat_name: "Eldritch Blast"
+splat_id: 77bdc9a2-99a4-5d86-bb3e-169e28e7939a
+splat_kind: reference
+splat_key: dnd2024:reference/spell/eldritch_blast
+splat_name: Eldritch Blast
 splat_pages:
 - 127
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "41753ef8-3585-5b19-939e-aa4cc9971e22"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_resistance"
-splat_name: "Ring of Resistance"
+splat_id: 41753ef8-3585-5b19-939e-aa4cc9971e22
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_resistance
+splat_name: Ring of Resistance
 splat_pages:
 - 238
 ---

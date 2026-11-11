@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0e4c89cc-547b-54db-9368-c8b1ff24b4ef"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/antilife_shell"
-splat_name: "Antilife Shell"
+splat_id: 0e4c89cc-547b-54db-9368-c8b1ff24b4ef
+splat_kind: reference
+splat_key: dnd2024:reference/spell/antilife_shell
+splat_name: Antilife Shell
 splat_pages:
 - 109
 ---

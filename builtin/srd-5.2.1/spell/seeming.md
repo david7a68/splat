@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "32b3978c-59b3-5c68-95cb-ab6ec8ba4fe6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/seeming"
-splat_name: "Seeming"
+splat_id: 32b3978c-59b3-5c68-95cb-ab6ec8ba4fe6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/seeming
+splat_name: Seeming
 splat_pages:
 - 160
 - 161

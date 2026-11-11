@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d350badd-8c2a-5ca8-8315-f191cef3d95f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/minor_illusion"
-splat_name: "Minor Illusion"
+splat_id: d350badd-8c2a-5ca8-8315-f191cef3d95f
+splat_kind: reference
+splat_key: dnd2024:reference/spell/minor_illusion
+splat_name: Minor Illusion
 splat_pages:
 - 149
 ---

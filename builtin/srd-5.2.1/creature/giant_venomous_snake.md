@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5cad6990-0e4e-5c36-9454-f19260d816f3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_venomous_snake"
-splat_name: "Giant Venomous Snake"
+splat_id: 5cad6990-0e4e-5c36-9454-f19260d816f3
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_venomous_snake
+splat_name: Giant Venomous Snake
 splat_pages:
 - 354
 ---

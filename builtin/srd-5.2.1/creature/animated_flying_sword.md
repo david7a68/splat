@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a6a0b79e-c574-55c4-b4bd-97be33094c31"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/animated_flying_sword"
-splat_name: "Animated Flying Sword"
+splat_id: a6a0b79e-c574-55c4-b4bd-97be33094c31
+splat_kind: reference
+splat_key: dnd2024:reference/creature/animated_flying_sword
+splat_name: Animated Flying Sword
 splat_pages:
 - 259
 ---

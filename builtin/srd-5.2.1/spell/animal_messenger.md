@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "08d8b195-51c4-5472-baea-db88a94383cd"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/animal_messenger"
-splat_name: "Animal Messenger"
+splat_id: 08d8b195-51c4-5472-baea-db88a94383cd
+splat_kind: reference
+splat_key: dnd2024:reference/spell/animal_messenger
+splat_name: Animal Messenger
 splat_pages:
 - 108
 ---

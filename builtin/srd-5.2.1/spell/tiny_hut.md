@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ee2c8569-9f4b-5538-8150-8709fd6934cf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/tiny_hut"
-splat_name: "Tiny Hut"
+splat_id: ee2c8569-9f4b-5538-8150-8709fd6934cf
+splat_kind: reference
+splat_key: dnd2024:reference/spell/tiny_hut
+splat_name: Tiny Hut
 splat_pages:
 - 169
 ---

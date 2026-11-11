@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a5aa557c-8223-55ab-931a-63634262524e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/chain_lightning"
-splat_name: "Chain Lightning"
+splat_id: a5aa557c-8223-55ab-931a-63634262524e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/chain_lightning
+splat_name: Chain Lightning
 splat_pages:
 - 114
 ---

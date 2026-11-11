@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "44df3471-ac28-5f1f-b842-cc86e9ef2998"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/prone_condition"
-splat_name: "Prone [Condition]"
+splat_id: 44df3471-ac28-5f1f-b842-cc86e9ef2998
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/prone_condition
+splat_name: Prone [Condition]
 splat_pages:
 - 186
 ---

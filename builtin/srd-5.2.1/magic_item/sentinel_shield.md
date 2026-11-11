@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "82f6c11c-aa6b-5027-aef1-90a82d09627a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sentinel_shield"
-splat_name: "Sentinel Shield"
+splat_id: 82f6c11c-aa6b-5027-aef1-90a82d09627a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sentinel_shield
+splat_name: Sentinel Shield
 splat_pages:
 - 243
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9fa22ccf-1f39-5e26-bdaf-791c9281d2db"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_swimming"
-splat_name: "Ring of Swimming"
+splat_id: 9fa22ccf-1f39-5e26-bdaf-791c9281d2db
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_swimming
+splat_name: Ring of Swimming
 splat_pages:
 - 239
 ---

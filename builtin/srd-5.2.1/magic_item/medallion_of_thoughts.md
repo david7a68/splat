@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e4ae80b6-7728-5358-a042-68a7d7bbf47a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/medallion_of_thoughts"
-splat_name: "Medallion of Thoughts"
+splat_id: e4ae80b6-7728-5358-a042-68a7d7bbf47a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/medallion_of_thoughts
+splat_name: Medallion of Thoughts
 splat_pages:
 - 230
 ---

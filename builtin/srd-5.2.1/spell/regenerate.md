@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7519076a-7f05-5d01-bbbe-d6867a7a304c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/regenerate"
-splat_name: "Regenerate"
+splat_id: 7519076a-7f05-5d01-bbbe-d6867a7a304c
+splat_kind: reference
+splat_key: dnd2024:reference/spell/regenerate
+splat_name: Regenerate
 splat_pages:
 - 158
 ---

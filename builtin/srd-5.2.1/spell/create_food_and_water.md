@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f12d8a17-8d96-5ed2-8fbb-e3ce89a49cb3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/create_food_and_water"
-splat_name: "Create Food and Water"
+splat_id: f12d8a17-8d96-5ed2-8fbb-e3ce89a49cb3
+splat_kind: reference
+splat_key: dnd2024:reference/spell/create_food_and_water
+splat_name: Create Food and Water
 splat_pages:
 - 120
 ---

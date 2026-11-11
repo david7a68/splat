@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2ced9e6a-861a-5573-9ad0-89ce8fd688b0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hypnotic_pattern"
-splat_name: "Hypnotic Pattern"
+splat_id: 2ced9e6a-861a-5573-9ad0-89ce8fd688b0
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hypnotic_pattern
+splat_name: Hypnotic Pattern
 splat_pages:
 - 141
 ---

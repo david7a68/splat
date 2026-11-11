@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9181deac-db4f-5883-b64b-91dfb47a2026"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_black_dragon"
-splat_name: "Adult Black Dragon"
+splat_id: 9181deac-db4f-5883-b64b-91dfb47a2026
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_black_dragon
+splat_name: Adult Black Dragon
 splat_pages:
 - 264
 ---

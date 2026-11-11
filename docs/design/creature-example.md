@@ -53,45 +53,76 @@ storage illustration, not the complete rules-coverage fixture.
   Details such as activation, targets, costs, steps, and triggers will be added
   in the next slice; they are not implicit in this skeleton.
 
-These are nested properties because stat definitions, resources, and actions
-have structured data. The common identity and display properties remain flat.
+These fields are structured in the note model, because stat definitions,
+resources, and actions have structured data. On disk, the common identity and
+display properties are flat. The `Stat block` tables hold the stats. A folded
+Splat data callout holds the resources and actions as marked YAML blocks.
 
 ## Partial note skeleton
 
-```markdown
+````markdown
 ---
-tags: [homebrew]
-splat_schema: 1
+splat_schema: 2
+tags:
+- homebrew
 splat_id: 6b02d7d9-19a7-4a18-a5ee-8bb9f00a04bd
 splat_kind: creature
-splat_key: "my_homebrew:creatures/guard"
+splat_key: my_homebrew:creatures/guard
 splat_name: Guard
-splat_stats:
-  armor_class:
-    value: 16
-  max_hp:
-    value: 30
-splat_resources:
-  healing:
-    name: Healing Uses
-    max: 3
-    recovery:
-      - mechanic: "dnd2024:long_rest"
-        restore: all
-splat_actions:
-  strike:
-    name: Strike
-  mend:
-    name: Mend
-  protect:
-    name: Protect Ally
 ---
 
 A guard who protects allies.
-```
+
+
+## Stat block
+
+| Stat | Value |
+| --- | --- |
+| Size |  |
+| Type |  |
+| Armor Class | 16 |
+| Hit Points | 30 |
+| Initiative |  |
+| Speed |  |
+| Challenge |  |
+
+| Ability | Score | Mod | Save |
+| --- | --- | --- | --- |
+| Str |  |  |  |
+| Dex |  |  |  |
+| Con |  |  |  |
+| Int |  |  |  |
+| Wis |  |  |  |
+| Cha |  |  |  |
+
+
+> [!note]- Splat data (edit in Splat)
+> <!-- splat:yaml path=splat_actions -->
+> 
+> ```yaml
+> strike:
+>   name: Strike
+> mend:
+>   name: Mend
+> protect:
+>   name: Protect Ally
+> ```
+> 
+> <!-- splat:yaml path=splat_resources -->
+> 
+> ```yaml
+> healing:
+>   name: Healing Uses
+>   max: 3
+>   recovery:
+>   - mechanic: dnd2024:long_rest
+>     restore: all
+> ```
+````
 
 The three action definitions intentionally lack executable behavior; this
-note would be an incomplete draft. Inventory, included stat contributions,
+note would be an incomplete draft. An empty Stat block cell is a stat that the
+skeleton does not set. Inventory, included stat contributions,
 other required stats, and executable controls will appear in later slices.
 The resource recovery rule is a choice for this homebrew example, not a claim
 about an official creature.

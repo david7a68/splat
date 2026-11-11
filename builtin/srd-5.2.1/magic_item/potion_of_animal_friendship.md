@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8af94e37-1fef-507a-b50e-0f67fbfb6409"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/potion_of_animal_friendship"
-splat_name: "Potion of Animal Friendship"
+splat_id: 8af94e37-1fef-507a-b50e-0f67fbfb6409
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/potion_of_animal_friendship
+splat_name: Potion of Animal Friendship
 splat_pages:
 - 235
 ---

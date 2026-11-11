@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bd3da7cc-bf68-55e8-ad7c-04d0463a6ab8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/stoneskin"
-splat_name: "Stoneskin"
+splat_id: bd3da7cc-bf68-55e8-ad7c-04d0463a6ab8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/stoneskin
+splat_name: Stoneskin
 splat_pages:
 - 165
 ---

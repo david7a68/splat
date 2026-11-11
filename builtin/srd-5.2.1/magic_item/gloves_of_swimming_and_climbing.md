@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9972d69e-3829-5e8f-b8e8-bb994c265add"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gloves_of_swimming_and_climbing"
-splat_name: "Gloves of Swimming and Climbing"
+splat_id: 9972d69e-3829-5e8f-b8e8-bb994c265add
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gloves_of_swimming_and_climbing
+splat_name: Gloves of Swimming and Climbing
 splat_pages:
 - 224
 ---

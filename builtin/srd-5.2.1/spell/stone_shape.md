@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9e46f1b7-9438-5183-a695-305986e774f5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/stone_shape"
-splat_name: "Stone Shape"
+splat_id: 9e46f1b7-9438-5183-a695-305986e774f5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/stone_shape
+splat_name: Stone Shape
 splat_pages:
 - 165
 ---

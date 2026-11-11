@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7dbeb970-9039-5a0c-ad91-6cca7d731a49"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/universal_solvent"
-splat_name: "Universal Solvent"
+splat_id: 7dbeb970-9039-5a0c-ad91-6cca7d731a49
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/universal_solvent
+splat_name: Universal Solvent
 splat_pages:
 - 250
 ---

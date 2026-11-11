@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "de2a0aa1-c4ca-5449-86e1-e8b3c48b10a3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/invisible_condition"
-splat_name: "Invisible [Condition]"
+splat_id: de2a0aa1-c4ca-5449-86e1-e8b3c48b10a3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/invisible_condition
+splat_name: Invisible [Condition]
 splat_pages:
 - 184
 ---

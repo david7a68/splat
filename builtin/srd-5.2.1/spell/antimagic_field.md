@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4e1051f9-17c8-5ec9-8c30-4502e78d9072"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/antimagic_field"
-splat_name: "Antimagic Field"
+splat_id: 4e1051f9-17c8-5ec9-8c30-4502e78d9072
+splat_kind: reference
+splat_key: dnd2024:reference/spell/antimagic_field
+splat_name: Antimagic Field
 splat_pages:
 - 109
 ---

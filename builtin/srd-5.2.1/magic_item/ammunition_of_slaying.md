@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "47efa6bb-77a9-5306-8003-71f8eb96cac0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ammunition_of_slaying"
-splat_name: "Ammunition of Slaying"
+splat_id: 47efa6bb-77a9-5306-8003-71f8eb96cac0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ammunition_of_slaying
+splat_name: Ammunition of Slaying
 splat_pages:
 - 209
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "42bc6e32-47b1-5507-8c4b-e6dcb3635759"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/slow"
-splat_name: "Slow"
+splat_id: 42bc6e32-47b1-5507-8c4b-e6dcb3635759
+splat_kind: reference
+splat_key: dnd2024:reference/spell/slow
+splat_name: Slow
 splat_pages:
 - 163
 ---

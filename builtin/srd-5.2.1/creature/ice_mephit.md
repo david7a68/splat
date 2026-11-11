@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2f2b5967-cee4-526d-8697-3428be977b95"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ice_mephit"
-splat_name: "Ice Mephit"
+splat_id: 2f2b5967-cee4-526d-8697-3428be977b95
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ice_mephit
+splat_name: Ice Mephit
 splat_pages:
 - 307
 ---

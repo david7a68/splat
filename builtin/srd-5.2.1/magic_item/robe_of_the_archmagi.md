@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2b13a99f-59af-5f9f-ab05-8af6118aefcb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/robe_of_the_archmagi"
-splat_name: "Robe of the Archmagi"
+splat_id: 2b13a99f-59af-5f9f-ab05-8af6118aefcb
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/robe_of_the_archmagi
+splat_name: Robe of the Archmagi
 splat_pages:
 - 240
 ---

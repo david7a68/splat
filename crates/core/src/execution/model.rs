@@ -1,4 +1,4 @@
-//! Typed executable subset of schema 1. Unknown fields are errors, never no-ops.
+//! Typed executable subset of the note model. Unknown fields are errors, never no-ops.
 use super::dice::Dice;
 use crate::content::Entry;
 use serde::{Deserialize, Serialize};

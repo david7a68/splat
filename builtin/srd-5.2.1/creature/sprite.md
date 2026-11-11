@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ab5693b1-59e8-57e3-b16d-0ba4e6c73adf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/sprite"
-splat_name: "Sprite"
+splat_id: ab5693b1-59e8-57e3-b16d-0ba4e6c73adf
+splat_kind: reference
+splat_key: dnd2024:reference/creature/sprite
+splat_name: Sprite
 splat_pages:
 - 329
 ---

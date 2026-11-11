@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b7d663b8-3ff3-5c26-8bca-2821f696f2b1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/guardian_naga"
-splat_name: "Guardian Naga"
+splat_id: b7d663b8-3ff3-5c26-8bca-2821f696f2b1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/guardian_naga
+splat_name: Guardian Naga
 splat_pages:
 - 296
 ---

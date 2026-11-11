@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "77c6e175-8910-5c1b-8c79-8f9ebb150df1"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/flying_snake"
-splat_name: "Flying Snake"
+splat_id: 77c6e175-8910-5c1b-8c79-8f9ebb150df1
+splat_kind: reference
+splat_key: dnd2024:reference/creature/flying_snake
+splat_name: Flying Snake
 splat_pages:
 - 348
 ---

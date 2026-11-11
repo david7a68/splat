@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b2fb23c0-02b4-59dc-985a-d916620a41dc"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/resilient_sphere"
-splat_name: "Resilient Sphere"
+splat_id: b2fb23c0-02b4-59dc-985a-d916620a41dc
+splat_kind: reference
+splat_key: dnd2024:reference/spell/resilient_sphere
+splat_name: Resilient Sphere
 splat_pages:
 - 158
 ---

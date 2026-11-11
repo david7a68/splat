@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "419dfc11-79e8-5340-9a4c-bd0471727577"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/sphere_area_of_effect"
-splat_name: "Sphere [Area of Effect]"
+splat_id: 419dfc11-79e8-5340-9a4c-bd0471727577
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/sphere_area_of_effect
+splat_name: Sphere [Area of Effect]
 splat_pages:
 - 188
 ---

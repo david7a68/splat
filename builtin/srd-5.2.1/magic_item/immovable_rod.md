@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d1a5551e-d873-55bd-8b6b-9c399dfe6291"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/immovable_rod"
-splat_name: "Immovable Rod"
+splat_id: d1a5551e-d873-55bd-8b6b-9c399dfe6291
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/immovable_rod
+splat_name: Immovable Rod
 splat_pages:
 - 227
 ---

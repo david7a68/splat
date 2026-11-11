@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6b323048-fa4d-5f18-81aa-fd8e91486c4f"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/trident_of_fish_command"
-splat_name: "Trident of Fish Command"
+splat_id: 6b323048-fa4d-5f18-81aa-fd8e91486c4f
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/trident_of_fish_command
+splat_name: Trident of Fish Command
 splat_pages:
 - 250
 ---

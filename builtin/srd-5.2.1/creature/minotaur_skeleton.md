@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6e79e07c-af8c-5f04-86c2-cda910ced6c9"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/minotaur_skeleton"
-splat_name: "Minotaur Skeleton"
+splat_id: 6e79e07c-af8c-5f04-86c2-cda910ced6c9
+splat_kind: reference
+splat_key: dnd2024:reference/creature/minotaur_skeleton
+splat_name: Minotaur Skeleton
 splat_pages:
 - 326
 ---

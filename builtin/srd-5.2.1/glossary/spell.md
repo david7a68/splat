@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "17e730e4-41b4-5245-b08b-5c558a8e808a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/spell"
-splat_name: "Spell"
+splat_id: 17e730e4-41b4-5245-b08b-5c558a8e808a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/spell
+splat_name: Spell
 splat_pages:
 - 188
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "89294d03-a243-5320-b3ac-143ade4b1e93"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/mammoth"
-splat_name: "Mammoth"
+splat_id: 89294d03-a243-5320-b3ac-143ade4b1e93
+splat_kind: reference
+splat_key: dnd2024:reference/creature/mammoth
+splat_name: Mammoth
 splat_pages:
 - 357
 ---

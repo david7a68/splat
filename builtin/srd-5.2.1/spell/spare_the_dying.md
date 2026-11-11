@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e3ef0348-5bd7-5232-8590-01a9a5827c3e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/spare_the_dying"
-splat_name: "Spare the Dying"
+splat_id: e3ef0348-5bd7-5232-8590-01a9a5827c3e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/spare_the_dying
+splat_name: Spare the Dying
 splat_pages:
 - 163
 ---

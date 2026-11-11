@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d0fad491-52ac-5a26-9b34-dc098fce9bdb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/will_o_wisp"
-splat_name: "Will-o’-Wisp"
+splat_id: d0fad491-52ac-5a26-9b34-dc098fce9bdb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/will_o_wisp
+splat_name: Will-o’-Wisp
 splat_pages:
 - 341
 - 342

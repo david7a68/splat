@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ceb53020-a2a1-5b8b-ace1-95160f618e2d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/deck_of_illusions"
-splat_name: "Deck of Illusions"
+splat_id: ceb53020-a2a1-5b8b-ace1-95160f618e2d
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/deck_of_illusions
+splat_name: Deck of Illusions
 splat_pages:
 - 217
 - 218

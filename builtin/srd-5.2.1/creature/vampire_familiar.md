@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "af933a9d-3a78-5bfd-a74a-a9c00fe824cb"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/vampire_familiar"
-splat_name: "Vampire Familiar"
+splat_id: af933a9d-3a78-5bfd-a74a-a9c00fe824cb
+splat_kind: reference
+splat_key: dnd2024:reference/creature/vampire_familiar
+splat_name: Vampire Familiar
 splat_pages:
 - 334
 ---

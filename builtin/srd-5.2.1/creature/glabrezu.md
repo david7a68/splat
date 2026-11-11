@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d84b2608-0816-5f08-9333-e845ba99e087"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/glabrezu"
-splat_name: "Glabrezu"
+splat_id: d84b2608-0816-5f08-9333-e845ba99e087
+splat_kind: reference
+splat_key: dnd2024:reference/creature/glabrezu
+splat_name: Glabrezu
 splat_pages:
 - 289
 ---

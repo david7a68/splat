@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "49f13310-0eac-572b-9961-a8659d94d427"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/vrock"
-splat_name: "Vrock"
+splat_id: 49f13310-0eac-572b-9961-a8659d94d427
+splat_kind: reference
+splat_key: dnd2024:reference/creature/vrock
+splat_name: Vrock
 splat_pages:
 - 336
 ---

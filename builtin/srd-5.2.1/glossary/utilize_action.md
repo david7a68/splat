@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "41de9972-477b-5c5e-a7d6-6da527966c8c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/utilize_action"
-splat_name: "Utilize [Action]"
+splat_id: 41de9972-477b-5c5e-a7d6-6da527966c8c
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/utilize_action
+splat_name: Utilize [Action]
 splat_pages:
 - 191
 ---

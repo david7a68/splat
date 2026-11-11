@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b3db91a0-fcbb-5d38-b615-246620a7cd9b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/cube_of_force"
-splat_name: "Cube of Force"
+splat_id: b3db91a0-fcbb-5d38-b615-246620a7cd9b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/cube_of_force
+splat_name: Cube of Force
 splat_pages:
 - 216
 ---

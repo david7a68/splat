@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5072922a-5090-5e8b-9961-04afb48fd09d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/gentle_repose"
-splat_name: "Gentle Repose"
+splat_id: 5072922a-5090-5e8b-9961-04afb48fd09d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/gentle_repose
+splat_name: Gentle Repose
 splat_pages:
 - 135
 ---

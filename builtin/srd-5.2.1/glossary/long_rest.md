@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94c63c67-c534-5a9b-8330-321f55cc3dec"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/long_rest"
-splat_name: "Long Rest"
+splat_id: 94c63c67-c534-5a9b-8330-321f55cc3dec
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/long_rest
+splat_name: Long Rest
 splat_pages:
 - 185
 ---

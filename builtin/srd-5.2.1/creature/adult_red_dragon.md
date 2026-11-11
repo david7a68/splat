@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "f9611d93-c4f2-5c2d-aa30-35e4ee2b44c4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/adult_red_dragon"
-splat_name: "Adult Red Dragon"
+splat_id: f9611d93-c4f2-5c2d-aa30-35e4ee2b44c4
+splat_kind: reference
+splat_key: dnd2024:reference/creature/adult_red_dragon
+splat_name: Adult Red Dragon
 splat_pages:
 - 318
 - 319

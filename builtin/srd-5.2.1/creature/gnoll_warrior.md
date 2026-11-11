@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5aa2e325-b973-53c4-9ae1-a9f1eb9401be"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gnoll_warrior"
-splat_name: "Gnoll Warrior"
+splat_id: 5aa2e325-b973-53c4-9ae1-a9f1eb9401be
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gnoll_warrior
+splat_name: Gnoll Warrior
 splat_pages:
 - 289
 ---

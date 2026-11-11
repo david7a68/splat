@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bf7903ba-b588-5d1c-9751-a5250b076bc7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/warrior_veteran"
-splat_name: "Warrior Veteran"
+splat_id: bf7903ba-b588-5d1c-9751-a5250b076bc7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/warrior_veteran
+splat_name: Warrior Veteran
 splat_pages:
 - 337
 ---

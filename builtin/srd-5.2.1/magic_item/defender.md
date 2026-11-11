@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "da1bfefe-439c-57ca-bbb2-e49fd3530277"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/defender"
-splat_name: "Defender"
+splat_id: da1bfefe-439c-57ca-bbb2-e49fd3530277
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/defender
+splat_name: Defender
 splat_pages:
 - 218
 ---

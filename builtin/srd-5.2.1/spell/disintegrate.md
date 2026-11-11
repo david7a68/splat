@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "721f07ab-9345-54b8-9be5-0c49361bfc2e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/disintegrate"
-splat_name: "Disintegrate"
+splat_id: 721f07ab-9345-54b8-9be5-0c49361bfc2e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/disintegrate
+splat_name: Disintegrate
 splat_pages:
 - 124
 ---

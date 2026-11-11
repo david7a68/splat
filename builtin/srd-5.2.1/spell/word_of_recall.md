@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "86bb2347-6508-5bfe-902a-b5093b38a17d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/word_of_recall"
-splat_name: "Word of Recall"
+splat_id: 86bb2347-6508-5bfe-902a-b5093b38a17d
+splat_kind: reference
+splat_key: dnd2024:reference/spell/word_of_recall
+splat_name: Word of Recall
 splat_pages:
 - 175
 ---

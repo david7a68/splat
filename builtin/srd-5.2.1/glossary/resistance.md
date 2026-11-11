@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9370cb12-6d69-5f7d-8bd8-2726f47e2df8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/resistance"
-splat_name: "Resistance"
+splat_id: 9370cb12-6d69-5f7d-8bd8-2726f47e2df8
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/resistance
+splat_name: Resistance
 splat_pages:
 - 187
 ---

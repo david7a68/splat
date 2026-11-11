@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "638bc7ce-ba73-5bc8-b1e9-fe306da43264"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/bearded_devil"
-splat_name: "Bearded Devil"
+splat_id: 638bc7ce-ba73-5bc8-b1e9-fe306da43264
+splat_kind: reference
+splat_key: dnd2024:reference/creature/bearded_devil
+splat_name: Bearded Devil
 splat_pages:
 - 262
 - 263

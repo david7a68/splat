@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a6e06e5d-1f4d-54bc-b7d7-eec30a797212"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/periapt_of_proof_against_poison"
-splat_name: "Periapt of Proof against Poison"
+splat_id: a6e06e5d-1f4d-54bc-b7d7-eec30a797212
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/periapt_of_proof_against_poison
+splat_name: Periapt of Proof against Poison
 splat_pages:
 - 234
 ---

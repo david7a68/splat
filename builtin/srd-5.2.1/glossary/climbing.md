@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6bddbf8e-9625-5fad-bc8a-655f55c3f5f3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/climbing"
-splat_name: "Climbing"
+splat_id: 6bddbf8e-9625-5fad-bc8a-655f55c3f5f3
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/climbing
+splat_name: Climbing
 splat_pages:
 - 178
 - 179

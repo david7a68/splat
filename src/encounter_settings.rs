@@ -450,11 +450,15 @@ mod tests {
     use super::*;
     fn inspiration_note(root: &Path, name: &str, rule: &str) {
         fs::create_dir_all(root.join("Rules")).unwrap();
-        let old = format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: rule\nsplat_name: {name}\nsplat_rule: {rule}\n---\n\n# {name}\n",
-            Uuid::new_v4()
-        );
-        let text = splat::content::formats::convert(&format!("{name}.md"), &old).unwrap();
+        let text = splat::content::formats::fixture(
+            &format!("{name}.md"),
+            &format!(
+                "splat_id: {}\nsplat_kind: rule\nsplat_name: {name}\nsplat_rule: {rule}\n",
+                Uuid::new_v4()
+            ),
+            &format!("\n# {name}\n"),
+        )
+        .unwrap();
         fs::write(root.join(format!("Rules/{name}.md")), text).unwrap();
     }
 

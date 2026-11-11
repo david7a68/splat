@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b1b60ea1-452a-5fd2-8883-0c9f57309477"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_copper_dragon"
-splat_name: "Young Copper Dragon"
+splat_id: b1b60ea1-452a-5fd2-8883-0c9f57309477
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_copper_dragon
+splat_name: Young Copper Dragon
 splat_pages:
 - 276
 ---

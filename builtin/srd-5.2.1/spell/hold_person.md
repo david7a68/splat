@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9b98e0a2-c840-5195-be8b-b0dd1439bbbf"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/hold_person"
-splat_name: "Hold Person"
+splat_id: 9b98e0a2-c840-5195-be8b-b0dd1439bbbf
+splat_kind: reference
+splat_key: dnd2024:reference/spell/hold_person
+splat_name: Hold Person
 splat_pages:
 - 141
 ---

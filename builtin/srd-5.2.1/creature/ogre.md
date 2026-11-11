@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7967ffe3-b2cf-5a06-b160-ea78a9a177c7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ogre"
-splat_name: "Ogre"
+splat_id: 7967ffe3-b2cf-5a06-b160-ea78a9a177c7
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ogre
+splat_name: Ogre
 splat_pages:
 - 312
 ---

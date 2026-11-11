@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ab566d03-4c40-516a-8cf0-131fe484697a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/bloodied"
-splat_name: "Bloodied"
+splat_id: ab566d03-4c40-516a-8cf0-131fe484697a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/bloodied
+splat_name: Bloodied
 splat_pages:
 - 177
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d32c98ac-7e77-5495-8a7a-a1eed7cd504e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/polar_bear"
-splat_name: "Polar Bear"
+splat_id: d32c98ac-7e77-5495-8a7a-a1eed7cd504e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/polar_bear
+splat_name: Polar Bear
 splat_pages:
 - 359
 ---

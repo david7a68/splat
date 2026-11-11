@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a80a88a6-f2f0-50b9-8585-b6c89adf8c90"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/fog_cloud"
-splat_name: "Fog Cloud"
+splat_id: a80a88a6-f2f0-50b9-8585-b6c89adf8c90
+splat_kind: reference
+splat_key: dnd2024:reference/spell/fog_cloud
+splat_name: Fog Cloud
 splat_pages:
 - 133
 ---

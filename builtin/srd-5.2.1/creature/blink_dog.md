@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "aff47a79-d180-57e6-acf4-59821bcf33f0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/blink_dog"
-splat_name: "Blink Dog"
+splat_id: aff47a79-d180-57e6-acf4-59821bcf33f0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/blink_dog
+splat_name: Blink Dog
 splat_pages:
 - 266
 ---

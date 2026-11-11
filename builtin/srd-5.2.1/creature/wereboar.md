@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "b7796f98-81f8-5b69-a27c-3c3f523eda46"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/wereboar"
-splat_name: "Wereboar"
+splat_id: b7796f98-81f8-5b69-a27c-3c3f523eda46
+splat_kind: reference
+splat_key: dnd2024:reference/creature/wereboar
+splat_name: Wereboar
 splat_pages:
 - 338
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "786ebaa9-28d1-5023-8071-ef22b99f030b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/adamantine_armor"
-splat_name: "Adamantine Armor"
+splat_id: 786ebaa9-28d1-5023-8071-ef22b99f030b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/adamantine_armor
+splat_name: Adamantine Armor
 splat_pages:
 - 209
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "bfef7cb9-b21f-5ba2-8f0a-bcbe5944db1e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/gate"
-splat_name: "Gate"
+splat_id: bfef7cb9-b21f-5ba2-8f0a-bcbe5944db1e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/gate
+splat_name: Gate
 splat_pages:
 - 135
 ---

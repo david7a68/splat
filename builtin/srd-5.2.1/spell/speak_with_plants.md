@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8be5d0e4-744e-53ac-85f1-e6e98016eb5e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/speak_with_plants"
-splat_name: "Speak with Plants"
+splat_id: 8be5d0e4-744e-53ac-85f1-e6e98016eb5e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/speak_with_plants
+splat_name: Speak with Plants
 splat_pages:
 - 164
 ---

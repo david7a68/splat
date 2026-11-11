@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "67968d91-3445-5ed5-800d-b5e94a4446c2"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/shape_shifting"
-splat_name: "Shape-Shifting"
+splat_id: 67968d91-3445-5ed5-800d-b5e94a4446c2
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/shape_shifting
+splat_name: Shape-Shifting
 splat_pages:
 - 187
 ---

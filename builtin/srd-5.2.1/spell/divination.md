@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7aeff2d0-d96a-51cb-bacd-e4c1db5500ca"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/divination"
-splat_name: "Divination"
+splat_id: 7aeff2d0-d96a-51cb-bacd-e4c1db5500ca
+splat_kind: reference
+splat_key: dnd2024:reference/spell/divination
+splat_name: Divination
 splat_pages:
 - 125
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1bfe7da1-ae46-5b82-9ec7-cc3825cf6be7"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/ring_of_regeneration"
-splat_name: "Ring of Regeneration"
+splat_id: 1bfe7da1-ae46-5b82-9ec7-cc3825cf6be7
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/ring_of_regeneration
+splat_name: Ring of Regeneration
 splat_pages:
 - 238
 ---

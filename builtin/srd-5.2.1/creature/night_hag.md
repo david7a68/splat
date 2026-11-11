@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "63f13bba-5108-5bc7-949c-61309a548d64"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/night_hag"
-splat_name: "Night Hag"
+splat_id: 63f13bba-5108-5bc7-949c-61309a548d64
+splat_kind: reference
+splat_key: dnd2024:reference/creature/night_hag
+splat_name: Night Hag
 splat_pages:
 - 311
 ---

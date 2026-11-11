@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "85415c74-e48b-5c64-8115-7babaed24d83"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/tome_of_leadership_and_influence"
-splat_name: "Tome of Leadership and Influence"
+splat_id: 85415c74-e48b-5c64-8115-7babaed24d83
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/tome_of_leadership_and_influence
+splat_name: Tome of Leadership and Influence
 splat_pages:
 - 249
 - 250

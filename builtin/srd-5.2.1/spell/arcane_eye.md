@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4e15f150-d705-50f9-91bf-a9de29376be8"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/arcane_eye"
-splat_name: "Arcane Eye"
+splat_id: 4e15f150-d705-50f9-91bf-a9de29376be8
+splat_kind: reference
+splat_key: dnd2024:reference/spell/arcane_eye
+splat_name: Arcane Eye
 splat_pages:
 - 110
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8af46d85-2ef3-531e-9f0c-47f39dc30785"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/speak_with_dead"
-splat_name: "Speak with Dead"
+splat_id: 8af46d85-2ef3-531e-9f0c-47f39dc30785
+splat_kind: reference
+splat_key: dnd2024:reference/spell/speak_with_dead
+splat_name: Speak with Dead
 splat_pages:
 - 164
 ---

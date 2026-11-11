@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "49667166-2c44-5f6e-a1db-cca4fcc8eb1d"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/ancient_silver_dragon"
-splat_name: "Ancient Silver Dragon"
+splat_id: 49667166-2c44-5f6e-a1db-cca4fcc8eb1d
+splat_kind: reference
+splat_key: dnd2024:reference/creature/ancient_silver_dragon
+splat_name: Ancient Silver Dragon
 splat_pages:
 - 325
 ---

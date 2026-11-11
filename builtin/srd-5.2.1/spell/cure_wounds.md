@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "78e1f4b9-731a-52ed-a1f1-4a38208215d5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/cure_wounds"
-splat_name: "Cure Wounds"
+splat_id: 78e1f4b9-731a-52ed-a1f1-4a38208215d5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/cure_wounds
+splat_name: Cure Wounds
 splat_pages:
 - 121
 ---

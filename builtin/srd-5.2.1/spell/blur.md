@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fc68c971-7bf8-5bff-8414-5abfbf3a62e6"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/blur"
-splat_name: "Blur"
+splat_id: fc68c971-7bf8-5bff-8414-5abfbf3a62e6
+splat_kind: reference
+splat_key: dnd2024:reference/spell/blur
+splat_name: Blur
 splat_pages:
 - 114
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "11710915-376e-5d39-a787-9a79c6301664"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/gold_dragon_wyrmling"
-splat_name: "Gold Dragon Wyrmling"
+splat_id: 11710915-376e-5d39-a787-9a79c6301664
+splat_kind: reference
+splat_key: dnd2024:reference/creature/gold_dragon_wyrmling
+splat_name: Gold Dragon Wyrmling
 splat_pages:
 - 290
 - 291

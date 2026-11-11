@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "9a5dbbe9-b7de-5823-bb73-da73b5c2c852"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/gem_of_brightness"
-splat_name: "Gem of Brightness"
+splat_id: 9a5dbbe9-b7de-5823-bb73-da73b5c2c852
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/gem_of_brightness
+splat_name: Gem of Brightness
 splat_pages:
 - 223
 ---

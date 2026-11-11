@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d9cd3ee1-1fd8-53b4-a82d-1326b82870a0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/mace_of_disruption"
-splat_name: "Mace of Disruption"
+splat_id: d9cd3ee1-1fd8-53b4-a82d-1326b82870a0
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/mace_of_disruption
+splat_name: Mace of Disruption
 splat_pages:
 - 229
 ---

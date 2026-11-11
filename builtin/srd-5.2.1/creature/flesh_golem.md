@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "134a4d44-fe4a-5231-998e-26a9b22d502a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/flesh_golem"
-splat_name: "Flesh Golem"
+splat_id: 134a4d44-fe4a-5231-998e-26a9b22d502a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/flesh_golem
+splat_name: Flesh Golem
 splat_pages:
 - 285
 ---

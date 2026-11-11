@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ba939402-94ec-5417-85c9-d8adf98fc22e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/eyebite"
-splat_name: "Eyebite"
+splat_id: ba939402-94ec-5417-85c9-d8adf98fc22e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/eyebite
+splat_name: Eyebite
 splat_pages:
 - 129
 ---

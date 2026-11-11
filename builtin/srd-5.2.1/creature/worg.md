@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ecf4c3f5-1ae5-5078-8788-b256c0dc89b0"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/worg"
-splat_name: "Worg"
+splat_id: ecf4c3f5-1ae5-5078-8788-b256c0dc89b0
+splat_kind: reference
+splat_key: dnd2024:reference/creature/worg
+splat_name: Worg
 splat_pages:
 - 342
 ---

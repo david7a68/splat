@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "50d52211-bdd5-506d-b879-897de8f17171"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/axe_beak"
-splat_name: "Axe Beak"
+splat_id: 50d52211-bdd5-506d-b879-897de8f17171
+splat_kind: reference
+splat_key: dnd2024:reference/creature/axe_beak
+splat_name: Axe Beak
 splat_pages:
 - 260
 ---

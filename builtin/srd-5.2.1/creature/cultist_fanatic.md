@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ccb291b0-f554-5e8e-af63-b5afbddb2f7a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/cultist_fanatic"
-splat_name: "Cultist Fanatic"
+splat_id: ccb291b0-f554-5e8e-af63-b5afbddb2f7a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/cultist_fanatic
+splat_name: Cultist Fanatic
 splat_pages:
 - 278
 ---

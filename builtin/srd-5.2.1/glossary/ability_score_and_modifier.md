@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1355d328-4a6d-5a9e-b4ad-c045cb907a9a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/ability_score_and_modifier"
-splat_name: "Ability Score and Modifier"
+splat_id: 1355d328-4a6d-5a9e-b4ad-c045cb907a9a
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/ability_score_and_modifier
+splat_name: Ability Score and Modifier
 splat_pages:
 - 176
 ---

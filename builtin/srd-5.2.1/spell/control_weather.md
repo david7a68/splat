@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "94b457c1-2ea9-5123-bd1b-7518017388f5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/control_weather"
-splat_name: "Control Weather"
+splat_id: 94b457c1-2ea9-5123-bd1b-7518017388f5
+splat_kind: reference
+splat_key: dnd2024:reference/spell/control_weather
+splat_name: Control Weather
 splat_pages:
 - 120
 ---

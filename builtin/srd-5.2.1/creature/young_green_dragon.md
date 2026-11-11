@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0e5dcf99-ffcb-537b-a395-42e357201b66"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/young_green_dragon"
-splat_name: "Young Green Dragon"
+splat_id: 0e5dcf99-ffcb-537b-a395-42e357201b66
+splat_kind: reference
+splat_key: dnd2024:reference/creature/young_green_dragon
+splat_name: Young Green Dragon
 splat_pages:
 - 293
 - 294

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "a8d90ac7-5495-5662-89cb-48bf5d35c496"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/reverse_gravity"
-splat_name: "Reverse Gravity"
+splat_id: a8d90ac7-5495-5662-89cb-48bf5d35c496
+splat_kind: reference
+splat_key: dnd2024:reference/spell/reverse_gravity
+splat_name: Reverse Gravity
 splat_pages:
 - 159
 ---

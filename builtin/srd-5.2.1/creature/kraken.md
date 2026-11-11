@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "ad0b3256-3bd6-5c7a-b3df-49646f763e80"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/kraken"
-splat_name: "Kraken"
+splat_id: ad0b3256-3bd6-5c7a-b3df-49646f763e80
+splat_kind: reference
+splat_key: dnd2024:reference/creature/kraken
+splat_name: Kraken
 splat_pages:
 - 303
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "1e13062a-00e6-56c5-b8e6-a7cc7690924c"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/octopus"
-splat_name: "Octopus"
+splat_id: 1e13062a-00e6-56c5-b8e6-a7cc7690924c
+splat_kind: reference
+splat_key: dnd2024:reference/creature/octopus
+splat_name: Octopus
 splat_pages:
 - 357
 - 358

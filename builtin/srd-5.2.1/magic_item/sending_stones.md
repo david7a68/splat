@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "28a287c5-63fd-5a25-97b0-cac09f3c6426"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/sending_stones"
-splat_name: "Sending Stones"
+splat_id: 28a287c5-63fd-5a25-97b0-cac09f3c6426
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/sending_stones
+splat_name: Sending Stones
 splat_pages:
 - 243
 ---

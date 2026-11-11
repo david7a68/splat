@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "d296f267-dc45-537b-8c94-389b032606e3"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/bracers_of_defense"
-splat_name: "Bracers of Defense"
+splat_id: d296f267-dc45-537b-8c94-389b032606e3
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/bracers_of_defense
+splat_name: Bracers of Defense
 splat_pages:
 - 214
 ---

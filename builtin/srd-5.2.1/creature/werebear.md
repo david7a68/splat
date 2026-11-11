@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "36c5d07d-1006-511d-97d9-61b91eb06c0a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/werebear"
-splat_name: "Werebear"
+splat_id: 36c5d07d-1006-511d-97d9-61b91eb06c0a
+splat_kind: reference
+splat_key: dnd2024:reference/creature/werebear
+splat_name: Werebear
 splat_pages:
 - 337
 - 338

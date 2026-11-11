@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "be3c26d1-6605-56e7-80dd-ba89e279e588"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/character_sheet"
-splat_name: "Character Sheet"
+splat_id: be3c26d1-6605-56e7-80dd-ba89e279e588
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/character_sheet
+splat_name: Character Sheet
 splat_pages:
 - 178
 ---

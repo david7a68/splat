@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5347d236-bb97-5007-b063-145d3803fe9a"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_paralysis"
-splat_name: "Wand of Paralysis"
+splat_id: 5347d236-bb97-5007-b063-145d3803fe9a
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_paralysis
+splat_name: Wand of Paralysis
 splat_pages:
 - 251
 ---

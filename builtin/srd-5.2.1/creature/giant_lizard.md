@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "40499ff8-8e2a-597f-8c0c-ba9adc7973d5"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_lizard"
-splat_name: "Giant Lizard"
+splat_id: 40499ff8-8e2a-597f-8c0c-ba9adc7973d5
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_lizard
+splat_name: Giant Lizard
 splat_pages:
 - 352
 ---

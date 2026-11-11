@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "12d1d9f1-7a9b-5a23-b76e-4492ce59b89b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/magic_item/wand_of_magic_detection"
-splat_name: "Wand of Magic Detection"
+splat_id: 12d1d9f1-7a9b-5a23-b76e-4492ce59b89b
+splat_kind: reference
+splat_key: dnd2024:reference/magic_item/wand_of_magic_detection
+splat_name: Wand of Magic Detection
 splat_pages:
 - 251
 ---

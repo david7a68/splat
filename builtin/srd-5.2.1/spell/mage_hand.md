@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "56ef1ec1-f386-5df1-9d6c-b1b1fd746261"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/mage_hand"
-splat_name: "Mage Hand"
+splat_id: 56ef1ec1-f386-5df1-9d6c-b1b1fd746261
+splat_kind: reference
+splat_key: dnd2024:reference/spell/mage_hand
+splat_name: Mage Hand
 splat_pages:
 - 145
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "8540d31a-af8f-52f7-a351-2f29656df294"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/glossary/indifferent_attitude"
-splat_name: "Indifferent [Attitude]"
+splat_id: 8540d31a-af8f-52f7-a351-2f29656df294
+splat_kind: reference
+splat_key: dnd2024:reference/glossary/indifferent_attitude
+splat_name: Indifferent [Attitude]
 splat_pages:
 - 184
 ---

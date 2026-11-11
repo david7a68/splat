@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4e71a3fd-d4bf-5ba0-a458-4672182d98ef"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/magic_circle"
-splat_name: "Magic Circle"
+splat_id: 4e71a3fd-d4bf-5ba0-a458-4672182d98ef
+splat_kind: reference
+splat_key: dnd2024:reference/spell/magic_circle
+splat_name: Magic Circle
 splat_pages:
 - 145
 - 146

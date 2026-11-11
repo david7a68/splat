@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "e77780db-3a95-5d23-a84b-1a96bea3c040"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/create_or_destroy_water"
-splat_name: "Create or Destroy Water"
+splat_id: e77780db-3a95-5d23-a84b-1a96bea3c040
+splat_kind: reference
+splat_key: dnd2024:reference/spell/create_or_destroy_water
+splat_name: Create or Destroy Water
 splat_pages:
 - 121
 ---

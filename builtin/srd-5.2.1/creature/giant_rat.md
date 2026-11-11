@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "2c421ee0-08b8-58fe-9491-65e37b79b8ab"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/giant_rat"
-splat_name: "Giant Rat"
+splat_id: 2c421ee0-08b8-58fe-9491-65e37b79b8ab
+splat_kind: reference
+splat_key: dnd2024:reference/creature/giant_rat
+splat_name: Giant Rat
 splat_pages:
 - 353
 ---

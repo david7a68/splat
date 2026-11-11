@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "fec93a70-d7a3-5df9-bde8-1e9c7253a2f4"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/message"
-splat_name: "Message"
+splat_id: fec93a70-d7a3-5df9-bde8-1e9c7253a2f4
+splat_kind: reference
+splat_key: dnd2024:reference/spell/message
+splat_name: Message
 splat_pages:
 - 148
 - 149

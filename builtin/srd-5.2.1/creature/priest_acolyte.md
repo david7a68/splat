@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "284e2287-06b5-59aa-acb4-a3f7abe59680"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/priest_acolyte"
-splat_name: "Priest Acolyte"
+splat_id: 284e2287-06b5-59aa-acb4-a3f7abe59680
+splat_kind: reference
+splat_key: dnd2024:reference/creature/priest_acolyte
+splat_name: Priest Acolyte
 splat_pages:
 - 316
 ---

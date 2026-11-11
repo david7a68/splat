@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "5a14b60a-578b-567c-b307-2054f0df843e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/clay_golem"
-splat_name: "Clay Golem"
+splat_id: 5a14b60a-578b-567c-b307-2054f0df843e
+splat_kind: reference
+splat_key: dnd2024:reference/creature/clay_golem
+splat_name: Clay Golem
 splat_pages:
 - 274
 ---

@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "6ddf95a4-3bd4-5b7d-a377-63b51697c88e"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/contagion"
-splat_name: "Contagion"
+splat_id: 6ddf95a4-3bd4-5b7d-a377-63b51697c88e
+splat_kind: reference
+splat_key: dnd2024:reference/spell/contagion
+splat_name: Contagion
 splat_pages:
 - 119
 ---

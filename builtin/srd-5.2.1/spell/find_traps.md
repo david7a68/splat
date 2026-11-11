@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "225ab2e2-3989-5168-82ed-72e90b83ba97"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/find_traps"
-splat_name: "Find Traps"
+splat_id: 225ab2e2-3989-5168-82ed-72e90b83ba97
+splat_kind: reference
+splat_key: dnd2024:reference/spell/find_traps
+splat_name: Find Traps
 splat_pages:
 - 131
 ---

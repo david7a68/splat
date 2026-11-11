@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "7a2932df-65d1-5205-9d9c-1595b82631ef"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/arcane_lock"
-splat_name: "Arcane Lock"
+splat_id: 7a2932df-65d1-5205-9d9c-1595b82631ef
+splat_kind: reference
+splat_key: dnd2024:reference/spell/arcane_lock
+splat_name: Arcane Lock
 splat_pages:
 - 110
 ---

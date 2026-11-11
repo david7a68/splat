@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "4d700a8b-12c7-5a53-ba20-ad758483b61b"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/creature/warrior_infantry"
-splat_name: "Warrior Infantry"
+splat_id: 4d700a8b-12c7-5a53-ba20-ad758483b61b
+splat_kind: reference
+splat_key: dnd2024:reference/creature/warrior_infantry
+splat_name: Warrior Infantry
 splat_pages:
 - 336
 - 337

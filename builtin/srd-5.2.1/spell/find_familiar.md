@@ -1,9 +1,9 @@
 ---
 splat_schema: 2
-splat_id: "0463d86a-84f5-547b-a07c-b9728cea4431"
-splat_kind: "reference"
-splat_key: "dnd2024:reference/spell/find_familiar"
-splat_name: "Find Familiar"
+splat_id: 0463d86a-84f5-547b-a07c-b9728cea4431
+splat_kind: reference
+splat_key: dnd2024:reference/spell/find_familiar
+splat_name: Find Familiar
 splat_pages:
 - 130
 ---
