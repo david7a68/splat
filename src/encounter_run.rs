@@ -4711,6 +4711,20 @@ pub(crate) fn write_in_progress_run(
     )
 }
 
+/// A fixture run's ID comes from its campaign and name, so its file is the same on every run of
+/// a test. It takes no ID from `hermetic::new_uuid`, so the seeded IDs and dice that follow do
+/// not move. Two runs of one name in one campaign would share a file, so the second is refused.
+#[cfg(test)]
+fn fixture_run_id(campaign: Uuid, directory: &Path, name: &str) -> Result<Uuid, String> {
+    let id = splat::character::stable_id(&format!("visual:run:{campaign}:{name}"));
+    if directory.join(format!("{id}.json")).exists() {
+        return Err(format!(
+            "The fixture has two runs named {name:?} in one campaign. Give each run its own name."
+        ));
+    }
+    Ok(id)
+}
+
 /// As `write_in_progress_run`, with the encounter's own text.
 #[cfg(test)]
 pub(crate) fn write_in_progress_run_with(
@@ -4720,8 +4734,22 @@ pub(crate) fn write_in_progress_run_with(
     participants: Vec<(Participant, i64)>,
     details: &str,
 ) -> Result<(), String> {
+    write_in_progress_run_marked(campaign, directory, name, participants, details, &[])
+}
+
+/// As `write_in_progress_run_with`, with words the DM typed as conditions, by roster index.
+#[cfg(test)]
+pub(crate) fn write_in_progress_run_marked(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    participants: Vec<(Participant, i64)>,
+    details: &str,
+    marks: &[(usize, &str)],
+) -> Result<(), String> {
     let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
     let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    run.id = fixture_run_id(campaign, directory, name)?;
     // The test campaign uses the SRD 5.2.1 package, whose inspiration rule is a reroll.
     run.set_inspiration(Some(Inspiration::Reroll));
     run.state.random = Random::seeded(20_260_101);
@@ -4729,6 +4757,9 @@ pub(crate) fn write_in_progress_run_with(
         run.apply(Command::Initiative(index, Some(total)))?;
     }
     run.apply(Command::Begin)?;
+    for (index, words) in marks {
+        run.apply(Command::Condition(*index, (*words).to_owned()))?;
+    }
     let first = run.state.order[0];
     run.apply(Command::Note(first, "Holding the bridge.".into()))?;
     run.apply(Command::Next)?;
@@ -4754,10 +4785,36 @@ pub(crate) fn write_ended_run(
     outcome: &str,
     participant: Participant,
 ) -> Result<crate::timeline::RunFact, String> {
-    let mut run = Run::new(name.into(), vec![participant], format!("# {name}"))?;
+    write_ended_run_with(
+        campaign,
+        directory,
+        name,
+        source,
+        outcome,
+        vec![participant],
+        &format!("# {name}"),
+    )
+}
+
+/// As `write_ended_run`, with several participants and the encounter's own text.
+#[cfg(test)]
+pub(crate) fn write_ended_run_with(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    source: Option<Uuid>,
+    outcome: &str,
+    participants: Vec<Participant>,
+    details: &str,
+) -> Result<crate::timeline::RunFact, String> {
+    let count = participants.len();
+    let mut run = Run::new(name.into(), participants, details.to_owned())?;
+    run.id = fixture_run_id(campaign, directory, name)?;
     run.state.random = Random::seeded(20_260_101);
     run.source = source;
-    run.apply(Command::Initiative(0, Some(10)))?;
+    for index in 0..count {
+        run.apply(Command::Initiative(index, Some(10 + index as i64)))?;
+    }
     run.apply(Command::Begin)?;
     run.apply(Command::End(outcome.into()))?;
     run.configure_storage(campaign, directory, Initiative::default())?;

@@ -5,7 +5,8 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, EntryRef, PackageSelection, Selection},
     encounter_run::{
-        Participant, write_ended_run, write_in_progress_run, write_in_progress_run_with,
+        Participant, write_ended_run, write_ended_run_with, write_in_progress_run,
+        write_in_progress_run_marked, write_in_progress_run_with,
     },
     hermetic,
     persistence::{Campaign, Module, Store, UserData},
@@ -44,6 +45,35 @@ pub const GROUP_WATCH: &str = "Watch Detail";
 pub const GROUP_SHRINE: &str = "Shrine Reserve";
 pub const GROUP_ARENA: &str = "Arena Beasts";
 pub const GROUP_ORPHAN: &str = "Cellar Rats";
+/// The plain campaign's fight in progress, with 12 participants.
+pub const PLAIN_RUN: &str = "Ambush at the Ropes";
+/// The plain campaign's played fight, with loot and a title longer than its row.
+pub const PLAIN_PLAYED: &str = "Wolves at the Ford Below the Burning Shrine Road";
+pub const PLAIN_LAST: &str = "The Road to Emberfall";
+/// A fight played before `PLAIN_PLAYED`, in the same session.
+pub const PLAIN_OLDER: &str = "The Toll Bridge Brawl";
+pub const PLAIN_TONIGHT: &str = "The Crossing";
+/// A participant's name that is longer than a roster row likes.
+pub const PLAIN_LONG_NAME: &str = "Ashfang, Eldest Wolf of the Southern Ridge";
+/// The titles that `docs/design/session-cycle.md` section 1.2 sums: 13, 16 and 19 letters.
+pub const PLAIN_TITLES: [&str; 3] = ["Captain Varra", "Oren Thistlewick", "Captain Varra Black"];
+
+/// The package creature that the plain campaign selects.
+pub fn plain_package_creature() -> uuid::Uuid {
+    module_entry_id("cinder_wolf")
+}
+
+/// A reader in the plain campaign: a World NPC, with no portrait, or a humanoid creature,
+/// which has its type's art.
+pub fn plain_reader(name: &str, portrait: bool) -> uuid::Uuid {
+    if portrait && name == "Captain Varra" {
+        stable_id("visual:note:varra")
+    } else if portrait {
+        stable_id(&format!("visual:plain:creature:{name}"))
+    } else {
+        stable_id(&format!("visual:plain:npc:{name}"))
+    }
+}
 
 /// What settings the app starts with.
 #[derive(Clone, Copy, PartialEq)]
@@ -70,6 +100,8 @@ pub enum Seed {
     /// `Campaign`, plus a run with the encounter's loot, a creature at 0 HP that carries loot,
     /// and the roll table its loot names.
     Loot,
+    /// G7's plain campaign: `Campaign`, plus what the session-cycle features touch, frozen.
+    Plain,
 }
 
 #[derive(Clone)]
@@ -155,6 +187,9 @@ fn seed_campaigns(
     }
     if matches!(seed, Seed::World | Seed::Formats) {
         write_world_notes(&active.path)?;
+    }
+    if seed == Seed::Plain {
+        write_plain(&active, &module.path, &party)?;
     }
     if seed == Seed::Formats {
         write_format_notes(&active.path)?;
@@ -924,6 +959,204 @@ fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
     let mut book = crate::timeline::Book::default();
     book.open(Some(&sessions));
     book.record_run(&past, Some(session), false);
+    book.save();
+    Ok(())
+}
+
+/// G7's plain campaign. Each part is something a feature of `docs/design/session-cycle.md`
+/// touches, as a DM has it today: old task lines under `## Plan for tonight`, words typed as
+/// conditions, a marked roll table, a played fight with loot, NPCs with and without a stat
+/// block, a session with a recap and one without, a Travel event, a long participant name,
+/// and 12 participants in one fight. G7 holds these files in its reference, so a change here
+/// shows as a difference of the fixture.
+fn write_plain(campaign: &Campaign, module: &Path, party: &[EntitySnapshot]) -> Result<(), String> {
+    // A long stat block, so these two readers scroll in Lookup at both sizes.
+    const ACTIONS: &str = "Longsword. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.\n\n\
+        Crossbow. Ranged Attack Roll: +4, range 80/320 ft. Hit: 6 (1d8 + 2) Piercing damage.\n\n\
+        Parry. Reaction: +2 AC against one melee attack that would hit.\n\n";
+    let root = &campaign.path;
+    for name in ["Hobb the Miller"].into_iter().chain(PLAIN_TITLES) {
+        write_model(
+            root,
+            &format!("NPCs/{name}.md"),
+            &format!(
+                "splat_id: {}\nsplat_kind: world\nsplat_name: {name}\nsplat_world: {{type: npc, status: alive}}\n",
+                plain_reader(name, false)
+            ),
+            &format!("\n# {name}\n\nKeeps watch on the road to the ford.\n"),
+        )?;
+    }
+    for name in &PLAIN_TITLES[1..] {
+        write_model(
+            root,
+            &format!("Notes/{name}.md"),
+            &format!(
+                "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{size: medium, type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 33}}\n  armor_class: {{value: 14}}\n  initiative: {{value: 1}}\n",
+                plain_reader(name, true)
+            ),
+            &format!(
+                "\n# {name}\n\nA sword for hire on the ford road.\n\n## Actions\n\n{}",
+                ACTIONS.repeat(4)
+            ),
+        )?;
+    }
+    fs::create_dir_all(root.join("World")).map_err(|e| e.to_string())?;
+    fs::write(
+        root.join("World/Road Encounters.md"),
+        "# Road Encounters\n\n<!-- splat:rolls key=road dice=1d6 -->\n\n| d6 | Encounter |\n| --- | --- |\n\
+         | 1-2 | [[Bridge Ambush]] |\n| 3-5 | Nothing on the road. |\n| 6 | A cart stuck in the mud. |\n",
+    )
+    .map_err(|e| e.to_string())?;
+
+    // The played fight, with the encounter's loot and two wolves at 0 HP.
+    let loot = "Wolves wait at the ford.\n\n## Loot\n\n- 30 gp\n- A wolf-tooth charm\n";
+    let encounter = stable_id(&format!("visual:encounter:{PLAIN_PLAYED}"));
+    write_model(
+        root,
+        &format!("Encounters/{PLAIN_PLAYED}.md"),
+        &format!(
+            "splat_id: {encounter}\nsplat_kind: encounter\nsplat_name: {PLAIN_PLAYED}\nsplat_encounter:\n  roster: []\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n"
+        ),
+        &format!("\n{loot}"),
+    )?;
+    let heroes = || -> Result<Vec<(Participant, i64)>, String> {
+        party
+            .iter()
+            .enumerate()
+            .map(|(index, hero)| {
+                Ok((
+                    Participant::new(
+                        format!("actor_hero_{}", hero.source.character_id),
+                        "party".into(),
+                        hero.entry()?,
+                        &Mapping::new(),
+                        true,
+                    )?,
+                    18 - index as i64 * 2,
+                ))
+            })
+            .collect()
+    };
+    let creature = |file: &str| -> Result<Entry, String> {
+        let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+        Entry::parse(file, &text)
+    };
+    let wolf = "Creatures/Cinder Wolf.md";
+    let down: Mapping = serde_yaml_ng::from_str("{hp: 0}").map_err(|e| e.to_string())?;
+    let mut played: Vec<Participant> = heroes()?.into_iter().map(|(hero, _)| hero).collect();
+    for index in 0..2 {
+        played.push(Participant::new(
+            format!("actor_ford_wolf_{index}"),
+            "enemies".into(),
+            creature(wolf)?,
+            &down,
+            true,
+        )?);
+    }
+    // An older fight of the same session, played before it, with no encounter of its own.
+    let mut brawl: Vec<Participant> = heroes()?.into_iter().map(|(hero, _)| hero).collect();
+    brawl.push(Participant::new(
+        "actor_toll_wolf".into(),
+        "enemies".into(),
+        creature(wolf)?,
+        &down,
+        true,
+    )?);
+    let older = write_ended_run_with(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        PLAIN_OLDER,
+        None,
+        "Party won",
+        brawl,
+        &format!("# {PLAIN_OLDER}"),
+    )?;
+    let fact = write_ended_run_with(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        PLAIN_PLAYED,
+        Some(encounter),
+        "Party won",
+        played,
+        &format!("# {PLAIN_PLAYED}\n\n{loot}"),
+    )?;
+
+    // A fight in progress with 12 participants, a long name, and words typed as conditions.
+    let mut twelve = heroes()?;
+    let long: Mapping = serde_yaml_ng::from_str(&format!("{{name: \"{PLAIN_LONG_NAME}\"}}"))
+        .map_err(|e| e.to_string())?;
+    for index in 0..5 {
+        let overrides = if index == 0 { &long } else { &Mapping::new() };
+        twelve.push((
+            Participant::with_overrides(
+                format!("actor_rope_wolf_{index}"),
+                "enemies".into(),
+                creature(wolf)?,
+                &Mapping::new(),
+                &Overrides::parse(overrides)?,
+                true,
+            )?,
+            15,
+        ));
+    }
+    for index in 0..2 {
+        twelve.push((
+            Participant::new(
+                format!("actor_rope_cultist_{index}"),
+                "enemies".into(),
+                creature("Creatures/Ember Cultist.md")?,
+                &Mapping::new(),
+                true,
+            )?,
+            7,
+        ));
+    }
+    write_in_progress_run_marked(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        PLAIN_RUN,
+        twelve,
+        &format!("# {PLAIN_RUN}\n\nThe ferry ropes are cut at dusk."),
+        &[(0, "Bless 10 rounds"), (5, "Hexed until the hag dies")],
+    )?;
+
+    // Two sessions: the last one, with a recap and the played fight; tonight's, with no recap,
+    // old task lines in its plan, a planned fight and a Travel event.
+    let sessions = crate::sessions::folder(campaign)?;
+    fs::create_dir_all(&sessions).map_err(|e| e.to_string())?;
+    let last = stable_id("visual:plain:session:7");
+    let tonight = stable_id("visual:plain:session:8");
+    fs::write(
+        sessions.join("Session 7.md"),
+        format!(
+            "---\nsession_id: {last}\nsession_number: 7\nsession_title: {PLAIN_LAST}\nsession_date: 2025-12-25\n---\n\n\
+             # Session 7: {PLAIN_LAST}\n\n## Recap of last time\n\nThe party left Emberfall at dawn with the miller's warning.\n\n\
+             ## Plan for tonight\n\n- [x] Meet [[Hobb the Miller]] at the mill\n- [ ] Ask about the toll\n\n\
+             ## What happened\n\nWolves at the ford. Hobb said the toll collectors were not paid.\n\n\
+             ## Open threads\n\n- Who cuts the ferry ropes?\n"
+        ),
+    )
+    .map_err(|e| e.to_string())?;
+    fs::write(
+        sessions.join("Session 8.md"),
+        format!(
+            "---\nsession_id: {tonight}\nsession_number: 8\nsession_title: {PLAIN_TONIGHT}\nsession_date: {}\n---\n\n\
+             # Session 8: {PLAIN_TONIGHT}\n\n## Recap of last time\n\n## Plan for tonight\n\n\
+             - [ ] Talk to [[Hobb the Miller]] about the ropes\n- [x] Read [[Emberfall Rumours]]\n- [[Shrine of Cinders]]\n\n\
+             ## What happened\n\n## Open threads\n\n",
+            hermetic::today()
+        ),
+    )
+    .map_err(|e| e.to_string())?;
+    let mut book = crate::timeline::Book::default();
+    book.open(Some(&sessions));
+    book.record_run(&older, Some(last), false);
+    book.record_run(&fact, Some(last), false);
+    let road = book.add(crate::timeline::Kind::Travel, Some(tonight));
+    if let Some(event) = book.events.iter_mut().find(|event| event.id == road) {
+        event.title = "Road to the ford".into();
+        event.duration = "half a day".into();
+    }
     book.save();
     Ok(())
 }
