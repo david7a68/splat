@@ -1731,7 +1731,7 @@ mod tests {
         let mut probe = draft.now.clone();
         probe.status = "ready".into();
         let now = std::mem::replace(&mut draft.now, probe);
-        let start_status = std::mem::replace(&mut draft.start.status, String::new());
+        let start_status = std::mem::take(&mut draft.start.status);
         let status = |effects: Vec<(&str, String)>| {
             effects
                 .into_iter()
