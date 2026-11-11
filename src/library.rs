@@ -2493,8 +2493,6 @@ struct RepairLink {
     target: splat::content::Reference,
     words: String,
     found: Option<(ParsedDraft, Option<usize>)>,
-    /// Its note has been on screen. From then, any other selection ends the repair.
-    shown: bool,
 }
 
 #[cfg(test)]
@@ -3145,9 +3143,10 @@ impl Library {
         self.pending_edit = Some(entry);
     }
     /// Open a file for repair; with a missing link's reference and words, at that link.
-    /// The one cleanup for a repair's owner. Once the repair's note has been on screen, any
-    /// other selection ends it, however it was made: the list, the keyboard, search, `reveal`,
-    /// Back or Forward, or a link. A load in progress keeps it, as the selection waits for it.
+    /// The repair guidance has one owner, its entry. When no load and no pending repair is in
+    /// progress and the selected entry is not the owner, the guidance ends, however the
+    /// selection was made: the list, the keyboard, search, `reveal`, Back or Forward, a link, or
+    /// a repair whose file could not be opened.
     fn end_repair_on_owner_change(&mut self) {
         if self.pending.is_some() || self.stale || self.pending_repair.is_some() {
             return;
@@ -3156,12 +3155,11 @@ impl Library {
             .selected
             .and_then(|i| self.loaded.as_ref()?.notes.get(i))
             .and_then(|note| Some(note.owner.root()?.join(&note.path)));
-        let Some(link) = &mut self.repair_link else {
-            return;
-        };
-        if here.as_ref() == Some(&link.path) {
-            link.shown = true;
-        } else if link.shown {
+        if self
+            .repair_link
+            .as_ref()
+            .is_some_and(|link| here.as_ref() != Some(&link.path))
+        {
             self.repair_link = None;
         }
     }
@@ -3180,7 +3178,6 @@ impl Library {
             target,
             words,
             found: None,
-            shown: false,
         });
         self.pending_repair = Some(path);
         self.stale = true;
@@ -6152,37 +6149,49 @@ impl Library {
                 }
                 ui.add_space(design::S);
             } else {
-                if let Some(words) = link_words {
+                // The guidance takes the reserved slot. When a Save reason or the discard result
+                // needs the slot, the guidance comes first, directly above it.
+                let discard_shown =
+                    discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
+                let slot_busy = discard_shown || slot_problem.is_some();
+                let slot_link = link_words.filter(|_| !slot_busy);
+                if let Some(words) = link_words.filter(|_| slot_busy) {
                     design::message(ui, Tone::Warning, words);
                 }
                 // Measure the same words in both states, so the first edit keeps the caret in place.
                 let words = draft_words(matches!(note.owner, Owner::Campaign(_)));
                 // The discard message is measured too, so neither state moves the editor.
-                let height = egui::WidgetText::from(Type::Small.rich(ui, words))
-                    .into_galley(
-                        ui,
-                        Some(egui::TextWrapMode::Wrap),
-                        editor_width,
-                        Type::Small.font(ui),
-                    )
-                    .size()
-                    .y
-                    .max(discarded_height(ui, note.name(), editor_width))
-                    .max(Density::Read.control() + design::XS)
-                    .max(slot_problem.map_or(0.0, |problem| {
-                        egui::WidgetText::from(Type::Body.rich(ui, problem))
-                            .into_galley(
-                                ui,
-                                Some(egui::TextWrapMode::Wrap),
-                                editor_width - design::XL,
-                                Type::Body.font(ui),
-                            )
-                            .size()
-                            .y
-                    }));
+                let body_height = |words: &str| {
+                    egui::WidgetText::from(Type::Body.rich(ui, words))
+                        .into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Wrap),
+                            editor_width - design::XL,
+                            Type::Body.font(ui),
+                        )
+                        .size()
+                        .y
+                };
+                // The guidance alone fills the slot: a discard result would move it above anyway.
+                let height = if let Some(link) = slot_link {
+                    body_height(link).max(Density::Read.control() + design::XS)
+                } else {
+                    egui::WidgetText::from(Type::Small.rich(ui, words))
+                        .into_galley(
+                            ui,
+                            Some(egui::TextWrapMode::Wrap),
+                            editor_width,
+                            Type::Small.font(ui),
+                        )
+                        .size()
+                        .y
+                        .max(discarded_height(ui, note.name(), editor_width))
+                        .max(Density::Read.control() + design::XS)
+                        .max(slot_problem.map_or(0.0, |problem| body_height(problem)))
+                };
                 let (slot, _) =
                     ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
-                if discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text {
+                if discard_shown {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(slot)
@@ -6203,6 +6212,14 @@ impl Library {
                             .layout(egui::Layout::top_down(egui::Align::Min)),
                     );
                     design::message(&mut slot_ui, Tone::Error, problem);
+                } else if let Some(words) = slot_link {
+                    // The repair this note was opened for, in the reason line.
+                    let mut slot_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(slot)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    design::message(&mut slot_ui, Tone::Warning, words);
                 } else if let Some(reason) = draft_reason {
                     let mut slot_ui = ui.new_child(
                         egui::UiBuilder::new()

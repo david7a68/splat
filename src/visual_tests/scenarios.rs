@@ -13495,6 +13495,27 @@ pub mod session_plan_groups {
                 "The repair names the member row {named:?}; caret {caret:?}; lines naming the id {named_ids:?}"
             ),
         );
+        // The guidance is in the reason line under Save: no empty slot between it and the editor,
+        // at 960 and 1200. The normal gap there is the design system's `S` before the editor
+        // with item spacing and the label's line padding (15 px), so the bound is `L`; an
+        // empty reserved slot (about 44 px) fails it.
+        const LINK_WORDS: &str = "needs a creature that cannot be found. Replace the link";
+        let gap_below = |d: &Driver<'_>, words: &str, next: Option<egui::Rect>| {
+            let text = d.painted_rect_in(words, egui::Rect::EVERYTHING)?;
+            Some(next?.top() - text.bottom())
+        };
+        let mut gaps = Vec::new();
+        for size in [SMALL, DEFAULT] {
+            gaps.push(d.at_size(size, |d| {
+                gap_below(d, LINK_WORDS, d.place_of("Markdown editor"))
+            }));
+        }
+        d.observe(
+            "iter-23-B-FK1-slot",
+            gaps.iter()
+                .all(|gap| gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))),
+            format!("Guidance to editor at 960 and 1200: {gaps:?}"),
+        );
         // Unchanged frames do not look the row up again.
         let lookups = d.app_mut().library.repair_lookups();
         d.settle();
@@ -13514,6 +13535,43 @@ pub mod session_plan_groups {
         read_only.set_readonly(true);
         std::fs::set_permissions(&lost, read_only).unwrap();
         d.press_ctrl(Key::S);
+        d.state("missing-member-save-failed", Sizes::Default);
+        // The editor's visible part: its accessible rect is its scrolled text.
+        let editor_shown = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == "Markdown editor")
+                .map(|node| node.shown)
+        };
+        // Save's reason needs the slot: the guidance comes first, then the reason, then the
+        // editor, each at the message gap.
+        // Save's reason in the slot: the painted line that starts below the guidance.
+        let guidance_bottom = d
+            .painted_rect_in(LINK_WORDS, egui::Rect::EVERYTHING)
+            .map_or(f32::INFINITY, |rect| rect.bottom());
+        let mut reason = None;
+        d.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text.galley.job.text.contains("This file is read only.")
+                && clip.intersects(rect)
+                && rect.top() >= guidance_bottom - 0.5
+                && reason.is_none_or(|found: egui::Rect| rect.top() < found.top())
+            {
+                reason = Some(rect);
+            }
+        });
+        let busy_gap = gap_below(d, LINK_WORDS, reason);
+        d.observe(
+            "iter-23-B-FK1-slot-busy",
+            busy_gap.is_some_and(|gap| (0.0..=crate::design::L).contains(&gap))
+                && reason
+                    .zip(editor_shown(d))
+                    .is_some_and(|(reason, editor)| reason.bottom() <= editor.top()),
+            format!(
+                "Guidance first, then Save's reason ({reason:?}) above the editor ({:?}): gap {busy_gap:?}",
+                editor_shown(d)
+            ),
+        );
         let failed = (
             named.as_deref().is_some_and(|named| d.visible_text(named)),
             d.editor_text()
@@ -13589,6 +13647,25 @@ pub mod session_plan_groups {
             format!(
                 "Guidance before Back {shown_before_back}, Lost Patrol again after Back (open, guidance) {after_back:?}; before the list {shown_before_list}, after the list {after_list:?}"
             ),
+        );
+        // A repair whose file is gone opens nothing; its guidance must not wait for the file.
+        let away = lost.with_extension("md.away");
+        std::fs::rename(&lost, &away).unwrap();
+        d.click(NAV_CAMPAIGN);
+        d.expect("Repair Lost Patrol");
+        d.click("Repair Lost Patrol");
+        d.settle();
+        d.click_starting("Rival Team ·");
+        std::fs::rename(&away, &lost).unwrap();
+        d.click("Packages");
+        d.click("Reload from disk");
+        d.settle();
+        d.click_starting("Lost Patrol ·");
+        let after_missing = open_with_editor(d);
+        d.observe(
+            "iter-23-B-FK1-owner-missing",
+            after_missing == (true, false),
+            format!("After a repair on a missing file, Lost Patrol opened normally (open, guidance): {after_missing:?}"),
         );
         std::fs::write(&lost, &lost_text).unwrap();
 
