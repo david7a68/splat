@@ -1258,6 +1258,34 @@ impl<'a> Driver<'a> {
         rules
     }
 
+    /// The pictures painted inside `area`: textured rects (portraits and art) and filled
+    /// circles (a portrait's initial). AccessKit pixels, like `place_of`.
+    pub fn pictures_in(&self, area: egui::Rect) -> Vec<egui::Rect> {
+        let scale = self.harness.ctx.pixels_per_point();
+        fn walk(shape: &egui::Shape, out: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+                egui::Shape::Rect(rect) if rect.brush.is_some() => out.push(rect.rect),
+                egui::Shape::Circle(circle) if circle.fill != egui::Color32::TRANSPARENT => {
+                    out.push(egui::Rect::from_center_size(
+                        circle.center,
+                        egui::Vec2::splat(circle.radius * 2.0),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, &mut found);
+        }
+        found
+            .into_iter()
+            .map(|rect| rect * scale)
+            .filter(|rect| area.contains(rect.center()))
+            .collect()
+    }
+
     /// The surfaces that scroll sideways now, as the ergonomics check finds them.
     pub fn horizontal_scroll_regions(&self) -> Vec<egui::Rect> {
         let scale = 1.0 / self.harness.ctx.pixels_per_point();

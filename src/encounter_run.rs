@@ -6696,7 +6696,10 @@ mod tests {
         // Must stay true: a later notice that removed nothing says nothing of Undo.
         reopened.note_sync_changes(&[format!("{name}: HP 1 → 2")], &[]);
         let later = reopened.notice_summary.clone().unwrap_or_default();
-        assert!(later.starts_with(&name) && !later.contains("removed"), "{later}");
+        assert!(
+            later.starts_with(&name) && !later.contains("removed"),
+            "{later}"
+        );
     }
     #[test]
     fn undo_before_the_first_read_after_a_restart_is_a_conflict_and_not_a_silent_write() {

@@ -1038,10 +1038,15 @@ impl Run {
                                 } else {
                                     shown
                                 };
+                                // FJ4: the words get `text_room`; the message's bar, icon and
+                                // their gaps take room before them. A fitted notice then keeps
+                                // one line, and its band the height the list gave up.
+                                let message_width =
+                                    text_room + lead + ui.spacing().item_spacing.x * 2.0;
                                 let response = ui
                                     .allocate_ui_with_layout(
                                         vec2(
-                                            text_room,
+                                            message_width,
                                             if compact || self.notice_summary.is_some() {
                                                 Type::Small.line()
                                             } else {
@@ -3446,8 +3451,21 @@ impl Run {
                 // FB1: the result has a line of its own, kept while it is empty, so a group
                 // that joins moves no row below it and a second Add lands where the first did.
                 // The result is the newest step's, so the next step ends it.
+                // A one-line message is as high as one row of Body words.
+                let line = ui
+                    .fonts_mut(|fonts| {
+                        fonts.layout_no_wrap(
+                            "Ag".into(),
+                            Type::Body.font(ui),
+                            egui::Color32::PLACEHOLDER,
+                        )
+                    })
+                    .size()
+                    .y;
+                // A row of a horizontal layout is at least the interact height.
+                let line = line.max(ui.spacing().interact_size.y);
                 ui.vertical(|ui| {
-                    ui.set_min_height(Type::Body.line());
+                    ui.set_min_height(line);
                     self.arrival_result(ui);
                 });
                 design::rule(ui);
@@ -3950,10 +3968,23 @@ impl Run {
         if status_above {
             ui.add(egui::Label::new(Type::Small.rich(ui, status_shown).color(c.muted)).wrap());
         }
+        // FB1: room for a status line and a members line, so a group that joins (and gains
+        // `Added in round 1`) moves no row below it.
+        let two_lines = ui
+            .fonts_mut(|fonts| {
+                fonts.layout_no_wrap(
+                    "Ag\nAg".into(),
+                    Type::Small.font(ui),
+                    egui::Color32::PLACEHOLDER,
+                )
+            })
+            .size()
+            .y;
         ui.horizontal(|ui| {
             ui.allocate_ui(vec2(width, Density::Read.control()), |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
+                ui.set_min_height(two_lines.max(Density::Read.control()));
                 let summary = arrival_summary(
                     ui,
                     if status_above { "" } else { status_shown },
@@ -6379,8 +6410,27 @@ fn move_words(
         .rsplit_once(' ')
         .map(|(_, last)| last)
         .filter(|last| !last.is_empty() && last.chars().all(|c| c.is_ascii_digit()))?;
-    let short = format!("Move {group} (…\u{a0}{copy}) before {before}");
-    (design::number_width(ui, &short, font) <= width).then_some(short)
+    // Then the group's and the other name's last words go, never the copy number.
+    let words = |name: &str| -> Vec<String> {
+        let all: Vec<&str> = name.split_whitespace().collect();
+        (1..=all.len())
+            .rev()
+            .map(|n| {
+                let kept = all[..n].join(" ");
+                if n == all.len() {
+                    kept
+                } else {
+                    format!("{kept}…")
+                }
+            })
+            .collect()
+    };
+    words(before).into_iter().find_map(|before| {
+        words(group).into_iter().find_map(|group| {
+            let short = format!("Move {group} (…\u{a0}{copy}) before {before}");
+            (design::number_width(ui, &short, font) <= width).then_some(short)
+        })
+    })
 }
 
 /// Cut only the target, keeping action words, amounts and copy numbers.
@@ -6543,19 +6593,44 @@ fn shortened_action(
 
 /// Keep the character's name; give up later values before shortening a sheet notice.
 fn sheet_notice_words(ui: &egui::Ui, summary: &str, font: &egui::FontId, width: f32) -> String {
+    // FJ1: a count of removed Undo steps stays as long as the character's name does.
+    let (summary, removed) = summary
+        .rsplit_once(" · ")
+        .filter(|(_, removed)| removed.ends_with(" removed"))
+        .map_or((summary, String::new()), |(summary, removed)| {
+            (summary, format!(" · {removed}"))
+        });
     let (first, more) = summary
         .rsplit_once(" and ")
         .filter(|(_, more)| more.ends_with("sheet") || more.ends_with("sheets"))
         .map_or((summary, String::new()), |(first, more)| {
             (first, format!(" and {more}"))
         });
-    let mut values: Vec<_> = first.split(", ").collect();
-    loop {
-        let shown = format!("{}{more}", values.join(", "));
-        if design::number_width(ui, &shown, font) <= width || values.len() == 1 {
-            return shown;
-        }
-        values.pop();
+    let values: Vec<_> = first.split(", ").collect();
+    let fits = |words: &str| design::number_width(ui, words, font) <= width;
+    // FJ4: then shorter forms, so the notice keeps one line and its band its height: the
+    // first value alone, `<name>: <value>`, without the other sheets, then the name alone.
+    let compact = values[0].replace(super::SHEET_CHANGED, ":");
+    let name = values[0]
+        .split_once(super::SHEET_CHANGED)
+        .map_or(values[0], |(name, _)| name);
+    let mut forms: Vec<String> = (1..=values.len())
+        .rev()
+        .map(|n| format!("{}{more}{removed}", values[..n].join(", ")))
+        .collect();
+    forms.push(format!("{compact}{more}{removed}"));
+    forms.push(format!("{compact}{removed}"));
+    if !removed.is_empty() {
+        forms.push(format!("{name}{removed}"));
+    }
+    match forms.iter().find(|form| fits(form)) {
+        Some(form) => form.clone(),
+        None => design::words_that_fit(
+            ui,
+            forms.last().map_or(summary, String::as_str),
+            font,
+            width,
+        ),
     }
 }
 
@@ -9226,8 +9301,14 @@ mod tests {
                 let short_width = design::number_width(ui, short, &font);
                 assert_eq!(at(whole_width).as_deref(), Some(whole));
                 assert_eq!(at(whole_width - 1.0).as_deref(), Some(short));
+                // Narrower, the group's last word goes, then the other name's: the copy stays.
+                let shorter = "Move Shrine… (…\u{a0}3) before Brannoch Vale";
+                assert_eq!(at(short_width - 1.0).as_deref(), Some(shorter));
+                let shortest = "Move Shrine… (…\u{a0}3) before Brannoch…";
+                let shortest_width = design::number_width(ui, shortest, &font);
+                assert_eq!(at(shortest_width).as_deref(), Some(shortest));
                 assert_eq!(
-                    at(short_width - 1.0),
+                    at(shortest_width - 1.0),
                     None,
                     "then the caller cuts the target"
                 );
@@ -10597,6 +10678,18 @@ mod tests {
                 let at = |room: f32| dock_name_shown(ui, long, room);
                 assert!(matches!(at(whole), (Type::Heading, shown) if shown == long));
                 assert!(matches!(at(small), (Type::Small, shown) if shown == long));
+                // iter-25-R FJ4, FJ1: a sheet notice keeps one line by shorter forms, and a
+                // count of removed Undo steps stays as long as the name does.
+                let summary = "Brannoch Vale’s sheet changed: HP 58 → 54 and 2 more sheets · 1 Undo step removed";
+                let notice = |width: f32| sheet_notice_words(ui, summary, &font, width);
+                let wide = design::number_width(ui, summary, &font);
+                assert_eq!(notice(wide), summary);
+                let compact = "Brannoch Vale: HP 58 → 54 and 2 more sheets · 1 Undo step removed";
+                assert_eq!(notice(design::number_width(ui, compact, &font)), compact);
+                let named = "Brannoch Vale · 1 Undo step removed";
+                let named_width = design::number_width(ui, named, &font);
+                assert_eq!(notice(named_width), named);
+                assert!(design::number_width(ui, &notice(named_width - 1.0), &font) <= named_width - 1.0);
                 let (role, shown) = at(small - 1.0);
                 assert!(role == Type::Heading && shown.ends_with('…'), "{shown}");
                 assert!(design::number_width(ui, &shown, &heading) <= small - 1.0);

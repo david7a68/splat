@@ -726,9 +726,11 @@ pub fn run(d: &mut Driver<'_>) {
         "Dismiss removes the message and leaves Lookup on its entry",
     );
     close_lookup(d);
+    // The header has room for the whole reason only when wide.
+    let whole = d.at_size((1920.0, 1080.0), |d| d.visible_text(UNREAD_REASON));
     d.observe(
         "iter-25-R-AI3-after-dismiss",
-        d.visible_text(UNREAD_REASON),
+        whole,
         "After Dismiss, Undo's reason gives the cause, with a full stop",
     );
     d.click(NEXT_TURN);

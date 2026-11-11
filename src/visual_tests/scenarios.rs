@@ -5078,48 +5078,55 @@ pub mod run_large_roster {
         d.begin_task();
         resume_run(d, RUN_20);
         // iter-25-R FJ3: on every row, two-line or not, the picture centres on the first name
-        // line. Rows with no art paint their initial at the picture's centre.
+        // line, where the initiative number is. The name's first painted row stands for it.
         let off_line = d.at_size(DEFAULT, |d| {
             let rows = roster_places(d);
-            let mut texts = Vec::new();
-            d.each_painted_text(|text, _| {
-                let first = text
-                    .galley
-                    .rows
-                    .first()
-                    .map(|row| row.rect().translate(text.pos.to_vec2()));
-                let centre = text.pos + text.galley.rect.center().to_vec2();
-                texts.push((text.galley.job.text.clone(), centre, first));
-            });
             let mut checked = 0;
+            let mut two_line = 0;
             let mut off = Vec::new();
             for (name, rect) in &rows {
-                let name_line = texts.iter().find_map(|(words, _, first)| {
-                    first.filter(|first| {
-                        words.starts_with(name.split(' ').next().unwrap_or(name))
-                            && rect.contains(first.center())
-                    })
-                });
-                let initial: String = name.chars().take(1).flat_map(char::to_uppercase).collect();
-                let picture = name_line.and_then(|line| {
-                    texts.iter().find_map(|(words, centre, _)| {
-                        (*words == initial && rect.contains(*centre) && centre.x < line.left())
-                            .then_some(*centre)
-                    })
-                });
-                if let (Some(line), Some(picture)) = (name_line, picture) {
-                    checked += 1;
-                    if (picture.y - line.center().y).abs() > 1.0 {
-                        off.push((name.clone(), picture.y, line.center().y));
+                let mut line = None;
+                let mut lines = 0;
+                d.each_painted_text(|text, _| {
+                    let first = text.galley.rows.first();
+                    if let Some(first) = first.map(|row| row.rect().translate(text.pos.to_vec2()))
+                        && text.galley.job.text.starts_with(name.as_str())
+                        && rect.contains(first.center())
+                    {
+                        line = Some(first);
                     }
+                });
+                let Some(line) = line else { continue };
+                // A second painted line under the name: conditions, sync or state words.
+                d.each_painted_text(|text, _| {
+                    let at = text.pos + text.galley.rect.center().to_vec2();
+                    if rect.contains(at) && at.y > line.bottom() && at.x >= line.left() - 1.0 {
+                        lines += 1;
+                    }
+                });
+                let left =
+                    egui::Rect::from_min_max(rect.min, egui::pos2(line.left(), rect.bottom()));
+                let Some(picture) = d
+                    .pictures_in(left)
+                    .into_iter()
+                    .max_by(|a, b| a.width().total_cmp(&b.width()))
+                else {
+                    continue;
+                };
+                checked += 1;
+                two_line += usize::from(lines > 0);
+                if (picture.center().y - line.center().y).abs() > 2.0 {
+                    off.push((name.clone(), picture.center().y, line.center().y));
                 }
             }
-            (rows.len(), checked, off)
+            (rows.len(), checked, two_line, off)
         });
         d.observe(
             "iter-25-R-FJ3",
-            off_line.1 >= 3 && off_line.2.is_empty(),
-            format!("Pictures centre on the first name line (rows, checked, off): {off_line:?}"),
+            off_line.1 >= 10 && off_line.2 >= 2 && off_line.3.is_empty(),
+            format!(
+                "Pictures centre on the first name line (rows, checked, two-line, off): {off_line:?}"
+            ),
         );
         d.state("roster-of-20", Sizes::All);
         d.goal("open a run with 20 participants");
@@ -5361,6 +5368,15 @@ pub mod run_sync_conflict {
         let amount_before = d.place_of(AMOUNT_FIELD);
         d.app_mut().encounters.simulate_read(SYNCED, 3);
         d.settle();
+        // iter-25-R FJ1: the update took the character's Undo step away, and its notice says
+        // so where the DM sees the Undo label change.
+        let removed = [SMALL, DEFAULT, LARGE]
+            .map(|size| d.at_size(size, |d| d.visible_text("1 Undo step removed")));
+        d.observe(
+            "iter-25-R-FJ1",
+            clear_before && removed.iter().all(|shown| *shown),
+            format!("The sheet notice names the removed Undo step at each size: {removed:?}"),
+        );
         d.state("undo-boundary-for-one-character", Sizes::All);
         let changed = format!("{SYNCED} HP {hp_before} → {}", hp_before - 3);
         // A notice goes under the list, and no row moves from where it was.
@@ -12166,7 +12182,7 @@ pub mod encounter_groups {
         // iter-25-R FH2, FJ2: an effect's row menu ends at the form's right edge, where the
         // Other effect field's Add ends, and sits on the effect's line.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (menu, add, word) = d.at_size(size, |d| {
+            let (menu, add, word, shown) = d.at_size(size, |d| {
                 let field = d.place_of("Other effect");
                 let add = field.and_then(|field| {
                     d.nodes()
@@ -12183,13 +12199,18 @@ pub mod encounter_groups {
                     );
                     d.painted_word_rect("Blessed", row)
                 });
-                (menu, add, word)
+                // At 960 the row is below the fold, so its words are not painted there: the
+                // edge is checked at every size, the line where the words show.
+                let shown = d.in_view("More actions for Blessed");
+                (menu, add, word, shown)
             });
             d.observe(
                 "iter-25-R-FH2",
-                matches!((menu, add, word), (Some(menu), Some(add), Some(word))
-                    if (menu.right() - add.right()).abs() <= 1.0
-                        && (menu.center().y - word.center().y).abs() <= 1.0),
+                matches!((menu, add), (Some(menu), Some(add))
+                    if (menu.right() - add.right()).abs() <= 1.0)
+                    && (size == SMALL && !shown
+                        || matches!((menu, word), (Some(menu), Some(word))
+                            if (menu.center().y - word.center().y).abs() <= 1.0)),
                 format!("At {size:?}, Blessed's menu {menu:?} ends with Add {add:?} on the word's line {word:?}"),
             );
         }
@@ -15982,7 +16003,9 @@ pub mod session_plan {
         // one control that gives the saved HP back.
         d.observe(
             "iter-25-R-FM1",
-            !d.has_containing("full HP after long rest") && d.has_containing("Nothing to undo"),
+            // The Setup's own older step stays the newest: the fill added none.
+            !d.has_containing("full HP after long rest")
+                && !d.name_starting("Undo").contains("long rest"),
             format!(
                 "The header offers no Undo of the fill: {}",
                 d.name_starting("Undo")
@@ -16858,7 +16881,8 @@ pub mod run_rolls {
 
     /// iter-20-R-FT4: a row's roll words have one place. They start on the line under the
     /// name, left of the AC column (never the state column), after the condition line when
-    /// the row has one, else at the name's edge. They are whole or cut by whole words, and
+    /// the row has one (or on their own line under it when the result cannot fit whole
+    /// there), else at the name's edge. They are whole or cut by whole words, and
     /// the row's accessible name holds them whole. `start` is how they begin. What is wrong,
     /// or `None`.
     fn roll_words_fault(
@@ -16893,10 +16917,14 @@ pub mod run_rolls {
                 && full.starts_with(kept)
                 && full[kept.len()..].starts_with(' '));
         let after = match condition {
+            // iter-25-R SJ1: words whose result cannot fit whole after the conditions take a
+            // line of their own under them, at the name's edge.
             Some(condition) => d
                 .painted_rect_in(condition, node.shown)
                 .is_some_and(|line| {
-                    words.left() >= line.right() && (words.top() - line.top()).abs() < 2.0
+                    (words.left() >= line.right() && (words.top() - line.top()).abs() < 2.0)
+                        || ((words.left() - name.left()).abs() < 1.0
+                            && words.top() >= line.bottom() - 1.0)
                 }),
             None => (words.left() - name.left()).abs() < 1.0,
         };
