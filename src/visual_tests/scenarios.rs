@@ -3463,6 +3463,10 @@ pub mod settings {
         // Each state through the same fields a real attempt sets.
         let mut words = true;
         let mut targets = Vec::new();
+        // iter-25-A FG6: the painted one-line Connected status in the rail: where its icon
+        // starts, and how wide it is with its word.
+        let rail = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(100.0, 10_000.0));
+        let mut one_line = None;
         for (state, word) in ACCOUNT_WORDS {
             d.app_mut().settings.simulate(state);
             d.settle();
@@ -3477,6 +3481,7 @@ pub mod settings {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 // Also supplies signed-in's shared Settings image at the wide size.
                 Account::Connected => {
+                    one_line = d.painted_rect_in(" Connected", rail);
                     d.observe(
                         "iter-23-C-FM4-connected",
                         d.visible_text("Splat stays signed in while it is open.")
@@ -3507,6 +3512,25 @@ pub mod settings {
                                     && second.rect.top() >= first.rect.bottom()
                             })
                         },
+                    );
+                    // iter-25-A FG6: the two-line status paints its icon and its word where the
+                    // one-line status paints them. The one-line word starts where its whole
+                    // text ends less the word's own width.
+                    let icon = d.painted_rect_in(crate::design::icons::WARN, rail);
+                    let word = d.painted_rect_in("Connected", rail);
+                    d.observe(
+                        "iter-25-A-FG6",
+                        one_line
+                            .zip(icon)
+                            .zip(word)
+                            .is_some_and(|((one, icon), word)| {
+                                (one.left() - icon.left()).abs() <= 0.5
+                                    && (one.right() - word.width() - word.left()).abs() <= 1.5
+                            }),
+                        format!(
+                            "The two-line rail status paints its icon at {icon:?} and its word at \
+                             {word:?}; the one-line status paints {one_line:?}"
+                        ),
                     );
                     // AD2: this state really takes two lines, so the target check below compares
                     // a one-line account with a two-line one at every size.
