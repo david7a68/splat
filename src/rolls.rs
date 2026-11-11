@@ -146,14 +146,6 @@ pub(crate) fn link_label(link: &RollLink) -> &str {
     }
 }
 
-/// One line of a right-click menu.
-pub(crate) fn menu_item(ui: &mut egui::Ui, words: &str) -> bool {
-    Action::quiet(words)
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
-}
-
 /// One line of a menu under a heading or a question: its words start at the heading's text.
 pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
     Action::quiet(words)
@@ -163,24 +155,61 @@ pub(crate) fn menu_choice(ui: &mut egui::Ui, words: &str) -> bool {
         .clicked()
 }
 
-/// The right-click menu on a d20 roll. Returns how to roll it, when one was chosen.
-fn mode_menu(response: &egui::Response, link: &RollLink) -> Option<(Mode, bool)> {
-    if !matches!(link, RollLink::D20 { .. }) {
-        return None;
+/// The heading of a d20 roll's menu: the action's name, `Bite`, or what the number rolls,
+/// `Dexterity save`.
+pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
+    match link {
+        RollLink::D20 {
+            what: D20::Attack,
+            label,
+            ..
+        } => Some(label.clone()),
+        RollLink::D20 { what, label, .. } => Some(d20_words(*what, label)),
+        _ => None,
     }
+}
+
+/// The right-click menu on a d20 roll, as a row's menu is: under the tile or number, so it
+/// stays in view, headed in muted Small with what it rolls, and its choices start at the
+/// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
+/// roll it, when one was chosen.
+fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
+    let heading = menu_heading(link)?;
     let inspired = response
         .ctx
         .data(|data| data.get_temp::<bool>(inspired_id()))
         .unwrap_or(false);
+    let open = if response.secondary_clicked() {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if response.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    // As wide as its tile, and never past the pane's right edge, which `right` is: a menu
+    // that ran past the window would be pushed left, over the panel's splitter.
+    let margin = egui::Frame::popup(&response.ctx.style())
+        .total_margin()
+        .sum()
+        .x;
+    let width = (response.rect.width().max(TILE_WIDTH) - margin)
+        .min(right - response.rect.left() - margin)
+        .max(1.0);
     let mut chosen = None;
-    egui::Popup::context_menu(response).show(|ui| {
-        for (words, mode, inspired) in mode_choices("Roll", inspired) {
-            if menu_item(ui, &words) {
-                chosen = Some((mode, inspired));
-                ui.close();
+    egui::Popup::menu(response)
+        .open_memory(open)
+        .width(width)
+        .show(|ui| {
+            // The area keeps the size it had; the content sets it each frame.
+            ui.set_width(width);
+            ui.label(Type::Small.rich(ui, &heading).color(colors().muted));
+            for (words, mode, inspired) in mode_choices("Roll", inspired) {
+                if menu_choice(ui, &words) {
+                    chosen = Some((mode, inspired));
+                    ui.close();
+                }
             }
-        }
-    });
+        });
     chosen
 }
 
@@ -307,7 +336,7 @@ fn press(ui: &egui::Ui, response: &egui::Response, link: &RollLink) {
     if response.clicked() {
         ask(ui.ctx(), link.clone(), Mode::from_keys(ui, link), false);
     }
-    if let Some((mode, inspired)) = mode_menu(response, link) {
+    if let Some((mode, inspired)) = mode_menu(response, link, ui.clip_rect().right()) {
         ask(ui.ctx(), link.clone(), mode, inspired);
     }
 }
@@ -1373,15 +1402,29 @@ fn rules_on_hover_and_focus(
     }
 }
 
-/// The width of each tile on a line `line` wide: two to a line when two fit, or else the
-/// line's width up to the reader measure, so a tile that stands alone wraps nothing it need
-/// not.
-fn tile_width(line: f32) -> f32 {
-    if line >= 2.0 * TILE_WIDTH + design::S {
-        TILE_WIDTH
+/// How `count` tiles share lines `line` wide: each line's number of tiles and their width.
+/// As many 208 px tiles as fit go on a line; a tile that stands alone on its line, by itself
+/// or as the last of an odd row, takes the line's width up to the reader measure, so it wraps
+/// nothing it need not and its edge meets the reader's.
+fn tile_lines(line: f32, count: usize) -> Vec<(usize, f32)> {
+    let per = if line >= 2.0 * TILE_WIDTH + design::S {
+        (((line + design::S) / (TILE_WIDTH + design::S)) as usize).max(2)
     } else {
-        line.clamp(48.0, design::READER_MEASURE)
+        1
+    };
+    let mut lines = Vec::new();
+    let mut left = count;
+    while left > 0 {
+        let here = left.min(per);
+        let width = if here == 1 {
+            line.clamp(48.0, design::READER_MEASURE)
+        } else {
+            TILE_WIDTH
+        };
+        lines.push((here, width));
+        left -= here;
     }
+    lines
 }
 
 /// Quiet actions on a line under a message, wrapped by whole actions. The first action of
@@ -1419,6 +1462,31 @@ fn line_start_actions<T: Copy>(ui: &mut egui::Ui, actions: &[(&str, T)]) -> Opti
     chosen
 }
 
+/// The armed action's next step under its tiles: a crosshair, then the words in Small. The
+/// crosshair stays on the first line when the words wrap, centred on it.
+fn armed_hint(ui: &mut egui::Ui, status: &str) {
+    let icon_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Body.font(ui)));
+    let text_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Small.font(ui)));
+    // Each starts lower by half of what the other's first line is taller.
+    let icon_drop = ((text_row - icon_row) / 2.0).max(0.0);
+    let text_drop = ((icon_row - text_row) / 2.0).max(0.0);
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        ui.vertical(|ui| {
+            ui.add_space(icon_drop);
+            ui.label(
+                Type::Body
+                    .rich(ui, design::icons::ARMED)
+                    .color(colors().accent),
+            );
+        });
+        ui.vertical(|ui| {
+            ui.add_space(text_drop);
+            ui.add(egui::Label::new(Type::Small.rich(ui, status).color(colors().text)).wrap());
+        });
+    });
+}
+
 /// An entry's actions as tiles. In a run a tile arms its action, and the line under the
 /// tiles says how to use it; outside a run a tile previews, and the line shows the result.
 ///
@@ -1442,42 +1510,47 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
     };
     set_entry(&ctx, entry);
     ui.add_space(design::XS);
-    let width = tile_width(ui.available_width());
+    let lines = tile_lines(ui.available_width(), chips.len());
     let shown: Vec<RollLink> = chips
         .iter()
         .map(|(_, chip)| with_changes(&chip.link, changes))
         .collect();
-    // One height for every tile, so a line of tiles keeps one edge.
-    let height = chips
-        .iter()
-        .zip(&shown)
-        .map(|((place, chip), link)| {
-            TileText::new(ui, chip, link, width, number(place), false).height()
-        })
-        .fold(0.0, f32::max);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
-        for ((place, chip), link) in chips.iter().zip(&shown) {
-            let number = number(place);
-            let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
-            let response = tile(ui, chip, link, egui::vec2(width, height), number, lit);
-            press(ui, &response, &chip.link);
+    let mut at = 0;
+    for (line, (count, width)) in lines.into_iter().enumerate() {
+        if line > 0 {
+            ui.add_space(design::S);
         }
-    });
+        let range = at..at + count;
+        at += count;
+        // One height for the tiles of a line, so the line keeps one edge.
+        let height = range
+            .clone()
+            .map(|at| {
+                let (place, chip) = &chips[at];
+                TileText::new(ui, chip, &shown[at], width, number(place), false).height()
+            })
+            .fold(0.0, f32::max);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(design::S, design::S);
+            for at in range {
+                let (place, chip) = &chips[at];
+                let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
+                let response = tile(
+                    ui,
+                    chip,
+                    &shown[at],
+                    egui::vec2(width, height),
+                    number(place),
+                    lit,
+                );
+                press(ui, &response, &chip.link);
+            }
+        });
+    }
     ui.add_space(design::XS);
     if let Some(view) = &armed {
         // What to do now, then what can follow, each on its own line.
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = design::XS;
-            ui.label(
-                Type::Body
-                    .rich(ui, design::icons::ARMED)
-                    .color(colors().accent),
-            );
-            ui.add(
-                egui::Label::new(Type::Small.rich(ui, &view.status).color(colors().text)).wrap(),
-            );
-        });
+        armed_hint(ui, &view.status);
         if let Some(action) = line_start_actions(ui, &view.actions) {
             ctx.data_mut(|data| data.insert_temp(armed_action_id(), action));
         }
@@ -1838,11 +1911,27 @@ mod tests {
 
     #[test]
     fn a_tile_alone_on_its_line_takes_the_line_and_two_share_a_wide_one() {
-        assert_eq!(tile_width(416.0), 416.0);
-        assert_eq!(tile_width(300.0), 300.0);
-        assert_eq!(tile_width(2.0 * TILE_WIDTH + design::S), TILE_WIDTH);
-        assert_eq!(tile_width(1000.0), TILE_WIDTH);
-        assert_eq!(tile_width(423.0), 423.0);
+        // A narrow line holds one tile, at the line's width.
+        assert_eq!(tile_lines(416.0, 2), vec![(1, 416.0), (1, 416.0)]);
+        assert_eq!(tile_lines(300.0, 1), vec![(1, 300.0)]);
+        assert_eq!(tile_lines(423.0, 1), vec![(1, 423.0)]);
+        // iter-20-R-ST2: a lone tile on a line that holds two takes the line, up to the
+        // measure; the old rule gave it 208 px.
+        let pair = 2.0 * TILE_WIDTH + design::S;
+        assert_eq!(tile_lines(pair, 2), vec![(2, TILE_WIDTH)]);
+        assert_eq!(tile_lines(488.0, 1), vec![(1, 488.0)]);
+        assert_eq!(
+            tile_lines(488.0, 3),
+            vec![(2, TILE_WIDTH), (1, 488.0)],
+            "the last of an odd row stands alone and takes the line"
+        );
+        assert_eq!(tile_lines(2000.0, 1), vec![(1, design::READER_MEASURE)]);
+        // Must stay true: three fit on a wide line, at 208 px each.
+        assert_eq!(
+            tile_lines(3.0 * TILE_WIDTH + 2.0 * design::S, 3),
+            vec![(3, TILE_WIDTH)]
+        );
+        assert!(tile_lines(488.0, 0).is_empty());
     }
 
     #[test]

@@ -992,33 +992,44 @@ cannot apply, such as speed. Splat's rolls include attack and damage changes: th
 as `in Splat’s rolls`, the tiles show the numbers rolled, and nothing tells the DM to add them again. An arriving member says `Changed
 · arrived with <group>` once. Use run AC, current/maximum HP and initiative bonus, with printed values below
 changed maxima or bonuses. Changes scroll with the stat block; each participant keeps its scroll position.
-Paused snapshots state when they differ from the current file.
+Paused snapshots state when they differ from the current file, subject first: `This stat block uses the copy from
+the start of the fight. Cinder Wolf.md has changed.` (`This sheet …` for a character; the same subject when the file
+was deleted, cannot be read or is not in the campaign), then `Read the new version`. Under that notice a character's
+card says only `The roster has the current values.`; without it, `Saved when this run began. The roster has the
+current values.`
 
 ### Rolls
 
 A stat block's actions are tiles: each rules paragraph with an attack, a save DC or damage, in printed order, in a
-wrapping row with `S` gaps. A tile is 208 px wide when two fit on a line; a tile alone on its line takes the line's
-width, up to the reader measure. Tiles in one row share one height. A tile has a hairline frame with control radius:
+wrapping row with `S` gaps. As many 208 px tiles as fit share a line; a tile alone on its line (the only tile, or the
+last of an odd row) takes the line's width, up to the reader measure, in a run, the Library and Party. Tiles on one line
+share one height. A tile has a hairline frame with control radius:
 a Phosphor icon (sword, shield-check, fire) in muted Body, the name in Strong, its Ctrl number in faint Small at the
 right in a run, then its numbers in muted Small, then, when the text says, where it lands and what a save does
 (`Reach 5 ft`, `Range 80/320 ft`, `10-ft emanation · half on a success`). Numbers and that line wrap; they are never
 cut. The rules paragraph shows on hover and on keyboard focus, and it is the tile's accessible description. Hover
 draws the frame in the focus colour. In a run a tile shows the numbers Splat rolls, with the run's attack and damage
 changes in them; its hover adds the printed numbers. Spellcasting stays prose. A character's Actions page shows its
-attacks as tiles.
+attacks as tiles, with the reach or range its sheet gives (`Reach 5 ft`, `Range 120 ft`).
 
 In a run a tile arms its action: its frame turns accent on the selected fill and its icon becomes a crosshair, and
 the panel stays on the actor. Under the tiles, a crosshair and the next step in Small (`Click a target to roll against
-it. Enter applies the damage. Escape stops.`), led by the way the d20 rolls when it is not plain (`With advantage.
+it. Enter applies the damage. Escape stops.`), the crosshair centred on the first line when the words wrap, led by the way the d20 rolls when it is not plain (`With advantage.
 Click a target…`). Then quiet actions on their own line, the first of each line with `line_start`, so its words start
 at the tiles' edge: `Stop`, and for a save `Roll damage` and `Half for those at or above DC`, or for a player's attack
-`Roll for them`. Each other row shows, in accent Small, under its state or after its second line, the chance to hit it
-while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the result against it, a plain comparison
-with no hit or miss verdict (`17 vs AC 13 · 10 damage`). It takes the longest form that fits whole, dropping words before the result first; the
-result's last two parts (the comparison and the damage) never drop, and are cut by words only where no place holds
-them. A save's creature targets show their roll in the AC cell. After `Roll damage`, each target says its own result,
-from the amount Enter gives it (`Saved · 1 damage (half)`, `Failed · 3 damage`), and keeps it after Enter. Outside a
-run a tile previews, and its totals show in Strong under the tiles.
+`Roll for them`. Each other row shows its roll words in accent Small in one place, at every size: the line under its
+name, after its conditions (and after its state word where the row has no state column), never in the state column.
+They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
+result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
+form that fits whole, dropping words before the result first; the result's last two parts (the comparison and the
+damage) never drop, and are cut by whole words only where the line has no room. The row's accessible name holds them
+whole. Roll words never move a row's columns. When the conditions leave no room for one word, the words take a line
+of their own under them, at the name's edge, and that row grows by the line. A save's creature targets show their roll in the AC
+cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
+(half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
+damage` go, the rows show their AC again, and the panel and the dock go back to the caster. Undo of that step arms the
+save again as it stood, with its saves, its damage in Amount and its results. Outside a run a tile previews, and its
+totals show in Strong under the tiles.
 
 While Lookup or Notes hide the panel, its tiles are one line of secondary Read buttons above the dock, with the run's
 changes in their numbers (`Dagger +6`, `Fire Bolt +7`). The line keeps an `XS` gap above the dock, and its first button
@@ -1026,10 +1037,12 @@ starts at the dock's content edge, where Amount starts.
 
 A right-click on a tile, on a number that rolls a d20, or on a target row while an action is armed opens a quiet menu
 (Read density): `Roll`, `Roll with advantage`, `Roll with disadvantage`, and inspiration's line when the campaign's rule
-and the character allow it. A row's menu opens under the row, so the row stays in view. Each of its sections has a
-heading in muted Small: `Bite against Cinder Wolf 2`, then `Inspiration: reroll one die` with a line for each die
-(`4 on the d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small,
-wrapped at 320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
+and the character allow it. Every such menu opens under its tile, number or row, so what it is about stays in view,
+and stays inside its pane: a tile's menu is the tile's width, so it never crosses the panel's splitter.
+Each of its sections has a heading in muted Small with what it rolls: `Bite` or `Dexterity save` for a tile or a
+number, `Bite against Cinder Wolf 2` for a row, then `Inspiration: reroll one die` with a line for each die (`4 on the
+d20`); its choices start at the heading's words. A damage question opens there too: the condition in Small, wrapped at
+320 px, then `Yes · …`, `No · …` and `Cancel`, starting at the condition's words.
 
 Numbers in tables that roll (attribute Mod and Save cells, skills, a sheet's abilities, saves and skills, a death
 save's `Roll`) are accent text with a quiet underline, at least 24 px each way. Attribute rows are 24 px for this.

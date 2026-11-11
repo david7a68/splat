@@ -1039,7 +1039,16 @@ struct Hero {
     /// STR, DEX, CON, INT, WIS, CHA
     scores: [i64; 6],
     proficient: &'static [&'static str],
-    attacks: &'static [(&'static str, i64, &'static str, &'static str)],
+    /// Name, to hit, damage dice, damage type, and where it lands: `Reach` or `Range` and its
+    /// feet. A sheet can give none.
+    #[allow(clippy::type_complexity)]
+    attacks: &'static [(
+        &'static str,
+        i64,
+        &'static str,
+        &'static str,
+        Option<(&'static str, u64)>,
+    )],
     spells: &'static [(&'static str, u64, &'static str)],
     features: &'static [(&'static str, &'static str)],
     items: &'static [(&'static str, u64, bool, &'static str)],
@@ -1060,8 +1069,14 @@ const HEROES: [Hero; 5] = [
         scores: [18, 12, 16, 10, 13, 8],
         proficient: &["Athletics", "Intimidation", "Perception", "Survival"],
         attacks: &[
-            ("Longsword", 7, "1d8", "Slashing"),
-            ("Heavy Crossbow", 4, "1d10", "Piercing"),
+            ("Longsword", 7, "1d8", "Slashing", Some(("Reach", 5))),
+            (
+                "Heavy Crossbow",
+                4,
+                "1d10",
+                "Piercing",
+                Some(("Range", 100)),
+            ),
         ],
         spells: &[],
         features: &[
@@ -1100,8 +1115,8 @@ const HEROES: [Hero; 5] = [
         scores: [8, 16, 14, 18, 12, 10],
         proficient: &["Arcana", "History", "Investigation", "Insight"],
         attacks: &[
-            ("Dagger", 6, "1d4", "Piercing"),
-            ("Fire Bolt", 7, "2d10", "Fire"),
+            ("Dagger", 6, "1d4", "Piercing", Some(("Reach", 5))),
+            ("Fire Bolt", 7, "2d10", "Fire", Some(("Range", 120))),
         ],
         spells: &[
             (
@@ -1173,8 +1188,8 @@ const HEROES: [Hero; 5] = [
         scores: [10, 18, 14, 13, 12, 14],
         proficient: &["Acrobatics", "Deception", "Sleight of Hand", "Stealth"],
         attacks: &[
-            ("Shortsword", 7, "1d6", "Piercing"),
-            ("Shortbow", 7, "1d6", "Piercing"),
+            ("Shortsword", 7, "1d6", "Piercing", Some(("Reach", 5))),
+            ("Shortbow", 7, "1d6", "Piercing", Some(("Range", 80))),
         ],
         spells: &[],
         features: &[
@@ -1214,7 +1229,7 @@ const HEROES: [Hero; 5] = [
         initiative: 0,
         scores: [14, 10, 14, 11, 18, 13],
         proficient: &["Insight", "Medicine", "Religion", "Persuasion"],
-        attacks: &[("Mace", 5, "1d6", "Bludgeoning")],
+        attacks: &[("Mace", 5, "1d6", "Bludgeoning", None)],
         spells: &[
             ("Guidance", 0, "Add 1d4 to one ability check."),
             ("Cure Wounds", 1, "Touch a creature to restore Hit Points."),
@@ -1262,7 +1277,7 @@ const HEROES: [Hero; 5] = [
         initiative: 2,
         scores: [8, 14, 14, 12, 10, 18],
         proficient: &["Deception", "Intimidation", "Arcana", "Nature"],
-        attacks: &[("Eldritch Blast", 7, "1d10", "Force")],
+        attacks: &[("Eldritch Blast", 7, "1d10", "Force", Some(("Range", 120)))],
         spells: &[
             (
                 "Eldritch Blast",
@@ -1361,11 +1376,17 @@ impl Hero {
         let attacks: Vec<Value> = self
             .attacks
             .iter()
-            .map(|(name, hit, dice, kind)| {
+            .map(|(name, hit, dice, kind, lands)| {
+                let range = match lands {
+                    Some(("Reach", feet)) => json!({"label": "Reach", "value": feet}),
+                    Some((_, feet)) => json!({"origin": "Ranged", "value": feet}),
+                    None => Value::Null,
+                };
                 json!({
                     "name": name,
                     "toHit": hit,
                     "damage": {"value": {"diceString": dice, "fixedValue": modifier(0).max(modifier(1))}, "type": kind},
+                    "range": range,
                 })
             })
             .collect();
