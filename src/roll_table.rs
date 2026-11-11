@@ -315,9 +315,10 @@ fn marked_tables_under_headings(body: &str) -> Vec<Headed> {
                 }
             }
             Event::End(TagEnd::Link) => {
-                if let (Some((target, start)), Some(cell)) =
-                    (link.take(), linked.last_mut().and_then(|row| row.last_mut()))
-                {
+                if let (Some((target, start)), Some(cell)) = (
+                    link.take(),
+                    linked.last_mut().and_then(|row| row.last_mut()),
+                ) {
                     let words = cell.split_off(start);
                     if words == target {
                         cell.push_str(&format!("[[{target}]]"));
@@ -638,7 +639,10 @@ mod tests {
         let table = &tables_in([("Road.md", indexed.as_str())])[0];
         assert_eq!(
             (table.rows[0].text.as_str(), table.linked_words(1)),
-            ("Wolf Pack pick up the trail.", Some("[[Wolf Pack]] pick up the trail."))
+            (
+                "Wolf Pack pick up the trail.",
+                Some("[[Wolf Pack]] pick up the trail.")
+            )
         );
         let plain = &tables_in([("World/Other.md", note)])[0];
         assert_eq!((plain.heading.as_deref(), plain.name()), (None, "Other"));

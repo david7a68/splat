@@ -404,7 +404,13 @@ fn result(event: &Event) -> String {
 fn checks_text(event: &Event) -> String {
     let mut out = String::new();
     if let Some(key) = &event.checks_table {
+        // A key that YAML would read as something else (`null`, `~`, `1`) goes in quotes.
         let key = clean(key);
+        let key = if key.is_empty() || scalar(&key) == key {
+            key
+        } else {
+            serde_json::to_string(&key).unwrap_or_default()
+        };
         let gap = if key.is_empty() { "" } else { " " };
         out.push_str(&format!("  - Checks table:{gap}{key}\n"));
     }
@@ -945,7 +951,13 @@ mod tests {
         // its words hold `: `; a table that is not chosen yet comes back as no key.
         let mut blank = road.clone();
         blank.checks_table = Some(String::new());
-        for event in [road, blank] {
+        // Keys that YAML reads as a null or a number keep their identity.
+        let keys = ["null", "~", "12"].map(|key| {
+            let mut event = road.clone();
+            event.checks_table = Some(key.into());
+            event
+        });
+        for event in [road, blank].into_iter().chain(keys) {
             let text = render(std::slice::from_ref(&event), &BTreeMap::new());
             let mut older = event.clone();
             older.checks_table = None;

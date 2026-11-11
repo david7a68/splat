@@ -307,11 +307,15 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
                 design::blocked_reason(ui, Some("Clear the results first."));
             }
         });
+        // Whole, so it moves to the next line with its `·` when the row is narrow.
         if let Some(table) = table {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("· {} {}", table.dice, table.per.words()))
-                    .color(c.muted),
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, format!("· {} {}", table.dice, table.per.words()))
+                        .color(c.muted),
+                )
+                .wrap_mode(egui::TextWrapMode::Extend),
             );
         }
     });
@@ -584,54 +588,110 @@ fn result(
     act
 }
 
+/// **How long** while it has focus: the event, the words typed, and the length the event had
+/// when the typing began.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LengthDraft(Option<(String, String, String)>);
+
+/// What a length's field did to its event this frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Taken {
+    /// Nothing reached the event.
+    Nothing,
+    /// The event took the typed length.
+    Length,
+    /// The event took the typed length, but the file had changed its length meanwhile: saving
+    /// waits for the DM's choice, as for any edit made on both sides.
+    OverDisk,
+}
+
+impl LengthDraft {
+    /// The words in view for this event: the typed ones while it has a draft.
+    pub fn words(&self, event: &Event) -> String {
+        match &self.0 {
+            Some((id, words, _)) if *id == event.id => words.clone(),
+            _ => event.duration.clone(),
+        }
+    }
+
+    /// The event takes the typed words.
+    fn take(&mut self, event: &mut Event) -> Taken {
+        let Some((_, words, base)) = self.0.take() else {
+            return Taken::Nothing;
+        };
+        if words == event.duration {
+            return Taken::Nothing;
+        }
+        let outside = event.duration != base;
+        event.duration = words;
+        if outside {
+            Taken::OverDisk
+        } else {
+            Taken::Length
+        }
+    }
+}
+
+/// Note what a length's field did: a new length is an edit; one typed over a newer length
+/// from the file waits for the DM's choice.
+pub fn note_taken(book: &mut Book, taken: Taken) {
+    match taken {
+        Taken::Nothing => {}
+        Taken::Length => book.touch(),
+        Taken::OverDisk => book.edited_over_disk(),
+    }
+}
+
 /// **How long**, the Timeline's field. The file takes the words on Enter or when the field
-/// loses focus; until then the page shows what was typed. Returns the words in view, and
-/// whether the event took a new length.
+/// loses focus; until then the page shows what was typed. Returns the words in view, and what
+/// reached the event.
 pub fn length_input(
     ui: &mut egui::Ui,
-    draft: &mut Option<(String, String)>,
+    draft: &mut LengthDraft,
     event: &mut Event,
     hint: &str,
     focus: bool,
-) -> (String, bool) {
-    let mut words = match draft {
-        Some((id, words)) if *id == event.id => words.clone(),
-        _ => event.duration.clone(),
-    };
+) -> (String, Taken) {
+    let mut words = draft.words(event);
     let response = design::text_input(ui, "How long", &mut words, hint, ui.available_width());
     if focus {
         response.request_focus();
     }
-    let mut changed = false;
+    let ours = draft.0.as_ref().is_some_and(|(id, _, _)| *id == event.id);
     if response.has_focus() {
-        *draft = Some((event.id.clone(), words.clone()));
-    } else if draft.as_ref().is_some_and(|(id, _)| *id == event.id) {
+        let base = match &draft.0 {
+            Some((id, _, base)) if *id == event.id => base.clone(),
+            _ => event.duration.clone(),
+        };
+        draft.0 = Some((event.id.clone(), words.clone(), base));
+        (words, Taken::Nothing)
+    } else if ours {
         // Enter, or focus gone elsewhere.
-        changed = words != event.duration;
-        event.duration.clone_from(&words);
-        *draft = None;
+        (words, draft.take(event))
+    } else {
+        (words, Taken::Nothing)
     }
-    (words, changed)
 }
 
 /// A length typed for a journey whose field is no longer in view: its event takes it, as the
 /// field would have when it lost focus.
-pub fn settle_length(book: &mut Book, draft: &mut Option<(String, String)>, shown: Option<&str>) {
-    if draft
+pub fn settle_length(book: &mut Book, draft: &mut LengthDraft, shown: Option<&str>) {
+    let Some(id) = draft
+        .0
         .as_ref()
-        .is_none_or(|(id, _)| Some(id.as_str()) == shown)
-    {
-        return;
-    }
-    let Some((id, words)) = draft.take() else {
+        .map(|(id, _, _)| id.clone())
+        .filter(|id| Some(id.as_str()) != shown)
+    else {
         return;
     };
-    if let Some(event) = book.events.iter_mut().find(|event| event.id == id)
-        && event.duration != words
-    {
-        event.duration = words;
-        book.touch();
-    }
+    let taken = match book.events.iter_mut().find(|event| event.id == id) {
+        Some(event) => draft.take(event),
+        None => {
+            draft.0 = None;
+            Taken::Nothing
+        }
+    };
+    note_taken(book, taken);
 }
 
 #[cfg(test)]
@@ -709,6 +769,25 @@ mod tests {
     }
 
     #[test]
+    fn t11_9_a_length_typed_over_a_newer_one_from_disk_waits_for_a_choice() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let id = book.add(Kind::Travel, None);
+        book.save();
+        let mut draft = LengthDraft(Some((id.clone(), "2 days".into(), String::new())));
+        // Typed against the length the event had: an edit.
+        let taken = draft.clone().take(&mut book.events[0].clone());
+        assert_eq!(taken, Taken::Length);
+        // The file gave the event a length meanwhile: the typed one does not overwrite it
+        // silently, and saving waits for the DM's choice.
+        book.events[0].duration = "3 days".into();
+        settle_length(&mut book, &mut draft, None);
+        assert_eq!(draft, LengthDraft::default());
+        assert!(book.conflict && book.events[0].duration == "2 days");
+    }
+
+    #[test]
     fn t11_10_the_first_table_follows_the_four_cases_never_a_key_or_file_order() {
         let road = table("road", "On the road", Per::Day);
         let sea = table("sea", "At sea", Per::Watch);
@@ -772,9 +851,20 @@ mod tests {
         entered.undo(&mut book);
         assert_eq!(book.events[0].checks.len(), 2);
         assert_eq!(book.events[1].checks_table.as_deref(), Some("road"));
-        // A shorter journey deletes no result; `No checks` waits until they are cleared.
+        // A shorter journey deletes no result, also through the file; the result past its end
+        // is no longer one of its lines. `No checks` waits until the results are cleared.
+        book.events[0].duration = "1 day".into();
+        book.touch();
+        book.save();
+        book.reload();
+        assert_eq!(
+            (
+                book.events[0].duration.as_str(),
+                book.events[0].checks.len()
+            ),
+            ("1 day", 2)
+        );
         assert_eq!(offsets("1 day", 24), Ok(vec![0]));
-        assert_eq!(book.events[0].checks.len(), 2);
         let refused = apply(&mut book, &id, &Act::Choose(None), &tables);
         assert_eq!(refused, Err("Clear the results first.".to_owned()));
         for check in book.events[0].checks.clone() {

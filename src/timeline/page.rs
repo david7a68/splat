@@ -86,7 +86,7 @@ pub struct TimelinePage {
     /// The campaign's marked tables, for a journey's encounter checks.
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
     /// **How long** while it has focus: the event and the words typed.
-    length: Option<(String, String)>,
+    length: checks::LengthDraft,
     focus_length: bool,
     /// What the DM typed in a journey's checks, and the last act's result with its Undo.
     checks: checks::State,
@@ -833,6 +833,7 @@ impl TimelinePage {
         let tables = sources.as_ref().map_or(&[][..], |sources| &sources.tables);
         let mut checks_act = None;
         let mut undo_checks = false;
+        let mut length_taken = checks::Taken::Nothing;
         if self
             .checks_done
             .as_ref()
@@ -1052,10 +1053,10 @@ impl TimelinePage {
                             _ => "",
                         };
                         let focus = std::mem::take(&mut self.focus_length);
-                        let (words, edited) =
+                        let (words, taken) =
                             checks::length_input(ui, &mut self.length, event, hint, focus);
                         length = words;
-                        changed |= edited;
+                        length_taken = taken;
                     },
                 );
             }
@@ -1227,6 +1228,7 @@ impl TimelinePage {
         if changed {
             book.touch();
         }
+        checks::note_taken(book, length_taken);
         if let Some(act) = checks_act {
             self.checks.clear_problem();
             if act == checks::Act::Start {

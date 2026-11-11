@@ -1031,6 +1031,13 @@ impl Book {
         }
     }
 
+    /// An edit typed against an older version of an event meets a newer one from the file:
+    /// saving waits for the DM's choice, as for any edit made on both sides.
+    pub fn edited_over_disk(&mut self) {
+        self.touch();
+        self.conflict = true;
+    }
+
     /// The file changed on disk, and the DM keeps this version.
     pub fn overwrite(&mut self) {
         if let Some(path) = &self.path

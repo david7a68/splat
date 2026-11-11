@@ -553,8 +553,11 @@ enum TravelUndo {
 #[derive(Default)]
 pub(super) struct Travel {
     block: checks::State,
-    /// **How long** while it has focus: the event and the words typed.
-    length: Option<(String, String)>,
+    /// **How long** while it has focus.
+    length: checks::LengthDraft,
+    /// The open journey's start on the clock, while the Timeline is as it was: its count of
+    /// changes, the event, and the minute.
+    start: Option<(u64, String, Option<u64>)>,
     focus_length: bool,
     done: Option<checks::Done>,
     /// `Plan “<name>”`: the journey, the name, and the note's Undo.
@@ -577,8 +580,7 @@ impl Sessions {
         start: Option<u64>,
         plan: &Plan<'_>,
         planned: &dyn Fn(&str) -> Option<bool>,
-        results: (Option<&checks::Done>, Option<&str>),
-    ) -> (Option<checks::Act>, bool, TravelUndo) {
+    ) -> (Option<checks::Act>, checks::Taken, TravelUndo) {
         let travel = &mut self.travel;
         let focus = std::mem::take(&mut travel.focus_length);
         let mut undo = TravelUndo::None;
@@ -591,10 +593,7 @@ impl Sessions {
             planned,
         };
         let mut act = checks::header(ui, &header, &mut travel.block);
-        let typed = match &travel.length {
-            Some((id, words)) if *id == event.id => words.clone(),
-            _ => event.duration.clone(),
-        };
+        let typed = travel.length.words(event);
         let help = checks::span(start, &typed).or_else(|| {
             timeline::read_duration(&typed)
                 .is_none()
@@ -611,7 +610,12 @@ impl Sessions {
             planned,
         };
         act = checks::lines(ui, &view, &mut travel.block).or(act);
-        let (done, plan_line) = results;
+        let done = travel.done.as_ref().filter(|done| done.id == event.id);
+        let plan_line = travel
+            .planned
+            .as_ref()
+            .filter(|(id, _, _)| *id == event.id)
+            .map(|(_, name, _)| name.as_str());
         if let Some(done) = done {
             ui.add_space(design::S);
             if design::undo_message(ui, Tone::Success, &done.words, done.undo) {
@@ -630,6 +634,25 @@ impl Sessions {
             }
         }
         (act, changed, undo)
+    }
+
+    /// The open journey's start on the clock, worked out again only when the Timeline changed
+    /// or another journey opened.
+    fn journey_start(&mut self, book: &Book, open: Option<&str>) -> Option<u64> {
+        let open = open?;
+        if let Some((changes, id, start)) = &self.travel.start
+            && *changes == book.changes()
+            && id == open
+        {
+            return *start;
+        }
+        let start = book
+            .events
+            .iter()
+            .position(|event| event.id == open && checks::shown(event))
+            .and_then(|at| timeline::clock(&book.events)[at]);
+        self.travel.start = Some((book.changes(), open.to_owned(), start));
+        start
     }
 
     /// Take back the plan line of `Plan “…”`, while the note is as that act left it.
@@ -859,11 +882,7 @@ impl Sessions {
         let mut ruling = None;
         // A journey's checks: the clock at the open journey's start, and the results that hold.
         checks::settle_length(book, &mut self.travel.length, open_event.as_deref());
-        let journey_start = book
-            .events
-            .iter()
-            .position(|event| open_event.as_ref() == Some(&event.id) && checks::shown(event))
-            .and_then(|at| timeline::clock(&book.events)[at]);
+        let journey_start = self.journey_start(book, open_event.as_deref());
         if self
             .travel
             .done
@@ -880,12 +899,7 @@ impl Sessions {
         {
             self.travel.planned = None;
         }
-        let travel_done = self.travel.done.clone();
-        let plan_line = self
-            .travel
-            .planned
-            .as_ref()
-            .map(|(id, name, _)| (id.clone(), name.clone()));
+        let mut length_taken = checks::Taken::Nothing;
         let mut travel_act = None;
         let mut travel_undo = TravelUndo::None;
         // A name a result links: an encounter or a group, and whether a row for it is to come.
@@ -1010,10 +1024,8 @@ impl Sessions {
                             } else {
                                 changed |= event_fields(ui, event);
                                 if checks::shown(event) {
-                                    let results = (travel_done.as_ref().filter(|done| done.id == event.id),
-                                        plan_line.as_ref().filter(|(id, _)| *id == event.id).map(|(_, name)| name.as_str()));
-                                    let (act, edited, undo) = self.travel_block(ui, event, journey_start, plan, &in_plan, results);
-                                    changed |= edited;
+                                    let (act, taken, undo) = self.travel_block(ui, event, journey_start, plan, &in_plan);
+                                    if taken != checks::Taken::Nothing { length_taken = taken; }
                                     if let Some(act) = act { travel_act = Some((event.id.clone(), act)); }
                                     if undo != TravelUndo::None { travel_undo = undo; }
                                 }
@@ -1213,6 +1225,7 @@ impl Sessions {
         if changed {
             book.touch();
         }
+        checks::note_taken(book, length_taken);
         if let Some((id, act)) = travel_act {
             self.travel_act(book, session, &id, act, plan);
         }
