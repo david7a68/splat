@@ -42,6 +42,10 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.
+- **A feature never freezes again.** A feature pull request does not regenerate the plain-evening reference
+  (`src/visual_tests/plain_evening/`) or the audit's counts (`artifacts/dm-audit/counts.json`). It adds rows to
+  `plain_evening/allowed.json` and new tasks to the evening. Only a pull request whose stated task is to freeze
+  again runs `audit-freeze`, and it says why.
 - **Run what you touched.** A focused run covers the scenarios of every file you changed, also files outside
   your task. The full `audit-gate` runs on merged source before merge. A visual scenario's ids and dice come
   from a hash of its name (`first_uuid` in `src/visual_tests/mod.rs`), not from its place in `SCENARIOS`. Add
