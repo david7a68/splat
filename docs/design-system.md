@@ -550,7 +550,10 @@ in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Ta
 return to five. Clear sits beside nonempty search only. Back, Open in Library (Open in World for every World note,
 typed or plain; a session note has neither) and the close icon share the title line. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search. When no creation action shows, their row takes no room: the rule
-above the entry follows the results or `Show N results` at the normal gap.
+above the entry follows the results or `Show N results` at the normal gap. While Lookup holds an unsaved generated
+NPC, its card is the view until an entry or a found note opens (a result, a link, typed words, `Back`). That view then
+shows below the World page's own row, `Unsaved NPC: <name> · Show` (`world::page::unsaved_npc_row`), and Show makes the
+card the view again. Lookup's place and its NPC are not kept across a restart.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
 to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.
@@ -1062,7 +1065,9 @@ One editor holds an encounter's loot and a creature's loot in its Changes, from 
 a row with a `row_menu` Remove and `Removed <line>.`, a success message, with `Undo remove loot`. A text line edits in place. A Library
 item shows its name, the book icon and muted `Library item`. A roll shows the dice icon, `Roll`, a `number_field`
 count, `×` and the table as a `menu_button`, then muted dice and note, or a `Cannot roll` warning status with its
-reason. The add field adds the typed words on Enter. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
+reason. The add field is `design::add_field`, the one field for typed words that join a list: no button, Enter
+adds, Escape clears the chosen suggestion, or the words when none is chosen, and the field stays open after Enter where several
+lines follow each other, as loot lines do. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
 refuses `;`, with the reason beside the field. Its Changes link stays one word, `Loot`, and names any key with no
 table. In a run, a standing creature's card has one muted `Loot · …` line, and the list opens at 0 HP. A result
@@ -1459,6 +1464,13 @@ without Paused; ended, named and custom results keep stored words. Played fights
 once on line two, then final party HP in a grid of two or three first-name cells in the party bar's order
 (players the party no longer has come last), quiet Log, Whole run and
 Timeline links. Hover keeps full names and conditions; Remove stays in the name-aligned row menu.
+
+An act that changes a session note's words goes through `Draft::apply`, the one path for a note act: it is for one
+session, by its ID, and the file must still hold that note; it reads the file first, changes one fragment, and its
+Undo lasts while that note's words are the words it left, with no time limit. The Undo follows the note when it is
+renamed, never a copy. A fragment that waits in the draft, unsaved, is taken back from the draft alone. A new act saves at once; with unsaved typed words and a changed file it writes nothing, and its place says
+`The note changed on disk. Choose in the note first.` Today's plan acts, a planned fight's line and Remove from
+tonight, join the draft as typed words do and save with them after the pause.
 
 Remove from tonight removes one fight or group link, retaining surrounding words, with Undo remove below that
 row after `S`. Removed groups leave message and Undo in their old place, keeping other rows still, until the
