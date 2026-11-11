@@ -13,6 +13,7 @@ const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
+const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
 
 /// The Undo control's whole action, which its accessible name keeps when its words are cut.
 fn undo_step(d: &Driver<'_>) -> String {
@@ -220,6 +221,49 @@ pub fn run(d: &mut Driver<'_>) {
         "Ended · Round 2",
     );
     d.state("ended-continue-fight", Sizes::All);
+
+    // Continue fight is for the fight that was played last. A long rest ruled after the
+    // ending has a later place, so the ended view says why the fight cannot go on, where
+    // the control was. Nothing else in the view moves.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click("Add Long rest");
+    d.click(BACK_TO_RUN);
+    d.observe(
+        "T15.8",
+        !d.has(CONTINUE) && d.visible_passage(LATER) && d.in_view(CLOSE_RUN),
+        "After a later rest, the ended view offers no Continue fight and says why",
+    );
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The ended view of a fight that is not the last",
+        &[CLOSE_RUN, LATER],
+        "Ended · Round 2",
+    );
+    d.state("ended-not-the-last-fight", Sizes::All);
+    open_lookup(d);
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The ended view of a fight that is not the last, beside Lookup",
+        &[CLOSE_RUN, LATER],
+        "Ended · Round 2",
+    );
+    d.state("ended-not-the-last-fight-beside-lookup", Sizes::All);
+    close_lookup(d);
+    // The DM rules that the rest restored nobody. The fight is the last again.
+    d.click(NAV_SESSIONS);
+    show_plan(d);
+    d.click("Long rest");
+    d.click("Mark not at full");
+    d.click("Long rest");
+    d.click(BACK_TO_RUN);
+    d.observe(
+        "T15.8",
+        d.has(CONTINUE) && !d.visible_passage(LATER),
+        "With no later fight or restoring rest, Continue fight is offered again",
+    );
     let told = story(d);
     d.observe(
         "T15.4",
@@ -283,42 +327,24 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.state("plan-with-continued-fight", Sizes::Default);
     d.click(BACK_TO_RUN);
-    // An outside edit makes Timeline.md unreadable. Undo of Continue fight comes before the
-    // repair, and so do Close run and a restart, so nothing in memory can carry it. The run
-    // file says how its fight stands, and the Timeline takes that when it reads again.
-    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
-    let timeline = crate::sessions::folder(&campaign)
-        .unwrap()
-        .join(crate::timeline::FILE);
-    d.app_mut().timeline.save();
-    let valid = std::fs::read(&timeline).unwrap();
-    std::fs::write(&timeline, "---\ntimeline_version: [broken\n---\n").unwrap();
-    d.app_mut().timeline.reload();
     // Undo of Continue fight is the ended fight again, with its loot.
     d.click_containing(CONTINUE_STEP);
     d.expect("Outcome: Undecided");
+    let told = story(d);
     d.observe(
         "T15.2",
-        undo_step(d) == LOOT_STEP && d.visible_text(" on 1d4"),
+        undo_step(d) == LOOT_STEP && d.visible_text(" on 1d4") && told == "Undecided, round 2",
         format!(
-            "Undo of Continue fight restores the ending and its loot: {}",
-            undo_step(d)
+            "Undo of Continue fight restores the ending, its loot and its Timeline result: {}, {}",
+            undo_step(d),
+            told
         ),
     );
 
-    // The ended run is closed, and the app starts again. Then the file is repaired. The
-    // plan's played row leads to the run in History, which offers the same action.
+    // The ended run is closed, and the app starts again. The plan's played row leads to the
+    // run in History, which offers the same action.
     close_run(d);
     d.restart();
-    std::fs::write(&timeline, &valid).unwrap();
-    d.app_mut().timeline.reload();
-    d.settle();
-    let told = story(d);
-    d.observe(
-        "T15.4",
-        told == "Undecided, round 2",
-        format!("After the repair, Timeline has the ending that Undo restored: {told}"),
-    );
     d.click(NAV_SESSIONS);
     show_plan(d);
     d.begin_task();
@@ -443,7 +469,25 @@ pub fn run(d: &mut Driver<'_>) {
         outcome == "Outcome: Fled",
         format!("Typing replaces the selected outcome: {outcome}"),
     );
+    // Close run writes the fight's last result to Timeline.md at once, and not after the
+    // pause before a save: a closed run cannot say it again after a crash. The file is read
+    // here before anything else can save it.
+    let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+    let timeline = crate::sessions::folder(&campaign)
+        .unwrap()
+        .join(crate::timeline::FILE);
+    let before = std::fs::read_to_string(&timeline).unwrap_or_default();
     close_run(d);
+    let after = std::fs::read_to_string(&timeline).unwrap_or_default();
+    d.observe(
+        "T15.4",
+        !before.contains("Fled, round 2") && after.contains("Fled, round 2"),
+        format!(
+            "Close run puts the last result in Timeline.md at once: before {}, after {}",
+            before.contains("Fled, round 2"),
+            after.contains("Fled, round 2")
+        ),
+    );
     go_encounters(d);
     d.observe(
         "T15.4",
@@ -496,4 +540,41 @@ pub fn run(d: &mut Driver<'_>) {
             undo_step(d)
         ),
     );
+
+    // That fight was played after the vault's. History offers no Continue fight for the
+    // vault and says why, where the control was.
+    go_encounters(d);
+    if !d.has_containing("Open the run of Sunken Vault") {
+        d.click_starting(HISTORY);
+    }
+    d.click_starting("Open the run of Sunken Vault");
+    d.expect("Read-only");
+    d.observe(
+        "T15.8",
+        !d.has(CONTINUE) && d.visible_passage(LATER),
+        "After a later fight, History offers no Continue fight and says why",
+    );
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The History run that is not the last fight",
+        &[LATER],
+        "",
+    );
+    d.state("history-not-the-last-fight", Sizes::All);
+    open_lookup(d);
+    whole_at_every_size(
+        d,
+        "T15.6",
+        "The History run that is not the last fight, beside Lookup",
+        &[LATER, "New encounter", "Reload from disk"],
+        "",
+    );
+    d.state("history-not-the-last-fight-beside-lookup", Sizes::All);
+    d.observe(
+        "T15.6",
+        lookup_keeps_its_entry(d),
+        "The reason in History leaves Lookup on its entry",
+    );
+    close_lookup(d);
 }

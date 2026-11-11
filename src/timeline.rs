@@ -333,36 +333,15 @@ pub struct RunFact {
     pub name: String,
     pub round: u64,
     pub state: RunState,
-    /// When the run says it was last played. The Timeline applies this and decides nothing.
-    pub played: Played,
+    /// How many steps the DM has taken since this run opened. It only grows while it stays open.
+    pub steps: usize,
 }
 
-/// When a fight was last played: its place in the campaign's order of play, and the session
-/// that was being played. The run file owns this. A step of the DM's sets it, and Undo puts the
-/// older one back with the rest of the run's state, also after a close or a restart. The
-/// Timeline's `played_order` and `continued_in` are what the run last said. Zero is a run from
-/// before this was kept, which says nothing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Played {
-    pub order: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session: Option<Uuid>,
-}
-
-impl Played {
-    /// This fight is played now, when `next` is the next place in the order of play. A fight
-    /// that has the last place keeps it, and a place never goes down: when less is known than
-    /// the fight already says, as while the Timeline cannot be read, the fight's own word
-    /// stands. With no session chosen, it stays in the one it had.
-    pub fn now(self, next: u64, session: Option<Uuid>) -> Self {
-        Self {
-            order: if self.order != 0 && self.order + 1 >= next {
-                self.order
-            } else {
-                next
-            },
-            session: session.or(self.session),
-        }
+impl RunFact {
+    /// Whether the DM played this run after `old`. A run just opened has only been opened,
+    /// even when it opens over its own older copy.
+    pub fn played_since(&self, old: &RunFact) -> bool {
+        self.id == old.id && self.steps > old.steps
     }
 }
 
@@ -631,15 +610,7 @@ pub struct Book {
     pub run_open: bool,
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
-    /// What the open run last said while the file could not be read. It is one fact and not a
-    /// list, because a run says everything each time: its result, and when it was last played.
-    /// It is applied when the file reads again. A closed run's file says the same to
-    /// `apply_saved`, so nothing is lost when this is.
-    pending_run: Option<(RunFact, Option<Uuid>)>,
-    /// A count that changes whenever the events change, by an edit or by a read of the file.
-    /// What follows the events, such as the next place in the order of play, is worked out
-    /// again only then.
-    revision: u64,
+    pending_run: Option<(RunFact, Option<Uuid>, bool)>,
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
@@ -764,13 +735,10 @@ impl Book {
                 self.unreadable = Some(format!("{FILE} could not be read. {e}"));
             }
         }
-        self.revision += 1;
-        self.record_pending();
     }
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
-        self.revision += 1;
         self.run_write = false;
         self.merged_outside = false;
         self.rest_undo = None;
@@ -942,9 +910,6 @@ impl Book {
         crate::sessions::sync_folder(parent)?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
-        // A save can take in events that were changed outside, so what follows the events
-        // is worked out again.
-        self.revision += 1;
         self.events = events;
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
@@ -976,10 +941,7 @@ impl Book {
             {
                 Ok(_) => {
                     match self.merged_events(std::str::from_utf8(&bytes).unwrap(), true) {
-                        Ok(merged) => {
-                            self.events = merged;
-                            self.revision += 1;
-                        }
+                        Ok(merged) => self.events = merged,
                         Err(error) => {
                             self.error = Some(error);
                             return;
@@ -1005,16 +967,12 @@ impl Book {
         self.unreadable = None;
         self.baseline = None;
         // Before the file is written, so that it holds what the open run said meanwhile.
-        self.record_pending();
+        if let Some((fact, session, played)) = self.pending_run.take() {
+            self.apply_run(&fact, session, played);
+        }
         if let Err(error) = self.write() {
             self.error = Some(format!("The timeline was not saved. {error}"));
         }
-        self.revision += 1;
-    }
-
-    /// See `revision`. A campaign's own book starts again from zero.
-    pub fn revision(&self) -> u64 {
-        self.revision
     }
 
     /// An edit is waiting for its pause before it saves.
@@ -1103,6 +1061,11 @@ impl Book {
             // A file that is back is read again, also when it is the file that went.
             if current != self.baseline || self.gone {
                 self.reload();
+                if self.unreadable.is_none()
+                    && let Some((fact, session, played)) = self.pending_run.take()
+                {
+                    self.apply_run(&fact, session, played);
+                }
             }
         }
     }
@@ -1242,39 +1205,11 @@ impl Book {
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
-    /// When the fight of this run was last played, as its event has it. A run file from
-    /// before runs kept this takes it from here, once.
-    pub fn played_of(&self, run: Uuid) -> Option<Played> {
-        self.events
-            .iter()
-            .find(|event| event.run == Some(run))
-            .map(|event| Played {
-                order: event.played_order,
-                session: event.continued_in.or(event.session),
-            })
-    }
-
-    /// A run's fact as a test gives it, with no run behind it. `played` stamps it as a step of
-    /// the DM's would, by the rule the run uses: `Played::now`.
-    #[cfg(test)]
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        let said = self.played_of(fact.id).unwrap_or(fact.played);
-        let fact = RunFact {
-            played: if played {
-                said.now(self.next_order(), session)
-            } else {
-                said
-            },
-            ..fact.clone()
-        };
-        self.record(&fact, session, true);
-    }
-
-    fn record(&mut self, fact: &RunFact, session: Option<Uuid>, create: bool) {
         // It stays in place for this, because what comes next must follow its order.
         let removed = self.removed.clone();
         let dm_edit = self.dirty && !self.run_write;
-        self.update_event(fact, session, create);
+        self.apply_run(fact, session, played);
         self.run_write = !dm_edit;
         self.removed = removed;
     }
@@ -1292,10 +1227,6 @@ impl Book {
 
     /// The open run's facts changed, from `before`. A run that was already over when it opened
     /// is being read. It adds nothing to the story, whichever session is now current.
-    ///
-    /// The run file owns what its fight says: its result, and when it was last played. The
-    /// Timeline decides none of it, so while the file cannot be read only the newest fact
-    /// waits, and `apply_saved` says the same for every closed run at the next read.
     pub fn record_change(
         &mut self,
         before: Option<&RunFact>,
@@ -1310,37 +1241,15 @@ impl Book {
         if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
             return;
         }
+        let played = before.is_some_and(|old| fact.played_since(old));
+        self.record_run(fact, session, played);
+    }
+
+    fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if self.unreadable.is_some() {
-            self.pending_run = Some((fact.clone(), session));
+            self.pending_run = Some((fact.clone(), session, played));
             return;
         }
-        self.record(fact, session, true);
-    }
-
-    /// The file reads again: the open run's newest fact is applied.
-    fn record_pending(&mut self) {
-        if self.unreadable.is_none()
-            && let Some((fact, session)) = self.pending_run.take()
-        {
-            self.record(&fact, session, true);
-        }
-    }
-
-    /// What the campaign's saved runs say, applied to the fights that are on the timeline. It
-    /// adds no event: a run with none was removed, or was only read. It is safe to do again,
-    /// so it is done after every read of the file and every read of the run folder.
-    pub fn apply_saved<'a>(&mut self, facts: impl IntoIterator<Item = &'a RunFact>) {
-        if self.unreadable.is_some() {
-            return;
-        }
-        for fact in facts {
-            if self.events.iter().any(|event| event.run == Some(fact.id)) {
-                self.record(fact, None, false);
-            }
-        }
-    }
-
-    fn update_event(&mut self, fact: &RunFact, session: Option<Uuid>, create: bool) {
         if !self.events.iter().any(|event| event.run == Some(fact.id))
             && let Some(original) = fact.copied_from
             && let Some(event) = self
@@ -1385,27 +1294,27 @@ impl Book {
                     self.events[index].result = result;
                     self.touch();
                 }
-                // The run says when it was last played. A run from before that was kept says
-                // nothing, and its event stays as it is.
-                if fact.played.order != 0 {
+                // Opening a fight to read it is not playing it.
+                if played {
+                    let next = self.next_order();
                     let event = &mut self.events[index];
-                    let continued_in = fact
-                        .played
-                        .session
-                        .filter(|session| event.session != Some(*session));
-                    if event.played_order != fact.played.order || event.continued_in != continued_in
-                    {
-                        event.played_order = fact.played.order;
-                        event.continued_in = continued_in;
+                    let moved = session.is_some()
+                        && event.session != session
+                        && event.continued_in != session;
+                    if moved {
+                        event.continued_in = session;
+                    }
+                    // Zero is from a file older than this order, and is never the latest.
+                    if event.played_order == 0 || event.played_order + 1 != next {
+                        event.played_order = next;
+                        self.touch();
+                    } else if moved {
                         self.touch();
                     }
                 }
             }
-            None if create => {
-                let order = match fact.played.order {
-                    0 => self.next_order(),
-                    order => order,
-                };
+            None => {
+                let order = self.next_order();
                 let id = self.add(Kind::Encounter, session);
                 let event = self
                     .events
@@ -1417,7 +1326,6 @@ impl Book {
                 event.result = result;
                 event.played_order = order;
             }
-            None => {}
         }
     }
 
@@ -1464,11 +1372,8 @@ mod tests {
         disk_events[1].title = "Outside road".into();
         let disk = formats::patch(&baseline, &disk_events, &BTreeMap::new(), false).unwrap();
         fs::write(&path, format!("{disk}\nOutside prose.\n")).unwrap();
-        let revision = book.revision();
         book.save();
         assert!(!book.conflict && !book.unsaved(), "{:?}", book.error);
-        // The save took in an outside change, so what follows the events is worked out again.
-        assert_ne!(book.revision(), revision);
         let saved = fs::read_to_string(&path).unwrap();
         let events = parse(&saved).unwrap();
         assert_eq!(
@@ -1597,7 +1502,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             round: 3,
             state,
-            played: Played::default(),
+            steps: 1,
         }
     }
 
@@ -1829,8 +1734,6 @@ mod tests {
             standing,
             saved_at: None,
             unsent: Vec::new(),
-            fact: None,
-            stamp: None,
         };
         (fight, run)
     }
@@ -2056,7 +1959,7 @@ mod tests {
         fs::write(&path, "written by hand").unwrap();
         let mut book = book(dir.path());
         assert!(book.unreadable.is_some());
-        book.record_change(None, &fact(RunState::Running), None);
+        book.record_run(&fact(RunState::Running), None, true);
         assert!(book.events.is_empty());
         book.add(Kind::Day, None);
         book.save();
@@ -2131,7 +2034,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut book = book(temp.path());
         let session = Some(Uuid::new_v4());
-        let bridge = fact(RunState::Running);
+        let mut bridge = fact(RunState::Running);
         book.record_run(&bridge, session, true);
         let shrine = RunFact {
             id: Uuid::from_u128(8),
@@ -2150,6 +2053,7 @@ mod tests {
         // Opened and not played: the order stays.
         book.record_run(&bridge, session, false);
         assert_eq!(order(&book), vec![bridge.id, shrine.id]);
+        bridge.steps += 1;
         book.record_run(&bridge, session, true);
         assert_eq!(order(&book), vec![shrine.id, bridge.id]);
         // A rest marked after that wipes both, wherever it sits in the list.
@@ -2163,29 +2067,26 @@ mod tests {
     }
 
     #[test]
-    fn a_fight_played_now_takes_the_next_place_unless_it_has_the_last() {
-        let (first, later) = (Some(Uuid::from_u128(1)), Some(Uuid::from_u128(2)));
-        let never = Played::default();
-        assert_eq!(
-            never.now(1, first),
-            Played {
-                order: 1,
-                session: first
-            }
-        );
-        let last = Played {
-            order: 4,
-            session: first,
+    fn a_run_opened_over_its_own_older_copy_was_not_played() {
+        let before = RunFact {
+            steps: 4,
+            ..fact(RunState::Running)
         };
-        // It has the last place already, so the number stays. The session follows the play.
-        assert_eq!(last.now(5, later).order, 4);
-        assert_eq!(last.now(5, later).session, later);
-        // Something else was played or ruled on since.
-        assert_eq!(last.now(7, first).order, 7);
-        // With no session chosen, the fight stays in the one it had.
-        assert_eq!(last.now(7, None).session, first);
-        // A place never goes down, when less is known than the fight says.
-        assert_eq!(last.now(3, first).order, 4);
+        let opened = RunFact {
+            steps: 0,
+            ..fact(RunState::Running)
+        };
+        assert!(!opened.played_since(&before));
+        let hit = RunFact {
+            steps: 1,
+            ..fact(RunState::Running)
+        };
+        assert!(hit.played_since(&opened));
+        let other = RunFact {
+            id: Uuid::from_u128(8),
+            ..hit.clone()
+        };
+        assert!(!other.played_since(&opened));
     }
 
     #[test]
@@ -2193,7 +2094,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut book = book(temp.path());
         let session = Some(Uuid::new_v4());
-        let bridge = fact(RunState::Running);
+        let mut bridge = fact(RunState::Running);
         book.record_run(&bridge, session, true);
         let shrine = RunFact {
             id: Uuid::from_u128(8),
@@ -2204,157 +2105,10 @@ mod tests {
         book.events
             .iter_mut()
             .for_each(|event| event.played_order = 0);
+        bridge.steps += 1;
         book.record_run(&bridge, session, true);
         let fights = party_state(&book.events, session).fights;
         assert_eq!(fights.last().map(|fight| fight.0), Some(bridge.id));
-
-        // From here, each fact is what a run says: its state, and when it was last played.
-        // A step stamps it, and Undo makes the run say the older fact again.
-        let latest = |book: &Book| {
-            party_state(&book.events, session)
-                .fights
-                .last()
-                .map(|fight| fight.0)
-        };
-        let said = |book: &Book, run: Uuid| {
-            let event = event_of(book, run);
-            Played {
-                order: event.played_order,
-                session: event.continued_in.or(event.session),
-            }
-        };
-        let step = |book: &Book, fact: &RunFact, state: RunState, session| RunFact {
-            state,
-            played: fact.played.now(book.next_order(), session),
-            ..fact.clone()
-        };
-        // The shrine is played and ended, in this session.
-        let shrine = RunFact {
-            played: said(&book, shrine.id),
-            ..shrine
-        };
-        let shrine_ended = step(&book, &shrine, RunState::Ended("Won".into()), session);
-        book.record_change(Some(&shrine), &shrine_ended, session);
-        assert_eq!(latest(&book), Some(shrine.id));
-
-        // The bridge's ended run is opened under a later session, and continued by mistake.
-        let later = Some(Uuid::new_v4());
-        let ended = RunFact {
-            state: RunState::Ended("Won".into()),
-            played: said(&book, bridge.id),
-            ..bridge.clone()
-        };
-        book.record_change(None, &ended, later);
-        assert_eq!(latest(&book), Some(shrine.id), "opening is not play");
-        let continued = step(&book, &ended, RunState::Running, later);
-        book.record_change(Some(&ended), &continued, later);
-        assert_eq!(latest(&book), Some(bridge.id), "a step played it");
-        assert_eq!(event_of(&book, bridge.id).continued_in, later);
-        assert_eq!(event_of(&book, bridge.id).result, "Round 3");
-        // Undo of Continue fight: the run says what it said before, and that is all it takes.
-        book.record_change(Some(&continued), &ended, later);
-        assert_eq!(latest(&book), Some(shrine.id), "Undo of it did not");
-        assert_eq!(event_of(&book, bridge.id).continued_in, None);
-        assert_eq!(event_of(&book, bridge.id).result, "Won, round 3");
-        // A fight that is played on, and ends a second time, is the latest word again.
-        book.record_change(Some(&ended), &continued, later);
-        let ended_again = step(&book, &continued, RunState::Ended("Lost".into()), later);
-        book.record_change(Some(&continued), &ended_again, later);
-        assert_eq!(latest(&book), Some(bridge.id));
-        assert_eq!(event_of(&book, bridge.id).result, "Lost, round 3");
-        book.record_change(Some(&ended_again), &ended, later);
-        assert_eq!(latest(&book), Some(shrine.id));
-
-        // A disk conflict in the middle: the run saves itself as a new run, with a new ID
-        // and the same state. Undo in the copy says the older fact under the new ID.
-        book.record_change(Some(&ended), &continued, later);
-        let copy = RunFact {
-            id: Uuid::from_u128(9),
-            copied_from: Some(bridge.id),
-            ..continued.clone()
-        };
-        book.record_change(Some(&continued), &copy, later);
-        assert_eq!(
-            latest(&book),
-            Some(copy.id),
-            "the copy has the fight's event"
-        );
-        let copy_ended = RunFact {
-            id: copy.id,
-            copied_from: copy.copied_from,
-            ..ended.clone()
-        };
-        book.record_change(Some(&copy), &copy_ended, later);
-        assert_eq!(latest(&book), Some(shrine.id), "Undo in the copy");
-
-        // The fight is continued again and the Timeline saves. Then an outside edit makes
-        // the file unreadable, and Undo comes before the repair. Nothing waits here. The run
-        // file has the older fact, and each way back applies what the saved runs say.
-        let path = temp.path().join(FILE);
-        let outage = |book: &mut Book| {
-            book.record_change(Some(&copy_ended), &copy, later);
-            assert_eq!(latest(book), Some(copy.id));
-            book.save();
-            let valid = fs::read(&path).unwrap();
-            fs::write(&path, "---\ntimeline_version: [broken\n---\n").unwrap();
-            book.reload();
-            assert!(book.unreadable.is_some());
-            // Undo of Continue fight, while the file cannot be read.
-            book.record_change(Some(&copy), &copy_ended, later);
-            assert!(!book.not_saved(), "nothing here asks to be saved");
-            valid
-        };
-        let saved = [copy_ended.clone(), shrine_ended.clone()];
-        // The file is repaired and read again in the same session.
-        let valid = outage(&mut book);
-        fs::write(&path, valid).unwrap();
-        book.reload();
-        book.apply_saved(&saved);
-        assert_eq!(latest(&book), Some(shrine.id), "after a repair");
-        assert_eq!(event_of(&book, copy.id).result, "Won, round 3");
-        assert_eq!(event_of(&book, copy.id).continued_in, None);
-        // The app restarts before the repair. The new book knows nothing of the old one.
-        let valid = outage(&mut book);
-        drop(book);
-        let mut book = self::book(temp.path());
-        assert!(book.unreadable.is_some());
-        book.record_change(None, &copy_ended, later);
-        fs::write(&path, valid).unwrap();
-        book.reload();
-        book.apply_saved(&saved);
-        assert_eq!(
-            latest(&book),
-            Some(shrine.id),
-            "after a restart and a repair"
-        );
-        assert_eq!(event_of(&book, copy.id).result, "Won, round 3");
-        // The run closes and the DM works in another campaign before the repair.
-        let valid = outage(&mut book);
-        let other = tempfile::tempdir().unwrap();
-        book.open(Some(other.path()));
-        assert!(
-            book.events.is_empty(),
-            "no fight goes to the other campaign"
-        );
-        book.apply_saved(&saved);
-        assert!(book.events.is_empty(), "and no saved run adds one");
-        fs::write(&path, valid).unwrap();
-        book.open(Some(temp.path()));
-        book.apply_saved(&saved);
-        assert_eq!(latest(&book), Some(shrine.id), "after another campaign");
-        assert_eq!(event_of(&book, copy.id).result, "Won, round 3");
-        // Applying it again changes nothing, so there is nothing more to save.
-        book.save();
-        book.apply_saved(&saved);
-        assert!(!book.not_saved());
-    }
-
-    fn event_of(book: &Book, run: Uuid) -> Event {
-        book.events
-            .iter()
-            .find(|event| event.run == Some(run))
-            .unwrap()
-            .clone()
     }
 
     #[test]
@@ -2362,7 +2116,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut book = book(temp.path());
         let session = Some(Uuid::new_v4());
-        let bridge = fact(RunState::Running);
+        let mut bridge = fact(RunState::Running);
         book.record_run(&bridge, session, true);
         let rest = book.add(Kind::LongRest, session);
         let next = book.next_order();
@@ -2370,6 +2124,7 @@ mod tests {
         event.restores = true;
         event.played_order = next;
         book.remove(&rest);
+        bridge.steps += 1;
         book.record_run(&bridge, session, true);
         assert_eq!(book.undo_remove(), Some(rest));
         let state = party_state(&book.events, session);
@@ -2403,14 +2158,13 @@ mod tests {
         book.reload();
         assert!(book.gone && book.unreadable.is_some());
         assert_eq!(book.events[0].id, rest);
-        book.record_change(None, &fact(RunState::Running), None);
+        book.record_run(&fact(RunState::Running), None, true);
         assert_eq!(book.events.len(), 1);
         assert!(!path.exists());
         book.save_again();
         assert!(!book.gone && book.unreadable.is_none());
         assert!(fs::read_to_string(&path).unwrap().contains(&rest));
-        // What the run said while the file was gone is recorded now, and is in the file.
-        assert_eq!(book.events.len(), 2);
+        // What the run said while the file was gone is recorded, and is in the file.
         assert_eq!(book.events[1].result, "Round 3");
         assert!(fs::read_to_string(&path).unwrap().contains("Round 3"));
         assert!(!book.not_saved());
@@ -2424,7 +2178,7 @@ mod tests {
             round: 4,
             ..fact(RunState::Running)
         };
-        book.record_change(Some(&fact(RunState::Running)), &next, None);
+        book.record_run(&next, None, true);
         book.last_check = None;
         book.poll(&eframe::egui::Context::default());
         assert!(book.gone, "nothing to find yet");

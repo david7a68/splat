@@ -126,15 +126,6 @@ struct Splat {
     run_origin: Page,
     /// What the party's carried state was last read for.
     carry_key: Option<(Option<uuid::Uuid>, timeline::PartyState, bool, Page, bool)>,
-    /// What `follow_the_runs` last worked from.
-    #[allow(clippy::type_complexity)]
-    runs_key: Option<(
-        Option<uuid::Uuid>,
-        u64,
-        (Option<uuid::Uuid>, u64),
-        Option<uuid::Uuid>,
-        Option<uuid::Uuid>,
-    )>,
     /// New events and runs go to a session dated before today.
     old_session: bool,
     art: art::Loader,
@@ -174,7 +165,6 @@ impl Default for Splat {
             run_fact: None,
             run_origin: Page::Encounters,
             carry_key: None,
-            runs_key: None,
             old_session: false,
             art: Default::default(),
             ui_store: ui_state::Store::user(),
@@ -331,43 +321,6 @@ impl Splat {
             }),
         };
         self.ui_store.save(&state);
-    }
-
-    /// The run files own what their fights say: a result, and when the fight was last played.
-    /// After each read of the Timeline or of the run folder, the Timeline takes what the closed
-    /// runs say, so that no list of changes has to wait while the Timeline cannot be read. The
-    /// open run speaks for itself, and learns the next place in the order of play here. This runs only when one of
-    /// its inputs changed, and never every frame.
-    fn follow_the_runs(&mut self, campaign: Option<uuid::Uuid>) {
-        let session = self.sessions.current();
-        let open_run = self.run_fact.as_ref().map(|fact| fact.id);
-        let key = (
-            campaign,
-            self.timeline.revision(),
-            self.encounters.runs_revision(),
-            session,
-            open_run,
-        );
-        if self.runs_key == Some(key) {
-            return;
-        }
-        self.runs_key = Some(key);
-        self.timeline.apply_saved(self.encounters.saved_facts());
-        // A file that cannot be read gives no events, so the run files give the floor then.
-        let played = self.encounters.saved_facts().map(|fact| fact.played.order);
-        let next = self
-            .timeline
-            .next_order()
-            .max(played.max().unwrap_or(0) + 1);
-        let said = open_run.and_then(|run| self.timeline.played_of(run));
-        if let Some(run) = self.encounters.run_mut() {
-            // Before the run is told the next place, so that a step that waits for it is
-            // counted against the place the fight had.
-            if let Some(said) = said {
-                run.adopt_played(said);
-            }
-            run.set_play_next(next, session);
-        }
     }
 
     /// Where the party stands in the session being played, from the timeline and the last
@@ -2421,7 +2374,16 @@ impl eframe::App for Splat {
             }
             self.run_fact = fact;
         }
-        self.follow_the_runs(open.as_ref().map(|campaign| campaign.id));
+        // Continue fight is for the fight that was played last. An ended run on screen is told
+        // whether it is that fight. The events are read for this only while such a run is open.
+        self.encounters.timeline_unreadable = self.timeline.unreadable.is_some();
+        if let Some(run) = self.encounters.run_mut().filter(|run| run.ended()) {
+            run.continue_blocked = encounter_run::continue_blocked(
+                &self.timeline.events,
+                self.timeline.unreadable.is_none(),
+                run.id(),
+            );
+        }
         self.update_carry();
         self.sessions.open_run = self.run_fact.as_ref().and_then(|fact| {
             let event = self

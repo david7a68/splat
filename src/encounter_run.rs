@@ -578,9 +578,6 @@ enum Phase {
     Running,
     Ended { outcome: String },
 }
-fn is_default<T: Default + PartialEq>(value: &T) -> bool {
-    *value == T::default()
-}
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
     participants: Vec<Participant>,
@@ -591,11 +588,6 @@ struct State {
     log: Vec<String>,
     #[serde(default)]
     last_change: Option<String>,
-    /// When this fight was last played. A step sets it, and Undo of the step puts the older
-    /// one back with the rest of the state. The run file is its one owner: the Timeline
-    /// applies what the run says. Saves from before this have none.
-    #[serde(default, skip_serializing_if = "is_default")]
-    played: crate::timeline::Played,
     random: Random,
     /// What each loot line rolled, by its place: `loot::place`. Saves from before loot have none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -664,12 +656,9 @@ pub(crate) struct Run {
     also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
     halved: BTreeSet<usize>,
-    /// A step was taken before the app could say when the fight is played, as Continue fight
-    /// from History is. It is counted when the app says so. Never saved.
-    unstamped: bool,
-    /// The next place in the campaign's order of play, and the session being played, as the
-    /// app last gave them. None in a run with no app around it. Never saved.
-    play_next: Option<(u64, Option<Uuid>)>,
+    /// How many steps the DM has taken or taken back since this opened. A sheet's change is
+    /// not one, and neither is opening a run to read it. Never saved.
+    dm_steps: usize,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -724,6 +713,9 @@ pub(crate) struct Run {
     pub copy_label: Option<String>,
     /// The account's one status function supplies the offline colour too.
     pub account_status: Option<crate::design::Status<'static>>,
+    /// Why this ended fight cannot go on, when it is not the fight that was played last. The
+    /// app says so while the run is ended. Never saved.
+    pub continue_blocked: Option<&'static str>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
     /// Opened from a save.
@@ -798,6 +790,46 @@ const MAX_FROM_SHEET: &str =
 const REST_STEP: &str = "full HP after long rest";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use the saved HP";
+/// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
+pub(crate) const CONTINUE_LATER: &str =
+    "A later fight or rest was played. Start a new run to play this one again.";
+/// Why Continue fight is not offered: the Timeline has no event for this fight.
+const CONTINUE_NO_EVENT: &str =
+    "This fight is not on the Timeline. Start a new run to play it again.";
+/// Why Continue fight is not offered: the Timeline cannot say which fight was played last.
+const CONTINUE_NEEDS_TIMELINE: &str =
+    "Splat cannot read Timeline.md. Repair it to go on with this fight.";
+
+/// Why Continue fight is not offered for this ended fight, if it is not.
+///
+/// Continue fight is for a fight that ended by mistake, and that fight is the one that was
+/// played last. For that fight, neither Continue fight nor its Undo changes which fight was
+/// played last, so the next fight still starts each player from the right HP, and the
+/// Timeline needs no order to restore. For any other ended fight the DM starts a new run.
+///
+/// The order is the one carried HP follows: each event's place, and the story's order where
+/// places are equal. Only fights and long rests that restore the party have a place in it.
+pub(crate) fn continue_blocked(
+    events: &[crate::timeline::Event],
+    readable: bool,
+    run: Uuid,
+) -> Option<&'static str> {
+    if !readable {
+        return Some(CONTINUE_NEEDS_TIMELINE);
+    }
+    if !events.iter().any(|event| event.run == Some(run)) {
+        return Some(CONTINUE_NO_EVENT);
+    }
+    let last = events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| {
+            event.run.is_some() || (event.kind == crate::timeline::Kind::LongRest && event.restores)
+        })
+        .max_by_key(|(at, event)| (event.played_order, *at))
+        .and_then(|(_, event)| event.run);
+    (last != Some(run)).then_some(CONTINUE_LATER)
+}
 /// The outcome of an ending whose outcome field was left empty.
 const NO_OUTCOME: &str = "Undecided";
 /// The Undo step an ending makes. While it is the newest step, Undo is how the fight goes on.
@@ -1006,7 +1038,6 @@ impl Run {
                     "DM run prepared from saved encounter. Rules are resolved by the DM.".into(),
                 ],
                 last_change: None,
-                played: crate::timeline::Played::default(),
                 loot: BTreeMap::new(),
                 roll_results: BTreeMap::new(),
                 cast: None,
@@ -1018,8 +1049,7 @@ impl Run {
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            unstamped: false,
-            play_next: None,
+            dm_steps: 0,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -1060,6 +1090,7 @@ impl Run {
             exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
+            continue_blocked: None,
             reopened: false,
             no_saved_undo: None,
             undo_unread: false,
@@ -1161,42 +1192,10 @@ impl Run {
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
     }
-    /// Keep a step of this opening. The fight is played now. Undo of the step gives back the
-    /// state before it, and with that state when the fight was played before.
+    /// Keep a step that the DM took, which counts as play.
     fn keep_own_step(&mut self, before: State, label: String, from_sheet: bool) {
         self.keep_step(before, label, from_sheet);
-        self.unstamped = self.play_next.is_none();
-        self.state.played = self.played_now();
-    }
-    /// When this fight is last played, if the DM changes it now.
-    fn played_now(&self) -> crate::timeline::Played {
-        match self.play_next {
-            Some((next, session)) => self.state.played.now(next, session),
-            None => self.state.played,
-        }
-    }
-    /// The next place in the campaign's order of play, and the session being played. The app
-    /// gives these when they change, so that a step can say when the fight was played.
-    pub fn set_play_next(&mut self, next: u64, session: Option<Uuid>) {
-        self.play_next = Some((next, session));
-        // A step taken before the app could say when counts from now. Undo of it still gives
-        // back when the fight was played before.
-        if std::mem::take(&mut self.unstamped) {
-            self.state.played = self.played_now();
-            self.dirty = true;
-        }
-    }
-    /// A run file from before runs kept when they were played says nothing. It takes its
-    /// fight's place from the Timeline once, in every state it holds, so that Undo can give
-    /// that place back. A run that has its own word keeps it.
-    pub fn adopt_played(&mut self, played: crate::timeline::Played) {
-        let unsaid = crate::timeline::Played::default();
-        for state in self.history.iter_mut().chain([&mut self.state]) {
-            if state.played == unsaid && played != unsaid {
-                state.played = played;
-                self.dirty = true;
-            }
-        }
+        self.dm_steps += 1;
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -1672,6 +1671,10 @@ impl Run {
     /// Take the ending away, as one named step that Undo puts back. Play goes on from the turn
     /// the fight ended on, and sync starts again by the rule for a resumed run.
     pub(crate) fn continue_fight(&mut self) {
+        if let Some(reason) = self.continue_blocked {
+            self.error = Some(reason.into());
+            return;
+        }
         self.run_command(Command::Continue);
     }
     /// The outcome of the ending that the newest Continue fight took away, for the next
@@ -2267,6 +2270,7 @@ impl Run {
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.notice = None;
+            self.dm_steps += 1;
             self.history_labels.pop();
             self.history_from_sheet.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
@@ -2534,7 +2538,7 @@ impl Run {
                 Phase::Running => crate::timeline::RunState::Running,
                 Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
             },
-            played: self.state.played,
+            steps: self.dm_steps,
         }
     }
     /// The strip's Next turn, usable from any page.
@@ -3843,8 +3847,7 @@ impl Run {
             history_from_sheet: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
-            unstamped: false,
-            play_next: None,
+            dm_steps: 0,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -3884,6 +3887,7 @@ impl Run {
             exhaustion_drag: None,
             hide_panel: false,
             lookup_open: false,
+            continue_blocked: None,
             reopened: true,
             no_saved_undo: None,
             undo_unread: false,
@@ -3945,8 +3949,6 @@ impl Run {
                             standing: Standing::Unreadable,
                             saved_at: modified,
                             unsent: Vec::new(),
-                            fact: None,
-                            stamp: None,
                             path,
                         });
                     }
@@ -3976,9 +3978,6 @@ impl Run {
                 .and_then(|id| identities.get(&id))
                 .filter(|paths| paths.len() > 1)
             {
-                // Two files with one identity have no one owner, so neither speaks for the
-                // fight on the Timeline.
-                run.fact = None;
                 run.label = format!(
                     "Duplicate identity: {} · {}",
                     paths
@@ -4084,8 +4083,6 @@ impl Run {
             standing,
             saved_at,
             unsent: self.unsent_in_save(),
-            fact: Some(self.timeline_fact()),
-            stamp: file_stamp(&path),
             path,
         }
     }
@@ -4138,18 +4135,6 @@ pub struct SavedRunInfo {
     pub saved_at: Option<u64>,
     /// Who holds values not sent to D&D Beyond.
     pub unsent: Vec<String>,
-    /// What the run's file says to the Timeline: its result, and when it was last played.
-    /// None for a file that is not a run, and for a file that shares its identity with another.
-    pub fact: Option<crate::timeline::RunFact>,
-    /// The file's change time and length when `fact` was read. A file that differs now has
-    /// changed since, and `fact` is no longer its word.
-    pub stamp: Option<(std::time::SystemTime, u64)>,
-}
-
-/// A file's change time and length, to tell whether it changed since it was read.
-pub(crate) fn file_stamp(path: &Path) -> Option<(std::time::SystemTime, u64)> {
-    let metadata = fs::metadata(path).ok()?;
-    Some((metadata.modified().ok()?, metadata.len()))
 }
 
 /// A run file the DM deleted, kept in memory for one step of undo.
@@ -4587,11 +4572,6 @@ mod tests {
             rows.iter()
                 .all(|row| row.label.contains("Duplicate identity"))
         );
-        // Two files with one identity have no one owner, so neither speaks to the Timeline.
-        assert!(rows.iter().all(|row| row.fact.is_none()));
-        fs::remove_file(dir.path().join("conflict.json")).unwrap();
-        let rows = Run::list(dir.path(), campaign).unwrap();
-        assert_eq!(rows[0].fact, Some(run.timeline_fact()));
     }
 
     #[test]
@@ -5852,6 +5832,9 @@ mod tests {
         reopened.undo();
         assert!(reopened.ended());
         assert_eq!(reopened.state.participants[0].hp, Some(max - 9));
+
+        // The same with the Timeline, the plan row and the next fight's HP.
+        the_fight_played_last_goes_on(Walk::Synced);
     }
     #[test]
     fn a_read_only_sheet_leaves_the_runs_value_alone_at_a_first_read() {
@@ -7351,78 +7334,19 @@ mod tests {
     }
     #[test]
     fn only_the_dm_moves_a_run_on_the_timeline() {
-        use crate::timeline::Played;
-        let (first, later) = (Some(Uuid::from_u128(1)), Some(Uuid::from_u128(2)));
         let mut run = run();
-        // The app says that the next place in the order of play is 3, in the first session.
-        run.set_play_next(3, first);
         begin(&mut run);
-        run.apply(Command::Damage(0, 1)).unwrap();
-        let played = Played {
-            order: 3,
-            session: first,
-        };
-        assert_eq!(run.timeline_fact().played, played);
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = stored(&mut run, dir.path());
-        // Opened again later, under another session, when the next place is 9. Opening is
-        // not play, and neither is a sheet's change, which reaches the log with no step.
-        let mut reopened = close_and_reopen(&mut run, campaign);
-        reopened.set_play_next(9, later);
-        let opened = reopened.timeline_fact();
-        assert_eq!(opened.played, played, "the file keeps it");
-        reopened
-            .state
+        let fact = run.timeline_fact();
+        // A sheet's change reaches the log with no step of the DM's.
+        run.state
             .log
             .push("Kestrel: HP changed on D&D Beyond.".into());
-        assert_eq!(reopened.timeline_fact(), opened);
-        // A step plays the fight now, here.
-        reopened.apply(Command::Damage(0, 1)).unwrap();
-        let hit = Played {
-            order: 9,
-            session: later,
-        };
-        assert_eq!(reopened.timeline_fact().played, hit);
-        // Undo of that step leaves the run as it opened, also after a close.
-        reopened.undo();
-        assert_eq!(reopened.timeline_fact(), opened);
-        reopened.apply(Command::Damage(0, 1)).unwrap();
-        // Undo restores it with the rest of the state, also after a close: the app says the
-        // next place first, as it does when a run opens, and Undo is still not play.
-        let mut again = close_and_reopen(&mut reopened, campaign);
-        again.set_play_next(12, later);
-        assert_eq!(again.timeline_fact().played, hit);
-        again.undo();
-        assert_eq!(again.timeline_fact().played, played);
-        // Less is known than the fight says, as while the Timeline cannot be read: a step
-        // never takes a place before the one the fight has.
-        again.set_play_next(2, later);
-        again.apply(Command::Next).unwrap();
-        assert_eq!(again.timeline_fact().played.order, 3);
-
-        // A run file from before this says nothing. It takes its fight's place from the
-        // Timeline once, in every state it holds, so that Undo can give that place back.
-        let mut legacy = self::run();
-        begin(&mut legacy);
-        let campaign = stored(&mut legacy, dir.path());
-        let mut legacy = close_and_reopen(&mut legacy, campaign);
-        assert_eq!(legacy.timeline_fact().played, Played::default());
-        let before = Played {
-            order: 4,
-            session: first,
-        };
-        legacy.adopt_played(before);
-        legacy.set_play_next(6, later);
-        assert_eq!(legacy.timeline_fact().played, before);
-        legacy.apply(Command::Damage(0, 1)).unwrap();
-        assert_eq!(legacy.timeline_fact().played.order, 6);
-        legacy.undo();
-        assert_eq!(legacy.timeline_fact().played, before);
-        // Its own word stands once it has one.
-        legacy.adopt_played(hit);
-        assert_eq!(legacy.timeline_fact().played, before);
-        legacy.undo();
-        assert_eq!(legacy.timeline_fact().played, before, "an older state too");
+        assert_eq!(run.timeline_fact(), fact);
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let hit = run.timeline_fact();
+        assert!(hit.played_since(&fact));
+        run.undo();
+        assert!(run.timeline_fact().played_since(&hit));
     }
 
     #[test]
@@ -7796,6 +7720,230 @@ mod tests {
         );
     }
 
+    /// What the app does with the open run after each step: it tells the Timeline what
+    /// changed, and both save. A run that closed has its last result saved at once.
+    fn tell(
+        book: &mut crate::timeline::Book,
+        said: &mut Option<crate::timeline::RunFact>,
+        mut run: Option<&mut Run>,
+        session: Option<Uuid>,
+    ) {
+        let fact = run.as_deref().map(Run::timeline_fact);
+        if fact != *said {
+            match &fact {
+                Some(fact) => book.record_change(said.as_ref(), fact, session),
+                None => book.save(),
+            }
+            *said = fact;
+        }
+        if let Some(run) = run.as_mut() {
+            run.dirty = true;
+            run.save().unwrap();
+        }
+        if book.unreadable.is_none() {
+            book.save();
+        }
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum Walk {
+        Plain,
+        /// `Timeline.md` cannot be read while the fight goes on, and is repaired at the end.
+        Outage,
+        /// The party is kept synced, and a sheet changes after the ending.
+        Synced,
+    }
+    /// Fight A, then fight B, which ends by mistake. After a close and a restart B goes on from
+    /// its file, a round is played, B ends again, and Undo goes back through all of it. B is
+    /// the fight played last at every step, so the next fight takes B's HP, and the Timeline,
+    /// the plan row and the Encounters lists say how B stands.
+    fn the_fight_played_last_goes_on(walk: Walk) {
+        use crate::timeline::{Book, FILE, party_state, played_fight_summary};
+        const HERO: Uuid = Uuid::from_u128(42);
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().join("Runs");
+        fs::create_dir(&dir).unwrap();
+        let campaign = Uuid::new_v4();
+        let session = Some(Uuid::new_v4());
+        let hurt = |run: &mut Run, damage: i64| {
+            if walk == Walk::Synced {
+                // The sheet has the damage, and the run takes it from there.
+                let max = run.state.participants[0].max_hp.unwrap();
+                first_sync(run, max, damage);
+            } else {
+                run.apply(Command::Damage(0, damage)).unwrap();
+            }
+        };
+        let fight = |book: &mut Book, name: &str, damage: i64| {
+            let mut run = run();
+            run.name = name.into();
+            linked(&mut run, 0, "11");
+            let mut hero = (*run.state.participants[0].definition).clone();
+            hero.id = HERO;
+            run.state.participants[0].definition = Arc::new(hero);
+            if walk == Walk::Synced {
+                run.keep_party_synced();
+            }
+            begin(&mut run);
+            run.configure_storage(campaign, &dir, Initiative::default())
+                .unwrap();
+            let mut said = None;
+            tell(book, &mut said, Some(&mut run), session);
+            hurt(&mut run, damage);
+            run.apply(Command::Next).unwrap();
+            tell(book, &mut said, Some(&mut run), session);
+            run.apply(Command::End("Won".into())).unwrap();
+            tell(book, &mut said, Some(&mut run), session);
+            tell(book, &mut said, None, session);
+            run
+        };
+        let mut book = Book::default();
+        book.open(Some(temp.path()));
+        let a = fight(&mut book, "A", 5);
+        let b = fight(&mut book, "B", 9);
+
+        // The app starts again.
+        let mut book = Book::default();
+        book.open(Some(temp.path()));
+        let event = |book: &Book, run: Uuid| {
+            book.events
+                .iter()
+                .find(|event| event.run == Some(run))
+                .cloned()
+                .unwrap()
+        };
+        // The fight the next one starts from, and the hero's HP there, read as the app reads it.
+        let carried = |book: &Book| {
+            let mut found = None;
+            for (id, _) in party_state(&book.events, session).fights {
+                let path = find_run(&dir, campaign, id).unwrap();
+                if let Some(&(hp, _)) = party_at_end(&path, campaign).unwrap().get(&HERO) {
+                    found = Some((id, hp));
+                }
+            }
+            found.unwrap()
+        };
+        let place = event(&book, b.id).played_order;
+        let standing = |run: &Run| run.info(PathBuf::new(), None, true).standing;
+        // B is the last fight, with this result, and the next fight starts from its HP.
+        let b_is_last = |book: &Book, b: &Run, result: &str, plan: &str, open: bool| {
+            let said = event(book, b.id);
+            assert_eq!(said.result, result);
+            assert_eq!(played_fight_summary(&said, open), plan);
+            assert_eq!(said.played_order, place, "B keeps its place");
+            assert_eq!(
+                carried(book),
+                (b.id, b.state.participants[0].hp.unwrap()),
+                "after {result}"
+            );
+            assert_eq!(continue_blocked(&book.events, true, b.id), None);
+        };
+        b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", false);
+
+        // Continue fight is for the fight that was played last. A was not, so A says why.
+        assert_eq!(
+            continue_blocked(&book.events, true, a.id),
+            Some(CONTINUE_LATER)
+        );
+        assert_eq!(
+            continue_blocked(&book.events, false, b.id),
+            Some(CONTINUE_NEEDS_TIMELINE)
+        );
+        assert_eq!(
+            continue_blocked(&book.events, true, Uuid::new_v4()),
+            Some(CONTINUE_NO_EVENT)
+        );
+        // A long rest that restored the party is later than B. One that did not has no place.
+        let rest = book.add_long_rest(session);
+        assert_eq!(
+            continue_blocked(&book.events, true, b.id),
+            Some(CONTINUE_LATER)
+        );
+        book.set_restores(&rest, false);
+        assert_eq!(continue_blocked(&book.events, true, b.id), None);
+        book.reload();
+        // A run that is told the reason does not go on.
+        let mut refused = Run::open(b.path().unwrap(), campaign).unwrap();
+        refused.continue_blocked = Some(CONTINUE_LATER);
+        refused.continue_fight();
+        assert!(refused.ended());
+        assert_eq!(refused.error.as_deref(), Some(CONTINUE_LATER));
+
+        // From History or the plan's played row: B opens from its file and goes on.
+        let mut b = Run::open(b.path().unwrap(), campaign).unwrap();
+        let mut said = None;
+        b.continue_fight();
+        assert!(b.error.is_none(), "{:?}", b.error);
+        tell(&mut book, &mut said, Some(&mut b), session);
+        assert_eq!(standing(&b), Standing::Unfinished);
+        b_is_last(&book, &b, "Round 1", "Round 1", true);
+        let timeline = temp.path().join(FILE);
+        let valid = fs::read(&timeline).unwrap();
+        if walk == Walk::Outage {
+            fs::write(&timeline, "---\ntimeline_version: [broken\n---\n").unwrap();
+            book.reload();
+            assert!(book.unreadable.is_some());
+        }
+        if walk == Walk::Synced {
+            // A sheet that changed after the ending. Its value is a fact, and not a step.
+            let max = b.state.participants[0].max_hp.unwrap();
+            first_sync(&mut b, max, 12);
+            assert_eq!(b.state.participants[0].hp, Some(max - 12));
+            tell(&mut book, &mut said, Some(&mut b), session);
+        }
+        // A round is played, and the fight ends again with another result.
+        for _ in 0..3 {
+            b.apply(Command::Next).unwrap();
+            tell(&mut book, &mut said, Some(&mut b), session);
+        }
+        b.apply(Command::Damage(1, 3)).unwrap();
+        tell(&mut book, &mut said, Some(&mut b), session);
+        if walk != Walk::Outage {
+            b_is_last(&book, &b, "Round 2", "Round 2", true);
+        }
+        b.apply(Command::End("Fled".into())).unwrap();
+        tell(&mut book, &mut said, Some(&mut b), session);
+        assert_eq!(standing(&b), Standing::Ended);
+        if walk != Walk::Outage {
+            b_is_last(&book, &b, "Fled, round 2", "Fled · Ended · Round 2", true);
+        }
+        // Undo goes back through all of it: the ending, the round, and Continue fight.
+        for step in [
+            "Undo: end encounter",
+            "Undo: 3 damage to Guard 2",
+            "Undo: next turn",
+            "Undo: next turn",
+            "Undo: next turn",
+            "Undo: continue fight",
+        ] {
+            assert_eq!(b.undo_label(), step);
+            b.undo();
+            tell(&mut book, &mut said, Some(&mut b), session);
+        }
+        assert!(
+            b.undo_continues(),
+            "the first ending is the newest step again"
+        );
+        assert_eq!(standing(&b), Standing::Ended);
+        if walk == Walk::Outage {
+            // Timeline.md is repaired outside Splat. The open run's last word reaches it.
+            fs::write(&timeline, valid).unwrap();
+            book.poll(&egui::Context::default());
+            assert!(book.unreadable.is_none());
+        }
+        b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", true);
+        // Close run, and the file has it.
+        tell(&mut book, &mut said, None, session);
+        let book = {
+            let mut book = Book::default();
+            book.open(Some(temp.path()));
+            book
+        };
+        b_is_last(&book, &b, "Won, round 1", "Won · Ended · Round 1", false);
+        assert_eq!(
+            continue_blocked(&book.events, true, a.id),
+            Some(CONTINUE_LATER)
+        );
+    }
     #[test]
     fn loot_rolls_after_the_end_and_keeps_each_lines_results_apart() {
         let mut run = run();
@@ -7941,6 +8089,10 @@ mod tests {
         closed.apply(Command::End(NO_OUTCOME.into())).unwrap();
         closed.continue_fight();
         assert_eq!(closed.outcome_before_continue(), None);
+
+        // The same with the Timeline, the plan row and the next fight's HP.
+        the_fight_played_last_goes_on(Walk::Plain);
+        the_fight_played_last_goes_on(Walk::Outage);
     }
 
     #[test]
@@ -8671,14 +8823,11 @@ mod tests {
     fn an_added_creature_counts_as_the_dms_step_and_follows_the_side_rule() {
         let mut run = run();
         run.initiative.grouping = Grouping::BySide;
-        run.set_play_next(5, None);
         begin(&mut run);
         let side_total = run.state.participants[0].initiative;
-        assert_eq!(run.timeline_fact().played.order, 5);
-        // Something else was played or ruled on since. The added creature plays this fight.
-        run.set_play_next(9, None);
+        let fact = run.timeline_fact();
         add_from(&mut run, &form("Ghost", "5"), &[]);
-        assert_eq!(run.timeline_fact().played.order, 9);
+        assert!(run.timeline_fact().played_since(&fact));
         assert_eq!(
             run.state.participants.last().unwrap().initiative,
             side_total,

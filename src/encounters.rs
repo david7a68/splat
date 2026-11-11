@@ -1961,8 +1961,8 @@ pub struct Encounters {
     run: Option<crate::encounter_run::Run>,
     /// History is a read-only snapshot and never owns the open-run slot.
     history_read: Option<(std::path::PathBuf, crate::encounter_run::FightSummary)>,
-    /// How many times the list of saved runs was read again without a whole reload.
-    runs_read: u64,
+    /// The Timeline cannot be read now, so it cannot say which fight was played last.
+    pub timeline_unreadable: bool,
     /// A run just opened, or the DM asked to go back to it from its row in the list, so the
     /// shell goes to the Run page.
     pub go_to_run: bool,
@@ -2225,27 +2225,6 @@ impl Encounters {
             .as_ref()
             .map(|d| d.name.clone())
             .or_else(|| self.group_draft.as_ref().map(GroupDraft::name))
-    }
-    /// A value that changes when the list of saved runs is read again.
-    pub fn runs_revision(&self) -> (Option<Uuid>, u64) {
-        (
-            self.snapshot.as_ref().map(|snapshot| snapshot.revision),
-            self.runs_read,
-        )
-    }
-    /// What each saved run's file says to the Timeline: its result, and when it was last
-    /// played. The open run speaks for itself, so its file is not here. A file that changed
-    /// since the list was read is not here either: what was read is no longer its word.
-    pub fn saved_facts(&self) -> impl Iterator<Item = &crate::timeline::RunFact> {
-        let open = self.run.as_ref().map(crate::encounter_run::Run::id);
-        self.snapshot
-            .iter()
-            .flat_map(|snapshot| &snapshot.runs)
-            .filter(|run| {
-                run.stamp.is_some() && crate::encounter_run::file_stamp(&run.path) == run.stamp
-            })
-            .filter_map(|run| run.fact.as_ref())
-            .filter(move |fact| Some(fact.id) != open)
     }
     /// The saved runs used by the Session plan and Timeline.
     pub fn saved_runs(&self) -> Vec<crate::encounter_run::SavedRunInfo> {
@@ -3172,7 +3151,6 @@ impl Encounters {
             {
                 Ok(runs) => {
                     s.runs = runs;
-                    self.runs_read += 1;
                     s.issues
                         .retain(|issue| !issue.starts_with("Run folder not found"));
                 }
@@ -3595,6 +3573,7 @@ impl Encounters {
                     start_blocked,
                     live.as_ref(),
                     self.history_read.as_ref(),
+                    (story.events, !self.timeline_unreadable),
                     &mut action,
                 );
             });
@@ -6962,13 +6941,6 @@ mod tests {
         // The same action on the open run does nothing more to a fight that is live.
         editor.continue_saved_run(&path, &campaign);
         assert_eq!(steps(&mut editor), 1);
-        // Continue fight came before the app could say when. It counts as play from the
-        // moment the app says so, and the run's file has it.
-        let run = editor.run_mut().unwrap();
-        assert_eq!(run.timeline_fact().played.order, 0);
-        run.set_play_next(4, None);
-        assert_eq!(run.timeline_fact().played.order, 4);
-        assert!(run.needs_save());
     }
 
     #[test]
@@ -7049,22 +7021,6 @@ mod tests {
         assert!(editor.go_to_run);
         assert!(editor.paused_run().is_none());
         assert_eq!(editor.draft.as_ref().unwrap().body, "Keep this draft");
-
-        // The open run speaks to the Timeline for itself, so its file does not.
-        assert_eq!(editor.saved_facts().count(), 0);
-        editor.run = None;
-        assert_eq!(editor.saved_facts().count(), 1);
-        // A file that changed since the list was read no longer says what was read.
-        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
-        fs::File::options()
-            .write(true)
-            .open(&path)
-            .unwrap()
-            .set_modified(later)
-            .unwrap();
-        assert_eq!(editor.saved_facts().count(), 0);
-        editor.read_runs_again(&campaign);
-        assert_eq!(editor.saved_facts().count(), 1);
     }
 
     fn slot_override(draft: &mut Draft, index: usize, text: &str) {

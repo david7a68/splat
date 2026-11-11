@@ -67,9 +67,6 @@ struct Step {
     phase: Phase,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_change: Option<String>,
-    /// When the fight was last played, as of this state. Undo puts it back with the rest.
-    #[serde(default, skip_serializing_if = "super::is_default")]
-    played: crate::timeline::Played,
     random: Random,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     loot: BTreeMap<String, Vec<loot::Found>>,
@@ -209,7 +206,6 @@ impl Step {
             phase,
             log,
             last_change,
-            played,
             random,
             loot,
             roll_results: _,
@@ -240,7 +236,6 @@ impl Step {
             round: *round,
             phase: phase.clone(),
             last_change: last_change.clone(),
-            played: *played,
             random: random.clone(),
             loot: loot.clone(),
         }
@@ -325,7 +320,6 @@ impl Step {
             phase: self.phase,
             log: self.log.before(&after.log)?,
             last_change: self.last_change,
-            played: self.played,
             random: self.random,
             loot: self.loot,
             roll_results: BTreeMap::new(),

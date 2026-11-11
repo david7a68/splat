@@ -198,8 +198,6 @@ mod tests {
             standing,
             saved_at: None,
             unsent: Vec::new(),
-            fact: None,
-            stamp: None,
         }
     }
     fn event(run: &SavedRunInfo, session: Option<Uuid>) -> Event {

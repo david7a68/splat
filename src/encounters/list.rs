@@ -625,6 +625,7 @@ pub(super) fn history_list(
     blocked: Option<&'static str>,
     live: Option<&SavedRunInfo>,
     read: Option<&(PathBuf, FightSummary)>,
+    (events, timeline_readable): (&[crate::timeline::Event], bool),
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
@@ -708,7 +709,11 @@ pub(super) fn history_list(
                     {
                         // The open run is this fight, so nothing stands in its way.
                         let here = live.is_some_and(|live| live.id == run.id);
-                        if history_summary(ui, summary, blocked.filter(|_| !here)) {
+                        // Continue fight is for the fight that was played last.
+                        let not_last = run.id.and_then(|id| {
+                            crate::encounter_run::continue_blocked(events, timeline_readable, id)
+                        });
+                        if history_summary(ui, summary, blocked.filter(|_| !here), not_last) {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }
                     }
@@ -725,7 +730,14 @@ pub(super) fn history_list(
 }
 
 /// An ended fight, read in place. Returns true when the DM chooses to go on with it.
-fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&str>) -> bool {
+/// `not_last` says why this fight cannot go on, when it is not the fight that was played last:
+/// then its sentence stands where the control would be.
+fn history_summary(
+    ui: &mut egui::Ui,
+    summary: &FightSummary,
+    blocked: Option<&str>,
+    not_last: Option<&str>,
+) -> bool {
     let mut go_on = false;
     ui.indent("history_summary", |ui| {
         ui.horizontal_wrapped(|ui| {
@@ -744,11 +756,16 @@ fn history_summary(ui: &mut egui::Ui, summary: &FightSummary, blocked: Option<&s
             );
         });
         // The one way on from a fight that ended by mistake. Undo puts the ending back.
-        go_on = crate::encounter_run::view::continue_action()
-            .density(Density::Read)
-            .blocked(blocked)
-            .show(ui)
-            .clicked();
+        match not_last {
+            Some(reason) => blocked_reason(ui, Some(reason)),
+            None => {
+                go_on = crate::encounter_run::view::continue_action()
+                    .density(Density::Read)
+                    .blocked(blocked)
+                    .show(ui)
+                    .clicked();
+            }
+        }
         design::group_label(ui, "Final state");
         for row in &summary.rows {
             ui.horizontal_wrapped(|ui| {
@@ -824,8 +841,6 @@ mod iter_2_c_tests {
             standing: crate::encounter_run::Standing::Unfinished,
             saved_at: Some(1_767_229_200 + n as u64 * 60),
             unsent: vec![],
-            fact: None,
-            stamp: None,
         });
         let refs = runs.iter().collect::<Vec<_>>();
         let sessions = [1, 2].map(|n| SessionLink {

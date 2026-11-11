@@ -5272,7 +5272,10 @@ impl Run {
             "Close run"
         }));
         if !self.undo_continues() {
-            actions += glance(continue_action());
+            actions += match self.continue_blocked {
+                Some(reason) => continue_reason_width(ui, reason) + gap,
+                None => glance(continue_action()),
+            };
         }
         if !self.history.is_empty() {
             actions += glance(self.undo_action("Undo"));
@@ -5525,11 +5528,26 @@ impl Run {
     /// After a loot roll, or with no steps, it is Continue fight, beside Close run: the two
     /// ways out of an ended fight, with the one that changes nothing last.
     fn ended_continue(&mut self, ui: &mut egui::Ui) {
-        if !self.undo_continues()
-            && continue_action()
-                .density(Density::Glance)
-                .show(ui)
-                .clicked()
+        if self.undo_continues() {
+            return;
+        }
+        // Continue fight is for the fight that was played last. For another fight, the
+        // reason stands where the control would be.
+        if let Some(reason) = self.continue_blocked {
+            let width = continue_reason_width(ui, reason);
+            ui.allocate_ui_with_layout(
+                vec2(width, Type::Small.line()),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                    );
+                },
+            );
+        } else if continue_action()
+            .density(Density::Glance)
+            .show(ui)
+            .clicked()
         {
             self.continue_fight();
         }
@@ -5557,6 +5575,12 @@ impl Run {
             self.return_focus = self.lookup_open;
         }
     }
+}
+
+/// The width of the sentence that stands where Continue fight would be. It wraps to the
+/// lines of the ended header, so that Close run keeps its place.
+fn continue_reason_width(ui: &egui::Ui, reason: &str) -> f32 {
+    design::number_width(ui, reason, &Type::Small.font(ui)).min(design::L * 15.0)
 }
 
 /// The one control that takes an ending away, wherever it shows.
