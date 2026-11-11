@@ -288,6 +288,73 @@ fn condition(text: &str, before: Option<usize>, start: usize, end: usize) -> Opt
     })
 }
 
+/// The damage a failed save takes at once, for the save whose DC ends at `dc`.
+///
+/// With a `Failure:` label, it is the damage in that label's first sentence. Damage in a later
+/// sentence is another effect, such as `takes 10 (3d6) Acid damage at the start of each of its
+/// turns`, and is not rolled with the save. One later form is read: `If the target has 20 Hit
+/// Points or fewer, … Otherwise, the target takes 18 (4d8) Psychic damage`, as damage with that
+/// condition. Without a label, it is the damage after the DC in the DC's sentence, and never
+/// the damage before it.
+fn save_damage(
+    text: &str,
+    groups: &[(Range<usize>, DamagePart, bool)],
+    dc: usize,
+) -> Vec<DamagePart> {
+    let within = |range: Range<usize>| -> Vec<DamagePart> {
+        groups
+            .iter()
+            .filter(|(group, _, damage)| *damage && range.contains(&group.start))
+            .map(|(_, part, _)| part.clone())
+            .collect()
+    };
+    let Some(label) = text[dc..].find("Failure:").map(|at| dc + at) else {
+        // Damage before the DC in that sentence is the hit's, not the save's.
+        return within(dc..sentence_end(text, dc));
+    };
+    let start = label + "Failure:".len();
+    let first_end = sentence_end(text, start);
+    let first = within(start..first_end);
+    if !first.is_empty() {
+        return first;
+    }
+    // `If the target has N Hit Points or fewer, …. Otherwise, the target takes …`.
+    let clause_end = ["Success:", "Failure or Success:"]
+        .iter()
+        .filter_map(|label| text[start..].find(label))
+        .min()
+        .map_or(text.len(), |at| start + at);
+    let opening = &text[start..first_end];
+    let limit = opening.find(" Hit Points or fewer").and_then(|at| {
+        let number = opening[..at].rsplit(' ').next()?;
+        number.parse::<i64>().ok()
+    });
+    let Some(limit) = limit else {
+        return Vec::new();
+    };
+    let mut at = first_end;
+    while at < clause_end {
+        let end = sentence_end(text, at).min(clause_end);
+        if text[at..end].to_lowercase().contains("otherwise") {
+            return within(at..end)
+                .into_iter()
+                .map(|part| DamagePart {
+                    when: Some(When {
+                        text: format!("if the target has more than {limit} Hit Points"),
+                        instead: false,
+                    }),
+                    ..part
+                })
+                .collect();
+        }
+        if end <= at {
+            break;
+        }
+        at = end;
+    }
+    Vec::new()
+}
+
 /// Where each sentence of a paragraph ends, so a hit's damage is the sentence after it.
 fn sentence_end(text: &str, from: usize) -> usize {
     let bytes = text.as_bytes();
@@ -405,13 +472,18 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         if let Some((bonus, length)) = signed_number(&text[start..])
             && start + length == index
         {
+            // The hit is its own sentence, after `reach 5 ft., one target.`
+            let hit = text[index..]
+                .find("Hit:")
+                .map(|at| index + at)
+                .unwrap_or(index);
             spans.push(Span {
                 range: start..index,
                 link: RollLink::D20 {
                     what: D20::Attack,
                     bonus,
                     label: label.to_owned(),
-                    damage: damage_in(index..sentence_end(text, index)),
+                    damage: damage_in(hit..sentence_end(text, hit)),
                 },
             });
         }
@@ -423,6 +495,7 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
         lower.contains("success: half damage") || lower.contains("half as much damage")
     };
     let mut add_dc = |range: Range<usize>, ability: &str, dc: i64| {
+        let damage = save_damage(text, &groups, range.end);
         spans.push(Span {
             range,
             link: RollLink::SaveDc {
@@ -430,7 +503,7 @@ pub fn find(text: &str, label: &str) -> Vec<Span> {
                 ability: ability.to_owned(),
                 dc,
                 half,
-                damage: damage_in(0..text.len()),
+                damage,
             },
         });
     };
@@ -532,6 +605,15 @@ mod tests {
     }
 
     #[test]
+    fn an_older_attack_carries_the_damage_of_its_hit() {
+        let bite = "Bite. Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8 + 3) piercing damage.";
+        assert_eq!(hit_damage(bite), vec![part("1d8+3", "Piercing")]);
+        // A spell attack bonus has no hit of its own.
+        let spells = "Spellcasting. The mage is a 9th-level spellcaster (spell save DC 14, +6 to hit with spell attacks).";
+        assert_eq!(hit_damage(spells), vec![]);
+    }
+
+    #[test]
     fn a_conditional_part_says_its_condition_and_whether_it_replaces_or_adds() {
         let or = hit_damage(
             "Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 + 2) Piercing damage if the target is Bloodied.",
@@ -558,6 +640,51 @@ mod tests {
             "Melee Attack Roll: +4, reach 10 ft. Hit: 9 (2d6 + 2) Bludgeoning damage plus 3 (1d6) Fire damage.",
         );
         assert!(plain.iter().all(|part| part.when.is_none()));
+    }
+
+    fn save_parts(text: &str) -> Vec<DamagePart> {
+        find(text, "x")
+            .into_iter()
+            .find_map(|span| match span.link {
+                RollLink::SaveDc { damage, .. } => Some(damage),
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_save_takes_only_the_damage_of_its_failure() {
+        // Later damage is another effect, at another time.
+        let engulf = "Engulf. Dexterity Saving Throw: DC 12, each creature whose space the cube enters. Failure: 10 (3d6) Acid damage, and the target is engulfed. An engulfed target is suffocating and takes 10 (3d6) Acid damage at the start of each of the cube's turns. Success: Half damage.";
+        assert_eq!(save_parts(engulf), vec![part("3d6", "Acid")]);
+        let swallow = "Swallow. Strength Saving Throw: DC 19, one creature. Failure: The target is swallowed. A swallowed creature takes 17 (5d6) Acid damage at the start of each of the worm's turns.";
+        assert_eq!(save_parts(swallow), vec![]);
+        let two = "Death Throes. Dexterity Saving Throw: DC 20, each creature. Failure: 31 (9d6) Fire damage plus 31 (9d6) Force damage. Success: Half damage.";
+        assert_eq!(
+            save_parts(two),
+            vec![part("9d6", "Fire"), part("9d6", "Force")]
+        );
+        // An attack's hit is not its rider save's damage.
+        let rider = "Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Slashing damage. If the target is a creature, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of its next turn.";
+        assert_eq!(save_parts(rider), vec![]);
+        // Damage unless the target has few Hit Points.
+        let glare = "Death Glare. Wisdom Saving Throw: DC 11, one Frightened creature. Failure: If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage.";
+        let parts = save_parts(glare);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].dice, "3d8");
+        assert_eq!(
+            parts[0].when,
+            Some(When {
+                text: "if the target has more than 20 Hit Points".into(),
+                instead: false
+            })
+        );
+        // The older wording: the damage after the DC, in its sentence.
+        let old = "Bite. Melee Weapon Attack: +5 to hit. Hit: 7 (1d8 + 3) piercing damage, and the target must make a DC 11 Constitution saving throw, taking 9 (2d8) poison damage on a failed save.";
+        assert_eq!(save_parts(old), vec![part("2d8", "Poison")]);
+        // An older rider save with no damage of its own does not take the hit's.
+        let petrify = "Bite. Melee Weapon Attack: +3 to hit. Hit: 3 (1d4 + 1) piercing damage, and the target must succeed on a DC 11 Constitution saving throw against being magically petrified.";
+        assert_eq!(save_parts(petrify), vec![]);
     }
 
     #[test]

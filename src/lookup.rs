@@ -2245,6 +2245,10 @@ impl Lookup {
             .show(ui, |ui| {
                 style::title(ui, &written.title);
                 style::subtitle(ui, &written.detail);
+                // The `L` gap after the kind line, as every other Lookup entry has. Their reader
+                // also keeps one row gap for its line warnings above the prose, so the card's
+                // words start where a spell's do.
+                ui.add_space(design::L + ui.spacing().item_spacing.y);
                 let found: Vec<&str> = written
                     .text
                     .lines()

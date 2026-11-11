@@ -292,11 +292,12 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Save changes");
     d.wait_for_text("Changes saved.");
     let saved_at = d.painted_rect_in("Changes saved.", pane);
+    // FD5 (round 20): a finished change has the success tone, as `Note repaired.` has.
     let (below, detail) = result_below_file_line(
         d,
         "Changes saved.",
         "Notes/Broken.md",
-        design::colors().result.info,
+        design::colors().result.success,
     );
     // An Undo message centres its words on its Undo target's line, so its words start that
     // much below the top of the place.
@@ -862,6 +863,17 @@ pub fn facts(d: &mut Driver<'_>) {
         d.has_label(help) && !d.has_containing("front matter"),
         "The type help states its purpose and names no storage format",
     );
+    // FD1 (round 20): the help states what a type gives the DM, and does not repeat the
+    // heading `Give this note a type` above it.
+    d.observe(
+        "iter-20-D-FD1",
+        d.has("Give this note a type")
+            && d.has_label(help)
+            && !help.to_lowercase().contains("this note a type")
+            && help.contains("fields")
+            && help.contains("stat block"),
+        format!("The type help says {help:?}"),
+    );
     action_at_text_edge(
         d,
         "iter-17-D-type-choice",
@@ -1368,6 +1380,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
     d.expect("In: The Keep → Watch House.");
+    let (success, detail) = finished_change_tone(d, "In: The Keep → Watch House.");
+    d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
     d.click("Ashfall Keep");
@@ -1630,6 +1644,39 @@ pub fn round_trip(d: &mut Driver<'_>) {
             format!(
                 "The unread warning wraps inside the Edit form's right edge at {size:?}: {detail}"
             ),
+        );
+        // FD6 (round 20): the warning's action starts at its words, on the line below them.
+        let (starts, detail) = d.at_size(size, |d| {
+            d.expect(&reason);
+            let message = d.painted_rect_in(&reason, egui::Rect::EVERYTHING);
+            let links: Vec<egui::Rect> = message
+                .map(|message| {
+                    d.nodes()
+                        .into_iter()
+                        .filter(|node| {
+                            node.name == "Edit in Obsidian"
+                                && node.role == Role::Link
+                                && node.in_view()
+                                && node.rect.top() >= message.bottom() - 1.0
+                                && node.rect.top() <= message.bottom() + design::XL
+                        })
+                        .map(|node| node.rect)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let start = links.first().and_then(|link| words_left_in(d, *link));
+            (
+                links.len() == 1
+                    && start
+                        .zip(message)
+                        .is_some_and(|(start, message)| (start - message.left()).abs() <= 1.0),
+                format!("message at {message:?}; links below it {links:?}, words from {start:?}"),
+            )
+        });
+        d.observe(
+            "iter-20-D-FD6",
+            starts,
+            format!("At {size:?}, Edit in Obsidian starts at the warning's words: {detail}"),
         );
     }
     d.state("unread-part-of-edit", Sizes::All);
@@ -2202,6 +2249,19 @@ fn result_below_file_line(
     )
 }
 
+/// FD5 (round 20): a finished change is a success. Its words have the success tone's bar, and
+/// no info bar.
+pub(super) fn finished_change_tone(d: &Driver<'_>, words: &str) -> (bool, String) {
+    let result = design::colors().result;
+    let message = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+    let success = message.is_some_and(|message| d.has_tone_bar(message, result.success));
+    let info = message.is_some_and(|message| d.has_tone_bar(message, result.info));
+    (
+        success && !info,
+        format!("{words:?} at {message:?}: success bar {success}, info bar {info}"),
+    )
+}
+
 /// FD5: one tone for one fault. The message above the roster has this tone's bar, and every
 /// roster row that states the fault marks it once, with this tone's icon and colour.
 fn fault_tone(
@@ -2253,7 +2313,7 @@ fn prose_gap(d: &Driver<'_>, file: &str, prose: &str) -> Option<f32> {
 }
 
 /// In Lookup, the gap from the reader's kind line to the first text below it (the prose).
-fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Option<f32> {
+pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Option<f32> {
     let search = d.place_of(SEARCH_LOOKUP)?;
     let (width, height) = d.window_size();
     let pane = egui::Rect::from_min_max(
@@ -4740,6 +4800,8 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
     d.wait_for_text("Undo name change");
+    let (success, detail) = finished_change_tone(d, "Name changed to Mara Vell.");
+    d.observe("iter-20-D-FD5-name", success, detail);
     for size in [SMALL, DEFAULT, LARGE] {
         let icon = d.at_size(size, |d| {
             d.place_of("Undo name change")
@@ -5793,11 +5855,12 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             d.expect("Change Status");
+            // FD5 (round 20): with the success tone.
             let (below, detail) = result_below_file_line(
                 d,
                 "Changes saved.",
                 "Safe Rook.md",
-                design::colors().result.info,
+                design::colors().result.success,
             );
             let message = d.painted_rect_in("Changes saved.", reader_pane(d));
             let row = d.place_of("Change Status");
